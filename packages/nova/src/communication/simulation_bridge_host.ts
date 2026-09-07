@@ -435,7 +435,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // (An escort action needs no staging: none of them builds a ship on
         // the tick it lands. Queueing an upgrade only records the target
         // class on the escort's marker; the class itself is loaded by the
-        // client that settles the deal at a shipyard — see
+        // client that settles the deal at lift-off — see
         // spaceport/escort_deals.ts.)
         if (record.inputs.some(input => input.kind === 'addEntity'
             || input.kind === 'acceptMission')) {
@@ -879,7 +879,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * drops components, and queueing an upgrade only writes the target
      * class's id onto the escort's ownership marker — the class is loaded
      * (and the hull actually swapped) by the client that settles the deal
-     * at a shipyard, spaceport/escort_deals.ts. Kept async so the bridge
+     * at lift-off, spaceport/escort_deals.ts. Kept async so the bridge
      * interface, and every caller's `await`, are unchanged.
      */
     async escortAction(action: EscortAction) {

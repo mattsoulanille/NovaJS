@@ -24,6 +24,7 @@ import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
+import { OfferPopup } from './offer_popup.js';
 import { Spaceport } from './spaceport.js';
 
 /**
@@ -39,9 +40,9 @@ import { Spaceport } from './spaceport.js';
  * per-frame escort-deal settlement — was still holding the ship that had
  * just been traded away.
  *
- * The money bug that made it urgent: escorts keep flying down and joining
- * the landed roster while the player shops, and a queued sale settles on the
- * docked frame the escort touches down (escort_deals.ts). Land with a sale
+ * The money bug that made it urgent: a queued escort sale settles after
+ * the trade (escort_deals.ts — at lift-off now, ruling #249; on the docked
+ * frame the escort touched down when this was found). Land with a sale
  * queued, trade up, and the sale's proceeds were added to the dead hull's
  * CreditsComponent — the escort left the roster for good, and the credits
  * evaporated at lift-off.
@@ -267,9 +268,10 @@ describe('a shipyard purchase published to the docked seam', () => {
     }
 
     /**
-     * The client's per-frame escort-deal settlement, verbatim from
-     * browser.ts's `settleDockedEscortDeals`: read the held entity's
-     * credits, settle, add the net back.
+     * A writer OUTSIDE the venue paying into the held entity's live
+     * component while a venue is open — the escort settlement's own
+     * arithmetic (read the credits, settle, add the net back), driven
+     * directly so the delta rule can be pinned without a Leave.
      */
     function settleFrame(roster: EscortDealEntry[], player: string,
         entity: Entity) {
@@ -329,36 +331,50 @@ describe('a shipyard purchase published to the docked seam', () => {
                 .toBe(true);
         });
 
-    it('settles an escort sale onto the ship the player will fly, '
-        + 'and lifts off with the money', async () => {
+    it('settles an escort sale at the Leave onto the ship the player will '
+        + 'fly, and lifts off with the money once the report is closed',
+        async () => {
             const visit = await land(500_000);
-            const { client, press, leaveVenue, departed, entity } = visit;
+            const { spaceport, client, press, leaveVenue, departed, entity }
+                = visit;
             const roster = [escortWithSaleQueued('player-uuid')];
+            spaceport.setLandedEscorts(() => roster, 'player-uuid');
 
             await tradeUp(visit);
-            // The escort touches down mid-visit, after the trade: the
-            // client's next docked frame settles its queued sale.
-            settleFrame(roster, 'player-uuid', client.entity);
+            await leaveVenue();
+            // Nothing settles while the player is docked (ruling #249).
+            expect(creditBalance(client.entity)).toBe(500_000 - 175_000);
+            expect(roster.length).toBe(1);
 
+            // Leave: the sale settles into the NEW hull and the report
+            // dialog goes up; the departure waits on it.
+            await press('depart');
+            const popup = (spaceport as unknown as { offerPopup: OfferPopup })
+                .offerPopup;
+            await waitFor(() => popup.container.visible);
             expect(creditBalance(client.entity))
                 .toBe(500_000 - 175_000 + 40_000);
             // The dead hull never saw a credit of it.
             expect(entity.components.get(CreditsComponent)?.credits)
                 .toBe(500_000);
             expect(roster.length).toBe(0);
+            let launched: Entity | undefined;
+            void departed.then(ship => { launched = ship; });
+            await settle();
+            expect(launched).toBeUndefined();
 
-            // Leave the shipyard, then the spaceport: the entity that lifts
-            // off is the purchased hull, carrying the settled proceeds.
-            await leaveVenue();
-            await press('depart');
-            const launched = await departed;
-            expect(launched).toBe(client.entity);
-            expect(launched.components.get(ShipComponent)?.id).toBe(NEW_SHIP);
-            expect(creditBalance(launched)).toBe(500_000 - 175_000 + 40_000);
+            // Close the report: the entity that lifts off is the purchased
+            // hull, carrying the settled proceeds.
+            (popup as unknown as { choice: Subject<'accept' | 'refuse'> })
+                .choice.next('accept');
+            const lifted = await departed;
+            expect(lifted).toBe(client.entity);
+            expect(lifted.components.get(ShipComponent)?.id).toBe(NEW_SHIP);
+            expect(creditBalance(lifted)).toBe(500_000 - 175_000 + 40_000);
         });
 
-    it('lands a venue delta commit on the new hull, composed with a '
-        + 'settlement that arrives while the venue is open', async () => {
+    it('lands a venue delta commit on the new hull, composed with an '
+        + 'external payment that arrives while the venue is open', async () => {
             const visit = await land(500_000);
             const { client, leaveVenue } = visit;
             await tradeUp(visit);
@@ -370,8 +386,8 @@ describe('a shipyard purchase published to the docked seam', () => {
             expect(baseline).toBe(500_000 - 175_000);
             const working = { credits: baseline - 20_000 }; // bought goods
 
-            // ...and a queued escort sale settles into the live component
-            // while that venue is still open.
+            // ...and a writer outside the venue pays into the live
+            // component while that venue is still open.
             const roster = [escortWithSaleQueued('player-uuid')];
             settleFrame(roster, 'player-uuid', client.entity);
 

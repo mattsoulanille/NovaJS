@@ -18,16 +18,17 @@ import { MissionUniverse } from './mission_universe.js';
  * ============================================================================
  *
  * The trade centre checks out working copies of the landed escorts' holds
- * when it opens and writes them back at Done. Meanwhile the client settles
- * queued escort deals on EVERY docked frame at a shipyard, and a settled SALE
- * splices its escort off the landed roster.
+ * when it opens and writes them back at Done. Settling the queued escort
+ * deals (escort_deals.ts) splices a SOLD escort off the landed roster.
  *
- * Nothing used to stop those from overlapping: sell an escort while the
- * exchange had its hold open and Done would commit the cargo onto an entity
- * that is no longer on any roster — so the goods evaporated while the credits
- * stayed spent. The lease closes it by freezing the deals of any escort whose
- * hold is checked out; they settle on the next docked frame after Done, which
- * the settlement already runs on.
+ * Nothing used to stop those from overlapping (the settlement then ran on
+ * every docked frame): sell an escort while the exchange had its hold open
+ * and Done would commit the cargo onto an entity that is no longer on any
+ * roster — so the goods evaporated while the credits stayed spent. The
+ * lease closes it by freezing the deals of any escort whose hold is
+ * checked out. The settlement now runs at lift-off (ruling #249), after
+ * every visit has released, so the lease is the invariant that keeps the
+ * settlement safe to run at any point; these specs drive it directly.
  *
  * The lease is a property of the landing's transaction
  * (landed_transaction.ts), scoped to the trade visit's savepoint: the
@@ -150,15 +151,15 @@ describe('open fleet holds', () => {
  * itself — can throw, and Spaceport.show's catch swallows it. When the lease
  * was a module-level registry it then stayed there FOR THE REST OF THE
  * SESSION with no dialog on screen: settleEscortDeals saw the hold open and
- * deferred to the next docked frame, over and over, and the player's queued
- * escort sale simply never paid out.
+ * deferred, over and over, and the player's queued escort sale simply never
+ * paid out.
  *
  * The lease now lives on the transaction under the visit's savepoint, and
  * the trade centre rolls that savepoint back on a throw.
  */
 describe('a rolled-back trade visit', () => {
-    it('drops the lease, so the escort\'s queued deals settle on the next '
-        + 'docked frame as they always would', async () => {
+    it('drops the lease, so the escort\'s queued deals settle at the '
+        + 'lift-off as they always would', async () => {
             const sold = entry('f', { pendingSale: true });
             const roster = [sold];
             const { transaction, visit, holdOpen } = await tradeVisit(roster);
@@ -196,7 +197,7 @@ describe('escort deals frozen by an open hold', () => {
             const { transaction, visit, holds, holdOpen } =
                 await tradeVisit(roster);
 
-            // A docked frame while the exchange is open: nothing settles.
+            // A settlement while the exchange is open: nothing settles.
             const frozen = settleEscortDeals(roster, PLAYER, 0, getShip,
                 holdOpen);
             expect(frozen.sold).toEqual([]);
@@ -214,7 +215,7 @@ describe('escort deals frozen by an open hold', () => {
             expect(freighter.entity.components.get(CargoComponent)!
                 .get('cargo:0')).toBe(40);
 
-            // The very next docked frame settles the sale, and the escort
+            // The settlement at the lift-off then sells the escort, and it
             // (cargo and all — the goods are aboard the ship being sold)
             // leaves the roster.
             const settled = settleEscortDeals(roster, PLAYER, 0, getShip,

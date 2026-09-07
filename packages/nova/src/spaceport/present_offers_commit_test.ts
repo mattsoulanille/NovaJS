@@ -125,11 +125,12 @@ describe('presentOffers and the session commit boundary', () => {
     /**
      * The other half of that `finally`: it must commit a DELTA, not the
      * absolute balance the session was seeded with. The offer popups await
-     * the player for as long as they care to read, and browser.ts's
-     * settleDockedEscortDeals writes the LIVE CreditsComponent on every
-     * docked frame — so a sale that settles while an offer is on screen
-     * was erased by the session's absolute write-back the moment the
-     * player dismissed it. See spaceport/credit_commit.ts.
+     * the player for as long as they care to read, and a writer outside
+     * the session (the refuel button; the escort settlement of a Leave
+     * pressed under a blind popup) can move the LIVE CreditsComponent
+     * meanwhile — so a payment that lands while an offer is on screen was
+     * erased by the session's absolute write-back the moment the player
+     * dismissed it. See spaceport/credit_commit.ts.
      */
     it('keeps an escort sale that settles while an offer popup is open',
         async () => {

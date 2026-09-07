@@ -90,11 +90,11 @@ export class Shipyard extends Menu<Entity> {
      * spaceport.ts's `adoptPurchasedShip`).
      *
      * The menu's returned `show()` promise is NOT enough on its own: it
-     * only resolves when the player presses Done, and the docked frame loop
-     * keeps writing to the held entity in between (escort deals settle on
-     * every docked frame at a shipyard). Anything paid into the traded-in
-     * hull after the trade is money the player never sees again, so the
-     * swap is announced at the click, not at the exit.
+     * only resolves when the player presses Done, and the client's docked
+     * readers (the status bar, the save writer) keep reading the held
+     * entity in between. A save taken from the traded-in hull is a save of
+     * a ship the player will never fly again, so the swap is announced at
+     * the click, not at the exit.
      */
     onShipPurchased?: (ship: Entity) => void;
     private text = {
@@ -476,8 +476,8 @@ export class Shipyard extends Menu<Entity> {
         this.text.status.text = "";
         this.refreshTradeState();
         // Publish the swap NOW, while the shipyard is still open: the
-        // docked frame loop is still writing to whatever entity the client
-        // is holding, and from this instant that must be the hull just
+        // client's docked readers follow whatever entity the client is
+        // holding, and from this instant that must be the hull just
         // bought (see onShipPurchased). Announced BEFORE the debug
         // convenience below, so nothing the console hook does can come
         // between the trade and the money moving with it.

@@ -245,7 +245,7 @@ describe('escortButtonSlots (the escort box\'s four fixed rows)', () => {
     it('greys an upgrade the player cannot AFFORD, keeping the row', () => {
         // Greyed rather than hidden, so the price in the readout above
         // still has a button to belong to. Affordability is re-checked
-        // when the deal actually settles at a shipyard.
+        // when the deal actually settles, as the player leaves a spaceport.
         const broke: EscortManagement = {
             ...CAPTURED,
             upgrade: { toShip: 'nova:167', cost: 35_000, canAfford: false },

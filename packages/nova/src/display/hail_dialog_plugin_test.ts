@@ -323,7 +323,7 @@ describe('computeContext: the escort management offer', () => {
     it('keeps the WAGE on the escort\'s CURRENT class while an upgrade is '
         + 'queued', async () => {
             // The escort is still flying the old hull until the deal
-            // settles at a shipyard, so it is still paid for the old hull.
+            // settles at lift-off, so it is still paid for the old hull.
             const { world, gameData } = escortWorld(target => {
                 target.components.set(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, provenance: 'hired',

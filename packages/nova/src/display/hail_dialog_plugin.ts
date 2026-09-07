@@ -121,13 +121,15 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  * hail/hail_captured_escort.png), not a fleet-command panel — commanding
  * escorts is the keyboard escort-controls' job. All three functions are live.
  * Their prices come off the escort's CURRENT ship class through
- * spaceport/escort_fees.ts — the same module the settlement at the pad
+ * spaceport/escort_fees.ts — the same module the settlement at lift-off
  * re-derives them from — and each press leaves as an EscortActionEvent, so
  * the escort dialog's effects ride the same input-record path every other
  * simulation effect does.
  *
- * Upgrade and Sell QUEUE their deal for the next shipyard rather than
- * striking it here (nova_plugin/escorts/escort_action.ts). This module's job for
+ * Upgrade and Sell QUEUE their deal for the next spaceport departure rather
+ * than striking it here (nova_plugin/escorts/escort_action.ts); they are
+ * MUTUALLY EXCLUSIVE toggles, and queueing one un-queues the other (ruling
+ * #249). This module's job for
  * them is the OFFER: what each would cost, whether the player can pay it
  * today, whether the target hull is one they are allowed at all
  * ({@link escortUpgradeOffer}), and which deals are already queued — all
@@ -858,7 +860,7 @@ export const HailDialogPlugin: Plugin = {
             // names the class the box priced, which the simulation checks
             // against the escort's own shïp UpgradeTo — so this can only
             // ever confirm what the escort already says — and then STORES,
-            // so the settlement at the pad can tell a stale deal from a
+            // so the settlement at lift-off can tell a stale deal from a
             // live one (spaceport/escort_deals.ts).
             //
             // The dialog has already decided queue-versus-cancel from its

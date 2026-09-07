@@ -39,11 +39,15 @@ import { MenuControls } from './menu_controls.js';
  * input path (nova_plugin/escorts/escort_action.ts).
  *
  * UPGRADE AND SELL ARE TOGGLES, not deals struck on the spot: they QUEUE the
- * deal for the next shipyard, the channel stays open, and the pressed button
- * becomes its "Cancel ..." twin (hail/hail_escort_upgrading.png,
- * hail/sell_captured_escort.png). The readout's price line for the queued
- * side is replaced by the original's own dim status line — "Will be upgraded
- * at next shipyard" / "Will be sold off at next shipyard". Only Release
+ * deal — settled as the player next LEAVES a spaceport (ruling #249;
+ * spaceport/escort_deals.ts) — the channel stays open, and the pressed
+ * button becomes its "Cancel ..." twin (hail/hail_escort_upgrading.png,
+ * hail/sell_captured_escort.png). The two are MUTUALLY EXCLUSIVE: queueing
+ * one un-queues the other, so at most one deal stands per escort. The
+ * readout's price line for the queued side is replaced by the original's
+ * own dim status line — "Will be upgraded at next shipyard" / "Will be sold
+ * off at next shipyard" (STR# 2002 291/294, the game's own wording, kept
+ * although the settlement no longer waits for a shipyard). Only Release
  * happens over the channel, and only Release closes it.
  */
 
@@ -141,7 +145,7 @@ export interface EscortManagement {
     /** The daily wage. HIRED escorts only — a captured hull draws none. */
     dailyFee?: number;
     /**
-     * An upgrade is QUEUED for the next shipyard (PlayerEscort.
+     * An upgrade is QUEUED for the next departure (PlayerEscort.
      * pendingUpgrade). The upgrade row's price line becomes
      * {@link UPGRADE_QUEUED_TEXT} and its button becomes Cancel Upgrade.
      *
@@ -150,7 +154,7 @@ export interface EscortManagement {
      * pay (escort_fees.ts prices everything off the CURRENT class).
      */
     pendingUpgrade?: boolean;
-    /** A sale is queued for the next shipyard. See above. */
+    /** A sale is queued for the next departure. See above. */
     pendingSale?: boolean;
 }
 
@@ -554,13 +558,15 @@ export function hailPress(state: HailPage, press: HailPress,
         // by "Will be upgraded at next shipyard" and the button now reading
         // "Cancel Upgrade". Pressing again un-queues it, as many times as
         // the player likes; nothing is charged either way, because the deal
-        // is settled at the next shipyard (spaceport/escort_deals.ts).
+        // is settled as the player next leaves a spaceport
+        // (spaceport/escort_deals.ts).
         //
-        // QUEUEING ONE CANCELS THE OTHER. An escort cannot be both sold off
-        // and refitted at the same visit, and the original does not grey
-        // the other button to say so — hail/sell_captured_escort.png keeps
-        // "Upgrade Escort" live beside a queued sale — so pressing it must
-        // mean something, and what it means is "that one instead".
+        // QUEUEING ONE CANCELS THE OTHER (Matthew's ruling, #249). An
+        // escort cannot be both sold off and refitted, and the original
+        // does not grey the other button to say so —
+        // hail/sell_captured_escort.png keeps "Upgrade Escort" live beside
+        // a queued sale — so pressing it must mean something, and what it
+        // means is "that one instead": at most one deal per escort.
         //
         // Each row is ignored unless the context actually offers it, the
         // same rule the assist and bribe slots follow: a press cannot

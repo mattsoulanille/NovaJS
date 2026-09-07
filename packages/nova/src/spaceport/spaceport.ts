@@ -30,6 +30,9 @@ import { Bar } from './bar.js';
 import { Button } from './button.js';
 import { describeOutfitChanges, requestCheckpoint } from './checkpoint_requests.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
+import {
+    EscortDealEntry, escortSettlementReport, queuedUpgradeTargets,
+} from './escort_deals.js';
 import { LandedTransaction } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
@@ -43,7 +46,6 @@ import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
 import { Shipyard } from './shipyard.js';
 import { OpenStarmapOptions } from './starmap.js';
-import { FleetEscortEntry } from './fleet_cargo.js';
 import { TradeCenter } from './trade_center.js';
 
 // The 618x517 spaceport frame (PICT 8500): the landing image fills the
@@ -116,6 +118,16 @@ export class Spaceport extends Menu<Entity> {
      */
     private transaction?: LandedTransaction;
     /**
+     * The client's landed-escort roster and the docked player's uuid
+     * (setLandedEscorts), for the lift-off settlement of the escort deals
+     * queued against it (leave). Unset for a spaceport shown without a
+     * landing (the headless specs): nothing settles.
+     */
+    private landedRoster?: () => EscortDealEntry[];
+    private playerUuid?: string;
+    /** Whether a Leave is already in progress (see leave). */
+    private leaving = false;
+    /**
      * The venues, as the set the transaction is attached to per landing
      * and the set a teardown dismisses.
      */
@@ -182,7 +194,7 @@ export class Spaceport extends Menu<Entity> {
         };
         const buttons = this.buttons;
 
-        buttons.leave.click.subscribe(this.done.bind(this));
+        buttons.leave.click.subscribe(() => void this.leave());
         buttons.refuel.click.subscribe(this.refuel.bind(this));
 
         this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
@@ -359,7 +371,7 @@ export class Spaceport extends Menu<Entity> {
             // flush a copy that still holds the aborted mission.
             missions: () => void this.openMissionInfo?.(this.input, this.id,
                 this.transaction),
-            depart: this.done.bind(this),
+            depart: () => void this.leave(),
         });
     }
 
@@ -467,8 +479,8 @@ export class Spaceport extends Menu<Entity> {
         await this.buildPromise;
         // THE LANDING'S TRANSACTION: one working copy for the whole visit,
         // seeded from the ship as it touched down and attached to every
-        // venue and to the docked handle (so the client's frame loop
-        // settles escort deals into the same ledger). Its landing pass
+        // venue and to the docked handle (the status bar and the save
+        // writer read it there). Its landing pass
         // advances the date a day and checks every active mission against
         // this stellar (completion + payment, deadline failures, travel-leg
         // cargo transfer) — on the ship entity, which is out of the
@@ -697,9 +709,9 @@ export class Spaceport extends Menu<Entity> {
             //
             // The release flushes the credits as a DELTA, like every
             // venue's: the offer popups above await the player, and the
-            // client settles escort deals on every docked frame meanwhile
-            // (through the same transaction, or onto the live component
-            // before one exists). See spaceport/credit_commit.ts.
+            // refuel button (and a Leave pressed under a blind popup, whose
+            // escort settlement goes through the same transaction) can move
+            // the balance meanwhile. See spaceport/credit_commit.ts.
             transaction.release(visit);
         }
     }
@@ -762,12 +774,11 @@ export class Spaceport extends Menu<Entity> {
      * to the docked entity between the trade and the lift-off wrote into a
      * ship nobody would ever fly:
      *
-     *  - AN ESCORT DEAL SETTLING AFTER THE TRADE. The client settles queued
-     *    upgrades and sales into the landing's ledger on EVERY docked frame
-     *    at a shipyard (spaceport/escort_deals.ts), and escorts keep
-     *    touching down while the player shops. A 40,000-credit sale that
-     *    landed after the trade was paid into the old hull and vanished at
-     *    lift-off — the escort was gone from the roster all the same.
+     *  - THE ESCORT DEALS SETTLING AT LEAVE. Queued upgrades and sales are
+     *    paid into the landing's ledger as the player departs
+     *    (spaceport/escort_deals.ts), after any trade. A 40,000-credit sale
+     *    used to be paid into the old hull and vanish at lift-off — the
+     *    escort was gone from the roster all the same.
      *  - EVERY OTHER DOCKED READER. The status bar's docked readouts, the
      *    player-info 'p' dialog, the mission-info dialog, the periodic save
      *    and the checkpoint writer all resolve the docked ship through the
@@ -792,8 +803,8 @@ export class Spaceport extends Menu<Entity> {
      */
     private adoptPurchasedShip(ship: Entity, verb = 'Bought') {
         this.input = ship;
-        // The client's handle on the docked ship — the status bar, the
-        // escort-deal settlement and the save writer all read it.
+        // The client's handle on the docked ship — the status bar and the
+        // save writer read it.
         this.dockedShip?.swapEntity(ship);
         // A ship purchase is a checkpoint (pilot_history.ts). The NEW
         // entity is passed explicitly rather than left to the recorder's
@@ -854,13 +865,19 @@ export class Spaceport extends Menu<Entity> {
      * per-landing, like setDeployedOutfitCounts, because it closes over
      * the docked ship's uuid.
      */
-    setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
+    setLandedEscorts(roster?: () => EscortDealEntry[],
         playerUuid?: string, world?: Iterable<[string, Entity]>) {
         this.tradeCenter.setLandedEscorts(roster, playerUuid);
         // ...and the bar, whose hire dialog counts the fleet against the
         // escort cap (nova_plugin/escorts/escort_cap.ts) — from the roster AND
         // the display world, where the escorts still on approach are.
         this.bar.setLandedEscorts(roster, playerUuid, world);
+        // ...and the Leave, which settles the deals queued against the
+        // roster's escorts as the player departs (leave). The roster is
+        // the client's own array, MUTATED by a settled sale (the escort
+        // is spliced off so it does not lift off).
+        this.landedRoster = roster;
+        this.playerUuid = playerUuid;
     }
 
     /**
@@ -1004,11 +1021,96 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
-     * Leave: THE COMMIT. The landing's working copy lands on the hull —
-     * once — and that hull is what LeaveSpaceportEvent carries to the
-     * client's lift-off, which encodes it into the insertion record every
-     * peer applies. Then the pad's own effects: parked on the stellar,
-     * repaired, de-ionized.
+     * LEAVE, from the button or the 'depart' key: first the escort deals
+     * the player queued over the comm channel are SETTLED (Matthew's
+     * ruling #249/#253 — as the player departs, from any spaceport, if
+     * funds suffice), then — if anything settled — a dialog says how many
+     * escorts were upgraded and how many sold and for how much, and only
+     * once the player closes it does {@link done} commit the landing and
+     * resolve show(). The client answers that resolution with the
+     * lift-off's insertion records, so nothing is in space until the
+     * dialog is closed; a deal the working balance cannot cover stays
+     * queued and rides on, unreported.
+     *
+     * Re-entrant presses are dropped while a Leave is in flight (the
+     * settlement awaits the upgrade targets' data, and the dialog awaits
+     * the player), the spaceport's own keys are given up for the dialog
+     * so a second 'depart' closes IT rather than leaving again, and a
+     * spaceport torn down under the dialog (exit to title) leaves nothing
+     * to depart: done() is not called, exactly as dismiss() does not.
+     */
+    private async leave() {
+        if (this.leaving) {
+            return;
+        }
+        this.leaving = true;
+        try {
+            const report = await this.settleEscortDealsAtLiftOff();
+            if (report !== undefined && this.stillDocked()) {
+                this.controls.unbind();
+                this.popupBlocker.bind();
+                try {
+                    await this.offerPopup.show(report, { accept: 'Okay' },
+                        { style: 'briefing' });
+                } finally {
+                    this.popupBlocker.unbind();
+                }
+            }
+        } catch (e) {
+            console.warn('Escort deals failed to settle at lift-off:', e);
+        } finally {
+            this.leaving = false;
+        }
+        if (!this.alive) {
+            return;
+        }
+        this.done();
+    }
+
+    /**
+     * The lift-off settlement (escort_deals.ts has the rules), through
+     * the landing's transaction: loads the classes the queued upgrades
+     * need, settles against the working balance, logs, and returns the
+     * dialog text — undefined when nothing settled, or when there is no
+     * transaction or roster to settle over (the deals then simply stay
+     * queued). The spaceport may have been torn down during the load; the
+     * deals stay queued then too, for the next departure.
+     */
+    private async settleEscortDealsAtLiftOff(): Promise<string | undefined> {
+        const transaction = this.transaction;
+        const roster = this.landedRoster?.();
+        const player = this.playerUuid;
+        if (!transaction || transaction.isClosed || !roster || !player) {
+            return undefined;
+        }
+        // The target classes have to be BUILT to refit against, and the
+        // settlement itself is synchronous (it mutates the roster the
+        // client's frame loop owns), so they are loaded first.
+        await Promise.all(queuedUpgradeTargets(roster, player)
+            .map(id => this.simulationData.data.Ship.get(id)
+                .catch(() => undefined)));
+        if (!this.alive || transaction.isClosed) {
+            return undefined;
+        }
+        const settled = transaction.settleEscortDeals(roster, player,
+            id => this.simulationData.data.Ship.getCached(id));
+        for (const sale of settled.sold) {
+            console.log(`Escort ${sale.uuid} sold off for ${sale.value} `
+                + 'credits on departure.');
+        }
+        for (const upgrade of settled.upgraded) {
+            console.log(`Escort ${upgrade.uuid} upgraded to ${upgrade.toShip} `
+                + `at a cost of ${upgrade.cost} credits on departure.`);
+        }
+        return escortSettlementReport(settled);
+    }
+
+    /**
+     * THE COMMIT, reached from {@link leave}. The landing's working copy
+     * lands on the hull — once — and that hull is what LeaveSpaceportEvent
+     * carries to the client's lift-off, which encodes it into the
+     * insertion record every peer applies. Then the pad's own effects:
+     * parked on the stellar, repaired, de-ionized.
      */
     protected override done() {
         if (this.transaction) {

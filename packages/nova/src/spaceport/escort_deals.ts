@@ -7,22 +7,35 @@ import {
 } from '../nova_plugin/player/player_escort.js';
 import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
+import { formatPrice } from './format_price.js';
 
 /**
  * ============================================================================
- * Settling the escort deals the player queued — at the shipyard
+ * Settling the escort deals the player queued — AT LIFT-OFF
  * ============================================================================
  *
- * Upgrading and selling an escort are DEFERRED in the original: pressing
- * the button over the comm channel only queues the deal ("Will be upgraded
- * at next shipyard" / "Will be sold off at next shipyard" — STR# 2002 291
- * and 294), and nothing happens until the player next puts down somewhere
- * with a shipyard. nova_plugin/escorts/escort_action.ts queues the deal
- * (player_escort.ts's EscortDeal, written with withEscortDeal); THIS module
- * is the other end, where the money moves. The deal is READ through
- * escortDeal and CLEARED through withEscortDeal(marker, NO_DEAL) here as
- * everywhere else, so the pendingUpgrade / pendingSale encoding has one
- * reader and one writer.
+ * Upgrading and selling an escort are DEFERRED: pressing the button over
+ * the comm channel only queues the deal ("Will be upgraded at next
+ * shipyard" / "Will be sold off at next shipyard" — STR# 2002 291 and
+ * 294), and nothing happens until the player next LEAVES A SPACEPORT.
+ * nova_plugin/escorts/escort_action.ts queues the deal (player_escort.ts's
+ * EscortDeal, written with withEscortDeal); THIS module is the other end,
+ * where the money moves. The deal is READ through escortDeal and CLEARED
+ * through withEscortDeal(marker, NO_DEAL) here as everywhere else, so the
+ * pendingUpgrade / pendingSale encoding has one reader and one writer.
+ *
+ * WHEN: as the player departs the spaceport (Matthew's ruling, tracker
+ * #249 / #253) — ANY spaceport, shipyard or not — from the Leave button,
+ * before the lift-off's insertion records are built. Spaceport.leave runs
+ * the settlement through the landing's transaction
+ * (LandedTransaction.settleEscortDeals), shows the player what was done
+ * ({@link escortSettlementReport}, a dialog they must close), and only
+ * then commits the transaction and resolves the departure; the client's
+ * next frame puts the fleet back into the world from that. So nothing is
+ * in space until the dialog is closed, and a deal the player cannot
+ * afford simply rides on, still queued, to the next departure. The
+ * previous design settled at the next SHIPYARD landing, on every docked
+ * frame; it is superseded, not kept alongside.
  *
  * ---------------------------------------------------------------------------
  * WHY IT RUNS ON THE CLIENT'S LANDED ROSTER
@@ -43,13 +56,17 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  * the held player entity, the class swap changes the held escort entity,
  * and both are encoded into the insertion records the launch schedules.
  *
+ * An escort that is still flying down to the pad when the player leaves is
+ * not on the roster and keeps its deal queued; it is re-attached in the
+ * simulation and settles at the next departure it lands for.
+ *
  * ---------------------------------------------------------------------------
  * THE RULES
  * ---------------------------------------------------------------------------
  *
- *  - ONLY AT A SHIPYARD (spöb hasShipyard). Landing anywhere else does
- *    nothing at all and leaves every deal queued — the caller decides that;
- *    this function is only called when there is a shipyard.
+ *  - AT ANY SPACEPORT. The stellar's own venues do not matter: an upgrade
+ *    is a hull purchase, but the ruling is that the deal settles as the
+ *    player departs wherever they are.
  *  - A SALE pays the escort's shïp EscSellValue and REMOVES it from the
  *    roster, which is the whole of "it does not lift off with you": the
  *    roster is the only thing that would have put it back in the world.
@@ -66,9 +83,9 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  *    that cannot leave the player holding a hull they did not want. That
  *    reading is escortDeal's, not a rule of this module.
  *  - INSUFFICIENT CREDITS: the upgrade is SKIPPED AND STAYS QUEUED. The
- *    player can come back when they can afford it — a deal they never got
- *    is not a deal they should lose. (A sale never fails this way: it pays
- *    the player.)
+ *    player can leave again when they can afford it — a deal they never
+ *    got is not a deal they should lose. (A sale never fails this way: it
+ *    pays the player.)
  *  - A STALE TARGET IS DROPPED. `pendingUpgrade` stores the class resolved
  *    when the button was pressed; if the escort's CURRENT shïp UpgradeTo no
  *    longer names it (the escort changed class some other way), the queue
@@ -80,18 +97,18 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  *    rule is re-checked here rather than trusted from the flag — the same
  *    policy applyEscortAction follows.
  *  - AN ESCORT WHOSE HOLD IS OPEN IN A VENUE IS SKIPPED ENTIRELY, flags and
- *    all, and retried on the next docked frame. The trade center checks out
- *    working copies of the landed escorts' holds when it opens and writes
- *    them back at Done (fleet_cargo.ts); settling a SALE in between would
- *    splice the escort off the roster while the exchange was still filling
- *    its hold, and the exchange would then commit that cargo onto an entity
- *    nothing will ever lift off — goods gone, credits spent. An UPGRADE is
- *    frozen for the same reason: it rewrites the escort's own cargo (the
- *    class swap clamps it to the new hull) and its capacity, both of which
- *    the open hold would overwrite from a copy taken before the swap.
- *    Freezing costs nothing: the settlement runs on EVERY docked frame, so
- *    "retry next frame" means the deal lands the moment Done releases the
- *    hold, and these deals have already waited since the last shipyard.
+ *    all, and stays queued. The trade center checks out working copies of
+ *    the landed escorts' holds when it opens and writes them back at Done
+ *    (fleet_cargo.ts); settling a SALE in between would splice the escort
+ *    off the roster while the exchange was still filling its hold, and the
+ *    exchange would then commit that cargo onto an entity nothing will
+ *    ever lift off — goods gone, credits spent. An UPGRADE is frozen for
+ *    the same reason: it rewrites the escort's own cargo (the class swap
+ *    clamps it to the new hull) and its capacity, both of which the open
+ *    hold would overwrite from a copy taken before the swap. At Leave no
+ *    venue is open (LandedTransaction.holdOpen answers false once the
+ *    visit released its lease), so this is belt and braces; it is kept
+ *    because the settlement is a plain function anyone may call mid-visit.
  *
  * TWO THINGS ARE DELIBERATELY NOT RE-CHECKED HERE.
  *
@@ -242,19 +259,18 @@ function wingOf(roster: readonly EscortDealEntry[], uuid: string): Set<string> {
  *
  * Returns what happened, so the caller can report it and apply the net
  * credits. Every deal that is settled or dropped has its flag cleared, so
- * calling this again on the same roster is a no-op — which matters,
- * because the client calls it on every frame it is docked at a shipyard
- * (escorts keep touching down while the player shops).
+ * calling this again on the same roster is a no-op — a second Leave, or a
+ * departure whose insertion was refused and retried, cannot settle
+ * anything twice.
  */
 export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     credits: number,
     getShip: (id: string) => ShipData | undefined,
     /**
      * Whether an escort's hold is checked out by an open venue right now, in
-     * which case its deals are left QUEUED and retried on the next docked
-     * frame (see the module comment's rule, and LandedTransaction.holdOpen
-     * in landed_transaction.ts). Omitted — every unit test, and any caller
-     * with no venue — freezes nothing.
+     * which case its deals are left QUEUED (see the module comment's rule,
+     * and LandedTransaction.holdOpen in landed_transaction.ts). Omitted —
+     * every unit test, and any caller with no venue — freezes nothing.
      */
     holdOpen: (uuid: string) => boolean = () => false):
     EscortDealSettlement {
@@ -274,7 +290,7 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         // otherwise commit a hold onto an entity this splice removed.
         if (holdOpen(entry.uuid)
             || [...wingOf(roster, entry.uuid)].some(holdOpen)) {
-            continue; // Frozen: stays queued, retried next frame.
+            continue; // Frozen: stays queued.
         }
         clearDeals(entry.entity, marker);
         if (escortProvenance(entry.entity) !== 'captured') {
@@ -315,7 +331,7 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         }
         const shipData = entry.entity.components.get(ShipDataComponent);
         if (!shipData) {
-            continue; // Not fully built; try again next landing.
+            continue; // Not fully built; try again next departure.
         }
         if (shipData.escortUpgradeShip !== pending) {
             // STALE: this escort is no longer the ship the deal was struck
@@ -346,4 +362,42 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     }
 
     return settlement;
+}
+
+/**
+ * ============================================================================
+ * The departure dialog
+ * ============================================================================
+ *
+ * What the player is told as they leave, BEFORE the lift-off: how many
+ * escorts were upgraded and how many sold, and for how much (Matthew's
+ * ruling, #253). The wording is the original's own settlement message,
+ * assembled from STR# 2002 297-300 — "escort was" / "escorts were" /
+ * "sold for a profit of" / "upgraded at a cost of" — one sentence per
+ * kind, sales first because they settle first and fund the upgrades.
+ *
+ * Deals that did NOT settle (unaffordable, frozen, stale) are not
+ * reported: they are still queued, the comm box still says so, and the
+ * player was never charged. Undefined when nothing settled, so the caller
+ * shows no dialog and leaves at once.
+ */
+export function escortSettlementReport(settlement: EscortDealSettlement):
+    string | undefined {
+    const lines: string[] = [];
+    if (settlement.sold.length > 0) {
+        const total = settlement.sold.reduce((sum, s) => sum + s.value, 0);
+        lines.push(`${countOfEscorts(settlement.sold.length)} sold for a `
+            + `profit of ${formatPrice(total)}.`);
+    }
+    if (settlement.upgraded.length > 0) {
+        const total = settlement.upgraded.reduce((sum, u) => sum + u.cost, 0);
+        lines.push(`${countOfEscorts(settlement.upgraded.length)} upgraded `
+            + `at a cost of ${formatPrice(total)}.`);
+    }
+    return lines.length === 0 ? undefined : lines.join('\n');
+}
+
+/** "1 escort was" / "3 escorts were" (STR# 2002 297 / 298). */
+function countOfEscorts(n: number): string {
+    return n === 1 ? '1 escort was' : `${n} escorts were`;
 }

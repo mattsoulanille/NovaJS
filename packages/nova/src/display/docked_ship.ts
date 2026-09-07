@@ -50,12 +50,10 @@ export class DockedShip {
     liveStatus?: () => DockedLiveStatus;
     /**
      * The landing's transaction (spaceport/landed_transaction.ts), set by
-     * the spaceport once its landing has opened one. The client's docked
-     * frame settles queued escort deals THROUGH it — gated on the working
-     * balance, frozen for a hold the trade center has checked out, paid
-     * into the one ledger — rather than onto the live component behind the
-     * open venue's back (client/docking.ts). Unset before the landing's
-     * data is in, and at a hypergate dock.
+     * the spaceport once its landing has opened one, so the client's
+     * docked readers (the save writer, the specs) can reach the working
+     * copy the venues are editing. Unset before the landing's data is in,
+     * and at a hypergate dock.
      */
     transaction?: LandedTransaction;
     /**
@@ -76,8 +74,7 @@ export class DockedShip {
         /**
          * Told whenever {@link swapEntity} replaces the held hull, so the
          * game client's own docked handle (browser.ts's `dockedShip`, which
-         * the frame loop settles escort deals against and which every save
-         * is built from) follows the swap. Wired from the OpenSpaceportEvent
+         * every save is built from) follows the swap. Wired from the OpenSpaceportEvent
          * payload; absent in tests and anywhere the client does not care.
          */
         private readonly onSwap?: (entity: Entity) => void) {
@@ -96,12 +93,11 @@ export class DockedShip {
      *
      * Every docked consumer reads the ship through this handle, so this one
      * assignment is what moves them all onto the hull the player will
-     * actually fly: the status bar's docked readouts, the client's
-     * escort-deal settlement (which pays credits into the held entity on
-     * every docked frame), and the save/checkpoint writer. Publishing it at
-     * the instant of purchase — rather than at lift-off, where the new
-     * entity used to first surface — is what keeps a deal that settles
-     * later in the same visit out of the traded-in hull's pocket.
+     * actually fly: the status bar's docked readouts and the
+     * save/checkpoint writer. Publishing it at the instant of purchase —
+     * rather than at lift-off, where the new entity used to first surface
+     * — is what keeps a save taken later in the same visit off the
+     * traded-in hull.
      *
      * Idempotent: swapping in the hull already held does nothing.
      */

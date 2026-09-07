@@ -54,8 +54,9 @@ import { WeaponsStateComponent } from '../ship/weapons_state.js';
  *             hold that would pin it here, and LEAVES the system under its
  *             own power.
  *   SELL      DEFERRED. Captured hulls only; queueing sets a flag and
- *             nothing else, and the money moves at the next shipyard
- *             (spaceport/escort_deals.ts, and escort_deals_test.ts).
+ *             nothing else, and the money moves as the player next leaves
+ *             a spaceport (spaceport/escort_deals.ts, and
+ *             escort_deals_test.ts).
  *   UPGRADE   DEFERRED. Queueing records the TARGET CLASS on the escort;
  *             the refit itself is replaceEscortShipClass, run by the same
  *             settlement — and exercised directly here, since it is this
@@ -356,9 +357,9 @@ describe('queueing a sale of a captured escort', () => {
 
     it('only FLAGS the escort — nothing is paid and it does not leave',
         async () => {
-            // The original defers the sale to the next shipyard
-            // (hail/sell_captured_escort.png: "Will be sold off at next
-            // shipyard"). Nothing moves over the comm channel.
+            // The sale is deferred (hail/sell_captured_escort.png: "Will
+            // be sold off at next shipyard"; settled at the next spaceport
+            // departure, ruling #249). Nothing moves over the comm channel.
             const escort = await fixture.addEscort(ESCORT, 'captured');
             const before = creditsOf(fixture.world);
             queueSale();
@@ -564,7 +565,7 @@ describe('the two queued deals are MUTUALLY EXCLUSIVE', () => {
     });
 });
 
-describe('replaceEscortShipClass (the refit itself, run at the shipyard)',
+describe('replaceEscortShipClass (the refit itself, run at lift-off)',
     () => {
         let fixture: Awaited<ReturnType<typeof makeWorld>>;
         beforeEach(async () => {

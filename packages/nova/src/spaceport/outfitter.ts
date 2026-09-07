@@ -289,8 +289,8 @@ export class Outfitter extends Menu<Entity> {
      * Told the moment an OnPurchase set string has CHANGED THE PLAYER'S
      * SHIP, with the new entity — the outfitter's twin of the shipyard's
      * `onShipPurchased`, wired by the Spaceport to the same
-     * `adoptPurchasedShip`, and for the same reason: the docked frame loop
-     * keeps writing to whichever entity the client holds, so the swap has
+     * `adoptPurchasedShip`, and for the same reason: the client's docked
+     * readers follow whichever entity the client holds, so the swap has
      * to be published at the instant it happens rather than at Done.
      */
     onShipChanged?: (ship: Entity) => void;

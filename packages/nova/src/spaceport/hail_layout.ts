@@ -288,7 +288,7 @@ export interface EscortButtonSlot {
  *    afford its EscUpgrdCost today. An unaffordable upgrade is greyed
  *    rather than hidden, so the price in the readout above still has a
  *    button to belong to; affordability is re-checked when the deal
- *    actually settles at a shipyard.
+ *    actually settles, as the player leaves a spaceport.
  *  - The SALE row is "Cancel Sale" (always live) while a sale is queued,
  *    and otherwise "Sell Escort", offered only for a CAPTURED escort. A
  *    hired pilot's ship was never the player's to sell (player_escort.ts's

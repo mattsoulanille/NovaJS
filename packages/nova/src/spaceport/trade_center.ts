@@ -338,7 +338,7 @@ export class TradeCenter extends Menu<Entity> {
             // A throw anywhere before Done — a texture that would not load,
             // a widget that would not lay out — drops the visit: its edits
             // are undone and the lease goes with it, so those escorts'
-            // deals settle on the next docked frame as they always would.
+            // deals settle at lift-off as they always would.
             transaction.rollback(visit);
             this.visit = undefined;
             throw e;

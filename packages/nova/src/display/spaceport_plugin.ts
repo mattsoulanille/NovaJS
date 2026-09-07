@@ -55,26 +55,28 @@ const PlanetSpaceportQuery = new Query(
  * assumes everything the player owns is aboard.
  *
  * `landedEscorts` is a live getter for the client's landed-escort roster
- * (browser.ts / spaceport/landed_escorts.ts). Two venues read it: the
- * outfitter, because bay fighters that LANDED with the player are out of
- * the display world but still deployed and still occupy their magazine
- * slots; and the trade center, because a cargo-carrying escort's hold is
- * part of the fleet's cargo space (spaceport/fleet_cargo.ts). A getter
- * because escorts keep touching down while the player shops.
+ * (browser.ts / spaceport/landed_escorts.ts) — the client's OWN array,
+ * not a copy. Two venues read it: the outfitter, because bay fighters
+ * that LANDED with the player are out of the display world but still
+ * deployed and still occupy their magazine slots; and the trade center,
+ * because a cargo-carrying escort's hold is part of the fleet's cargo
+ * space (spaceport/fleet_cargo.ts). The Leave MUTATES it: the escort
+ * deals queued against the roster settle as the player departs, and a
+ * sold escort is spliced off so it does not lift off
+ * (spaceport/escort_deals.ts). A getter because escorts keep touching
+ * down while the player shops.
  *
  * `onShipSwap` is how a ship BOUGHT at the shipyard reaches the client
  * before lift-off. A purchase builds a brand-new entity, so the handle
- * browser.ts is holding (`dockedShip.entity` — what the frame loop settles
- * escort deals into, and what every save is written from) would otherwise
- * still be the traded-in hull for the rest of the visit. The spaceport
- * publishes the swap through DockedShip.swapEntity as it happens, and this
- * callback carries it back out to the client. Optional: a client that keeps
- * no handle of its own needs nothing here.
+ * browser.ts is holding (`dockedShip.entity` — what every save is written
+ * from) would otherwise still be the traded-in hull for the rest of the
+ * visit. The spaceport publishes the swap through DockedShip.swapEntity
+ * as it happens, and this callback carries it back out to the client.
+ * Optional: a client that keeps no handle of its own needs nothing here.
  */
 export const OpenSpaceportEvent = new EcsEvent<{
     planetId: string, ship: Entity, uuid?: string,
-    landedEscorts?: () =>
-        readonly { player: string, uuid: string, entity: Entity }[],
+    landedEscorts?: () => { player: string, uuid: string, entity: Entity }[],
     onShipSwap?: (ship: Entity) => void,
 }>('OpenSpaceportEvent');
 export const LeaveSpaceportEvent = new EcsEvent<Entity>('LeaveSpaceportEvent');

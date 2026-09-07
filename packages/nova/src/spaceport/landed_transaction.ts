@@ -89,27 +89,40 @@ import { commitPendingEscorts } from './pending_escorts.js';
  * The flush is IDEMPOTENT and DELTA-BASED for credits (credit_commit.ts):
  * what lands on the entity is (what it holds now) + (working - the balance
  * it held at the last sync). That is what keeps a writer this transaction
- * does not own — a spec that pokes the live component, the client's
- * settlement before a transaction exists — from being erased. Writers that
- * DO go through the transaction (applyExternalCredits: the client's escort
- * deal settlement, the refuel button) move the working balance, the live
- * component and the sync point together, so the delta stays what the
- * venue spent and the readout, the affordability gates and the balance
- * that lifts off all agree.
+ * does not own — a spec that pokes the live component — from being
+ * erased. Writers that DO go through the transaction (applyExternalCredits:
+ * the escort-deal settlement at lift-off, the refuel button) move the
+ * working balance, the live component and the sync point together, so
+ * the delta stays what the venue spent and the readout, the affordability
+ * gates and the balance that lifts off all agree.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ESCORT DEALS SETTLE AT LIFT-OFF, through the transaction
+ * ---------------------------------------------------------------------------
+ *
+ * The upgrades and sales the player queued over the comm channel settle as
+ * they LEAVE (escort_deals.ts has the rules and the ruling): the spaceport
+ * runs {@link settleEscortDeals} over the client's landed roster before it
+ * commits, gated on the working balance and paid into the one ledger, then
+ * shows the player the report and only then calls {@link commit}. The
+ * money therefore lifts off on the hull commit() hands back, whichever
+ * hull that is by then (a shipyard trade re-seeds the working copy from
+ * the new one).
  *
  * ---------------------------------------------------------------------------
  * THE FLEET-HOLD LEASE is a property of the visit
  * ---------------------------------------------------------------------------
  *
  * The trade center checks out working copies of the landed escorts' holds
- * (fleet_cargo.ts) and the client settles queued escort deals on every
- * docked frame at a shipyard; a sale settling while a hold is open would
+ * (fleet_cargo.ts); an escort sale settling while a hold is open would
  * splice the escort off the roster under the exchange. `leaseFleetHolds`
  * records the holds on the transaction, `holdOpen(uuid)` is what the
  * settlement asks, and the lease lives exactly as long as the savepoint
  * that opened it: released (holds committed onto the escort entities, then
  * the lease closed) with it, discarded with its rollback. There is no
- * module-level registry to leak.
+ * module-level registry to leak. At Leave every visit has released, so
+ * the lift-off settlement finds no hold open; the freeze stays as the
+ * invariant that makes the settlement safe to call at any point.
  *
  * ---------------------------------------------------------------------------
  * WHAT DOES NOT CHANGE
@@ -518,15 +531,14 @@ export class LandedTransaction {
     /**
      * The balance a CONCURRENT SPENDER may check affordability against:
      * the working balance, which is what the player is about to have.
-     * (credit_commit.ts's spendableBalance, for a transaction.)
      */
     spendable(): number {
         return this.session.state.credits.credits;
     }
 
     /**
-     * A credit movement by a writer that is not a venue — the client's
-     * escort-deal settlement, the spaceport's refuel button. Working
+     * A credit movement by a writer that is not a venue — the escort-deal
+     * settlement at lift-off, the spaceport's refuel button. Working
      * balance, live component and sync point all move by `delta`, so the
      * open venue's own delta is untouched, its readout follows, and the
      * affordability gates see the money at once.
@@ -581,6 +593,40 @@ export class LandedTransaction {
         return this.leasedHolds.some(hold => hold.uuid === uuid);
     }
 
+    // ── The escort deals, at lift-off ───────────────────────────────────
+
+    /**
+     * THE LIFT-OFF SETTLEMENT of the escort deals the player queued over
+     * the comm channel (escort_deals.ts's rules; Matthew's ruling #249):
+     * run by the spaceport's Leave, over the client's landed roster,
+     * BEFORE {@link commit}. Gated on the working balance (what the player
+     * is about to lift off with), frozen for any escort whose hold a visit
+     * still has checked out, and paid into the one ledger through
+     * applyExternalCredits — so the proceeds land on whichever hull commits,
+     * and a savepoint still open under a blind popup sequence cannot roll
+     * them back.
+     *
+     * `getShip` must already have the upgrade targets built
+     * (escort_deals.ts's queuedUpgradeTargets names them; the spaceport
+     * loads them first, since this must be synchronous — it mutates the
+     * roster the client's frame loop owns). Sold escorts are spliced off
+     * that roster here, which is what keeps them out of the lift-off.
+     *
+     * After commit() nothing can settle: the hull has left, so the deals
+     * stay queued for the next departure and the call says so.
+     */
+    settleEscortDeals(roster: EscortDealEntry[], player: string,
+        getShip: (id: string) => ShipData | undefined): EscortDealSettlement {
+        if (this.closed) {
+            this.warnAbandoned('escort-deal settlement');
+            return { sold: [], upgraded: [], credits: 0 };
+        }
+        const settled = settleEscortDeals(roster, player, this.spendable(),
+            getShip, uuid => this.holdOpen(uuid));
+        this.applyExternalCredits(settled.credits);
+        return settled;
+    }
+
     private endLease(): void {
         this.leasedHolds = [];
         this.leaseOwner = undefined;
@@ -632,20 +678,4 @@ export class LandedTransaction {
             listener(ship);
         }
     }
-}
-
-/**
- * The client's docked-frame escort-deal settlement, THROUGH the visit:
- * gated on the working balance, frozen for any escort whose hold the
- * trade center has checked out, and paid into the one ledger. What
- * client/docking.ts runs on every docked frame at a shipyard while a
- * transaction is open; escort_deals.ts has the deal rules.
- */
-export function settleVisitEscortDeals(transaction: LandedTransaction,
-    roster: EscortDealEntry[], player: string,
-    getShip: (id: string) => ShipData | undefined): EscortDealSettlement {
-    const settled = settleEscortDeals(roster, player, transaction.spendable(),
-        getShip, uuid => transaction.holdOpen(uuid));
-    transaction.applyExternalCredits(settled.credits);
-    return settled;
 }

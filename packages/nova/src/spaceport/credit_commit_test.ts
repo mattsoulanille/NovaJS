@@ -11,7 +11,7 @@ import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { commitVenueCredits, creditBalance, spendableBalance } from './credit_commit.js';
+import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Outfitter } from './outfitter.js';
 import { TradeCenter } from './trade_center.js';
@@ -25,12 +25,14 @@ import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
  *
  * A venue snapshots the player's balance when it opens and writes it back
  * when the player presses Done, but it is not the only writer while the
- * dialog is up: browser.ts settles queued escort deals straight onto the
- * docked entity on EVERY docked frame at a shipyard, and the spaceport's
- * refuel button decrements the live component in place. Committing the
- * snapshot as an ABSOLUTE erased them — buy a hold of food, have a 40,000
- * credit escort sale settle mid-visit, press Done, and the sale was gone
- * though the escort had already left the roster for good.
+ * dialog is up: the spaceport's refuel button decrements the live
+ * component in place, and (until ruling #249 moved the settlement to the
+ * lift-off) the client settled queued escort deals straight onto the
+ * docked entity on every docked frame. Committing the snapshot as an
+ * ABSOLUTE erased them — buy a hold of food, have a 40,000 credit external
+ * payment land mid-visit, press Done, and the payment was gone. The
+ * mid-visit escort sale is kept below as the concurrent writer these specs
+ * drive: the rule is about any writer outside the venue.
  *
  * These drive the REAL menus (headless PIXI, parsed Nova data — the
  * synthetic set) through exactly that sequence.
@@ -67,10 +69,9 @@ describe('venue credit commits compose with concurrent writers', () => {
     }
 
     /**
-     * An escort deal settling on a docked frame: browser.ts's
-     * settleDockedEscortDeals adds the net proceeds to the LIVE component
-     * (`credits.credits += ...`), which is what a venue holding a snapshot
-     * used to overwrite.
+     * A writer outside the venue adding to the LIVE component
+     * (`credits.credits += ...`) while the venue is open — what a venue
+     * holding a snapshot used to overwrite.
      */
     function escortDealSettles(entity: Entity, amount: number) {
         entity.components.get(CreditsComponent)!.credits += amount;
@@ -182,13 +183,15 @@ describe('venue credit commits compose with concurrent writers', () => {
     });
 
     /**
-     * THE GATE, NOT JUST THE ARITHMETIC. An escort UPGRADE settling
-     * mid-visit is a spend: browser.ts asks whether the player can afford
-     * it, then debits the live component. Read off the live balance while
-     * the outfitter's working copy had already spent most of it, the
+     * THE GATE, NOT JUST THE ARITHMETIC. An escort UPGRADE settling while
+     * a venue's working copy is open is a spend: the settlement asks
+     * whether the player can afford it, then debits. Read off the live
+     * balance while the working copy had already spent most of it, the
      * upgrade went through and Done rebased the visit's spend to a
-     * negative balance. It is gated on the venue's working balance now
-     * (credit_commit.ts's spendableBalance).
+     * negative balance. It is gated on the WORKING balance
+     * (LandedTransaction.spendable; landed_transaction_test drives the
+     * real transaction) — modelled here as the balance a venue's live
+     * status hands back, so the delta arithmetic can be pinned on its own.
      */
     describe('a mid-visit escort upgrade is gated on the venue\'s balance',
         () => {
@@ -216,14 +219,15 @@ describe('venue credit commits compose with concurrent writers', () => {
                 }];
             }
             /**
-             * browser.ts's docked frame, as it now settles: gated on the
-             * spendable balance, debited on the live component.
+             * A settlement gated on the working balance (the venue's live
+             * status when one is open, else the live component), debited
+             * on the live component.
              */
             function settleFrame(entity: Entity, deals: EscortDealEntry[],
                 catalogue: Map<string, ShipData>,
                 liveStatus?: () => { credits?: number }) {
                 const settled = settleEscortDeals(deals, PLAYER,
-                    spendableBalance(entity, liveStatus),
+                    liveStatus?.().credits ?? creditBalance(entity),
                     id => catalogue.get(id));
                 entity.components.get(CreditsComponent)!.credits +=
                     settled.credits;
@@ -244,7 +248,7 @@ describe('venue credit commits compose with concurrent writers', () => {
                         () => ({ credits: working.credits }));
                     expect(settled.upgraded).toEqual([]);
                     expect(creditBalance(entity)).toBe(100_000);
-                    // Still queued: it will settle on a later docked frame.
+                    // Still queued: it will settle at a later departure.
                     expect(deals[0].entity.components.get(PlayerEscortComponent)!
                         .pendingUpgrade).toBe(BETTER);
 
@@ -276,8 +280,6 @@ describe('venue credit commits compose with concurrent writers', () => {
             it('reads the live balance when no venue is open', () => {
                 const entity = new Entity();
                 entity.components.set(CreditsComponent, { credits: 100_000 });
-                expect(spendableBalance(entity)).toBe(100_000);
-                expect(spendableBalance(entity, () => ({}))).toBe(100_000);
                 const catalogue = ships(50_000);
                 const settled = settleFrame(entity, roster(catalogue), catalogue);
                 expect(settled.upgraded.length).toBe(1);

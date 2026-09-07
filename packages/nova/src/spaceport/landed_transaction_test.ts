@@ -30,9 +30,7 @@ import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugi
 import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
 import { creditBalance } from './credit_commit.js';
 import { EscortDealEntry } from './escort_deals.js';
-import {
-    LandedTransaction, settleVisitEscortDeals,
-} from './landed_transaction.js';
+import { LandedTransaction } from './landed_transaction.js';
 import { MissionUniverse } from './mission_universe.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 
@@ -316,7 +314,7 @@ describe('the landed transaction', () => {
             expect(creditBalance(entity)).toBe(97_000);
         });
 
-    describe('the client\'s escort-deal settlement, through the visit', () => {
+    describe('the escort-deal settlement at lift-off, through the visit', () => {
         const ESCORT = 'test:terrapin';
         const BETTER = 'test:terrapin-2';
         const ships = (upgradeCost: number) => new Map<string, ShipData>([
@@ -342,14 +340,15 @@ describe('the landed transaction', () => {
         it('gates an upgrade on the WORKING balance and leaves one it '
             + 'cannot cover queued, so the release never goes negative',
             async () => {
-                // 100,000 cr; the outfitter has spent 90,000 of it; a
-                // 50,000 upgrade lands mid-visit.
+                // 100,000 cr; a savepoint still open (a Leave under a blind
+                // landing popup) has spent 90,000 of it; a 50,000 upgrade
+                // settles at the lift-off.
                 const { entity, transaction } = await landing();
-                const visit = transaction.savepoint('outfitter');
+                const visit = transaction.savepoint('landing offers');
                 transaction.credits.credits -= 90_000;
                 const catalogue = ships(50_000);
                 const deals = roster(catalogue);
-                const settled = settleVisitEscortDeals(transaction, deals,
+                const settled = transaction.settleEscortDeals(deals,
                     PLAYER, id => catalogue.get(id));
                 expect(settled.upgraded).toEqual([]);
                 expect(deals[0].entity.components.get(PlayerEscortComponent)!
@@ -361,10 +360,10 @@ describe('the landed transaction', () => {
         it('settles one it CAN cover into the same ledger the visit is '
             + 'spending from', async () => {
                 const { entity, transaction } = await landing();
-                const visit = transaction.savepoint('outfitter');
+                const visit = transaction.savepoint('landing offers');
                 transaction.credits.credits -= 90_000;
                 const catalogue = ships(5_000);
-                const settled = settleVisitEscortDeals(transaction,
+                const settled = transaction.settleEscortDeals(
                     roster(catalogue), PLAYER, id => catalogue.get(id));
                 expect(settled.upgraded.length).toBe(1);
                 // The gate, the readout and the balance that lifts off agree.
@@ -372,6 +371,23 @@ describe('the landed transaction', () => {
                 expect(transaction.spendable()).toBe(5_000);
                 transaction.release(visit);
                 expect(creditBalance(entity)).toBe(5_000);
+            });
+
+        it('settles nothing after the lift-off commit — the hull has left, '
+            + 'so the deal stays queued for the next departure', async () => {
+                const { entity, transaction } = await landing();
+                const before = creditBalance(entity);
+                transaction.commit();
+                const catalogue = ships(5_000);
+                const deals = roster(catalogue);
+                const warn = spyOn(console, 'warn');
+                const settled = transaction.settleEscortDeals(deals, PLAYER,
+                    id => catalogue.get(id));
+                expect(settled).toEqual({ sold: [], upgraded: [], credits: 0 });
+                expect(deals[0].entity.components.get(PlayerEscortComponent)!
+                    .pendingUpgrade).toBe(BETTER);
+                expect(creditBalance(entity)).toBe(before);
+                expect(warn).toHaveBeenCalled();
             });
     });
 
@@ -503,8 +519,8 @@ describe('the landed transaction', () => {
                 }
                 // Everything the save reads is what it read before the trip.
                 expect(extractSaveData(hull, SYSTEM)).toEqual(before);
-                // And the deal is still queued for the next shipyard, in the
-                // encoding the settlement reads.
+                // And the deal is still queued for the next departure, in
+                // the encoding the settlement reads.
                 const marker = escorts[0].entity.components
                     .get(PlayerEscortComponent);
                 expect(escortDeal(marker))

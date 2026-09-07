@@ -57,8 +57,8 @@ export type SimulationInput =
      * sim-side; the record carries only which escort and (for an upgrade)
      * which class the client resolved, which the sim verifies against the
      * escort's own shïp UpgradeTo. No PRICE is involved either way — the
-     * two deals are deferred to the next shipyard, where the money moves
-     * (spaceport/escort_deals.ts).
+     * two deals are deferred to the next spaceport departure, where the
+     * money moves (spaceport/escort_deals.ts).
      */
     | { kind: 'escortAction', action: EscortAction }
     | { kind: 'addEntity', uuid: string, entity: EncodedEntity }
@@ -190,7 +190,7 @@ export async function loadInputRecordsGameData(
             // (An escortAction stages NOTHING. Queueing an upgrade records
             // the target class's id on the escort's ownership marker and
             // builds no ship; the class is loaded by the client that
-            // settles the deal at a shipyard — spaceport/escort_deals.ts.)
+            // settles the deal at lift-off — spaceport/escort_deals.ts.)
             //
             // Every input that carries an ENTITY must stage it, or a peer
             // that did not originate the record derives against unloaded

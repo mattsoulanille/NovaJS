@@ -157,7 +157,7 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         // components, and queueing an upgrade only writes the target
         // class's id onto the escort's ownership marker — the class is
         // loaded, and the hull actually swapped, much later, by the
-        // client that settles the deal at a shipyard
+        // client that settles the deal as the player leaves a spaceport
         // (spaceport/escort_deals.ts).
         world.events.get(EscortActionEvent).subscribe(({ data }) => {
             sendToBridge(bridge.escortAction(data.action), 'Escort action');

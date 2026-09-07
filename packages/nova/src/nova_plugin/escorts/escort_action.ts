@@ -42,10 +42,14 @@ import { CargoComponent, cargoUsed } from '../ship/index.js';
  *   RELEASE  (both kinds)      let the ship go; it stops being yours.
  *                              IMMEDIATE — it happens over the channel.
  *   SELL     (captured only)   cash the hull in for its shïp EscSellValue.
- *                              DEFERRED to the next shipyard.
+ *                              DEFERRED to the next spaceport departure.
  *   UPGRADE  (both kinds)      swap the escort's class for its shïp
  *                              UpgradeTo class, for EscUpgrdCost.
- *                              DEFERRED to the next shipyard.
+ *                              DEFERRED to the next spaceport departure.
+ *
+ * SELL and UPGRADE are MUTUALLY EXCLUSIVE toggles (Matthew's ruling,
+ * tracker #249): queueing one un-queues the other, so at most one deal is
+ * ever queued per escort.
  *
  * The DIALOG is client-side (display/hail_dialog_plugin.ts), like every
  * other comm dialog; each of these has a simulation effect, and every one
@@ -90,14 +94,16 @@ import { CargoComponent, cargoUsed } from '../ship/index.js';
  * snapshots, survive a landing and a jump, and go into the save.
  *
  * WHERE THE MONEY MOVES: at the pad, not here. spaceport/escort_deals.ts
- * settles a queued deal the next time the player lands on a stellar with a
- * shipyard (spöb hasShipyard) — charging EscUpgrdCost and swapping the
- * class, or paying EscSellValue and dropping the escort from the roster
- * that would otherwise lift off with the player. Nothing is charged or
- * paid at queue time, and cancelling costs nothing. That reading is the
- * original's: STR# 2002 keeps "escort was" / "escorts were" / "sold for a
- * profit of" / "upgraded at a cost of" (297-300) as the message it prints
- * when the deal SETTLES, which is where it names the sum.
+ * settles a queued deal as the player next LEAVES a spaceport (any
+ * stellar, shipyard or not — ruling #249/#253), if the funds are there —
+ * charging EscUpgrdCost and swapping the class, or paying EscSellValue and
+ * dropping the escort from the roster that would otherwise lift off with
+ * the player — and tells the player so in a dialog before the lift-off.
+ * Nothing is charged or paid at queue time, and cancelling costs nothing.
+ * That reading is the original's: STR# 2002 keeps "escort was" / "escorts
+ * were" / "sold for a profit of" / "upgraded at a cost of" (297-300) as
+ * the message it prints when the deal SETTLES, which is where it names
+ * the sum.
  *
  * WHY QUEUEING IS NOT GATED ON CREDITS. The button greys when the player
  * cannot afford the upgrade today, but this module accepts the record
@@ -123,8 +129,9 @@ export type EscortAction =
     /** Let the escort go: it is nobody's, and it leaves the system. */
     | { kind: 'releaseEscort', target: string }
     /**
-     * Queue a sale of a CAPTURED escort's hull, to be settled at the next
-     * shipyard. Cancels any queued upgrade — an escort is never both.
+     * Queue a sale of a CAPTURED escort's hull, to be settled as the
+     * player next leaves a spaceport. Cancels any queued upgrade — an
+     * escort is never both.
      */
     | { kind: 'queueSale', target: string }
     /** Un-queue a sale. Nothing was charged, so nothing is refunded. */
@@ -399,8 +406,8 @@ function setEscortDeal(escort: Entity, deal: EscortDeal): void {
  *
  * Only RELEASE has an effect on the world here. The other four write (or
  * clear) the two queued-deal flags on the escort's ownership marker; the
- * money and the hull swap happen at the next shipyard, in
- * spaceport/escort_deals.ts. See the module comment.
+ * money and the hull swap happen as the player next leaves a spaceport,
+ * in spaceport/escort_deals.ts. See the module comment.
  */
 export function applyEscortAction(world: World, peerId: string | undefined,
     action: EscortAction): void {
@@ -472,7 +479,7 @@ export function applyEscortAction(world: World, peerId: string | undefined,
             }
             // NOT gated on credits, and nothing is staged: no ship is built
             // on this tick. The target class is loaded (and the money
-            // checked) by the client that settles the deal at the pad.
+            // checked) by the client that settles the deal at lift-off.
             setEscortDeal(escort, { kind: 'upgrade', toShip: upgradeTo });
             return;
         }

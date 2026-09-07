@@ -22,20 +22,13 @@
 import type { Entity } from 'nova_ecs/entity';
 import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
-import { DockedShip as DockedShipHandle, DockedShipResource } from '../display/docked_ship.js';
 import { OpenGateMapEvent } from '../display/gate_map_plugin.js';
 import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
 import { DISCOVERY_LANDED } from '../nova_plugin/player/discovery.js';
 import { markDiscovered } from '../nova_plugin/player/discovery_store.js';
 import { PlanetTargetComponent } from '../nova_plugin/travel/planet_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { TargetComponent } from '../nova_plugin/ship/target_component.js';
-import { spendableBalance } from '../spaceport/credit_commit.js';
-import {
-    EscortDealSettlement, queuedUpgradeTargets, settleEscortDeals,
-} from '../spaceport/escort_deals.js';
-import { settleVisitEscortDeals } from '../spaceport/landed_transaction.js';
 import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
 import {
     dock, dockAtGate, gateLaunched, land, landAtGate, launched, LiveSystem,
@@ -116,7 +109,11 @@ export function onLand(runtime: ClientRuntime, world: World,
  * LeaveSpaceportEvent: the player hit Depart. Departure is THE
  * checkpoint (the original saved the pilot file on every depart). The
  * relaunching entity carries everything the venues committed, including
- * a ship bought at the shipyard.
+ * a ship bought at the shipyard and the escort deals the spaceport
+ * settled on the way out (spaceport/escort_deals.ts: the Leave settles
+ * them, shows the player the report, and resolves only once that dialog
+ * is closed — so by the time this fires the roster already lacks the
+ * escorts that were sold and the ledger already holds the money).
  */
 export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
     void {
@@ -138,90 +135,22 @@ export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
 }
 
 /**
- * Settles the escort deals the player queued over the comm channel —
- * upgrades and sales, which the original defers to the next SHIPYARD
- * (spaceport/escort_deals.ts explains the whole model).
- *
- * Called on every frame the player is docked at a stellar with a
- * shipyard, not just as the spaceport opens, because escorts keep flying
- * down and joining the roster while the player shops: one that touches
- * down halfway through a visit gets its deal settled then.
- * `settleEscortDeals` clears each flag as it acts, so the repeat calls
- * are no-ops. Nothing happens at a stellar WITHOUT a shipyard: the
- * caller's flag check is the whole of that rule, and every queued deal
- * simply rides on to the next landing.
- *
- * The credits move on the DOCKED PLAYER'S OWN ENTITY, which is where
- * they live while the player is out of the world, and reach the other
- * peers with the `addEntity` record that puts that entity back at
- * lift-off — exactly as every purchase made in the spaceport does.
- *
- * THROUGH THE LANDING'S TRANSACTION once the spaceport has opened one
- * (spaceport/landed_transaction.ts, reached by the display's docked
- * handle): gated on the working balance the open venue is spending from,
- * frozen for an escort whose hold the trade center has checked out, and
- * paid into the one ledger every venue is a view onto — so there is no
- * second copy for the settlement to race. Before the transaction exists
- * (the frames between the dock and the landing's data arriving) it is a
- * writer of the live component, which the transaction then seeds from;
- * credit_commit.ts documents how a venue's delta composes with that.
- */
-async function settleDockedEscortDeals(runtime: ClientRuntime, player: string,
-    docked: { entity: Entity }, handle?: DockedShipHandle): Promise<void> {
-    const { fleet, gameData } = runtime;
-    // The target classes have to be BUILT to refit against, and the
-    // settlement itself is synchronous (it mutates the roster the frame
-    // loop owns), so they are loaded first.
-    await Promise.all(queuedUpgradeTargets(fleet.landed, player)
-        .map(id => gameData.data.Ship.get(id).catch(() => undefined)));
-    // Read the HANDLE's entity (and transaction) after the await, not
-    // what it named before: a shipyard purchase during that fetch
-    // repoints the docked entity at the new hull (swapDockedShip), and
-    // the money must land on the hull that lifts off, not the one just
-    // traded in.
-    const entity = docked.entity;
-    const credits = entity.components.get(CreditsComponent);
-    if (!credits) {
-        // No balance, no trades: settling here would still SELL queued
-        // escorts (they leave the roster) while the proceeds vanish with
-        // no component to receive them (review r16 MEDIUM). Every real
-        // player entity has CreditsComponent; if one ever doesn't, the
-        // deals just wait.
-        return;
-    }
-    const getShip = (id: string) => gameData.data.Ship.getCached(id);
-    let settled: EscortDealSettlement;
-    const transaction = handle?.transaction;
-    if (transaction && transaction.ship === entity) {
-        settled = settleVisitEscortDeals(transaction, fleet.landed, player,
-            getShip);
-    } else {
-        // No transaction yet: gated on the open venue's working balance
-        // if there is one (credit_commit.ts's spendableBalance), debited
-        // on the live component. No venue can be leasing a hold without a
-        // transaction, so nothing is frozen.
-        settled = settleEscortDeals(fleet.landed, player,
-            spendableBalance(entity, handle?.liveStatus), getShip);
-        credits.credits += settled.credits;
-    }
-    for (const sale of settled.sold) {
-        console.log(`Escort ${sale.uuid} sold off for `
-            + `${sale.value} credits at the shipyard.`);
-    }
-    for (const upgrade of settled.upgraded) {
-        console.log(`Escort ${upgrade.uuid} upgraded to `
-            + `${upgrade.toShip} at a cost of ${upgrade.cost} credits.`);
-    }
-}
-
-/**
  * The docking half of a pump frame, in the order the pump always ran
- * its blocks: dock a pending spaceport landing, settle escort deals while
- * docked at a shipyard, launch a requested departure, dock a pending
- * hypergate landing, lift off from a gate whose map closed without a
- * pick. Each block re-reads the state, so a block's transition is seen
- * by the ones after it in the same frame exactly as the flag writes
- * were.
+ * its blocks: dock a pending spaceport landing, launch a requested
+ * departure, dock a pending hypergate landing, lift off from a gate
+ * whose map closed without a pick. Each block re-reads the state, so a
+ * block's transition is seen by the ones after it in the same frame
+ * exactly as the flag writes were.
+ *
+ * NOTHING SETTLES HERE while the player is docked. The escort deals
+ * queued over the comm channel settle in the SPACEPORT'S Leave
+ * (spaceport/escort_deals.ts, ruling #249): the spaceport settles them,
+ * shows the player the report, and only then resolves its show() into
+ * LeaveSpaceportEvent — which is what sets `launching` and lets the
+ * launch block below build the insertion records. So the fleet cannot
+ * be in space before the player has closed that dialog, and a frame that
+ * runs while the dialog is up finds a `landed` state with nothing to
+ * launch and does nothing.
  *
  * `live` is the system this frame captured; every await inside is
  * against its bridge, and a transition that takes the bridge away
@@ -254,12 +183,11 @@ export async function runDockingFrame(runtime: ClientRuntime,
             // roster while the player shops, and each one still counts
             // against the outfitter's buy caps.
             landedEscorts: () => fleet.landed,
-            // A ship bought at the shipyard is a NEW entity, and the frame
-            // loop keeps writing to whichever one the docked handle names
-            // — escort deals settle into its credits on every docked
-            // frame, and every save is built from it. The spaceport
-            // publishes the trade as it happens so both follow the hull
-            // that will actually lift off (Spaceport.adoptPurchasedShip).
+            // A ship bought at the shipyard is a NEW entity, and every
+            // save is built from whichever one the docked handle names.
+            // The spaceport publishes the trade as it happens so the
+            // handle follows the hull that will actually lift off
+            // (Spaceport.adoptPurchasedShip).
             onShipSwap: (hull: Entity) => {
                 try {
                     swapDockedShip(state.state, hull);
@@ -269,23 +197,6 @@ export async function runDockingFrame(runtime: ClientRuntime,
             },
         });
         current = state.apply(dock);
-    }
-    // Queued escort deals settle at a SHIPYARD, and only there (spöb
-    // hasShipyard). Checked every docked frame rather than once at the
-    // dock: escorts keep flying down and joining the roster while the
-    // player shops, and one that touches down mid-visit has its deal
-    // settled then. A no-op once every flag is cleared, and a no-op at
-    // any stellar without a shipyard.
-    if (current.kind === 'landed' && fleet.landed.length > 0
-        && gameData.data.Planet.getCached(current.ship.planetId)
-            ?.flags.hasShipyard) {
-        // The handle, not its entity (a purchase may repoint it during
-        // the settlement's await), and the display's docked handle for
-        // the landing's transaction (or, before one exists, the open
-        // venue's working balance for the affordability gate).
-        await settleDockedEscortDeals(runtime, current.ship.uuid, current.ship,
-            world.resources.get(DockedShipResource)?.current);
-        current = state.state;
     }
     if (current.kind === 'landed' && current.launching) {
         const launching = current.launching;

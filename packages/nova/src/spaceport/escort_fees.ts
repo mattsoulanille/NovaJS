@@ -20,7 +20,7 @@ import { modifiedPrice } from './price_mod.js';
  * the player would be shown one number and charged another.
  *
  * "CURRENT ship class" is the load-bearing part. Upgrading an escort
- * replaces its class in place (escort_deals.ts, at the shipyard), and
+ * replaces its class in place (escort_deals.ts, at lift-off), and
  * because every one of these is a pure function of the class the escort is
  * flying right now, an upgrade automatically raises the wage, changes what
  * a further upgrade costs, and changes what the hull would sell for.
@@ -95,9 +95,10 @@ import { modifiedPrice } from './price_mod.js';
  *    the player last docked at would make the same escort cost different
  *    amounts on different days with nothing about the escort having changed.
  *  - UPGRADING and SELLING are AGREED over a comm channel in deep space and
- *    SETTLED at the next shipyard (escort_deals.ts), so there are two
- *    stellars one could argue for and neither was involved when the price
- *    was quoted. They take the LIST price. The deciding reason is that the
+ *    SETTLED as the player leaves the next spaceport (escort_deals.ts), so
+ *    there are two stellars one could argue for and neither was involved
+ *    when the price was quoted. They take the LIST price. The deciding
+ *    reason is that the
  *    comm box shows the player a figure ("Upgrade Cost: 50,000 credits")
  *    before they commit, and bending it afterwards by whichever rock they
  *    happened to put down on would charge them something other than what

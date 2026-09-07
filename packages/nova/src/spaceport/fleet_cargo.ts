@@ -481,23 +481,22 @@ export async function collectFleetHolds(
 // ─────────────────────────────────────────────────────────────────────────
 //
 // The exchange snapshots the landed roster's holds when it opens and writes
-// them back at Done, but the roster keeps CHANGING underneath it: the client
-// settles the escort deals the player queued over the comm channel on every
-// docked frame at a shipyard, and a settled SALE splices its escort out of
-// the roster (spaceport/escort_deals.ts). Nothing stopped that from
-// happening to an escort whose hold was open — the exchange would then
-// commit a hold onto an entity that is not on any roster, so the goods
-// evaporated while the credits stayed spent.
+// them back at Done, but the roster can CHANGE underneath it: settling the
+// escort deals the player queued over the comm channel splices a SOLD
+// escort out of the roster (spaceport/escort_deals.ts). When that
+// settlement ran on every docked frame, nothing stopped it from happening
+// to an escort whose hold was open — the exchange would then commit a hold
+// onto an entity that is not on any roster, so the goods evaporated while
+// the credits stayed spent.
 //
 // An open hold is therefore a LEASE on its escort: while the trade visit
-// holds it, that escort's queued deals are frozen and simply retried on the
-// next docked frame (a frame the settlement was going to run on anyway — it
-// runs on all of them). An exchange visit is seconds long and the deals are
-// already deferred to "the next shipyard", so waiting until Done costs the
-// player nothing; the alternative (re-running the whole buy allocation
-// against the shrunken fleet at commit time and refunding the overflow)
-// charges the player for goods and then takes some back, which is a worse
-// thing to have happen while they are looking at the screen.
+// holds it, that escort's queued deals are frozen. The settlement now runs
+// at lift-off (Leave), when every visit has released, so the lease is the
+// invariant that keeps it safe to run at any point rather than a case
+// that arises in play; the alternative (re-running the whole buy
+// allocation against the shrunken fleet at commit time and refunding the
+// overflow) charges the player for goods and then takes some back, which
+// is a worse thing to have happen while they are looking at the screen.
 //
 // THE LEASE IS A PROPERTY OF THE LANDING'S TRANSACTION
 // (spaceport/landed_transaction.ts: leaseFleetHolds / holdOpen), scoped to

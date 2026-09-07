@@ -83,7 +83,7 @@ export const PlayerEscort = t.intersection([t.type({
     provenance: t.union([t.literal('hired'), t.literal('captured')]),
     /**
      * A QUEUED UPGRADE: the global ship id this escort will be swapped to
-     * the next time its player lands on a stellar with a shipyard
+     * the next time its player leaves a spaceport, funds permitting
      * (spaceport/escort_deals.ts). Absent means nothing is queued.
      *
      * The TARGET IS RESOLVED AT QUEUE TIME — it is the class's own shïp
@@ -105,8 +105,8 @@ export const PlayerEscort = t.intersection([t.type({
     pendingUpgrade: t.string,
     /**
      * A QUEUED SALE: this escort will be sold off (and will NOT lift off
-     * with the player) the next time its player lands on a stellar with a
-     * shipyard. CAPTURED escorts only — a hired pilot's hull was never the
+     * with the player) the next time its player leaves a spaceport.
+     * CAPTURED escorts only — a hired pilot's hull was never the
      * player's to sell — and the settlement re-checks that rather than
      * trusting the flag.
      *
@@ -133,8 +133,9 @@ export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
  *                absent on the wire = 'hired', the reading that cannot be
  *                turned into cash);
  *   deal         what the player has decided to do with it at the next
- *                shipyard (escortDeal): nothing, an upgrade to a resolved
- *                class, or a sale — ONE of the three, never two.
+ *                spaceport departure (escortDeal): nothing, an upgrade to
+ *                a resolved class, or a sale — ONE of the three, never two
+ *                (ruling #249: Upgrade and Sell are mutually exclusive).
  *
  * `pendingUpgrade` / `pendingSale` are the encoding of `deal`:
  *
@@ -251,12 +252,12 @@ export function escortSaleQueued(escort: Entity): boolean {
  * rebuild of that marker:
  *
  *   `provenance`   how the escort was acquired (hired / captured);
- *   the deal       what is queued for the next shipyard (EscortDeal, in
+ *   the deal       what is queued for the next departure (EscortDeal, in
  *                  its `pendingUpgrade` / `pendingSale` encoding).
  *
  * Both are facts about the PLAYER'S RELATIONSHIP with this ship — how
  * they got it, and what they have decided to do with it at the next
- * shipyard — not about which ship it is currently keeping formation on.
+ * departure — not about which ship it is currently keeping formation on.
  * Every site that rebuilds the marker goes through this or through
  * {@link carriedEscortFields}, so none of them can quietly drop one.
  *

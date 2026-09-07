@@ -27,13 +27,12 @@ import { Bar } from './bar.js';
 import { creditBalance } from './credit_commit.js';
 import { EscortDealEntry } from './escort_deals.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
-import {
-    LandedTransaction, settleVisitEscortDeals,
-} from './landed_transaction.js';
+import { LandedTransaction } from './landed_transaction.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
 import { resetOfferRolls } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
+import { OfferPopup } from './offer_popup.js';
 import { Outfitter } from './outfitter.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { Spaceport } from './spaceport.js';
@@ -56,7 +55,9 @@ import { TradeCenter } from './trade_center.js';
  *   2. hire a pilot at the bar, then gamble the money away;
  *   3. fill the hold at the trade center, then try to accept a cargo
  *      mission at the BBS;
- *   4. queue an escort upgrade, then trade the hull in — and the reverse.
+ *   4. queue an escort upgrade, then trade the hull in, then LEAVE — the
+ *      deal settles at the lift-off (ruling #249), on the new hull, and
+ *      the departure waits on the report dialog.
  */
 describe('the seams between landed venues', () => {
     beforeAll(() => installHeadlessPixi());
@@ -232,11 +233,26 @@ describe('the seams between landed venues', () => {
         };
         const venues = spaceport as unknown as {
             outfitter: Outfitter, shipData?: ShipData,
+            offerPopup: OfferPopup,
         };
         return {
             spaceport, client, dockedShip, transaction, departed, press,
             enter, leaveVenue, entity, venues, data,
         };
+    }
+
+    /** The text a popup is showing, unwrapped (its lines are pre-wrapped). */
+    function popupText(popup: OfferPopup): string {
+        return popup.container.children
+            .filter((child): child is PIXI.Text => child instanceof PIXI.Text)
+            .map(text => text.text.replace(/\n/g, ' '))
+            .join(' ');
+    }
+
+    /** Closes a one-button notice as its Okay button would. */
+    function closePopup(popup: OfferPopup) {
+        (popup as unknown as { choice: Subject<'accept' | 'refuse'> })
+            .choice.next('accept');
     }
 
     /** Opens the shipyard and trades up to NEW_SHIP (the second tile). */
@@ -307,95 +323,133 @@ describe('the seams between landed venues', () => {
                 });
         });
 
-    describe('an escort upgrade queued, then the hull traded in', () => {
-        it('pays the upgrade from the NEW hull when it settles after the '
-            + 'trade, and lifts off with it', async () => {
-                const visit = await land(500_000, { hasShipyard: true });
-                const { client, entity, press, leaveVenue, departed,
-                    transaction } = visit;
-                const roster = [escort('upgrade')];
+    describe('an escort upgrade queued, then the hull traded in, then '
+        + 'Leave (the deals settle at lift-off, ruling #249)', () => {
+            it('pays the upgrade from the NEW hull at the Leave, reports '
+                + 'it, and lifts off with it only once the report is closed',
+                async () => {
+                    const visit = await land(500_000, { hasShipyard: true });
+                    const { spaceport, client, entity, press, leaveVenue,
+                        departed, transaction, venues } = visit;
+                    const roster = [escort('upgrade')];
+                    spaceport.setLandedEscorts(() => roster, PLAYER);
 
-                await tradeUp(visit);
-                // The escort touches down mid-visit: the client's docked
-                // frame settles its queued upgrade THROUGH the transaction.
-                const settled = settleVisitEscortDeals(transaction, roster,
-                    PLAYER, id => SHIPS.get(id));
-                expect(settled.upgraded.map(u => u.toShip))
-                    .toEqual([BETTER_ESCORT]);
-                const expected = 500_000 - tradeUpPrice(0) - 60_000;
-                expect(creditBalance(client.entity)).toBe(expected);
-                expect(transaction.credits.credits).toBe(expected);
-                // The dead hull never paid a credit of it.
-                expect(creditBalance(entity)).toBe(500_000);
+                    await tradeUp(visit);
+                    await leaveVenue();
+                    // Nothing settled while docked: the trade's balance is
+                    // untouched and the escort still flies its old class.
+                    expect(creditBalance(client.entity))
+                        .toBe(500_000 - tradeUpPrice(0));
+                    expect(roster[0].entity.components.get(ShipComponent)?.id)
+                        .toBe(ESCORT_SHIP);
 
-                await leaveVenue();
-                await press('depart');
-                const launched = await departed;
-                expect(launched).toBe(client.entity);
-                expect(creditBalance(launched)).toBe(expected);
-            });
+                    // LEAVE: the upgrade settles THROUGH the transaction
+                    // onto the new hull, and the report goes up.
+                    await press('depart');
+                    const popup = venues.offerPopup;
+                    await waitFor(() => popup.container.visible,
+                        'the settlement report');
+                    expect(popupText(popup)).toContain(
+                        '1 escort was upgraded at a cost of 60,000 cr.');
+                    const expected = 500_000 - tradeUpPrice(0) - 60_000;
+                    expect(creditBalance(client.entity)).toBe(expected);
+                    expect(transaction.credits.credits).toBe(expected);
+                    expect(roster[0].entity.components.get(ShipComponent)?.id)
+                        .toBe(BETTER_ESCORT);
+                    // The dead hull never paid a credit of it.
+                    expect(creditBalance(entity)).toBe(500_000);
+                    // ...and NOTHING has lifted off: show() is unresolved
+                    // (so LeaveSpaceportEvent has not fired) while the
+                    // report is up, and the transaction is still open.
+                    let launched: Entity | undefined;
+                    void departed.then(ship => { launched = ship; });
+                    await settle();
+                    expect(launched).toBeUndefined();
+                    expect(transaction.isClosed).toBeFalse();
+                    expect(spaceport.container.visible).toBeTrue();
 
-        it('charges the trade from the post-upgrade balance when the '
-            + 'upgrade settled first — neither is paid twice', async () => {
-                const visit = await land(500_000, { hasShipyard: true });
-                const { client, press, leaveVenue, departed, transaction,
-                    enter } = visit;
-                const roster = [escort('upgrade')];
+                    closePopup(popup);
+                    const lifted = await departed;
+                    expect(lifted).toBe(client.entity);
+                    expect(creditBalance(lifted)).toBe(expected);
+                    expect(transaction.isClosed).toBeTrue();
+                    expect(MenuControls.focused).toBeUndefined();
+                });
 
-                await enter('shipyard');
-                // Settles while the shipyard is open, before the Buy.
-                settleVisitEscortDeals(transaction, roster, PLAYER,
-                    id => SHIPS.get(id));
-                expect(transaction.credits.credits).toBe(440_000);
-                await press('right');
-                await press('right');
-                await press('buy');
-                const expected = 440_000 - tradeUpPrice(0);
-                expect(creditBalance(client.entity)).toBe(expected);
-                expect(transaction.credits.credits).toBe(expected);
+            it('settles a SALE at the Leave: the escort is off the roster '
+                + 'and the proceeds are aboard when the ship lifts off',
+                async () => {
+                    const visit = await land(500_000, { hasShipyard: true });
+                    const { spaceport, client, press, departed, transaction,
+                        venues } = visit;
+                    const roster = [escort('sale')];
+                    spaceport.setLandedEscorts(() => roster, PLAYER);
 
-                await leaveVenue();
-                await press('depart');
-                expect(creditBalance(await departed)).toBe(expected);
-            });
+                    await press('depart');
+                    const popup = venues.offerPopup;
+                    await waitFor(() => popup.container.visible,
+                        'the settlement report');
+                    expect(popupText(popup)).toContain(
+                        '1 escort was sold for a profit of 40,000 cr.');
+                    expect(roster).toEqual([]);
+                    expect(creditBalance(client.entity)).toBe(540_000);
+                    expect(transaction.credits.credits).toBe(540_000);
 
-        it('prices a purchase from a sale that settled while the shipyard '
-            + 'was open, so the money is not lost to a stale copy', async () => {
-                const visit = await land(500_000, { hasShipyard: true });
-                const { client, press, transaction, enter } = visit;
-                const roster = [escort('sale')];
-                await enter('shipyard');
-                const settled = settleVisitEscortDeals(transaction, roster,
-                    PLAYER, id => SHIPS.get(id));
-                expect(settled.credits).toBe(40_000);
-                expect(roster).toEqual([]);
-                await press('right');
-                await press('right');
-                await press('buy');
-                expect(creditBalance(client.entity))
-                    .toBe(540_000 - tradeUpPrice(0));
-                expect(transaction.credits.credits)
-                    .toBe(540_000 - tradeUpPrice(0));
-            });
+                    // The 'depart' key closes the REPORT, not the
+                    // spaceport again: the Leave gave its keys up for it.
+                    await press('depart');
+                    expect(creditBalance(await departed)).toBe(540_000);
+                    expect(popup.container.visible).toBeFalse();
+                    expect(MenuControls.focused).toBeUndefined();
+                });
 
-        it('refuses an upgrade the working balance cannot cover after the '
-            + 'trade, leaving it queued', async () => {
-                // 500,000 less the 175,000 trade leaves 325,000; a
-                // 60,000 upgrade is fine, but a hull bought first with
-                // a thinner wallet is not.
-                const visit = await land(200_000, { hasShipyard: true });
-                const { transaction } = visit;
-                const roster = [escort('upgrade')];
-                await tradeUp(visit);
-                expect(transaction.credits.credits).toBe(25_000);
-                const settled = settleVisitEscortDeals(transaction, roster,
-                    PLAYER, id => SHIPS.get(id));
-                expect(settled.upgraded).toEqual([]);
-                expect(roster[0].entity.components.get(PlayerEscortComponent)!
-                    .pendingUpgrade).toBe(BETTER_ESCORT);
-                expect(transaction.credits.credits).toBe(25_000);
-            });
-    });
+            it('leaves an upgrade the working balance cannot cover after '
+                + 'the trade QUEUED, shows no report, and lifts off at once',
+                async () => {
+                    // 200,000 less the 175,000 trade leaves 25,000; the
+                    // 60,000 upgrade cannot be paid.
+                    const visit = await land(200_000, { hasShipyard: true });
+                    const { spaceport, press, departed, transaction, venues,
+                        client } = visit;
+                    const roster = [escort('upgrade')];
+                    spaceport.setLandedEscorts(() => roster, PLAYER);
+                    await tradeUp(visit);
+                    await visit.leaveVenue();
+                    expect(transaction.credits.credits).toBe(25_000);
+
+                    await press('depart');
+                    const lifted = await departed;
+                    expect(venues.offerPopup.container.visible).toBeFalse();
+                    expect(lifted).toBe(client.entity);
+                    expect(creditBalance(lifted)).toBe(25_000);
+                    // Still queued, still the old class, still aboard.
+                    expect(roster.length).toBe(1);
+                    expect(roster[0].entity.components
+                        .get(PlayerEscortComponent)!.pendingUpgrade)
+                        .toBe(BETTER_ESCORT);
+                    expect(roster[0].entity.components.get(ShipComponent)?.id)
+                        .toBe(ESCORT_SHIP);
+                });
+
+            it('settles at a stellar WITHOUT a shipyard too — any spaceport '
+                + 'departure', async () => {
+                    const visit = await land(500_000, {});
+                    const { spaceport, press, departed, venues, client } = visit;
+                    const roster = [escort('upgrade')];
+                    spaceport.setLandedEscorts(() => roster, PLAYER);
+                    await press('depart');
+                    const popup = venues.offerPopup;
+                    await waitFor(() => popup.container.visible,
+                        'the settlement report');
+                    expect(popupText(popup)).toContain('upgraded at a cost');
+                    closePopup(popup);
+                    expect(creditBalance(await departed)).toBe(440_000);
+                    expect(roster[0].entity.components.get(ShipComponent)?.id)
+                        .toBe(BETTER_ESCORT);
+                    expect(client.entity.components.get(ShipComponent)?.id)
+                        .toBe(OLD_SHIP);
+                });
+        });
 
     // ── Standalone venues sharing one transaction (seams 2 and 3) ─────
 

@@ -5,20 +5,22 @@ import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
 import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
-    EscortDealEntry, queuedUpgradeTargets, settleEscortDeals,
+    EscortDealEntry, escortSettlementReport, queuedUpgradeTargets,
+    settleEscortDeals,
 } from './escort_deals.js';
 
 /**
  * ============================================================================
- * Settling queued escort deals at the shipyard
+ * Settling queued escort deals at lift-off
  * ============================================================================
  *
  * The far end of the deferred flow: the comm dialog queued an upgrade or a
- * sale (nova_plugin/escorts/escort_action.ts) and the player has now landed
- * somewhere with a shipyard. These specs drive the settlement over a landed
- * roster exactly as browser.ts does — a plain array of CarriedEscort-shaped
- * entries, mutated in place — and check the money, the hull, and what is
- * left on the roster to lift off again.
+ * sale (nova_plugin/escorts/escort_action.ts) and the player is now
+ * leaving a spaceport (ruling #249). These specs drive the settlement over
+ * a landed roster exactly as the spaceport's Leave does — a plain array of
+ * CarriedEscort-shaped entries, mutated in place — and check the money,
+ * the hull, what is left on the roster to lift off again, and the report
+ * the departure dialog shows.
  */
 
 const PLAYER = 'player-uuid';
@@ -229,7 +231,7 @@ describe('settling a queued UPGRADE', () => {
 });
 
 describe('the settlement as a whole', () => {
-    it('is IDEMPOTENT — the client calls it on every docked frame', () => {
+    it('is IDEMPOTENT — a retried departure cannot settle twice', () => {
         const escort = entry('e', { pendingUpgrade: BETTER });
         const roster = [escort];
         expect(settleEscortDeals(roster, PLAYER, 100_000, getShip).credits)
@@ -296,5 +298,50 @@ describe('the settlement as a whole', () => {
             });
             expect(Object.keys(markerOf(escort.entity)).sort())
                 .toEqual(['parent', 'player', 'provenance']);
+        });
+});
+
+/**
+ * The departure dialog's text (ruling #253): how many were upgraded, how
+ * many sold, and for how much — in the original's own settlement words
+ * (STR# 2002 297-300), sales first.
+ */
+describe('escortSettlementReport (the departure dialog)', () => {
+    it('reports a single sale in the singular, with the sum', () => {
+        const roster = [entry('sold', { pendingSale: true })];
+        const settled = settleEscortDeals(roster, PLAYER, 0, getShip);
+        expect(escortSettlementReport(settled))
+            .toBe('1 escort was sold for a profit of 15,000 cr.');
+    });
+
+    it('reports several upgrades in the plural, summing their costs', () => {
+        const roster = [
+            entry('a', { pendingUpgrade: BETTER }),
+            entry('b', { pendingUpgrade: BETTER }),
+        ];
+        const settled = settleEscortDeals(roster, PLAYER, 1_000_000, getShip);
+        expect(escortSettlementReport(settled))
+            .toBe('2 escorts were upgraded at a cost of 100,000 cr.');
+    });
+
+    it('puts the sales line before the upgrades line', () => {
+        const roster = [
+            entry('up', { pendingUpgrade: BETTER }),
+            entry('sold', { pendingSale: true }),
+        ];
+        const settled = settleEscortDeals(roster, PLAYER, 1_000_000, getShip);
+        expect(escortSettlementReport(settled)).toBe(
+            '1 escort was sold for a profit of 15,000 cr.\n'
+            + '1 escort was upgraded at a cost of 50,000 cr.');
+    });
+
+    it('says nothing about a deal that stayed queued, and nothing at all '
+        + 'when nothing settled — so no dialog is shown', () => {
+            const unaffordable = entry('e', { pendingUpgrade: BETTER });
+            const settled = settleEscortDeals([unaffordable], PLAYER,
+                UPGRADE_COST - 1, getShip);
+            expect(escortSettlementReport(settled)).toBeUndefined();
+            expect(escortSettlementReport(
+                { sold: [], upgraded: [], credits: 0 })).toBeUndefined();
         });
 });
