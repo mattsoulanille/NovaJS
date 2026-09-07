@@ -175,20 +175,28 @@ function comparePoints(a: Point, b: Point): number {
  * be decomposed (makeHull).
  *
  * The vertex order is part of the hashed collision geometry, so it is
- * pinned to what the previous implementation (hull.js with infinite
- * concavity) produced — see sprite_sheet_stock_identity_test:
- *  - four or more pixels: the monotone-chain hull, counterclockwise,
- *    starting from the (x, y)-greatest pixel;
- *  - fewer: the pixels themselves in (x, y) order, whatever shape they
- *    make. (hull.js skipped the hull for so few points.)
+ * pinned — see sprite_sheet_stock_identity_test — to: the monotone-chain
+ * hull, counterclockwise, starting from the (x, y)-greatest pixel. That
+ * holds for EVERY non-empty pixel set (maintainer ruling, tracker #207):
+ * a lone pixel is a one-point hull, two pixels (or a collinear run) are
+ * the segment between their ends, three make a counterclockwise
+ * triangle. Frames with fewer than four opaque pixels — 81 stock frames,
+ * sparks and the fade-out tails of explosions — used to be handed back
+ * as the pixels themselves in (x, y) order, which hull.js's skip had
+ * produced and which for three pixels could be a CLOCKWISE triangle the
+ * SAT hit test (which assumes counterclockwise convex polygons) got
+ * wrong. Making them real hulls changed the stock digest, and with it
+ * PROTOCOL_VERSION (nova's rollback_protocol.ts, 6).
  */
 export function makeConvexHull(mask: Mask): ConvexHull {
     const visibleArray = makeVisibleArray(mask);
     if (visibleArray.length === 0) {
         return getDefaultConvexHull();
     }
-    if (visibleArray.length < 4) {
-        return visibleArray.sort(comparePoints);
+    if (visibleArray.length === 1) {
+        // The monotone chain pops its lone point off both chains; a
+        // single pixel is its own hull.
+        return visibleArray;
     }
     const hull = convexHull(visibleArray);
     let start = 0;

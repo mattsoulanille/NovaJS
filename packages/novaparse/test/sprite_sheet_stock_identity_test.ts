@@ -14,10 +14,13 @@ import { makeConvexHull } from "../src/parsers/sprite_sheet_multi_parse.js";
  * game must derive the same geometry from the same sprite, and a saved
  * game's checksum must survive a rebuild. So the sprite-sheet pipeline's
  * output over the stock data is pinned here, byte for byte, and the
- * fallback convex hull is held to the exact vertex order its previous
- * implementation (hull.js, concavity Infinity) produced. The commit that
+ * fallback convex hull is held to an exact vertex order. That order was
+ * first the one hull.js (concavity Infinity) produced — the commit that
  * introduced this spec compared the two implementations live on every
- * stock frame (17007 frames, 0 mismatches) before hull.js was dropped.
+ * stock frame (17007 frames, 0 mismatches) before hull.js was dropped —
+ * and was then changed ONCE, deliberately, by ruling #207: frames with
+ * fewer than four opaque pixels became real hulls (see makeConvexHull),
+ * the digest below was rebaselined, and PROTOCOL_VERSION went to 6.
  */
 
 /** A mask over an explicit list of filled pixels. */
@@ -44,13 +47,30 @@ describe("makeConvexHull (the fallback hull)", () => {
         expect(makeConvexHull(maskOf(4, 4, []))).toEqual(getDefaultConvexHull());
     });
 
-    it("returns one, two or three pixels as they are, in (x, y) order", () => {
+    /**
+     * Ruling #207: fewer than four pixels still make a REAL hull — a
+     * point, a segment, or a counterclockwise triangle — starting, like
+     * every other hull, from the (x, y)-greatest pixel. (They used to be
+     * handed back sorted, which for three pixels could wind clockwise.)
+     */
+    it("makes a one-point hull of a lone pixel", () => {
         expectHull(maskOf(4, 4, [[1, 1]]), [[-1, 1]]);
-        expectHull(maskOf(4, 4, [[3, 0], [0, 3]]), [[-2, -1], [1, 2]]);
-        // Not a counterclockwise hull: hull.js returned so few points
-        // sorted, and that order is what the pinned geometry holds.
+    });
+
+    it("makes a segment of two pixels, from the (x, y)-greatest", () => {
+        expectHull(maskOf(4, 4, [[3, 0], [0, 3]]), [[1, 2], [-2, -1]]);
+    });
+
+    it("makes a counterclockwise triangle of three pixels", () => {
+        // Pixels (0,2) (1,1) (2,2) -> points (-2,0) (-1,1) (0,0): from
+        // the greatest, (0,0), counterclockwise means up to (-1,1) and
+        // back down to (-2,0). Sorted order would have wound clockwise.
         expectHull(maskOf(4, 4, [[0, 2], [1, 1], [2, 2]]),
-            [[-2, 0], [-1, 1], [0, 0]]);
+            [[0, 0], [-1, 1], [-2, 0]]);
+    });
+
+    it("collapses three collinear pixels to the segment's ends", () => {
+        expectHull(maskOf(4, 4, [[0, 1], [1, 1], [2, 1]]), [[0, 1], [-2, 1]]);
     });
 
     it("starts a hull at its (x, y)-greatest pixel and runs counterclockwise",
@@ -76,12 +96,16 @@ describe("sprite sheet pipeline over every stock rlëD", () => {
     const TIMEOUT_MS = 300_000;
 
     // The stock data as shipped: 282 rlëDs, and the SHA-256 over their
-    // hulls, frame tables and sheet pixels (see digestOf) as produced at
-    // ac8cda14 by the hull.js implementation. Any change here is a change
-    // to hashed simulation input and must be deliberate.
+    // hulls, frame tables and sheet pixels (see digestOf). First pinned at
+    // ac8cda14 to what the hull.js implementation produced
+    // (c37a19320090cb97c584c5e365dcf47df1059a4b52cd5dce35e0c24f67088e26);
+    // rebaselined ONCE by ruling #207, when frames with fewer than four
+    // opaque pixels became real hulls — only those frames' hulls differ.
+    // Any change here is a change to hashed simulation input and must be
+    // deliberate, with a PROTOCOL_VERSION bump beside it.
     const STOCK_RLED_COUNT = 282;
     const STOCK_DIGEST =
-        "c37a19320090cb97c584c5e365dcf47df1059a4b52cd5dce35e0c24f67088e26";
+        "06cf529bc58ba157db73f1e6e8f7bfadc85567d5623f1245e67bffe69d92f6af";
 
     let np: NovaParse;
     let ids: string[];

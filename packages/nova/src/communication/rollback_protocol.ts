@@ -60,7 +60,15 @@ export const STATE_HASH_INTERVAL = 60;
 //      exact -0 / NaN bits the room holds, which hashWorld now
 //      distinguishes from +0 / finite — a desync report between peers
 //      that differ only there is real, not a hash artifact.
-export const PROTOCOL_VERSION = 5;
+// 6: collision geometry (ruling #207): sprite frames with fewer than four
+//    opaque pixels get a real convex hull (a point, a segment or a
+//    counterclockwise triangle) instead of the sorted pixel list; the
+//    hashed hulls of 81 stock frames changed (novaparse
+//    sprite_sheet_multi_parse's makeConvexHull; the stock digest in
+//    sprite_sheet_stock_identity_test was rebaselined). Also under 6, no
+//    further bump: BoardingState's `capture` lost the 'refused' literal
+//    (#250), a value only ever carried inside a session.
+export const PROTOCOL_VERSION = 6;
 
 /**
  * ============================================================================
