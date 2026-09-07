@@ -10,6 +10,8 @@ import {
     shouldAdmitClient, truncateCloseReason, VERSION_MISMATCH_CLOSE_CODE,
     versionFromConnectUrl,
 } from "../common/version_handshake.js";
+import { decodeWire, WireCodec } from "./wire_codec.js";
+import { liveWireCodec } from "./wire_schemas.js";
 
 interface Client {
     socket: NodeWebSocket;
@@ -18,12 +20,37 @@ interface Client {
 
 /**
  * The largest frame a client may send. ws's default is 100 MiB, fully
- * buffered and JSON.parsed per frame. The largest legitimate
+ * buffered and decoded per frame. The largest legitimate
  * client->server message is a desync dump (32 checkpoint snapshots of
  * a busy system: low single-digit MiB); DesyncRecorder caps what it
  * writes at the same figure. ws closes a frame over this with 1009.
  */
 export const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The close code for a TEXT frame. The wire is binary (Avro, protocol
+ * 7): a text frame can only come from a client speaking the JSON wire
+ * of an older build, and there is no fallback — a JSON message would
+ * have to be re-validated against a schema the sender never derived.
+ * 1003 is WebSocket's "unsupported data"; the reason says why.
+ */
+export const TEXT_FRAME_CLOSE_CODE = 1003;
+export const TEXT_FRAME_CLOSE_REASON =
+    'text frames are not accepted: this server speaks the binary (Avro) wire';
+
+/** The bytes of a ws message, whatever ws buffered it as. */
+export function rawDataBytes(data: string | Buffer | ArrayBuffer | Buffer[]): Uint8Array {
+    if (typeof data === 'string') {
+        return new TextEncoder().encode(data);
+    }
+    if (Array.isArray(data)) {
+        return Buffer.concat(data);
+    }
+    if (data instanceof ArrayBuffer) {
+        return new Uint8Array(data);
+    }
+    return data;
+}
 
 export class SocketChannelServer implements ChannelServer {
     readonly message = new Subject<MessageWithSourceType<unknown>>();
@@ -34,6 +61,9 @@ export class SocketChannelServer implements ChannelServer {
     private clientMap = new Map<string, Client>();
     readonly wss: WebSocketServer;
     private warn: (m: string) => void = console.warn;
+    /** How socket messages become frames; the live wire unless a test
+     * supplies its own. */
+    private readonly codec: WireCodec;
 
     // Send a ping if a packet hasn't been received in this long
     // If the ping doesn't get back in this much time, disconnect them.
@@ -49,11 +79,12 @@ export class SocketChannelServer implements ChannelServer {
      */
     private readonly buildVersion?: string;
 
-    constructor({ server, warn, wss, timeout, buildVersion }: {
+    constructor({ server, warn, wss, timeout, buildVersion, codec }: {
         server?: http.Server | https.Server,
         warn?: ((m: string) => void),
         wss?: WebSocketServer, timeout?: number,
         buildVersion?: string,
+        codec?: WireCodec,
     }) {
 
         if (warn) {
@@ -61,6 +92,7 @@ export class SocketChannelServer implements ChannelServer {
         }
 
         this.buildVersion = buildVersion;
+        this.codec = codec ?? liveWireCodec();
 
         if (wss) {
             this.wss = wss;
@@ -95,7 +127,18 @@ export class SocketChannelServer implements ChannelServer {
         if (!client) {
             this.warn(`No such client ${destination}`);
         } else if (client.socket.readyState === WebSocket.OPEN) {
-            client.socket.send(JSON.stringify(SocketMessage.encode(socketMessage)));
+            let frame: Uint8Array;
+            try {
+                frame = this.codec.encode(SocketMessage.encode(socketMessage));
+            } catch (error) {
+                // A message the wire schema does not admit is a bug in
+                // the sender, not a reason to drop the client.
+                this.warn(`Not sending a message to ${destination} the `
+                    + `${this.codec.encoding} wire cannot carry: ${String(error)}`);
+                return false;
+            }
+            // A Uint8Array goes as a BINARY frame.
+            client.socket.send(frame);
             return true;
         }
         return false;
@@ -211,7 +254,7 @@ export class SocketChannelServer implements ChannelServer {
     // anything thrown here is an uncaught exception: every failure
     // below drops the message instead.
     private handleMessageFromClient(clientUUID: string,
-        serialized: string | Buffer | ArrayBuffer | Buffer[]) {
+        serialized: string | Buffer | ArrayBuffer | Buffer[], isBinary?: boolean) {
         const client = this.clientMap.get(clientUUID);
         if (!client) {
             // A frame that raced the client's removal.
@@ -220,18 +263,22 @@ export class SocketChannelServer implements ChannelServer {
         }
         this.resetClientTimeout(clientUUID);
 
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(String(serialized));
-        } catch (error) {
-            this.warn(`Dropping unparseable message from client `
-                + `${clientUUID}: ${String(error)}`);
+        // ws hands a text frame over with `isBinary` false (its data
+        // is still a Buffer). There is no text fallback: close, with
+        // the reason, so the mismatch is diagnosable from either end.
+        if (isBinary === false || typeof serialized === 'string') {
+            this.warn(`Closing client ${clientUUID}: it sent a text frame; `
+                + TEXT_FRAME_CLOSE_REASON);
+            client.socket.close(TEXT_FRAME_CLOSE_CODE,
+                truncateCloseReason(TEXT_FRAME_CLOSE_REASON));
             return;
         }
-        const maybeSocketMessage = SocketMessage.decode(parsed);
 
+        const maybeSocketMessage = decodeWire(this.codec, SocketMessage,
+            rawDataBytes(serialized));
         if (isLeft(maybeSocketMessage)) {
-            this.warn(`Received bad message from client ${clientUUID}`);
+            this.warn(`Dropping undecodable message from client ${clientUUID}: `
+                + (maybeSocketMessage.left[0]?.message ?? 'not a socket message'));
             return;
         }
 

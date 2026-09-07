@@ -5,6 +5,18 @@ import { SocketMessage } from "./socket_message.js";
 import {
     connectUrlWithVersion, VERSION_MISMATCH_CLOSE_CODE,
 } from "../common/version_handshake.js";
+import { decodeWire, WireCodec } from "./wire_codec.js";
+import { liveWireCodec } from "./wire_schemas.js";
+
+/**
+ * The close code and reason the client answers a TEXT frame with. The
+ * wire is binary (Avro, protocol 7); a text frame means the server
+ * speaks an older build's JSON wire, which the build handshake should
+ * have refused. No fallback: see socket_channel_server.ts.
+ */
+export const TEXT_FRAME_CLOSE_CODE = 1003;
+export const TEXT_FRAME_CLOSE_REASON =
+    'text frames are not accepted: this client speaks the binary (Avro) wire';
 
 export class SocketChannelClient implements ChannelClient {
     readonly message = new Subject<unknown>();
@@ -20,6 +32,9 @@ export class SocketChannelClient implements ChannelClient {
     private closeListener?: (e: CloseEvent) => void;
     private messageQueue: SocketMessage[] = [];
     private maxPings: number
+    /** How socket messages become frames; the live wire unless a test
+     * supplies its own. */
+    private readonly codec: WireCodec;
 
     /**
      * Set once the server has refused this client for a build mismatch.
@@ -33,12 +48,13 @@ export class SocketChannelClient implements ChannelClient {
     private versionRefused = false;
 
     constructor({ webSocket, warn, timeout, webSocketFactory, maxPings,
-        buildVersion, onVersionMismatch }: {
+        buildVersion, onVersionMismatch, codec }: {
             webSocket?: WebSocket,
             warn?: ((m: string) => void),
             timeout?: number,
             webSocketFactory?: () => WebSocket,
             maxPings?: number,
+            codec?: WireCodec,
             /**
              * This bundle's build stamp, announced on the connect URL so
              * the server can refuse a stale client before admitting it.
@@ -63,7 +79,8 @@ export class SocketChannelClient implements ChannelClient {
             return new WebSocket(connectUrlWithVersion(origin, buildVersion));
         });
 
-        this.webSocket = webSocket ?? this.webSocketFactory();
+        this.codec = codec ?? liveWireCodec();
+        this.webSocket = this.adopt(webSocket ?? this.webSocketFactory());
         this.warn = warn ?? console.warn;
         this.timeout = timeout ?? 1200;
         this.maxPings = maxPings ?? 3;
@@ -94,6 +111,19 @@ export class SocketChannelClient implements ChannelClient {
         }
     }
 
+    /**
+     * Binary frames arrive as ArrayBuffers (the browser default is a
+     * Blob, which needs an async read and would reorder messages).
+     */
+    private adopt(webSocket: WebSocket): WebSocket {
+        try {
+            webSocket.binaryType = 'arraybuffer';
+        } catch {
+            // A test double without the property; frames still decode.
+        }
+        return webSocket;
+    }
+
     reconnect() {
         // A build-mismatched client stays down; see `versionRefused`.
         if (this.versionRefused) {
@@ -115,7 +145,7 @@ export class SocketChannelClient implements ChannelClient {
             || this.webSocket.readyState === this.webSocket.OPEN) {
             this.disconnect();
         }
-        this.webSocket = this.webSocketFactory();
+        this.webSocket = this.adopt(this.webSocketFactory());
         this.webSocket.addEventListener("message", this.messageListener);
         this.addCloseListener();
         this.resetTimeout();
@@ -178,14 +208,29 @@ export class SocketChannelClient implements ChannelClient {
         }
         this.reconnectIfClosed();
         if (this.webSocket.readyState === this.webSocket.OPEN) {
-            for (const message of this.messageQueue) {
-                this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+            for (const queued of this.messageQueue) {
+                this.sendFrame(queued);
             }
             this.messageQueue.length = 0;
-            this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+            this.sendFrame(message);
         } else {
             this.messageQueue.push(message);
         }
+    }
+
+    /** One socket message as one BINARY frame. */
+    private sendFrame(message: SocketMessage) {
+        let frame: Uint8Array;
+        try {
+            frame = this.codec.encode(SocketMessage.encode(message));
+        } catch (error) {
+            // A message the wire schema does not admit is a bug in the
+            // sender; dropping it beats taking the socket down.
+            this.warn(`Not sending a message the ${this.codec.encoding} wire `
+                + `cannot carry: ${String(error)}`);
+            return;
+        }
+        this.webSocket.send(frame);
     }
 
     private async handleMessage(messageEvent: MessageEvent) {
@@ -196,14 +241,28 @@ export class SocketChannelClient implements ChannelClient {
             this.connected.next(true);
         }
 
-        const data = messageEvent.data;
+        const data: unknown = messageEvent.data;
+        let bytes: Uint8Array;
+        if (data instanceof ArrayBuffer) {
+            bytes = new Uint8Array(data);
+        } else if (data instanceof Uint8Array) {
+            bytes = data;
+        } else {
+            // A text frame (a string), or a Blob from a socket whose
+            // binaryType was reset: neither is the binary wire.
+            this.warn(`Closing the socket: the server sent a `
+                + `${typeof data === 'string' ? 'text' : 'non-binary'} frame; `
+                + TEXT_FRAME_CLOSE_REASON);
+            this.webSocket.close(TEXT_FRAME_CLOSE_CODE, TEXT_FRAME_CLOSE_REASON);
+            return;
+        }
         let socketMessage: SocketMessage;
-        const maybeSocketMessage = SocketMessage.decode(JSON.parse(data) as unknown);
+        const maybeSocketMessage = decodeWire(this.codec, SocketMessage, bytes);
         if (isRight(maybeSocketMessage)) {
             socketMessage = maybeSocketMessage.right;
         } else {
-            this.warn(`Failed to deserialize message from server. `
-                + `Errors: ${maybeSocketMessage.left}`);
+            this.warn(`Failed to deserialize message from server: `
+                + (maybeSocketMessage.left[0]?.message ?? 'not a socket message'));
             return;
         }
 
