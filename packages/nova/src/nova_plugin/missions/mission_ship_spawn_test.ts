@@ -14,6 +14,7 @@ import { MissionShipComponent } from '../player/mission_ship_component.js';
 import { ShipComponent } from '../ship/ship_plugin.js';
 import {
     buildMissionShipSpawns,
+    liveMissionShips,
     MISSION_SHIP_NO_DEPART_MS,
     MissionShipUniverse,
 } from './mission_ship_spawn.js';
@@ -26,6 +27,8 @@ import {
     GOAL_NONE,
     GOAL_OBSERVE,
     GOAL_RESCUE,
+    registerShip,
+    shipDied,
     ShipObjective,
 } from '../player/mission_ship_state.js';
 import { SystemHoldComponent } from '../npc/system_hold.js';
@@ -309,6 +312,78 @@ describe('buildMissionShipSpawns', () => {
         const committed = player.components.get(MissionsComponent)!
             .get(MISSION_ID)!.shipObjective!;
         expect(committed.live.size).toBe(0);
+    });
+
+    /**
+     * Lost versus destroyed (maintainer ruling #148): a ship missing
+     * without a death is part of the shortfall and comes back; a ship
+     * the goal banked as destroyed stays destroyed.
+     */
+    describe('a mission ship lost to an insertion failure or a desync', () => {
+        it('respawns on re-entry: the roster named it, the world has it '
+            + 'not, and the goal banked nothing', async () => {
+                // Three ships were tracked; the world is fresh (a jump
+                // back in) and holds none of them. Nothing was satisfied,
+                // so all three come back.
+                const objective = makeObjective({
+                    live: new Map([['lost-1', {}], ['lost-2', {}], ['lost-3', {}]]),
+                });
+                const player = makePlayer(objective);
+                const ships = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', makeGameData(), makeUniverse());
+                expect(ships.length).toBe(3);
+            });
+
+        it('respawns at a lift-off in the SAME system: only the shortfall '
+            + 'against what the world still holds', async () => {
+                const objective = makeObjective({
+                    live: new Map([['still-here', {}], ['lost', {}]]),
+                });
+                const player = makePlayer(objective);
+                const world = new Map<string, Entity>([['still-here',
+                    new Entity('kept').addComponent(MissionShipComponent,
+                        { mission: MISSION_ID, owner: OWNER })]]);
+                const ships = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', makeGameData(), makeUniverse(), 0,
+                    Math.random, liveMissionShips(world, OWNER));
+                // Three wanted, one demonstrably here: two spawn — the
+                // lost one and the one that never spawned. The kept
+                // one's roster entry survives, the lost one's goes.
+                expect(ships.length).toBe(2);
+                const committed = player.components.get(MissionsComponent)!
+                    .get(MISSION_ID)!.shipObjective!;
+                expect([...committed.live.keys()]).toEqual(['still-here']);
+            });
+    });
+
+    describe('a mission ship that was DESTROYED stays destroyed', () => {
+        it('is not respawned by a destroy goal that banked its death',
+            async () => {
+                // shipDied on a destroy goal: satisfied++ and the roster
+                // entry gone — the machinery's own record of a death.
+                const objective = makeObjective({ goal: GOAL_DESTROY });
+                registerShip(objective, 'doomed');
+                registerShip(objective, 'lost');
+                shipDied(objective, 'doomed');
+                const player = makePlayer(objective);
+                const ships = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', makeGameData(), makeUniverse());
+                // Three wanted, one destroyed for good: the lost one and
+                // the never-spawned one come back, the dead one does not.
+                expect(ships.length).toBe(2);
+            });
+
+        it('is not respawned by an ESCORT goal, which the death failed',
+            async () => {
+                const objective = makeObjective({ goal: GOAL_ESCORT });
+                registerShip(objective, 'charge');
+                shipDied(objective, 'charge');
+                expect(objective.failed).toBeTrue();
+                const player = makePlayer(objective);
+                const ships = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', makeGameData(), makeUniverse());
+                expect(ships.length).toBe(0);
+            });
     });
 
     it('spawns nothing for complete or failed objectives', async () => {

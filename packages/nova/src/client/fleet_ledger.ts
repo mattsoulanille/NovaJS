@@ -5,12 +5,14 @@
  *
  * What the client holds for the local player's fleet while the fleet is
  * not (all) in the simulation: the two escort rosters
- * (spaceport/landed_escorts.ts explains them), the formation-slot floor,
- * and the escorts a loaded save is still carrying as encoded blobs. Plus
- * the operations over them that browser.ts used to spread across a dozen
- * functions: the take-and-restock drains, the standing flushes, the bar
- * hire spawn, the mission-ship preparation, and the "what escorts does
- * this pilot own" read the save takes.
+ * (spaceport/landed_escorts.ts explains them), the LOST roster (escorts
+ * that vanished from the world without dying — ruling #148, see
+ * `noteRemoved`), the formation-slot floor, and the escorts a loaded save
+ * is still carrying as encoded blobs. Plus the operations over them that
+ * browser.ts used to spread across a dozen functions: the take-and-restock
+ * drains, the standing flushes, the bar hire spawn, the mission-ship
+ * preparation, and the "what escorts does this pilot own" read the save
+ * takes.
  *
  * One ledger per client, RESET by the session teardown: the rosters
  * belong to a session, and a batch left over would be dealt into the next
@@ -19,12 +21,15 @@
  * Client-local module: everything here goes into the simulation through
  * the bridge's input-record path (client/fleet_insertion.ts).
  */
+import { isLeft } from 'fp-ts/lib/Either.js';
 import type { Entity } from 'nova_ecs/entity';
+import type { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import type {
     AsyncSimulationBridgeClient,
 } from '../communication/async_simulation_bridge_client.js';
+import { countsTowardEscortCap } from '../nova_plugin/escorts/escort_cap.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
 } from '../nova_plugin/missions/mission_ship_spawn.js';
@@ -103,6 +108,53 @@ export class FleetLedger {
      * intermediate system.
      */
     readonly jumping: CarriedEscort[] = [];
+    /**
+     * ========================================================================
+     * LOST, NOT DESTROYED (maintainer ruling #148)
+     * ========================================================================
+     *
+     * Hired and captured escorts that LEFT THE WORLD WITHOUT DYING and
+     * without being carried: an insertion that never took (a rejected
+     * record), a rollback correction or a resync that removed the entity,
+     * a desync of any kind. The ruling is that such a ship must not
+     * disappear and never return, while a ship that was DESTROYED stays
+     * destroyed — so the two are told apart here, at the one place the
+     * client sees every removal: the display world's mirror of the
+     * simulation ({@link noteRemoved}, fed by the frame pump).
+     *
+     *   destroyed   a DeathEvent was seen for the uuid ({@link noteDeath})
+     *               — the entity is gone for good and is NOT recorded;
+     *   carried     the same frame's EscortJumpEvent / EscortLandedEvent
+     *               filed it on `jumping` / `landed` — not lost, it is
+     *               riding a roster already;
+     *   lost        everything else: recorded here, whole, as the escort
+     *               stood on its last mirrored frame (the synced
+     *               components, through the serializer), and RETRIED on
+     *               the player's next system entry through the ordinary
+     *               carried batch (system_entry.ts takes this roster with
+     *               the other two — fresh uuids, formation stations,
+     *               commands reset). Until then it rides the save like a
+     *               landed escort, so it survives a session too.
+     *
+     * Bay fighters and mission escorts are never recorded: a fighter that
+     * docks with its carrier is deleted without dying and is the
+     * magazine's business, and a mission ship is respawned by the mission
+     * machinery (mission_ship_spawn.ts). An entity the world re-adds
+     * under the same uuid (a correction that removed and restored it) is
+     * taken back off this roster ({@link escortReturned}).
+     *
+     * A per-player client roster like the other two: entries for other
+     * peers' players are dropped when the roster is taken, never
+     * respawned by this client.
+     */
+    readonly lost: CarriedEscort[] = [];
+    /**
+     * Uuids a DeathEvent was seen for, so a removal that follows one is
+     * read as a destruction (see `lost`). Bounded: the newest
+     * RECENT_DEATHS entries are kept, which is orders of magnitude more
+     * than the frames between a death and its entity's removal.
+     */
+    private readonly recentDeaths = new Set<string>();
     /** See RestoredSaveEscorts. Drained by the first system entry. */
     restoredSave: RestoredSaveEscorts | undefined;
     /**
@@ -116,9 +168,83 @@ export class FleetLedger {
      */
     private slotFloor: { player: string, next: number } | undefined;
 
-    /** Both rosters, in the order the save unions them. */
+    /** Every roster, in the order the save unions them. */
     get rosters(): readonly CarriedEscort[][] {
-        return [this.landed, this.jumping];
+        return [this.landed, this.jumping, this.lost];
+    }
+
+    // ── Lost versus destroyed (ruling #148; see `lost`) ─────────────────
+
+    /** A DeathEvent was seen for `uuid`: its removal is a destruction. */
+    noteDeath(uuid: string): void {
+        this.recentDeaths.add(uuid);
+        if (this.recentDeaths.size > RECENT_DEATHS) {
+            const oldest = this.recentDeaths.values().next().value;
+            if (oldest !== undefined) {
+                this.recentDeaths.delete(oldest);
+            }
+        }
+    }
+
+    /**
+     * The display world is about to drop `entity` (the simulation removed
+     * it this frame; the frame's events have already been emitted, so a
+     * carry event has filed it and a death has been noted). Records it on
+     * `lost` when it is a hired or captured escort of `player` (or of any
+     * player when `player` is undefined — the local player is between
+     * worlds; the take filters by player) that neither died nor was
+     * carried. Returns whether it was recorded.
+     *
+     * The entity kept is a serializer round trip of the display entity:
+     * the synced components only, as a carry event would have handed
+     * them over, and a copy the display world's teardown cannot touch. A
+     * display entity that does not round-trip is kept as it is rather
+     * than dropped.
+     */
+    noteRemoved(uuid: string, entity: Entity, player: string | undefined,
+        serializer: Serializer): boolean {
+        const marker = entity.components.get(PlayerEscortComponent);
+        if (!marker || (player !== undefined && marker.player !== player)) {
+            return false;
+        }
+        if (!countsTowardEscortCap(entity) || this.recentDeaths.has(uuid)) {
+            return false;
+        }
+        if (this.rosters.some(roster => roster.some(row => row.uuid === uuid))) {
+            return false;
+        }
+        const decoded = serializer.decode(serializer.encode(entity));
+        const kept = isLeft(decoded) ? entity : decoded.right;
+        this.lost.push({ player: marker.player, uuid, entity: kept });
+        console.warn(`Escort ${uuid} left the world without dying; it will `
+            + 'be respawned when its player next enters a system.');
+        return true;
+    }
+
+    /**
+     * The world holds `uuid` again (a correction removed and restored the
+     * same entity): it was never lost.
+     */
+    escortReturned(uuid: string): void {
+        const index = this.lost.findIndex(row => row.uuid === uuid);
+        if (index >= 0) {
+            this.lost.splice(index, 1);
+        }
+    }
+
+    /**
+     * Takes the lost roster for `player` — the retry, at a system entry
+     * — dropping other peers' entries (this client never respawns them),
+     * and any entry the caller's batch already carries under the same
+     * uuid (an escort carried by a jump AND recorded lost by a correction
+     * in between must not be doubled).
+     */
+    takeLost(player: string, carried: Iterable<string> = []): CarriedEscort[] {
+        const already = new Set(carried);
+        const taken = takeCarriedEscorts(this.lost, player)
+            .filter(row => !already.has(row.uuid));
+        this.lost.length = 0;
+        return taken;
     }
 
     /**
@@ -210,11 +336,13 @@ export class FleetLedger {
     /**
      * Every escort belonging to `player` that this client can still
      * account for, as the save wants them: the ones live in the system
-     * (in flight), the landed roster held while docked, and any batch
-     * riding a jump. The three are disjoint in practice but unioned by
-     * uuid anyway, because the landing window overlaps them — an escort
-     * still flying to the planet is in the world while its already-landed
-     * wingmates are on the roster.
+     * (in flight), the landed roster held while docked, any batch riding
+     * a jump, and the lost roster (an escort that vanished without dying
+     * is still the player's, and comes back at the next system entry —
+     * of this session or the next). The rosters are disjoint in practice
+     * but unioned by uuid anyway, because the landing window overlaps
+     * them — an escort still flying to the planet is in the world while
+     * its already-landed wingmates are on the roster.
      *
      * ESCORTS IN OTHER SYSTEMS ARE NOT HERE, by construction: this reads
      * the active system and the client's own rosters, and a ship left
@@ -257,6 +385,7 @@ export class FleetLedger {
         return {
             landed: this.landed.map(strip),
             jumping: this.jumping.map(strip),
+            lost: this.lost.map(strip),
         };
     }
 
@@ -264,10 +393,15 @@ export class FleetLedger {
     reset(): void {
         this.landed.length = 0;
         this.jumping.length = 0;
+        this.lost.length = 0;
+        this.recentDeaths.clear();
         this.restoredSave = undefined;
         this.slotFloor = undefined;
     }
 }
+
+/** How many death uuids the ledger remembers (see FleetLedger.noteDeath). */
+const RECENT_DEATHS = 256;
 
 /** The local player's ship uuid in a display world, if it is in flight. */
 export function localPlayerShipUuid(displayWorld: World): string | undefined {
@@ -325,20 +459,32 @@ export async function spawnHiredEscorts(ctx: FleetContext,
     let slot = ctx.fleet.nextClientSlot(displayWorld, leaderUuid);
     ctx.fleet.noteSlotsUsed(leaderUuid, slot + shipIds.length);
     for (const shipId of shipIds) {
+        let escort: Entity | undefined;
         try {
             const shipData = await ctx.gameData.data.Ship.get(shipId);
-            const escort = buildHiredEscort(shipData, leaderUuid, leader,
-                slot, ctx.ownerUuid());
-            if (!escort) {
-                console.warn('Hired escorts skipped: leader has no movement '
-                    + 'state');
-                return;
-            }
-            await bridge.addEntity(v4(), escort);
-            slot++;
+            escort = buildHiredEscort(shipData, leaderUuid, leader, slot,
+                ctx.ownerUuid());
         } catch (e) {
-            console.warn(`Failed to spawn hired escort ${shipId}:`, e);
+            console.warn(`Failed to build hired escort ${shipId}:`, e);
+            continue;
         }
+        if (!escort) {
+            console.warn('Hired escorts skipped: leader has no movement '
+                + 'state');
+            return;
+        }
+        const uuid = v4();
+        try {
+            await bridge.addEntity(uuid, escort);
+        } catch (e) {
+            // Same policy as the lift-off's insertion (fleet_insertion.ts,
+            // ruling #148): a built hire that could not go in is the
+            // player's already, and the standing flush retries it.
+            console.warn(`Failed to insert hired escort ${shipId}; it will `
+                + 'be retried:', e);
+            ctx.fleet.jumping.push({ player: leaderUuid, uuid, entity: escort });
+        }
+        slot++;
     }
 }
 

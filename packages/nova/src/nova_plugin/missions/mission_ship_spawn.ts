@@ -430,6 +430,21 @@ export function liveMissionShips(entities: Iterable<[string, Entity]>,
  * `live` is the batch the world ALREADY holds (see liveMissionShips);
  * omitting it means "a fresh world", which is what a jump or a gate
  * transit hands us.
+ *
+ * LOST VERSUS DESTROYED (maintainer ruling #148). A special ship that is
+ * missing from the world without having died — its insertion never took,
+ * a correction or a desync removed it — is simply part of the SHORTFALL
+ * this rebuilds: the objective's `live` roster is reconciled against what
+ * the world demonstrably holds, and `shipsToSpawn` (total less what the
+ * goal has already banked) minus that is built again, at the next
+ * lift-off in the same system or the next entry. A ship that was
+ * DESTROYED is what the goal's own bookkeeping says it is
+ * (mission_ship_state.ts's shipDied): a destroy or chase-off goal banks it
+ * as satisfied and never respawns it; a disable-then-board or escort goal
+ * fails outright, so nothing respawns; goals that survive the death of an
+ * unfinished ship (observe, board, rescue) get the remainder again. That
+ * is the "mission says a destroyed ship stays destroyed" the ruling
+ * honours — the goal is the mission's say.
  */
 export async function buildMissionShipSpawns(playerEntity: Entity,
     ownerUuid: string, systemId: string,

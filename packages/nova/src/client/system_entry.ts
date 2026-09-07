@@ -106,6 +106,18 @@ export async function jumpTo(runtime: ClientRuntime, plan: TransitPlan,
     const { fleet } = runtime;
     const { batch: jumpEscorts, fromLanded } = takeEscortsForTransition(
         fleet.jumping, fleet.landed, plan.uuid);
+    // THE RETRY OF THE LOST (ruling #148): escorts that left the previous
+    // world without dying — an insertion that never took, a correction, a
+    // desync — re-enter with the player through this same batch, fresh
+    // uuids and formation stations and all, exactly as a carried escort
+    // does. Destroyed ones were never recorded (FleetLedger.lost).
+    const lostEscorts = fleet.takeLost(plan.uuid,
+        jumpEscorts.map(escort => escort.uuid));
+    if (lostEscorts.length > 0) {
+        console.info(`Respawning ${lostEscorts.length} escort(s) that were `
+            + 'lost without being destroyed.');
+        jumpEscorts.push(...lostEscorts);
+    }
     // Run as a TRACKED transition of the current session: an exit-to-title
     // in the middle of it invalidates the scope, enterSystem bails at its
     // next check, and the teardown waits for that before it resets the

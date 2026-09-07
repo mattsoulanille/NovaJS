@@ -49,11 +49,18 @@ import {
  *    fighter naming its carrier) have already been rewritten to it, so a
  *    retry that remaps from THIS uuid keeps a carrier-and-wing pair
  *    together even when both failed.
- *  - A hire or a mission ship that cannot be spawned is logged and
- *    dropped. A hire is a ship id whose data the bar has already fetched
- *    and a mission ship is rebuilt by the mission machinery on the next
- *    entry; neither carries state that cannot be rebuilt. (Documented
- *    limit; see the report for issue #31.)
+ *  - A HIRE whose insertion rejects is returned in `failed` too (ruling
+ *    #148: a hired ship must not disappear to an insertion failure and
+ *    never return): the escort entity the bar's hire builds is a
+ *    complete carried escort from that moment, so it goes back on a
+ *    roster under its minted uuid exactly like a carried escort, and the
+ *    standing flush (or the next system entry) re-inserts it. A hire
+ *    whose ship DATA cannot be loaded has nothing to build and is logged
+ *    and dropped — there is no entity to keep.
+ *  - A mission ship that cannot be spawned is logged and dropped: the
+ *    mission machinery rebuilds the shortfall on the next lift-off or
+ *    system entry (mission_ship_spawn.ts's buildMissionShipSpawns), which
+ *    is the retry ruling #148 asks for.
  *
  * Formation slots run from `baseSlot`: the carried escorts first, then the
  * hires. The mission ships were placed by prepareMissionShips from a slot
@@ -93,8 +100,9 @@ export interface FleetInsertion {
 
 export interface FleetInsertionResult {
     /**
-     * Escorts whose insertion rejected, keyed by the uuid they were about
-     * to be inserted under (see the module comment). Empty on success.
+     * Escorts whose insertion rejected — carried escorts and freshly
+     * built hires alike — keyed by the uuid they were about to be
+     * inserted under (see the module comment). Empty on success.
      */
     failed: CarriedEscort[];
     /** The slot after the last one this insertion handed out. */
@@ -201,22 +209,35 @@ export async function insertPlayerAndFleet(args: FleetInsertion):
 
     const escortResult = await insertEscortBatch(bridge, playerUuid, player,
         escorts, baseSlot, mintUuid, ownerUuid);
+    const failed = [...escortResult.failed];
     let slot = escortResult.nextSlot;
     for (const shipId of hires) {
+        let escort: Entity | undefined;
         try {
             const shipData = await getShip(shipId);
-            const escort = buildHiredEscort(shipData, playerUuid, player,
-                slot, ownerUuid);
-            if (!escort) {
-                console.warn('Hired escorts skipped: leader has no movement '
-                    + 'state');
-                break;
-            }
-            await bridge.addEntity(mintUuid(), escort);
-            slot++;
+            escort = buildHiredEscort(shipData, playerUuid, player, slot,
+                ownerUuid);
         } catch (e) {
-            console.warn(`Failed to spawn hired escort ${shipId}:`, e);
+            console.warn(`Failed to build hired escort ${shipId}:`, e);
+            continue;
         }
+        if (!escort) {
+            console.warn('Hired escorts skipped: leader has no movement '
+                + 'state');
+            break;
+        }
+        const uuid = mintUuid();
+        try {
+            await bridge.addEntity(uuid, escort);
+        } catch (e) {
+            // The hull is built and is the player's from this moment: it
+            // goes back on a roster under its minted uuid, like a carried
+            // escort whose insertion rejected (ruling #148).
+            console.warn(`Failed to insert hired escort ${shipId}; it will `
+                + 'be retried:', e);
+            failed.push({ player: playerUuid, uuid, entity: escort });
+        }
+        slot++;
     }
     for (const ship of missionShips) {
         try {
@@ -230,5 +251,5 @@ export async function insertPlayerAndFleet(args: FleetInsertion):
             console.warn('Failed to spawn mission ship:', e);
         }
     }
-    return { failed: escortResult.failed, nextSlot: slot };
+    return { failed, nextSlot: slot };
 }

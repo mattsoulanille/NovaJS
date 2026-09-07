@@ -47,6 +47,7 @@ import { LandEvent } from '../nova_plugin/travel/planet_plugin.js';
 import {
     EscortJumpEvent, EscortLandedEvent,
 } from '../nova_plugin/escorts/player_escort_plugin.js';
+import { DeathEvent } from '../nova_plugin/ship/death_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { resetMostRecentlyActivatedRank } from '../nova_plugin/ncb/rank_logic.js';
 import { AnalogControlState } from '../nova_plugin/player/ship_control.js';
@@ -204,6 +205,16 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         });
         world.events.get(EscortLandedEvent).subscribe(({ data }) => {
             pushCarried(fleet.landed, data);
+        });
+        // A death, noted BEFORE the frame's removals reach the ledger
+        // (apply_simulation_frame.ts emits events first): the removal
+        // that follows is a destruction, not a loss, and the ship stays
+        // destroyed (FleetLedger.lost, ruling #148).
+        world.events.get(DeathEvent).subscribe(({ entities }) => {
+            for (const target of entities ?? []) {
+                fleet.noteDeath(typeof target === 'string'
+                    ? target : target.uuid);
+            }
         });
         world.events.get(FinishJumpEvent).subscribe(({ data }) => {
             // Every peer simulates every ship's jump; only follow it to
@@ -368,7 +379,8 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     // spaceport/landed_escorts.ts). `landed` is the roster held while
     // docked or swept at a gate; `jumping` is the batch waiting for the
     // destination system's world to be built — or riding out a multi-
-    // jump chain.
+    // jump chain; `lost` the escorts that left the world without dying,
+    // to be respawned at the next system entry (ruling #148).
     window.novaEscortRosters = () => fleet.summary();
     // The same-system convergence invariant, live (FleetLedger.audit).
     window.novaEscortAudit = (expected?: string[]) => {

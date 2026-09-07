@@ -196,8 +196,34 @@ describe('fleet insertion', () => {
                     .toEqual({ leader: 'again:10', slot: 0 });
             });
 
-        it('a hire that cannot be spawned is logged and skipped without '
-            + 'stopping the rest', async () => {
+        it('a hire whose INSERTION rejects comes back in `failed` under '
+            + 'its minted uuid, to be retried like a carried escort (#148)',
+            async () => {
+                // The player, then the hire under minted:0 — which rejects.
+                const { bridge, inserted } = stubBridge(
+                    { rejectUuids: ['minted:0'] });
+                spyOn(console, 'warn');
+                const result = await insertPlayerAndFleet({
+                    bridge, playerUuid: PLAYER, player: ship('player'),
+                    escorts: [], hires: ['test:ship', 'test:ship'],
+                    ownerUuid: PEER, baseSlot: 0, mintUuid: minter(),
+                    getShip: async () => getDefaultShipData(),
+                });
+                expect(inserted.map(i => i.uuid)).toEqual([PLAYER, 'minted:1']);
+                expect(result.failed.length).toBe(1);
+                expect(result.failed[0].uuid).toBe('minted:0');
+                expect(result.failed[0].player).toBe(PLAYER);
+                // A whole hired escort, ready for the standing flush.
+                expect(result.failed[0].entity.components
+                    .get(PlayerEscortComponent))
+                    .toEqual({ player: PLAYER, parent: PLAYER,
+                        provenance: 'hired' });
+                // Its slot is still spent: the retry re-places it anyway.
+                expect(result.nextSlot).toBe(2);
+            });
+
+        it('a hire whose ship DATA cannot be loaded is logged and skipped '
+            + 'without stopping the rest', async () => {
                 const { bridge, inserted } = stubBridge();
                 const warn = spyOn(console, 'warn');
                 const result = await insertPlayerAndFleet({

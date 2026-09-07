@@ -34,9 +34,11 @@ import { shouldExtrapolate } from '../display/movement_extrapolation_plugin.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/jump_plugin.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { liveSystem, LiveSystem } from './client_state.js';
+import { dockedShip, liveSystem, LiveSystem } from './client_state.js';
 import { runDockingFrame } from './docking.js';
-import { flushCarriedJumpEscorts, flushLandedEscorts } from './fleet_ledger.js';
+import {
+    flushCarriedJumpEscorts, flushLandedEscorts, localPlayerShipUuid,
+} from './fleet_ledger.js';
 import type { ClientRuntime } from './runtime.js';
 
 // Fixed-timestep bookkeeping: real elapsed ms not yet simulated.
@@ -362,9 +364,24 @@ export class FramePump {
                 // emitEvents: the frame's events are emitted between its
                 // state changes and its removals, so events targeting
                 // entities removed this same frame still find them (see
-                // apply_simulation_frame.ts).
-                applySimulationFrame(frame, serializer, displayWorld,
-                    { emitEvents: true });
+                // apply_simulation_frame.ts). onRemove: the same ordering
+                // is what lets the ledger tell a removal that a death or
+                // a carry event explained from one that nothing did — a
+                // LOST escort, to be respawned at the next system entry
+                // (FleetLedger.lost, ruling #148). The local player is
+                // the ship in the world, or the docked one; between
+                // worlds the marker's own player is trusted and the take
+                // filters.
+                const localPlayer = localPlayerShipUuid(displayWorld)
+                    ?? dockedShip(runtime.state.state)?.uuid;
+                applySimulationFrame(frame, serializer, displayWorld, {
+                    emitEvents: true,
+                    onRemove: (uuid, entity) => runtime.fleet.noteRemoved(
+                        uuid, entity, localPlayer, serializer),
+                });
+                for (const [uuid] of frame.added) {
+                    runtime.fleet.escortReturned(uuid);
+                }
                 this.pacing = frame.pacing;
                 this.syncedPlayerJumpRoute =
                     getDisplayPlayerJumpRoute(displayWorld)?.slice();

@@ -136,7 +136,18 @@ function applyEntityDelta(uuid: string, delta: EntityDelta, serializer: Serializ
 
 export function applySimulationFrame(frame: SimulationFrame,
     serializer: Serializer, displayWorld: World,
-    { emitEvents = false }: { emitEvents?: boolean } = {}) {
+    { emitEvents = false, onRemove }: {
+        emitEvents?: boolean,
+        /**
+         * Told of each entity the frame removes, with the display entity
+         * as it stands, AFTER the frame's events have been emitted and
+         * BEFORE it is deleted — so a subscriber that filed a carry or
+         * noted a death for that uuid has already run (the client's
+         * lost-escort bookkeeping, FleetLedger.noteRemoved). Not called
+         * for a uuid the display world does not hold.
+         */
+        onRemove?: (uuid: string, entity: Entity) => void,
+    } = {}) {
     for (const [uuid, entity] of frame.added) {
         syncEntityToDisplay(uuid, entity, serializer, displayWorld);
     }
@@ -166,6 +177,12 @@ export function applySimulationFrame(frame: SimulationFrame,
         }
     }
     for (const uuid of frame.removed) {
+        if (onRemove) {
+            const entity = displayWorld.entities.get(uuid);
+            if (entity) {
+                onRemove(uuid, entity);
+            }
+        }
         syncedComponents.delete(uuid);
         displayWorld.entities.delete(uuid);
     }
