@@ -544,9 +544,19 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 this.logRollbackEvent('retimed', {
                     seq: record.seq, from: oldTick, to: record.tick,
                 });
+                // A seq is only unique PER PEER (every peer numbers its
+                // records from 0), so the stale application is the
+                // record at oldTick with OUR peerId and this seq — not
+                // every record there with this seq. Filtering on seq
+                // alone dropped another peer's record that happened to
+                // share the tick and the number: two peers' first
+                // records (their ship insertions, seq 0 each) stamped
+                // for the same tick, one of them retimed, and the
+                // sender silently never inserted the other's ship (the
+                // binary_wire_e2e checkpoint-420 desync).
                 this.rollback.setInputs(oldTick,
                     (this.rollback.getInputs(oldTick) ?? []).filter(
-                        r => r.seq !== record.seq));
+                        r => r.peerId !== record.peerId || r.seq !== record.seq));
                 this.addRecord(record.tick, record);
                 this.sentRecords.set(record.seq, record.tick);
                 if (oldTick <= this.rollback.tick) {

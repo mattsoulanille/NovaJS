@@ -933,6 +933,63 @@ describe('Input-driven rooms', () => {
         expect(movement.velocity.length).toBeGreaterThan(0);
     }, 240_000);
 
+    it('a retime echo moves only the sender\'s own record, not another peer\'s with the same seq', async () => {
+        // The e2e desync at checkpoint 420 (binary_wire_e2e.mjs, two
+        // node clients joining a live room): every peer numbers its
+        // records from 0, so when two peers' first records — their
+        // ship insertions — are stamped for the same tick and the
+        // relay retimes one of them, the sender's echo handling used
+        // to drop EVERY record at the stale tick with that seq, the
+        // other peer's included. The other ship was never inserted
+        // and nothing logged it: no rollback, no late record, no
+        // drop — a silent fork until the checkpoint streak convicted
+        // the peer four seconds later. Records are identified by
+        // (peer, seq); the echo may move only the sender's own.
+        const peerA = await makePeer('a');
+        const peerB = await makePeer('b');
+        await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+        await peerB.client.addEntity('ship b', await makePeerShip('b', peerB.world));
+        // A's insertion (seq 0) lands at tick 1, on the relay's clock,
+        // and reaches B; B stages it before its own first step.
+        peerA.host.step();
+        for (let i = 0; i < 20; i++) {
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        // The relay's clock passes tick 1 before B's first step, so
+        // B's insertion (also seq 0, also stamped tick 1) is retimed
+        // to tick 2 and echoed back. B applied it at tick 1 alongside
+        // A's record.
+        relay.advanceTicks(1);
+        peerB.host.step();
+        await new Promise(resolve => setImmediate(resolve));
+        // The echo integrates: B moves its own record to tick 2 and
+        // rolls back across tick 1 — where A's insertion must survive.
+        for (let tick = 0; tick < 10; tick++) {
+            peerA.host.step();
+            peerB.host.step();
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        {
+            const { TimeResource } =
+                await import('nova_ecs/plugins/time_plugin');
+            const frame = (world: World) =>
+                world.resources.get(TimeResource)!.frame;
+            while (frame(peerA.world) !== frame(peerB.world)) {
+                (frame(peerA.world) < frame(peerB.world) ? peerA : peerB)
+                    .host.step();
+            }
+        }
+        expect(peerB.world.entities.has('ship a'))
+            .withContext('A\'s insertion, sharing seq 0 with B\'s retimed record')
+            .toBeTrue();
+        expect(peerB.world.entities.has('ship b')).toBeTrue();
+        expect(peerA.world.entities.has('ship a')).toBeTrue();
+        expect(peerA.world.entities.has('ship b')).toBeTrue();
+        const hashA = hashWorld(peerA.world, PEER_LOCAL_COMPONENTS);
+        const hashB = hashWorld(peerB.world, PEER_LOCAL_COMPONENTS);
+        expect(hashA.hash).toEqual(hashB.hash);
+    }, 240_000);
+
     it('detects a desync and the diverged peer resyncs from the log', async () => {
         // Replace the plain relay with one capturing incident hooks:
         // the conviction report and the diverged peer's uploaded
