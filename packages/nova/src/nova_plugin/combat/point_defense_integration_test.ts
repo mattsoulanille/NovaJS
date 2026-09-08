@@ -12,7 +12,9 @@ import { getIntegrationGameData } from '../../communication/simulation_test_fixt
 import { BayFighterComponent } from '../escorts/bay_plugin.js';
 import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import {
+    completeEntity, loadWeaponsGameData,
+} from '../spawn/entity_data_loader.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
@@ -100,6 +102,18 @@ describe('point defense against fighters (real Nova data)', () => {
         const gameData = await getIntegrationGameData();
         const world = await makeSystem('nova:226', gameData, undefined,
             { npcs: false });
+        // Neither ship below carries these, so stage them the way the
+        // loader stages a ship's own weapons: closure (the Viper Bay's
+        // fighter, its hull sprite sheet, both weapons' shot sprites)
+        // plus this world's entries. Building the entries straight from
+        // WeaponEntries.get skipped the closure, and a launched Viper
+        // then grew its hull on whichever tick the sprite sheet's
+        // background load landed — one event-loop turn later with a
+        // cold shared cache, never during a synchronous settle with a
+        // warm one, which is why the damage spec below failed whenever
+        // bay_plugin_test had warmed every stock Weapon first (#240).
+        await loadWeaponsGameData(world,
+            [VIPER_BAY, QUAD_LIGHT_BLASTER_TURRET]);
         return { gameData, world };
     }
 
@@ -122,9 +136,10 @@ describe('point defense against fighters (real Nova data)', () => {
         }
     }
 
-    async function getWeapon(world: World, id: string) {
-        const weapon = await world.resources.get(WeaponEntries)!.get(id);
-        expect(weapon).withContext(`weapon ${id} loaded`).toBeDefined();
+    /** Staged in makeBattlefield, so the cache read is the contract. */
+    function getWeapon(world: World, id: string) {
+        const weapon = world.resources.get(WeaponEntries)!.getCached(id);
+        expect(weapon).withContext(`weapon ${id} staged`).toBeDefined();
         return weapon!;
     }
 
@@ -177,7 +192,7 @@ describe('point defense against fighters (real Nova data)', () => {
         const enemyCarrier = await addShip(world, gameData, SHUTTLE,
             'enemyCarrier', 1000 + 4 * PD_RANGE, 1000, PIRATE_GOVT);
         settle(world);
-        const viperBay = await getWeapon(world, VIPER_BAY);
+        const viperBay = getWeapon(world, VIPER_BAY);
         const [hostileUuid, hostile] = launch(world, viperBay, 'enemyCarrier');
         settle(world);
         pin(shooter, 1000, 1000);
@@ -221,7 +236,7 @@ describe('point defense against fighters (real Nova data)', () => {
     describe('target choice', () => {
         it('engages a hostile bay fighter in range', async () => {
             const { world, hostileUuid } = await setUp();
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             const shot = pd.fireFromEntity('shooter', false);
             expect(shot).withContext('the turret fires').toBeDefined();
             expect(pdTargetOf(shot)).toBe(hostileUuid);
@@ -231,14 +246,14 @@ describe('point defense against fighters (real Nova data)', () => {
             const { world, hostile } = await setUp();
             // Our own wing, sitting closer than the enemy's and (as a
             // formation escort can transiently be) pointed at us.
-            const viperBay = await getWeapon(world, VIPER_BAY);
+            const viperBay = getWeapon(world, VIPER_BAY);
             const [, ours] = launch(world, viperBay, 'shooter');
             settle(world);
             pin(ours, 1010, 1000);
             pin(hostile, 1000 + 4 * PD_RANGE, 1000); // out of reach
             ours.components.set(TargetComponent, { target: 'shooter' });
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             expect(pd.fireFromEntity('shooter', false))
                 .withContext('nothing hostile in reach, so nothing fires')
                 .toBeUndefined();
@@ -247,13 +262,13 @@ describe('point defense against fighters (real Nova data)', () => {
         it('picks the hostile fighter over our own when both are in range',
             async () => {
                 const { world, hostile, hostileUuid } = await setUp();
-                const viperBay = await getWeapon(world, VIPER_BAY);
+                const viperBay = getWeapon(world, VIPER_BAY);
                 const [, ours] = launch(world, viperBay, 'shooter');
                 settle(world);
                 pin(ours, 1010, 1000);        // ours is much closer
                 pin(hostile, 1100, 1000);
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot)).toBe(hostileUuid);
             }, 120_000);
@@ -271,7 +286,7 @@ describe('point defense against fighters (real Nova data)', () => {
                 pin(capital, 1050, 1000);
                 capital.components.set(TargetComponent, { target: 'shooter' });
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
                 expect(pd.fireFromEntity('shooter', false))
                     .withContext('capital ships are not point defense prey')
                     .toBeUndefined();
@@ -284,7 +299,7 @@ describe('point defense against fighters (real Nova data)', () => {
                 addMissile(world, 'missile', 1200, 1000, 'enemyCarrier',
                     'shooter');             // nearly at the edge of reach
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot))
                     .withContext('a torpedo outranks a fighter')
@@ -297,7 +312,7 @@ describe('point defense against fighters (real Nova data)', () => {
             addMissile(world, 'missile', 1000 + 4 * PD_RANGE, 1000,
                 'enemyCarrier', 'shooter');
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             const shot = pd.fireFromEntity('shooter', false);
             expect(pdTargetOf(shot)).toBe(hostileUuid);
         }, 120_000);
@@ -322,13 +337,39 @@ describe('point defense against fighters (real Nova data)', () => {
             const damaged = recordDamage(world);
             pin(hostile, 1030, 1000);
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
             expect(damaged).withContext('the fighter takes the burst')
                 .toContain(hostileUuid);
         }, 120_000);
+
+        it('damages it just the same with every stock Weapon already cached '
+            + '(#240)', async () => {
+                // What bay_plugin_test's sound spec leaves in the shared
+                // cache, done here on purpose: with every Weapon a cache
+                // hit, nothing between launching the fighter and firing
+                // the turret yields to the event loop, so anything the
+                // fighter needs that staging did NOT cache (its hull
+                // sprite sheet, before makeBattlefield staged the bay)
+                // can never arrive during the synchronous settle. The
+                // spec above passed only when a cold cache bought that
+                // one turn; this one holds whatever ran before it.
+                const gameData = await getIntegrationGameData();
+                for (const id of (await gameData.ids).Weapon) {
+                    await gameData.data.Weapon.get(id);
+                }
+                const { world, hostile, hostileUuid } = await setUp();
+                const damaged = recordDamage(world);
+                pin(hostile, 1030, 1000);
+
+                const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                expect(pd.fireFromEntity('shooter', false)).toBeDefined();
+                settle(world, 30);
+
+                expect(damaged).toContain(hostileUuid);
+            }, 120_000);
 
         it('and cannot damage a ship whose class lacks the flag', async () => {
             // The Bible's other half: point defense only harms missiles
@@ -342,7 +383,7 @@ describe('point defense against fighters (real Nova data)', () => {
             pin(manta, 1030, 1000);
             pin(hostile, 1100, 1000);
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
@@ -377,7 +418,7 @@ describe('point defense against fighters (real Nova data)', () => {
             for (const uuid of uuids) {
                 pin(world.entities.get(uuid)!, 1100, 1000);
             }
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
             return pdTargetOf(pd.fireFromEntity('shooter', false));
         }
 
