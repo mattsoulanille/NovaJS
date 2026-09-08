@@ -1,10 +1,19 @@
 import 'jasmine';
 import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getSyntheticGameData, makeSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
 import { loadAsteroidGameData } from '../combat/asteroid_plugin.js';
-import { loadEntityGameData, loadShipGameData, loadWeaponGameData } from './entity_data_loader.js';
+import {
+    completeEntity, loadEntityGameData, loadShipGameData, loadWeaponGameData,
+    loadWeaponsGameData,
+} from './entity_data_loader.js';
 import { WeaponEntries } from '../combat/fire_weapon_plugin.js';
+import { HitboxHullComponent } from '../core/collisions_plugin.js';
+import { BayFighterComponent } from '../escorts/bay_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
 import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
@@ -235,5 +244,54 @@ describe('entity data loader', () => {
                 + 'staged synchronously-fireable on every world applying '
                 + 'the insertion')
             .toBeDefined();
+    }, 120_000);
+
+    it('loadWeaponsGameData stages a bay no entity carries: its fighter\'s '
+        + 'hull attaches on the launch tick (#240)', async () => {
+        // A FRESH aggregator: the memoized one is warmed by whatever
+        // spec ran before, which is the very thing #240 was about.
+        const gameData = makeSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'node', { npcs: false });
+        const skiff = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
+        const skiffSheet = skiff.animation.images.baseImage.id;
+        // The carrier is a Corsair — no bay in its loadout, and a
+        // sprite sheet of its own — so staging it stages nothing about
+        // the Skiff Bay or the Skiff hull its fighters need.
+        const carrier = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.corsair));
+        carrier.components.set(MultiplayerData, { owner: 'server' });
+        await completeEntity(world, carrier);
+        world.entities.set('carrier', carrier);
+        const weaponEntries = world.resources.get(WeaponEntries)!;
+        expect(weaponEntries.getCached(SYNTHETIC.weapons.skiffBay))
+            .withContext('control: the bay entry is cold').toBeUndefined();
+        expect(gameData.data.SpriteSheet.getCached(skiffSheet))
+            .withContext('control: the fighter\'s sprite sheet is cold')
+            .toBeUndefined();
+
+        await loadWeaponsGameData(world, [SYNTHETIC.weapons.skiffBay]);
+        expect(weaponEntries.getCached(SYNTHETIC.weapons.skiffBay))
+            .withContext('the entry is primed, fireable synchronously')
+            .toBeDefined();
+        expect(gameData.data.SpriteSheet.getCached(skiffSheet))
+            .withContext('the fighter\'s hull sprite sheet is cached')
+            .toBeDefined();
+
+        // A tick for the carrier's own providers (a bay fires from its
+        // carrier's animation exit points), then launch.
+        world.step();
+        const before = new Set(world.entities.keys());
+        weaponEntries.getCached(SYNTHETIC.weapons.skiffBay)!
+            .fireFromEntity('carrier', false);
+        const fighter = [...world.entities].find(([uuid, entity]) =>
+            !before.has(uuid) && entity.components.has(BayFighterComponent));
+        expect(fighter).withContext('a fighter launched').toBeDefined();
+        // One synchronous step, no event-loop turn: the hull must come
+        // from the cache, never from a background load.
+        world.step();
+        expect(fighter![1].components.has(HitboxHullComponent))
+            .withContext('the fighter is hittable on its first tick')
+            .toBeTrue();
     }, 120_000);
 });

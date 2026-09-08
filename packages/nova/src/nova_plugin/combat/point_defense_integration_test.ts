@@ -13,7 +13,9 @@ import { getSyntheticGameData } from '../../communication/simulation_test_fixtur
 import { BayFighterComponent } from '../escorts/bay_plugin.js';
 import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import {
+    completeEntity, loadWeaponsGameData,
+} from '../spawn/entity_data_loader.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
@@ -111,6 +113,17 @@ describe('point defense against fighters', () => {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
+        // Neither ship below carries these, so stage them the way the
+        // loader stages a ship's own weapons: closure (the bay's fighter,
+        // its hull sprite sheet, both weapons' shot sprites) plus this
+        // world's entries. Building the entries straight from
+        // WeaponEntries.get skipped the closure, and a launched fighter
+        // then grew its hull on whichever tick the sprite sheet's
+        // background load landed — one event-loop turn later with a cold
+        // shared cache, never during a synchronous settle with a warm
+        // one, which is why the damage spec below failed whenever
+        // another spec had warmed every Weapon first (#240).
+        await loadWeaponsGameData(world, [SKIFF_BAY, FLAK_POINT_DEFENSE]);
         return { gameData, world };
     }
 
@@ -133,9 +146,10 @@ describe('point defense against fighters', () => {
         }
     }
 
-    async function getWeapon(world: World, id: string) {
-        const weapon = await world.resources.get(WeaponEntries)!.get(id);
-        expect(weapon).withContext(`weapon ${id} loaded`).toBeDefined();
+    /** Staged in makeBattlefield, so the cache read is the contract. */
+    function getWeapon(world: World, id: string) {
+        const weapon = world.resources.get(WeaponEntries)!.getCached(id);
+        expect(weapon).withContext(`weapon ${id} staged`).toBeDefined();
         return weapon!;
     }
 
@@ -188,7 +202,7 @@ describe('point defense against fighters', () => {
         const enemyCarrier = await addShip(world, gameData, SKIFF,
             'enemyCarrier', 1000 + 4 * PD_RANGE, 1000, RAIDER_GOVT);
         settle(world);
-        const skiffBay = await getWeapon(world, SKIFF_BAY);
+        const skiffBay = getWeapon(world, SKIFF_BAY);
         const [hostileUuid, hostile] = launch(world, skiffBay, 'enemyCarrier');
         settle(world);
         pin(shooter, 1000, 1000);
@@ -232,7 +246,7 @@ describe('point defense against fighters', () => {
     describe('target choice', () => {
         it('engages a hostile bay fighter in range', async () => {
             const { world, hostileUuid } = await setUp();
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             const shot = pd.fireFromEntity('shooter', false);
             expect(shot).withContext('the turret fires').toBeDefined();
             expect(pdTargetOf(shot)).toBe(hostileUuid);
@@ -242,14 +256,14 @@ describe('point defense against fighters', () => {
             const { world, hostile } = await setUp();
             // Our own wing, sitting closer than the enemy's and (as a
             // formation escort can transiently be) pointed at us.
-            const skiffBay = await getWeapon(world, SKIFF_BAY);
+            const skiffBay = getWeapon(world, SKIFF_BAY);
             const [, ours] = launch(world, skiffBay, 'shooter');
             settle(world);
             pin(ours, 1010, 1000);
             pin(hostile, 1000 + 4 * PD_RANGE, 1000); // out of reach
             ours.components.set(TargetComponent, { target: 'shooter' });
 
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false))
                 .withContext('nothing hostile in reach, so nothing fires')
                 .toBeUndefined();
@@ -258,13 +272,13 @@ describe('point defense against fighters', () => {
         it('picks the hostile fighter over our own when both are in range',
             async () => {
                 const { world, hostile, hostileUuid } = await setUp();
-                const skiffBay = await getWeapon(world, SKIFF_BAY);
+                const skiffBay = getWeapon(world, SKIFF_BAY);
                 const [, ours] = launch(world, skiffBay, 'shooter');
                 settle(world);
                 pin(ours, 1010, 1000);        // ours is much closer
                 pin(hostile, 1100, 1000);
 
-                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+                const pd = getWeapon(world, FLAK_POINT_DEFENSE);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot)).toBe(hostileUuid);
             }, 120_000);
@@ -282,7 +296,7 @@ describe('point defense against fighters', () => {
                 pin(capital, 1050, 1000);
                 capital.components.set(TargetComponent, { target: 'shooter' });
 
-                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+                const pd = getWeapon(world, FLAK_POINT_DEFENSE);
                 expect(pd.fireFromEntity('shooter', false))
                     .withContext('capital ships are not point defense prey')
                     .toBeUndefined();
@@ -295,7 +309,7 @@ describe('point defense against fighters', () => {
                 addMissile(world, 'missile', 1000 + PD_RANGE - 40, 1000,
                     'enemyCarrier', 'shooter'); // nearly at the edge of reach
 
-                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+                const pd = getWeapon(world, FLAK_POINT_DEFENSE);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot))
                     .withContext('a torpedo outranks a fighter')
@@ -308,7 +322,7 @@ describe('point defense against fighters', () => {
             addMissile(world, 'missile', 1000 + 4 * PD_RANGE, 1000,
                 'enemyCarrier', 'shooter');
 
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             const shot = pd.fireFromEntity('shooter', false);
             expect(pdTargetOf(shot)).toBe(hostileUuid);
         }, 120_000);
@@ -333,13 +347,38 @@ describe('point defense against fighters', () => {
             const damaged = recordDamage(world);
             pin(hostile, 1030, 1000);
 
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
             expect(damaged).withContext('the fighter takes the burst')
                 .toContain(hostileUuid);
         }, 120_000);
+
+        it('damages it just the same with every Weapon already cached '
+            + '(#240)', async () => {
+                // What bay_plugin_test's sound spec leaves in the shared
+                // cache, done here on purpose: with every Weapon a cache
+                // hit, nothing between launching the fighter and firing
+                // the turret yields to the event loop, so anything the
+                // fighter needs that staging did NOT cache (its hull
+                // sprite sheet, before makeBattlefield staged the bay)
+                // can never arrive during the synchronous settle. The
+                // spec above passed only when a cold cache bought that
+                // one turn; this one holds whatever ran before it.
+                const gameData = await getSyntheticGameData();
+                await Promise.all([...(await gameData.ids).Weapon].map(
+                    id => gameData.data.Weapon.get(id)));
+                const { world, hostile, hostileUuid } = await setUp();
+                const damaged = recordDamage(world);
+                pin(hostile, 1030, 1000);
+
+                const pd = getWeapon(world, FLAK_POINT_DEFENSE);
+                expect(pd.fireFromEntity('shooter', false)).toBeDefined();
+                settle(world, 30);
+
+                expect(damaged).toContain(hostileUuid);
+            }, 120_000);
 
         it('and cannot damage a ship whose class lacks the flag', async () => {
             // The Bible's other half: point defense only harms missiles
@@ -353,7 +392,7 @@ describe('point defense against fighters', () => {
             pin(ghost, 1030, 1000);
             pin(hostile, 1100, 1000);
 
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
@@ -388,7 +427,7 @@ describe('point defense against fighters', () => {
             for (const uuid of uuids) {
                 pin(world.entities.get(uuid)!, 1100, 1000);
             }
-            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
+            const pd = getWeapon(world, FLAK_POINT_DEFENSE);
             return pdTargetOf(pd.fireFromEntity('shooter', false));
         }
 
