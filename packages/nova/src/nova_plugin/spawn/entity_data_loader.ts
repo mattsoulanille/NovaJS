@@ -236,6 +236,34 @@ export async function loadOutfitsGameData(world: World,
 }
 
 /**
+ * Stages weapons by id — their closure (animation sprite sheets,
+ * submunitions, and for a bay the fighter it launches: that ship's
+ * data, hull sprite sheet and loadout) and this world's WeaponEntries
+ * — exactly as loadEntityGameData stages the weapons a ship carries.
+ *
+ * This is the ONLY correct way to obtain a WeaponEntry for a weapon no
+ * staged entity carries. `WeaponEntries.get(id)` alone builds the entry
+ * from the wëap alone: a bay entry made that way launches a fighter
+ * whose hull sprite sheet was never cached, so HitboxProvider attaches
+ * its hull on whatever tick the background load happens to land — a
+ * load-timing-dependent, per-world tick, i.e. the desync class staging
+ * exists to prevent (#240: a spec doing that passed or failed with the
+ * warmth of the shared game-data cache).
+ */
+export async function loadWeaponsGameData(world: World,
+    weaponIds: Iterable<string>) {
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        throw new Error('Expected SimulationGameDataResource to exist');
+    }
+    const staged = new Set<string>();
+    for (const weaponId of weaponIds) {
+        await loadWeaponGameData(gameData, weaponId, staged);
+    }
+    await primeWeaponEntries(world, staged);
+}
+
+/**
  * Stage, load, then complete: loads the transitive closure of game data
  * the entity (and anything it can spawn) needs, then attaches derived
  * components so the entity enters the simulation fully formed.
