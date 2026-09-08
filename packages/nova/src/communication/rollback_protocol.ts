@@ -68,7 +68,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    sprite_sheet_stock_identity_test was rebaselined). Also under 6, no
 //    further bump: BoardingState's `capture` lost the 'refused' literal
 //    (#250), a value only ever carried inside a session.
-export const PROTOCOL_VERSION = 6;
+// 7: the wire is Avro BINARY (wire_codec.ts, avro_binary.ts): every
+//    socket frame is the derived schema's encoding of the typed
+//    envelope (wire_schemas.ts WireMessageType), never JSON text — a
+//    text frame is refused with close code 1003. joinRequest gained the
+//    OPTIONAL `schema` (the wire schema's CRC-64-AVRO fingerprint; a
+//    relay answers a mismatch with the new `joinRefused` kind). And the
+//    seven game-data components (ShipData, PlanetData, ProjectileData,
+//    BeamData, ExplosionData, AnimationComponent — as references to the
+//    peer's own game data — and BeamState, as its real shape) changed
+//    their ENCODED form (nova_plugin/core/game_data_ref.ts), which every
+//    input record, baseline and state hash carries.
+export const PROTOCOL_VERSION = 7;
 
 /**
  * ============================================================================
@@ -196,7 +207,18 @@ export type RollbackProtocolMessage =
      * NOW instead of the last periodic one: a resync replaying a
      * ~30s-stale baseline's log tail costs 1-2s of blocked rebuild,
      * while a fresh baseline's tail is just the transit window. */
-    | { kind: 'joinRequest', fresh?: boolean, protocol?: number }
+    /** `schema`: the joiner's wire-schema fingerprint (wire_schemas.ts
+     * liveWireFingerprint), so a relay built from a different schema
+     * refuses the join instead of misreading every frame. REQUIRED
+     * since protocol 7: a schema'd relay refuses a join that omits it
+     * (rollback_relay.ts, "wire schema fingerprint missing"). Optional
+     * in the codec only for the json rollback wire (wire_codec.ts
+     * WIRE_ENCODING), which has no fingerprint on either end. */
+    | { kind: 'joinRequest', fresh?: boolean, protocol?: number, schema?: string }
+    /** The relay will not serve this joiner: its wire schema differs
+     * (server -> peer). The peer gives up the join; nothing it sent
+     * would have decoded alike on both ends. */
+    | { kind: 'joinRefused', reason: string }
     | {
         kind: 'catchUp', tick: number, records: InputRecord[],
         baseline?: ArchiveBaseline,
@@ -291,8 +313,9 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
         t.strict({ kind: t.literal('inputLog'), records: t.array(InputRecordType) }),
         t.exact(t.intersection([
             t.type({ kind: t.literal('joinRequest') }),
-            t.partial({ fresh: t.boolean, protocol: t.number }),
+            t.partial({ fresh: t.boolean, protocol: t.number, schema: t.string }),
         ])),
+        t.strict({ kind: t.literal('joinRefused'), reason: t.string }),
         t.exact(t.intersection([
             t.type({
                 kind: t.literal('catchUp'),

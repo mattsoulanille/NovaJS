@@ -24,7 +24,7 @@ import type * as PIXI from 'pixi.js';
 import type Stats from 'stats.js';
 import type { Autopilot } from '../autopilot.js';
 import {
-    applySimulationFrame, movementSyncedSinceStep,
+    applySimulationFrame, movementSyncedSinceStep, stageSimulationFrameGameData,
 } from '../communication/apply_simulation_frame.js';
 import {
     SimulationBridgeClosedError,
@@ -358,6 +358,14 @@ export class FramePump {
             if (steps > 0) {
                 await bridge.step(steps);
                 const frame = await bridge.snapshot();
+                if (liveSystem(runtime.state.state) !== live) {
+                    return;
+                }
+                // The frame's game-data references resolve in the
+                // display's own caches (ExplosionData in its asset
+                // data): stage them before applying.
+                await stageSimulationFrameGameData(runtime.gameData, frame,
+                    runtime.displayAssetData);
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
                 }

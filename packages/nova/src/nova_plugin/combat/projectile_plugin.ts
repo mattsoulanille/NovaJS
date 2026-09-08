@@ -33,6 +33,7 @@ import { OwnerComponent, SourceComponent, VulnerableToPD } from '../ship/index.j
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
 import { SimulationGameDataResource } from '../core/index.js';
+import { gameDataRefType } from '../core/index.js';
 import { isHostileTarget } from './hostility.js';
 import { ShipComponent } from '../ship/index.js';
 import { pointDefenseMayDamage } from './point_defense.js';
@@ -609,8 +610,12 @@ export const ProjectilePlugin: Plugin = {
         if (!weaponConstructors) {
             throw new Error('Expected WeaponConstructors to exist');
         }
+        // On the wire as `{id}`, resolved in this world's Weapon data and
+        // checked to be a projectile weapon (core/game_data_ref.ts).
         world.resources.get(SerializerResource)?.addComponent(
-            ProjectileDataComponent, passthroughType<ProjectileWeaponData>('ProjectileDataComponentType'));
+            ProjectileDataComponent, gameDataRefType<ProjectileWeaponData>(world, 'Weapon',
+                'ProjectileData', (data): data is ProjectileWeaponData =>
+                    (data as WeaponData).type === 'ProjectileWeaponData'));
         world.resources.get(SerializerResource)?.addComponent(ProjectileComponent, t.intersection([
             t.type({ id: t.string }),
             t.partial({ source: t.string }),

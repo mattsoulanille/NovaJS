@@ -1,13 +1,22 @@
-import { isLeft } from "fp-ts/lib/Either.js";
 import * as https from "https";
 import * as http from "http";
+import * as t from "io-ts";
 import "jasmine";
-import { SocketChannelServer } from "./socket_channel_server.js";
+import { SocketChannelServer, TEXT_FRAME_CLOSE_CODE } from "./socket_channel_server.js";
 import { SocketMessage } from "./socket_message.js";
 import { firstValueFrom, Subject } from "rxjs";
 import { take } from "rxjs/operators";
 import { WebSocket, WebSocketServer } from "ws";
 import { Callbacks, On, trackOn } from "./test_utils.js";
+import { decodeWireOrThrow } from "./wire_codec.js";
+import { socketCodecFor } from "./wire_schemas.js";
+
+/**
+ * The frames here go through a schema'd codec whose payload is untyped
+ * (opaque), so the plumbing specs can send any shape; the live wire's
+ * typed schema is exercised end to end in binary_wire_test.ts.
+ */
+const codec = socketCodecFor(t.unknown);
 
 describe("SocketChannelServer", function () {
 
@@ -23,7 +32,7 @@ describe("SocketChannelServer", function () {
 
     it("should be created", () => {
         const server = new SocketChannelServer({
-            wss
+            wss, codec,
         });
         expect(server).toBeDefined();
     });
@@ -43,7 +52,7 @@ describe("SocketChannelServer", function () {
 
     it("binds to the websocket's `connection` listener", () => {
         new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         expect(wss.on).toHaveBeenCalled();
@@ -52,7 +61,7 @@ describe("SocketChannelServer", function () {
 
     it("binds listeners to a client's socket", () => {
         new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
@@ -87,26 +96,46 @@ describe("SocketChannelServer", function () {
     });
 
     describe("hostile frames", () => {
-        it("drops an invalid-JSON text frame and keeps serving", async () => {
+        it("drops an undecodable binary frame and keeps serving", async () => {
             const warnings: string[] = [];
             const server = new SocketChannelServer({
-                wss, timeout: 10, warn: m => warnings.push(m),
+                wss, timeout: 10, warn: m => warnings.push(m), codec,
             });
             const client1 = new ClientHarness(server);
             wssCallbacks["connection"][0](client1.websocket as unknown as WebSocket);
             client1.open();
 
-            expect(() => client1.sendRaw('{')).not.toThrow();
-            expect(() => client1.sendRaw('')).not.toThrow();
-            expect(() => client1.sendRaw('null')).not.toThrow();
-            expect(() => client1.sendRaw('[1,2]')).not.toThrow();
-            expect(warnings.some(w => /unparseable/.test(w))).toBeTrue();
+            expect(() => client1.sendBinary(new Uint8Array([0xff, 0xff, 0xff]))).not.toThrow();
+            expect(() => client1.sendBinary(new Uint8Array([]))).not.toThrow();
+            expect(() => client1.sendBinary(new Uint8Array([0x02, 0x7f]))).not.toThrow();
+            expect(warnings.some(w => /undecodable/.test(w))).toBeTrue();
 
             // Still a client, still served.
             expect(server.clients.size).toBe(1);
+            expect(client1.websocket.close).not.toHaveBeenCalled();
             const emitted = firstValueFrom(server.message.pipe(take(1)));
             client1.sendMessage({ message: { ok: true } });
             expect((await emitted).message).toEqual({ ok: true });
+        });
+
+        it("closes a client that sends a TEXT frame, naming the reason", () => {
+            // No JSON fallback: the wire is binary. A text frame is a
+            // client speaking an older build's wire.
+            const warnings: string[] = [];
+            const server = new SocketChannelServer({
+                wss, timeout: 10, warn: m => warnings.push(m), codec,
+            });
+            const client1 = new ClientHarness(server);
+            wssCallbacks["connection"][0](client1.websocket as unknown as WebSocket);
+            client1.open();
+
+            const messages: unknown[] = [];
+            server.message.subscribe(m => messages.push(m));
+            client1.sendRaw(JSON.stringify(SocketMessage.encode({ message: { ok: true } })));
+            expect(messages).toEqual([]);
+            expect(client1.websocket.close).toHaveBeenCalledWith(
+                TEXT_FRAME_CLOSE_CODE, jasmine.stringMatching(/text frames are not accepted.*Avro/));
+            expect(warnings.some(w => /text frame/.test(w))).toBeTrue();
         });
 
         it("a refused socket has an error listener while its close frame is in flight",
@@ -130,7 +159,7 @@ describe("SocketChannelServer", function () {
 
     it("creates an entry for a new client in the clients set", () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
             ["on", "removeAllListeners", "terminate"]);
@@ -145,7 +174,7 @@ describe("SocketChannelServer", function () {
 
     it("emits when a client connects", async () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         // Connect client 1
@@ -163,7 +192,7 @@ describe("SocketChannelServer", function () {
 
     it("emits when a client disconnects", async () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         // Connect client 1
@@ -182,7 +211,7 @@ describe("SocketChannelServer", function () {
 
     it("send() sends a message to a peer", () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         const testMessage = {
@@ -204,7 +233,7 @@ describe("SocketChannelServer", function () {
 
     it("emits messages sent by clients", async () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         // Connect client 1
@@ -233,7 +262,7 @@ describe("SocketChannelServer", function () {
         jasmine.clock().install();
 
         const server = new SocketChannelServer({
-            wss,
+            wss, codec,
             timeout: 10, // 10 ms
         });
 
@@ -255,7 +284,7 @@ describe("SocketChannelServer", function () {
         jasmine.clock().install();
 
         const server = new SocketChannelServer({
-            wss,
+            wss, codec,
             timeout: 10, // 10 ms
         });
 
@@ -281,7 +310,7 @@ describe("SocketChannelServer", function () {
         jasmine.clock().install();
 
         const server = new SocketChannelServer({
-            wss,
+            wss, codec,
             timeout: 10, // 10 ms
         });
 
@@ -309,7 +338,7 @@ describe("SocketChannelServer", function () {
 
     it("replies to pings", async () => {
         const server = new SocketChannelServer({
-            wss, timeout: 10,
+            wss, timeout: 10, codec,
         });
 
         // Connect client 1
@@ -328,23 +357,24 @@ class ClientHarness {
     readonly callbacks: Callbacks;
     readonly messagesFromServer = new Subject<SocketMessage>();
     lastMessage?: SocketMessage;
+    /** Every frame the server sent, raw. */
+    readonly frames: unknown[] = [];
 
     constructor(private server: SocketChannelServer) {
         this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
-            ["on", "send", "removeAllListeners", "terminate"]);
+            ["on", "send", "close", "removeAllListeners", "terminate"]);
         const [callbacks, on] = trackOn();
         this.websocket.on.and.callFake(on);
         (this.websocket as any).readyState = WebSocket.CONNECTING;
         this.callbacks = callbacks;
-        this.websocket.send.and.callFake((data: any) => {
-            const socketMessage =
-                SocketMessage.decode(JSON.parse(data) as unknown);
-            if (isLeft(socketMessage)) {
-                throw new Error(`Failed to parse SocketMessage: ${data}`);
+        this.websocket.send.and.callFake((data: unknown) => {
+            this.frames.push(data);
+            if (!(data instanceof Uint8Array)) {
+                throw new Error(`The server sent a non-binary frame: ${String(data)}`);
             }
-
-            this.messagesFromServer.next(socketMessage.right);
-            this.lastMessage = socketMessage.right;
+            const socketMessage = decodeWireOrThrow(codec, SocketMessage, data);
+            this.messagesFromServer.next(socketMessage);
+            this.lastMessage = socketMessage;
         });
     }
     open() {
@@ -357,10 +387,14 @@ class ClientHarness {
         (this.websocket as any).readyState = WebSocket.CLOSED;
     }
     sendMessage(message: SocketMessage) {
-        this.sendRaw(JSON.stringify(SocketMessage.encode(message)));
+        this.sendBinary(codec.encode(SocketMessage.encode(message)));
     }
-    /** A text frame's bytes as the server's message listener sees them. */
+    /** A binary frame as ws hands it to the server's message listener. */
+    sendBinary(bytes: Uint8Array) {
+        this.callbacks["message"][0](Buffer.from(bytes), true);
+    }
+    /** A TEXT frame as ws hands it over: a Buffer, `isBinary` false. */
     sendRaw(text: string) {
-        this.callbacks["message"][0](text);
+        this.callbacks["message"][0](Buffer.from(text), false);
     }
 }

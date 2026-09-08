@@ -9,7 +9,9 @@ import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { loadEntityGameData, loadOutfitsGameData, loadWireSnapshotGameData } from "../nova_plugin/spawn/index.js";
-import { deriveEntityComponents, ControlEvent } from '../nova_plugin/core/index.js';
+import {
+    deriveEntityComponents, ControlEvent, stageEncodedComponentsGameData,
+} from '../nova_plugin/core/index.js';
 import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction } from "../nova_plugin/escorts/index.js";
@@ -892,6 +894,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * loaded when the record lands.
      */
     async acceptMission(accepted: AcceptedMission) {
+        // The ships' game-data references resolve during the decode
+        // (core/game_data_ref.ts): stage them first.
+        await stageEncodedComponentsGameData(this.simulationGameData,
+            (accepted.ships ?? []).map(ship => (ship.entity as EncodedEntity).components));
         for (const ship of accepted.ships ?? []) {
             const decoded = this.serializer.decode(ship.entity);
             if (isLeft(decoded)) {
@@ -966,6 +972,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     ([name]) => !PEER_LOCAL_COMPONENTS.has(name)),
             };
         }
+        // The entity's game-data references (ShipData & co., see
+        // core/game_data_ref.ts) resolve during the decode: stage them
+        // in THIS world's cache first — the display side warming its
+        // own does not warm the worker's.
+        await stageEncodedComponentsGameData(this.simulationGameData, [entity.components]);
         const decoded = this.serializer.decode(entity);
         if (isLeft(decoded)) {
             throw new Error(`Failed to decode entity: ${this.serializer.describeDecodeFailure(entity, decoded.left)}`);

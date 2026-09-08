@@ -2,7 +2,7 @@ import 'jasmine';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
-import { getDefaultBeamWeaponData } from 'novadatainterface/weapon_data';
+import { BeamWeaponData } from 'novadatainterface/weapon_data';
 import { UnknownComponent } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import {
@@ -13,6 +13,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { BeamDataComponent, OwnerComponent, SourceComponent } from '../nova_plugin/combat/index.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { ShipDataComponent, TargetComponent } from '../nova_plugin/ship/index.js';
@@ -138,10 +139,25 @@ describe('SourceComponent sim -> display wiring', () => {
         });
 
     it('matches a mirrored beam with ActiveBeamsQuery, keeping the firing '
-        + 'animation on', () => {
+        + 'animation on', async () => {
             const SHIP = 'firing-ship-uuid';
+            // BeamData crosses the wire as a reference into the world's
+            // own Weapon data (nova_plugin/core/game_data_ref.ts), so the
+            // mirrored beam must be a real beam weapon of the data set.
+            const gameData = simWorld.resources.get(SimulationGameDataResource)!;
+            let beamData: BeamWeaponData | undefined;
+            for (const id of (await gameData.ids).Weapon) {
+                const weapon = await gameData.data.Weapon.get(id);
+                if (weapon.type === 'BeamWeaponData') {
+                    beamData = weapon;
+                    break;
+                }
+            }
+            if (!beamData) {
+                throw new Error('the data set has no beam weapon');
+            }
             const simBeam = new Entity('beam')
-                .addComponent(BeamDataComponent, getDefaultBeamWeaponData())
+                .addComponent(BeamDataComponent, beamData)
                 .addComponent(SourceComponent, SHIP);
 
             // Run the REAL query the ship animation system uses, in a world

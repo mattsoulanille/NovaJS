@@ -3,8 +3,9 @@ import { Animation } from "novadatainterface/animation";
 import { ExplosionData } from "novadatainterface/explosion_data";
 import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
-import { passthroughType, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { Provide } from "nova_ecs/provide";
+import { animationRefType, gameDataRefType } from "./game_data_ref.js";
 import { ProjectileDataComponent } from "./projectile_data.js";
 
 export const AnimationComponent = new Component<Animation>('AnimationComponent');
@@ -74,10 +75,14 @@ export const AnimationPlugin: Plugin = {
         world.addComponent(AnimationComponent);
         world.addComponent(ExplosionDataComponent);
         world.addComponent(TumbleAnimationComponent);
+        // On the wire as references into this world's own game data
+        // (game_data_ref.ts): an Animation by its owner's id, an
+        // ExplosionData by its id. Staged before any decode.
         world.resources.get(SerializerResource)?.addComponent(
-            AnimationComponent, passthroughType<Animation>('AnimationComponentType'));
+            AnimationComponent, animationRefType(world));
         world.resources.get(SerializerResource)?.addComponent(
-            ExplosionDataComponent, passthroughType<ExplosionData>('ExplosionDataComponentType'));
+            ExplosionDataComponent,
+            gameDataRefType<ExplosionData>(world, 'Explosion', 'ExplosionData'));
         world.resources.get(SerializerResource)?.addComponent(
             TumbleAnimationComponent, TumbleAnimation);
 

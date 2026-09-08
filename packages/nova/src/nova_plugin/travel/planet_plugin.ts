@@ -10,7 +10,7 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
 import { World } from 'nova_ecs/world';
 import { landable } from '../core/index.js';
@@ -24,6 +24,7 @@ import { AnimationComponent, ExplosionAnimationProvider } from '../core/index.js
 import { ControlAction } from '../core/index.js';
 import { findControlledEntity, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
+import { gameDataRefType } from '../core/index.js';
 import { SystemIdResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { ExplodingFinishedSystem, ShipComponent, ShipDataComponent } from '../ship/index.js';
@@ -468,8 +469,9 @@ export const PlanetPlugin: Plugin = {
             derive: (entity, gameData) =>
                 derivePlanetData(gameData, entity.components.get(PlanetComponent)!),
         });
+        // On the wire as `{id}` (core/game_data_ref.ts).
         world.resources.get(SerializerResource)?.addComponent(
-            PlanetDataComponent, passthroughType<PlanetData>('PlanetDataComponentType'));
+            PlanetDataComponent, gameDataRefType<PlanetData>(world, 'Planet', 'PlanetData'));
         // Bought landing clearance is ordinary synced player state: it has to
         // survive a snapshot (a peer joining mid-bribe must honour it) and be
         // delta-synced so the display's comm dialog and radar see it.

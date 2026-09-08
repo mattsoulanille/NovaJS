@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import { PositionType } from 'nova_ecs/datatypes/position';
 import { AngleType, VectorType } from 'nova_ecs/datatypes/vector';
-import { EncodedComponentList, markerType, Serializer } from 'nova_ecs/plugins/serializer_plugin';
+import { EncodedComponentList, markerType, Serializer, WireShapedType } from 'nova_ecs/plugins/serializer_plugin';
 
 /**
  * ============================================================================
@@ -469,6 +469,12 @@ class Deriver {
                 return this.opaque('unmapped', path, codec, 'functions cannot cross a wire');
             case 'RecursiveType':
                 return this.recursive(codec as t.RecursiveType<t.Any>, path, nameHint);
+            case 'WireShapedType':
+                // A hand-written codec that declares its encoded shape
+                // (nova_ecs serializer_plugin WireShapedType): the
+                // shape is what crosses the wire.
+                return this.derive((codec as WireShapedType<unknown, unknown>).wireShape,
+                    path, nameHint);
             default:
                 return this.opaque('unmapped', path, codec,
                     `custom codec (${tag ?? 'no _tag'}); its encoded shape is not reflectable`
@@ -579,7 +585,7 @@ class Deriver {
                 field.default = null;
             } else if (isOptional) {
                 optionalNames.push(fieldName);
-                field.type = ['null', this.presentWrapper(schema, `${node.name}_${prop}`)];
+                field.type = this.optionalUnion(schema, `${node.name}_${prop}`);
                 field.default = null;
             }
             node.fields!.push(field);
@@ -603,6 +609,27 @@ class Deriver {
             node.renamed = renamed;
         }
         return node;
+    }
+
+    /**
+     * The type of an optional field: `['null', present]`, where absent
+     * is the null branch. A field whose own type is a union cannot be
+     * wrapped in another (Avro forbids nested unions), so its branches
+     * join the optional's union directly — a discriminated union keeps
+     * its branch table, with null in front — unless one of them is
+     * already null, in which case the present wrapper below keeps a
+     * present null apart from an absent field.
+     */
+    private optionalUnion(schema: AvroSchema, nameHint: string): AvroSchema {
+        if (Array.isArray(schema) && !schema.includes('null')) {
+            return ['null', ...schema];
+        }
+        if (typeof schema === 'object' && !Array.isArray(schema)
+            && schema.logicalType === 'kindUnion'
+            && !(schema.type as AvroSchema[]).includes('null')) {
+            return { ...schema, type: ['null', ...(schema.type as AvroSchema[])] };
+        }
+        return ['null', this.presentWrapper(schema, nameHint)];
     }
 
     /**

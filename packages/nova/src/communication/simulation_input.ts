@@ -7,6 +7,7 @@ import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
 import {
     ControlEvent, ControlEventType, ControlsSubject, deriveEntityComponents,
+    SimulationGameDataResource, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/spawn/index.js";
 import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
@@ -204,6 +205,15 @@ export async function loadInputRecordsGameData(
                         ? (input.accepted.ships ?? []).map(
                             ship => ship.entity as EncodedEntity)
                         : [];
+            // The entity's game-data REFERENCES (ShipData & co., see
+            // core/game_data_ref.ts) resolve during the decode itself,
+            // so they are staged before it; the decoded entity's
+            // closure follows, as genesis stages it.
+            const gameData = world.resources.get(SimulationGameDataResource);
+            if (gameData && entities.length > 0) {
+                await stageEncodedComponentsGameData(gameData,
+                    entities.map(encoded => encoded.components));
+            }
             for (const encoded of entities) {
                 const decoded = serializer.decode(encoded);
                 if (!isLeft(decoded)) {

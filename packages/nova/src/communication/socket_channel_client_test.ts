@@ -1,9 +1,28 @@
-import { isLeft } from "fp-ts/lib/Either.js";
-import { SocketChannelClient } from "./socket_channel_client.js";
+import * as t from "io-ts";
+import { SocketChannelClient, TEXT_FRAME_CLOSE_CODE } from "./socket_channel_client.js";
 import { SocketMessage } from "./socket_message.js";
 import { take } from "rxjs/operators";
 import { Callbacks, On, trackOn } from "./test_utils.js";
 import { firstValueFrom } from "rxjs";
+import { decodeWireOrThrow } from "./wire_codec.js";
+import { socketCodecFor } from "./wire_schemas.js";
+
+/** A schema'd codec over an untyped payload: any shape, binary frames. */
+const codec = socketCodecFor(t.unknown);
+
+/** A binary frame's message event, as a browser delivers it. */
+function frameEvent(message: SocketMessage): MessageEvent<ArrayBuffer> {
+    const bytes = codec.encode(SocketMessage.encode(message));
+    return { type: "testMessage", data: bytes.buffer } as MessageEvent<ArrayBuffer>;
+}
+
+/** What the client put on the socket, decoded. */
+function sentMessage(frame: unknown): SocketMessage {
+    if (!(frame instanceof Uint8Array)) {
+        throw new Error(`The client sent a non-binary frame: ${String(frame)}`);
+    }
+    return decodeWireOrThrow(codec, SocketMessage, frame);
+}
 
 describe("SocketChannelClient", function () {
     let webSocket: jasmine.SpyObj<WebSocket>;
@@ -34,26 +53,30 @@ describe("SocketChannelClient", function () {
     });
 
     it("can be instantiated", () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
     });
 
     it("binds a listener to 'message'", () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
         expect(webSocket.addEventListener).toHaveBeenCalledTimes(1);
         expect(webSocket.addEventListener.calls.mostRecent().args[0])
             .toEqual("message");
     });
 
+    it("asks for binary frames as ArrayBuffers", () => {
+        new SocketChannelClient({ webSocket, warn, codec });
+        expect(webSocket.binaryType).toBe('arraybuffer');
+    });
+
     it("warns if it can't decode a received message", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const badMessage = "foobar";
         const messageEvent = {
             type: "testMessage",
-            data: JSON.stringify(badMessage)
-        } as MessageEvent<string>;
+            data: new Uint8Array([0xff, 0xff, 0x7f]).buffer,
+        } as MessageEvent<ArrayBuffer>;
 
         let warnPromise = new Promise<void>((resolve) => {
             warn.and.callFake(() => resolve());
@@ -64,18 +87,31 @@ describe("SocketChannelClient", function () {
         expect(warn).toHaveBeenCalled();
         expect(warn.calls.mostRecent().args[0])
             .toMatch("Failed to deserialize");
+        expect(webSocket.close).not.toHaveBeenCalled();
+    });
+
+    it("closes the socket on a TEXT frame, naming the reason", () => {
+        // The wire is binary; a text frame is an older build's JSON
+        // wire, and there is no fallback for it.
+        const client = new SocketChannelClient({ webSocket, warn, codec });
+        const received: unknown[] = [];
+        client.message.subscribe(m => received.push(m));
+        callbacks["message"][0]({
+            type: "testMessage",
+            data: JSON.stringify(SocketMessage.encode({ message: { ok: true } })),
+        } as MessageEvent<string>);
+        expect(received).toEqual([]);
+        expect(webSocket.close).toHaveBeenCalledWith(TEXT_FRAME_CLOSE_CODE,
+            jasmine.stringMatching(/text frames are not accepted.*Avro/));
+        expect(warn.calls.mostRecent().args[0]).toMatch("text frame");
     });
 
     it("warns if the message has no body", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const badMessage = { foo: 'bar' };
-        const messageEvent = {
-            type: "testMessage",
-            data: JSON.stringify(badMessage)
-        } as MessageEvent<string>;
+        const messageEvent = frameEvent({});
 
         let warnPromise = new Promise<void>((resolve) => {
             warn.and.callFake(() => resolve());
@@ -90,7 +126,7 @@ describe("SocketChannelClient", function () {
 
 
     it("emits when it receives a valid message", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
@@ -99,11 +135,7 @@ describe("SocketChannelClient", function () {
             bar: 'bar message',
         };
 
-        const message = SocketMessage.encode({ message: testMessage });
-        const messageEvent = {
-            type: "testMessage",
-            data: JSON.stringify(message)
-        } as MessageEvent<string>;
+        const messageEvent = frameEvent({ message: testMessage });
 
         const messagePromise = firstValueFrom(client.message.pipe(take(1)));
         sendMessage(messageEvent);
@@ -113,15 +145,11 @@ describe("SocketChannelClient", function () {
     });
 
     it("replies to pings", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
+        const client = new SocketChannelClient({ webSocket, warn, codec });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const message = SocketMessage.encode({ ping: true });
-        const messageEvent = {
-            type: "testMessage",
-            data: JSON.stringify(message),
-        } as MessageEvent<string>;
+        const messageEvent = frameEvent({ ping: true });
 
         const pongPromise = new Promise<unknown>((resolve) => {
             webSocket.send.and.callFake(resolve);
@@ -129,17 +157,13 @@ describe("SocketChannelClient", function () {
 
         sendMessage(messageEvent);
         const pong = await pongPromise;
-        const pongMessage = SocketMessage.decode(JSON.parse(pong as string) as unknown);
-        if (isLeft(pongMessage)) {
-            throw new Error("pongPromise was not a SocketMessage");
-        }
-        expect(pongMessage.right.pong).toBe(true);
+        expect(sentMessage(pong).pong).toBe(true);
     });
 
     it("sends a ping if it hasn't heard from the server", async () => {
         const client = new SocketChannelClient({
             webSocket,
-            warn,
+            warn, codec,
             timeout: 10,
         });
 
@@ -151,11 +175,7 @@ describe("SocketChannelClient", function () {
 
         clock.tick(11);
         const ping = await pingPromise;
-        const pingMessage = SocketMessage.decode(JSON.parse(ping as string) as unknown);
-        if (isLeft(pingMessage)) {
-            throw new Error("pingPromise was not a SocketMessage");
-        }
-        expect(pingMessage.right.ping).toBe(true);
+        expect(sentMessage(ping).ping).toBe(true);
 
         clock.uninstall();
     });
@@ -167,7 +187,7 @@ describe("SocketChannelClient", function () {
 
         const client = new SocketChannelClient({
             webSocket,
-            warn,
+            warn, codec,
             timeout: 10,
             webSocketFactory,
             maxPings: 0,

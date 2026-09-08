@@ -6,17 +6,28 @@ import { DefaultMap } from "nova_ecs/utils";
 import { BehaviorSubject, EMPTY, Observable, of, Subject } from "rxjs";
 import { filter, map, mergeMap, takeUntil, tap } from "rxjs/operators";
 
-export const RoomMessage = t.intersection([
-    t.type({
-        room: t.string,
-    }),
-    t.partial({
-        message: t.unknown,
-        peers: set(t.string),
-        inRoom: t.boolean,
-        getPeers: t.literal(true),
-    })
-]);
+/**
+ * The room envelope inside a communicator message: a room's membership
+ * traffic (join/leave, the peer set) or a message to the room.
+ * `roomMessageType` threads the room payload's codec through (see
+ * socket_message.ts); the rooms themselves decode with the untyped
+ * `RoomMessage` and hand the payload to the room's subscribers.
+ */
+export function roomMessageType<A, O>(payload: t.Type<A, O, unknown>) {
+    return t.intersection([
+        t.type({
+            room: t.string,
+        }),
+        t.partial({
+            message: payload,
+            peers: set(t.string),
+            inRoom: t.boolean,
+            getPeers: t.literal(true),
+        })
+    ]);
+}
+
+export const RoomMessage = roomMessageType(t.unknown);
 type RoomMessage = t.TypeOf<typeof RoomMessage>;
 
 class RoomCommunicator implements Communicator {

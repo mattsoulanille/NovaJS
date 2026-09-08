@@ -13,7 +13,7 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementPhysics, MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
-import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { TimeSystem } from 'nova_ecs/plugins/time_plugin';
@@ -21,6 +21,7 @@ import { ProvideFromCache } from '../core/index.js';
 import { AnimationComponent, CreateTimeProvider, ProjectileAnimationProvider } from '../core/index.js';
 import { CollisionVulnerabilityComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
+import { gameDataRefType } from '../core/index.js';
 import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin.js';
 import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { registerEntityDeriver } from '../core/index.js';
@@ -435,8 +436,10 @@ export const ShipPlugin: Plugin = {
         }
         world.addComponent(ShipComponent);
         world.addComponent(ShipDataComponent);
+        // On the wire as `{id}`, resolved in this world's own Ship data
+        // (core/game_data_ref.ts); staged before any decode.
         world.resources.get(SerializerResource)?.addComponent(
-            ShipDataComponent, passthroughType<ShipData>('ShipDataComponentType'));
+            ShipDataComponent, gameDataRefType<ShipData>(world, 'Ship', 'ShipData'));
 
         // Derivers attach these components synchronously when an
         // entity is completed (staged insertion, snapshot restore).

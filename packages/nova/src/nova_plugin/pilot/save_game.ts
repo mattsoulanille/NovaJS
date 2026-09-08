@@ -36,6 +36,7 @@ import { ShipComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bit_namespaces';
 import { migrateRaw } from '../../common/migrations.js';
+import { GAME_DATA_REF_COMPONENTS } from '../core/index.js';
 import {
     FIRST_SAVE_VERSION, RawSaveData, SAVE_MIGRATIONS, SAVE_VERSION,
     saveDefaults,
@@ -607,7 +608,7 @@ export function extractSavedEscorts(escorts: Iterable<EscortToSave>,
     const saved: SavedEscort[] = [];
     for (const { uuid, entity } of escorts) {
         try {
-            saved.push({ uuid, entity: serializer.encode(entity) });
+            saved.push({ uuid, entity: withoutGameDataComponents(serializer.encode(entity)) });
         } catch (e) {
             console.warn(`Skipping escort ${uuid} in the save; `
                 + `it could not be serialized:`, e);
@@ -778,12 +779,30 @@ function phantomBayFighter(entity: Entity, owner: SavedFleetOwner,
  * criterion). Omitting it restores the array verbatim, which is what every
  * caller that cannot identify the pilot must do.
  */
+/**
+ * A saved escort without its game-data components (ShipData,
+ * AnimationComponent, ...; core/game_data_ref.ts). They are DERIVED —
+ * the ship class from ShipComponent's id, its animation from the class
+ * — and the host re-derives them when the escort is inserted, exactly
+ * as for a freshly built ship; persisting them would tie the save to
+ * one build's encoding of parsed game data (a save from before the
+ * references held whole ShipData objects, which no longer decode).
+ */
+function withoutGameDataComponents(entity: EncodedEntity): EncodedEntity {
+    return {
+        ...entity,
+        components: entity.components.filter(
+            ([name]) => !GAME_DATA_REF_COMPONENTS.has(name)),
+    };
+}
+
 export function restoreSavedEscorts(
     escorts: readonly SavedEscort[], serializer: Serializer,
     owner?: SavedFleetOwner):
     Array<{ uuid: string, entity: Entity }> {
     const restored: Array<{ uuid: string, entity: Entity }> = [];
-    for (const { uuid, entity } of escorts) {
+    for (const { uuid, entity: saved } of escorts) {
+        const entity = withoutGameDataComponents(saved);
         const decoded = serializer.decode(entity);
         if (isLeft(decoded)) {
             console.warn(`Dropping saved escort ${uuid}; its entity no `
