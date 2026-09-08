@@ -8,6 +8,7 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { openEnum } from '../common/open_enum.js';
 import { makeDeterminismWorld } from './determinism_harness.js';
+import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { AvroSchema, AvroSchemaNode, DerivationFailure, DerivationOptions, deriveAvroSchema } from './io_ts_to_avro.js';
 import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simulation_frame.js';
 import { WireTick } from './simulation_input.js';
@@ -494,7 +495,8 @@ describe('io-ts to Avro derivation', () => {
         let frame: SimulationFrame;
 
         beforeAll(async () => {
-            world = await makeDeterminismWorld(2);
+            world = await makeDeterminismWorld(2, 'worker',
+                getSyntheticGameData());
             for (let i = 0; i < 20; i++) {
                 world.step();
             }

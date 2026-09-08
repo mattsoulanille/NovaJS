@@ -17,7 +17,8 @@ import { RoomArchive } from './room_archive.js';
 import { DesyncDump, InputRecord, unwrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
-import { getIntegrationGameData } from './simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from './simulation_test_fixture.js';
 
 /**
  * The pure input-driven room, end to end with real bridge hosts and a
@@ -54,7 +55,7 @@ describe('Input-driven rooms', () => {
         options?: ConstructorParameters<typeof SimulationBridgeHost>[2],
         HostClass: typeof SimulationBridgeHost = SimulationBridgeHost,
         npcs = false) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         systemId ??= [...ids.System].sort()[0]!;
         const world = await makeSystem(systemId, gameData, 'worker', { npcs });
@@ -67,7 +68,7 @@ describe('Input-driven rooms', () => {
     }
 
     async function makePeerShip(peerId: string, world: World) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const shipData = await gameData.data.Ship.get([...ids.Ship].sort()[0]!);
         const ship = makeShip(shipData);
@@ -237,7 +238,7 @@ describe('Input-driven rooms', () => {
             baseline: () => archive?.latest,
         });
         const makeArchiveWorld = async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             return makeSystem([...ids.System].sort()[0]!, gameData, 'node', { npcs: false });
         };
@@ -310,7 +311,7 @@ describe('Input-driven rooms', () => {
             referenceHash: tick => archive?.hashAt(tick),
         });
         const makeArchiveWorld = async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             return makeSystem([...ids.System].sort()[0]!, gameData, 'node', { npcs: false });
         };
@@ -336,8 +337,10 @@ describe('Input-driven rooms', () => {
         peerA.client.removeEntity('ship a');
         await step(35);
         // Depart with a purchased ship: a fresh entity, same uuid.
-        const gameData = await getIntegrationGameData();
-        const carrierData = await gameData.data.Ship.get('nova:143');
+        const gameData = await getSyntheticGameData();
+        // A DIFFERENT hull from the one that landed (a Heron Warden
+        // where a Wren Skiff took off), which is the whole point.
+        const carrierData = await gameData.data.Ship.get(SYNTHETIC.ships.warden);
         const carrier = makeShip(carrierData!);
         carrier.components.set(ControlledByComponent, { peerId: 'a' });
         await peerA.client.addEntity('ship a', carrier);
@@ -363,7 +366,7 @@ describe('Input-driven rooms', () => {
             referenceHash: tick => archive?.hashAt(tick),
         });
         const makeArchiveWorld = async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             return makeSystem([...ids.System].sort()[0]!, gameData, 'node', { npcs: false });
         };
@@ -372,18 +375,20 @@ describe('Input-driven rooms', () => {
 
         const peerA = await makePeer('a');
         const peerB = await makePeer('b');
-        // A's controlled shuttle between two hostile carriers: it will
-        // die (exercising the respawn path) amid full combat
-        // (missiles, turret bolts, blasts) that every world — worker
-        // peers and the node archive — must simulate identically.
+        // A's controlled skiff between two warships: it will die
+        // (exercising the respawn path) amid full combat (missiles,
+        // turret bolts, beams, blasts) that every world — worker peers
+        // and the node archive — must simulate identically.
         const ship = await makePeerShip('a', peerA.world);
         await peerA.client.addEntity('ship a', ship);
-        const gameData = await getIntegrationGameData();
-        // A Fed Carrier (missiles, turrets, bays) and a Raven (beams,
-        // point defense — the live-session loadout that coincided with
-        // an archive divergence) both in weapons range.
+        const gameData = await getSyntheticGameData();
+        // A Gannet Corsair (blasters and guided missiles; a Verge
+        // raider, so xenophobic and alwaysAttacksPlayer — it opens on
+        // the skiff) and a Heron Warden (a beam, a turret, point
+        // defense and a fighter bay; Meridian, so it opens on the
+        // corsair), both in weapons range of everything.
         for (const [i, [shipId, x]] of ([
-            ['nova:143', -120], ['nova:164', 320],
+            [SYNTHETIC.ships.corsair, -120], [SYNTHETIC.ships.warden, 320],
         ] as const).entries()) {
             const npcData = await gameData.data.Ship.get(shipId);
             const npc = makeNpc(npcData!);
@@ -438,22 +443,23 @@ describe('Input-driven rooms', () => {
             referenceHash: tick => archive?.hashAt(tick),
         });
         const makeArchiveWorld = async () => {
-            const gameData = await getIntegrationGameData();
-            return makeSystem('nova:226', gameData, 'node', { npcs: false });
+            const gameData = await getSyntheticGameData();
+            return makeSystem(SYNTHETIC.systems.thessaly, gameData, 'node', { npcs: false });
         };
         archive = new RoomArchive(relay, makeArchiveWorld,
             { intervalTicks: 60, autoUpdate: false });
 
-        // An asteroid-free system (Ver'ashan): this spec depends on a
-        // marginal dogfight where at least one launched fighter
+        // An asteroid-free system (Thessaly Reach): this spec depends
+        // on a marginal dogfight where at least one launched fighter
         // survives to fly home, and an asteroid field absorbing shots
         // tips that fight the other way.
-        const peerA = await makePeer('a', 'nova:226');
-        const peerB = await makePeer('b', 'nova:226');
-        const gameData = await getIntegrationGameData();
-        // A pilots a Fed Carrier (it has a fighter bay).
-        const carrierData = await gameData.data.Ship.get('nova:143');
-        // The raven mauls the carrier hard enough to push it below its
+        const peerA = await makePeer('a', SYNTHETIC.systems.thessaly);
+        const peerB = await makePeer('b', SYNTHETIC.systems.thessaly);
+        const gameData = await getSyntheticGameData();
+        // A pilots a Heron Warden (it has a fighter bay, two skiffs in
+        // it).
+        const carrierData = await gameData.data.Ship.get(SYNTHETIC.ships.warden);
+        // The prey mauls the carrier hard enough to push it below its
         // disable threshold mid-launch, and a DISABLED ship can't fire
         // its bay (ship disabling landed after this spec was written).
         // This spec is about escort lockstep, not attrition, so give
@@ -462,9 +468,21 @@ describe('Input-driven rooms', () => {
         // The custom ShipDataComponent is set before insertion, so it
         // rides the insertion record and every peer — and every
         // snapshot re-derivation — agrees.
+        //
+        // The stock Warden loadout carries no GUIDED weapon, and the
+        // last act of this spec needs missiles homing in on another
+        // player's ship, so a Harrier launcher and its ammo are bolted
+        // on through the same ship data (outfits are what the weapon
+        // and physics providers derive from, so this rides the
+        // insertion record too).
         const toughCarrierData = {
             ...carrierData!,
             physics: { ...carrierData!.physics, armor: 1_000_000 },
+            outfits: {
+                ...carrierData!.outfits,
+                [SYNTHETIC.outfits.launcher]: 1,
+                [SYNTHETIC.outfits.missileAmmo]: 20,
+            },
         };
         const carrier = makeShip(toughCarrierData);
         carrier.components.set(ShipDataComponent, toughCarrierData);
@@ -475,22 +493,22 @@ describe('Input-driven rooms', () => {
         carrierMovement.velocity = new Vector(0, 0);
         await completeEntity(peerA.world, carrier);
         await peerA.client.addEntity('ship a', carrier);
-        // The dogfight victim: a second Fed Carrier. (This spec once
-        // used a Raven, but the tighter halved formation spacing parks
-        // freshly launched fighters in the line of fire, and a Raven
-        // one-shots each fighter before the next launches — no
-        // survivor ever flies home. Carrier-vs-carrier keeps a real
-        // dogfight while letting a couple of fighters live to return:
-        // the same adaptation-not-weakening rule as pinning this spec
-        // to an asteroid-free system.)
-        const preyData = await gameData.data.Ship.get('nova:143');
+        // The dogfight victim: a second Heron Warden. (On stock data
+        // this spec once used a Raven, but the tighter halved formation
+        // spacing parks freshly launched fighters in the line of fire
+        // and a Raven one-shots each fighter before the next launches —
+        // no survivor ever flies home. Carrier-vs-carrier keeps a real
+        // dogfight while letting a fighter live to return: the same
+        // adaptation-not-weakening rule as pinning this spec to an
+        // asteroid-free system.)
+        const preyData = await gameData.data.Ship.get(SYNTHETIC.ships.warden);
         const prey = makeNpc(preyData!);
         const preyMovement = prey.components.get(MovementStateComponent)!;
         preyMovement.position = new Position(0, 800);
         preyMovement.rotation = new Angle(Math.PI);
         preyMovement.velocity = new Vector(0, 0);
         await completeEntity(peerA.world, prey);
-        await peerA.client.addEntity('raven', prey);
+        await peerA.client.addEntity('prey', prey);
 
         const step = async (ticks: number) => {
             for (let i = 0; i < ticks; i++) {
@@ -507,12 +525,12 @@ describe('Input-driven rooms', () => {
         // Populate the weapons map, acquire a target, cycle to the bay.
         // The target is set explicitly (the click/tap input record)
         // rather than with the 'r' key: 'r' takes the nearest HOSTILE
-        // ship, and this spec's choreography needs the raven locked
+        // ship, and this spec's choreography needs the prey locked
         // whatever it thinks of the player.
         peerA.host.controlEvents([{ action: 'firePrimary', state: 'start' }]);
         await step(10);
         peerA.host.controlEvents([{ action: 'firePrimary', state: false }]);
-        peerA.host.setTarget('raven');
+        peerA.host.setTarget('prey');
         await step(5);
         const shipA = () => peerA.world.entities.get('ship a')!;
         const { ActiveSecondaryWeapon } =
@@ -532,7 +550,7 @@ describe('Input-driven rooms', () => {
         // escort-command framework (no auto-attack), so keep pressing
         // the attack command while the bay cycles: each press sends
         // every fighter launched so far at the player's target (the
-        // raven), which fights back — the dogfight this spec's
+        // prey), which fights back — the dogfight this spec's
         // choreography depends on.
         peerA.host.controlEvents([{ action: 'fireSecondary', state: 'start' }]);
         for (let volley = 0; volley < 6; volley++) {
@@ -577,7 +595,7 @@ describe('Input-driven rooms', () => {
             .filter(([, entity]) => [...entity.components.keys()]
                 .some(component => component.name === 'ReturnComponent'))
             .length;
-        peerA.client.removeEntity('raven');
+        peerA.client.removeEntity('prey');
         await step(30);
         peerA.host.controlEvents([{ action: 'returnToBay', state: 'start' }]);
         await step(2);
@@ -613,7 +631,7 @@ describe('Input-driven rooms', () => {
         // different id for the same projectile and diverge on contact.
         // (It used to pass by accident: bare `projectile:N` ids were
         // system-agnostic.)
-        const peerC = await makePeer('c', 'nova:226');
+        const peerC = await makePeer('c', SYNTHETIC.systems.thessaly);
         expect(await peerC.host.joinRoom()).toBeTrue();
         {
             const { TimeResource } =
@@ -648,12 +666,25 @@ describe('Input-driven rooms', () => {
         // another player has to be earned).
         peerA.host.setTarget('ship b');
         await step(3);
-        // Cycle from the bay back to the guided missile (the first
-        // secondary), then hold fire.
+        // Cycle from the bay back to the guided missile, then hold
+        // fire. (Reset to "no secondary" first, then step forward until
+        // the Harrier is the live selection — the carrier has two
+        // secondaries and the spec needs the guided one, not whichever
+        // the weapons map happens to list first.)
         peerA.host.controlEvents([{ action: 'resetSecondary', state: 'start' }]);
         await step(3);
-        peerA.host.controlEvents([{ action: 'nextSecondary', state: 'start' }]);
-        await step(3);
+        for (let cycle = 0; cycle < 8; cycle++) {
+            peerA.host.controlEvents(
+                [{ action: 'nextSecondary', state: 'start' }]);
+            await step(3);
+            if (shipA().components.get(ActiveSecondaryWeapon)?.secondary
+                === SYNTHETIC.weapons.missile) {
+                break;
+            }
+        }
+        expect(shipA().components.get(ActiveSecondaryWeapon)?.secondary)
+            .withContext('the carrier must be holding its guided missile')
+            .toEqual(SYNTHETIC.weapons.missile);
         peerA.host.controlEvents([{ action: 'fireSecondary', state: 'start' }]);
         // The victim must actually have been hit for this to prove
         // anything. Watch the shield during the volley: it recharges,
@@ -718,16 +749,17 @@ describe('Input-driven rooms', () => {
             referenceHash: tick => archive?.hashAt(tick),
         });
         const makeArchiveWorld = async () => {
-            const gameData = await getIntegrationGameData();
-            return makeSystem('nova:226', gameData, 'node', { npcs: true });
+            const gameData = await getSyntheticGameData();
+            return makeSystem(SYNTHETIC.systems.thessaly, gameData, 'node', { npcs: true });
         };
         archive = new RoomArchive(relay, makeArchiveWorld,
             { intervalTicks: 60, autoUpdate: false });
 
-        // nova:226 (Ver'ashan): no asteroids, AvgShips 5.
-        const peerA = await makePeer('a', 'nova:226', undefined,
+        // Thessaly Reach: no asteroids, AvgShips 6, a düde table of
+        // Meridian traders and patrols and a Person list of its own.
+        const peerA = await makePeer('a', SYNTHETIC.systems.thessaly, undefined,
             SimulationBridgeHost, true);
-        const peerB = await makePeer('b', 'nova:226', undefined,
+        const peerB = await makePeer('b', SYNTHETIC.systems.thessaly, undefined,
             SimulationBridgeHost, true);
         await peerA.client.addEntity('ship a',
             await makePeerShip('a', peerA.world));

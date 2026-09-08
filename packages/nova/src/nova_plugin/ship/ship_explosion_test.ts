@@ -7,7 +7,10 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import SAT from 'sat';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
 import { AggressionComponent } from '../combat/aggression.js';
 import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
@@ -31,13 +34,12 @@ import {
     SHIP_EXPLOSION_MIN_RADIUS, shipExplosionDamage, shipExplosionRadius,
 } from './ship_explosion.js';
 
-/** Stock ships whose real numbers these specs lean on. */
-const LEVIATHAN = 'nova:131';   // 10000 tons, DeathDelay 250 frames
-const SHUTTLE = 'nova:128';     // 15 tons, DeathDelay 25 frames
-const VIPER = 'nova:167';       // 10 tons, DeathDelay 10 frames
-const FED_CARRIER = 'nova:219'; // 2000 tons, DeathDelay 150 frames
+/** Synthetic hulls whose numbers the simulation specs below lean on. */
+const HEAVY = SYNTHETIC.ships.hulk;   // Bastion Hulk: 10000 t, 150 frames
+const VICTIM_HULL = SYNTHETIC.ships.skiff;  // Wren Skiff: 30 t, 20 frames
+const LIGHT = SYNTHETIC.ships.mote;   // Mote Drone: 10 t, 10 frames
 
-/** Enough to zero any stock ship's shields and armor in one hit. */
+/** Enough to zero any ship's shields and armor in one hit. */
 const LETHAL = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,
     knockback: 0, passThroughShield: 1,
@@ -320,10 +322,10 @@ describe('final explosion area damage (simulation)', () => {
      * `distance` pixels away.
      */
     async function battlefield(exploderId: string, distance: number,
-        victimId = SHUTTLE, options: { victimIsPlayer?: boolean } = {}) {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+        victimId = VICTIM_HULL, options: { victimIsPlayer?: boolean } = {}) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
 
         const place = async (id: string, uuid: string, x: number) => {
             const shipData = (await gameData.data.Ship.get(id))!;
@@ -352,7 +354,7 @@ describe('final explosion area damage (simulation)', () => {
      * Ends the exploding ship's death sequence right now. DeathEvent is
      * the tick the final explosion happens on — the same event the
      * display's Explode2 fireball rides — so this reaches the sim's
-     * final-explosion tick without waiting out a 250-frame breakup (one
+     * final-explosion tick without waiting out a 150-frame breakup (one
      * spec below does wait it out, end to end). The payload is the
      * sim Time, which no DeathEvent handler reads.
      */
@@ -372,20 +374,21 @@ describe('final explosion area damage (simulation)', () => {
                 world.step();
                 return before - shieldOf(victim).current;
             };
-            // A Leviathan (10000 t) and a Viper (10 t) at the same range.
-            const leviathan = await damageTo(LEVIATHAN);
-            const viper = await damageTo(VIPER);
-            expect(leviathan).toBeCloseTo(
+            // A Bastion Hulk (10,000 t) and a Mote Drone (10 t) at the
+            // same range.
+            const heavy = await damageTo(HEAVY);
+            const light = await damageTo(LIGHT);
+            expect(heavy).toBeCloseTo(
                 10000 * SHIP_EXPLOSION_DAMAGE_PER_TON, 4);
-            expect(viper).toBeCloseTo(10 * SHIP_EXPLOSION_DAMAGE_PER_TON, 4);
-            expect(leviathan).toBeGreaterThan(viper * 100 - 1);
+            expect(light).toBeCloseTo(10 * SHIP_EXPLOSION_DAMAGE_PER_TON, 4);
+            expect(heavy).toBeGreaterThan(light * 100 - 1);
         }, 120_000);
 
     it('does not reach past its radius', async () => {
-        // A Leviathan's blast is SHIP_EXPLOSION_MAX_RADIUS px; a Shuttle
-        // sitting twice that far away is untouched. (Its own hitbox is
+        // A Bastion Hulk's blast is SHIP_EXPLOSION_MAX_RADIUS px; a Wren
+        // Skiff sitting well past that is untouched. (Its own hitbox is
         // tens of px wide, so the margin is generous.)
-        const { world, victim } = await battlefield(LEVIATHAN,
+        const { world, victim } = await battlefield(HEAVY,
             SHIP_EXPLOSION_MAX_RADIUS * 4);
         const shield = shieldOf(victim).current;
         const armor = armorOf(victim).current;
@@ -397,7 +400,7 @@ describe('final explosion area damage (simulation)', () => {
     }, 120_000);
 
     it('never disables or destroys a nearly-dead victim', async () => {
-        const { world, victim } = await battlefield(LEVIATHAN, 30);
+        const { world, victim } = await battlefield(HEAVY, 30);
         const shipData = victim.components.get(ShipDataComponent)!;
         const armor = armorOf(victim);
         // One armor point above the disable threshold, shields gone:
@@ -426,7 +429,7 @@ describe('final explosion area damage (simulation)', () => {
 
     it('cannot finish off a hulk that is already below the threshold',
         async () => {
-            const { world, victim } = await battlefield(LEVIATHAN, 30);
+            const { world, victim } = await battlefield(HEAVY, 30);
             const armor = armorOf(victim);
             // A disabled wreck at a hair of armor, as a real hulk sits.
             armor.current = 0.01;
@@ -446,8 +449,8 @@ describe('final explosion area damage (simulation)', () => {
 
     it('carries no kill credit, no aggression and no legal penalty',
         async () => {
-            const { world, victim } = await battlefield(LEVIATHAN, 30,
-                SHUTTLE, { victimIsPlayer: true });
+            const { world, victim } = await battlefield(HEAVY, 30,
+                VICTIM_HULL, { victimIsPlayer: true });
             explodeNow(world);
             world.step();
 
@@ -477,7 +480,7 @@ describe('final explosion area damage (simulation)', () => {
             // apart takes the ordnance in the neighbourhood with it. The
             // non-lethal clamp is a SHIP rule, so a missile — which has
             // no shïp data — dies outright.
-            const { world } = await battlefield(LEVIATHAN, 1000);
+            const { world } = await battlefield(HEAVY, 1000);
             const missile = new Entity('missile');
             missile.components.set(MovementStateComponent, {
                 position: new Position(20, 0), velocity: new Vector(0, 0),
@@ -503,7 +506,7 @@ describe('final explosion area damage (simulation)', () => {
     it('does not damage the exploding ship itself', async () => {
         // A player's ship survives its own death sequence (it respawns),
         // so its own blast must not immediately maul the fresh hull.
-        const { world, exploder } = await battlefield(LEVIATHAN, 30);
+        const { world, exploder } = await battlefield(HEAVY, 30);
         const armor = armorOf(exploder);
         armor.current = armor.max;
         explodeNow(world);
@@ -516,11 +519,11 @@ describe('final explosion area damage (simulation)', () => {
             // End to end: shoot the ship, let its death sequence run,
             // and the victim takes the blast when it finishes.
             const run = async () => {
-                // A Fed Carrier (2000 t) takes a real bite out of a
-                // Shuttle's shields on the way out, and its 150-frame
+                // A Bastion Hulk (10,000 t) takes a real bite out of a
+                // Wren Skiff's shields on the way out, and its 150-frame
                 // breakup is 300 sim steps — short enough to sit through.
-                const { world, victim } = await battlefield(FED_CARRIER, 30,
-                    SHUTTLE);
+                const { world, victim } = await battlefield(HEAVY, 30,
+                    VICTIM_HULL);
                 const shieldBefore = shieldOf(victim).current;
                 let died = false;
                 world.events.get(DeathEvent).subscribe(() => died = true);

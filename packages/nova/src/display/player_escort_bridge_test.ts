@@ -12,9 +12,8 @@ import {
     emitSimulationBridgeEvent,
 } from '../communication/simulation_bridge_events.js';
 import {
-    makeSimulationBridgeHarness,
+    getSyntheticGameData, makeSimulationBridgeHarness,
 } from '../communication/simulation_test_fixture.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import {
     EscortCommandComponent, EscortLandingComponent, PlayerEscortComponent,
@@ -46,10 +45,8 @@ import {
 describe('player escort sim -> client wiring', () => {
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
         serializer = harness.world.resources.get(SerializerResource)!;
     });
 
@@ -63,7 +60,7 @@ describe('player escort sim -> client wiring', () => {
     it('delivers a landed escort to the client as a decodable entity',
         async () => {
             const { client, world, gameData, shipId, shipUuid } =
-                await makeSimulationBridgeHarness();
+                await makeSimulationBridgeHarness(getSyntheticGameData());
             const sim = world.resources.get(SerializerResource)!;
 
             // A real stellar in this system to land on.
@@ -148,7 +145,7 @@ describe('player escort sim -> client wiring', () => {
     it('mirrors a live escort\'s ownership to the client every frame',
         async () => {
             const { client, world, gameData, shipId, shipUuid } =
-                await makeSimulationBridgeHarness();
+                await makeSimulationBridgeHarness(getSyntheticGameData());
 
             const escort = makeShip(await gameData.data.Ship.get(shipId));
             escort.components.set(MovementStateComponent, {

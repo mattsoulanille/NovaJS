@@ -5,11 +5,13 @@ import { encodeCicn } from "./cicn.js";
 import { encodePict, IndexedImage, placeholderImage } from "./pict.js";
 import { encodeRled } from "./rled.js";
 import {
-    barDesc, BOOM, CharDef, CHARS, CICN, DudeDef, DUDES, FletDef, FLETS,
-    GovtDef, GOVTS, INTF, landscapePict, missionBriefDesc, missionOfferDesc,
-    MisnDef, MISNS, OutfDef, outfitDesc, outfitPict, OUTFS, PICT, pilotDesc,
-    RankDef, RANKS, RLED, ROID, ShanDef, ShipDef, shipDesc, shipPict, SHIPS,
-    SPIN, SpobDef, SPOBS, STRING_TABLES, SystDef, SYSTS, WeapDef, WEAPS,
+    barDesc, BOOM, buttonPictSize, CharDef, CHARS, CICN, DIALOG_PICT_SIZES,
+    DudeDef, DUDES, FletDef, FLETS, GovtDef, GOVTS, INTF, JunkDef, JUNKS,
+    landscapePict, missionBriefDesc, missionOfferDesc, MisnDef, MISNS,
+    OutfDef, outfitDesc, outfitPict, OUTFS, PersDef, PERSONS, PICT,
+    pilotDesc, RankDef, RANKS, RLED, ROID, ShanDef, ShipDef, shipDesc,
+    shipPict, SHIPS, SPIN, SpobDef, SPOBS, STRING_TABLES, SystDef, SYSTS,
+    WeapDef, WEAPS,
 } from "./universe.js";
 
 /**
@@ -34,7 +36,7 @@ function govt(def: GovtDef): number[] {
         .int16(def.skillMult).uint16(def.scanMask)
         .string(def.commName, 16).string(def.targetCode, 16)
         .uint64(0n) // Require
-        .int16s(4, [], 0) // InhJam
+        .int16s(4, def.inhJam, 0) // InhJam
         .string(def.mediumName, 64)
         .uint32(def.color).uint32(def.shipColor)
         .int16(def.interface).int16(NONE) // NewsPic
@@ -51,7 +53,8 @@ function syst(def: SystDef): number[] {
         .int16(def.avgShips).int16(def.govt)
         .int16(NONE) // Message buoy.
         .int16(def.asteroids).int16(def.interference)
-        .int16s(8, [], NONE).int16s(8, [], 0) // Persons.
+        .int16s(8, def.persons.map(p => p.id), NONE)
+        .int16s(8, def.persons.map(p => p.chance), 0)
         .uint32(def.backgroundColor).int16(def.murk).uint16(def.asteroidTypes)
         .string("", 256) // Visibility: always.
         .int16(NONE).int16(0).int16(0) // Reinforcements.
@@ -130,8 +133,9 @@ function outf(def: OutfDef): number[] {
         const mod = secondary[i];
         w.int16(mod ? mod[0] : 0).int16(mod ? mod[1] : 0);
     }
-    return w.uint64(0n).uint64(0n) // Contribute, Require.
-        .string("", 255).string("", 255).string("", 255) // Availability, OnPurchase, OnSell.
+    return w.uint64(def.contribute ?? 0n).uint64(def.require ?? 0n) // Contribute, Require.
+        .string(def.availability ?? "", 255).string(def.onPurchase ?? "", 255)
+        .string("", 255) // OnSell.
         .string(def.name, 64).string(def.lcName, 64).string(def.lcPlural, 65)
         .int16(0) // Item class.
         .uint16(0) // Scan mask.
@@ -161,7 +165,7 @@ function ship(def: ShipDef): number[] {
         .int16s(4, outfits(0).map(o => o.count), 0)
         .int16(def.energyRecharge).int16(def.skillVariation).uint16(def.flags2)
         .uint64(0n) // Contribute.
-        .string("", 255).string("", 255).string("", 256) // Availability, AppearOn, OnPurchase.
+        .string("", 255).string(def.appearOn ?? "", 255).string("", 256) // Availability, AppearOn, OnPurchase.
         .int16(def.deionize).int16(def.ionization)
         .int16(NONE) // Key carried.
         .int16s(4, outfits(4).map(o => o.id), NONE)
@@ -260,12 +264,12 @@ function misn(def: MisnDef): number[] {
         .zeros(2)
         .int16(NONE).int16(NONE).int16(NONE) // Aux ships.
         .zeros(2)
-        .uint16(def.flags).uint16(0)
+        .uint16(def.flags).uint16(def.flags2 ?? 0)
         .zeros(4)
         .int16(NONE) // RefuseText.
         .int16(NONE) // AvailShipType.
         .string(def.availBits, 255).string(def.onAccept, 255)
-        .string("", 255) // OnRefuse.
+        .string(def.onRefuse ?? "", 255)
         .string(def.onSuccess, 255).string(def.onFailure, 255)
         .string(def.onAbort, 255)
         .uint64(0n) // Require.
@@ -301,6 +305,39 @@ function char(def: CharDef): number[] {
         .string("", 16).string("", 16) // Date prefix, suffix.
         .zeros(16)
         .expect(362).toArray();
+}
+
+/** A përs (ResForge's 400-byte template, EVN Bible pp. 47-49). */
+function pers(def: PersDef): number[] {
+    const weapons = def.weapons.slice(0, 4);
+    return new ByteWriter()
+        .int16(def.linkSystem).int16(def.govt)
+        .int16(def.aiType).int16(def.aggression).int16(def.cowardice)
+        .int16(def.ship)
+        .int16s(4, weapons.map(w => w.id), NONE)
+        .int16s(4, weapons.map(w => w.count), 0)
+        .int16s(4, weapons.map(w => w.ammo), 0)
+        .int32(def.credits).int16(def.shieldMod)
+        .int16(NONE) // HailPict: the ship's own picture.
+        .int16(def.commQuote).int16(def.hailQuote)
+        .int16(def.linkMission)
+        .uint16(def.flags)
+        .string(def.activeOn, 256)
+        .int16(def.grantClass).int16(def.grantCount).int16(def.grantChance)
+        .string(def.subtitle, 64)
+        .uint32(def.color)
+        .uint16(0) // Flags2: starts fuelled.
+        .expect(384).padTo(400).toArray();
+}
+
+/** A jünk (676 bytes, EVN Bible p. 31). */
+function junk(def: JunkDef): number[] {
+    return new ByteWriter()
+        .int16s(8, def.soldAt, NONE).int16s(8, def.boughtAt, NONE)
+        .int16(def.basePrice).uint16(def.flags).uint16(def.scanMask)
+        .string(def.lcName, 64).string(def.abbrev, 64)
+        .string(def.buyOn, 255).string(def.sellOn, 255)
+        .expect(676).toArray();
 }
 
 /** A dësc: the text, then its PICT, movie name and flags. */
@@ -442,6 +479,8 @@ export function buildSyntheticResources(): ResourceSpec[] {
         add("chär", def.id, def.name, char(def));
         add("dësc", def.introDesc, `${def.name} intro`, desc(def.introText));
     }
+    for (const def of PERSONS) add("përs", def.id, def.name, pers(def));
+    for (const def of JUNKS) add("jünk", def.id, def.name, junk(def));
     for (const table of STRING_TABLES) add("STR#", table.id, table.name, strn(table.strings));
 
     add("bööm", BOOM.burst, "Burst", boom());
@@ -492,9 +531,9 @@ export function buildSyntheticResources(): ResourceSpec[] {
         ...[...new Set(SPOBS.map(s => s.type))].map((type): [number, string, number, number] =>
             [landscapePict(type), `Landscape ${type}`, 96, 64]),
         ...PICT.buttons.map((id, i): [number, string, number, number] =>
-            [id, `Button ${i}`, 16, 16]),
+            [id, `Button ${i}`, ...buttonPictSize(i)]),
         ...PICT.dialogs.map((id, i): [number, string, number, number] =>
-            [id, `Dialog ${i}`, 64, 48]),
+            [id, `Dialog ${i}`, ...(DIALOG_PICT_SIZES[id] ?? [64, 48])]),
     ];
     for (const [id, name, width, height] of picts.sort((a, b) => a[0] - b[0])) {
         add("PICT", id, name, encodePict(pictImage(id, width, height)));

@@ -1,6 +1,7 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
 import { DisabledComponent } from '../ship/disabled_component.js';
@@ -15,21 +16,27 @@ import { ArmorComponent, ShieldComponent } from '../ship/health_plugin.js';
 import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/ncb_plugin.js';
 
 /**
- * The victim throughout is a Federation (gövt nova:128) ship, so the
- * penalties charged are the stock Federation's OWN fields, not the
- * DEFAULT_* engine fallbacks: KillPenalty 5, DisabPenalty 1
- * (pinned in reputation_integration_test.ts).
+ * The victim throughout is a Concord of Meridian ship, so the penalties
+ * charged are Meridian's OWN gövt fields, not the DEFAULT_* engine
+ * fallbacks: KillPenalty 20, DisabPenalty 5.
  */
-const FED_KILL_PENALTY = 5;
-const FED_DISABLE_PENALTY = 1;
+const MERIDIAN = SYNTHETIC.govts.meridian;
+/** Meridian's allies list names its class (1), so it takes half. */
+const ALLY = SYNTHETIC.govts.compact;
+/** The Verge Raiders' enemies list names Meridian's class: they credit half. */
+const ENEMY = SYNTHETIC.govts.raiders;
+/** The Raiders' gövt InitialRec: every record with them starts here. */
+const RAIDER_INITIAL_RECORD = -10;
+const MERIDIAN_KILL_PENALTY = 20;
+const MERIDIAN_DISABLE_PENALTY = 5;
 
 /**
- * The reputation pipeline in a LIVE world (real game data, the full
- * simulation stack): a shot attributed to a player zeroes a
- * Federation ship's armor -> the player's Fed record drops by the
- * kill penalty and their combat rating grows by the victim's
- * strength; and a Federation warship's NPC brain treats a player
- * with a criminal Fed record as an enemy.
+ * The reputation pipeline in a LIVE world (parsed game data, the full
+ * simulation stack): a shot attributed to a player zeroes a Meridian
+ * ship's armor -> the player's Meridian record drops by the kill penalty
+ * and their combat rating grows by the victim's strength; and a Meridian
+ * warship's NPC brain treats a player with a criminal Meridian record as
+ * an enemy.
  */
 describe('reputation in a live world', () => {
     const PLAYER = 'player ship';
@@ -37,17 +44,17 @@ describe('reputation in a live world', () => {
     const SHOT = 'weapon shot';
 
     async function makeWorld() {
-        const gameData = await getIntegrationGameData();
-        // nova:226 (Ver'ashan): stock system with Asteroids 0; NPCs
-        // off for control.
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        // Thessaly Reach: Asteroids 0; NPCs off for control.
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
         return { gameData, world };
     }
 
     async function addPlayer(world: Awaited<ReturnType<typeof makeWorld>>['world'],
         gameData: Awaited<ReturnType<typeof makeWorld>>['gameData']) {
-        const player = makeShip(await gameData.data.Ship.get('nova:128'));
+        const player = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
         player.components.set(LegalRecordsComponent, new Map());
         player.components.set(CombatRatingComponent, { kills: 0 });
         await completeEntity(world, player);
@@ -59,10 +66,10 @@ describe('reputation in a live world', () => {
         const { gameData, world } = await makeWorld();
         const player = await addPlayer(world, gameData);
 
-        // A Federation shuttle as the victim (strength 2).
-        const victimData = await gameData.data.Ship.get('nova:128');
+        // A Meridian skiff as the victim (strength 8).
+        const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
         const victim = makeShip(victimData);
-        victim.components.set(GovtComponent, { id: 'nova:128' });
+        victim.components.set(GovtComponent, { id: MERIDIAN });
         await completeEntity(world, victim);
         world.entities.set(VICTIM, victim);
 
@@ -89,12 +96,17 @@ describe('reputation in a live world', () => {
         expect(victim.components.get(DamageAttributionComponent))
             .toEqual({ root: PLAYER, killCredited: true, disabledAtHit: false });
         const records = player.components.get(LegalRecordsComponent)!;
-        expect(records.get('nova:128')).toBe(-FED_KILL_PENALTY);
-        // Ally (Bureau) and enemy (Auroran) propagation, real map.
-        expect(records.get('nova:153'))
-            .toBe(-Math.trunc(FED_KILL_PENALTY / 2));
-        expect(records.get('nova:129'))
-            .toBe(Math.trunc(FED_KILL_PENALTY / 2));
+        expect(records.get(MERIDIAN)).toBe(-MERIDIAN_KILL_PENALTY);
+        // Ally (Amber Compact) and enemy (Verge Raiders) propagation,
+        // over the scenario's real relation map. A propagated record is
+        // applied on top of the govt's InitialRec: the Compact's is 0,
+        // the Raiders' is -10 (they think ill of everyone to begin
+        // with), so approving the kill lifts theirs from -10 to 0.
+        expect(records.get(ALLY))
+            .toBe(-Math.trunc(MERIDIAN_KILL_PENALTY / 2));
+        expect(records.get(ENEMY))
+            .toBe(RAIDER_INITIAL_RECORD
+                + Math.trunc(MERIDIAN_KILL_PENALTY / 2));
         expect(player.components.get(CombatRatingComponent)!.kills)
             .toBe(victimData.strength);
 
@@ -107,15 +119,15 @@ describe('reputation in a live world', () => {
             damager: SHOT,
         }, [VICTIM]);
         world.step();
-        expect(records.get('nova:128')).toBe(-FED_KILL_PENALTY);
+        expect(records.get(MERIDIAN)).toBe(-MERIDIAN_KILL_PENALTY);
     });
 
     /**
-     * ränk nova:148 "; Rebel 1" (AffilGovt nova:141 Rebellion, Flags
-     * 0x144): the cover "Infiltrate the Rebels" grants — 0x0100 their
-     * ships won't attack you, 0x0004 / 0x0040 blown the moment you turn on
-     * them. Until #56 the sim never revoked it, so an infiltrator could
-     * destroy Rebel ships forever with the Rebellion never fighting back.
+     * ränk "Verge Cover" (AffilGovt the Verge Raiders, Flags 0x144): the
+     * cover grants — 0x0100 their ships won't attack you, 0x0004 / 0x0040
+     * blown the moment you turn on them. Until #56 the sim never revoked
+     * it, so an infiltrator could destroy raider ships forever with the
+     * Verge never fighting back.
      */
     it('revokes a 0x0004/0x0040 cover rank when its holder kills a ship '
         + 'of the affiliated govt, and un-bakes its 0x0100 (#56)',
@@ -123,13 +135,13 @@ describe('reputation in a live world', () => {
             const { gameData, world } = await makeWorld();
             const player = await addPlayer(world, gameData);
             player.components.set(ActiveRanksComponent,
-                new Set(['nova:148', 'nova:147']));
+                new Set([SYNTHETIC.ranks.cover, SYNTHETIC.ranks.warrant]));
             player.components.set(AggressionSuppressGovtsComponent,
-                new Set(['nova:141']));
+                new Set([ENEMY]));
 
-            const victimData = await gameData.data.Ship.get('nova:128');
+            const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
             const victim = makeShip(victimData);
-            victim.components.set(GovtComponent, { id: 'nova:141' });
+            victim.components.set(GovtComponent, { id: ENEMY });
             await completeEntity(world, victim);
             world.entities.set(VICTIM, victim);
             const shot = new Entity(SHOT);
@@ -149,12 +161,12 @@ describe('reputation in a live world', () => {
 
             // The record still drops as before...
             expect(player.components.get(LegalRecordsComponent)!
-                .get('nova:141')).toBeLessThan(0);
-            // ...the cover is gone, the hypergate rank (nova:147, permanent,
+                .get(ENEMY)).toBeLessThan(0);
+            // ...the cover is gone, the Meridian warrant (permanent,
             // another govt) untouched...
             expect(player.components.get(ActiveRanksComponent))
-                .toEqual(new Set(['nova:147']));
-            // ...and the Rebellion's ships may attack again.
+                .toEqual(new Set([SYNTHETIC.ranks.warrant]));
+            // ...and the Verge's ships may attack again.
             expect(player.components.get(AggressionSuppressGovtsComponent))
                 .toEqual(new Set());
         });
@@ -164,9 +176,9 @@ describe('reputation in a live world', () => {
             const { gameData, world } = await makeWorld();
             const player = await addPlayer(world, gameData);
 
-            const victimData = await gameData.data.Ship.get('nova:128');
+            const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
             const victim = makeShip(victimData);
-            victim.components.set(GovtComponent, { id: 'nova:128' });
+            victim.components.set(GovtComponent, { id: MERIDIAN });
             await completeEntity(world, victim);
             world.entities.set(VICTIM, victim);
             const shot = new Entity(SHOT);
@@ -190,10 +202,10 @@ describe('reputation in a live world', () => {
             }
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
+            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
             // Steps while it stays disabled do not re-charge.
             world.step();
-            expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
+            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
         });
 
     it('does not credit a disable for a hit on a ship that was already ' +
@@ -201,9 +213,9 @@ describe('reputation in a live world', () => {
             const { gameData, world } = await makeWorld();
             const player = await addPlayer(world, gameData);
 
-            const victimData = await gameData.data.Ship.get('nova:128');
+            const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
             const victim = makeShip(victimData);
-            victim.components.set(GovtComponent, { id: 'nova:128' });
+            victim.components.set(GovtComponent, { id: MERIDIAN });
             await completeEntity(world, victim);
             world.entities.set(VICTIM, victim);
             const shot = new Entity(SHOT);
@@ -222,7 +234,7 @@ describe('reputation in a live world', () => {
             world.step();
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(records.get('nova:128')).toBeUndefined();
+            expect(records.get(MERIDIAN)).toBeUndefined();
 
             // A stray player shot at the hulk: it did not disable it.
             world.emit(DamagedEvent, {
@@ -237,7 +249,7 @@ describe('reputation in a live world', () => {
             }
             expect(victim.components.get(DamageAttributionComponent)!.root)
                 .toBe(PLAYER);
-            expect(records.get('nova:128')).toBeUndefined();
+            expect(records.get(MERIDIAN)).toBeUndefined();
 
             // Repaired and then genuinely disabled by the player: charged.
             armor.current = armor.max;
@@ -254,24 +266,25 @@ describe('reputation in a live world', () => {
                 world.step();
             }
             expect(victim.components.has(DisabledComponent)).toBeTrue();
-            expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
+            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
         });
 
-    it('a Federation warship hunts a player with a criminal Fed record',
+    it('a Meridian warship hunts a player with a criminal Meridian record',
         async () => {
             const { gameData, world } = await makeWorld();
             const player = await addPlayer(world, gameData);
-            // Deep in criminal territory (Fed CrimeTol is 6).
+            // Deep in criminal territory (Meridian's CrimeTol is 20).
             player.components.set(LegalRecordsComponent,
-                new Map([['nova:128', -100]]));
+                new Map([[MERIDIAN, -100]]));
 
-            // A Federation warship with the NPC warship brain.
-            const warship = makeShip(await gameData.data.Ship.get('nova:141'));
-            warship.components.set(GovtComponent, { id: 'nova:128' });
+            // A Meridian warship with the NPC warship brain.
+            const warship = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.warden));
+            warship.components.set(GovtComponent, { id: MERIDIAN });
             warship.components.set(NpcComponent, { aiType: 3 });
             warship.components.set(TargetComponent, { target: undefined });
             await completeEntity(world, warship);
-            world.entities.set('fed warship', warship);
+            world.entities.set('meridian warship', warship);
 
             // Let the decision system think.
             for (let i = 0; i < 5; i++) {
@@ -283,17 +296,18 @@ describe('reputation in a live world', () => {
                 .toBe(PLAYER);
         });
 
-    it('a Federation warship ignores a player with a clean record',
+    it('a Meridian warship ignores a player with a clean record',
         async () => {
             const { gameData, world } = await makeWorld();
             await addPlayer(world, gameData);
 
-            const warship = makeShip(await gameData.data.Ship.get('nova:141'));
-            warship.components.set(GovtComponent, { id: 'nova:128' });
+            const warship = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.warden));
+            warship.components.set(GovtComponent, { id: MERIDIAN });
             warship.components.set(NpcComponent, { aiType: 3 });
             warship.components.set(TargetComponent, { target: undefined });
             await completeEntity(world, warship);
-            world.entities.set('fed warship', warship);
+            world.entities.set('meridian warship', warship);
 
             for (let i = 0; i < 5; i++) {
                 world.step();

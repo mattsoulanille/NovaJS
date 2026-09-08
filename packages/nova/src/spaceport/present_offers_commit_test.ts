@@ -1,5 +1,6 @@
 import 'jasmine';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { MissionOffer } from '../nova_plugin/missions/index.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
@@ -52,24 +53,34 @@ function scriptedPopup(script: (call: number, text: string) =>
 }
 
 describe('presentOffers and the session commit boundary', () => {
-    /** A fresh default pilot docked at Earth, plus a live session. */
+    /**
+     * The scenario's two venue errands: both have an EMPTY BriefText, so
+     * accepting one shows no briefing popup and the show() call indices
+     * the scripts below count on are the offers' own texts.
+     */
+    const FIRST = SYNTHETIC.missions.tradeErrand;
+    const SECOND = SYNTHETIC.missions.shipyardErrand;
+
+    /**
+     * A fresh default pilot docked at Port Amberline, plus a live session.
+     */
     async function bench() {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
-        const start = await gameData.data.PlayerStart.get('nova:128');
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
         const shipData = await gameData.data.Ship.get(start.ship);
         const entity = makeShip(shipData);
         entity.components.set(GameDateComponent, { ...start.date });
         entity.components.set(CreditsComponent, { credits: start.credits });
         entity.components.set(ControlBitsComponent, new Set());
         const session = await MissionSession.create(
-            entity, gameData, universe, 'nova:128');
+            entity, gameData, universe, SYNTHETIC.planets.port);
         // Two real missions the pilot can be offered, taken as frozen
         // offers so the spec does not depend on a board roll.
-        const offers: MissionOffer[] = ['nova:211', 'nova:418'].map(id => ({
+        const offers: MissionOffer[] = [FIRST, SECOND].map(id => ({
             data: universe.getMission(id)!,
-            travelPlanet: 'nova:214', returnPlanet: null,
+            travelPlanet: SYNTHETIC.planets.coldharbour, returnPlanet: null,
             cargoType: 0, cargoQty: 2, acceptable: true,
         }));
         return { entity, universe, session, offers };
@@ -89,17 +100,17 @@ describe('presentOffers and the session commit boundary', () => {
 
             // The accept is in the WORKING COPY, and only the first one
             // got that far...
-            expect(session.state.missions.has('nova:211')).toBeTrue();
-            expect(session.state.missions.has('nova:418')).toBeFalse();
+            expect(session.state.missions.has(FIRST)).toBeTrue();
+            expect(session.state.missions.has(SECOND)).toBeFalse();
             // ...but not yet on the entity: skipping the commit (what the
             // old `await …; session.commit();` did on a throw) is what
             // lost it.
-            expect(entity.components.get(MissionsComponent)?.has('nova:211'))
+            expect(entity.components.get(MissionsComponent)?.has(FIRST))
                 .toBeFalsy();
 
             // The `finally` commit is what the spaceport now runs.
             session.commit();
-            expect(entity.components.get(MissionsComponent)!.has('nova:211'))
+            expect(entity.components.get(MissionsComponent)!.has(FIRST))
                 .toBeTrue();
         });
 
@@ -165,7 +176,7 @@ describe('presentOffers and the session commit boundary', () => {
             // BOTH survive: the sale, and the visit's own delta.
             expect(entity.components.get(CreditsComponent)!.credits)
                 .toBe(working + SALE);
-            expect(entity.components.get(MissionsComponent)!.has('nova:211'))
+            expect(entity.components.get(MissionsComponent)!.has(FIRST))
                 .toBeTrue();
             // An absolute write-back would have stored the working balance
             // alone; pin that this spec can tell the two apart.

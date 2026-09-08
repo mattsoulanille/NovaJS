@@ -7,7 +7,8 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
 import { completeEntity, loadShipGameData } from '../spawn/entity_data_loader.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
@@ -16,25 +17,26 @@ import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
 import { NpcComponent } from '../npc/npc_ai_plugin.js';
 
-const SHIP_ID = 'nova:128'; // Shuttle: carries an unguided projectile weapon.
+// The Wren Skiff: carries an unguided projectile weapon (its blaster).
+const SHIP_ID = SYNTHETIC.ships.skiff;
 
 /**
- * End-to-end pin of fleet friendly-fire immunity against real Nova
+ * End-to-end pin of fleet friendly-fire immunity against parsed game
  * data: a fleet member's real weapon, fired through the real weapon
  * pipeline, must pass through its leader (no DamagedEvent, and the
  * leader records no aggressor — the retaliation trigger of the
  * observed bug), while the identical shot from an outsider hits.
  */
-describe('firing group friendly fire against real Nova data', () => {
+describe('firing group friendly fire against parsed game data', () => {
     let damaged: Array<{ uuid: string, damager: string }>;
 
-    /** nova:226 (Ver'ashan) is asteroid-free: a controlled
-     * battlefield for collision choreography (same adaptation as the
-     * bay-escort spec). */
+    /** Thessaly Reach is asteroid-free: a controlled battlefield for
+     * collision choreography (same adaptation as the bay-escort
+     * spec). */
     async function makeBattlefield() {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, undefined,
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
         damaged = [];
         world.addSystem(new System({
             name: 'DamageRecorder',
@@ -48,7 +50,7 @@ describe('firing group friendly fire against real Nova data', () => {
     }
 
     async function addShip(world: World,
-        gameData: Awaited<ReturnType<typeof getIntegrationGameData>>,
+        gameData: Awaited<ReturnType<typeof getSyntheticGameData>>,
         uuid: string, x: number, y: number) {
         const shipData = await gameData.data.Ship.get(SHIP_ID);
         const ship = makeShip(shipData);
@@ -68,7 +70,7 @@ describe('firing group friendly fire against real Nova data', () => {
 
     /** The ship's first unguided projectile weapon (its blaser). */
     async function findGun(gameData:
-        Awaited<ReturnType<typeof getIntegrationGameData>>) {
+        Awaited<ReturnType<typeof getSyntheticGameData>>) {
         const weaponIds = await loadShipGameData(gameData, SHIP_ID);
         for (const id of [...weaponIds].sort()) {
             const weapon = await gameData.data.Weapon.get(id);
@@ -160,16 +162,17 @@ describe('firing group friendly fire against real Nova data', () => {
 });
 
 /**
- * Pins the guided-target data plumbing against real Nova data: the
+ * Pins the guided-target data plumbing against parsed game data: the
  * wëap Flags2 0x0008 flag ("Proximity detonator is triggered by ships
  * other than the target (for guided weapons)") reaches the simulation
  * as ProjectileWeaponData.proxHitAll, forced true for non-guided
- * weapons.
+ * weapons. Swept over the whole weapon table — the scenario's guided
+ * weapon is the Harrier Missile, which sets no Flags2.
  */
-describe('proxHitAll against real Nova data', () => {
+describe('proxHitAll over the whole weapon table', () => {
     it('guided missiles are target-only unless flagged; '
         + 'non-guided weapons always hit anyone', async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = [...(await gameData.ids).Weapon].sort();
         let guided = 0;
         let guidedTargetOnly = 0;

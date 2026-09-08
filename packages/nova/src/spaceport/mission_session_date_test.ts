@@ -1,6 +1,7 @@
 import 'jasmine';
 import { CronData, getDefaultCronData } from 'novadatainterface/cron_data';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import {
     dayNumber, EscortPayrollComponent, CreditsComponent, CronStatesComponent, GameDateComponent,
 } from '../nova_plugin/player/index.js';
@@ -12,18 +13,25 @@ import { MissionUniverse } from './mission_universe.js';
 /**
  * A mïsn DatePostInc — "the game date will be advanced by this number of
  * days after successful completion or auto-aborting of the mission" (EVN
- * Bible) — is LIVED, not merely dated: stock nova:172 "Head to Nil'ar
- * Kemorya" skips 180 days and nova:659 "Receive Training from Karlaekaar"
- * 185, and every one of those days pays the ränk Salary ("per day"),
- * charges the escorts' wages, and rolls the crons, exactly as a jump or
- * a landing does (#109). And the calendar only moves once that
+ * Bible) — is LIVED, not merely dated: a mission may skip half a year in
+ * one commit, and every one of those days pays the ränk Salary ("per
+ * day"), charges the escorts' wages, and rolls the crons, exactly as a
+ * jump or a landing does (#109). And the calendar only moves once that
  * bookkeeping has actually happened (#120).
+ *
+ * Driven on the synthetic data set: a Wren Skiff pilot holding the
+ * Meridian warrant (Salary 100) with one Gannet Corsair on the payroll
+ * (90,000 cr, so a 900 cr daily wage), skipping the 180 days a long stock
+ * DatePostInc asks for.
  */
 describe('a DatePostInc date skip', () => {
-    /** ränk 128 "Federation Naval Rank of Commander": Salary 200, no cap. */
-    const FED_COMMANDER = 'nova:128';
-    /** Viper, 110,000 cr: 1,100 a day on the payroll. */
-    const VIPER = 'nova:335';
+    /** ränk "Meridian Warrant Officer": Salary 100 a day, no cap. */
+    const WARRANT = SYNTHETIC.ranks.warrant;
+    /** The Gannet Corsair, 90,000 cr: 1% of that, 900 a day on the payroll. */
+    const CORSAIR = SYNTHETIC.ships.corsair;
+    /** The rank's daily pay less the escort's daily wage: 100 - 900. */
+    const SALARY = 100;
+    const WAGE = 900;
     const START = { day: 1, month: 1, year: 1177 };
 
     function makeCron(partial: Partial<CronData>): CronData {
@@ -34,16 +42,17 @@ describe('a DatePostInc date skip', () => {
     }
 
     async function pilot(credits: number) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         // An instance of our own: the crons below must not leak into the
         // shared universe other specs run against.
         const universe = new MissionUniverse(gameData);
         await universe.load();
-        const entity = makeShip(await gameData.data.Ship.get('nova:136'));
+        const entity = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
         entity.components.set(CreditsComponent, { credits });
         entity.components.set(GameDateComponent, { ...START });
-        entity.components.set(ActiveRanksComponent, new Set([FED_COMMANDER]));
-        entity.components.set(EscortPayrollComponent, [VIPER]);
+        entity.components.set(ActiveRanksComponent, new Set([WARRANT]));
+        entity.components.set(EscortPayrollComponent, [CORSAIR]);
         entity.components.set(CronStatesComponent, new Map());
         return { gameData, universe, entity };
     }
@@ -53,7 +62,7 @@ describe('a DatePostInc date skip', () => {
         async () => {
             const { gameData, universe, entity } = await pilot(1_000_000);
             const session = await MissionSession.create(
-                entity, gameData, universe, 'nova:128');
+                entity, gameData, universe, SYNTHETIC.planets.port);
             // A cron that fires on any day and sets bit 777 when it does.
             universe.crons = [makeCron({ onStart: 'b777' })];
 
@@ -63,7 +72,7 @@ describe('a DatePostInc date skip', () => {
             expect(dayNumber(entity.components.get(GameDateComponent)!))
                 .toBe(dayNumber(START) + 180);
             expect(entity.components.get(CreditsComponent)!.credits)
-                .toBe(1_000_000 + 180 * (200 - 1_100));
+                .toBe(1_000_000 + 180 * (SALARY - WAGE));
             expect(entity.components.get(ControlBitsComponent)!.has(777))
                 .toBe(true);
             // A second commit() charges nothing twice.
@@ -71,12 +80,12 @@ describe('a DatePostInc date skip', () => {
             expect(dayNumber(entity.components.get(GameDateComponent)!))
                 .toBe(dayNumber(START) + 180);
             expect(entity.components.get(CreditsComponent)!.credits)
-                .toBe(1_000_000 + 180 * (200 - 1_100));
+                .toBe(1_000_000 + 180 * (SALARY - WAGE));
             // ...and the session's own working copies followed the crons,
             // so it did not roll the bit back either.
             expect(session.state.bits.has(777)).toBe(true);
             expect(session.state.credits.credits)
-                .toBe(1_000_000 + 180 * (200 - 1_100));
+                .toBe(1_000_000 + 180 * (SALARY - WAGE));
         });
 
     it('settles the books and the calendar, but no crons, for a DETACHED '
@@ -94,7 +103,7 @@ describe('a DatePostInc date skip', () => {
             expect(dayNumber(entity.components.get(GameDateComponent)!))
                 .toBe(dayNumber(START) + 14);
             expect(entity.components.get(CreditsComponent)!.credits)
-                .toBe(500_000 + 14 * (200 - 1_100));
+                .toBe(500_000 + 14 * (SALARY - WAGE));
             expect(entity.components.get(ControlBitsComponent)!.has(777))
                 .toBe(false);
         });
@@ -103,13 +112,14 @@ describe('a DatePostInc date skip', () => {
 describe('a date advance whose bookkeeping cannot run (#120)', () => {
     it('leaves the calendar (and the credits) exactly where they were',
         async () => {
-            const gameData = await getIntegrationGameData();
-            const entity = makeShip(await gameData.data.Ship.get('nova:136'));
+            const gameData = await getSyntheticGameData();
+            const entity = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
             entity.components.set(CreditsComponent, { credits: 10_000 });
             entity.components.set(GameDateComponent,
                 { day: 1, month: 1, year: 1177 });
             entity.components.set(ActiveRanksComponent,
-                new Set(['nova:128']));
+                new Set([SYNTHETIC.ranks.warrant]));
             // A universe whose data never arrives: the date used to be
             // written BEFORE this rejected, so the skipped days were never
             // stepped by the crons and never paid, and a retried landing

@@ -15,7 +15,8 @@ import { World } from 'nova_ecs/world';
 import { UUID } from 'nova_ecs/arg_types';
 import { System } from 'nova_ecs/system';
 import { boardingBlockedMessage } from '../../display/status_bar_content.js';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import {
     BayCaptureEvent, BoardingBlockedEvent, clearHostilityToward,
     EscortRepairedEvent, reassignCapturedWing,
@@ -87,8 +88,19 @@ function forceCaptureRoll(world: World, succeed: boolean) {
  * Live-world boarding against the real simulation stack (mirrors
  * disabled_plugin_test): a controlled boarder pulled alongside a
  * disabled target in an asteroid-free, traffic-free system.
+ *
+ * On the SYNTHETIC scenario: Thessaly Reach (Asteroids 0; it does list
+ * NPC traffic, but the world is built with npcs: false), two Wren Skiffs,
+ * and the Concord of Meridian — gövt BoardPenalty 10 — as the victim's
+ * government. The Wren Skiff's price of 20,000 makes the credit booty
+ * 10% = 2,000.
  */
 describe('boarding in a live world', () => {
+    /** The victim's government: BoardPenalty 10. */
+    const MERIDIAN = SYNTHETIC.govts.meridian;
+    /** The hostile wing's own government, kept through a capture. */
+    const RAIDERS = SYNTHETIC.govts.raiders;
+
     async function boardingWorld({
         aligned = true,
         distance = 100,
@@ -97,10 +109,10 @@ describe('boarding in a live world', () => {
         targetFuel = 30,
         cargo = new Map<string, number>([['cargo:0', 2]]),
     } = {}) {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
-        const shipData = (await gameData.data.Ship.get('nova:128'))!;
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(SYNTHETIC.ships.skiff))!;
 
         const boarder = makeShip(shipData);
         boarder.components.set(MovementStateComponent, {
@@ -117,7 +129,7 @@ describe('boarding in a live world', () => {
             rotation: new Angle(aligned ? 0 : Math.PI / 2), turning: 0,
             turnBack: false, accelerating: 0,
         });
-        target.components.set(GovtComponent, { id: 'nova:128' });
+        target.components.set(GovtComponent, { id: MERIDIAN });
 
         await completeEntity(world, boarder);
         await completeEntity(world, target);
@@ -214,7 +226,7 @@ describe('boarding in a live world', () => {
 
             // Pirating charged the BoardPenalty against the victim's govt.
             const record = boarder.components.get(LegalRecordsComponent)!
-                .get('nova:128');
+                .get(MERIDIAN);
             expect(record).toBeLessThan(0);
         });
 
@@ -284,12 +296,12 @@ describe('boarding in a live world', () => {
                     { peerId: 'test peer' });
                 if (carrierAlive) {
                     const carrier = new Entity();
-                    carrier.components.set(ShipComponent, { id: 'nova:128' });
+                    carrier.components.set(ShipComponent, { id: SYNTHETIC.ships.skiff });
                     world.entities.set(OLD_CARRIER, carrier);
                 }
                 // Something for an 'attack' order to be aimed at.
                 const victim = new Entity();
-                victim.components.set(ShipComponent, { id: 'nova:128' });
+                victim.components.set(ShipComponent, { id: SYNTHETIC.ships.skiff });
                 victim.components.set(MovementStateComponent, {
                     position: new Position(3000, 0), velocity: new Vector(0, 0),
                     rotation: new Angle(0), turning: 0, turnBack: false,
@@ -548,7 +560,7 @@ describe('boarding in a live world', () => {
             forceCaptureRoll(world, true);
             const record = () =>
                 boarder.components.get(LegalRecordsComponent)!
-                    .get('nova:128');
+                    .get(MERIDIAN);
             press(world, BOARDER, 'board');
             expect(record()).toBeUndefined();
             press(world, BOARDER, 'plunderCapture');
@@ -637,8 +649,8 @@ describe('boarding in a live world', () => {
             // MissionShipCleanupSystem would delete the hulk before it
             // could be boarded at all.
             boarder.components.set(MissionsComponent, new Map([['nova:9999', {
-                id: 'nova:9999', acceptedDay: 0, acceptedAt: 'nova:128',
-                travelPlanet: null, returnPlanet: 'nova:128', cargoType: -1,
+                id: 'nova:9999', acceptedDay: 0, acceptedAt: SYNTHETIC.planets.port,
+                travelPlanet: null, returnPlanet: SYNTHETIC.planets.port, cargoType: -1,
                 cargoQty: 0, cargoLoaded: false, travelDone: false,
                 deadlineDay: null,
             }]]));
@@ -700,7 +712,7 @@ describe('boarding in a live world', () => {
                 const ship = new Entity(uuid);
                 ship.components.set(NpcComponent,
                     { aiType: 3, aggressor: BOARDER, mode: 'attack' });
-                ship.components.set(GovtComponent, { id: 'nova:129' });
+                ship.components.set(GovtComponent, { id: RAIDERS });
                 ship.components.set(ShipDataComponent,
                     { ...getDefaultShipData(), strength: strengths[i] });
                 ship.components.set(FormationComponent,
@@ -761,7 +773,7 @@ describe('boarding in a live world', () => {
                 for (const uuid of WING) {
                     const ship = world.entities.get(uuid)!;
                     expect(ship.components.get(GovtComponent)?.id)
-                        .withContext(uuid).toEqual('nova:129');
+                        .withContext(uuid).toEqual(RAIDERS);
                     // Their quarrel with the player is untouched — only
                     // memories of the PRIZE are swept (clearHostilityToward).
                     expect(ship.components.get(NpcComponent)?.aggressor)
@@ -877,7 +889,7 @@ describe('boarding in a live world', () => {
                 nextDecision: 1e12,
             });
             bystander.components.set(TargetComponent, { target: TARGET });
-            bystander.components.set(GovtComponent, { id: 'nova:129' });
+            bystander.components.set(GovtComponent, { id: RAIDERS });
             // A rival player who traded shots with the victim.
             bystander.components.set(AggressionComponent, new Map([
                 [TARGET, { at: 0, damage: 100, hostile: true }],
@@ -1113,7 +1125,7 @@ describe('boarding in a live world', () => {
                 const { world, boarder } = await formerEscortWorld();
                 press(world, BOARDER, 'board');
                 expect(boarder.components.get(LegalRecordsComponent)!
-                    .get('nova:128')).toBeUndefined();
+                    .get(MERIDIAN)).toBeUndefined();
             });
 
         it('still plunders a hulk marked as ANOTHER player\'s escort',
@@ -1309,7 +1321,7 @@ describe('boarding in a live world', () => {
                 // Only a PËRS can offer (presentShipOffer refuses
                 // otherwise), and the sim checks that itself.
                 target.components.set(PersComponent,
-                    { id: 'nova:131', name: 'Drifting Derelict', subtitle: '' });
+                    { id: SYNTHETIC.persons.wreck, name: 'Hollow Wreck', subtitle: '' });
                 press(world, BOARDER, 'board');
                 expect(target.components.get(BoardedComponent)?.plundered)
                     .toBeTrue();
@@ -1342,7 +1354,7 @@ describe('boarding in a live world', () => {
                 // replayed input must not do anything different.
                 const { world, boarder, target } = await boardingWorld();
                 target.components.set(PersComponent,
-                    { id: 'nova:131', name: 'Drifting Derelict', subtitle: '' });
+                    { id: SYNTHETIC.persons.wreck, name: 'Hollow Wreck', subtitle: '' });
                 const credits =
                     boarder.components.get(CreditsComponent)!.credits;
                 press(world, BOARDER, 'board');
@@ -1432,7 +1444,8 @@ describe('boarding in a live world', () => {
                 .toBeTrue();
 
             // A brand-new boarder takes over the same hulk.
-            const shipData = (await gameData.data.Ship.get('nova:128'))!;
+            const shipData =
+                (await gameData.data.Ship.get(SYNTHETIC.ships.skiff))!;
             const second = makeShip(shipData);
             second.components.set(MovementStateComponent, {
                 position: new Position(0, 0), velocity: new Vector(0, 0),
@@ -1497,7 +1510,7 @@ describe('boarding in a live world', () => {
             press(world, BOARDER, 'board');
             press(world, BOARDER, 'plunderCapture');
             expect(boarder.components.get(LegalRecordsComponent)!
-                .get('nova:128')).toBeLessThan(0);
+                .get(MERIDIAN)).toBeLessThan(0);
         });
 
         it('gives no second capture attempt inside one session', async () => {
@@ -1557,7 +1570,7 @@ describe('boarding in a live world', () => {
             expect(target.components.has(BoardedComponent)).toBeTrue();
 
             // Landing ends the life segment (BoardingLandingResetSystem).
-            world.emit(LandEvent, { id: 'nova:128', uuid: 'some stellar' },
+            world.emit(LandEvent, { id: SYNTHETIC.planets.port, uuid: 'some stellar' },
                 [TARGET]);
             world.step();
             expect(target.components.has(BoardedComponent)).toBeFalse();
@@ -1577,7 +1590,7 @@ describe('boarding in a live world', () => {
                 // JumpFromSystem clears the record just before the entity
                 // is serialized and carried to the destination, so it
                 // arrives plunderable again.
-                world.emit(InitiateJumpEvent, { to: 'nova:227' }, [TARGET]);
+                world.emit(InitiateJumpEvent, { to: SYNTHETIC.systems.kestrel }, [TARGET]);
                 world.step();
                 expect(target.components.has(BoardedComponent)).toBeFalse();
                 expect(boarder.components.has(BoardingComponent)).toBeFalse();
@@ -1593,8 +1606,8 @@ describe('boarding in a live world', () => {
  * bay"). The prize leaves the world; launching it again mints a fresh
  * fighter from the bay's ship class.
  *
- * Built on a MockGameData world (like bay_plugin_test) rather than the
- * stock scenario, because the shortcut needs a carrier whose bay launches
+ * Built on a MockGameData world (like bay_plugin_test) rather than a
+ * parsed scenario, because the shortcut needs a carrier whose bay launches
  * exactly the class of the ship being boarded, in several capacity
  * configurations.
  */
@@ -2004,11 +2017,14 @@ describe('bay-capture shortcut', () => {
     });
 
     /**
-     * PLUNDER specs that need no Nova_Data. The plunder flow's own suite
-     * runs on getIntegrationGameData, so on a checkout without the game
-     * files (data-less CI, review machines) it is skipped wholesale —
-     * including the HIGH-severity credit-farm regression. These are twins
-     * of the ones worth pinning everywhere, built on the mock world above.
+     * PLUNDER specs on the mock world. These were written as twins of the
+     * live-world plunder specs back when that suite ran on Nova_Data and
+     * so was skipped wholesale on a checkout without the game files
+     * (data-less CI, review machines) — including the HIGH-severity
+     * credit-farm regression. The live-world suite now runs on the
+     * checked-in synthetic scenario and no longer skips; these stay
+     * because they exercise the same rules against a carrier/bay
+     * configuration built to order.
      *
      * OTHER_SHIP is deliberately a class no bay here launches, so the
      * bay-capture shortcut does not fire and boarding falls through to the

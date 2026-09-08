@@ -1,12 +1,12 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import {
     CloakComponent, CloakScannerComponent, OutfitsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { CloakDisplayPlugin } from './cloak_display_plugin.js';
 import { radarHidesShip } from './status_bar_radar.js';
 
@@ -15,30 +15,27 @@ import { radarHidesShip } from './status_bar_radar.js';
  * a ship's delta-synced outfits, the way the sim does. Neither crosses
  * the bridge (snapshot policy `skip`), so before this plugin the radar's
  * `Optional(CloakComponent)` was always undefined and its `?? true`
- * default hid every cloaked ship — including the five stock cloaks that
- * set 0x0002 "Visible on radar".
+ * default hid every cloaked ship — including every cloak that sets
+ * 0x0002 "Visible on radar".
  *
- * Pinned against the real stock outfits (base data only).
+ * Pinned against both polarities of that bit, parsed out of real oütf
+ * resources.
  */
 
-/** Federation Cloaking Device: ModVal 14 = 0x2 | 0x4 | 0x8, visible on radar. */
-const FED_CLOAK = 'nova:211';
-/** Cloaking Organ v1.1: ModVal 1033 = 0x400 | 0x8 | 0x1, no 0x2 — hides. */
-const ORGAN_V1_1 = 'nova:269';
+/** Shrike Veil: ModVal 0x040A = 0x2 | 0x8 | 0x400, visible on radar. */
+const VISIBLE_CLOAK = SYNTHETIC.outfits.veil;
+/** Shadow Cloak: ModVal 0x0024 = 0x20 | 0x4, no 0x2 — hides. */
+const HIDING_CLOAK = SYNTHETIC.outfits.cloak;
 
-describe('CloakDisplayPlugin (real stock cloaks)', () => {
+describe('CloakDisplayPlugin', () => {
     let world: World;
 
-    // Without Nova_Data each spec pends; pending() thrown from a
-    // beforeAll would instead fail the whole suite (nova_data_gate.ts).
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         // The providers read getCached; warm the outfits first, as the
         // entity data loader does for every ship it inserts.
-        await gameData.data.Outfit.get(FED_CLOAK);
-        await gameData.data.Outfit.get(ORGAN_V1_1);
+        await gameData.data.Outfit.get(VISIBLE_CLOAK);
+        await gameData.data.Outfit.get(HIDING_CLOAK);
         world = new World('cloak display test');
         world.resources.set(SimulationGameDataResource, gameData);
         await world.addPlugin(CloakDisplayPlugin);
@@ -52,19 +49,18 @@ describe('CloakDisplayPlugin (real stock cloaks)', () => {
         return ship;
     }
 
-    it('derives a radar-visible cloak for the Federation Cloaking Device',
-        () => {
-            const ship = shipWith('fed', [[FED_CLOAK, 1]]);
-            world.step();
-            const cloak = ship.components.get(CloakComponent);
-            expect(cloak?.canCloak).toBeTrue();
-            expect(cloak?.hidesFromRadar).toBeFalse();
-            // ...so an actively cloaked Fed-cloak ship stays a blip.
-            expect(radarHidesShip({ active: true }, cloak)).toBeFalse();
-        });
+    it('derives a radar-visible cloak for the Shrike Veil', () => {
+        const ship = shipWith('veil', [[VISIBLE_CLOAK, 1]]);
+        world.step();
+        const cloak = ship.components.get(CloakComponent);
+        expect(cloak?.canCloak).toBeTrue();
+        expect(cloak?.hidesFromRadar).toBeFalse();
+        // ...so an actively veiled ship stays a blip.
+        expect(radarHidesShip({ active: true }, cloak)).toBeFalse();
+    });
 
-    it('derives a radar-hiding cloak for Cloaking Organ v1.1', () => {
-        const ship = shipWith('organ', [[ORGAN_V1_1, 1]]);
+    it('derives a radar-hiding cloak for the Shadow Cloak', () => {
+        const ship = shipWith('shadow', [[HIDING_CLOAK, 1]]);
         world.step();
         const cloak = ship.components.get(CloakComponent);
         expect(cloak?.hidesFromRadar).toBeTrue();

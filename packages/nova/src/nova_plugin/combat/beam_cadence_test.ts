@@ -9,7 +9,10 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent, BeamStateComponent } from './beam_plugin.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
@@ -23,33 +26,43 @@ import { TargetComponent } from '../ship/target_component.js';
 import { ORIGINAL_FRAME_MS } from './weapon_plugin.js';
 import { WeaponsStateComponent } from '../ship/weapons_state.js';
 
-const SHIP_ID = 'nova:128';      // Shuttle.
-const SOLAR_LANCE = 'nova:164';  // beam, Reload 0, Count 1, Inaccuracy 5.
-const PULSE_LASER = 'nova:146';  // beam, Count 15, Decay 100, Falloff 0.
+const SHIP_ID = SYNTHETIC.ships.skiff;
+const NEEDLE_BEAM = SYNTHETIC.weapons.needleBeam;  // beam, Reload 0, Count 1, Inaccuracy 5.
+const WIDE_LANCE = SYNTHETIC.weapons.wideLance;    // beam, Count 15, Decay 0.
 
 /**
- * Beams against the original's 30 fps clock, on real data (#23, #93,
- * #101). The Solar Lance is the review's measured case: Reload 0 and
- * Count 1, so the original fires it once per frame and each shot deals
- * one frame of its damage — 30 beams and 30 frame-damages per second.
- * Measured at 7f4e013e: 60 beams and 78 frame-damages (2.0x shots, 2.6x
- * damage), from firing per 60 Hz tick and a 1-frame beam straddling a
- * third tick.
+ * How far ahead of the shooter the victim sits. The Wren Skiff's hull is
+ * a narrow polygon (x from -4 to +4), and the shooter's beam exit point
+ * is 8 px ahead of its centre, so the ray starts (VICTIM_AHEAD - 8) px
+ * out: at 30 the Needle Beam's ±5° error can throw it at most
+ * 22 * tan 5° = 1.9 px sideways, which cannot clear a 4 px half-width.
+ * (At the stock spec's 60 px it could: 4.5 px, and it missed 3 shots in
+ * 30.)
+ */
+const VICTIM_AHEAD = 30;
+
+/**
+ * Beams against the original's 30 fps clock (#23, #93, #101). The Needle
+ * Beam is the review's measured case: Reload 0 and Count 1, so the
+ * original fires it once per frame and each shot deals one frame of its
+ * damage — 30 beams and 30 frame-damages per second. Measured at
+ * 7f4e013e (on the stock weapon of the same shape): 60 beams and 78
+ * frame-damages (2.0x shots, 2.6x damage), from firing per 60 Hz tick and
+ * a 1-frame beam straddling a third tick.
  *
- * Battlefield as in beam_turret_stale_target_test: nova:226 (asteroid-
- * free), shooter facing -y with the victim 60 px straight ahead, well
- * inside the Lance's reach and close enough that its 5° error cannot
- * miss a Shuttle.
+ * Battlefield as in beam_turret_stale_target_test: Thessaly Reach
+ * (asteroid-free), shooter facing -y with the victim straight ahead, well
+ * inside the Needle Beam's 200 px reach.
  */
 describe('beam fire cadence and damage on the original frame clock', () => {
     let damaged: Array<{ uuid: string, damager: string, scale: number }>;
 
-    type GameData = Awaited<ReturnType<typeof getIntegrationGameData>>;
+    type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
     async function makeBattlefield() {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, undefined,
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
         damaged = [];
         world.addSystem(new System({
             name: 'BeamCadenceDamageRecorder',
@@ -86,12 +99,13 @@ describe('beam fire cadence and damage on the original frame clock', () => {
     async function setUp() {
         const { gameData, world } = await makeBattlefield();
         const shooter = await addShip(world, gameData, 'shooter', 1000, 1000);
-        const victim = await addShip(world, gameData, 'victim', 1000, 940);
+        const victim = await addShip(world, gameData, 'victim',
+            1000, 1000 - VICTIM_AHEAD);
         for (let i = 0; i < 20; i++) {
             world.step();
         }
         pin(shooter, 1000, 1000);
-        pin(victim, 1000, 940);
+        pin(victim, 1000, 1000 - VICTIM_AHEAD);
         return { gameData, world, shooter, victim };
     }
 
@@ -131,10 +145,10 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             .reduce((sum, d) => sum + d.scale, 0);
     }
 
-    it('Solar Lance: 30 beams and 30 frames of damage per second (#23)',
+    it('Needle Beam: 30 beams and 30 frames of damage per second (#23)',
         async () => {
             const { world, shooter } = await setUp();
-            await holdFire(world, shooter, SOLAR_LANCE);
+            await holdFire(world, shooter, NEEDLE_BEAM);
             damaged = [];
 
             // 60 ticks = 1 s. The last beam fired may still be alive
@@ -151,29 +165,31 @@ describe('beam fire cadence and damage on the original frame clock', () => {
                 .toBeCloseTo(30, 6);
         }, 120_000);
 
-    it('Pulse Laser: on screen 31 frames, damaging for its 15 (#93)',
-        async () => {
+    it('Wide Lance: on screen for its 15 frames, damaging for all of them '
+        + '(#93)', async () => {
             const { world, shooter } = await setUp();
-            const laser = await world.resources.get(WeaponEntries)!.get(PULSE_LASER);
+            const lance = await world.resources.get(WeaponEntries)!.get(WIDE_LANCE);
             damaged = [];
-            const beam = laser!.fireFromEntity('shooter', false)!;
+            const beam = lance!.fireFromEntity('shooter', false)!;
             expect(beam).toBeDefined();
 
-            // Count 15 + 16 - CoronaFalloff 0 = 31 frames = 62 ticks
-            // alive, then gone.
+            // Count 15 with Decay 0, so no shrinking corona tail: 15
+            // frames = 30 ticks alive, then gone. (The stock Pulse Laser
+            // spec below is the Decay > 0 case, where the tail adds
+            // 16 - CoronaFalloff frames of screen time.)
             const beams = run(world, 70);
             expect(beams.size).toEqual(1);
-            expect([...beams.values()][0]).toEqual(62);
+            expect([...beams.values()][0]).toEqual(30);
             expect(frameDamages('victim')).toBeCloseTo(15, 6);
         }, 120_000);
 
     describe('inaccuracy is sampled once, as the beam leaves the ship (#101)', () => {
-        /** A long-lived Solar Lance, so the ray can be watched over many ticks. */
+        /** A long-lived Needle Beam, so the ray can be watched over many ticks. */
         async function longLance(world: World, gameData: GameData,
             over: Partial<BeamWeaponData> = {}) {
             const construct = world.resources
                 .get(WeaponConstructors)!.get('BeamWeaponData')!;
-            const data = await gameData.data.Weapon.get(SOLAR_LANCE) as BeamWeaponData;
+            const data = await gameData.data.Weapon.get(NEEDLE_BEAM) as BeamWeaponData;
             return new construct({
                 ...data,
                 id: 'test:long_lance',
@@ -235,4 +251,75 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             }
         }, 120_000);
     });
+});
+
+/**
+ * The other half of #93 — the shrinking CORONA TAIL — stays on the real
+ * Nova data. Every beam in the synthetic scenario carries Decay 0
+ * (synthetic/resources.ts writes the field as a literal zero), and the
+ * tail only exists for Decay > 0, so nothing there can express
+ * "Count + 16 - CoronaFalloff frames on screen while damaging for Count".
+ * The stock Pulse Laser (nova:146: Count 15, Decay 100, Falloff 0) can.
+ */
+describe('a beam with a positive Decay outlives its damage (real data)', () => {
+    const SHUTTLE = 'nova:128';
+    const PULSE_LASER = 'nova:146';
+
+    it('Pulse Laser: on screen 31 frames, damaging for its 15 (#93)',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const world = await makeSystem('nova:226', gameData, undefined,
+                { npcs: false });
+            const damaged: Array<{ uuid: string, scale: number }> = [];
+            world.addSystem(new System({
+                name: 'StockBeamCadenceDamageRecorder',
+                events: [DamagedEvent],
+                args: [DamagedEvent, UUID] as const,
+                step({ scale }, uuid) {
+                    damaged.push({ uuid, scale: scale ?? 1 });
+                },
+            }));
+            const place = (ship: Entity, x: number, y: number) =>
+                ship.components.set(MovementStateComponent, {
+                    position: new Position(x, y), velocity: new Vector(0, 0),
+                    rotation: new Angle(0), accelerating: 0, turning: 0,
+                    turnBack: false,
+                });
+            const add = async (uuid: string, x: number, y: number) => {
+                const ship = makeShip(await gameData.data.Ship.get(SHUTTLE));
+                ship.components.set(MultiplayerData, { owner: 'server' });
+                await completeEntity(world, ship);
+                place(ship, x, y);
+                world.entities.set(uuid, ship);
+                return ship;
+            };
+            const shooter = await add('shooter', 1000, 1000);
+            const victim = await add('victim', 1000, 940);
+            for (let i = 0; i < 20; i++) {
+                world.step();
+            }
+            place(shooter, 1000, 1000);
+            place(victim, 1000, 940);
+
+            const laser = await world.resources.get(WeaponEntries)!
+                .get(PULSE_LASER);
+            damaged.length = 0;
+            expect(laser!.fireFromEntity('shooter', false)).toBeDefined();
+
+            // Count 15 + 16 - CoronaFalloff 0 = 31 frames = 62 ticks
+            // alive, then gone.
+            const beams = new Map<string, number>();
+            for (let i = 0; i < 70; i++) {
+                world.step();
+                for (const [uuid, entity] of world.entities) {
+                    if (entity.components.has(BeamDataComponent)) {
+                        beams.set(uuid, (beams.get(uuid) ?? 0) + 1);
+                    }
+                }
+            }
+            expect(beams.size).toEqual(1);
+            expect([...beams.values()][0]).toEqual(62);
+            expect(damaged.filter(d => d.uuid === 'victim')
+                .reduce((sum, d) => sum + d.scale, 0)).toBeCloseTo(15, 6);
+        }, 120_000);
 });

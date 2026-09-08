@@ -2,7 +2,7 @@ import 'jasmine';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { navReadout } from '../../display/status_bar_content.js';
 import {
     initialJumpReadyState, jumpReadyEdge,
@@ -31,7 +31,7 @@ const SHIP_UUID = 'readiness agreement ship';
  * here as a beep or a bright readout promising a jump that doesn't happen.
  */
 async function makeHarness() {
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
     let originId: string | undefined;
     let destinationId: string | undefined;

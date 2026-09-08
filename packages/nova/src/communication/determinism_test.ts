@@ -1,5 +1,6 @@
 import "jasmine";
 import { runDeterminismCheck } from "./determinism_harness.js";
+import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
 describe("Simulation determinism", () => {
     // Entities are staged (fully loaded before insertion) and the sim
@@ -8,7 +9,7 @@ describe("Simulation determinism", () => {
     it("is deterministic for a quiet world", async () => {
         const messages: string[] = [];
         const result = await runDeterminismCheck(0, 240, 0,
-            message => messages.push(message));
+            message => messages.push(message), getSyntheticGameData());
         expect(result.divergedAtStep)
             .withContext(messages.join('\n'))
             .toBeUndefined();
@@ -20,7 +21,7 @@ describe("Simulation determinism", () => {
     it("is deterministic with NPCs fighting", async () => {
         const messages: string[] = [];
         const result = await runDeterminismCheck(4, 240, 0,
-            message => messages.push(message));
+            message => messages.push(message), getSyntheticGameData());
         expect(result.divergedAtStep)
             .withContext(messages.join('\n'))
             .toBeUndefined();
@@ -37,8 +38,10 @@ describe("Cross-platform determinism", () => {
             await import("./determinism_harness.js");
         const { applySimulationInputs } =
             await import("./simulation_input.js");
-        const nodeWorld = await makeDeterminismWorld(2, undefined);
-        const workerWorld = await makeDeterminismWorld(2, 'worker');
+        const nodeWorld = await makeDeterminismWorld(2, undefined,
+            getSyntheticGameData());
+        const workerWorld = await makeDeterminismWorld(2, 'worker',
+            getSyntheticGameData());
         for (const world of [nodeWorld, workerWorld]) {
             applySimulationInputs(world, [{
                 kind: 'control',

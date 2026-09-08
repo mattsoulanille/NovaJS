@@ -12,16 +12,16 @@ import { makeSystem } from "../nova_plugin/make_system.js";
 import {
     PlayerShipSelector, applyControlEvents, ControlledByComponent,
 } from '../nova_plugin/player/index.js';
-import { getIntegrationGameData } from "./simulation_test_fixture.js";
+import { SYNTHETIC } from "novaparse/synthetic/universe";
+import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
-// A ship carrying the Polaris Cloaking Organ v1.1 (outfit nova:269) with
-// count >= 1: ModVal 0x0409 = 4 shield/sec drain, deactivates-when-hit,
-// faster fade, hides from radar. Found by scanning the real Nova data.
-// (nova:406 lists the cloak with count 0, so it does not cloak.)
-const CLOAK_SHIP_ID = "nova:272"; // "Raven;Cloaking+fast jump"
+// The Shrike Ghost carries a Shrike Veil (outfit nova:140) with count 1 in
+// its stock loadout: ModVal 0x040A = 4 shield/sec drain,
+// deactivates-when-hit, and VISIBLE on radar (0x0002 set).
+const CLOAK_SHIP_ID = SYNTHETIC.ships.ghost; // "Shrike Ghost"
 
 async function makeCloakWorld() {
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
     const systemId = [...ids.System].sort()[0]!;
     const world = await makeSystem(systemId, gameData, "worker", { npcs: false });
@@ -59,17 +59,21 @@ function damage(world: Awaited<ReturnType<typeof makeCloakWorld>>["world"],
     world.removeSystem(emitSystem);
 }
 
-describe("cloak integration (real Nova data)", () => {
+describe("cloak integration", () => {
     it("derives a cloak capability for a cloak-equipped ship", async () => {
         const { ship } = await makeCloakWorld();
         const cloak = ship.components.get(CloakComponent);
         expect(cloak?.canCloak)
             .withContext(`${CLOAK_SHIP_ID} should carry a cloaking device`)
             .toBe(true);
-        // Polaris v1.1 (0x0409): drains shields, decloaks on hit, hides radar.
+        // The Shrike Veil (0x040A): drains shields, decloaks on hit, and
+        // leaves the transponder up — 0x0002 set means "visible on
+        // radar", which is the bit's other polarity (the Shadow Cloak,
+        // SYNTHETIC.outfits.cloak, is the hiding one; both polarities are
+        // pinned in display/cloak_display_plugin_test.ts).
         expect(cloak?.shieldPerSecond).toBe(4);
         expect(cloak?.deactivatesWhenHit).toBe(true);
-        expect(cloak?.hidesFromRadar).toBe(true);
+        expect(cloak?.hidesFromRadar).toBe(false);
     }, 60_000);
 
     it("toggles the cloak on the 'cloak' control edge and drains shields",
@@ -88,7 +92,9 @@ describe("cloak integration (real Nova data)", () => {
 
         const shield = ship.components.get(ShieldComponent)!;
         const before = shield.current;
-        // Let the drain system run several ticks.
+        // Let the drain system run several ticks: 4 shield/s against the
+        // Ghost's 120 points of shielding, so a second of cloak costs a
+        // thirtieth of the bar — visible, and nowhere near the floor.
         for (let i = 0; i < 30; i++) {
             world.step();
         }
@@ -180,7 +186,7 @@ describe("cloak integration (real Nova data)", () => {
             const sounds = recordSounds(world);
 
             // Pin shields at the floor so the drain system decloaks on
-            // its next tick (Polaris v1.1 drains shields while cloaked).
+            // its next tick (the Veil drains shields while cloaked).
             const shield = ship.components.get(ShieldComponent)!;
             shield.current = shield.min;
             shield.recharge = 0;

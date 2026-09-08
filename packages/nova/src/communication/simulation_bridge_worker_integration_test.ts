@@ -2,12 +2,15 @@ import "jasmine";
 import { once } from "events";
 import { Worker } from "worker_threads";
 import { makeWorkerThreadSimulationBridgeClient } from "./simulation_bridge_worker_threads.js";
-import { makeSimulationBridgeHarness } from "./simulation_test_fixture.js";
+import {
+    getSyntheticGameData, makeSimulationBridgeHarness,
+} from "./simulation_test_fixture.js";
 
 
 describe("SimulationBridge worker integration", () => {
     it("runs the simulation bridge across a worker thread", async () => {
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
         const serializer = harness.client.getSerializer();
         const ship = harness.world.entities.get(harness.shipUuid);
         if (!ship) {
@@ -20,6 +23,9 @@ describe("SimulationBridge worker integration", () => {
                 workerData: {
                     systemId: harness.systemId,
                     communicatorId: "server",
+                    // The worker parses the SAME set as the harness, or
+                    // the two worlds would not be the same system at all.
+                    dataSet: "synthetic",
                 },
             },
         );
@@ -27,11 +33,12 @@ describe("SimulationBridge worker integration", () => {
 
         const client = makeWorkerThreadSimulationBridgeClient(worker, serializer);
         try {
-            // Planets, the asteroid field, and the NPC population
-            // (with its spawner) are loaded before the world ever
-            // steps, so the initial frame already contains them.
+            // Planets, the asteroid field (none in the synthetic
+            // scenario's first system, Thessaly Reach), and the NPC
+            // population (with its spawner) are loaded before the world
+            // ever steps, so the initial frame already contains them.
             // Sim-minted ids carry the system id as a prefix (IdFactory:
-            // `nova:1124:asteroid:0`); the field and the spawner
+            // `nova:128:asteroid:0`); the field and the spawner
             // themselves are named entities ('asteroid field', 'npc
             // spawner').
             const isSystemFurniture = (uuid: string) =>
@@ -67,6 +74,7 @@ describe("SimulationBridge worker integration", () => {
         // Full system genesis (planets, asteroids, the NPC spawn
         // table, and the përs table over every përs resource) runs
         // twice here (harness + worker); the default 5s was already
-        // borderline before the përs table existed.
+        // borderline before the përs table existed, and the worker
+        // still pays for its own module graph and parse.
     }, 30_000);
 });

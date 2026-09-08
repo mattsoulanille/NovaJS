@@ -19,7 +19,7 @@ import {
     PEER_LOCAL_COMPONENTS,
 } from '../nova_plugin/player/index.js';
 import { applyInputRecords, InputRecord, loadInputRecordsGameData } from './simulation_input.js';
-import { getIntegrationGameData, makeIntegrationGameData } from './simulation_test_fixture.js';
+import { getSyntheticGameData, makeSyntheticGameData } from './simulation_test_fixture.js';
 
 /**
  * An in-flight mission acceptance can GRANT an outfit (OnAccept Gxxx).
@@ -87,6 +87,9 @@ describe('acceptMission outfit grants', () => {
         return { world, ship };
     }
 
+    // nova:134 is the Shipyard Errand and nova:128 Port Amberline: a real
+    // mission accepted at a real stellar, so staging has something to
+    // load. The grant itself is what the spec is about.
     function grantRecord(outfitId: string, tick: number): InputRecord {
         return {
             peerId: PEER, tick,
@@ -115,7 +118,7 @@ describe('acceptMission outfit grants', () => {
 
     it('a replaying world with a cold cache rebuilds the same weapons and '
         + 'physics on the same tick as a warm one', async () => {
-            const warmData = await getIntegrationGameData();
+            const warmData = await getSyntheticGameData();
             const ids = await warmData.ids;
             const systemId = [...ids.System].sort()[0]!;
             const shipId = [...ids.Ship].sort()[0]!;
@@ -126,14 +129,14 @@ describe('acceptMission outfit grants', () => {
             const { outfitId, weaponId } = grant!;
 
             // The warm world: the originating peer, whose cache already
-            // holds the outfit (getIntegrationGameData is process-wide).
+            // holds the outfit (getSyntheticGameData is process-wide).
             const warm = await makePlayerWorld(warmData, systemId, shipId);
             // The cold world: a replaying world (archive, late joiner)
             // over an aggregator that never loaded the granted weapon.
             // (The OUTFIT is warm everywhere: the aggregator preloads
             // every Outfit into its own cache at construction. The
             // grant's weapon is what the providers reach for cold.)
-            const coldData = makeIntegrationGameData();
+            const coldData = makeSyntheticGameData();
             const cold = await makePlayerWorld(coldData, systemId, shipId);
             // (Inspected through the cache's own store: getCached would
             // START a background load, warming the control by accident.)
@@ -185,7 +188,7 @@ describe('acceptMission outfit grants', () => {
             // on every world), but a data source can also REJECT — a
             // fetch failure on a browser worker — and a rejected staging
             // would wedge the archive on that record forever.
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             const systemId = [...ids.System].sort()[0]!;
             const world = await makeSystem(systemId, gameData, 'node', { npcs: false });

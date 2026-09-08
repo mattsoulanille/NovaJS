@@ -3,7 +3,8 @@ import { EmitNow } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import {
     armorFullyRestored, DamagedEvent, DeathEvent, ExplodingComponent,
     ExplodingFinishedSystem, ZeroArmorEvent,
@@ -18,7 +19,7 @@ import { Stat } from '../core/stat.js';
 
 const SHIP = 'ship under test';
 
-/** Enough to zero any stock ship's shields and armor in one hit. */
+/** Enough to zero any ship's shields and armor in one hit. */
 const LETHAL = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,
     knockback: 0, passThroughShield: true,
@@ -61,10 +62,10 @@ describe('armorFullyRestored', () => {
  * living, full-armor ship. These specs pin both event orderings.
  */
 describe('player death and respawn', () => {
-    async function playerWorld(shipId = 'nova:128') {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+    async function playerWorld(shipId = SYNTHETIC.ships.skiff) {
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
         const shipData = (await gameData.data.Ship.get(shipId))!;
         const ship = makeShip(shipData);
         // ControlledBy, not PlayerShipSelector: PlayerDeathSystem (the
@@ -223,14 +224,13 @@ describe('player death and respawn', () => {
         }, 120_000);
 
     // The staleness guards must never mistake a hulk for a live ship.
-    // 70 of the 288 stock ships have a nonzero armor recharge, and
-    // ArmorRecharge (step system #56) runs after the weapons that zero
-    // them, so their armor is a hair above zero for the whole death
-    // sequence. An "above zero means alive" guard made every one of them
-    // immortal.
+    // 70 of the 288 stock ships have a nonzero armor recharge (the Heron
+    // Warden is the scenario's), and ArmorRecharge (step system #56) runs
+    // after the weapons that zero them, so their armor is a hair above
+    // zero for the whole death sequence. An "above zero means alive"
+    // guard made every one of them immortal.
     for (const [id, name] of [
-        ['nova:158', 'Arachnid (armorRecharge 0.6)'],
-        ['nova:159', 'Dragon (armorRecharge 0.3)'],
+        [SYNTHETIC.ships.warden, 'Heron Warden (armorRecharge 5)'],
     ] as const) {
         it(`still kills an armor-recharging ship: ${name}`, async () => {
             const { world, ship } = await playerWorld(id);

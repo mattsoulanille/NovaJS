@@ -9,7 +9,8 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent } from './beam_plugin.js';
 import { DamagedEvent, ExplodingComponent } from '../ship/death_plugin.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
@@ -20,9 +21,11 @@ import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
 import { TargetComponent } from '../ship/target_component.js';
 
-const SHIP_ID = 'nova:128';        // Shuttle.
-const ION_CANNON = 'nova:142';     // beamTurret, 240 long, 33ms duration.
-const POLARON_CANNON = 'nova:141'; // plain 'beam', 180 long, 33ms duration.
+const SHIP_ID = SYNTHETIC.ships.skiff;
+// beamTurret, 240 long, one frame (33ms) of life, blind to its rear.
+const ARC_TURRET = SYNTHETIC.weapons.arcTurret;
+// plain 'beam', 220 long, ten frames of life.
+const LANCE_BEAM = SYNTHETIC.weapons.beam;
 
 /**
  * A beam turret is a ray held on its target: it is re-aimed every tick,
@@ -38,7 +41,7 @@ const POLARON_CANNON = 'nova:141'; // plain 'beam', 180 long, 33ms duration.
  *     — target uuids outlive their entities, because DeleteEvent is
  *     queued rather than immediate.
  *
- * The battlefield is nova:226 (Ver'ashan, asteroid-free) so nothing but
+ * The battlefield is Thessaly Reach (asteroid-free) so nothing but
  * the ships placed here can be hit. Geometry: the shooter faces -y (Nova
  * rotation 0) with an innocent BYSTANDER straight ahead in beam range,
  * and the VICTIM off to the +x side. A correctly aimed turret shot goes
@@ -48,12 +51,12 @@ const POLARON_CANNON = 'nova:141'; // plain 'beam', 180 long, 33ms duration.
 describe('beam turret with a dead target', () => {
     let damaged: Array<{ uuid: string, damager: string }>;
 
-    type GameData = Awaited<ReturnType<typeof getIntegrationGameData>>;
+    type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
     async function makeBattlefield() {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, undefined,
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
         damaged = [];
         world.addSystem(new System({
             name: 'BeamTurretDamageRecorder',
@@ -104,10 +107,9 @@ describe('beam turret with a dead target', () => {
     /**
      * Shooter at (1000, 1000) facing -y, bystander 60 ahead of it, and a
      * victim 60 off to the +x side that the shooter is targeting. Both
-     * are well inside the Ion Cannon's 240-unit reach, and close enough
-     * that the weapon's own 4-degree inaccuracy (sampled once as the beam
-     * leaves the ship, and held for its life) cannot throw the ray clear
-     * of a Shuttle's 14x17 hitbox.
+     * are well inside the Arc Turret's 240-unit reach (and the fixed
+     * Lance Beam's 220), and every shot below is fired with inaccuracy
+     * off, so the ray runs exactly through the target's centre.
      */
     async function setUp() {
         const { gameData, world } = await makeBattlefield();
@@ -146,9 +148,9 @@ describe('beam turret with a dead target', () => {
     it('hits the target it is aimed at, and not the ship in front of it',
         async () => {
             const { world } = await setUp();
-            const ionCannon = await getWeapon(world, ION_CANNON);
+            const arcTurret = await getWeapon(world, ARC_TURRET);
 
-            expect(fire(ionCannon))
+            expect(fire(arcTurret))
                 .withContext('a turret with a live target fires').toBeDefined();
             settle(world);
 
@@ -166,9 +168,9 @@ describe('beam turret with a dead target', () => {
     it('a beam in flight does not swing forward when its target dies',
         async () => {
             const { world } = await setUp();
-            const ionCannon = await getWeapon(world, ION_CANNON);
+            const arcTurret = await getWeapon(world, ARC_TURRET);
 
-            expect(fire(ionCannon)).withContext('the shot spawns').toBeDefined();
+            expect(fire(arcTurret)).withContext('the shot spawns').toBeDefined();
             world.step();
             expect(beamCount(world))
                 .withContext('the beam outlives the tick it was fired on')
@@ -189,7 +191,7 @@ describe('beam turret with a dead target', () => {
 
     it('fires nothing from a lock whose entity is already gone', async () => {
         const { world } = await setUp();
-        const ionCannon = await getWeapon(world, ION_CANNON);
+        const arcTurret = await getWeapon(world, ARC_TURRET);
 
         // Deleted, but the shooter's TargetComponent still names it:
         // DeleteEvent is queued, so every system that runs before the
@@ -197,7 +199,7 @@ describe('beam turret with a dead target', () => {
         world.entities.delete('victim');
         damaged = [];
 
-        const spawned = fire(ionCannon);
+        const spawned = fire(arcTurret);
         settle(world);
 
         expect(spawned)
@@ -213,13 +215,13 @@ describe('beam turret with a dead target', () => {
 
     it('fires nothing at a target that is exploding', async () => {
         const { world, victim } = await setUp();
-        const ionCannon = await getWeapon(world, ION_CANNON);
+        const arcTurret = await getWeapon(world, ARC_TURRET);
 
         // Armor gone: the ship is a fireball, not something to aim at.
         victim.components.set(ExplodingComponent, Infinity);
         damaged = [];
 
-        const spawned = fire(ionCannon);
+        const spawned = fire(arcTurret);
         settle(world);
 
         expect(spawned)
@@ -236,12 +238,12 @@ describe('beam turret with a dead target', () => {
     // target must not silence it.
     it('a fixed beam still fires forward with a dead target', async () => {
         const { world } = await setUp();
-        const polaron = await getWeapon(world, POLARON_CANNON);
+        const lance = await getWeapon(world, LANCE_BEAM);
 
         world.entities.delete('victim');
         damaged = [];
 
-        expect(fire(polaron))
+        expect(fire(lance))
             .withContext('a fixed beam fires regardless of target')
             .toBeDefined();
         settle(world);
@@ -253,13 +255,13 @@ describe('beam turret with a dead target', () => {
 
     // Control: a point-defense beam picks its own victim out of the live
     // world every time it fires and ignores the ship's target entirely,
-    // so a dead ship target must not silence it either. No stock weapon
-    // has pointDefenseBeam guidance, so build one from a real beam.
+    // so a dead ship target must not silence it either. No weapon in the
+    // scenario has pointDefenseBeam guidance, so build one from a beam.
     describe('point defense beam', () => {
         async function makePointDefenseBeam(world: World, gameData: GameData) {
             const construct = world.resources
                 .get(WeaponConstructors)!.get('BeamWeaponData')!;
-            const data = await gameData.data.Weapon.get(ION_CANNON);
+            const data = await gameData.data.Weapon.get(ARC_TURRET);
             return new construct({
                 ...(data as BeamWeaponData),
                 id: 'test:pd_beam',

@@ -10,8 +10,9 @@ import {
 } from 'nova_ecs/plugins/serializer_plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
-import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
+import {
+    getSyntheticGameData, makeSimulationBridgeHarness,
+} from '../communication/simulation_test_fixture.js';
 import { BeamDataComponent, OwnerComponent, SourceComponent } from '../nova_plugin/combat/index.js';
 import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
@@ -47,12 +48,10 @@ describe('SourceComponent sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
         // A real simulation world plus the bridge that mirrors it, built
         // the way the browser builds them.
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
         simWorld = harness.world;
         serializer = simWorld.resources.get(SerializerResource)!;
     });
@@ -73,7 +72,7 @@ describe('SourceComponent sim -> display wiring', () => {
     it('carries Source in a frame from a live simulation world', async () => {
         // A fresh harness so this snapshot is the bridge's FIRST — every
         // entity then arrives in `added` with its full component list.
-        const { client, world } = await makeSimulationBridgeHarness();
+        const { client, world } = await makeSimulationBridgeHarness(getSyntheticGameData());
         const fighter = new Entity('bay fighter')
             .addComponent(SourceComponent, 'carrier-uuid');
         world.entities.set('bay-fighter-uuid', fighter);
