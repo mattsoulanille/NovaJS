@@ -20,7 +20,7 @@ import { DOMAINS } from './domains.js';
  * why with a `// deep import: <reason>` comment on the line above the
  * statement (none today).
  *
- * And INSIDE nova_plugin: every spec there reaches another domain only
+ * And INSIDE nova_plugin: every spec there reaches ANOTHER domain only
  * through its index too. A spec may still import its own domain's
  * modules directly, and the composition root's files (make_system and
  * friends) stay importable from anywhere — they are not domain modules.
@@ -272,6 +272,11 @@ describe('nova_plugin domain graph', () => {
             let checked = 0;
             for (const [root, ext] of [[sourceRoot, '.ts'], [builtRoot, '.js']] as const) {
                 for (const file of pluginSpecsAndRootModules(root, ext)) {
+                    // A spec's own domain: deep imports into it are the
+                    // spec reaching into what it exercises. The empty
+                    // relative dir is the composition root, whose files
+                    // (and root-level specs) may import any domain.
+                    const ownDomain = path.relative(root, path.dirname(file));
                     for (const { specifier, exempt } of specifiersOf(file)) {
                         const relative = path.relative(
                             root, path.resolve(path.dirname(file), specifier));
@@ -279,6 +284,9 @@ describe('nova_plugin domain graph', () => {
                         if (relative.startsWith('..') || parts.length === 1 || exempt) {
                             continue; // outside nova_plugin, the root itself,
                             // or a declared exception
+                        }
+                        if (parts[0] === ownDomain || ownDomain === '') {
+                            continue; // the spec's own domain, or a root file
                         }
                         checked++;
                         expect(parts)

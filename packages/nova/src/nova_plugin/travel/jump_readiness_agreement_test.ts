@@ -175,7 +175,7 @@ describe('jump readiness: gate / beep / readout agreement', () => {
             ship.components.set(JumpRouteComponent, { route: [destinationId] });
 
             const { DisabledComponent } =
-                await import('../ship/disabled_component.js');
+                await import('../ship/index.js');
             ship.components.set(DisabledComponent, { repairAt: null });
             applyControlEvents(world, undefined,
                 [{ action: 'hyperjump', state: 'start' }]);

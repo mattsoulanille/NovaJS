@@ -527,7 +527,7 @@ describe('ship disabling in a live world', () => {
     it('disable-only weapons floor armor above zero; a normal weapon ' +
         'finishes the job', async () => {
             const { DamagedEvent, DISABLE_ONLY_ARMOR_FLOOR, ExplodingComponent } =
-                await import('../ship/death_plugin.js');
+                await import('../ship/index.js');
             const ionBarrage = {
                 shield: 100_000, armor: 100_000, ionization: 0,
                 ionizationColor: 0xffffff, passThroughShield: 0,
@@ -589,9 +589,9 @@ describe('ship disabling in a live world', () => {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             'worker', { npcs: false });
-        const { makeNpcShip } = await import('../spawn/npc_spawn_plugin.js');
-        const { NpcComponent } = await import('../npc/npc_ai_plugin.js');
-        const { TargetComponent } = await import('../ship/target_component.js');
+        const { makeNpcShip } = await import('../spawn/index.js');
+        const { NpcComponent } = await import('../npc/index.js');
+        const { TargetComponent } = await import('../ship/index.js');
         const { Position } = await import('nova_ecs/datatypes/position');
         const { Angle } = await import('nova_ecs/datatypes/angle');
 
@@ -633,7 +633,7 @@ describe('ship disabling in a live world', () => {
         // already-launched missile would destroy the prey and turn
         // this into a death test instead of a disable test.
         const { ProjectileDataComponent } =
-            await import('../core/projectile_data.js');
+            await import('../core/index.js');
         for (const [uuid, entity] of [...world.entities]) {
             if (entity.components.has(ProjectileDataComponent)) {
                 world.entities.delete(uuid);
