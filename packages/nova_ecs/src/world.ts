@@ -12,6 +12,7 @@ import { Plugin } from './plugin.js';
 import { ProvidePlugin } from "./provide.js";
 import { Query } from "./query.js";
 import { QueryCache } from "./query_cache.js";
+import { unwrapReadOnly } from "./read_only.js";
 import { Resource, UnknownResource } from "./resource.js";
 import { ResourceMapWrapped } from "./resource_map.js";
 import { Marker, Phase, Sortable, System, SystemSet } from "./system.js";
@@ -624,6 +625,9 @@ export class World {
         entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgData<T>> {
+        // ReadOnly wrappers are annotations for the ambiguity report;
+        // resolve the arg they wrap.
+        arg = unwrapReadOnly(arg);
         if (arg instanceof Resource) {
             if (this.state.resources.has(arg)) {
                 return right(this.state.resources.get(arg) as ArgData<T>);

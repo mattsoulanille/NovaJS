@@ -5,6 +5,7 @@ import { EntityMap } from "./entity_map.js";
 import { EcsEvent, EventData } from "./events.js";
 import { ArgModifier, ArgModifierResult } from "./arg_modifier.js";
 import { Query } from "./query.js";
+import { ReadOnlyArg } from "./read_only.js";
 import { Resource, ResourceData } from "./resource.js";
 import { World } from "./world.js";
 
@@ -44,7 +45,8 @@ export type ArgTypes = Component<any>
     | typeof UUID
     | typeof GetEntity
     | typeof GetArg
-    | ArgModifier<readonly ArgTypes[], any>;
+    | ArgModifier<readonly ArgTypes[], any>
+    | ReadOnlyArg<ArgTypes>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
 
