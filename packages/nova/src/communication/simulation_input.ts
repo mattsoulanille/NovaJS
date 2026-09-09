@@ -403,12 +403,27 @@ function applySimulationInput(world: World, input: SimulationInput,
     peerId: string | undefined) {
     switch (input.kind) {
         case 'control': {
-            applyControlEvents(world, peerId, input.events);
-            const subject = world.resources.get(ControlsSubject);
-            if (subject) {
-                for (const event of input.events) {
-                    subject.next(event);
+            // The same predicate the wire codec enforces on a relayed
+            // record (SimulationInputType's control branch). The
+            // authoring host's own records never cross that codec — it
+            // schedules them straight into its timeline — so without
+            // this check an invalid control (the e2e script's
+            // state:'stop') applied locally while the relay refused the
+            // published record: a self-inflicted desync. Refusing here
+            // too is a pure function of the payload, so every world
+            // drops (or applies) the same control at the same tick.
+            if (!isLeft(t.array(ControlEventType).decode(input.events))) {
+                applyControlEvents(world, peerId, input.events);
+                const subject = world.resources.get(ControlsSubject);
+                if (subject) {
+                    for (const event of input.events) {
+                        subject.next(event);
+                    }
                 }
+            } else {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping control input from ${peerId ?? 'local'}: `
+                    + 'events fail the wire codec');
             }
             break;
         }

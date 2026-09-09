@@ -10,8 +10,11 @@ import { World } from 'nova_ecs/world';
 import { Component } from 'nova_ecs/component';
 import {
     ActiveMissionType, MissionsComponent, ControlledByComponent, ControlledByType,
+    ShipControlStateComponent,
 } from '../nova_plugin/player/index.js';
-import { applyInputRecords, InputRecordType, SimulationInput, SimulationInputType } from './simulation_input.js';
+import {
+    applyInputRecords, InputRecordType, SimulationInput, SimulationInputType,
+} from './simulation_input.js';
 
 /**
  * ============================================================================
@@ -246,6 +249,40 @@ describe('malformed inputs', () => {
             /Dropping (\S+)/.exec(String(line))?.[1]));
         expect(kinds).toEqual(new Set(['control', 'removeEntity', 'removePeer']));
     });
+
+    it('a control event the wire would refuse is dropped deterministically, '
+        + 'not applied', () => {
+            // The avro-wire e2e desync: an authoring client sent
+            // state:'stop' (not false|'start'|'repeat'), applied it to its
+            // own timeline, and had the record refused by the wire codec —
+            // a self-inflicted desync the relay convicted. The apply path
+            // runs the same predicate the wire does, as a pure function of
+            // the payload, so a control input that survives anywhere
+            // survives identically everywhere (and the authoring host
+            // refuses its own before scheduling — simulation_bridge_host).
+            const { world } = makeWorld();
+            apply(world, 'a', [{
+                kind: 'control',
+                events: [
+                    { action: 'accelerate', state: 'stop' } as never,
+                    { action: 'firePrimary', state: 'start' },
+                ],
+            }]);
+            const own = world.entities.get('own')!;
+            const state = own.components.get(ShipControlStateComponent);
+            expect(state?.get('accelerate')).toBeUndefined();
+            expect(state?.get('firePrimary')).toBeUndefined();
+        });
+
+    it('a control input whose events are not an array is dropped, '
+        + 'not thrown on', () => {
+            const { world } = makeWorld();
+            expect(() => apply(world, 'a', [
+                { kind: 'control', events: 'start' } as unknown as SimulationInput,
+            ])).not.toThrow();
+            expect(world.entities.get('own')!.components
+                .get(ShipControlStateComponent)).toBeUndefined();
+        });
 
     it('the input codec rejects every shape the relay used to forward', () => {
         for (const input of [
