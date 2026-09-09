@@ -19,7 +19,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { loadShipGameData } from './entity_data_loader.js';
+import { loadShipGameData, primeWeaponEntries } from './entity_data_loader.js';
 import { deriveEntityComponents } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
@@ -33,7 +33,6 @@ import { GOAL_RESCUE } from '../player/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { FormationComponent, NpcComponent, formationSlotPosition } from '../npc/index.js';
-import { WeaponEntries } from '../combat/index.js';
 import { PersComponent } from './pers_plugin.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import { Stat } from '../core/index.js';
@@ -321,10 +320,10 @@ async function stageShip(world: World, shipId: string, govt: string | null) {
     }
     const weaponIds = await loadWithRetries(
         () => loadShipGameData(gameData, shipId), `NPC ship ${shipId}`);
-    const weaponEntries = world.resources.get(WeaponEntries);
-    if (weaponEntries) {
-        await Promise.all([...weaponIds].map(id => weaponEntries.get(id)));
-    }
+    // Same prime-and-record as every other staging path: these ids are
+    // staged, so the dev warning on a bare WeaponEntries.get (#279)
+    // must stay silent for them.
+    await primeWeaponEntries(world, weaponIds);
     if (govt) {
         await loadWithRetries(() => gameData.data.Govt.get(govt),
             `NPC govt ${govt}`);

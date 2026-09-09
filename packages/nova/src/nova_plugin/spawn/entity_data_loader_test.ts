@@ -294,4 +294,35 @@ describe('entity data loader', () => {
             .withContext('the fighter is hittable on its first tick')
             .toBeTrue();
     }, 120_000);
+
+    it('a bare WeaponEntries.get on an unstaged weapon warns in dev builds; '
+        + 'a staged one stays silent (#279)', async () => {
+        // The unstaged-closure pattern the combat specs used to slip
+        // into: building an entry straight from WeaponEntries.get works
+        // only while the shared game-data cache happens to be warm, so
+        // the sim-side contract is stage-then-getCached. Dev builds now
+        // say so when an entry is built unstaged.
+        const gameData = makeSyntheticGameData();
+        const bay = SYNTHETIC.weapons.skiffBay;
+
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'node', { npcs: false });
+        const warn = spyOn(console, 'warn');
+        await world.resources.get(WeaponEntries)!.get(bay);
+        const warned = warn.calls.allArgs().map(args => args.join(' ')).join('\n');
+        expect(warned).withContext('the bare get warns').toContain(bay);
+
+        // Staging the closure first is the contract, and is silent —
+        // on a FRESH world, since the staged set is per-world.
+        warn.calls.reset();
+        const staged = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'node', { npcs: false });
+        await loadWeaponsGameData(staged, [bay]);
+        expect(staged.resources.get(WeaponEntries)!.getCached(bay))
+            .withContext('staged, so synchronously fireable').toBeDefined();
+        const warnedAfter = warn.calls.allArgs()
+            .map(args => args.join(' ')).join('\n');
+        expect(warnedAfter).withContext('staging warns nothing')
+            .not.toContain(bay);
+    }, 120_000);
 });
