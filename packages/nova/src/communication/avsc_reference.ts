@@ -396,6 +396,11 @@ class PlanCompiler {
     private componentUnion(schema: AvroSchemaNode): Plan {
         const components = schema.components ?? {};
         const extra = schema.extra!;
+        // A wire snapshot's list is a 3-tuple whose trailing tag the
+        // binary codec drops and restores (avro_binary componentUnion);
+        // this reference codec mirrors that exactly, so the specs'
+        // byte-for-byte cross-check holds.
+        const arity = schema.tupleArity ?? 2;
         const byComponent = new Map<string, { branch: string, plan: Plan }>();
         const byBranch = new Map<string, { component: string, plan: Plan }>();
         for (const branch of schema.type as AvroSchema[]) {
@@ -422,10 +427,19 @@ class PlanCompiler {
                 const branch = Object.keys(value as object)[0]!;
                 const record = (value as Record<string, Record<string, unknown>>)[branch]!;
                 if (branch === extra) {
-                    return [record['name'], OPAQUE.decode(record['data'])];
+                    const pair: unknown[] = [record['name'], OPAQUE.decode(record['data'])];
+                    if (arity === 3) {
+                        pair.push('serializer');
+                    }
+                    return pair;
                 }
                 const entry = byBranch.get(branch)!;
-                return [entry.component, (entry.plan.decode(record) as { data: unknown }).data];
+                const pair: unknown[] = [entry.component,
+                    (entry.plan.decode(record) as { data: unknown }).data];
+                if (arity === 3) {
+                    pair.push('serializer');
+                }
+                return pair;
             },
         };
     }

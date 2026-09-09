@@ -4,6 +4,7 @@ import { formatIoTsErrors } from "nova_ecs/plugins/serializer_plugin";
 import { WireWorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { warnThrottled } from "../common/log_throttle.js";
 import { InputRecord, InputRecordType, WireTick } from "./simulation_input.js";
+import { WireComponentTupleType } from "./wire_component_list.js";
 
 export { InputRecord } from "./simulation_input.js";
 
@@ -262,11 +263,15 @@ export type RollbackProtocolMessage =
  * deep decode of a megabyte baseline on every join would cost more
  * than it protects; both messages are server-trusted or gated by the
  * relay anyway (see simulation_bridge.ts and rollback_relay.ts).
+ *
+ * The component lists are the SHARED WireComponentListType (nova
+ * wire_component_list.ts) by identity, so the socket schema's
+ * derivation (wire_schemas.ts, with the world-independent registry)
+ * recognises them and types each component's data; the io-ts runtime
+ * codec here stays structural, exactly as before.
  */
 
-const WireComponentType = t.tuple([
-    t.string, t.unknown, t.union([t.literal('serializer'), t.literal('wire')]),
-]);
+const WireComponentType = WireComponentTupleType;
 
 const WireEntityType = t.intersection([
     t.type({

@@ -343,7 +343,13 @@ describe('io-ts to Avro derivation', () => {
         it('the live wire schema types the envelopes end to end', () => {
             // What is left opaque is exactly the rollback protocol's
             // own t.unknown nodes, plus the component lists (the socket
-            // has no serializer; see wireMessageDerivation).
+            // has no serializer; see wireMessageDerivation). The
+            // world-independent registry exists now
+            // (wire_snapshot_components.ts) and types a whole wire
+            // snapshot standalone; switching THIS schema over to it is
+            // the open decision recorded in the issue (the JSON-safe
+            // capture form's `{$undefined}` sentinel vs an absent
+            // optional key).
             const { failures } = wireMessageDerivation();
             expect(summarize(failures)).toEqual([
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',

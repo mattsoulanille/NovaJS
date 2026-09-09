@@ -1,4 +1,5 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
+import * as t from 'io-ts';
 import { AsyncSystemResource } from '../async_system.js';
 import { Component, UnknownComponent } from '../component.js';
 import { Entity } from '../entity.js';
@@ -527,6 +528,35 @@ export interface WireWorldSnapshot {
     singleton: WireComponent[];
     resources: unknown[];
 }
+
+/**
+ * The io-ts codec of a wire snapshot's STRUCTURE: entity/component
+ * tuple shapes, not component contents (which the receiving world's
+ * serializer decodes with its own codecs on restore). The runtime
+ * validation gate for snapshot-bearing messages (nova's
+ * rollback_protocol.ts) and the codec the socket schema's derivation
+ * walks (nova's wire_snapshot_components.ts, which types each
+ * component's data by the world-independent registry). The component
+ * list is nova's shared WireComponentListType (by identity), so the
+ * reflection types its data.
+ */
+export const WireComponentType = t.tuple([
+    t.string, t.unknown, t.union([t.literal('serializer'), t.literal('wire')]),
+]);
+
+export const WireEntityType = t.intersection([
+    t.type({
+        uuid: t.string,
+        components: t.array(WireComponentType),
+    }),
+    t.partial({ name: t.string }),
+]);
+
+export const WireWorldSnapshotType: t.Type<WireWorldSnapshot, unknown> = t.type({
+    entities: t.array(WireEntityType),
+    singleton: t.array(WireComponentType),
+    resources: t.array(t.unknown),
+});
 
 function wireSnapshotComponents(world: World, entity: Entity,
     policies: SnapshotPolicies): WireComponent[] {

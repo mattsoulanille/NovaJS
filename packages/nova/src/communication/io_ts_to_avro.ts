@@ -2,6 +2,7 @@ import * as t from 'io-ts';
 import { PositionType } from 'nova_ecs/datatypes/position';
 import { AngleType, VectorType } from 'nova_ecs/datatypes/vector';
 import { EncodedComponentList, markerType, Serializer, WireShapedType } from 'nova_ecs/plugins/serializer_plugin';
+import { WireComponentListType, WIRE_COMPONENT_TUPLE_ARITY } from './wire_component_list.js';
 
 /**
  * ============================================================================
@@ -97,6 +98,13 @@ export interface AvroSchemaNode {
     components?: Record<string, string>;
     /** `componentUnion`: the branch for components the serializer lacks. */
     extra?: string;
+    /**
+     * `componentUnion` on a WIRE SNAPSHOT's component list: the item
+     * tuple's arity (3 = `[name, data, tag]`, whose tag the binary
+     * write drops and the read restores). Absent = 2, the ECS
+     * component list's `[name, data]`.
+     */
+    tupleArity?: 2 | 3;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +334,10 @@ class Deriver {
         }
         if (codec === EncodedComponentList && this.options.serializer) {
             return this.componentList(this.options.serializer, path, codec);
+        }
+        if (codec === WireComponentListType && this.options.serializer) {
+            return this.componentList(this.options.serializer, path, codec,
+                WIRE_COMPONENT_TUPLE_ARITY);
         }
         return this.deriveByTag(codec, path, nameHint);
     };
@@ -854,8 +866,20 @@ class Deriver {
      * length plus one byte per component over the data itself; a
      * record-with-83-nullable-fields shape was measured to cost ~84
      * bytes per entity in absent markers. List order is preserved.
+     *
+     * `tupleArity` selects the list's item shape: 2 for the ECS
+     * component list (`[name, encoded]`), 3 for a wire snapshot's
+     * (`[name, encoded, tag]`, nova_ecs WireComponentListType) — whose
+     * trailing tag is DROPPED on the binary wire: which of a
+     * component's two codecs captured the data is a property of the
+     * SENDING world's snapshot policies, and the receiving world
+     * decodes through its own (restoreWireComponents), so the tag was
+     * never consulted on the way back in. The io-ts runtime codec keeps
+     * accepting it, so the JSON wire and the persisted forms are
+     * unchanged.
      */
-    private componentList(serializer: Serializer, path: string, codec: t.Any): AvroSchema {
+    private componentList(serializer: Serializer, path: string, codec: t.Any,
+        tupleArity: 2 | 3 = 2): AvroSchema {
         const union: AvroSchemaNode = {
             type: [], logicalType: 'componentUnion', components: {},
         };
@@ -879,6 +903,11 @@ class Deriver {
         // A component the serializer does not know, by name.
         const extra = this.uniqueName('Component_extra');
         union.extra = extra;
+        // The arity annotation rides the UNION node (the array's items),
+        // which is what both compilers hand to componentUnion.
+        if (tupleArity === 3) {
+            union.tupleArity = 3;
+        }
         branches.push({
             type: 'record', name: extra, fields: [
                 { name: 'name', type: 'string' },

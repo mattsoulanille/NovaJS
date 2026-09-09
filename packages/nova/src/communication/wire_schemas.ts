@@ -80,13 +80,29 @@ export function roomMessageDerivation(): Derivation {
  * built before any world exists, so the component lists inside
  * (addEntity records, wire-snapshot baselines) ride opaquely; the
  * serializer that decodes them validates them on the receiving world,
- * as it always did. Typing them needs a world-independent component
- * registry — a later wave.
+ * as it always did.
+ *
+ * The world-independent registry EXISTS now (wire_snapshot_components.ts:
+ * wireSnapshotSchema / wireSnapshotCodec type and encode a whole wire
+ * snapshot with every component's data typed, sentinels dropped on the
+ * binary wire, ~30% smaller on a measured baseline) — but wiring it
+ * into THIS schema is still open: the JSON-safe capture form wraps
+ * undefined as `{$undefined:true}`, and a typed field for `T | undefined`
+ * decodes an absent optional as a MISSING key, which io-ts `t.type`
+ * rejects (TargetComponent{target:undefined} is common — makeNpcShip
+ * stamps it). Switching the live wire over needs either a
+ * present-undefined encoding on the typed path or a tolerant restore,
+ * and is recorded in the issue rather than improvised here.
  */
 export function wireMessageDerivation(): Derivation {
     return deriveAvroSchema(WireMessageType, {
         name: 'WireMessage', hooks: novaCodecHooks(),
     });
+}
+
+/** The synchronous form, for callers that cannot await. */
+function wireMessageDerivationSync(): Derivation {
+    return wireMessageDerivation();
 }
 
 let live: WireCodec | undefined;

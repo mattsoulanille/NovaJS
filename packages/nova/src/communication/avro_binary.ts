@@ -674,6 +674,14 @@ class Compiler {
     private componentUnion(schema: AvroSchemaNode): Codec {
         const components = schema.components ?? {};
         const extra = schema.extra!;
+        // A wire snapshot's component list is a 3-tuple whose trailing
+        // encoding tag the binary wire drops (io_ts_to_avro
+        // componentList): written without it, read back with a
+        // 'serializer' placeholder — the receiving world decodes
+        // through its own snapshot policies and never consults the
+        // tag, and the io-ts runtime codec accepts any of its
+        // literals.
+        const arity = schema.tupleArity ?? 2;
         const byComponent = new Map<string, { index: number, data: Codec }>();
         const byIndex: { component: string, data: Codec }[] = [];
         let extraIndex = -1;
@@ -700,8 +708,9 @@ class Compiler {
         return {
             bucket: 'array',
             write: (value, out) => {
-                if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== 'string') {
-                    throw expected('a [name, data] pair', value);
+                if (!Array.isArray(value) || value.length !== arity
+                    || typeof value[0] !== 'string') {
+                    throw expected(`a [name, data] pair of ${arity}`, value);
                 }
                 const [name, data] = value as [string, unknown];
                 const entry = byComponent.get(name);
@@ -722,13 +731,21 @@ class Compiler {
                 const index = input.readZigZag();
                 if (index === extraIndex) {
                     const name = input.readString();
-                    return [name, OPAQUE.read(input)];
+                    const pair: unknown[] = [name, OPAQUE.read(input)];
+                    if (arity === 3) {
+                        pair.push('serializer');
+                    }
+                    return pair;
                 }
                 const entry = byIndex[index];
                 if (!entry) {
                     throw new RangeError(`avro: component index ${index}`);
                 }
-                return [entry.component, entry.data.read(input)];
+                const pair: unknown[] = [entry.component, entry.data.read(input)];
+                if (arity === 3) {
+                    pair.push('serializer');
+                }
+                return pair;
             },
         };
     }
