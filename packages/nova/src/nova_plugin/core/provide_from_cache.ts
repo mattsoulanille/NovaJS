@@ -1,4 +1,4 @@
-import { ArgsToData, ArgTypes, GetEntity } from "nova_ecs/arg_types";
+import { ArgsToData, ArgTypes, SetComponent } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { StepEvent } from "nova_ecs/events";
 import { Optional } from "nova_ecs/optional";
@@ -33,8 +33,8 @@ export function ProvideFromCache<Data, Args extends readonly ArgTypes[]>(
         name,
         events: [StepEvent, ...updateEvents],
         before, after,
-        args: [Optional(provided), GetEntity, Optional(StepEvent), ...args] as const,
-        step(providedValue, entity, step, ...args) {
+        args: [Optional(provided), SetComponent(provided), Optional(StepEvent), ...args] as const,
+        step(providedValue, setComponent, step, ...args) {
             if (providedValue !== undefined && step) {
                 // Called by a normal step and the component already
                 // exists; nothing to do.
@@ -44,7 +44,7 @@ export function ProvideFromCache<Data, Args extends readonly ArgTypes[]>(
             if (value === undefined) {
                 return;
             }
-            entity.components.set(provided, value);
+            setComponent(provided, value);
         }
     });
 }
