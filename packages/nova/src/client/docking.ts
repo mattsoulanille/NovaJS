@@ -10,7 +10,11 @@
  * venue. A lift-off is the mirror: the venue announces the departure
  * (LeaveSpaceportEvent / LeaveGateMapEvent) with the committed entity,
  * and the next pump frame puts the fleet back through the one insertion
- * sequence (client/fleet_insertion.ts).
+ * sequence (client/fleet_insertion.ts). Both lift-offs also take the
+ * LOST roster (FleetLedger.takeLost): a lost (not destroyed) escort is
+ * retried at a same-system land-and-lift-off too, not only at the next
+ * system entry (issue #257, extending ruling #148) — un-restocked, since
+ * it never touched the pad.
  *
  * The two phases are the `landing` -> `landed` (-> `landed{launching}`
  * -> `inSpace`) and `gateLanding` -> `gateMap` (-> `gateMap{launching}`
@@ -213,13 +217,32 @@ export async function runDockingFrame(runtime: ClientRuntime,
         // re-attached in the simulation instead (EscortReattachSystem).
         const returningEscorts =
             await fleet.takeLandedEscortsRestocked(docked.uuid, gameData);
+        // THE LOST-ESCORT RETRY AT A LIFT-OFF (issue #257, extending
+        // ruling #148): escorts lost without dying — an insertion that
+        // never took, a correction, a desync — are retried at the next
+        // system entry (jumpTo's takeLost); a land-and-lift-off in the
+        // same system is the same "the fleet goes back into the world",
+        // so the launch takes the lost roster too. They ride the ordinary
+        // insertion (fresh uuid, formation station, command reset) but
+        // are NOT restocked: the restock above is for escorts that put
+        // down at the port, and these never did. Kept as their own array
+        // so a failed PLAYER insertion hands each half back to the roster
+        // it came from — a lost escort returned to `landed` would be
+        // restocked by the retry.
+        const lostEscorts = fleet.takeLost(docked.uuid,
+            returningEscorts.map(escort => escort.uuid));
+        if (lostEscorts.length > 0) {
+            console.info(`Respawning ${lostEscorts.length} escort(s) that `
+                + 'were lost without being destroyed.');
+        }
         try {
             // One slot run across all three batches inserted by this
             // launch: the display world does not see any of them until a
             // later frame, so each batch must be told where to start.
             const launchBaseSlot = fleet.nextClientSlot(world, docked.uuid);
             const missionBaseSlot = launchBaseSlot
-                + returningEscorts.length + pendingEscorts.length;
+                + returningEscorts.length + pendingEscorts.length
+                + lostEscorts.length;
             // Mission ships spawn alongside the relaunch; prepared before
             // the player entity is encoded, inserted after it.
             const missionShips = await prepareMissionShips(gameData,
@@ -228,26 +251,43 @@ export async function runDockingFrame(runtime: ClientRuntime,
             // THE ONE INSERTION SEQUENCE (client/fleet_insertion.ts):
             // player (stamped with the multiplayer identity — a ship
             // bought at the shipyard is a fresh entity), returning
-            // escorts, hires, mission ships.
+            // escorts, hires, mission ships. The lost retry rides at the
+            // back of the carried batch.
             const inserted = await insertPlayerAndFleet({
                 bridge, playerUuid: docked.uuid, player: launching,
-                escorts: returningEscorts, hires: pendingEscorts, missionShips,
+                escorts: [...returningEscorts, ...lostEscorts],
+                hires: pendingEscorts, missionShips,
                 ownerUuid: communicator.uuid ?? undefined,
                 baseSlot: launchBaseSlot, mintUuid: v4,
                 getShip: id => gameData.data.Ship.get(id),
             });
-            // An escort whose own insertion rejected goes back on the
-            // roster; the in-flight flush retries it.
-            fleet.landed.push(...inserted.failed);
+            // An escort whose own insertion rejected goes back on a
+            // roster; the standing flush retries it. WHICH roster keeps
+            // the restock rule straight (issue #257): a lost-origin
+            // escort never touched a pad, so it goes to the JUMP roster,
+            // whose flush re-inserts un-restocked — the same routing the
+            // system-entry retry uses (system_entry.ts puts its own
+            // failed batch on `jumping` too). Landed-origin failures
+            // stay on the landed roster as before. Matched by ENTITY
+            // identity: a failed row is re-keyed to the uuid it was
+            // about to be inserted under (fleet_insertion.ts), so the
+            // roster uuid it came from is no longer on it.
+            const lostEntities = new Set(lostEscorts.map(row => row.entity));
+            fleet.jumping.push(...inserted.failed.filter(
+                row => lostEntities.has(row.entity)));
+            fleet.landed.push(...inserted.failed.filter(
+                row => !lostEntities.has(row.entity)));
         } catch (e) {
             // The player's own insertion rejected: nothing went in.
             // Everything goes back where it was — the escorts to the
-            // landed roster, the hires onto the docked entity — and the
-            // block runs again next frame with the state still `landed`
-            // and `launching` (issue #31). Before this, the re-run found
-            // an empty roster and a popped hire list: the fleet was gone
-            // from the session and from the next save.
+            // landed roster, the lost retry to the lost roster (so the
+            // retry stays un-restocked), the hires onto the docked
+            // entity — and the block runs again next frame with the state
+            // still `landed` and `launching` (issue #31). Before this, the
+            // re-run found an empty roster and a popped hire list: the
+            // fleet was gone from the session and from the next save.
             fleet.landed.push(...returningEscorts);
+            fleet.lost.push(...lostEscorts);
             if (pendingEscorts.length > 0) {
                 launching.components.set(PendingEscortsComponent,
                     pendingEscorts);
@@ -284,26 +324,50 @@ export async function runDockingFrame(runtime: ClientRuntime,
         // dock would be stranded out of the world.
         const gateEscorts =
             await fleet.takeLandedEscortsRestocked(docked.uuid, gameData);
+        // THE LOST-ESCORT RETRY AT A LIFT-OFF (issue #257): the same take
+        // the spaceport launch makes — a gate lift-off puts the fleet back
+        // into the world it docked from, which is the same-system
+        // land-and-lift-off the ruling names. Un-restocked, like there.
+        const gateLost = fleet.takeLost(docked.uuid,
+            gateEscorts.map(escort => escort.uuid));
+        if (gateLost.length > 0) {
+            console.info(`Respawning ${gateLost.length} escort(s) that `
+                + 'were lost without being destroyed.');
+        }
         try {
             const gateBaseSlot = fleet.nextClientSlot(world, docked.uuid);
             // Mission ships despawned while gate-docked; respawn them with
             // the lift-off (same shape as the spaceport launch above).
             const gateMissionShips = await prepareMissionShips(gameData,
                 launching, docked.uuid, live.systemId,
-                gateBaseSlot + gateEscorts.length, world);
-            fleet.noteSlotsUsed(docked.uuid, gateBaseSlot + gateEscorts.length);
-            // The same insertion sequence as the spaceport launch.
+                gateBaseSlot + gateEscorts.length + gateLost.length, world);
+            fleet.noteSlotsUsed(docked.uuid,
+                gateBaseSlot + gateEscorts.length + gateLost.length);
+            // The same insertion sequence as the spaceport launch, with
+            // the lost retry riding at the back of the carried batch.
             const inserted = await insertPlayerAndFleet({
                 bridge, playerUuid: docked.uuid, player: launching,
-                escorts: gateEscorts, missionShips: gateMissionShips,
+                escorts: [...gateEscorts, ...gateLost],
+                missionShips: gateMissionShips,
                 ownerUuid: communicator.uuid ?? undefined,
                 baseSlot: gateBaseSlot, mintUuid: v4,
                 getShip: id => gameData.data.Ship.get(id),
             });
-            fleet.landed.push(...inserted.failed);
+            // Failed insertions by origin, as at the spaceport launch
+            // above: lost-origin escorts to the jump roster (un-restocked
+            // flush), landed-origin ones to the landed roster. Matched by
+            // ENTITY identity — a failed row is re-keyed to the uuid it
+            // was about to be inserted under (fleet_insertion.ts).
+            const gateLostEntities = new Set(gateLost.map(row => row.entity));
+            fleet.jumping.push(...inserted.failed.filter(
+                row => gateLostEntities.has(row.entity)));
+            fleet.landed.push(...inserted.failed.filter(
+                row => !gateLostEntities.has(row.entity)));
         } catch (e) {
-            // Same failure policy as the spaceport launch above.
+            // Same failure policy as the spaceport launch above: each half
+            // back to the roster it came from.
             fleet.landed.push(...gateEscorts);
+            fleet.lost.push(...gateLost);
             throw e;
         }
         if (launching.components.has(PlayerShipSelector)) {

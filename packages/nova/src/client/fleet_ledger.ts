@@ -233,10 +233,11 @@ export class FleetLedger {
 
     /**
      * Takes the lost roster for `player` — the retry, at a system entry
-     * — dropping other peers' entries (this client never respawns them),
-     * and any entry the caller's batch already carries under the same
-     * uuid (an escort carried by a jump AND recorded lost by a correction
-     * in between must not be doubled).
+     * (system_entry.ts's jumpTo) or at a same-system lift-off (docking.ts,
+     * issue #257) — dropping other peers' entries (this client never
+     * respawns them), and any entry the caller's batch already carries
+     * under the same uuid (an escort carried by a jump AND recorded lost
+     * by a correction in between must not be doubled).
      */
     takeLost(player: string, carried: Iterable<string> = []): CarriedEscort[] {
         const already = new Set(carried);
