@@ -80,7 +80,11 @@ export class Marker implements Sortable {
  * A System has several arguments, Only `name`, `args`, and `step` are required:
  * @param name the globally unique name of the system.
  * @param args a list of arg types to construct the System's Query. See query.ts
- *             for more details
+ *             for more details. Wrap an arg the step only reads in
+ *             `ReadOnly(arg)` (read_only.ts): the ambiguity report
+ *             (ambiguities.ts) then treats a value another system also
+ *             merely reads as unshared, instead of an ambiguity that
+ *             needs a `before` / `after` edge.
  * @param step the function where the system's behavior is implemented.
  * @param before a list of other systems that this system runs before.
  * @param after a list of other systems that this system runs after.
