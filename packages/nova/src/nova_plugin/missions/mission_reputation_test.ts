@@ -4,11 +4,13 @@ import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_da
 import {
     abortMission,
     acceptOffer,
+    failMission,
     makeMissionOffer,
     MissionContext,
     MissionMachineryContext,
     missionMatchesLocation,
     MissionWorkingState,
+    startMissionById,
     LOCATION_MISSION_COMPUTER,
     processLanding,
     stellarRecord,
@@ -101,6 +103,12 @@ function makeMachinery(state: MissionWorkingState,
             records: state.records,
             ...ctxPartial,
         }),
+        // Injected exactly as MissionSession injects them (#266).
+        missionOperators: {
+            startMission: startMissionById,
+            abortMission,
+            failMission,
+        },
         random: () => 0.5,
         allGovts: () => [...govts],
     };
