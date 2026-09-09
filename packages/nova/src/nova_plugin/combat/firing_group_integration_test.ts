@@ -10,7 +10,9 @@ import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity, loadShipGameData } from '../spawn/entity_data_loader.js';
+import {
+    completeEntity, loadShipGameData, loadWeaponsGameData,
+} from '../spawn/entity_data_loader.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
 import { FiringGroupComponent } from '../ship/firing_group.js';
 import { makeShip } from '../ship/make_ship.js';
@@ -101,7 +103,14 @@ describe('firing group friendly fire against parsed game data', () => {
         + 'an outsider\'s hits', async () => {
         const { gameData, world } = await makeBattlefield();
         const gunId = await findGun(gameData);
-        const gun = await world.resources.get(WeaponEntries)!.get(gunId);
+        // No staged entity carries the gun, so stage it the way the
+        // loader stages a ship's own weapons: closure plus this world's
+        // entries. A bare WeaponEntries.get builds the entry from the
+        // wëap alone — the unstaged-closure pattern #279 warns about,
+        // which passes or fails with the shared cache's warmth.
+        await loadWeaponsGameData(world, [gunId]);
+        // Staged above; the cache read is the contract.
+        const gun = world.resources.get(WeaponEntries)!.getCached(gunId);
         expect(gun).toBeDefined();
 
         // Far from the system's planets so nothing else intersects the

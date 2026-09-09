@@ -7,7 +7,7 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity, loadWeaponsGameData } from '../spawn/entity_data_loader.js';
 import { FireSubs, WeaponEntries } from './fire_weapon_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
@@ -56,9 +56,12 @@ describe('submunition firing sound (real Nova data)', () => {
 
         // Warm the weapon caches: fireSubs and the FireSubs resource both
         // go through getCached and silently do nothing on a cold entry.
-        const weaponEntries = world.resources.get(WeaponEntries)!;
-        await weaponEntries.get(MULTI_TORP);
-        await weaponEntries.get(TORP);
+        // Staged, not bare-got: the closure (the sub weapons' shot
+        // sprites) must be in the cache too, not just the entries — a
+        // bare WeaponEntries.get builds the entry from the wëap alone,
+        // the unstaged-closure pattern #279 warns about, which passes or
+        // fails with the shared cache's warmth.
+        await loadWeaponsGameData(world, [MULTI_TORP, TORP]);
     });
 
     async function addShip(uuid: string) {

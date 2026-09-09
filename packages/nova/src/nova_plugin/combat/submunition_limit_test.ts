@@ -10,7 +10,9 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import {
+    completeEntity, loadWeaponsGameData,
+} from '../spawn/entity_data_loader.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
@@ -87,10 +89,13 @@ async function makeTestWorld(weapons: ProjectileWeaponData[]) {
     world.entities.set(SHIP_UUID, ship);
     await stepWorld(world, 2);
 
+    // Staged, not bare-got: the closure (the sub weapons' shot sprites)
+    // must be in the cache too, not just the entries — a bare
+    // WeaponEntries.get builds the entry from the wëap alone, the
+    // unstaged-closure pattern #279 warns about, which passes or fails
+    // with the shared cache's warmth.
+    await loadWeaponsGameData(world, weapons.map(data => data.id));
     const entries = world.resources.get(WeaponEntries)!;
-    for (const data of weapons) {
-        await entries.get(data.id);
-    }
     return { world, entries };
 }
 
