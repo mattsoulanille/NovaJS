@@ -52,7 +52,8 @@ export const FoldStateProvider = new System({
             entity.components.set(FoldStateComponent, { progress: 0 });
         }
     },
-    // #237 pin (shared: entity): FoldPlugin registers after WeaponPlugin.
+    // #237 pin (shared: ActiveSecondaryWeapon, ControlledBy): FoldPlugin
+    // registers after WeaponPlugin.
     after: [ActiveSecondaryProvider],
 });
 

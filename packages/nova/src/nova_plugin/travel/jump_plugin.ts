@@ -570,8 +570,8 @@ const PlayerJumpControl = new System({
         beginJump(entity, systemId, destination, jumpRoute, shipPhysics,
             gameData, autoJumpsLeft);
     },
-    // #237 pin (shared: entity): JumpPlugin registers this before its
-    // route provider.
+    // #237 pin (shared: ControlledBy, JumpRouteComponent): JumpPlugin
+    // registers this before its route provider.
     before: [JumpRouteProvider],
 });
 

@@ -299,7 +299,8 @@ const PointDefenseQuery = new Query([MovementStateComponent, Optional(OwnerCompo
  */
 export const ShipPointDefenseVulnerabilitySystem = new System({
     name: 'ShipPointDefenseVulnerability',
-    // WeaponsComponentProvider is a #237 pin (shared: entity).
+    // WeaponsComponentProvider is a #237 pin (shared: WeaponsComponent,
+    // WeaponsStateComponent).
     after: [ShipDataProvider, WeaponsComponentProvider],
     args: [ShipDataComponent, GetEntity] as const,
     step(shipData, entity) {

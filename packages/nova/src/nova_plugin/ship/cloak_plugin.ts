@@ -203,7 +203,7 @@ const CloakScannerProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloakScanner,
-    // #237 pin (shared: entity, SimulationGameData).
+    // #237 pin (shared: OutfitsStateComponent, SimulationGameData).
     after: [CloakProvider],
 });
 

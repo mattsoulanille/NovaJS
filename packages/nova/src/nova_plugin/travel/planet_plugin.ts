@@ -71,7 +71,9 @@ const PlanetTargetProvider = Provide({
     provided: PlanetTargetComponent,
     args: [ShipComponent] as const,
     factory: () => ({ target: undefined }),
-    // #237 pin (shared: entity): PlanetPlugin registers after core's
+    // #237 pin: the pair no longer shares state (the providers declare
+    // their writes with SetComponent now), but the edge carries the
+    // providers' transitive order — PlanetPlugin registers after core's
     // AnimationPlugin.
     after: [ExplosionAnimationProvider],
 });
@@ -444,9 +446,12 @@ const PlanetAnimationProvider = Provide({
     update: [PlanetDataComponent],
     args: [PlanetDataComponent],
     factory: planetData => planetData.animation,
-    // #237 pins (shared: entity): between the planet target and data
-    // providers; PlanetDataProvider is in turn pinned before ship's
-    // ExplodingFinishedSystem (shared: ShipExplodingComponent).
+    // #237 pins: between the planet target and data providers (both
+    // neighbouring pairs no longer share state — the providers declare
+    // their writes with SetComponent now — but the edges carry the
+    // providers' transitive order); PlanetDataProvider is in turn pinned
+    // before ship's ExplodingFinishedSystem (shared:
+    // ShipExplodingComponent).
     after: [PlanetTargetProvider],
     before: [PlanetDataProvider],
 });

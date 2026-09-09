@@ -135,7 +135,8 @@ export const ShipDisableSystem = new System({
             entity.components.delete(DisabledComponent);
         }
     },
-    // RepairProvider is a #237 pin (shared: entity).
+    // RepairProvider is a #237 pin (shared: RepairComponent,
+    // OutfitsStateComponent).
     after: [TimeSystem, RepairProvider],
 });
 

@@ -32,8 +32,8 @@ export const TargetIndexProvider = Provide({
     provided: TargetIndexComponent,
     args: [] as const,
     factory: () => ({ index: -1 }),
-    // #237 pin (shared: entity): TargetPlugin registers after
-    // AggressionPlugin.
+    // #237 pin (shared: TargetIndexComponent): TargetPlugin registers
+    // after AggressionPlugin.
     after: [AggressionSweepSystem],
 });
 
