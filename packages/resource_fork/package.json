@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ../nova/scripts/clean_stale_dist.mjs && tsc",
     "clean": "rimraf dist",
     "test": "jasmine --config=jasmine.json"
   },

@@ -14,16 +14,30 @@ import { fileURLToPath } from 'url';
  * an existing checkout keeps the old flat dist/src/nova_plugin/<mod>.js
  * beside dist/src/nova_plugin/<domain>/<mod>.js, and jasmine's
  * `dist/**`/*_test.js` glob then loads and runs both copies (duplicate
- * specs; modules with load-time registration register twice).
+ * specs; modules with load-time registration register twice). Case-only
+ * renames are the same trap on case-sensitive filesystems
+ * (Gettable_test.js beside gettable_test.js).
  *
- * The specs run the real script as a subprocess against a synthetic
- * tree in a temp directory, laid out the way the package is: the dist
- * directory's parent is tsc's rootDir, so `dist/<rel>.js` must have a
- * `<rel>.ts` source beside it.
+ * The specs run the real script as a subprocess against a synthetic tree
+ * in a temp directory, laid out the way the packages are: the dist
+ * directory's parent is the package root, and a compiled file's source is
+ * the package-root-relative path with dist/ and the compilation suffix
+ * stripped — either as-is (nova, novaparse: dist mirrors the root) or
+ * under src/ (nova_ecs, novadatainterface, resource_fork: dist mirrors
+ * src/).
  */
 
 const SCRIPT = fileURLToPath(
     new URL('../../../scripts/clean_stale_dist.mjs', import.meta.url));
+
+/** Whether the filesystem holding `dir` distinguishes letter case. */
+function isCaseSensitive(dir: string): boolean {
+    const probe = path.join(dir, 'cleanstaledistcaseprobe.ts');
+    fs.writeFileSync(probe, 'export {};');
+    const insensitive = fs.existsSync(probe.toUpperCase());
+    fs.unlinkSync(probe);
+    return !insensitive;
+}
 
 /** A dist file that exists and a source tree that does not explain it. */
 function makeTree(root: string, files: Record<string, string>): void {
@@ -63,7 +77,7 @@ describe('clean_stale_dist', () => {
             'src/nova_plugin/reputation.d.ts': 'old flat types',
             'src/nova_plugin/reputation/reputation.js': 'current output',
         });
-        makeTree(path.join(tmp), {
+        makeTree(tmp, {
             'src/nova_plugin/reputation/reputation.ts': 'export const x = 1;',
         });
 
@@ -82,6 +96,8 @@ describe('clean_stale_dist', () => {
     });
 
     it('keeps outputs whose source still exists', () => {
+        // nova's layout: dist mirrors the package root, so dist/server.js
+        // comes from the root server.ts and dist/src/<x>.js from src/<x>.ts.
         makeTree(dist, {
             'server.js': 'server',
             'server.js.map': '{}',
@@ -104,6 +120,58 @@ describe('clean_stale_dist', () => {
             .toBeTrue();
         expect(fs.existsSync(path.join(dist, 'src/util/deimmerify.d.ts')))
             .toBeTrue();
+    });
+
+    it('keeps outputs in packages whose dist mirrors src/ directly', () => {
+        // nova_ecs / novadatainterface / resource_fork layout: no src/ in
+        // dist, the compiled path is the source path under src/.
+        makeTree(dist, {
+            'world.js': 'kept',
+            'gone/gone_test.js': 'stale',
+        });
+        makeTree(tmp, { 'src/world.ts': 'export {};' });
+
+        runCleaner(dist);
+
+        expect(fs.existsSync(path.join(dist, 'world.js'))).toBeTrue();
+        expect(fs.existsSync(path.join(dist, 'gone/gone_test.js'))).toBeFalse();
+    });
+
+    it('keeps outputs compiled from the test tree', () => {
+        // novaparse compiles src/ and test/ into one dist/ that mirrors
+        // the package root.
+        makeTree(dist, {
+            'test/pilot/synthetic_pilot_test.js': 'kept',
+            'test/removed_test.js': 'stale',
+        });
+        makeTree(tmp, { 'test/pilot/synthetic_pilot_test.ts': 'export {};' });
+
+        runCleaner(dist);
+
+        expect(fs.existsSync(
+            path.join(dist, 'test/pilot/synthetic_pilot_test.js'))).toBeTrue();
+        expect(fs.existsSync(path.join(dist, 'test/removed_test.js')))
+            .toBeFalse();
+    });
+
+    it('removes the stale copy of a case-only rename', () => {
+        if (!isCaseSensitive(tmp)) {
+            pending('case-insensitive filesystem: the stale copy IS the source');
+        }
+        // novadatainterface renamed Gettable_test.ts to gettable_test.ts;
+        // on Linux the old output keeps loading beside the new one.
+        makeTree(dist, {
+            'src/gettable_test.js': 'current',
+            'src/Gettable_test.js': 'stale',
+        });
+        makeTree(tmp, { 'src/gettable_test.ts': 'export {};' });
+
+        runCleaner(dist);
+
+        expect(fs.existsSync(path.join(dist, 'src/gettable_test.js')))
+            .toBeTrue();
+        expect(fs.existsSync(path.join(dist, 'src/Gettable_test.js')))
+            .toBeFalse();
     });
 
     it('keeps esbuild bundles and the tsc incremental state', () => {
