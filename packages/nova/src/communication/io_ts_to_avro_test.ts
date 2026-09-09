@@ -7,6 +7,7 @@ import { EncodedEntity, markerType, SerializerResource } from 'nova_ecs/plugins/
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { openEnum } from '../common/open_enum.js';
+import { ActiveMissionType } from '../nova_plugin/player/index.js';
 import { makeDeterminismWorld } from './determinism_harness.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { AvroSchema, AvroSchemaNode, DerivationFailure, DerivationOptions, deriveAvroSchema } from './io_ts_to_avro.js';
@@ -341,18 +342,18 @@ describe('io-ts to Avro derivation', () => {
         });
 
         it('the live wire schema types the envelopes end to end', () => {
-            // What is left opaque is exactly the rollback protocol's
-            // own t.unknown nodes, plus the component lists (the socket
-            // has no serializer; see wireMessageDerivation).
+            // What is left opaque is exactly the component lists (the
+            // socket has no serializer; see wireMessageDerivation) —
+            // #269 typed the acceptMission record's mission payloads,
+            // which used to be three of these. The ships' entities and
+            // addEntity's share EncodedEntity, so the one untyped node
+            // is reported at its first site.
             const { failures } = wireMessageDerivation();
             expect(summarize(failures)).toEqual([
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.resources[]',
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.singleton[][1]',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.mission',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.missionsStarted[][1]',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<addEntity>.entity.components[][1]',
+                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity.components[][1]',
             ]);
             expect(liveWireCodec().encoding).toBe('avro');
             expect(liveWireFingerprint()).toMatch(/^[0-9a-f]{16}$/);
@@ -398,14 +399,17 @@ describe('io-ts to Avro derivation', () => {
                 'untyped $.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',
                 'untyped $.rollback<catchUp>.baseline.snapshot.resources[]',
                 'untyped $.rollback<catchUp>.baseline.snapshot.singleton[][1]',
+                // addEntity's component data, without a serializer. The
+                // mission ships' entities share the same EncodedEntity
+                // codec, so this one node stands for both (the deriver
+                // reports an anonymous list schema at its first site).
+                'untyped $.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity.components[][1]',
                 // The mission the client resolved (ActiveMission) and
-                // the special ships it spawns, both deliberately untyped
-                // at the input layer (mission_accept.ts).
-                'untyped $.rollback<inputs>.record.inputs[]<acceptMission>.accepted.mission',
-                'untyped $.rollback<inputs>.record.inputs[]<acceptMission>.accepted.missionsStarted[][1]',
-                'untyped $.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity',
-                // addEntity's component data, without a serializer.
-                'untyped $.rollback<inputs>.record.inputs[]<addEntity>.entity.components[][1]',
+                // the special ships it spawns USED to be untyped here
+                // too; #269 typed them (EncodedActiveMissionType, the
+                // encoded form the record carries; AcceptedMissionShip's
+                // EncodedEntity), so only the component DATA inside the
+                // ships' entities stays opaque, like addEntity's.
             ]);
         });
 
@@ -429,7 +433,17 @@ describe('io-ts to Avro derivation', () => {
                                 { kind: 'removePeer', peerId: 'q' },
                                 {
                                     kind: 'acceptMission', accepted: {
-                                        missionId: 'm', mission: { anything: [1, 2] },
+                                        missionId: 'm',
+                                        mission: ActiveMissionType.encode({
+                                            id: 'm', acceptedDay: 0,
+                                            acceptedAt: 'nova:128',
+                                            travelPlanet: null,
+                                            returnPlanet: null,
+                                            cargoType: -1, cargoQty: 0,
+                                            cargoLoaded: false,
+                                            travelDone: false,
+                                            deadlineDay: null,
+                                        }),
                                         autoAborted: true, ships: [{ uuid: 's', entity: { components: [] } }],
                                     },
                                 },

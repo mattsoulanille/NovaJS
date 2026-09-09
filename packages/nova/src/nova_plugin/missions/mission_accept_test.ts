@@ -115,8 +115,11 @@ describe('applyAcceptMission', () => {
 
     it('drops a record whose mission does not decode', () => {
         const { world, player } = makeWorld();
+        // Shape-valid (so the record codec would accept it) but not a
+        // real encoded ActiveMission: applyAcceptMission's own decode
+        // is what rejects it.
         applyAcceptMission(world, PEER,
-            { missionId: MISSION, mission: { nonsense: true } });
+            { missionId: MISSION, mission: { id: MISSION } as never });
         expect(missionsOf(player).size).toEqual(0);
     });
 
