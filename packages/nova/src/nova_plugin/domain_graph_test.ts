@@ -20,8 +20,10 @@ import { DOMAINS } from './domains.js';
  * why with a `// deep import: <reason>` comment on the line above the
  * statement (none today).
  *
- * Specs INSIDE nova_plugin are exempt: a spec may reach into any module
- * of any domain it exercises.
+ * And INSIDE nova_plugin: every spec there reaches another domain only
+ * through its index too. A spec may still import its own domain's
+ * modules directly, and the composition root's files (make_system and
+ * friends) stay importable from anywhere — they are not domain modules.
  */
 describe('nova_plugin domain graph', () => {
     const builtRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -220,6 +222,29 @@ describe('nova_plugin domain graph', () => {
         return out;
     }
 
+    /**
+     * nova_plugin's own specs, plus the composition root's non-spec
+     * modules: importers the per-domain checks above skip.
+     */
+    function pluginSpecsAndRootModules(pluginRoot: string, ext: string):
+        string[] {
+        const out: string[] = [];
+        const walk = (dir: string): void => {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const file = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    walk(file);
+                } else if (entry.name.endsWith(ext)
+                    && (entry.name.endsWith(`_test${ext}`)
+                        || path.dirname(file) === pluginRoot)) {
+                    out.push(file);
+                }
+            }
+        };
+        walk(pluginRoot);
+        return out;
+    }
+
     it('is reached from outside nova_plugin only through the domain indexes',
         () => {
             let checked = 0;
@@ -240,6 +265,29 @@ describe('nova_plugin domain graph', () => {
                 }
             }
             expect(checked).toBeGreaterThan(100);
+        });
+
+    it('is reached from inside nova_plugin only through the domain indexes',
+        () => {
+            let checked = 0;
+            for (const [root, ext] of [[sourceRoot, '.ts'], [builtRoot, '.js']] as const) {
+                for (const file of pluginSpecsAndRootModules(root, ext)) {
+                    for (const { specifier, exempt } of specifiersOf(file)) {
+                        const relative = path.relative(
+                            root, path.resolve(path.dirname(file), specifier));
+                        const parts = relative.split(path.sep);
+                        if (relative.startsWith('..') || parts.length === 1 || exempt) {
+                            continue; // outside nova_plugin, the root itself,
+                            // or a declared exception
+                        }
+                        checked++;
+                        expect(parts)
+                            .withContext(`${path.relative(root, file)}: ${specifier}`)
+                            .toEqual([parts[0]!, 'index.js']);
+                    }
+                }
+            }
+            expect(checked).toBeGreaterThan(500);
         });
 
     it('exports no two different things under one name across the domain indexes',
