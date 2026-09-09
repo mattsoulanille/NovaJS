@@ -20,7 +20,7 @@ import {
 import { GovtData } from 'novadatainterface/govt_data';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { acceptOffer } from '../missions/mission_logic.js';
+import { acceptOffer } from '../missions/index.js';
 import { makeShip } from '../ship/make_ship.js';
 import { dayNumber } from '../player/calendar.js';
 import {

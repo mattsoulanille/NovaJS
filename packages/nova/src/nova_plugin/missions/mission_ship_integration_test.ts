@@ -24,7 +24,7 @@ import { BoardedComponent } from '../ship/boarding_component.js';
 import { CargoComponent } from '../ship/cargo_plugin.js';
 import { CreditsComponent } from '../player/player_state_plugin.js';
 import { FuelComponent } from '../ship/health_plugin.js';
-import { missionCargoKey } from './mission_logic.js';
+import { missionCargoKey } from './mission_cargo.js';
 import { makeNpcShip } from '../spawn/npc_spawn_plugin.js';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';

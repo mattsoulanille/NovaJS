@@ -16,7 +16,7 @@ import { makeShip } from '../ship/make_ship.js';
 import { ArmorComponent } from '../ship/health_plugin.js';
 import { Stat } from '../core/stat.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { startMissionById } from './mission_logic.js';
+import { startMissionById } from './mission_accept_offer.js';
 import { MissionShipComponent } from '../player/mission_ship_component.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
 import { ControlBitsComponent } from '../ncb/ncb_plugin.js';

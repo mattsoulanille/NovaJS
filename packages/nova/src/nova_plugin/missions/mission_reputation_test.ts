@@ -15,7 +15,7 @@ import {
     processLanding,
     stellarRecord,
     StellarInfo,
-} from './mission_logic.js';
+} from './index.js';
 import { Missions } from '../player/player_state_plugin.js';
 import { LegalRecords } from '../reputation/reputation.js';
 

@@ -24,7 +24,7 @@ import {
     StellarInfo,
     stellarRecord,
     stellarVisible,
-} from './mission_logic.js';
+} from './index.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
 } from '../player/discovery.js';
