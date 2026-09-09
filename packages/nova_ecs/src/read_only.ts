@@ -1,4 +1,4 @@
-import type { ArgTypes } from "./arg_types.js";
+import type { ArgData, ArgTypes } from "./arg_types.js";
 
 const readOnlySymbol = Symbol('ReadOnly');
 
@@ -19,9 +19,10 @@ const readOnlySymbol = Symbol('ReadOnly');
  * interchangeable in a system's args list. `Query` unwraps it when it
  * computes membership (which entities match) and staleness, and
  * `World.getArg` unwraps it when it resolves, so wrapping changes only
- * the ambiguity report.
+ * the ambiguity report. `Data` is the wrapped arg's resolved type,
+ * fixed by the `ReadOnly` factory so `ArgsToData` needs no recursion.
  */
-export class ReadOnlyArg<T extends ArgTypes> {
+export class ReadOnlyArg<T extends ArgTypes, Data> {
     // This symbol makes ReadOnlyArg not assignable to the arg it wraps
     // (or to Component / Resource).
     private readonly readOnlySymbol = readOnlySymbol;
@@ -36,11 +37,12 @@ export class ReadOnlyArg<T extends ArgTypes> {
     }
 }
 
-export function ReadOnly<T extends ArgTypes>(arg: T): ReadOnlyArg<T> {
+export function ReadOnly<T extends ArgTypes>(arg: T):
+    ReadOnlyArg<T, ArgData<T>> {
     return new ReadOnlyArg(arg);
 }
 
-export type UnknownReadOnlyArg = ReadOnlyArg<ArgTypes>;
+export type UnknownReadOnlyArg = ReadOnlyArg<ArgTypes, unknown>;
 
 /**
  * The arg a ReadOnly wrapper stands for, or the arg itself.

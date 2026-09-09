@@ -46,9 +46,12 @@ export type ArgTypes = Component<any>
     | typeof GetEntity
     | typeof GetArg
     | ArgModifier<readonly ArgTypes[], any>
-    | ReadOnlyArg<ArgTypes>;
+    | ReadOnlyArg<ArgTypes, any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
+
+/** `ReadOnly(x)` resolves to what `x` resolves to. */
+type ReadOnlyData<T> = T extends ReadOnlyArg<ArgTypes, infer Data> ? Data : never;
 
 export type ArgData<T> =
     ComponentData<T>
@@ -60,6 +63,7 @@ export type ArgData<T> =
     | GetEntityObject<T>
     | GetArgSelector<T>
     | ArgModifierResult<T>
+    | ReadOnlyData<T>
     | AllowUndefined<T>;
 
 export type ArgsToData<Args> = {

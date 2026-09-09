@@ -5,6 +5,7 @@ import { Angle } from "nova_ecs/datatypes/angle";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
+import { ReadOnly } from "nova_ecs/read_only";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { ProvideFromCache } from './provide_from_cache.js';
 import { Query } from "nova_ecs/query";
@@ -294,7 +295,11 @@ function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
 
 export const UpdateHitboxHullSystem = new System({
     name: "UpdateHitboxHullSystem",
-    args: [MovementStateComponent, HitboxHullComponent, Optional(AnimationComponent)] as const,
+    // MovementStateComponent and AnimationComponent are read-only here:
+    // the step writes only the hull it owns (HitboxHullComponent). The
+    // annotation lets the ambiguity report ignore a pair that shares
+    // only those reads (see UpdateHurtboxHullSystem).
+    args: [ReadOnly(MovementStateComponent), HitboxHullComponent, ReadOnly(Optional(AnimationComponent))] as const,
     step(movement, hull, animation) {
         let angle = movement.rotation.angle;
         if (hull instanceof MultiFrameHull) {
@@ -314,11 +319,15 @@ export const UpdateHitboxHullSystem = new System({
 
 export const UpdateHurtboxHullSystem = new System({
     name: "UpdateHurtboxHullSystem",
-    args: [MovementStateComponent, HurtboxHullComponent, Optional(AnimationComponent)] as const,
+    // Same read-only args as UpdateHitboxHullSystem; the step writes
+    // only HurtboxHullComponent.
+    args: [ReadOnly(MovementStateComponent), HurtboxHullComponent, ReadOnly(Optional(AnimationComponent))] as const,
     step: UpdateHitboxHullSystem.step,
-    // #237 pin (shared: MovementState, AnimationComponent — both read-only
-    // here).
-    after: [MovementSystem, UpdateHitboxHullSystem],
+    // The two hull updaters share only read-only state (MovementState,
+    // AnimationComponent) and write disjoint hulls, so their relative
+    // order is unobservable: no pin needed (see #263). They still run
+    // after MovementSystem, which writes the movement they read.
+    after: [MovementSystem],
 });
 
 export const CollisionSystem = new System({
