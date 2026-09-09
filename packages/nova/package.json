@@ -4,7 +4,7 @@
     "type": "module",
     "main": "dist/server.js",
     "scripts": {
-        "build": "node scripts/generate_build_version.mjs && tsc && node esbuild.config.js",
+        "build": "node scripts/generate_build_version.mjs && node scripts/clean_stale_dist.mjs && tsc && node esbuild.config.js",
         "test": "jasmine --config=jasmine.json",
         "start": "node dist/server.js",
         "clean": "rimraf dist",
