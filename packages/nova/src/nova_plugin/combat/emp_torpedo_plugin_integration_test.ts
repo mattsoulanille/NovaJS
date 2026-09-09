@@ -10,20 +10,20 @@ import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { getPluginGameData } from '../../communication/simulation_test_fixture.js';
 import { canBuyOutfit, OutfitterContext } from '../../spaceport/outfitter_rules.js';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity, loadWeaponGameData } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { ESCORT_FIRE_RANGE } from '../escorts/escort_command_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { DamagedEvent } from '../ship/index.js';
+import { completeEntity, loadWeaponGameData } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { ESCORT_FIRE_RANGE } from '../escorts/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { DeathAIComponent } from '../npc/npc_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { weaponReach } from '../ship/weapon_range.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { DeathAIComponent } from '../npc/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { ShipComponent } from '../ship/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { weaponReach } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

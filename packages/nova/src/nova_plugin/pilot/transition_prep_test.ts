@@ -1,10 +1,10 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
-import { AggressionComponent } from '../combat/aggression.js';
-import { BoardedComponent } from '../ship/boarding_component.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
-import { PlanetTargetComponent } from '../travel/planet_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { AggressionComponent } from '../combat/index.js';
+import { BoardedComponent } from '../ship/index.js';
+import { NpcComponent } from '../npc/index.js';
+import { PlanetTargetComponent } from '../travel/index.js';
+import { TargetComponent } from '../ship/index.js';
 import {
     clearPlayerTargetsForTransition, clearStaleReferences,
     prepareCarriedEntitiesForFreshWorld,

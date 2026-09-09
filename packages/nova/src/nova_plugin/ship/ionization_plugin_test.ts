@@ -4,7 +4,7 @@ import { getDefaultShipData, getDefaultShipPhysics, ShipPhysics } from 'novadata
 import { MovementPhysicsComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { DamagedEvent } from './death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { IonizationComponent } from './health_plugin.js';
 import { ION_FACTOR, ionizedNow, IsIonizedComponent } from './ionization_plugin.js';
 import { makeShip } from './make_ship.js';

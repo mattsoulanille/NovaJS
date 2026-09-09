@@ -2,18 +2,18 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { DamagedEvent } from '../ship/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { GovtComponent } from '../core/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
+import { NpcComponent } from '../npc/index.js';
 import { CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponent } from './reputation_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { ArmorComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/ncb_plugin.js';
+import { TargetComponent } from '../ship/index.js';
+import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/index.js';
 
 /**
  * The victim throughout is a Concord of Meridian ship, so the penalties

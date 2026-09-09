@@ -5,28 +5,28 @@ import {
     getIntegrationGameData, getSyntheticGameData,
 } from "../../communication/simulation_test_fixture.js";
 import { SYNTHETIC } from "novaparse/synthetic/universe";
-import { completeEntity } from "../spawn/entity_data_loader.js";
-import { makeShip } from "../ship/make_ship.js";
+import { completeEntity } from "../spawn/index.js";
+import { makeShip } from "../ship/index.js";
 import { makeSystem } from "../make_system.js";
-import { PlayerShipSelector } from "../player/player_ship_plugin.js";
+import { PlayerShipSelector } from "../player/index.js";
 import { LandEvent } from "./planet_plugin.js";
-import { PlayerSoundEvent } from "../core/sound_plugin.js";
+import { PlayerSoundEvent } from "../core/index.js";
 import { WARP_OUT_SOUND } from "./jump_plugin.js";
-import { ShipPhysicsComponent, getShipMovementPhysics } from "../ship/ship_plugin.js";
+import { ShipPhysicsComponent, getShipMovementPhysics } from "../ship/index.js";
 import {
     GateArrivalComponent, GateTransit, GateTransitEvent, GATE_EMERGENCE_DISTANCE,
 } from "./gate_transit_plugin.js";
 import { GateDestinationResolver } from "./gate_destination_resolver.js";
 import { gateMapDestinations } from "../../spaceport/hypergate_network.js";
-import { landable } from "../core/landable.js";
-import { EscortCommandComponent } from "../player/escort_command.js";
-import { FiringGroupComponent } from "../ship/firing_group.js";
-import { FormationComponent } from "../npc/npc_ai_plugin.js";
-import { PlayerEscortComponent } from "../player/player_escort.js";
+import { landable } from "../core/index.js";
+import { EscortCommandComponent } from "../player/index.js";
+import { FiringGroupComponent } from "../ship/index.js";
+import { FormationComponent } from "../npc/index.js";
+import { PlayerEscortComponent } from "../player/index.js";
 import {
     EscortLanded, EscortLandedEvent,
-} from "../escorts/player_escort_plugin.js";
-import { ControlledByComponent } from "../player/ship_control.js";
+} from "../escorts/index.js";
+import { ControlledByComponent } from "../player/index.js";
 
 // The synthetic hypergate pair: Kestrel Gate (in Kestrel Drift, emergence
 // angle 90° from CustSndID) links to Vael Gate (in Vael Hollow, 270°), and

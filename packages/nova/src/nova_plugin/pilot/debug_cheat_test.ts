@@ -2,14 +2,14 @@ import 'jasmine';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { DEBUG_CREDITS_GRANT } from './debug_cheat_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { CreditsComponent } from '../player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../reputation/reputation_plugin.js';
-import { recordHostile, recordWith } from '../reputation/reputation.js';
-import { ShipControlEvent, ShipControlStateComponent } from '../player/ship_control.js';
+import { CreditsComponent } from '../player/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
+import { recordHostile, recordWith } from '../reputation/index.js';
+import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 
 /**
  * The debug cheats in a LIVE world (parsed game data, the full simulation

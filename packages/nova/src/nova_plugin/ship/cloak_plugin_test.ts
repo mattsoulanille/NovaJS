@@ -13,7 +13,7 @@ import {
     isTargetable,
     ShieldLike,
 } from './cloak_plugin.js';
-import { getValidTargets } from '../npc/npc_plugin.js';
+import { getValidTargets } from '../npc/index.js';
 import { OutfitsState } from './outfit_plugin.js';
 
 /** A gameData stub exposing only the Outfit.getCached the deriver uses. */

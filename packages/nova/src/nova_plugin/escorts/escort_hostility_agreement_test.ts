@@ -1,21 +1,21 @@
 import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { Entity } from 'nova_ecs/entity';
-import { AggressionComponent } from '../combat/aggression.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
+import { AggressionComponent } from '../combat/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { EscortCommandComponent } from '../player/index.js';
 import {
     EscortHostilityContext, isHostileTo,
 } from './escort_command_plugin.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { isHostileTarget, styleForTarget } from '../combat/hostility.js';
-import { AggressionSuppressGovtsComponent } from '../ncb/ncb_plugin.js';
-import { ShootAllWeaponsComponent } from '../npc/npc_plugin.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { LegalRecordsComponent } from '../reputation/reputation_plugin.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { GovtComponent } from '../core/index.js';
+import { isHostileTarget, styleForTarget } from '../combat/index.js';
+import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
+import { ShootAllWeaponsComponent } from '../npc/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
+import { ShipComponent } from '../ship/index.js';
+import { TargetComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

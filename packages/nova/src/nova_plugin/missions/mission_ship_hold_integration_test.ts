@@ -9,22 +9,22 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { GameDataAggregator } from '../../server/parsing/game_data_aggregator.js';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { BoardedComponent } from '../ship/boarding_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { JumpComponent } from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { Stat } from '../core/stat.js';
+import { BoardedComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { JumpComponent } from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { Stat } from '../core/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { startMissionById } from './mission_logic.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
+import { MissionShipComponent } from '../player/index.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
-import { ControlBitsComponent } from '../ncb/ncb_plugin.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { NpcComponent } from '../npc/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../player/player_state_plugin.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
+} from '../player/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
 
 /**
  * ============================================================================

@@ -5,26 +5,26 @@ import {
     getIntegrationGameData,
 } from '../../communication/simulation_test_fixture.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { makeShip } from '../ship/make_ship.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { OwnerComponent, SourceComponent } from '../ship/weapon_components.js';
+import { MissionShipComponent } from '../player/index.js';
+import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
 } from './mission_ship_spawn.js';
-import { ShipObjective } from '../player/mission_ship_state.js';
-import { ControlBitsComponent } from '../ncb/ncb_plugin.js';
-import { FormationComponent } from '../npc/npc_ai_plugin.js';
-import { PlayerEscortComponent } from '../player/player_escort.js';
-import { escortsOnPayroll, sweepableEscorts } from '../escorts/player_escort_plugin.js';
-import { PlayerShipSelector } from '../player/player_ship_plugin.js';
+import { ShipObjective } from '../player/index.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { FormationComponent } from '../npc/index.js';
+import { PlayerEscortComponent } from '../player/index.js';
+import { escortsOnPayroll, sweepableEscorts } from '../escorts/index.js';
+import { PlayerShipSelector } from '../player/index.js';
 import {
     ActiveMission, MissionsComponent,
-} from '../player/player_state_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
+} from '../player/index.js';
+import { ControlledByComponent } from '../player/index.js';
 
 /**
  * ============================================================================

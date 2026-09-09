@@ -6,18 +6,18 @@ import { getDefaultGameDate } from 'novadatainterface/player_start_data';
 import {
     PILOT_FILE_NO_ESCORT, PILOT_FILE_WITH_ESCORT,
 } from '../../title/fixtures/sample_pilot_files.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
+import { CargoComponent } from '../ship/index.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../ncb/ncb_plugin.js';
+} from '../ncb/index.js';
 import {
     ActiveMission, CreditsComponent, CronState, CronStatesComponent,
     GameDateComponent, MissionsComponent, PendingAutoAbortShip,
     PendingAutoAbortShipsComponent,
-} from '../player/player_state_plugin.js';
+} from '../player/index.js';
 import {
     CombatRatingComponent, LegalRecordsComponent,
-} from '../reputation/reputation_plugin.js';
+} from '../reputation/index.js';
 import {
     decodeSave, decodeSaveDetailed, encodeSave, MIN_READABLE_SAVE_VERSION,
     restorePlayerState, SaveData, SavedEscort, SAVE_VERSION,

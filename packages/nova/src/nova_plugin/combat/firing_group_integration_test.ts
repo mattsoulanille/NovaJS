@@ -9,13 +9,13 @@ import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity, loadShipGameData } from '../spawn/entity_data_loader.js';
+import { DamagedEvent } from '../ship/index.js';
+import { completeEntity, loadShipGameData } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { makeShip } from '../ship/make_ship.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
+import { NpcComponent } from '../npc/index.js';
 
 // The Wren Skiff: carries an unguided projectile weapon (its blaster).
 const SHIP_ID = SYNTHETIC.ships.skiff;

@@ -7,17 +7,17 @@ import { navReadout } from '../../display/status_bar_content.js';
 import {
     initialJumpReadyState, jumpReadyEdge,
 } from '../../display/ui_sound_logic.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { FuelComponent, FUEL_PER_JUMP } from '../ship/health_plugin.js';
+import { completeEntity } from '../spawn/index.js';
+import { FuelComponent, FUEL_PER_JUMP } from '../ship/index.js';
 import {
     JumpComponent, JumpRouteComponent, JUMP_DISTANCE,
 } from './jump_plugin.js';
 import { canJump, jumpRadiusFor } from './jump_readiness.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { PlayerShipSelector } from '../player/player_ship_plugin.js';
-import { applyControlEvents } from '../player/ship_control.js';
-import { ShipPhysicsComponent } from '../ship/ship_plugin.js';
+import { PlayerShipSelector } from '../player/index.js';
+import { applyControlEvents } from '../player/index.js';
+import { ShipPhysicsComponent } from '../ship/index.js';
 
 const SHIP_UUID = 'readiness agreement ship';
 

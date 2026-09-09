@@ -1,8 +1,8 @@
 import 'jasmine';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
-import { dayNumber } from '../player/calendar.js';
+import { dayNumber } from '../player/index.js';
 import { runCronsForDays } from './cron_logic.js';
-import { CronStates } from '../player/player_state_plugin.js';
+import { CronStates } from '../player/index.js';
 
 /**
  * The crön date window against the REAL Nova Files.

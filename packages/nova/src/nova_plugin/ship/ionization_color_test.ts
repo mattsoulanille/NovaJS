@@ -14,7 +14,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DamagedEvent } from './death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { IonizationColorComponent, IonizationComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';

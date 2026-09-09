@@ -6,14 +6,14 @@ import { AmmoType, getDefaultProjectileWeaponData, ProjectileWeaponData } from '
 import { Entity } from 'nova_ecs/entity';
 import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { AFTERBURNER_FACTOR } from '../travel/afterburner_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { AFTERBURNER_FACTOR } from '../travel/index.js';
+import { completeEntity } from '../spawn/index.js';
 import { AUTO_REFUEL_PER_SECOND, FuelComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
-import { ProjectileComponent } from '../core/projectile_data.js';
-import { ShipControlStateComponent } from '../player/ship_control.js';
+import { ProjectileComponent } from '../core/index.js';
+import { ShipControlStateComponent } from '../player/index.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
 const SHIP_ID = 'test:ship';

@@ -15,23 +15,23 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
-import { CloakActiveComponent } from '../ship/cloak_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { CloakActiveComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
 import {
     defaultWeaponLocalState, OwnerComponent, VulnerableToPD, WeaponsComponent,
 } from './fire_weapon_plugin.js';
-import { FuelComponent, IonizationComponent } from '../ship/health_plugin.js';
-import { IsIonizedComponent } from '../ship/ionization_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { FuelComponent, IonizationComponent } from '../ship/index.js';
+import { IsIonizedComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { ProjectileComponent } from '../core/projectile_data.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { ProjectileComponent } from '../core/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
 import {
     effectiveReload, FAST_SHIP_TURN_RATE, intervalElapsed, ORIGINAL_FRAME_MS,
     WeaponsSystem,
 } from './weapon_plugin.js';
-import { WeaponsStateComponent, WeaponState } from '../ship/weapons_state.js';
+import { WeaponsStateComponent, WeaponState } from '../ship/index.js';
 
 /**
  * ============================================================================

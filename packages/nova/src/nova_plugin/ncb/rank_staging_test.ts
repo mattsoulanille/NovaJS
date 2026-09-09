@@ -5,9 +5,9 @@ import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
-import { SimulationGameDataResource } from '../core/game_data_resource.js';
+import { SimulationGameDataResource } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
-import { stellarClearanceFor } from '../travel/planet_plugin.js';
+import { stellarClearanceFor } from '../travel/index.js';
 
 const GATE_GOVT = 'test:hypergate';
 const GATE = 'test:gate';

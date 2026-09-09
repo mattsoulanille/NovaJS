@@ -1,8 +1,8 @@
 import 'jasmine';
 import { Angle } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { PlayerShipSelector } from '../player/player_ship_plugin.js';
+import { ControlledByComponent } from '../player/index.js';
+import { PlayerShipSelector } from '../player/index.js';
 import {
     capturable,
     AXIS_ALIGN_TOLERANCE_RAD,

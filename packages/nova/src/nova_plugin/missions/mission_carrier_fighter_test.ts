@@ -12,24 +12,24 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { isInFlock } from '../combat/flock.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { makeShip } from '../ship/make_ship.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { isInFlock } from '../combat/index.js';
+import { GovtComponent } from '../core/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { PlayerEscortComponent } from '../player/player_escort.js';
+import { MissionShipComponent } from '../player/index.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { PlayerEscortComponent } from '../player/index.js';
 import {
     escortsOnPayroll, playerEscortLink, sweepableEscorts,
-} from '../escorts/player_escort_plugin.js';
-import { ActiveMission, MissionsComponent } from '../player/player_state_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { OwnerComponent, SourceComponent } from '../ship/weapon_components.js';
+} from '../escorts/index.js';
+import { ActiveMission, MissionsComponent } from '../player/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { OwnerComponent, SourceComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

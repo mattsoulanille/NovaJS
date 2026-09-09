@@ -13,26 +13,26 @@ import {
     Serializer, SerializerResource,
 } from 'nova_ecs/plugins/serializer_plugin';
 import { prepareCarriedEscorts } from '../../spaceport/landed_escorts.js';
-import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from '../escorts/bay_plugin.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
+import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from '../escorts/index.js';
+import { CargoComponent } from '../ship/index.js';
 import { commitFleetHolds } from '../../spaceport/fleet_cargo.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { OwnerComponent, SourceComponent } from '../combat/fire_weapon_plugin.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { OwnerComponent, SourceComponent } from '../combat/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { FormationComponent } from '../npc/npc_ai_plugin.js';
+import { FormationComponent } from '../npc/index.js';
 import {
     escortProvenance, PlayerEscortComponent,
-} from '../player/player_escort.js';
-import { Stat } from '../core/stat.js';
+} from '../player/index.js';
+import { Stat } from '../core/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
     ControlBitsComponent,
-} from '../ncb/ncb_plugin.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/reputation_plugin.js';
+} from '../ncb/index.js';
+import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import { isRight } from 'fp-ts/lib/Either.js';
 import {
     ActiveMissionType,
@@ -42,7 +42,7 @@ import {
     MissionsComponent,
     PendingAutoAbortShips,
     PendingAutoAbortShipsComponent,
-} from '../player/player_state_plugin.js';
+} from '../player/index.js';
 import {
     collectEscortsToSave,
     decodeSave,
@@ -66,13 +66,13 @@ import {
     SAVE_VERSION,
     writeSave,
 } from './save_game.js';
-import { discoveryLevel, markDiscovered } from '../player/discovery_store.js';
+import { discoveryLevel, markDiscovered } from '../player/index.js';
 import { saveDefaults } from './save_migrations.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
+import { ShipComponent } from '../ship/index.js';
 import {
     ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
 } from 'novadatainterface/control_bit_namespaces';
-import { ControlBitResolver } from '../ncb/control_bit_namespaces.js';
+import { ControlBitResolver } from '../ncb/index.js';
 import { getDefaultRankData, RankData } from 'novadatainterface/rank_data';
 
 /** An in-memory SaveStorage for tests. */

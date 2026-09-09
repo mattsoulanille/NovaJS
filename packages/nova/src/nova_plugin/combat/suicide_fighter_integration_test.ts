@@ -14,20 +14,20 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { ExplodingComponent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { ArmorComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { ExplodingComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { DeathAIComponent } from '../npc/npc_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ProjectileComponent } from '../core/projectile_data.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { weaponReach } from '../ship/weapon_range.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { DeathAIComponent } from '../npc/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { ProjectileComponent } from '../core/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { weaponReach } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

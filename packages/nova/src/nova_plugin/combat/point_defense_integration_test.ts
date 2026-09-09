@@ -10,19 +10,19 @@ import { UUID } from 'nova_ecs/arg_types';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { CollisionVulnerabilityComponent } from '../core/index.js';
+import { DamagedEvent } from '../ship/index.js';
 import {
     completeEntity, loadWeaponsGameData,
-} from '../spawn/entity_data_loader.js';
+} from '../spawn/index.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { makeShip } from '../ship/make_ship.js';
+import { GovtComponent } from '../core/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 
 // The battlefield ship: a Wren Skiff, which the flag happens to mark too,
 // but it is only ever the SHOOTER here.

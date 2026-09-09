@@ -6,7 +6,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { ExplodingComponent } from '../ship/death_plugin.js';
+import { ExplodingComponent } from '../ship/index.js';
 import {
     defaultWeaponLocalState, getEvenlySpacedAngles, getNextExitpoint,
     liveTargetMovement,

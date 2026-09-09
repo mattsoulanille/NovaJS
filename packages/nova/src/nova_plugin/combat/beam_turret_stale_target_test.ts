@@ -12,14 +12,14 @@ import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent } from './beam_plugin.js';
-import { DamagedEvent, ExplodingComponent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { DamagedEvent, ExplodingComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponConstructors, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 
 const SHIP_ID = SYNTHETIC.ships.skiff;
 // beamTurret, 240 long, one frame (33ms) of life, blind to its rear.

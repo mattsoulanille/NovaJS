@@ -1,9 +1,9 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { OwnerComponent } from './fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
+import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
 
 const PLAYER = 'player';
 

@@ -6,13 +6,13 @@ import {
     makeSimulationBridgeHarness,
 } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { IdFactory } from '../core/id_factory.js';
+import { IdFactory } from '../core/index.js';
 import { PersComponent } from './pers_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { ArmorComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { ShipDataComponent } from '../ship/ship_plugin.js';
-import { GOAL_RESCUE } from '../player/mission_ship_state.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
+import { DisabledComponent } from '../ship/index.js';
+import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { ShipDataComponent } from '../ship/index.js';
+import { GOAL_RESCUE } from '../player/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
 import {
     buildPersSpawnTable,
     PersSpawnEntry,

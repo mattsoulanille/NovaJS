@@ -9,22 +9,22 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
 import { carriedBatchSettled } from '../../spaceport/landed_escorts.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { ArmorComponent, FuelComponent } from '../ship/health_plugin.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import {
     FinishJumpEvent, JumpComponent, JumpState, JUMP_DEPART_DELAY_MS,
     JUMP_SPINUP_DELAY_MS,
-} from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+} from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { FormationComponent } from '../npc/npc_ai_plugin.js';
-import { PlayerEscortComponent } from '../player/player_escort.js';
+import { FormationComponent } from '../npc/index.js';
+import { PlayerEscortComponent } from '../player/index.js';
 import { EscortJump, EscortJumpEvent } from './player_escort_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { Stat } from '../core/stat.js';
+import { ControlledByComponent } from '../player/index.js';
+import { Stat } from '../core/index.js';
 
 /**
  * ============================================================================

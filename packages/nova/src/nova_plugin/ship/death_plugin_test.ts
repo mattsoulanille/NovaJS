@@ -9,13 +9,13 @@ import {
     armorFullyRestored, DamagedEvent, DeathEvent, ExplodingComponent,
     ExplodingFinishedSystem, ZeroArmorEvent,
 } from './death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { ArmorComponent, ShieldComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
-import { DamageAttributionComponent } from '../reputation/reputation_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { Stat } from '../core/stat.js';
+import { DamageAttributionComponent } from '../reputation/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { Stat } from '../core/index.js';
 
 const SHIP = 'ship under test';
 

@@ -14,8 +14,8 @@ import {
     stellarRecord,
     StellarInfo,
 } from './mission_logic.js';
-import { Missions } from '../player/player_state_plugin.js';
-import { LegalRecords } from '../reputation/reputation.js';
+import { Missions } from '../player/index.js';
+import { LegalRecords } from '../reputation/index.js';
 
 /**
  * Mission-layer reputation: AvailRecord/AvailRating gating,

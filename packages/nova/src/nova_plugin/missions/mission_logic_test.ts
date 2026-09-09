@@ -25,8 +25,8 @@ import {
 } from './mission_logic.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
-} from '../player/discovery.js';
-import { ActiveMission, MAX_ACTIVE_MISSIONS, Missions } from '../player/player_state_plugin.js';
+} from '../player/index.js';
+import { ActiveMission, MAX_ACTIVE_MISSIONS, Missions } from '../player/index.js';
 
 function makeStellar(partial: Partial<StellarInfo> = {}): StellarInfo {
     return {

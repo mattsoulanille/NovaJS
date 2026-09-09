@@ -7,12 +7,12 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { World } from 'nova_ecs/world';
 import { getPluginGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { ShootAllWeaponsComponent } from '../npc/npc_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { ShootAllWeaponsComponent } from '../npc/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * A ship's stock armament is a list of wëap ids — "the next twelve fields

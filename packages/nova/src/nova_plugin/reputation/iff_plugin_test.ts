@@ -19,7 +19,7 @@ import {
     SHIP_DISABLED_COLOR,
     targetCornerStyle,
 } from './iff_plugin.js';
-import { OutfitsState } from '../ship/outfit_plugin.js';
+import { OutfitsState } from '../ship/index.js';
 import { planetClearance } from './stellar_clearance.js';
 
 function stellar(over: Partial<PlanetData> = {}): PlanetData {

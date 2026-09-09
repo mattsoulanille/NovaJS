@@ -9,15 +9,15 @@ import {
 } from 'novadatainterface/weapon_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { ShipExplosionComponent } from '../ship/ship_explosion.js';
-import { ExplodingComponent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { ShipExplosionComponent } from '../ship/index.js';
+import { ExplodingComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { DeathAIComponent } from '../npc/npc_plugin.js';
-import { ProjectileComponent } from '../core/projectile_data.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { DeathAIComponent } from '../npc/index.js';
+import { ProjectileComponent } from '../core/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 const SHIP_ID = 'test:ship';
 const SUICIDE_ID = 'test:suicide';

@@ -5,18 +5,18 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { World } from "nova_ecs/world";
 import { getIntegrationGameData, getSyntheticGameData } from "../../communication/simulation_test_fixture.js";
 import { GameDataAggregator } from "../../server/parsing/game_data_aggregator.js";
-import { completeEntity } from "../spawn/entity_data_loader.js";
+import { completeEntity } from "../spawn/index.js";
 import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
-import { makeShip } from "../ship/make_ship.js";
+import { makeShip } from "../ship/index.js";
 import { makeSystem, SIMULATION_STEP_MS } from "../make_system.js";
-import { applyControlEvents } from "../player/ship_control.js";
-import { PlayerShipSelector } from "../player/player_ship_plugin.js";
-import { ShipPhysicsComponent } from "../ship/ship_plugin.js";
-import { ArmorComponent, FuelComponent, FUEL_PER_JUMP } from "../ship/health_plugin.js";
+import { applyControlEvents } from "../player/index.js";
+import { PlayerShipSelector } from "../player/index.js";
+import { ShipPhysicsComponent } from "../ship/index.js";
+import { ArmorComponent, FuelComponent, FUEL_PER_JUMP } from "../ship/index.js";
 import { LandEvent } from "./planet_plugin.js";
-import { PlayerSoundEvent } from "../core/sound_plugin.js";
+import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
-import { DisabledComponent } from "../ship/disabled_component.js";
+import { DisabledComponent } from "../ship/index.js";
 
 const SHIP_UUID = 'jump test ship';
 

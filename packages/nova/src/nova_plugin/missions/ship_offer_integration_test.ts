@@ -14,29 +14,29 @@ import {
     buildShipMissionAccept, buildShipMissionOffer,
 } from '../../spaceport/ship_mission_accept.js';
 import { shipOfferConsequence } from '../../spaceport/ship_mission_offer.js';
-import { BoardedComponent } from '../ship/boarding_component.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { FuelComponent } from '../ship/health_plugin.js';
-import { JUMP_DISTANCE } from '../travel/jump_plugin.js';
+import { BoardedComponent } from '../ship/index.js';
+import { CargoComponent } from '../ship/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { FuelComponent } from '../ship/index.js';
+import { JUMP_DISTANCE } from '../travel/index.js';
 import {
     applyAcceptMission, ShipOfferSpentComponent,
 } from './mission_accept.js';
 import { buildAcceptedMissionShips } from './mission_ship_spawn.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { GOAL_RESCUE } from '../player/mission_ship_state.js';
-import { ActiveRanksComponent, ControlBitsComponent } from '../ncb/ncb_plugin.js';
-import { makeNpcShip } from '../spawn/npc_spawn_plugin.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
-import { PersComponent } from '../spawn/pers_plugin.js';
+import { MissionShipComponent } from '../player/index.js';
+import { GOAL_RESCUE } from '../player/index.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../ncb/index.js';
+import { makeNpcShip } from '../spawn/index.js';
+import { NpcComponent } from '../npc/index.js';
+import { PersComponent } from '../spawn/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../player/player_state_plugin.js';
-import { CombatRatingComponent } from '../reputation/reputation_plugin.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
-import { TargetComponent } from '../ship/target_component.js';
+} from '../player/index.js';
+import { CombatRatingComponent } from '../reputation/index.js';
+import { ShipComponent } from '../ship/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
+import { TargetComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

@@ -12,7 +12,7 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { CloakActiveComponent } from '../ship/cloak_plugin.js';
+import { CloakActiveComponent } from '../ship/index.js';
 import {
     deriveRepair,
     DisabledComponent,
@@ -26,20 +26,20 @@ import {
     repairedArmor,
     REPAIR_MARGIN_FRACTION,
     rollRepairTime,
-} from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { SourceComponent } from '../combat/fire_weapon_plugin.js';
-import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+} from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { SourceComponent } from '../combat/index.js';
+import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     FormationComponent, formationSlotPosition,
-} from '../npc/npc_ai_plugin.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/ship_control.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/ship_plugin.js';
-import { PlayerSoundEvent } from '../core/sound_plugin.js';
-import { Stat } from '../core/stat.js';
+} from '../npc/index.js';
+import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
+import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { PlayerSoundEvent } from '../core/index.js';
+import { Stat } from '../core/index.js';
 
 /** A gameData stub exposing only Outfit.getCached. */
 function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {

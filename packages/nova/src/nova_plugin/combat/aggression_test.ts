@@ -7,8 +7,8 @@ import {
     sweepAggression,
 } from './aggression.js';
 import { provokeGuidedLock } from './flock.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { ControlledByComponent } from '../player/index.js';
 
 function emptyState(): AggressionState {
     return new Map();

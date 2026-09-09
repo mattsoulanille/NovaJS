@@ -20,13 +20,13 @@ import {
 import { GovtData } from 'novadatainterface/govt_data';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { acceptOffer } from '../missions/mission_logic.js';
-import { makeShip } from '../ship/make_ship.js';
-import { dayNumber } from '../player/calendar.js';
+import { acceptOffer } from '../missions/index.js';
+import { makeShip } from '../ship/index.js';
+import { dayNumber } from '../player/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../player/player_state_plugin.js';
-import { ControlBitsComponent } from '../ncb/ncb_plugin.js';
+} from '../player/index.js';
+import { ControlBitsComponent } from '../ncb/index.js';
 
 /**
  * Reputation against the REAL Nova game data: pins the stock govts'

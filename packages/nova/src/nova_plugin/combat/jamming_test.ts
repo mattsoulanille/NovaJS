@@ -30,9 +30,9 @@ import {
     RADAR_JAM_INDEX,
     SystemInterferenceResource,
 } from './jamming_plugin.js';
-import { ProjectileDataComponent } from '../core/projectile_data.js';
+import { ProjectileDataComponent } from '../core/index.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 
 /** A stand-in for the simulation game data, exposing only Outfit.getCached. */
 function mockGameData(outfits: Record<string, ReturnType<typeof getDefaultOutfitData>>,
