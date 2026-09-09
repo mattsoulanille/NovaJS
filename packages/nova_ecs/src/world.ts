@@ -1,6 +1,6 @@
 import { Either, isLeft, left, right } from "fp-ts/lib/Either.js";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetArgFunction, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types.js";
+import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetArgFunction, GetEntity, GetWorld, RunQuery, RunQueryFunction, SetComponentArg, SetComponentFunction, UUID } from "./arg_types.js";
 import { ProvideAsyncPlugin } from "./provide_async.js";
 import { AsyncSystemPlugin } from "./async_system.js";
 import { Component, UnknownComponent } from "./component.js";
@@ -645,6 +645,16 @@ export class World {
             return right(entity.uuid as ArgData<T>);
         } else if (arg === GetEntity) {
             return right(entity as ArgData<T>);
+        } else if (arg instanceof SetComponentArg) {
+            // The write half of GetEntity: a closure over this entity's
+            // component map, bound to the arg's component, so a provider
+            // can store its component without taking the whole entity
+            // (see SetComponent in arg_types.ts).
+            const component = arg.component;
+            const setComponent: SetComponentFunction = (_c, data) => {
+                entity.components.set(component as UnknownComponent, data);
+            };
+            return right(setComponent as ArgData<T>);
         } else if (arg === GetArg) {
             // Cast like the branches above: a runtime `arg === X` check
             // cannot narrow the generic T.

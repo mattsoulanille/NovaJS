@@ -79,9 +79,11 @@ export class Query<QueryArgs extends readonly ArgTypes[]
      * arg of `Optional`, which affects results but not membership.
      * Args that resolve to live or stable references contribute
      * nothing: nested Query results (the cache updates the same array
-     * in place), GetEntity, Components, UUID, GetArg (fetches fresh on
-     * every call), EcsEvents (never cached across events), and
-     * Resources (invalidated by the cache's own resource subscription).
+     * in place), GetEntity, SetComponent (a write closure over the
+     * entity's component map, not a read), Components, UUID, GetArg
+     * (fetches fresh on every call), EcsEvents (never cached across
+     * events), and Resources (invalidated by the cache's own resource
+     * subscription).
      */
     readonly referencedComponents: ReadonlySet<UnknownComponent> | null;
 
@@ -160,7 +162,8 @@ export function referencedComponentsOfArg(arg: ArgTypes):
         // reads do, where the fetched value IS cached.)
         return null;
     }
-    // Resources, nested Queries, EcsEvents, GetEntity, Components, UUID:
-    // live/stable references or handled by their own invalidation.
+    // Resources, nested Queries, EcsEvents, GetEntity, SetComponent,
+    // Components, UUID: live/stable references or handled by their own
+    // invalidation.
     return new Set();
 }

@@ -1,5 +1,5 @@
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgTypes, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
+import { ArgTypes, Entities, GetArg, GetEntity, GetWorld, RunQuery, SetComponentArg } from "./arg_types.js";
 import { Component, UnknownComponent } from "./component.js";
 import { Query } from "./query.js";
 import { Resource, UnknownResource } from "./resource.js";
@@ -16,11 +16,14 @@ import type { World } from "./world.js";
  * or writes, so any shared component or resource counts as a
  * conflict. Some args imply more than they name (`accessSetOf`):
  * `GetEntity` hands the system the whole entity (every component);
- * `Entities`, `RunQuery`, `GetWorld` and `GetArg` reach anything in
- * the world — except a `GetArg` inside a modifier that declares what
- * it resolves (`ArgModifier.reaches`; `Optional(x)` reaches `x`).
- * `Emit` / `EmitNow` are ordinary resources: two emitters share the
- * event queue, whose FIFO order IS their relative order.
+ * `SetComponent(x)` is the exception — it declares a write to `x`
+ * alone, so a provider holding it touches only its provided
+ * component; `Entities`, `RunQuery`, `GetWorld` and `GetArg` reach
+ * anything in the world — except a `GetArg` inside a modifier that
+ * declares what it resolves (`ArgModifier.reaches`; `Optional(x)`
+ * reaches `x`). `Emit` / `EmitNow` are ordinary resources: two
+ * emitters share the event queue, whose FIFO order IS their relative
+ * order.
  *
  * Two systems that never respond to the same event are never in the
  * same run list, so their position in `world.systemNames` is
@@ -75,6 +78,11 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
             }
         } else if (arg === GetEntity) {
             allComponents = true;
+        } else if (arg instanceof SetComponentArg) {
+            // A write to the arg's component: still a touch, so it pairs
+            // with readers and other writers of that component — but with
+            // nothing else on the entity.
+            components.add(arg.component as UnknownComponent);
         } else if (arg === GetArg) {
             everything = true;
         }

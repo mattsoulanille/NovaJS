@@ -20,6 +20,26 @@ export type UUIDData<T> = T extends typeof UUID ? string : never;
 export const GetEntity = Symbol('Get Entity');
 export type GetEntityObject<T> = T extends typeof GetEntity ? Entity : never;
 
+/**
+ * Resolves to a function that sets `component` on the current entity to
+ * the given data — the write half of `GetEntity`, for systems (providers)
+ * whose only reason to take the entity is to store a component. The
+ * ambiguity report counts it as a write to that one component, not as a
+ * reach of every component on the entity (#261).
+ */
+export class SetComponentArg<T> {
+    constructor(readonly component: Component<T>) {}
+}
+
+/** An arg that can set `component` on the current entity, and nothing else. */
+export function SetComponent<T>(component: Component<T>): SetComponentArg<T> {
+    return new SetComponentArg(component);
+}
+
+export type SetComponentFunction = <T>(component: Component<T>, data: T) => void;
+export type SetComponentObject<T>
+    = T extends SetComponentArg<any> ? SetComponentFunction : never;
+
 export const GetArg = Symbol('Get Arg');
 export type GetArgFunction = <T extends ArgTypes = ArgTypes>(arg: T)
     => Either<undefined, ArgData<T>>;
@@ -43,6 +63,7 @@ export type ArgTypes = Component<any>
     | typeof Components
     | typeof UUID
     | typeof GetEntity
+    | SetComponentArg<any>
     | typeof GetArg
     | ArgModifier<readonly ArgTypes[], any>;
 
@@ -56,6 +77,7 @@ export type ArgData<T> =
     | ComponentsObject<T>
     | UUIDData<T>
     | GetEntityObject<T>
+    | SetComponentObject<T>
     | GetArgSelector<T>
     | ArgModifierResult<T>
     | AllowUndefined<T>;
