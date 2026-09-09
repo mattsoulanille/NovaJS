@@ -1,8 +1,8 @@
 import 'jasmine';
 import { accessSetOf, findAmbiguities, formatAmbiguities, reportAmbiguities, sharedAccess } from './ambiguities.js';
-import { Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
+import { Entities, GetArg, GetEntity, GetWorld, RunQuery, SetComponent, UUID } from './arg_types.js';
 import { Component } from './component.js';
-import { EcsEvent } from './events.js';
+import { EcsEvent, StepEvent } from './events.js';
 import { Optional } from './optional.js';
 import { Query } from './query.js';
 import { Resource } from './resource.js';
@@ -43,6 +43,13 @@ describe('accessSetOf', () => {
         expect(accessSetOf([GetEntity]).everything).toBeFalse();
     });
 
+    it('reads SetComponent(x) as a write to x only', () => {
+        const access = accessSetOf([SetComponent(A)]);
+        expect([...access.components]).toEqual([A]);
+        expect(access.allComponents).toBeFalse();
+        expect(access.everything).toBeFalse();
+    });
+
     it('reads the world-reaching args as everything', () => {
         for (const arg of [Entities, RunQuery, GetWorld, GetArg] as const) {
             expect(accessSetOf([arg]).everything).withContext(String(arg)).toBeTrue();
@@ -72,6 +79,19 @@ describe('sharedAccess', () => {
         expect(sharedAccess(accessSetOf([GetEntity]), accessSetOf([R]))).toEqual([]);
     });
 
+    it('pairs SetComponent(x) with a reader or writer of x, and nothing else', () => {
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([A])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([SetComponent(A)])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([B, R])))
+            .toEqual([]);
+        // Unlike GetEntity, a SetComponent does not pair with the entity as
+        // a whole: another SetComponent(B) on the same entity is disjoint.
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([SetComponent(B)])))
+            .toEqual([]);
+    });
+
     it('reports * when one side reaches everything and the other anything', () => {
         expect(sharedAccess(accessSetOf([Entities]), accessSetOf([A]))).toEqual(['*']);
         expect(sharedAccess(accessSetOf([A]), accessSetOf([GetArg]))).toEqual(['*']);
@@ -91,6 +111,21 @@ describe('findAmbiguities', () => {
         const a = system('a', [A]);
         expect(pairs([a, system('b', [A], { after: [a] })])).toEqual([]);
         expect(pairs([a, system('b', [A], { before: [a] })])).toEqual([]);
+    });
+
+    it('counts a SetComponent(provided) provider against readers of what it touches, and only those', () => {
+        // The Provide shape: Optional(provided), SetComponent(provided),
+        // Optional(StepEvent), ...args. Readers of the provided component
+        // or of a factory input still share state with it…
+        const provider = system('provider',
+            [Optional(A), SetComponent(A), Optional(StepEvent), B]);
+        expect(pairs([provider, system('reader', [A])]))
+            .toEqual(['provider<->reader']);
+        expect(pairs([provider, system('writer', [B])]))
+            .toEqual(['provider<->writer']);
+        // …but a system that merely runs on the same entity no longer does
+        // (with GetEntity here, this pair would share the whole entity).
+        expect(pairs([provider, system('unrelated', [C])])).toEqual([]);
     });
 
     it('follows transitive paths, through markers too', () => {

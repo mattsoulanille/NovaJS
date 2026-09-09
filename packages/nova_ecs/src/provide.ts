@@ -1,4 +1,4 @@
-import { ArgsToData, ArgTypes, GetEntity } from "./arg_types.js";
+import { ArgsToData, ArgTypes, SetComponent } from "./arg_types.js";
 import { Component } from "./component.js";
 import { EcsEvent, StepEvent } from "./events.js";
 import { SyncSubscription } from "./event_map.js";
@@ -26,8 +26,8 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
         name,
         events: [StepEvent, ...updateEvents],
         before, after,
-        args: [Optional(provided), GetEntity, Optional(StepEvent), ...args] as const,
-        step(providedValue, entity, step, ...args) {
+        args: [Optional(provided), SetComponent(provided), Optional(StepEvent), ...args] as const,
+        step(providedValue, setComponent, step, ...args) {
             if (providedValue !== undefined && step) {
                 // If step is true, then this system was called by the world being
                 // stepped. That means it wasn't called due to a component changing,
@@ -36,7 +36,7 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
             }
             providedValue = factory(...args);
 
-            entity.components.set(provided, providedValue);
+            setComponent(provided, providedValue);
         }
     });
 }
