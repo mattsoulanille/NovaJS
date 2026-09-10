@@ -80,6 +80,36 @@ describe('ReadOnly', () => {
         expect(access.components).toEqual(new Set([A]));
     });
 
+    it('cancels the read-only mark whichever order the args come in', () => {
+        // The mark means "reached ONLY through a ReadOnly arg", so a
+        // write arg must cancel it even when it comes first. A
+        // system that writes A and also reads it through ReadOnly(A)
+        // is a writer of A, not a reader.
+        for (const args of [[A, ReadOnly(A)], [ReadOnly(A), A]] as const) {
+            const access = accessSetOf([...args]);
+            expect(access.readComponents).withContext(String(args))
+                .toEqual(new Set());
+            expect(access.components).withContext(String(args))
+                .toEqual(new Set([A]));
+        }
+        for (const args of [[R, ReadOnly(R)], [ReadOnly(R), R]] as const) {
+            const access = accessSetOf([...args]);
+            expect(access.readResources).withContext(String(args))
+                .toEqual(new Set());
+            expect(access.resources).withContext(String(args))
+                .toEqual(new Set([R]));
+        }
+    });
+
+    it('pairs a writer that also reads through ReadOnly with a pure reader', () => {
+        // The order-independent shape of the cancellation above, at
+        // the level the report acts on: the write is observable to a
+        // pure reader, so the pair needs a pin.
+        const writer = system('writer', [A, ReadOnly(A)]);
+        const reader = system('reader', [ReadOnly(A)]);
+        expect(pairs([writer, reader])).toEqual(['reader<->writer']);
+    });
+
     it('does not mark the world-reaching args read-only', () => {
         // The report cannot check what the system does with the
         // entity or world object these hand out.

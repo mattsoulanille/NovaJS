@@ -68,12 +68,17 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
     // The read-only channel: what the args reach through `ReadOnly`
     // wrappers. A component or resource is read-only for the system
     // only if every arg that reaches it is annotated; an arg that
-    // reaches it without the annotation (a write) wins. The
-    // world-reaching args (GetEntity, Entities, RunQuery, GetWorld,
-    // GetArg) are never read-only: the report cannot check what the
-    // system does with the entity or world object it hands out.
+    // reaches it without the annotation (a write) wins. The mark is
+    // collected unconditionally below and reconciled against the
+    // unannotated reaches afterwards, so the result cannot depend on
+    // the order the args happen to come in. The world-reaching args
+    // (GetEntity, Entities, RunQuery, GetWorld, GetArg) are never
+    // read-only: the report cannot check what the system does with
+    // the entity or world object it hands out.
     const readComponents = new Set<UnknownComponent>();
     const readResources = new Set<UnknownResource>();
+    const unannotatedComponents = new Set<UnknownComponent>();
+    const unannotatedResources = new Set<UnknownResource>();
     const visit = (arg: ArgTypes, readOnly: boolean) => {
         if (arg instanceof ReadOnlyArg) {
             // The wrapper changes how the arg counts in the report
@@ -86,7 +91,7 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
             if (readOnly) {
                 readComponents.add(arg as UnknownComponent);
             } else {
-                readComponents.delete(arg as UnknownComponent);
+                unannotatedComponents.add(arg as UnknownComponent);
             }
         } else if (arg instanceof Resource) {
             resources.add(arg as UnknownResource);
@@ -96,7 +101,7 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
             if (readOnly) {
                 readResources.add(arg as UnknownResource);
             } else {
-                readResources.delete(arg as UnknownResource);
+                unannotatedResources.add(arg as UnknownResource);
             }
         } else if (arg instanceof Query) {
             arg.args.forEach(nested => visit(nested, readOnly));
@@ -120,6 +125,17 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
         // Components (the name map), UUID and events reach no state.
     };
     args.forEach(arg => visit(arg, false));
+    // A write cancels the read-only mark. `components` /
+    // `resources` already carry the write; the mark must not stay on
+    // a component or resource the system also reaches unannotated,
+    // or a writer could pose as a reader (order-independently: this
+    // runs after the whole arg list is visited).
+    for (const component of unannotatedComponents) {
+        readComponents.delete(component);
+    }
+    for (const resource of unannotatedResources) {
+        readResources.delete(resource);
+    }
     return {
         components, resources, allComponents, everything,
         readComponents, readResources,
