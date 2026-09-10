@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build-defaults": "ts-node --esm scripts/pack_png.ts defaults/default_pict.png src/default_pict.ts && ts-node --esm scripts/pack_png.ts defaults/default_rled.png src/default_rled.ts",
-    "build": "node ../nova/scripts/clean_stale_dist.mjs && npm run build-defaults && tsc",
+    "build": "node ../nova/scripts/clean_stale_dist.mjs ./dist && npm run build-defaults && tsc",
     "clean": "rimraf dist",
     "test": "jasmine --config=jasmine.json"
   },
