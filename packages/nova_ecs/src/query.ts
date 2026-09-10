@@ -152,6 +152,10 @@ export class Query<QueryArgs extends readonly ArgTypes[]
  */
 export function referencedComponentsOfArg(arg: ArgTypes):
     ReadonlySet<UnknownComponent> | null {
+    // ReadOnly is an annotation for the ambiguity report; the wrapped
+    // arg is still resolved (World.getArg unwraps it), so its
+    // components belong in the staleness set like the bare arg's.
+    arg = unwrapReadOnly(arg);
     if (arg instanceof Component) {
         return new Set([arg as UnknownComponent]);
     }

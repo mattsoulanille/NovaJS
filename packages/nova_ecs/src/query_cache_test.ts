@@ -1,8 +1,12 @@
-import { right } from 'fp-ts/lib/Either.js';
+import { Either, isLeft, left, right } from 'fp-ts/lib/Either.js';
 import 'jasmine';
+import { ArgTypes, GetArg } from './arg_types.js';
+import { ArgModifier } from './arg_modifier.js';
 import { Component } from './component.js';
 import { Entity } from './entity.js';
 import { EntityMapWithEvents } from './entity_map.js';
+import { Optional } from './optional.js';
+import { ReadOnly, unwrapReadOnly } from './read_only.js';
 import { Query } from './query.js';
 import { QueryCache } from './query_cache.js';
 import { Resource } from './resource.js';
@@ -254,5 +258,77 @@ describe('query cache', () => {
         entities.set('e1', new Entity()
             .addComponent(BarComponent, { y: 'hello' }));
         expect(cached.getResult().length).toBe(0);
+    });
+
+    // The staleness pins for the ReadOnly wrapper: it is an
+    // annotation for the ambiguity report, and resolution unwraps it
+    // (World.getArg), so a wrapped arg must invalidate exactly like
+    // the bare one. The fake getArg resolves the way the real one
+    // does — through the entity's components, through the nested
+    // query's own cache entry, and through a modifier's query and
+    // transform.
+    describe('with a ReadOnly wrapper', () => {
+        function fakeGetArg(queryCache: QueryCache): World['getArg'] {
+            const getArg = ((arg: unknown, entity: Entity): unknown => {
+                const a = unwrapReadOnly(arg as ArgTypes);
+                if (a === GetArg) {
+                    // Like World.getArg: the closure is wrapped in an
+                    // Either (getResultForEntity projects `.right`).
+                    return right(
+                        (selected: ArgTypes) => getArg(selected, entity));
+                }
+                if (a instanceof ArgModifier) {
+                    const resolved = queryCache.get(a.query)
+                        .getResultForEntity(entity);
+                    if (isLeft(resolved)) {
+                        return left(undefined);
+                    }
+                    return (a.transform as
+                        (...args: unknown[]) => Either<undefined, unknown>)
+                        (...resolved.right);
+                }
+                if (a instanceof Query) {
+                    return right(queryCache.get(a).getResult());
+                }
+                return right(
+                    entity.components.get(a as Component<unknown>));
+            }) as unknown as World['getArg'];
+            return getArg;
+        }
+
+        it('invalidates Optional(ReadOnly(x)) when x changes', () => {
+            // Optional caches the wrapped arg's value in the result,
+            // so its changes must invalidate even through the
+            // wrapper.
+            const query = new Query([Optional(ReadOnly(FooComponent))]);
+            const e1 = new Entity();
+            entities.set('e1', e1);
+
+            getArg.and.callFake(fakeGetArg(queryCache));
+            const cached = queryCache.get(query);
+            expect(cached.getResult().map(row => row[0])).toEqual([undefined]);
+
+            e1.components.set(FooComponent, { x: 2 });
+            expect(cached.getResult().map(row => row[0]))
+                .toEqual([{ x: 2 }]);
+        });
+
+        it('re-resolves a ReadOnly-wrapped nested query', () => {
+            // The wrapper is transparent at resolution time: the
+            // nested query resolves to the same cached results as the
+            // bare one, so it must invalidate the same way.
+            const inner = new Query([FooComponent]);
+            const outer = new Query([ReadOnly(inner)]);
+            const e1 = new Entity()
+                .addComponent(FooComponent, { x: 1 });
+            entities.set('e1', e1);
+
+            getArg.and.callFake(fakeGetArg(queryCache));
+            const cached = queryCache.get(outer);
+            expect(cached.getResult()[0]![0]!.length).toBe(1);
+
+            e1.components.delete(FooComponent);
+            expect(cached.getResult()[0]![0]!.length).toBe(0);
+        });
     });
 });
