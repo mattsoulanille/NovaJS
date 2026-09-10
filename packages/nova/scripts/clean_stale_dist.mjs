@@ -35,14 +35,16 @@
  * touches anything outside the dist/ directory it is given.
  *
  * Usage: node scripts/clean_stale_dist.mjs [distDir]   (default: ./dist)
+ *
+ * The default is the caller's working directory's dist/, not the script's
+ * own package: the sibling packages invoke it as
+ * `node ../nova/scripts/clean_stale_dist.mjs`, and npm runs build scripts
+ * in the invoking package's root, so that is the dist/ to clean.
  */
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const distDir = path.resolve(
-    process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)),
-        '..', 'dist'));
+const distDir = path.resolve(process.argv[2] ?? 'dist');
 
 if (!fs.existsSync(distDir)) {
     // Nothing built yet: nothing to clean.
@@ -75,8 +77,15 @@ function clean(dir) {
         const abs = path.join(dir, entry.name);
         if (entry.isDirectory()) {
             clean(abs);
-            if (fs.readdirSync(abs).length === 0) {
-                fs.rmdirSync(abs);
+            try {
+                if (fs.readdirSync(abs).length === 0) {
+                    fs.rmdirSync(abs);
+                }
+            } catch (error) {
+                // A concurrent cleaner emptied and removed it first.
+                if (error.code !== 'ENOENT') {
+                    throw error;
+                }
             }
             continue;
         }
@@ -84,7 +93,16 @@ function clean(dir) {
             continue;
         }
         if (sourceOf(abs) === null && /\.(js|js\.map|d\.ts)$/.test(abs)) {
-            fs.unlinkSync(abs);
+            // Another concurrent cleaner (turbo runs independent packages'
+            // builds in parallel) may have removed this very file after our
+            // scan; that is success, not a build failure.
+            try {
+                fs.unlinkSync(abs);
+            } catch (error) {
+                if (error.code !== 'ENOENT') {
+                    throw error;
+                }
+            }
             removed.push(path.relative(distDir, abs));
         }
     }

@@ -1,5 +1,5 @@
 import 'jasmine';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -51,6 +51,14 @@ function makeTree(root: string, files: Record<string, string>): void {
 function runCleaner(distDir: string): string {
     return execFileSync(process.execPath, [SCRIPT, distDir], {
         encoding: 'utf8',
+    });
+}
+
+/** Run the cleaner with no distDir argument, from another package's root. */
+function runCleanerDefaultingToCwd(cwd: string): string {
+    return execFileSync(process.execPath, [SCRIPT], {
+        encoding: 'utf8',
+        cwd,
     });
 }
 
@@ -223,6 +231,57 @@ describe('clean_stale_dist', () => {
         runCleaner(dist);
 
         expect(fs.existsSync(path.join(dist, 'src/misc.dat'))).toBeTrue();
+    });
+
+    it('cleans the invoking package when run with no argument from its root', () => {
+        // The sibling packages invoke the script as
+        // `node ../nova/scripts/clean_stale_dist.mjs` with no argument, so
+        // the default dist directory must come from the caller's working
+        // directory (npm runs build scripts in the package root), not from
+        // the script's own location inside packages/nova — otherwise every
+        // sibling build would clean nova's dist and never its own.
+        makeTree(dist, {
+            'src/world.js': 'kept',
+            'src/gone.js': 'stale',
+        });
+        makeTree(tmp, { 'src/world.ts': 'export {};' });
+
+        runCleanerDefaultingToCwd(tmp);
+
+        expect(fs.existsSync(path.join(dist, 'src/gone.js'))).toBeFalse();
+        expect(fs.existsSync(path.join(dist, 'src/world.js'))).toBeTrue();
+    });
+
+    it('lets concurrent cleaners race on the same dist without failing', async () => {
+        // turbo runs the independent leaf packages' builds concurrently; if
+        // two of them ever clean the same directory (a shared dist, or a
+        // misdirected default), each scans the whole tree and then unlinks,
+        // so the second unlink of an already-removed file must not crash
+        // the build with ENOENT.
+        const files: Record<string, string> = {};
+        for (let i = 0; i < 400; i++) {
+            files[`src/stale_${i}.js`] = 'stale';
+        }
+        makeTree(dist, files);
+
+        // Overlap the cleaners: the script scans the whole tree before it
+        // starts unlinking, so starting three together is enough for each
+        // to see files another has already removed.
+        const runs = [0, 1, 2].map(() => new Promise<number>((resolve) => {
+            const child = spawn(process.execPath, [SCRIPT, dist],
+                { stdio: ['ignore', 'ignore', 'pipe'] });
+            let stderr = '';
+            child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+            child.on('close', (code) => {
+                if (code !== 0) console.error(stderr);
+                resolve(code ?? 1);
+            });
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 25));
+
+        const codes = await Promise.all(runs);
+        expect(codes).toEqual([0, 0, 0]);
+        expect(fs.existsSync(path.join(dist, 'src/stale_0.js'))).toBeFalse();
     });
 
     it('removes nothing on a second run', () => {
