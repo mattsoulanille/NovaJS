@@ -42,8 +42,6 @@ export function ReadOnly<T extends ArgTypes>(arg: T):
     return new ReadOnlyArg(arg);
 }
 
-export type UnknownReadOnlyArg = ReadOnlyArg<ArgTypes, unknown>;
-
 /**
  * The arg a ReadOnly wrapper stands for, or the arg itself.
  * `unwrapReadOnly(Optional(x))` is `Optional(x)`.
