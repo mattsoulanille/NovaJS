@@ -24,6 +24,8 @@ import { DOMAINS } from './domains.js';
  * through its index too. A spec may still import its own domain's
  * modules directly, and the composition root's files (make_system and
  * friends) stay importable from anywhere — they are not domain modules.
+ * A root-level spec has no own domain: like the root modules, it reaches
+ * every domain through its index.
  */
 describe('nova_plugin domain graph', () => {
     const builtRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -273,9 +275,11 @@ describe('nova_plugin domain graph', () => {
             for (const [root, ext] of [[sourceRoot, '.ts'], [builtRoot, '.js']] as const) {
                 for (const file of pluginSpecsAndRootModules(root, ext)) {
                     // A spec's own domain: deep imports into it are the
-                    // spec reaching into what it exercises. The empty
-                    // relative dir is the composition root, whose files
-                    // (and root-level specs) may import any domain.
+                    // spec reaching into what it exercises. A file of the
+                    // composition root (the empty relative dir) has no own
+                    // domain, so every domain it imports answers to the
+                    // rule — for the root's modules a second time, after
+                    // the check above.
                     const ownDomain = path.relative(root, path.dirname(file));
                     for (const { specifier, exempt } of specifiersOf(file)) {
                         const relative = path.relative(
@@ -285,8 +289,8 @@ describe('nova_plugin domain graph', () => {
                             continue; // outside nova_plugin, the root itself,
                             // or a declared exception
                         }
-                        if (parts[0] === ownDomain || ownDomain === '') {
-                            continue; // the spec's own domain, or a root file
+                        if (parts[0] === ownDomain) {
+                            continue; // the spec's own domain
                         }
                         checked++;
                         expect(parts)
