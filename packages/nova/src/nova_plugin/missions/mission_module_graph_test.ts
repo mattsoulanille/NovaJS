@@ -17,10 +17,17 @@ import { fileURLToPath } from 'url';
 describe('the missions module graph', () => {
     const builtDir = path.dirname(fileURLToPath(import.meta.url));
 
-    /** The in-domain relative imports of a built module ('./x.js' -> 'x'). */
+    /**
+     * The in-domain relative imports of a built module ('./x.js' -> 'x'),
+     * in every form a module can name another by — `from`, a side-effect
+     * `import './x.js'`, and `import('./x.js')` — the same reading the
+     * domain-graph spec makes, so no form can close a cycle unseen.
+     */
     function relativeImports(file: string): string[] {
         const text = fs.readFileSync(file, 'utf8');
-        return [...text.matchAll(/from '(\.\/[^']+\.js)'/g)]
+        const pattern =
+            /(?:\bfrom\s*|^\s*import\s+|\bimport\s*\(\s*)["'](\.\/[^"']+\.js)["']/gm;
+        return [...text.matchAll(pattern)]
             .map(match => match[1]!.slice(2, -3));
     }
 
@@ -56,9 +63,15 @@ describe('the missions module graph', () => {
     });
 
     it('has no mission_logic façade any more', () => {
+        // builtDir is dist/src/nova_plugin/missions; the sources are four
+        // levels up, under packages/nova/src. Anchored on the index so a
+        // wrong path fails here instead of making the check vacuous.
+        const sourceDir = path.resolve(
+            builtDir, '../../../../src/nova_plugin/missions');
+        expect(fs.existsSync(path.join(sourceDir, 'index.ts'))).toBeTrue();
         expect(fs.existsSync(path.join(builtDir, 'mission_logic.js')))
             .toBeFalse();
-        expect(fs.existsSync(path.resolve(builtDir,
-            '../../../src/nova_plugin/missions/mission_logic.ts'))).toBeFalse();
+        expect(fs.existsSync(path.join(sourceDir, 'mission_logic.ts')))
+            .toBeFalse();
     });
 });
