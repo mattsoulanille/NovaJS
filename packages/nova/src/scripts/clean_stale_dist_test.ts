@@ -298,3 +298,34 @@ describe('clean_stale_dist', () => {
         expect(() => runCleaner(dist)).not.toThrow();
     });
 });
+
+describe('the build scripts that run clean_stale_dist', () => {
+    const PACKAGES = fileURLToPath(new URL('../../../../', import.meta.url));
+    const BUILT = ['nova', 'nova_ecs', 'novadatainterface', 'novaparse',
+        'resource_fork'];
+
+    it('run it immediately before tsc, after every source generator', () => {
+        // tsc's incremental build never re-emits an output whose source is
+        // unchanged according to tsconfig.tsbuildinfo, even when the output
+        // file is missing. So every generated, gitignored source
+        // (novadatainterface's src/default_rled.ts from build-defaults,
+        // nova's src/common/generated_build_version.ts) must exist BEFORE
+        // the cleaner runs: with the generator after it, a checkout whose
+        // dist/ came back from the turbo cache — outputs and tsbuildinfo
+        // restored, generator never run — has default_rled.js deleted as
+        // stale and never written again, and the build still exits 0.
+        for (const pkg of BUILT) {
+            const manifest = JSON.parse(fs.readFileSync(
+                path.join(PACKAGES, pkg, 'package.json'), 'utf8'));
+            const steps = (manifest.scripts.build as string)
+                .split('&&').map((step) => step.trim());
+            const clean = steps.findIndex(
+                (step) => step.includes('clean_stale_dist.mjs'));
+            expect(clean).withContext(`${pkg}: build runs the cleaner`)
+                .toBeGreaterThanOrEqual(0);
+            expect(steps[clean + 1])
+                .withContext(`${pkg}: tsc runs right after the cleaner`)
+                .toBe('tsc');
+        }
+    });
+});
