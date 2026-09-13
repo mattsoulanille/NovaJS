@@ -229,10 +229,20 @@ describe('entity data loader', () => {
             .toBeDefined();
 
         // A world that never staged this entity has a cold entry —
-        // the control that makes the warm assertion meaningful.
+        // the control that makes the warm assertion meaningful. The
+        // cold read is deliberately the unstaged pattern: the miss
+        // starts a background entry build, which the dev diagnostic
+        // (#279) flags. The spy keeps that expected warning out of the
+        // run and pins that the diagnostic sees the cold read.
         const coldWorld = await makeSystem(systemId, gameData, 'node', { npcs: false });
+        const warn = spyOn(console, 'warn');
         expect(coldWorld.resources.get(WeaponEntries)!.getCached(weaponId!))
             .toBeUndefined();
+        expect(warn.calls.allArgs().flat().join('\n'))
+            .withContext('the cold control is the unstaged pattern the '
+                + 'dev build flags')
+            .toContain(weaponId!);
+        warn.and.callThrough();
 
         const world = await makeSystem(systemId, gameData, 'node', { npcs: false });
         const ship = makeShip(shipData);
@@ -264,8 +274,18 @@ describe('entity data loader', () => {
         await completeEntity(world, carrier);
         world.entities.set('carrier', carrier);
         const weaponEntries = world.resources.get(WeaponEntries)!;
+        // The cold control is deliberately the unstaged pattern: the
+        // miss starts a background entry build, which the dev
+        // diagnostic (#279) flags. The spy keeps that expected warning
+        // out of the run and pins that the diagnostic sees the cold read.
+        const warn = spyOn(console, 'warn');
         expect(weaponEntries.getCached(SYNTHETIC.weapons.skiffBay))
             .withContext('control: the bay entry is cold').toBeUndefined();
+        expect(warn.calls.allArgs().flat().join('\n'))
+            .withContext('the cold control is the unstaged pattern the '
+                + 'dev build flags')
+            .toContain(SYNTHETIC.weapons.skiffBay);
+        warn.and.callThrough();
         expect(gameData.data.SpriteSheet.getCached(skiffSheet))
             .withContext('control: the fighter\'s sprite sheet is cold')
             .toBeUndefined();
@@ -324,5 +344,30 @@ describe('entity data loader', () => {
             .map(args => args.join(' ')).join('\n');
         expect(warnedAfter).withContext('staging warns nothing')
             .not.toContain(bay);
+    }, 120_000);
+
+    it('the unstaged-closure warning is a development diagnostic: a '
+        + 'production build stays silent (#279)', async () => {
+        // esbuild bakes NODE_ENV into the browser bundles and node reads
+        // the real environment; the check reads it per call, so the
+        // production gate can be pinned by flipping it around one get.
+        const gameData = makeSyntheticGameData();
+        const bay = SYNTHETIC.weapons.skiffBay;
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'node', { npcs: false });
+        const warn = spyOn(console, 'warn');
+        const nodeEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        try {
+            await world.resources.get(WeaponEntries)!.get(bay);
+        } finally {
+            if (nodeEnv === undefined) {
+                delete process.env.NODE_ENV;
+            } else {
+                process.env.NODE_ENV = nodeEnv;
+            }
+        }
+        expect(warn.calls.allArgs().flat().join('\n'))
+            .withContext('production builds never warn').not.toContain(bay);
     }, 120_000);
 });
