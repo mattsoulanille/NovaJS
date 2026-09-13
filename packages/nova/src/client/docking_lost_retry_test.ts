@@ -205,4 +205,70 @@ describe('the docking frame takes the lost roster at a lift-off (issue #257)',
             expect(fleet.lost).toEqual([]);
             expect(fleet.landed).toEqual([]);
         });
+
+        /**
+         * THE PLAYER-REJECTION HALF OF THE FAILURE POLICY (issue #31 + #257):
+         * when the player's own insertion rejects, nothing went in and the
+         * block re-runs next frame with the state still `launching`. The
+         * landed half goes back to `landed` and the lost half back to
+         * `lost` — never to `landed`, because the re-run restocks the landed
+         * roster (takeLandedEscortsRestocked: fuel -> max) and a lost escort
+         * never touched the pad. The re-run is what makes the routing
+         * observable: a lost escort put back on the wrong roster would lift
+         * off with full fuel.
+         */
+        for (const kind of ['landed', 'gateMap'] as const) {
+            it(`hands each half back to its own roster when the player `
+                + `insertion rejects at the ${kind} lift-off, so the re-run `
+                + 'stays un-restocked', async () => {
+                    const { runtime, live, inserted, insertedEntities, player,
+                        fleet, state } = bench(kind);
+                    const landed = lostEscort('landed-1');
+                    landed.entity.components.set(FuelComponent, new Stat(
+                        { current: 10, recharge: 0, max: 100 }));
+                    const lost = lostEscort('lost-1');
+                    lost.entity.components.set(FuelComponent, new Stat(
+                        { current: 10, recharge: 0, max: 100 }));
+                    fleet.landed.push(landed);
+                    fleet.lost.push(lost);
+                    let playerRejects = true;
+                    const bridge = live.bridge as unknown as {
+                        addEntity: (uuid: string, entity: Entity) => Promise<void>,
+                    };
+                    bridge.addEntity = async (uuid: string, entity: Entity) => {
+                        if (uuid === PLAYER && playerRejects) {
+                            throw new Error('the player record was rejected');
+                        }
+                        inserted.push(uuid);
+                        insertedEntities.push(entity);
+                    };
+                    state.apply(s => kind === 'landed'
+                        ? requestLaunch(s, player) : requestGateLaunch(s, player));
+                    await expectAsync(runDockingFrame(runtime, live)).toBeRejected();
+                    expect(inserted).toEqual([]);
+                    // Still docked, still launching: the block runs again.
+                    expect(state.state.kind).toBe(kind);
+                    expect((state.state as { launching?: Entity }).launching)
+                        .toBe(player);
+                    // Each half on the roster it came from.
+                    expect(fleet.landed.map(row => row.uuid)).toEqual(['landed-1']);
+                    expect(fleet.lost.map(row => row.uuid)).toEqual(['lost-1']);
+                    expect(fleet.jumping).toEqual([]);
+                    // The re-run: the landed escort leaves the pad restocked,
+                    // the lost one exactly as it stood.
+                    playerRejects = false;
+                    await runDockingFrame(runtime, live);
+                    expect(inserted.length).toBe(3);
+                    expect(inserted[0]).toBe(PLAYER);
+                    expect(state.state.kind).toBe('inSpace');
+                    expect(fleet.landed).toEqual([]);
+                    expect(fleet.lost).toEqual([]);
+                    expect(insertedEntities).toContain(landed.entity);
+                    expect(insertedEntities).toContain(lost.entity);
+                    expect(landed.entity.components.get(FuelComponent)!.current)
+                        .toBe(100);
+                    expect(lost.entity.components.get(FuelComponent)!.current)
+                        .toBe(10);
+                });
+        }
     });
