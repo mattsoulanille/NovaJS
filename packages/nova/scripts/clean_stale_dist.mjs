@@ -35,14 +35,16 @@
  * touches anything outside the dist/ directory it is given.
  *
  * Usage: node scripts/clean_stale_dist.mjs [distDir]   (default: ./dist)
+ *
+ * The default is the CURRENT DIRECTORY's dist/, not this script's own
+ * package's: every package's `build` runs `node ../nova/scripts/clean_stale_dist.mjs`
+ * from its own root, and resolving the default from the script's
+ * location made all of them clean nova's dist and never their own.
  */
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const distDir = path.resolve(
-    process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)),
-        '..', 'dist'));
+const distDir = path.resolve(process.cwd(), process.argv[2] ?? 'dist');
 
 if (!fs.existsSync(distDir)) {
     // Nothing built yet: nothing to clean.

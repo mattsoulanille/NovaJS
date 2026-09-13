@@ -238,4 +238,17 @@ describe('clean_stale_dist', () => {
     it('succeeds when dist does not exist yet', () => {
         expect(() => runCleaner(dist)).not.toThrow();
     });
+
+    it('defaults to the current directory\'s dist, not the script\'s own package', () => {
+        // Every other package runs `node ../nova/scripts/clean_stale_dist.mjs`
+        // from ITS root with no argument. Resolved from the script's
+        // location, the default cleaned nova's dist for all of them
+        // and left their own stale outputs in place.
+        makeTree(dist, { 'gone/stale.js': 'stale' });
+        const output = execFileSync(process.execPath, [SCRIPT], {
+            cwd: tmp, encoding: 'utf8',
+        });
+        expect(output).toContain('gone/stale.js');
+        expect(fs.existsSync(path.join(dist, 'gone/stale.js'))).toBeFalse();
+    });
 });
