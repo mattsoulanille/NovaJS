@@ -172,6 +172,32 @@ describe('the typed wire-snapshot component list', () => {
         expect(referenceFrame.length).toBe(frame.length);
         expect(referenceFrame.every((byte, i) => byte === frame[i])).toBeTrue();
         expect(snapshotOf(decodeWireOrThrow(reference, WireMessageType, frame))).toEqual(back);
+
+        // A desync dump's checkpoints are the same snapshot type, so
+        // they cross the same way: what the server writes to disk for
+        // analyze_desync.mjs is the JSON-safe form the peer captured.
+        const dump: WireMessage = {
+            message: {
+                type: MessageType.message, destination: 'server', message: {
+                    room: 'nova:129', message: {
+                        rollback: {
+                            kind: 'desyncDump', dump: {
+                                tick: 180, desyncTick: 120, engine: 'spec',
+                                checkpoints: [{ tick: 120, snapshot: source }],
+                                rollbackLog: [{ event: 'spec', atTick: 120 }],
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        const dumpBack = decodeWireOrThrow(codec, WireMessageType, codec.encode(WireMessageType.encode(dump)));
+        const rollback = dumpBack.message?.type === MessageType.message
+            ? dumpBack.message.message.message?.rollback : undefined;
+        if (rollback?.kind !== 'desyncDump') {
+            throw new Error('the dump did not survive the wire');
+        }
+        expect(rollback.dump.checkpoints[0]!.snapshot).toEqual(back);
     }, 120_000);
 
     it('a typed catchUp frame is materially smaller than the opaque one it replaces', async () => {
