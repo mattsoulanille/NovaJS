@@ -1,20 +1,66 @@
 import 'jasmine';
-import { SnapshotPoliciesResource, restoreWireWorldSnapshot, wireSnapshotWorld } from 'nova_ecs/plugins/snapshot_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { SnapshotPoliciesResource, wireSnapshotWorld, WireWorldSnapshot } from 'nova_ecs/plugins/snapshot_plugin';
+import { MessageType } from './communicator_message.js';
+import { avscReferenceCodec } from './avsc_reference.js';
 import { makeDeterminismWorld } from './determinism_harness.js';
+import { deriveAvroSchema } from './io_ts_to_avro.js';
+import { Target } from '../nova_plugin/ship/index.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
-import {
-    wireSnapshotCodec, wireSnapshotRegistrySerializer, wireSnapshotSchema,
-} from './wire_snapshot_components.js';
+import { avroWireCodec, AvroWireCodec, decodeWireOrThrow } from './wire_codec.js';
+import { liveWireCodec, novaCodecHooks, WireMessage, WireMessageType } from './wire_schemas.js';
+import { wireSnapshotRegistrySerializer } from './wire_snapshot_components.js';
 
 /**
- * The typed wire-snapshot component list (issue #268): the socket
- * schema's derivation types every component's data in a catchUp
- * baseline / desync dump through the world-independent registry
+ * The typed wire-snapshot component list (issue #268): the live socket
+ * schema types every component's data in a catchUp baseline / desync
+ * dump through the world-independent registry
  * (wire_snapshot_components.ts), instead of carrying each one as an
  * opaque dynamic blob behind the toJsonSafe sentinels.
  */
 describe('the typed wire-snapshot component list', () => {
+    async function midCombatSnapshot(): Promise<WireWorldSnapshot> {
+        const source = await makeDeterminismWorld(2, 'worker', getSyntheticGameData());
+        for (let i = 0; i < 120; i++) {
+            source.step();
+        }
+        const snapshot = wireSnapshotWorld(source);
+        expect([...source.resources.get(SnapshotPoliciesResource)!.unhandledWire])
+            .toEqual([]);
+        return snapshot;
+    }
+
+    function catchUpWith(snapshot: WireWorldSnapshot): WireMessage {
+        return {
+            message: {
+                type: MessageType.message, source: 'server', message: {
+                    room: 'nova:129', message: {
+                        rollback: {
+                            kind: 'catchUp', tick: 120, records: [],
+                            baseline: { tick: 120, snapshot },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    function snapshotOf(received: WireMessage): WireWorldSnapshot {
+        const rollback = received.message?.type === MessageType.message
+            ? received.message.message.message?.rollback : undefined;
+        if (rollback?.kind !== 'catchUp' || !rollback.baseline) {
+            throw new Error('the catch-up did not survive the wire');
+        }
+        return rollback.baseline.snapshot;
+    }
+
+    /** The pre-#268 live wire: the same schema, derived without the registry. */
+    function opaqueWireCodec(): AvroWireCodec {
+        return avroWireCodec(deriveAvroSchema(WireMessageType, {
+            name: 'WireMessage', hooks: novaCodecHooks(),
+        }).schema);
+    }
+
     it('the registry covers every component a real simulation world registers', async () => {
         const real = await makeDeterminismWorld(2, 'worker', getSyntheticGameData());
         const realNames = new Set(
@@ -25,100 +71,96 @@ describe('the typed wire-snapshot component list', () => {
         expect(missing).toEqual([]);
     }, 60_000);
 
-    it('the wire-snapshot schema derives with no untyped node', () => {
-        // The schema derivation never reports an untyped node: the
-        // componentUnion covers every registered component, and the
-        // explicit hooks cover every wire codec. (Before #268 the
-        // snapshot's component data rode as `untyped` opaque nodes —
-        // the three failures io_ts_to_avro_test pins for the live wire
-        // at exactly these paths.)
-        expect(wireSnapshotSchema()).toBeDefined();
+    it('the live wire schema types the snapshot lists, tag included', () => {
+        const codec = liveWireCodec() as AvroWireCodec;
+        const text = JSON.stringify(codec.schema);
+        // One branch record per registered component, carrying the
+        // pair's encoding tag as a one-byte enum.
+        expect(text).toContain('"name":"Component_MovementState"');
+        expect(text).toContain('"name":"WireComponentEncoding","symbols":["serializer","wire"]');
+        // A schema change is a fingerprint change: the gate at room
+        // join (rollback_relay joinRequest) refuses a peer on the
+        // opaque wire.
+        expect(codec.fingerprint).not.toBe(opaqueWireCodec().fingerprint);
     });
 
-    it('a mid-combat baseline round-trips through the typed codec exactly', async () => {
-        const source = await makeDeterminismWorld(2, 'worker', getSyntheticGameData());
-        for (let i = 0; i < 120; i++) {
-            source.step();
-        }
-        // A ship spawned mid-tick (a bay fighter) gets its derived
-        // components from the provider systems on the NEXT step, whereas
-        // restoring a snapshot derives them immediately — the same
-        // derive-at-restore asymmetry wire_snapshot_test.ts documents.
-        // Step past any such tick so the gate below judges the wire
-        // alone.
-        const { ShipComponent, ShipDataComponent } =
-            await import('../nova_plugin/ship/index.js');
-        const undrivedShip = () => [...source.entities.values()].some(entity =>
-            entity.components.has(ShipComponent)
-            && !entity.components.has(ShipDataComponent));
-        let guard = 0;
-        while (undrivedShip() && guard++ < 600) {
-            source.step();
-        }
-        const snapshot = wireSnapshotWorld(source);
-        expect([...source.resources.get(SnapshotPoliciesResource)!.unhandledWire])
-            .toEqual([]);
+    it('a wire snapshot crosses the live wire as the sender captured it, −0/NaN/absent/null intact', async () => {
+        const source = await midCombatSnapshot();
+        const withMovement = source.entities.filter(entity =>
+            entity.components.some(([name]) => name === 'MovementState'));
+        expect(withMovement.length).toBeGreaterThan(1);
+        const [first, second] = withMovement as [typeof withMovement[0], typeof withMovement[0]];
+        const movementOf = (entity: typeof first) =>
+            entity.components.find(([name]) => name === 'MovementState')![1] as Record<string, unknown>;
+        // Every value JSON cannot carry, in the JSON-safe form the
+        // capture produces, in schema'd fields: the sign of zero, the
+        // non-finite doubles, a present null against an absent
+        // optional (MovementState.turnTo), a present undefined
+        // (Target.target — makeNpcShip stamps it).
+        Object.assign(movementOf(first), {
+            position: { x: { $negzero: true }, y: { $nonfinite: '+' } },
+            velocity: { x: { $nonfinite: 'nan' }, y: { $nonfinite: '-' } },
+            turnTo: null,
+        });
+        delete movementOf(second)['turnTo'];
+        first.components.push(['TargetComponent', { target: { $undefined: true } }, 'serializer']);
+        second.components.push(['TargetComponent', { target: 'first' }, 'serializer']);
+        // A component the registry does not know rides the opaque
+        // branch, sentinels and tag as they are.
+        first.components.push(['RogueComponent', { v: { $negzero: true }, w: [1, { $undefined: true }] }, 'wire']);
+        const sent = catchUpWith(source);
 
-        const codec = wireSnapshotCodec();
-        const frame = codec.encode(snapshot);
-        const back = codec.decode(frame) as typeof snapshot;
-
-        // THE PROPERTY: the typed wire carries every component of
-        // every entity, under the encoding tag the receiving world's
-        // restore routes by — nothing lost, nothing retyped. (The full
-        // restore-to-lockstep gate is wire_snapshot_test's live-wire
-        // spec, which exercises the same restore path; this spec pins
-        // the codec's own transparency, which the harness's shared
-        // game-data cache makes the stable form of that check.)
-        expect(back.entities.map(entity => entity.uuid))
-            .toEqual(snapshot.entities.map(entity => entity.uuid));
-        expect(back.singleton.map(pair => pair[0]))
-            .toEqual(snapshot.singleton.map(pair => pair[0]));
-        expect(back.resources).toEqual(snapshot.resources);
-        for (const [wireEntity, sourceEntity] of [
-            ...back.entities.map((entity, i) => [entity, snapshot.entities[i]!] as const),
-        ] as const) {
-            expect(wireEntity.components.map(pair => pair[0]))
-                .toEqual(sourceEntity.components.map(pair => pair[0]));
-            for (const pair of wireEntity.components) {
-                // The tag the restore path routes by: 'wire' exactly
-                // for the wire-codec-only components.
-                expect(['serializer', 'wire']).toContain(pair[2]);
-                // The data is sentinel-free on the decoded side (the
-                // wire dropped it and the read re-wrapped only what
-                // JSON cannot carry — asserted below on the bytes).
-                expect(JSON.stringify(pair[1])).not.toContain('$negzero');
-            }
-        }
-        expect(back.singleton.map(pair => pair[0]))
-            .toEqual(snapshot.singleton.map(pair => pair[0]));
-
-        // The sentinels are dropped ON THE WIRE: the encoded bytes must
-        // not carry the toJsonSafe wrapper objects (the schema'd fields
-        // hold -0/NaN/±Infinity/undefined natively). A baseline with a
-        // -0 velocity component is the stock case (vector math produces
-        // -0 routinely); its wire bytes carry the IEEE double, not
-        // `{"$negzero":true}`.
+        const codec = liveWireCodec() as AvroWireCodec;
+        const frame = codec.encode(WireMessageType.encode(sent));
         const text = new TextDecoder().decode(frame);
-        expect(text).not.toContain('$negzero');
+        // The schema'd fields hold the values natively: no sentinel
+        // object crosses for them (the rogue component's do).
+        expect(text.split('$negzero').length).toBe(2);
         expect(text).not.toContain('$nonfinite');
-        expect(text).not.toContain('$undefined');
+        expect(text.split('$undefined').length).toBe(2);
+
+        const back = snapshotOf(decodeWireOrThrow(codec, WireMessageType, frame));
+        const backFirst = back.entities.find(entity => entity.uuid === first.uuid)!;
+        const backSecond = back.entities.find(entity => entity.uuid === second.uuid)!;
+        expect(movementOf(backFirst)['position']).toEqual({ x: { $negzero: true }, y: { $nonfinite: '+' } });
+        expect(movementOf(backFirst)['velocity']).toEqual({ x: { $nonfinite: 'nan' }, y: { $nonfinite: '-' } });
+        expect(movementOf(backFirst)['turnTo']).toBeNull();
+        expect('turnTo' in movementOf(backSecond)).toBeFalse();
+        // A present undefined decodes as the absent key: the two are
+        // one value to the component's codec (io-ts fills the key back
+        // in), to the restore and to the hash, so the wire need not
+        // tell them apart.
+        const targetOf = (entity: typeof first) =>
+            entity.components.find(([name]) => name === 'TargetComponent')!;
+        expect(targetOf(backFirst)).toEqual(['TargetComponent', {}, 'serializer']);
+        expect(Target.decode(targetOf(backFirst)[1])).toEqual(Target.decode({ target: undefined }));
+        expect(targetOf(backSecond)).toEqual(['TargetComponent', { target: 'first' }, 'serializer']);
+        expect(backFirst.components.find(([name]) => name === 'RogueComponent'))
+            .toEqual(['RogueComponent', { v: { $negzero: true }, w: [1, { $undefined: true }] }, 'wire']);
+        // Everything else, pair for pair, tag for tag.
+        for (const entity of source.entities) {
+            const received = back.entities.find(other => other.uuid === entity.uuid)!;
+            expect(received.components.map(pair => [pair[0], pair[2]]))
+                .withContext(entity.uuid).toEqual(entity.components.map(pair => [pair[0], pair[2]]));
+        }
+        expect(back.singleton).toEqual(source.singleton);
+        expect(back.resources).toEqual(source.resources);
+
+        // The bytes are standard Avro: the independent reference codec
+        // produces the same bytes and reads ours back to the same value.
+        const reference = avscReferenceCodec(codec.schema);
+        const referenceFrame = reference.encode(WireMessageType.encode(sent));
+        expect(referenceFrame.length).toBe(frame.length);
+        expect(referenceFrame.every((byte, i) => byte === frame[i])).toBeTrue();
+        expect(snapshotOf(decodeWireOrThrow(reference, WireMessageType, frame))).toEqual(back);
     }, 120_000);
 
-    it('the typed encoding is materially smaller than the JSON-safe baseline', async () => {
-        const source = await makeDeterminismWorld(2, 'worker', getSyntheticGameData());
-        for (let i = 0; i < 120; i++) {
-            source.step();
-        }
-        const snapshot = wireSnapshotWorld(source);
-        const typed = wireSnapshotCodec().encode(snapshot).length;
-        // The opaque encoding (the pre-#268 wire) carried every
-        // component's data as a dynamic blob behind the sentinels —
-        // never smaller than the JSON form for these shapes, and
-        // measured ~25% LARGER than the typed encoding on a real
-        // baseline. Assert the conservative end: the typed frame is at
-        // least 15% smaller than the JSON of the same snapshot.
-        const json = JSON.stringify(snapshot).length;
-        expect(typed).toBeLessThan(json * 0.85);
+    it('a typed catchUp frame is materially smaller than the opaque one it replaces', async () => {
+        const sent = WireMessageType.encode(catchUpWith(await midCombatSnapshot()));
+        const typed = liveWireCodec().encode(sent).length;
+        const opaque = opaqueWireCodec().encode(sent).length;
+        // Measured ~30% smaller on a mid-combat synthetic baseline; the
+        // conservative end is asserted.
+        expect(typed).withContext(`typed ${typed} vs opaque ${opaque}`).toBeLessThan(opaque * 0.85);
     }, 60_000);
 });

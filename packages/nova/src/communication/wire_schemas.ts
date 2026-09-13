@@ -9,6 +9,7 @@ import { SimulationFrameType } from './simulation_frame.js';
 import { WireTick } from './simulation_input.js';
 import { SocketMessage, socketMessageType } from './socket_message.js';
 import { AvroWireCodec, avroWireCodec, makeWireCodec, WIRE_ENCODING, WireCodec } from './wire_codec.js';
+import { wireSnapshotRegistrySerializer } from './wire_snapshot_components.js';
 
 /**
  * The Avro schemas for nova's real wire shapes, derived from the io-ts
@@ -76,33 +77,23 @@ export function roomMessageDerivation(): Derivation {
 }
 
 /**
- * The live socket's schema. Derived WITHOUT a serializer: the socket is
- * built before any world exists, so the component lists inside
- * (addEntity records, wire-snapshot baselines) ride opaquely; the
- * serializer that decodes them validates them on the receiving world,
- * as it always did.
- *
- * The world-independent registry EXISTS now (wire_snapshot_components.ts:
- * wireSnapshotSchema / wireSnapshotCodec type and encode a whole wire
- * snapshot with every component's data typed, sentinels dropped on the
- * binary wire, ~30% smaller on a measured baseline) — but wiring it
- * into THIS schema is still open: the JSON-safe capture form wraps
- * undefined as `{$undefined:true}`, and a typed field for `T | undefined`
- * decodes an absent optional as a MISSING key, which io-ts `t.type`
- * rejects (TargetComponent{target:undefined} is common — makeNpcShip
- * stamps it). Switching the live wire over needs either a
- * present-undefined encoding on the typed path or a tolerant restore,
- * and is recorded in the issue rather than improvised here.
+ * The live socket's schema. The socket is built before any world
+ * exists, so the component lists inside — a catchUp baseline's or a
+ * desync dump's wire snapshot, an addEntity record's entity — are
+ * typed by the world-independent registry (wire_snapshot_components.ts:
+ * every component codec the simulation plugin set registers, without
+ * a world): each component's data crosses at its schema's width under
+ * a one-byte branch index, and a wire snapshot's toJsonSafe sentinels
+ * are unwrapped on the binary wire (io_ts_to_avro componentList). The
+ * serializer that decodes them still validates them on the receiving
+ * world, as it always did. What stays opaque is exactly what the
+ * protocol leaves `t.unknown` (io_ts_to_avro_test pins the list).
  */
 export function wireMessageDerivation(): Derivation {
     return deriveAvroSchema(WireMessageType, {
         name: 'WireMessage', hooks: novaCodecHooks(),
+        serializer: wireSnapshotRegistrySerializer(),
     });
-}
-
-/** The synchronous form, for callers that cannot await. */
-function wireMessageDerivationSync(): Derivation {
-    return wireMessageDerivation();
 }
 
 let live: WireCodec | undefined;

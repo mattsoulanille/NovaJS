@@ -342,23 +342,18 @@ describe('io-ts to Avro derivation', () => {
 
         it('the live wire schema types the envelopes end to end', () => {
             // What is left opaque is exactly the rollback protocol's
-            // own t.unknown nodes, plus the component lists (the socket
-            // has no serializer; see wireMessageDerivation). The
-            // world-independent registry exists now
-            // (wire_snapshot_components.ts) and types a whole wire
-            // snapshot standalone; switching THIS schema over to it is
-            // the open decision recorded in the issue (the JSON-safe
-            // capture form's `{$undefined}` sentinel vs an absent
-            // optional key).
+            // own t.unknown nodes. The component lists — a wire
+            // snapshot's (catchUp baselines, desync dumps) and an
+            // addEntity record's — are typed by the world-independent
+            // registry (wire_snapshot_components.ts, #268); a component
+            // whose codec the derivation could not type would appear
+            // here, and this pin is what makes that loud.
             const { failures } = wireMessageDerivation();
             expect(summarize(failures)).toEqual([
-                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.resources[]',
-                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.singleton[][1]',
                 'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.mission',
                 'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.missionsStarted[][1]',
                 'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<addEntity>.entity.components[][1]',
             ]);
             expect(liveWireCodec().encoding).toBe('avro');
             expect(liveWireFingerprint()).toMatch(/^[0-9a-f]{16}$/);

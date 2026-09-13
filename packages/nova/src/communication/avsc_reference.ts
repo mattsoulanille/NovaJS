@@ -1,5 +1,6 @@
 import { Decoder, Encoder } from '@msgpack/msgpack';
 import avro from 'avsc';
+import { fromJsonSafe, toJsonSafe } from 'nova_ecs/plugins/snapshot_plugin';
 import { dynamicDecode, dynamicEncode } from './dynamic_encoding.js';
 import { AvroSchema, AvroSchemaNode } from './io_ts_to_avro.js';
 import { WireCodec } from './wire_codec.js';
@@ -396,10 +397,11 @@ class PlanCompiler {
     private componentUnion(schema: AvroSchemaNode): Plan {
         const components = schema.components ?? {};
         const extra = schema.extra!;
-        // A wire snapshot's list is a 3-tuple whose trailing tag the
-        // binary codec drops and restores (avro_binary componentUnion);
-        // this reference codec mirrors that exactly, so the specs'
-        // byte-for-byte cross-check holds.
+        // A wire snapshot's list (`tupleArity` 3) carries each pair's
+        // encoding tag in the branch record and unwraps the JSON-safe
+        // sentinels around a typed branch's data (avro_binary
+        // componentUnion); this reference codec mirrors that exactly,
+        // so the specs' byte-for-byte cross-check holds.
         const arity = schema.tupleArity ?? 2;
         const byComponent = new Map<string, { branch: string, plan: Plan }>();
         const byBranch = new Map<string, { component: string, plan: Plan }>();
@@ -413,33 +415,33 @@ class PlanCompiler {
             byComponent.set(component, { branch: name, plan });
             byBranch.set(name, { component, plan });
         }
+        const tagged = (record: Record<string, unknown>, value: unknown[]) =>
+            arity === 3 ? { ...record, encoding: value[2] } : record;
         return {
             identity: false,
             encode: value => {
                 const [name, data] = value as [string, unknown];
                 const entry = byComponent.get(name);
                 if (entry === undefined) {
-                    return { [extra]: { name, data: OPAQUE.encode(data) } };
+                    return { [extra]: tagged({ name, data: OPAQUE.encode(data) }, value as unknown[]) };
                 }
-                return { [entry.branch]: entry.plan.encode({ data }) };
+                return {
+                    [entry.branch]: entry.plan.encode(
+                        tagged({ data: arity === 3 ? fromJsonSafe(data) : data }, value as unknown[])),
+                };
             },
             decode: value => {
                 const branch = Object.keys(value as object)[0]!;
                 const record = (value as Record<string, Record<string, unknown>>)[branch]!;
+                const withTag = (pair: unknown[], decoded: Record<string, unknown>) =>
+                    arity === 3 ? [...pair, decoded['encoding']] : pair;
                 if (branch === extra) {
-                    const pair: unknown[] = [record['name'], OPAQUE.decode(record['data'])];
-                    if (arity === 3) {
-                        pair.push('serializer');
-                    }
-                    return pair;
+                    return withTag([record['name'], OPAQUE.decode(record['data'])], record);
                 }
                 const entry = byBranch.get(branch)!;
-                const pair: unknown[] = [entry.component,
-                    (entry.plan.decode(record) as { data: unknown }).data];
-                if (arity === 3) {
-                    pair.push('serializer');
-                }
-                return pair;
+                const decoded = entry.plan.decode(record) as Record<string, unknown>;
+                const data = arity === 3 ? toJsonSafe(decoded['data']) : decoded['data'];
+                return withTag([entry.component, data], decoded);
             },
         };
     }
