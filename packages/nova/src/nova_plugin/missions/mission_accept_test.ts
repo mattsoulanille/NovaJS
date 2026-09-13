@@ -1,4 +1,5 @@
 import 'jasmine';
+import { isLeft } from 'fp-ts/lib/Either.js';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { SerializerPlugin, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
@@ -115,11 +116,15 @@ describe('applyAcceptMission', () => {
 
     it('drops a record whose mission does not decode', () => {
         const { world, player } = makeWorld();
-        // Shape-valid (so the record codec would accept it) but not a
-        // real encoded ActiveMission: applyAcceptMission's own decode
-        // is what rejects it.
+        // Not an encoded ActiveMission. The record codec rejects it too
+        // (#269 types `mission` by the same ActiveMissionType.decode), so
+        // nothing that passes the codec fails here; this is the sim's own,
+        // independent gate, and the cast bypasses the codec to reach it.
+        const mission = { id: MISSION };
+        expect(isLeft(AcceptedMissionType.decode({ missionId: MISSION, mission })))
+            .withContext('the record codec rejects the same shape').toBeTrue();
         applyAcceptMission(world, PEER,
-            { missionId: MISSION, mission: { id: MISSION } as never });
+            { missionId: MISSION, mission: mission as never });
         expect(missionsOf(player).size).toEqual(0);
     });
 
