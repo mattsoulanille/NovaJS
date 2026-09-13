@@ -33,8 +33,13 @@ import { SystemPlugin } from '../nova_plugin/system_plugin.js';
  * MultiplayerData, in makeSystem after the plugin set), so they are
  * repeated here explicitly.
  *
- * A spec pins the registry against a real stepped world, so a future
- * registration cannot be missed.
+ * Coverage is enforced twice. A spec pins the registry against a real
+ * stepped world, and every simulation world checks itself against the
+ * registry as it is built (`assertWireRegistryCovers`, from
+ * makeSystem): a component the registry lacks would otherwise cross
+ * the wire through the schema's opaque `extra` branch — correct bytes,
+ * but silently untyped — so it fails loudly at world creation instead,
+ * naming the component.
  */
 
 /**
@@ -89,4 +94,36 @@ export function wireSnapshotRegistrySerializer(): Serializer {
         registrySerializer = serializer;
     }
     return registrySerializer;
+}
+
+/**
+ * The names of `world`'s serializer-registered components that the
+ * wire registry lacks — components the socket schema cannot type.
+ */
+export function wireRegistryMissing(world: World): string[] {
+    const serializer = world.resources.get(SerializerResource);
+    if (!serializer) {
+        return [];
+    }
+    const registry = wireSnapshotRegistrySerializer().componentsByName;
+    return [...serializer.componentsByName.keys()]
+        .filter(name => !registry.has(name)).sort();
+}
+
+/**
+ * Throws unless every serializer-registered component of `world` is in
+ * the wire registry. Called by makeSystem on every simulation world:
+ * a component registered somewhere the registry world's synchronous
+ * plugin build does not reach would cross the wire untyped (the
+ * schema's opaque `extra` branch) and silently forfeit the typing —
+ * this makes it a loud failure at world creation instead.
+ */
+export function assertWireRegistryCovers(world: World): void {
+    const missing = wireRegistryMissing(world);
+    if (missing.length > 0) {
+        throw new Error(`The wire schema's component registry lacks `
+            + `${missing.join(', ')}: register the component in a plugin the `
+            + `simulation plugin set builds synchronously, or repeat the `
+            + `registration in wire_snapshot_components.ts buildRegistryWorld`);
+    }
 }

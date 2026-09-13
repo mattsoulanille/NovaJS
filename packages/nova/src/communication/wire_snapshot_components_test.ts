@@ -1,4 +1,6 @@
 import 'jasmine';
+import * as t from 'io-ts';
+import { Component } from 'nova_ecs/component';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { SnapshotPoliciesResource, wireSnapshotWorld, WireWorldSnapshot } from 'nova_ecs/plugins/snapshot_plugin';
 import { MessageType } from './communicator_message.js';
@@ -9,7 +11,9 @@ import { Target } from '../nova_plugin/ship/index.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { avroWireCodec, AvroWireCodec, decodeWireOrThrow } from './wire_codec.js';
 import { liveWireCodec, novaCodecHooks, WireMessage, WireMessageType } from './wire_schemas.js';
-import { wireSnapshotRegistrySerializer } from './wire_snapshot_components.js';
+import {
+    assertWireRegistryCovers, wireRegistryMissing, wireSnapshotRegistrySerializer,
+} from './wire_snapshot_components.js';
 
 /**
  * The typed wire-snapshot component list (issue #268): the live socket
@@ -69,6 +73,21 @@ describe('the typed wire-snapshot component list', () => {
             wireSnapshotRegistrySerializer().componentsByName.keys());
         const missing = [...realNames].filter(name => !registry.has(name)).sort();
         expect(missing).toEqual([]);
+        expect(wireRegistryMissing(real)).toEqual([]);
+    }, 60_000);
+
+    it('a component the registry lacks fails loudly, by name', async () => {
+        // A registration the registry world's synchronous plugin build
+        // does not reach would cross the wire through the schema's
+        // opaque `extra` branch — correct bytes, silently untyped. The
+        // check makeSystem runs on every simulation world names it.
+        const world = await makeDeterminismWorld(0, 'worker', getSyntheticGameData());
+        expect(() => assertWireRegistryCovers(world)).not.toThrow();
+        world.resources.get(SerializerResource)!.addComponent(
+            new Component<{ v: number }>('RogueComponent'), t.type({ v: t.number }));
+        expect(wireRegistryMissing(world)).toEqual(['RogueComponent']);
+        expect(() => assertWireRegistryCovers(world))
+            .toThrowError(/registry lacks RogueComponent/);
     }, 60_000);
 
     it('the live wire schema types the snapshot lists, tag included', () => {
