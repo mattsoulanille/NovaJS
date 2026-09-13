@@ -18,6 +18,13 @@ export function fnv1a(text: string, seed = 0x811c9dc5): number {
  * exact values in, matching what the wire snapshot preserves
  * (snapshot_plugin's toJsonSafe): the hash distinguishes precisely the
  * states a resync could produce a peer in.
+ *
+ * Object keys are hashed in SORTED order. JSON.stringify writes them
+ * in insertion order, which is not simulation state: the peer that
+ * built a component object in construction order and the peer that
+ * restored it from a schema'd wire (an Avro record's fields come back
+ * in schema order — nova's typed wire snapshots and addEntity records)
+ * hold the same values under the same keys, and must hash alike.
  */
 function hashReplacer(_key: string, value: unknown): unknown {
     if (typeof value === 'number') {
@@ -27,6 +34,20 @@ function hashReplacer(_key: string, value: unknown): unknown {
         if (!Number.isFinite(value)) {
             return value > 0 ? '$+inf' : value < 0 ? '$-inf' : '$nan';
         }
+        return value;
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        const record = value as Record<string, unknown>;
+        const keys = Object.keys(record);
+        const sorted = [...keys].sort();
+        if (keys.every((key, i) => key === sorted[i])) {
+            return value;
+        }
+        const canonical: Record<string, unknown> = {};
+        for (const key of sorted) {
+            canonical[key] = record[key];
+        }
+        return canonical;
     }
     return value;
 }
