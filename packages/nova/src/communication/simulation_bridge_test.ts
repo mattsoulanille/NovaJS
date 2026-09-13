@@ -31,6 +31,7 @@ import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
 import { wrapRollbackMessage } from './rollback_protocol.js';
 import { ShipControlStateComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
+import { resetWarnThrottle } from '../common/log_throttle.js';
 
 const FooComponent = new Component<{ x: number }>('Foo');
 
@@ -85,6 +86,10 @@ describe('SimulationBridge', () => {
             // controlled ship through PlayerShipSelector (ship_control.ts).
             .addComponent(PlayerShipSelector, undefined);
         world.entities.set('ship', ship);
+        // The drop warning is throttled per key for a second across the
+        // whole process (common/log_throttle.ts): forget any earlier
+        // spec's firing so the count below is this spec's alone.
+        resetWarnThrottle();
         const warn = spyOn(console, 'warn');
         client.controlEvents([
             { action: 'accelerate', state: 'stop' } as never,
