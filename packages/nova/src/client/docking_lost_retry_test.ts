@@ -1,4 +1,5 @@
 import 'jasmine';
+import { right } from 'fp-ts/lib/Either.js';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
@@ -7,6 +8,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import type { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import { PlayerEscortComponent, CreditsComponent } from '../nova_plugin/player/index.js';
 import { FuelComponent, ShipComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
@@ -271,4 +273,40 @@ describe('the docking frame takes the lost roster at a lift-off (issue #257)',
                         .toBe(10);
                 });
         }
+
+        /**
+         * DESTROYED STAYS DESTROYED at the lift-off too (ruling #148): the
+         * lift-off takes only the lost roster, and a removal that followed a
+         * DeathEvent never reaches it (FleetLedger.noteRemoved). Driven
+         * through the ledger's own death-then-removal seam, exactly as the
+         * frame pump drives it while the player is docked.
+         */
+        it('does not resurrect an escort whose death was seen while the '
+            + 'player was docked', async () => {
+                const { runtime, live, inserted, insertedEntities, player,
+                    fleet, state } = bench('landed');
+                const doomed = lostEscort('doomed');
+                const lost = lostEscort('lost-1');
+                // The pump's order while docked: the frame's DeathEvent is
+                // noted, then its removal reaches the ledger.
+                fleet.noteDeath('doomed');
+                const identity = {
+                    encode: (entity: Entity) => entity,
+                    decode: (entity: Entity) => right(entity),
+                } as unknown as Serializer;
+                expect(fleet.noteRemoved('doomed', doomed.entity, PLAYER, identity))
+                    .toBeFalse();
+                expect(fleet.noteRemoved('lost-1', lost.entity, PLAYER, identity))
+                    .toBeTrue();
+                expect(fleet.lost.map(row => row.uuid)).toEqual(['lost-1']);
+                state.apply(s => requestLaunch(s, player));
+                await runDockingFrame(runtime, live);
+                // The player and the lost escort; the destroyed one is gone
+                // for good.
+                expect(inserted.length).toBe(2);
+                expect(insertedEntities).toContain(lost.entity);
+                expect(insertedEntities).not.toContain(doomed.entity);
+                expect(fleet.lost).toEqual([]);
+                expect(fleet.jumping).toEqual([]);
+            });
     });
