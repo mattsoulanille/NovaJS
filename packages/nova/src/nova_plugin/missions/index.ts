@@ -21,8 +21,8 @@ export {
     STANDARD_CARGO_NAMES, cargoName, missionCargoKey, loadMissionCargo,
     unloadMissionCargo, freeCargoSpace as missionFreeCargoSpace,
 } from './mission_cargo.js';
-export * from './mission_availability.js';
 export * from './mission_ship_logic.js';
+export * from './mission_availability.js';
 export * from './mission_offer.js';
 export * from './mission_payval.js';
 export * from './mission_map_marks.js';
