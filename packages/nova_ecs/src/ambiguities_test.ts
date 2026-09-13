@@ -1,6 +1,6 @@
 import 'jasmine';
 import { accessSetOf, findAmbiguities, formatAmbiguities, reportAmbiguities, sharedAccess } from './ambiguities.js';
-import { Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
+import { Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
 import { Component } from './component.js';
 import { EcsEvent } from './events.js';
 import { Optional } from './optional.js';
@@ -117,6 +117,22 @@ describe('ReadOnly', () => {
         expect(accessSetOf([ReadOnly(GetEntity)]).allComponents).toBeTrue();
         expect(accessSetOf([ReadOnly(GetEntity)]).readComponents.size)
             .toBe(0);
+    });
+
+    it('does not mark Emit / EmitNow read-only', () => {
+        // Emitting IS the write: two emitters share the event queue,
+        // whose FIFO order is their relative order, so the annotation
+        // cannot make a pair of emitters unshared.
+        for (const emit of [Emit, EmitNow]) {
+            const access = accessSetOf([ReadOnly(emit)]);
+            expect(access.resources).withContext(String(emit))
+                .toEqual(new Set([emit]));
+            expect(access.readResources.size).withContext(String(emit))
+                .toBe(0);
+            expect(sharedAccess(accessSetOf([ReadOnly(emit)]),
+                accessSetOf([ReadOnly(emit)]))).withContext(String(emit))
+                .toEqual([`resource:${emit.name}`]);
+        }
     });
 });
 

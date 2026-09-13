@@ -1,5 +1,5 @@
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgTypes, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
+import { ArgTypes, Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
 import { Component, UnknownComponent } from "./component.js";
 import { Query } from "./query.js";
 import { ReadOnlyArg } from "./read_only.js";
@@ -25,7 +25,8 @@ import type { World } from "./world.js";
  * a modifier that declares what it resolves (`ArgModifier.reaches`;
  * `Optional(x)` reaches `x`). `Emit` / `EmitNow` are ordinary
  * resources: two emitters share the event queue, whose FIFO order IS
- * their relative order.
+ * their relative order — so they are never read-only, whatever the
+ * annotation says: emitting is the write.
  *
  * Two systems that never respond to the same event are never in the
  * same run list, so their position in `world.systemNames` is
@@ -74,7 +75,9 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
     // the order the args happen to come in. The world-reaching args
     // (GetEntity, Entities, RunQuery, GetWorld, GetArg) are never
     // read-only: the report cannot check what the system does with
-    // the entity or world object it hands out.
+    // the entity or world object it hands out. Neither are Emit /
+    // EmitNow: their only use is a write to the event queue, whose
+    // FIFO order is the emitters' relative order.
     const readComponents = new Set<UnknownComponent>();
     const readResources = new Set<UnknownResource>();
     const unannotatedComponents = new Set<UnknownComponent>();
@@ -98,7 +101,7 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
             if (arg === Entities || arg === RunQuery || arg === GetWorld) {
                 everything = true;
             }
-            if (readOnly) {
+            if (readOnly && arg !== Emit && arg !== EmitNow) {
                 readResources.add(arg as UnknownResource);
             } else {
                 unannotatedResources.add(arg as UnknownResource);
@@ -157,7 +160,8 @@ function touchesAnything(access: AccessSet): boolean {
  * (`GetEntity`, `Entities`, `RunQuery`, `GetWorld`, `GetArg`) are
  * never read-only — the report cannot check what the system does with
  * the entity or world object it hands out — so they keep pairing with
- * everything, as before.
+ * everything, as before; nor are `Emit` / `EmitNow`, whose only use is
+ * the write.
  */
 export function sharedAccess(a: AccessSet, b: AccessSet): string[] {
     if ((a.everything && touchesAnything(b))
