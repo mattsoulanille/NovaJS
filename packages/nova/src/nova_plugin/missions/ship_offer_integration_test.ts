@@ -17,7 +17,10 @@ import { shipOfferConsequence } from '../../spaceport/ship_mission_offer.js';
 import { BoardedComponent } from '../ship/boarding_component.js';
 import { CargoComponent } from '../ship/cargo_plugin.js';
 import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import {
+    completeEntity, loadEntityGameData, loadShipGameData,
+} from '../spawn/entity_data_loader.js';
+import { WeaponEntries } from '../combat/fire_weapon_plugin.js';
 import { FuelComponent } from '../ship/health_plugin.js';
 import { JUMP_DISTANCE } from '../travel/jump_plugin.js';
 import {
@@ -132,6 +135,17 @@ async function hailTheTrader(persId = 'nova:225') {
             preferShipId: trader.components.get(ShipComponent)?.id,
         },
     });
+
+    // Staged before they can land, as the host's acceptMission stages
+    // them before scheduling (simulation_bridge_host.ts): applying the
+    // acceptance must be synchronous on every world, so each ship's
+    // game-data closure — and this world's weapon entries — is loaded
+    // first. Applying it unstaged is the #279 pattern: the ship arms
+    // (and its hull attaches) on whichever tick the shared cache's
+    // warmth allows, differently per run.
+    for (const ship of ships) {
+        await loadEntityGameData(world, ship);
+    }
 
     // What browser.ts does with the pair: encode the ships onto the
     // record so the whole acceptance is one input.
@@ -339,6 +353,15 @@ describe('the Derelict Decoy trap, boarded (mïsn 133)', () => {
             const ships = await buildAcceptedMissionShips('nova:133',
                 accept!.shipSource, shipUuid, systemId, gameData, universe);
             expect(ships.length).toEqual(4);
+            // Staged before they land, as the host's acceptMission
+            // stages them before scheduling (simulation_bridge_host.ts).
+            // Inserting them unstaged was the #279 pattern: with the
+            // shared cache warm from earlier specs the pirates built
+            // their weapon entries on a load-timing-dependent tick, and
+            // cold they never armed at all within the steps below.
+            for (const ship of ships) {
+                await loadEntityGameData(world, ship);
+            }
             const serializer = world.resources.get(SerializerResource)!;
             const pirateUuids = ships.map(() => v4());
             applyAcceptMission(world, undefined, {
@@ -348,6 +371,18 @@ describe('the Derelict Decoy trap, boarded (mïsn 133)', () => {
                     entity: serializer.encode(ship) as never,
                 })),
             });
+
+            // Synchronously fireable on the tick they land: every weapon
+            // of the pirate class has its entry in THIS world already.
+            const weaponEntries = world.resources.get(WeaponEntries)!;
+            for (const ship of ships) {
+                const classId = ship.components.get(ShipComponent)!.id;
+                for (const weaponId of await loadShipGameData(gameData, classId)) {
+                    expect(weaponEntries.getCached(weaponId))
+                        .withContext(`${classId}'s ${weaponId} staged`)
+                        .toBeDefined();
+                }
+            }
 
             // No mission — it aborted on acceptance — but four pirates,
             // already aggressed at the player who took the bait.
