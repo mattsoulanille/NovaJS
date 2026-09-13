@@ -192,8 +192,10 @@ const CloakProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloak,
-    // #237 pin (shared: Fuel, DisabledComponent): CloakPlugin registers
-    // after HealthPlugin's recharges.
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order — CloakPlugin registers after HealthPlugin's
+    // recharges.
     after: [FuelRechargeSystem],
 });
 
@@ -354,8 +356,9 @@ export const CloakDrainSystem = new System({
     },
     // Determinism rule 4: reads time.delta_s to drain the cloak's
     // resource cost, so it must run after TimeSystem produces this
-    // tick's delta. CloakScannerProvider is a #237 pin (shared:
-    // CloakActive, Cloak, Fuel, Shield).
+    // tick's delta. CloakScannerProvider is a #237 pin: the pair no
+    // longer shares state (the provider declares its write with
+    // SetComponent now), but the edge carries the transitive order.
     after: [TimeSystem, CloakScannerProvider],
 });
 

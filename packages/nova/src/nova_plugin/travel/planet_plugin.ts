@@ -59,8 +59,9 @@ export const PlanetDataProvider = ProvideFromCache({
     provided: PlanetDataComponent,
     args: [SimulationGameDataResource, PlanetComponent] as const,
     factory: derivePlanetData,
-    // #237 pin (shared: ShipExplodingComponent): PlanetPlugin registers
-    // before DeathPlugin.
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order — PlanetPlugin registers before DeathPlugin.
     before: [ExplodingFinishedSystem],
 });
 
@@ -446,12 +447,12 @@ const PlanetAnimationProvider = Provide({
     update: [PlanetDataComponent],
     args: [PlanetDataComponent],
     factory: planetData => planetData.animation,
-    // #237 pins: between the planet target and data providers (both
-    // neighbouring pairs no longer share state — the providers declare
-    // their writes with SetComponent now — but the edges carry the
-    // providers' transitive order); PlanetDataProvider is in turn pinned
-    // before ship's ExplodingFinishedSystem (shared:
-    // ShipExplodingComponent).
+    // #237 pins: after PlanetTargetProvider (the pair no longer shares
+    // state — the providers declare their writes with SetComponent now —
+    // but the edge carries the providers' transitive order); before
+    // PlanetDataProvider (shared: PlanetData, read here and written
+    // there). PlanetDataProvider is in turn pinned before ship's
+    // ExplodingFinishedSystem (see there).
     after: [PlanetTargetProvider],
     before: [PlanetDataProvider],
 });

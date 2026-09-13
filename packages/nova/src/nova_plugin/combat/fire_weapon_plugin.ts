@@ -101,8 +101,9 @@ export const WeaponsComponentProvider = Provide({
     factory() {
         return new DefaultMap(defaultWeaponLocalState);
     },
-    // #237 pin (shared: ShipExplodingComponent): FireWeaponPlugin registers
-    // after DeathPlugin.
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order — FireWeaponPlugin registers after DeathPlugin.
     after: [ExplodingFinishedSystem],
 });
 

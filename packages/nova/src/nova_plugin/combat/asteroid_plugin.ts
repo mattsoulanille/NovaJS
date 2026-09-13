@@ -247,8 +247,10 @@ const AsteroidMotionSystem = new System({
     // delta_s = 0 on a world's very first step but the previous delta
     // on the first step after a wire-baseline restore, so a late
     // joiner's asteroids would drift one extra step out of lockstep.
-    // ShipCargoProvider is a #237 pin (shared: Asteroid, MovementState):
-    // AsteroidPlugin registers last of all.
+    // ShipCargoProvider is a #237 pin: the pair no longer shares state
+    // (the provider declares its write with SetComponent now), but the
+    // edge carries the transitive order — AsteroidPlugin registers last
+    // of all.
     after: [TimeSystem, ShipCargoProvider],
     before: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
 });

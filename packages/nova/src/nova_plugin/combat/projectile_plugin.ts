@@ -361,8 +361,11 @@ const ProjectileHurtboxProvider = ProvideFromCache({
     provided: HurtboxHullComponent,
     args: [AnimationComponent, SimulationGameDataResource, CollisionHitterComponent, ProjectileComponent] as const,
     factory: hullFromAnimation,
-    // #237 pins (shared: *; entity): ProjectilePlugin registers before
-    // WeaponPlugin.
+    // #237 pins: after ProjectileLifespanSystem (shared: *); before
+    // ActiveSecondaryProvider — that pair no longer shares state (the
+    // providers declare their writes with SetComponent now), but the
+    // edge carries the transitive order. ProjectilePlugin registers
+    // before WeaponPlugin.
     after: [ProjectileLifespanSystem],
     before: [ActiveSecondaryProvider],
 });

@@ -439,8 +439,11 @@ export const ReturnAI = new System({
         movementState.turnTo = owner.owner;
         movementState.accelerating = 1;
     },
-    // #237 pins (shared: Owner, MovementState, EscortLanding, Return; *):
-    // first of BayPlugin's systems, after TargetPlugin's index provider.
+    // #237 pins: after TargetPlugin's index provider (the pair no longer
+    // shares state — the provider declares its write with SetComponent
+    // now — but the edge carries the transitive order); before
+    // ReturnVulnerabilitySystem (shared: *). First of BayPlugin's
+    // systems.
     after: [TargetIndexProvider],
     before: [ReturnVulnerabilitySystem],
 });

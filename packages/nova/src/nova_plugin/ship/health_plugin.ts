@@ -62,8 +62,10 @@ function rechargeSystem(statComponent: Component<Stat>, after: System[]) {
 
 // The recharges run in this order (#237 pins; shared: DisabledComponent
 // and the time resource, both read-only here). Shield's pin after
-// core's HitboxHullProvider (shared: Shield, DisabledComponent) places
-// the whole group where HealthPlugin registers.
+// core's HitboxHullProvider places the whole group where HealthPlugin
+// registers; that pair no longer shares state (the provider declares
+// its write with SetComponent now), but the edge carries the
+// transitive order.
 export const ShieldRechargeSystem = rechargeSystem(ShieldComponent, [HitboxHullProvider]);
 export const ArmorRechargeSystem = rechargeSystem(ArmorComponent, [ShieldRechargeSystem]);
 /**
