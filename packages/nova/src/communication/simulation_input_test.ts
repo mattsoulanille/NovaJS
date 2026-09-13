@@ -284,6 +284,27 @@ describe('malformed inputs', () => {
                 .get(ShipControlStateComponent)).toBeUndefined();
         });
 
+    it('the control drop warning names the offending event', () => {
+        // Same as the host's controlEvents warning: the line carries
+        // the decode errors (event index, field, value) so a dropped
+        // control can be traced to its author's bug.
+        resetWarnThrottle();
+        const warn = spyOn(console, 'warn');
+        const { world } = makeWorld();
+        apply(world, 'a', [{
+            kind: 'control',
+            events: [
+                { action: 'firePrimary', state: 'start' },
+                { action: 'accelerate', state: 'stop' } as never,
+            ],
+        }]);
+        expect(warn.calls.count()).toBe(1);
+        const line = String(warn.calls.mostRecent().args[0]);
+        expect(line).toContain('Dropping control input from a');
+        expect(line).toContain('1.state');
+        expect(line).toContain('stop');
+    });
+
     it('the input codec rejects every shape the relay used to forward', () => {
         for (const input of [
             { kind: 'control' },

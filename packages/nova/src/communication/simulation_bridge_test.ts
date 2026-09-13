@@ -109,6 +109,22 @@ describe('SimulationBridge', () => {
             ?.get('accelerate')).toBe('start');
     });
 
+    it('the controlEvents drop warning names the offending event', () => {
+        // A static "fails the wire codec" line leaves the caller
+        // hunting: the warning carries the decode errors (event index,
+        // field, value), as the relay's own drop path does.
+        resetWarnThrottle();
+        const warn = spyOn(console, 'warn');
+        client.controlEvents([
+            { action: 'firePrimary', state: 'start' },
+            { action: 'accelerate', state: 'stop' } as never,
+        ]);
+        expect(warn.calls.count()).toBe(1);
+        const line = String(warn.calls.mostRecent().args[0]);
+        expect(line).toContain('1.state');
+        expect(line).toContain('stop');
+    });
+
     it('adds and removes entities through bridge commands', async () => {
         const entity = new Entity('foo').addComponent(FooComponent, { x: 3 });
 

@@ -4,7 +4,7 @@ import { RollbackSimulation } from "nova_ecs/plugins/rollback_plugin";
 import { restoreWireWorldSnapshot, restoreWorld, snapshotWorld, SnapshotPolicies, SnapshotPoliciesResource, wireSnapshotOfSnapshot, WorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
@@ -870,11 +870,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // batch, at the wire's granularity for one control input; the
         // apply path (simulation_input.ts) refuses the same shapes
         // deterministically, so the two ends can never disagree.
-        if (isLeft(t.array(ControlEventType).decode(events))) {
+        const decoded = t.array(ControlEventType).decode(events);
+        if (isLeft(decoded)) {
+            // Name the offending event (index, field, value), as the
+            // relay's drop path does, so the warning points at the
+            // caller's bug rather than restating the schema.
             warnThrottled('bridge-controlEvents-invalid', () =>
                 'Dropping controlEvents: events fail the wire codec '
                 + `(state must be false | 'start' | 'repeat', action a `
-                + 'known ControlAction)');
+                + 'known ControlAction): '
+                + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
             return;
         }
         this.schedule({ kind: 'control', events });

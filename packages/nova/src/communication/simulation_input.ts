@@ -2,7 +2,7 @@ import { isLeft } from "fp-ts/lib/Either.js";
 import * as t from 'io-ts';
 import { Entity } from "nova_ecs/entity";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
 import {
@@ -412,7 +412,8 @@ function applySimulationInput(world: World, input: SimulationInput,
             // published record: a self-inflicted desync. Refusing here
             // too is a pure function of the payload, so every world
             // drops (or applies) the same control at the same tick.
-            if (!isLeft(t.array(ControlEventType).decode(input.events))) {
+            const decoded = t.array(ControlEventType).decode(input.events);
+            if (!isLeft(decoded)) {
                 applyControlEvents(world, peerId, input.events);
                 const subject = world.resources.get(ControlsSubject);
                 if (subject) {
@@ -423,7 +424,8 @@ function applySimulationInput(world: World, input: SimulationInput,
             } else {
                 warnDrop(peerId, input.kind, () =>
                     `Dropping control input from ${peerId ?? 'local'}: `
-                    + 'events fail the wire codec');
+                    + 'events fail the wire codec: '
+                    + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
             }
             break;
         }
