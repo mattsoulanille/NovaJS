@@ -16,16 +16,6 @@ import { decodePayVal } from '../reputation/index.js';
  * missions modules import each other in a cycle (#266).
  */
 
-/**
- * The mission operators this module implements, for the machinery to
- * inject (MissionMachineryContext.missionOperators): Axxx aborts and
- * Fxxx fails active missions.
- */
-export const transitionMissionOperators = {
-    abortMission,
-    failMission,
-};
-
 /** Axxx / the abort button: run OnAbort, drop cargo, remove. */
 export function abortMission(machinery: MissionMachineryContext,
     missionId: string, outfits?: Map<string, number>, depth = 0): void {

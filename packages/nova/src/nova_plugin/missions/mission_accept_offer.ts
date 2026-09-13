@@ -22,15 +22,6 @@ import { decodePayVal } from '../reputation/index.js';
  */
 
 /**
- * The mission operators this module implements, for the machinery to
- * inject (MissionMachineryContext.missionOperators): Sxxx re-enters
- * acceptOffer as a scripted start.
- */
-export const acceptOfferMissionOperators = {
-    startMission: startMissionById,
-} as const;
-
-/**
  * Picks the special ships' name for a mission being accepted, from
  * the mïsn's ShipNameID STR# list (MissionData.shipNames; empty when
  * ShipNameID is -1). Undefined when the mission names no list — the
