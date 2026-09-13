@@ -1,6 +1,6 @@
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Emit, EmitNow, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types.js';
+import { Emit, EmitNow, Entities, GetEntity, GetWorld, QueryResults, RunQuery, SetComponent, UUID } from './arg_types.js';
 import { Component } from './component.js';
 import { Entity } from './entity.js';
 import { AddEvent, DeleteEvent, EcsEvent } from './events.js';
@@ -597,6 +597,36 @@ describe('world', () => {
         world.step();
 
         expect(fooValues).toEqual(new Set([4, 7]));
+    });
+
+    it('resolves SetComponent(x) to a setter bound to x alone', () => {
+        // The setter takes only the data: the component is fixed by the
+        // arg, so a system cannot name some other component and write
+        // past what it declared (review of #261).
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [SetComponent(BAR_COMPONENT), FOO_COMPONENT] as const,
+            step: (setBar, foo) => {
+                setBar({ y: `foo was ${foo.x}` });
+                // Never run: the two-argument form must not compile.
+                const _wouldWriteTheWrongComponent = () => {
+                    // @ts-expect-error a bound setter names no component.
+                    setBar(FOO_COMPONENT, { x: 1 });
+                };
+            }
+        });
+
+        const uuid = v4();
+        world.entities.set(uuid, new Entity()
+            .addComponent(FOO_COMPONENT, { x: 4 }));
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(world.entities.get(uuid)!.components.get(BAR_COMPONENT))
+            .toEqual({ y: 'foo was 4' });
+        expect(world.entities.get(uuid)!.components.get(FOO_COMPONENT))
+            .toEqual({ x: 4 });
     });
 
     it('provides access to components in the entity handle', () => {

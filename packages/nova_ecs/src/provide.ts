@@ -36,7 +36,7 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
             }
             providedValue = factory(...args);
 
-            setComponent(provided, providedValue);
+            setComponent(providedValue);
         }
     });
 }

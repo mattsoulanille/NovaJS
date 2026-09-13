@@ -4,7 +4,6 @@ import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { DEFAULT_IONIZE_COLOR } from "novadatainterface/weapon_data";
 import { SetComponent, SetComponentFunction } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
-import { Entity } from 'nova_ecs/entity';
 import { System } from 'nova_ecs/system';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -203,7 +202,7 @@ function shipStatSystem(name: string, component: Component<Stat>,
         args: [ShipPhysicsComponent, Optional(component),
             SetComponent(component)] as const,
         step(physics, stat, setComponent) {
-            reconcileStat(setComponent, component, stat, bounds(physics),
+            reconcileStat(setComponent, stat, bounds(physics),
                 initialCurrent(physics));
         },
         after,
@@ -211,12 +210,11 @@ function shipStatSystem(name: string, component: Component<Stat>,
 }
 
 /** The step of shipStatSystem, shared with the fuel provider below. */
-function reconcileStat(setComponent: SetComponentFunction,
-    component: Component<Stat>,
+function reconcileStat(setComponent: SetComponentFunction<Stat>,
     stat: Stat | undefined, { max, min, recharge }: StatBounds,
     initialCurrent: number): void {
     if (!stat) {
-        setComponent(component, new Stat({
+        setComponent(new Stat({
             current: initialCurrent, max, min, recharge,
         }));
         return;
@@ -360,7 +358,7 @@ const ShipFuelProvider = new System({
         Optional(ControlledByComponent), Optional(FuelComponent),
         SetComponent(FuelComponent)] as const,
     step(physics, shipData, controlledBy, fuel, setComponent) {
-        reconcileStat(setComponent, FuelComponent, fuel,
+        reconcileStat(setComponent, fuel,
             shipFuelBounds(physics, shipData, controlledBy !== undefined),
             physics.energy);
     },

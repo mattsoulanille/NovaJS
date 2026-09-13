@@ -36,9 +36,14 @@ export function SetComponent<T>(component: Component<T>): SetComponentArg<T> {
     return new SetComponentArg(component);
 }
 
-export type SetComponentFunction = <T>(component: Component<T>, data: T) => void;
+/**
+ * What `SetComponent(x)` resolves to: a setter already bound to `x`. It
+ * takes the data alone — the component is fixed by the arg, so there is
+ * no way to name a different one and write past the declaration.
+ */
+export type SetComponentFunction<T> = (data: T) => void;
 export type SetComponentObject<T>
-    = T extends SetComponentArg<any> ? SetComponentFunction : never;
+    = T extends SetComponentArg<infer Data> ? SetComponentFunction<Data> : never;
 
 export const GetArg = Symbol('Get Arg');
 export type GetArgFunction = <T extends ArgTypes = ArgTypes>(arg: T)

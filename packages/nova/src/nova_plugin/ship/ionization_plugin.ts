@@ -83,7 +83,7 @@ export const IonizedSystem = new System({
             return;
         }
 
-        setComponent(IsIonizedComponent, isIonized);
+        setComponent(isIonized);
         emit(IonizedEvent, isIonized, [uuid]);
     },
     // Judge the raw charge left by last tick's hits (DamageSystem adds

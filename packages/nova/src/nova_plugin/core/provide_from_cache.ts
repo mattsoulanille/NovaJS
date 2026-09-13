@@ -44,7 +44,7 @@ export function ProvideFromCache<Data, Args extends readonly ArgTypes[]>(
             if (value === undefined) {
                 return;
             }
-            setComponent(provided, value);
+            setComponent(value);
         }
     });
 }

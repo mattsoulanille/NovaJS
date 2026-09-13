@@ -650,9 +650,9 @@ export class World {
             // component map, bound to the arg's component, so a provider
             // can store its component without taking the whole entity
             // (see SetComponent in arg_types.ts).
-            const component = arg.component;
-            const setComponent: SetComponentFunction = (_c, data) => {
-                entity.components.set(component as UnknownComponent, data);
+            const component = arg.component as UnknownComponent;
+            const setComponent: SetComponentFunction<unknown> = data => {
+                entity.components.set(component, data);
             };
             return right(setComponent as ArgData<T>);
         } else if (arg === GetArg) {
