@@ -4,6 +4,7 @@ import { BinSet, BinSetC } from "./bin_set.js";
 import { Component, UnknownComponent } from "./component.js";
 import { Entity } from "./entity.js";
 import { Resource, UnknownResource } from "./resource.js";
+import { unwrapReadOnly } from "./read_only.js";
 
 const querySymbol = Symbol('Query');
 
@@ -86,7 +87,12 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     readonly referencedComponents: ReadonlySet<UnknownComponent> | null;
 
     constructor(readonly args: QueryArgs, readonly name?: string) {
-        const modifiers = args.filter(arg => arg instanceof ArgModifier) as UnknownArgModifier[];
+        // ReadOnly wrappers are annotations for the ambiguity report;
+        // unwrap them so membership, resources, and staleness see the
+        // arg the system actually resolves.
+        const unwrappedArgs = args.map(unwrapReadOnly);
+        const modifiers = unwrappedArgs.filter(
+            arg => arg instanceof ArgModifier) as UnknownArgModifier[];
         const modifierComponents = modifiers
             .map(modifier => modifier.query.components)
             .reduce((a, b) => new Set([...a, ...b]), new Set());
@@ -96,15 +102,15 @@ export class Query<QueryArgs extends readonly ArgTypes[]
             .reduce((a, b) => new Set([...a, ...b]), new Set());
 
 
-        this.components = new Set([...(this.args.filter(
+        this.components = new Set([...(unwrappedArgs.filter(
             a => a instanceof Component) as UnknownComponent[]),
         ...modifierComponents]);
 
-        this.resources = new Set([...(this.args.filter(
+        this.resources = new Set([...(unwrappedArgs.filter(
             a => (a instanceof Resource)) as UnknownResource[]),
         ...modifierResources]);
 
-        this.queries = [...(this.args.filter(
+        this.queries = [...(unwrappedArgs.filter(
             (a): a is Query => (a instanceof Query)))];
 
         this.componentsBinSet = BinSetC.of(this.components);
@@ -146,6 +152,10 @@ export class Query<QueryArgs extends readonly ArgTypes[]
  */
 export function referencedComponentsOfArg(arg: ArgTypes):
     ReadonlySet<UnknownComponent> | null {
+    // ReadOnly is an annotation for the ambiguity report; the wrapped
+    // arg is still resolved (World.getArg unwraps it), so its
+    // components belong in the staleness set like the bare arg's.
+    arg = unwrapReadOnly(arg);
     if (arg instanceof Component) {
         return new Set([arg as UnknownComponent]);
     }

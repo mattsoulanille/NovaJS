@@ -1,7 +1,8 @@
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgTypes, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
+import { ArgTypes, Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
 import { Component, UnknownComponent } from "./component.js";
 import { Query } from "./query.js";
+import { ReadOnlyArg } from "./read_only.js";
 import { Resource, UnknownResource } from "./resource.js";
 import { Sortable, System } from "./system.js";
 import type { World } from "./world.js";
@@ -14,13 +15,18 @@ import type { World } from "./world.js";
  *
  * A System's args declare what it can touch, but not whether it reads
  * or writes, so any shared component or resource counts as a
- * conflict. Some args imply more than they name (`accessSetOf`):
- * `GetEntity` hands the system the whole entity (every component);
- * `Entities`, `RunQuery`, `GetWorld` and `GetArg` reach anything in
- * the world — except a `GetArg` inside a modifier that declares what
- * it resolves (`ArgModifier.reaches`; `Optional(x)` reaches `x`).
- * `Emit` / `EmitNow` are ordinary resources: two emitters share the
- * event queue, whose FIFO order IS their relative order.
+ * conflict — unless the arg is annotated `ReadOnly(x)` (read_only.ts):
+ * a value two systems both merely read cannot carry their order
+ * between them, so read/read sharing is not an ambiguity. A read of a
+ * value the other system writes still is one. Some args imply more
+ * than they name (`accessSetOf`): `GetEntity` hands the system the
+ * whole entity (every component); `Entities`, `RunQuery`, `GetWorld`
+ * and `GetArg` reach anything in the world — except a `GetArg` inside
+ * a modifier that declares what it resolves (`ArgModifier.reaches`;
+ * `Optional(x)` reaches `x`). `Emit` / `EmitNow` are ordinary
+ * resources: two emitters share the event queue, whose FIFO order IS
+ * their relative order — so they are never read-only, whatever the
+ * annotation says: emitting is the write.
  *
  * Two systems that never respond to the same event are never in the
  * same run list, so their position in `world.systemNames` is
@@ -33,6 +39,14 @@ export interface AccessSet {
     readonly allComponents: boolean;
     /** `Entities` / `RunQuery` / `GetWorld` / `GetArg`: anything at all. */
     readonly everything: boolean;
+    /**
+     * The subset of `components` the system reaches only through a
+     * `ReadOnly` arg. A component here and in the other system's
+     * `readComponents` is read/read: not an ambiguity.
+     */
+    readonly readComponents: ReadonlySet<UnknownComponent>;
+    /** The subset of `resources` reached only through a `ReadOnly` arg. */
+    readonly readResources: ReadonlySet<UnknownResource>;
 }
 
 export interface Ambiguity {
@@ -52,26 +66,59 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
     const resources = new Set<UnknownResource>();
     let allComponents = false;
     let everything = false;
-    const visit = (arg: ArgTypes) => {
+    // The read-only channel: what the args reach through `ReadOnly`
+    // wrappers. A component or resource is read-only for the system
+    // only if every arg that reaches it is annotated; an arg that
+    // reaches it without the annotation (a write) wins. The mark is
+    // collected unconditionally below and reconciled against the
+    // unannotated reaches afterwards, so the result cannot depend on
+    // the order the args happen to come in. The world-reaching args
+    // (GetEntity, Entities, RunQuery, GetWorld, GetArg) are never
+    // read-only: the report cannot check what the system does with
+    // the entity or world object it hands out. Neither are Emit /
+    // EmitNow: their only use is a write to the event queue, whose
+    // FIFO order is the emitters' relative order.
+    const readComponents = new Set<UnknownComponent>();
+    const readResources = new Set<UnknownResource>();
+    const unannotatedComponents = new Set<UnknownComponent>();
+    const unannotatedResources = new Set<UnknownResource>();
+    const visit = (arg: ArgTypes, readOnly: boolean) => {
+        if (arg instanceof ReadOnlyArg) {
+            // The wrapper changes how the arg counts in the report
+            // (read, not write), not what the system resolves.
+            visit(arg.arg, true);
+            return;
+        }
         if (arg instanceof Component) {
             components.add(arg as UnknownComponent);
+            if (readOnly) {
+                readComponents.add(arg as UnknownComponent);
+            } else {
+                unannotatedComponents.add(arg as UnknownComponent);
+            }
         } else if (arg instanceof Resource) {
             resources.add(arg as UnknownResource);
             if (arg === Entities || arg === RunQuery || arg === GetWorld) {
                 everything = true;
             }
+            if (readOnly && arg !== Emit && arg !== EmitNow) {
+                readResources.add(arg as UnknownResource);
+            } else {
+                unannotatedResources.add(arg as UnknownResource);
+            }
         } else if (arg instanceof Query) {
-            arg.args.forEach(visit);
+            arg.args.forEach(nested => visit(nested, readOnly));
         } else if (arg instanceof ArgModifier) {
             const modifier = arg as UnknownArgModifier;
             if (modifier.reaches) {
                 // A declared reach stands in for the raw GetArg the
                 // transform resolves it with.
                 modifier.query.args
-                    .filter(nested => nested !== GetArg).forEach(visit);
-                modifier.reaches.forEach(visit);
+                    .filter(nested => nested !== GetArg)
+                    .forEach(nested => visit(nested, readOnly));
+                modifier.reaches.forEach(nested => visit(nested, readOnly));
             } else {
-                modifier.query.args.forEach(visit);
+                modifier.query.args.forEach(nested => visit(nested, readOnly));
             }
         } else if (arg === GetEntity) {
             allComponents = true;
@@ -80,8 +127,22 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
         }
         // Components (the name map), UUID and events reach no state.
     };
-    args.forEach(visit);
-    return { components, resources, allComponents, everything };
+    args.forEach(arg => visit(arg, false));
+    // A write cancels the read-only mark. `components` /
+    // `resources` already carry the write; the mark must not stay on
+    // a component or resource the system also reaches unannotated,
+    // or a writer could pose as a reader (order-independently: this
+    // runs after the whole arg list is visited).
+    for (const component of unannotatedComponents) {
+        readComponents.delete(component);
+    }
+    for (const resource of unannotatedResources) {
+        readResources.delete(resource);
+    }
+    return {
+        components, resources, allComponents, everything,
+        readComponents, readResources,
+    };
 }
 
 function touchesAnything(access: AccessSet): boolean {
@@ -89,7 +150,19 @@ function touchesAnything(access: AccessSet): boolean {
         || access.components.size > 0 || access.resources.size > 0;
 }
 
-/** The state two access sets both reach, as `Ambiguity.shared`. */
+/**
+ * The state two access sets both reach, as `Ambiguity.shared`.
+ *
+ * A value both systems merely READ cannot carry one system's order to
+ * the other, so read/read sharing is not an ambiguity: a shared
+ * component or resource counts only if at least one side reaches it
+ * without a `ReadOnly` annotation. The world-reaching args
+ * (`GetEntity`, `Entities`, `RunQuery`, `GetWorld`, `GetArg`) are
+ * never read-only — the report cannot check what the system does with
+ * the entity or world object it hands out — so they keep pairing with
+ * everything, as before; nor are `Emit` / `EmitNow`, whose only use is
+ * the write.
+ */
 export function sharedAccess(a: AccessSet, b: AccessSet): string[] {
     if ((a.everything && touchesAnything(b))
         || (b.everything && touchesAnything(a))) {
@@ -105,13 +178,17 @@ export function sharedAccess(a: AccessSet, b: AccessSet): string[] {
         }
     } else {
         for (const component of a.components) {
-            if (b.components.has(component)) {
+            if (b.components.has(component)
+                && !(a.readComponents.has(component)
+                    && b.readComponents.has(component))) {
                 shared.push(`component:${component.name}`);
             }
         }
     }
     for (const resource of a.resources) {
-        if (b.resources.has(resource)) {
+        if (b.resources.has(resource)
+            && !(a.readResources.has(resource)
+                && b.readResources.has(resource))) {
             shared.push(`resource:${resource.name}`);
         }
     }

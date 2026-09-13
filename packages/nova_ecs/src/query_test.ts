@@ -4,6 +4,7 @@ import { GetArg } from './arg_types.js';
 import { Component } from './component.js';
 import { ArgModifier } from './arg_modifier.js';
 import { Optional } from './optional.js';
+import { ReadOnly } from './read_only.js';
 import { Query } from './query.js';
 import { Resource } from './resource.js';
 import { Without } from './without.js';
@@ -72,6 +73,18 @@ describe('query', () => {
             // changes must invalidate it.
             const query = new Query(
                 [FOO_COMPONENT, Optional(BAR_COMPONENT)] as const);
+            expect(query.components).toEqual(new Set([FOO_COMPONENT]));
+            expect(query.referencedComponents)
+                .toEqual(new Set([FOO_COMPONENT, BAR_COMPONENT]));
+        });
+
+        it('includes the component inside a ReadOnly wrapper', () => {
+            // ReadOnly is an annotation for the ambiguity report; the
+            // wrapped arg is still resolved, and a modifier like
+            // Optional caches its value, so its changes must
+            // invalidate the cached result.
+            const query = new Query(
+                [FOO_COMPONENT, Optional(ReadOnly(BAR_COMPONENT))] as const);
             expect(query.components).toEqual(new Set([FOO_COMPONENT]));
             expect(query.referencedComponents)
                 .toEqual(new Set([FOO_COMPONENT, BAR_COMPONENT]));

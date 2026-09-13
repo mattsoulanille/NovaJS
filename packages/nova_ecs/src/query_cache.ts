@@ -276,8 +276,12 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         if (!this.resultValid) {
             return false;
         }
-        for (const arg of this.query.args) {
-            if (arg instanceof Query && !this.queryCache.get(arg).valid) {
+        // `query.queries` is the unwrapped arg list's nested queries:
+        // a `ReadOnly(new Query(...))` arg resolves to the same cached
+        // results as the bare query (World.getArg unwraps the
+        // wrapper), so it must invalidate the same way.
+        for (const nested of this.query.queries) {
+            if (!this.queryCache.get(nested).valid) {
                 return false;
             }
         }

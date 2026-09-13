@@ -1,9 +1,10 @@
 import 'jasmine';
 import { accessSetOf, findAmbiguities, formatAmbiguities, reportAmbiguities, sharedAccess } from './ambiguities.js';
-import { Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
+import { Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
 import { Component } from './component.js';
 import { EcsEvent } from './events.js';
 import { Optional } from './optional.js';
+import { ReadOnly } from './read_only.js';
 import { Query } from './query.js';
 import { Resource } from './resource.js';
 import { Marker, System } from './system.js';
@@ -56,6 +57,85 @@ describe('accessSetOf', () => {
     });
 });
 
+describe('ReadOnly', () => {
+    it('marks the arg read-only without changing what it reaches', () => {
+        const access = accessSetOf([ReadOnly(A), ReadOnly(R)]);
+        expect([...access.components]).toEqual([A]);
+        expect([...access.resources]).toEqual([R]);
+        expect(access.readComponents).toEqual(new Set([A]));
+        expect(access.readResources).toEqual(new Set([R]));
+    });
+
+    it('passes through queries and modifiers', () => {
+        const access = accessSetOf(
+            [ReadOnly(new Query([A, R] as const)), ReadOnly(Optional(B))]);
+        expect(access.readComponents).toEqual(new Set([A, B]));
+        expect(access.readResources).toEqual(new Set([R]));
+    });
+
+    it('lets a write arg cancel the read-only mark', () => {
+        // The same component declared both ways is a write.
+        const access = accessSetOf([ReadOnly(A), A]);
+        expect(access.readComponents).toEqual(new Set());
+        expect(access.components).toEqual(new Set([A]));
+    });
+
+    it('cancels the read-only mark whichever order the args come in', () => {
+        // The mark means "reached ONLY through a ReadOnly arg", so a
+        // write arg must cancel it even when it comes first. A
+        // system that writes A and also reads it through ReadOnly(A)
+        // is a writer of A, not a reader.
+        for (const args of [[A, ReadOnly(A)], [ReadOnly(A), A]] as const) {
+            const access = accessSetOf([...args]);
+            expect(access.readComponents).withContext(String(args))
+                .toEqual(new Set());
+            expect(access.components).withContext(String(args))
+                .toEqual(new Set([A]));
+        }
+        for (const args of [[R, ReadOnly(R)], [ReadOnly(R), R]] as const) {
+            const access = accessSetOf([...args]);
+            expect(access.readResources).withContext(String(args))
+                .toEqual(new Set());
+            expect(access.resources).withContext(String(args))
+                .toEqual(new Set([R]));
+        }
+    });
+
+    it('pairs a writer that also reads through ReadOnly with a pure reader', () => {
+        // The order-independent shape of the cancellation above, at
+        // the level the report acts on: the write is observable to a
+        // pure reader, so the pair needs a pin.
+        const writer = system('writer', [A, ReadOnly(A)]);
+        const reader = system('reader', [ReadOnly(A)]);
+        expect(pairs([writer, reader])).toEqual(['reader<->writer']);
+    });
+
+    it('does not mark the world-reaching args read-only', () => {
+        // The report cannot check what the system does with the
+        // entity or world object these hand out.
+        expect(accessSetOf([ReadOnly(Entities)]).everything).toBeTrue();
+        expect(accessSetOf([ReadOnly(GetEntity)]).allComponents).toBeTrue();
+        expect(accessSetOf([ReadOnly(GetEntity)]).readComponents.size)
+            .toBe(0);
+    });
+
+    it('does not mark Emit / EmitNow read-only', () => {
+        // Emitting IS the write: two emitters share the event queue,
+        // whose FIFO order is their relative order, so the annotation
+        // cannot make a pair of emitters unshared.
+        for (const emit of [Emit, EmitNow]) {
+            const access = accessSetOf([ReadOnly(emit)]);
+            expect(access.resources).withContext(String(emit))
+                .toEqual(new Set([emit]));
+            expect(access.readResources.size).withContext(String(emit))
+                .toBe(0);
+            expect(sharedAccess(accessSetOf([ReadOnly(emit)]),
+                accessSetOf([ReadOnly(emit)]))).withContext(String(emit))
+                .toEqual([`resource:${emit.name}`]);
+        }
+    });
+});
+
 describe('sharedAccess', () => {
     it('names the shared components and resources, sorted', () => {
         expect(sharedAccess(accessSetOf([A, B, R]), accessSetOf([B, R, C])))
@@ -77,6 +157,41 @@ describe('sharedAccess', () => {
         expect(sharedAccess(accessSetOf([A]), accessSetOf([GetArg]))).toEqual(['*']);
         expect(sharedAccess(accessSetOf([Entities]), accessSetOf([UUID]))).toEqual([]);
     });
+
+    it('ignores read/read sharing of components and resources', () => {
+        expect(sharedAccess(accessSetOf([ReadOnly(A), ReadOnly(R)]),
+            accessSetOf([ReadOnly(A), ReadOnly(R)]))).toEqual([]);
+        // One side reading what the other side WRITES is still shared.
+        expect(sharedAccess(accessSetOf([ReadOnly(A)]), accessSetOf([A])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([A]), accessSetOf([ReadOnly(A)])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([ReadOnly(R)]), accessSetOf([R])))
+            .toEqual(['resource:R']);
+        // A write arg cancels the read-only mark on the same side.
+        expect(sharedAccess(accessSetOf([ReadOnly(A), A]),
+            accessSetOf([ReadOnly(A)]))).toEqual(['component:A']);
+    });
+
+    it('ignores read/read sharing through GetEntity', () => {
+        // GetEntity is never read-only: the system holds the whole
+        // entity object, and the report cannot check what it does
+        // with it.
+        expect(sharedAccess(accessSetOf([ReadOnly(GetEntity)]),
+            accessSetOf([ReadOnly(GetEntity)]))).toEqual(['entity']);
+        expect(sharedAccess(accessSetOf([ReadOnly(GetEntity)]),
+            accessSetOf([A]))).toEqual(['component:A']);
+    });
+
+    it('keeps a read-only world-reaching arg an ambiguity', () => {
+        // ReadOnly(Entities) promises not to write the map, but the
+        // map is mutable and reaches every entity: the report cannot
+        // check that promise arg by arg, so it stays conservative.
+        expect(sharedAccess(accessSetOf([ReadOnly(Entities)]),
+            accessSetOf([ReadOnly(A)]))).toEqual(['*']);
+        expect(sharedAccess(accessSetOf([ReadOnly(Entities)]),
+            accessSetOf([A]))).toEqual(['*']);
+    });
 });
 
 describe('findAmbiguities', () => {
@@ -85,6 +200,15 @@ describe('findAmbiguities', () => {
         const b = system('b', [A, B]);
         const c = system('c', [C]);
         expect(pairs([c, b, a])).toEqual(['a<->b']);
+    });
+
+    it('does not report pairs that only read the same state', () => {
+        const a = system('a', [ReadOnly(A), ReadOnly(R)]);
+        const b = system('b', [ReadOnly(A)]);
+        const c = system('c', [ReadOnly(A), A]);
+        // a and b both merely read A: unobservable order. c writes A,
+        // so it stays ambiguous with both readers.
+        expect(pairs([c, b, a])).toEqual(['a<->c', 'b<->c']);
     });
 
     it('is silent for pairs ordered by a declared edge, in either direction', () => {
@@ -132,6 +256,14 @@ describe('reportAmbiguities', () => {
             .toEqual([['a', 'b']]);
         const between = new Marker({ name: 'between', after: [a], before: [b] });
         world.addMarker(between);
+        expect(reportAmbiguities(world)).toEqual([]);
+    });
+
+    it('does not report two systems that only read the same resource', () => {
+        const world = new World('read-only');
+        world.resources.set(R, 0);
+        world.addSystem(system('a', [ReadOnly(R)]))
+            .addSystem(system('b', [ReadOnly(R)]));
         expect(reportAmbiguities(world)).toEqual([]);
     });
 });
