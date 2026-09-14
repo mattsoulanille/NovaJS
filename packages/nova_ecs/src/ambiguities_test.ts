@@ -1,8 +1,8 @@
 import 'jasmine';
 import { accessSetOf, findAmbiguities, formatAmbiguities, reportAmbiguities, sharedAccess } from './ambiguities.js';
-import { Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, UUID } from './arg_types.js';
+import { Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, SetComponent, UUID } from './arg_types.js';
 import { Component } from './component.js';
-import { EcsEvent } from './events.js';
+import { EcsEvent, StepEvent } from './events.js';
 import { Optional } from './optional.js';
 import { ReadOnly } from './read_only.js';
 import { Query } from './query.js';
@@ -42,6 +42,13 @@ describe('accessSetOf', () => {
     it('reads GetEntity as every component', () => {
         expect(accessSetOf([GetEntity]).allComponents).toBeTrue();
         expect(accessSetOf([GetEntity]).everything).toBeFalse();
+    });
+
+    it('reads SetComponent(x) as a write to x only', () => {
+        const access = accessSetOf([SetComponent(A)]);
+        expect([...access.components]).toEqual([A]);
+        expect(access.allComponents).toBeFalse();
+        expect(access.everything).toBeFalse();
     });
 
     it('reads the world-reaching args as everything', () => {
@@ -119,6 +126,25 @@ describe('ReadOnly', () => {
             .toBe(0);
     });
 
+    it('does not mark SetComponent read-only, and lets it cancel the mark', () => {
+        // SetComponent(x) IS the write to x: wrapping it in ReadOnly
+        // cannot make it a read, and a system that also reads x through
+        // ReadOnly(x) is a writer of x, whichever order the args come in.
+        const wrapped = accessSetOf([ReadOnly(SetComponent(A))]);
+        expect(wrapped.components).toEqual(new Set([A]));
+        expect(wrapped.readComponents.size).toBe(0);
+        for (const args of [[ReadOnly(A), SetComponent(A)],
+                            [SetComponent(A), ReadOnly(A)]] as const) {
+            const access = accessSetOf([...args]);
+            expect(access.readComponents).withContext(String(args))
+                .toEqual(new Set());
+            expect(access.components).withContext(String(args))
+                .toEqual(new Set([A]));
+        }
+        expect(sharedAccess(accessSetOf([SetComponent(A)]),
+            accessSetOf([ReadOnly(A)]))).toEqual(['component:A']);
+    });
+
     it('does not mark Emit / EmitNow read-only', () => {
         // Emitting IS the write: two emitters share the event queue,
         // whose FIFO order is their relative order, so the annotation
@@ -150,6 +176,19 @@ describe('sharedAccess', () => {
             .toEqual(['entity']);
         // GetEntity alone against a resource-only system: nothing in common.
         expect(sharedAccess(accessSetOf([GetEntity]), accessSetOf([R]))).toEqual([]);
+    });
+
+    it('pairs SetComponent(x) with a reader or writer of x, and nothing else', () => {
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([A])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([SetComponent(A)])))
+            .toEqual(['component:A']);
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([B, R])))
+            .toEqual([]);
+        // Unlike GetEntity, a SetComponent does not pair with the entity as
+        // a whole: another SetComponent(B) on the same entity is disjoint.
+        expect(sharedAccess(accessSetOf([SetComponent(A)]), accessSetOf([SetComponent(B)])))
+            .toEqual([]);
     });
 
     it('reports * when one side reaches everything and the other anything', () => {
@@ -215,6 +254,21 @@ describe('findAmbiguities', () => {
         const a = system('a', [A]);
         expect(pairs([a, system('b', [A], { after: [a] })])).toEqual([]);
         expect(pairs([a, system('b', [A], { before: [a] })])).toEqual([]);
+    });
+
+    it('counts a SetComponent(provided) provider against readers of what it touches, and only those', () => {
+        // The Provide shape: Optional(provided), SetComponent(provided),
+        // Optional(StepEvent), ...args. Readers of the provided component
+        // or of a factory input still share state with it…
+        const provider = system('provider',
+            [Optional(A), SetComponent(A), Optional(StepEvent), B]);
+        expect(pairs([provider, system('reader', [A])]))
+            .toEqual(['provider<->reader']);
+        expect(pairs([provider, system('writer', [B])]))
+            .toEqual(['provider<->writer']);
+        // …but a system that merely runs on the same entity no longer does
+        // (with GetEntity here, this pair would share the whole entity).
+        expect(pairs([provider, system('unrelated', [C])])).toEqual([]);
     });
 
     it('follows transitive paths, through markers too', () => {

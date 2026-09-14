@@ -65,7 +65,7 @@ export const ExplosionAnimationProvider = Provide({
     update: [ExplosionDataComponent],
     args: [ExplosionDataComponent],
     factory: animationFactory,
-    // #237 pin (shared: entity).
+    // #237 pin (shared: AnimationComponent).
     after: [ProjectileAnimationProvider],
 });
 

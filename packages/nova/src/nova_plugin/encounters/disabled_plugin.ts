@@ -64,8 +64,10 @@ const RepairProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveRepair,
-    // #237 pin (shared: Ionization, Disabled): DisabledPlugin registers
-    // after IonizedPlugin, whose recharge IonizedSystem drags down here.
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order — DisabledPlugin registers after IonizedPlugin,
+    // whose recharge IonizedSystem drags down here.
     after: [IonizationRechargeSystem],
 });
 
@@ -135,7 +137,8 @@ export const ShipDisableSystem = new System({
             entity.components.delete(DisabledComponent);
         }
     },
-    // RepairProvider is a #237 pin (shared: entity).
+    // RepairProvider is a #237 pin (shared: RepairComponent,
+    // OutfitsStateComponent).
     after: [TimeSystem, RepairProvider],
 });
 

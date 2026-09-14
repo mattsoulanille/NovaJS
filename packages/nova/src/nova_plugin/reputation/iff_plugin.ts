@@ -301,8 +301,9 @@ export const IffProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveIff,
-    // #237 pin (shared: CloakActive, Cloak, Fuel, Shield): IffPlugin
-    // registers after CloakPlugin.
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order — IffPlugin registers after CloakPlugin.
     after: [CloakDrainSystem],
 });
 

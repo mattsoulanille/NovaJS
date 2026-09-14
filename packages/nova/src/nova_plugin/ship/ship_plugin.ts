@@ -2,9 +2,8 @@ import * as t from 'io-ts';
 import { OutfitData } from "novadatainterface/outfit_data";
 import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { DEFAULT_IONIZE_COLOR } from "novadatainterface/weapon_data";
-import { GetEntity } from 'nova_ecs/arg_types';
+import { SetComponent, SetComponentFunction } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
-import { Entity } from 'nova_ecs/entity';
 import { System } from 'nova_ecs/system';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -108,8 +107,9 @@ export const ShipPhysicsProvider = ProvideFromCache({
     args: [ShipDataComponent, SimulationGameDataResource, OutfitsStateComponent] as const,
     update: [ShipDataComponent, OutfitsStateComponent],
     factory: deriveShipPhysics,
-    // #237 pin (shared: entity). The ship providers run in ShipPlugin's
-    // registration order; each pins itself after the previous one.
+    // #237 pin (shared: OutfitsStateComponent, ShipData). The ship
+    // providers run in ShipPlugin's registration order; each pins itself
+    // after the previous one.
     // TimeSystem is the display world's pin (#156): there this provider
     // runs alone (ShipPhysicsDisplayPlugin), after the clock.
     after: [TimeSystem, ShipOutfitsProvider],
@@ -141,7 +141,7 @@ export const ShipMovementPhysicsProvider = Provide({
     update: [ShipPhysicsComponent],
     args: [ShipPhysicsComponent] as const,
     factory: getShipMovementPhysics,
-    // #237 pin (shared: entity).
+    // #237 pin (shared: ShipPhysicsComponent).
     after: [ShipPhysicsProvider],
 });
 
@@ -199,9 +199,10 @@ function shipStatSystem(name: string, component: Component<Stat>,
     after: System[]) {
     return new System({
         name,
-        args: [ShipPhysicsComponent, Optional(component), GetEntity] as const,
-        step(physics, stat, entity) {
-            reconcileStat(entity, component, stat, bounds(physics),
+        args: [ShipPhysicsComponent, Optional(component),
+            SetComponent(component)] as const,
+        step(physics, stat, setComponent) {
+            reconcileStat(setComponent, stat, bounds(physics),
                 initialCurrent(physics));
         },
         after,
@@ -209,11 +210,11 @@ function shipStatSystem(name: string, component: Component<Stat>,
 }
 
 /** The step of shipStatSystem, shared with the fuel provider below. */
-function reconcileStat(entity: Entity, component: Component<Stat>,
+function reconcileStat(setComponent: SetComponentFunction<Stat>,
     stat: Stat | undefined, { max, min, recharge }: StatBounds,
     initialCurrent: number): void {
     if (!stat) {
-        entity.components.set(component, new Stat({
+        setComponent(new Stat({
             current: initialCurrent, max, min, recharge,
         }));
         return;
@@ -244,7 +245,7 @@ const ShipAnimationProvider = Provide({
     update: [ShipDataComponent],
     args: [ShipDataComponent],
     factory: shipData => shipData.animation,
-    // #237 pins (shared: entity).
+    // #237 pins (shared: ShipData).
     after: [ShipDataProvider],
     before: [ShipOutfitsProvider],
 });
@@ -284,8 +285,10 @@ const ShipCollisionInteractionProvider = Provide({
     update: [ShipDataComponent],
     args: [ShipComponent, Optional(ShipDataComponent)] as const,
     factory: (_ship, shipData) => deriveShipVulnerability(shipData),
-    // #237 pins (shared: entity): first of the ship providers, after
-    // core's CreateTimeProvider.
+    // #237 pins: after core's CreateTimeProvider (the pair no longer
+    // shares state — the providers declare their writes with
+    // SetComponent now — but the edge carries the providers' transitive
+    // order); before ShipDataProvider (shared: Ship, ShipData).
     after: [CreateTimeProvider],
     before: [ShipDataProvider],
 });
@@ -298,7 +301,7 @@ const ShipShieldProvider = shipStatSystem(
         recharge: physics.shieldRecharge,
     }),
     physics => physics.shield,
-    // #237 pin (shared: entity).
+    // #237 pin (shared: ShipPhysicsComponent).
     [ShipMovementPhysicsProvider]);
 
 const ShipArmorProvider = shipStatSystem(
@@ -309,7 +312,7 @@ const ShipArmorProvider = shipStatSystem(
         recharge: physics.armorRecharge,
     }),
     physics => physics.armor,
-    // #237 pin (shared: entity).
+    // #237 pin (shared: ShipPhysicsComponent).
     [ShipShieldProvider]);
 
 /**
@@ -353,13 +356,13 @@ const ShipFuelProvider = new System({
     name: "ShipFuelProvider",
     args: [ShipPhysicsComponent, ShipDataComponent,
         Optional(ControlledByComponent), Optional(FuelComponent),
-        GetEntity] as const,
-    step(physics, shipData, controlledBy, fuel, entity) {
-        reconcileStat(entity, FuelComponent, fuel,
+        SetComponent(FuelComponent)] as const,
+    step(physics, shipData, controlledBy, fuel, setComponent) {
+        reconcileStat(setComponent, fuel,
             shipFuelBounds(physics, shipData, controlledBy !== undefined),
             physics.energy);
     },
-    // #237 pin (shared: entity).
+    // #237 pin (shared: ShipPhysicsComponent).
     after: [ShipArmorProvider],
 });
 
@@ -371,7 +374,7 @@ const ShipIonizationProvider = shipStatSystem(
         recharge: -physics.deionize,
     }),
     () => 0,
-    // #237 pin (shared: entity).
+    // #237 pin (shared: ShipPhysicsComponent).
     [ShipFuelProvider]);
 
 /**
@@ -391,7 +394,9 @@ const ShipIonizationColorProvider = Provide({
     factory() {
         return { color: DEFAULT_IONIZE_COLOR };
     },
-    // #237 pin (shared: entity).
+    // #237 pin: the pair no longer shares state (this provider touches
+    // only its own component), but the edge carries the providers'
+    // transitive order.
     after: [ShipIonizationProvider],
 });
 
@@ -410,7 +415,8 @@ const ShipMovementStateProvider = Provide({
             velocity: new Vector(0, 0),
         }
     },
-    // #237 pin (shared: entity).
+    // #237 pin: the pair no longer shares state, but the edge carries
+    // the providers' transitive order.
     after: [ShipIonizationColorProvider],
 });
 
@@ -421,8 +427,9 @@ const ShipTargetComponentProvider = Provide({
     factory() {
         return { target: undefined };
     },
-    // #237 pins (shared: entity): last of the ship providers, before
-    // core's projectile/explosion animation providers.
+    // #237 pins: after ShipMovementStateProvider (shared: Ship); before
+    // the animation providers — the pair no longer shares state, but the
+    // edge carries the providers' transitive order.
     after: [ShipMovementStateProvider],
     before: [ProjectileAnimationProvider],
 });

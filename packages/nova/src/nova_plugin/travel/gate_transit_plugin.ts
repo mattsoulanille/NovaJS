@@ -263,8 +263,8 @@ export const GateArrivalSystem = new System({
         emit(PlayerSoundEvent, { id: WARP_OUT_SOUND }, [uuid]);
         entity.components.delete(GateArrivalComponent);
     },
-    // #237 pin (shared: entity): GateTransitPlugin registers after
-    // JumpPlugin.
+    // #237 pin (shared: ControlledBy, JumpRouteComponent): GateTransitPlugin
+    // registers after JumpPlugin.
     after: [JumpRouteProvider],
 });
 

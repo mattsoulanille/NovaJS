@@ -1,5 +1,5 @@
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgTypes, Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery } from "./arg_types.js";
+import { ArgTypes, Emit, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, SetComponentArg } from "./arg_types.js";
 import { Component, UnknownComponent } from "./component.js";
 import { Query } from "./query.js";
 import { ReadOnlyArg } from "./read_only.js";
@@ -20,13 +20,15 @@ import type { World } from "./world.js";
  * between them, so read/read sharing is not an ambiguity. A read of a
  * value the other system writes still is one. Some args imply more
  * than they name (`accessSetOf`): `GetEntity` hands the system the
- * whole entity (every component); `Entities`, `RunQuery`, `GetWorld`
- * and `GetArg` reach anything in the world — except a `GetArg` inside
- * a modifier that declares what it resolves (`ArgModifier.reaches`;
- * `Optional(x)` reaches `x`). `Emit` / `EmitNow` are ordinary
- * resources: two emitters share the event queue, whose FIFO order IS
- * their relative order — so they are never read-only, whatever the
- * annotation says: emitting is the write.
+ * whole entity (every component); `SetComponent(x)` is the exception —
+ * it declares a write to `x` alone, so a provider holding it touches
+ * only its provided component (and, being a write, is never read-only);
+ * `Entities`, `RunQuery`, `GetWorld` and `GetArg` reach anything in
+ * the world — except a `GetArg` inside a modifier that declares what
+ * it resolves (`ArgModifier.reaches`; `Optional(x)` reaches `x`).
+ * `Emit` / `EmitNow` are ordinary resources: two emitters share the
+ * event queue, whose FIFO order IS their relative order — so they are
+ * never read-only, whatever the annotation says: emitting is the write.
  *
  * Two systems that never respond to the same event are never in the
  * same run list, so their position in `world.systemNames` is
@@ -122,6 +124,14 @@ export function accessSetOf(args: readonly ArgTypes[]): AccessSet {
             }
         } else if (arg === GetEntity) {
             allComponents = true;
+        } else if (arg instanceof SetComponentArg) {
+            // A write to the arg's component: still a touch, so it pairs
+            // with readers and other writers of that component — but with
+            // nothing else on the entity. It IS the write, so it is never
+            // read-only whatever wrapper it came through, and it cancels
+            // any ReadOnly mark the same system put on that component.
+            components.add(arg.component as UnknownComponent);
+            unannotatedComponents.add(arg.component as UnknownComponent);
         } else if (arg === GetArg) {
             everything = true;
         }

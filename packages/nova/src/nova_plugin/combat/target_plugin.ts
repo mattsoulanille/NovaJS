@@ -32,8 +32,8 @@ export const TargetIndexProvider = Provide({
     provided: TargetIndexComponent,
     args: [] as const,
     factory: () => ({ index: -1 }),
-    // #237 pin (shared: entity): TargetPlugin registers after
-    // AggressionPlugin.
+    // #237 pin (shared: TargetIndexComponent): TargetPlugin registers
+    // after AggressionPlugin.
     after: [AggressionSweepSystem],
 });
 
@@ -260,7 +260,9 @@ export const DropCloakedTargetSystem = new System({
             }
         }
     },
-    // #237 pin (shared: Target, Ship, CloakActive, CloakScanner).
+    // #237 pin: the pair no longer shares state (the provider declares
+    // its write with SetComponent now), but the edge carries the
+    // transitive order.
     after: [TargetIndexProvider],
 });
 

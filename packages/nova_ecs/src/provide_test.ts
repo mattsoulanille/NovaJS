@@ -1,4 +1,6 @@
 import 'jasmine';
+import { accessSetOf } from './ambiguities.js';
+import { SetComponent } from './arg_types.js';
 import { Component } from './component.js';
 import { Entity } from './entity.js';
 import { EventMap } from './event_map.js';
@@ -192,6 +194,28 @@ describe('Provide', () => {
         word1.components.set(BAR_COMPONENT, { y: 'hello' });
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
+    });
+
+    it('declares its provided component and its factory inputs, not the whole entity', () => {
+        // Provide takes SetComponent(provided) instead of GetEntity so the
+        // ambiguity report sees exactly what a provider touches (#261):
+        // the provided component (written via SetComponent, read via
+        // Optional) plus its declared factory args — and nothing more.
+        expect([...accessSetOf(fooProvider.args).components].map(c => c.name).sort())
+            .toEqual(['bar', 'foo']);
+        expect(accessSetOf(fooProvider.args).allComponents).toBeFalse();
+    });
+
+    it('sets the provided component through SetComponent', () => {
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
+
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
+        world.entities.set('word1', word1);
+        world.step();
+
+        expect(word1.components.get(FOO_COMPONENT)).toEqual({ x: 5 });
     });
 });
 

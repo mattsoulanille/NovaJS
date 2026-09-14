@@ -1,5 +1,5 @@
 import * as t from 'io-ts';
-import { Emit, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Emit, SetComponent, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { EcsEvent } from "nova_ecs/events";
 import { Optional } from "nova_ecs/optional";
@@ -76,14 +76,14 @@ export function ionizedNow(
 
 export const IonizedSystem = new System({
     name: 'IonizedSystem',
-    args: [IonizationComponent, Optional(IsIonizedComponent), GetEntity, UUID, Emit] as const,
-    step(ionization, wasIonized, entity, uuid, emit) {
+    args: [IonizationComponent, Optional(IsIonizedComponent), SetComponent(IsIonizedComponent), UUID, Emit] as const,
+    step(ionization, wasIonized, setComponent, uuid, emit) {
         const isIonized = ionizedNow(ionization);
         if (isIonized === wasIonized) {
             return;
         }
 
-        entity.components.set(IsIonizedComponent, isIonized);
+        setComponent(isIonized);
         emit(IonizedEvent, isIonized, [uuid]);
     },
     // Judge the raw charge left by last tick's hits (DamageSystem adds

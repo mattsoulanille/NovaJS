@@ -161,8 +161,8 @@ export const AggressionSweepSystem = new System({
     // must run after TimeSystem has advanced the clock this tick.
     // Otherwise a peer whose toposort placed it first would hold a
     // grudge one tick longer than its neighbour.
-    // IffProvider is a #237 pin (shared: entity): AggressionPlugin
-    // registers after IffPlugin.
+    // IffProvider is a #237 pin (shared: IffComponent,
+    // OutfitsStateComponent): AggressionPlugin registers after IffPlugin.
     after: [TimeSystem, IffProvider],
 });
 
