@@ -359,7 +359,21 @@ class Deriver {
         if (known) {
             return known;
         }
-        const schema = typeof hook === 'function' ? hook(this.derive, path) : hook;
+        if (typeof hook === 'function') {
+            // A function hook derives its schema through `derive`, which
+            // has already named any record it built and registered it for
+            // the codec it derived from (ActiveMissionType, say) — so the
+            // node here is that original, and renaming a copy of it would
+            // orphan the registered name: the next use of the derived
+            // codec would reference a name this schema never defines.
+            // The name stays as derived; the hook's cache key dedupes.
+            const derived = hook(this.derive, path);
+            if (isNamed(derived)) {
+                this.namedHooks.set(hook, derived.name);
+            }
+            return derived;
+        }
+        const schema = hook;
         if (isNamed(schema)) {
             // A hook's literal schema may be shared between derivations
             // (module constants), so name a copy rather than the original.

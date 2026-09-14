@@ -372,7 +372,12 @@ describe('malformed inputs', () => {
                 missionId: 'nova:1014',
                 mission: null,
                 outfitsDelta: [['nova:300', 1]],
-                missionsStarted: [['nova:1015', { id: 'nova:1015', started: 3 }]],
+                missionsStarted: [['nova:1015', ActiveMissionType.encode({
+                    id: 'nova:1015', acceptedDay: 3, acceptedAt: 'nova:128',
+                    travelPlanet: null, returnPlanet: null,
+                    cargoType: -1, cargoQty: 0, cargoLoaded: false,
+                    travelDone: false, deadlineDay: null,
+                })]],
                 missionsEnded: ['nova:1013'],
                 recordsDelta: [['nova:128', -3]],
             };
@@ -388,8 +393,14 @@ describe('malformed inputs', () => {
                 expect('extra' in input).toBeFalse();
                 if (input.kind === 'acceptMission') {
                     expect(input.accepted.outfitsDelta).toEqual([['nova:300', 1]]);
-                    expect(input.accepted.missionsStarted)
-                        .toEqual([['nova:1015', { id: 'nova:1015', started: 3 }]]);
+                    expect(input.accepted.missionsStarted).toEqual([['nova:1015',
+                        ActiveMissionType.encode({
+                            id: 'nova:1015', acceptedDay: 3,
+                            acceptedAt: 'nova:128', travelPlanet: null,
+                            returnPlanet: null, cargoType: -1, cargoQty: 0,
+                            cargoLoaded: false, travelDone: false,
+                            deadlineDay: null,
+                        })]]);
                     expect(input.accepted.missionsEnded).toEqual(['nova:1013']);
                     expect(input.accepted.recordsDelta).toEqual([['nova:128', -3]]);
                 }
@@ -403,6 +414,75 @@ describe('malformed inputs', () => {
                 const inputs = [{ kind: 'acceptMission', accepted: { ...accepted, ...bad } }];
                 expect(isLeft(InputRecordType.decode({ ...record, inputs })))
                     .withContext(JSON.stringify(bad)).toBeTrue();
+            }
+        });
+
+    it('an accept record\'s mission and mission-ship payloads are typed, '
+        + 'not opaque', () => {
+            // #269: `mission` and `ships[].entity` used to be t.unknown /
+            // t.UnknownRecord — opaque on the wire, so a schema'd relay
+            // carried them as self-describing blobs and the codec checked
+            // nothing. They are typed in their ENCODED form (what the
+            // client bakes in and applyAcceptMission decodes), so the
+            // codec validates the shape without converting it.
+            const mission = ActiveMissionType.encode({
+                id: 'nova:134', acceptedDay: 0, acceptedAt: 'nova:128',
+                travelPlanet: null, returnPlanet: null,
+                cargoType: -1, cargoQty: 0, cargoLoaded: false,
+                travelDone: false, deadlineDay: null,
+                shipObjective: {
+                    goal: 0, systemId: null, shipStart: 1, behavior: 0,
+                    dudeId: 'nova:133', total: 4, satisfied: 0,
+                    complete: false, failed: false, shipDonePending: false,
+                    live: new Map([['ship-1', { disabled: true }]]),
+                },
+            });
+            const accepted = {
+                missionId: 'nova:134',
+                mission,
+                ships: [{ uuid: 's', entity: { components: [['Foo', { x: 1 }]] } }],
+            };
+            const record = {
+                peerId: 'a', tick: 5, seq: 2,
+                inputs: [{ kind: 'acceptMission', accepted }],
+            };
+            const decoded = InputRecordType.decode(record);
+            expect(isRight(decoded)).toBeTrue();
+            if (isRight(decoded)) {
+                const input = decoded.right.inputs[0];
+                if (input.kind === 'acceptMission') {
+                    // The encoded mission survives verbatim: the field
+                    // codec validates, it does not convert (the sim
+                    // decodes it itself, and the record must stay
+                    // JSON-safe in memory).
+                    expect(input.accepted.mission).toEqual(mission);
+                }
+            }
+
+            // The mission must be an ENCODED ActiveMission: the runtime
+            // `map` state (a Map) is not JSON-safe and is rejected.
+            const liveMission = ActiveMissionType.decode(mission);
+            if (isLeft(liveMission)) {
+                throw new Error('fixture failed to decode');
+            }
+            expect(isLeft(InputRecordType.decode({
+                ...record,
+                inputs: [{
+                    kind: 'acceptMission',
+                    accepted: { ...accepted, mission: liveMission.right },
+                }],
+            }))).withContext('a Map-carrying ActiveMission is not wire-safe').toBeTrue();
+            for (const bad of [
+                { mission: { nonsense: true } },
+                { mission: 7 },
+                { ships: [{ uuid: 's' }] },
+                { ships: [{ uuid: 's', entity: { components: 'no' } }] },
+                { ships: [{ uuid: 7, entity: { components: [] } }] },
+            ]) {
+                expect(isLeft(InputRecordType.decode({
+                    ...record,
+                    inputs: [{ kind: 'acceptMission', accepted: { ...accepted, ...bad } }],
+                }))).withContext(JSON.stringify(bad)).toBeTrue();
             }
         });
 });

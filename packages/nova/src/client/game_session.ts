@@ -174,7 +174,7 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
                     ...data.record,
                     ships: data.ships.map(ship => ({
                         uuid: v4(),
-                        entity: serializer.encode(ship) as never,
+                        entity: serializer.encode(ship),
                     })),
                 }
                 : data.record;

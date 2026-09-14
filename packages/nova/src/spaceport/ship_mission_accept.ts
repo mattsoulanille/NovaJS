@@ -4,7 +4,8 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import {
-    AcceptedMission, acceptOffer, LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
+    AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
+    LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
     missionMatchesLocation,
 } from '../nova_plugin/missions/index.js';
 import {
@@ -276,7 +277,10 @@ export async function buildShipMissionAccept(player: Entity,
         offeredBy?: string,
         /** What accepting does to that hull (shipOfferConsequence). */
         offeredByFate?: 'replace' | 'leave',
-        ships?: { uuid: string, entity: unknown }[],
+        /** The caller builds the batch from the returned `active` and
+         * attaches it to `record.ships` (see below); the entities are
+         * already ENCODED by then, with the bridge's serializer. */
+        ships?: AcceptedMissionShip[],
         /** The system the offer was made in; MUST be the one the offer
          * was resolved against, or the accept re-rolls a different
          * destination and ship system than the player was shown. */
@@ -332,7 +336,7 @@ export async function buildShipMissionAccept(player: Entity,
     // has its own field below). See AcceptedMissionType.missionsStarted.
     const missionsBefore = before.components.get(MissionsComponent)!;
     const missionsNow = copy.components.get(MissionsComponent)!;
-    const missionsStarted: [string, unknown][] = [...missionsNow]
+    const missionsStarted: [string, EncodedActiveMission][] = [...missionsNow]
         .filter(([id]) => id !== offer.data.id && !missionsBefore.has(id))
         .map(([id, started]) => [id, ActiveMissionType.encode(started)]);
     const missionsEnded = [...missionsBefore.keys()]
@@ -395,7 +399,7 @@ export async function buildShipMissionAccept(player: Entity,
             ...(missionsStarted.length ? { missionsStarted } : {}),
             ...(missionsEnded.length ? { missionsEnded } : {}),
             ...(records.length ? { recordsDelta: records } : {}),
-            ...(ships.length ? { ships: ships as never } : {}),
+            ...(ships.length ? { ships } : {}),
         },
     };
 }

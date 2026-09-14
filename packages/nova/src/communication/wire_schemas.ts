@@ -1,6 +1,8 @@
 import * as t from 'io-ts';
 import { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import { stat } from '../nova_plugin/core/index.js';
+import { EncodedActiveMissionType } from '../nova_plugin/missions/index.js';
+import { ActiveMissionType } from '../nova_plugin/player/index.js';
 import { CommunicatorMessage, communicatorMessageType } from './communicator_message.js';
 import { CodecHook, CodecHooks, Derivation, deriveAvroSchema } from './io_ts_to_avro.js';
 import { RoomMessage, roomMessageType } from './multi_room_communicator.js';
@@ -31,6 +33,14 @@ export function novaCodecHooks(): CodecHooks {
                 { name: 'min', type: 'double' },
             ],
         }],
+        // The acceptMission record's mission payload: the ENCODED
+        // ActiveMission, validated pass-through by the codec
+        // (mission_accept.ts) and typed on the wire by the same schema
+        // ActiveMissionType itself derives (#269). A function hook so
+        // the record schema is derived once and referenced by name at
+        // every use (`mission`, each missionsStarted entry).
+        [EncodedActiveMissionType, (derive, path) =>
+            derive(ActiveMissionType, path, 'ActiveMission')],
     ]);
 }
 

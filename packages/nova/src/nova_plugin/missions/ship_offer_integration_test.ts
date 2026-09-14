@@ -155,7 +155,7 @@ async function hailTheTrader(persId = 'nova:225') {
         ...accept.record,
         ships: ships.map((ship, i) => ({
             uuid: shipUuids[i],
-            entity: serializer.encode(ship) as never,
+            entity: serializer.encode(ship),
         })),
     };
 
@@ -368,7 +368,7 @@ describe('the Derelict Decoy trap, boarded (mïsn 133)', () => {
                 ...accept!.record,
                 ships: ships.map((ship, i) => ({
                     uuid: pirateUuids[i],
-                    entity: serializer.encode(ship) as never,
+                    entity: serializer.encode(ship),
                 })),
             });
 

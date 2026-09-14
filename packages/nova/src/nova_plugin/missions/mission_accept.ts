@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import { Component } from 'nova_ecs/component';
-import { EncodedEntity, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { EncodedEntity, SerializerResource, formatIoTsErrors } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import { CargoComponent } from '../ship/index.js';
 import { deriveEntityComponents } from '../core/index.js';
@@ -97,11 +97,49 @@ import { findControlledEntity } from '../player/index.js';
  * implied.
  */
 
+/**
+ * The mission payload as it crosses the wire: the ENCODED ActiveMission
+ * (what `ActiveMissionType.encode` produces — its `map` fields are
+ * already tuple pairs), or null for an `autoAborted` accept.
+ *
+ * A pass-through codec, not `ActiveMissionType` itself: the record
+ * carries the mission in encoded form end to end — the client bakes the
+ * encoded value in (ship_mission_accept.ts), the sim decodes it itself
+ * at apply (applyAcceptMission) — so this codec validates the encoded
+ * shape and hands it back UNCHANGED. Decoding here would hand
+ * applyAcceptMission a live ActiveMission (its `map` fields as Maps) to
+ * decode a second time, and would put a Map on a record that must stay
+ * JSON-safe in memory.
+ *
+ * The wire schema (io_ts_to_avro) cannot reflect a bare `new t.Type`, so
+ * `novaCodecHooks` types this codec by `ActiveMissionType`'s own derived
+ * schema — the encoded form, which is what the field holds (#269).
+ */
+export type EncodedActiveMission = t.OutputOf<typeof ActiveMissionType>;
+
+export const EncodedActiveMissionType = new t.Type<EncodedActiveMission,
+    EncodedActiveMission, unknown>(
+    'EncodedActiveMission',
+    (u): u is EncodedActiveMission =>
+        typeof u === 'object' && u !== null && 'id' in u,
+    (input, context) => {
+        const decoded = ActiveMissionType.decode(input);
+        if (isLeft(decoded)) {
+            return t.failure(input, context,
+                'not an encoded ActiveMission: '
+                + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
+        }
+        return t.success(input as EncodedActiveMission);
+    },
+    t.identity,
+);
+
 /** One mission ship the accept spawns, baked into the record. */
 export const AcceptedMissionShipType = t.type({
     uuid: t.string,
-    entity: t.UnknownRecord,
+    entity: EncodedEntity,
 });
+export type AcceptedMissionShip = t.TypeOf<typeof AcceptedMissionShipType>;
 
 /**
  * The result of an in-flight mission acceptance, as it crosses the wire.
@@ -119,8 +157,10 @@ export const AcceptedMissionType = t.intersection([t.type({
     missionId: t.string,
     /** The fully resolved ActiveMission, encoded (see the module note on
      * why the client resolves it). Null for an `autoAborted` accept,
-     * which never produces one. */
-    mission: t.unknown,
+     * which never produces one. Typed in its ENCODED form — the codec
+     * validates the shape without converting it; see
+     * EncodedActiveMissionType (#269). */
+    mission: t.union([EncodedActiveMissionType, t.null]),
 }), t.partial({
     /**
      * mïsn Flags 0x0001 in its IMMEDIATE form: "the mission auto-aborts
@@ -233,9 +273,10 @@ export const AcceptedMissionType = t.intersection([t.type({
      * mission / the offering hull) AND per entry: a started mission
      * already on the list is skipped, the 16-mission cap is re-checked for
      * each, and ending a mission that is not there is a no-op. Additive:
-     * older records simply carry neither field.
+     * older records simply carry neither field. Each entry's mission is
+     * typed in the same encoded form as `mission` above (#269).
      */
-    missionsStarted: t.array(t.tuple([t.string, t.unknown])),
+    missionsStarted: t.array(t.tuple([t.string, EncodedActiveMissionType])),
     missionsEnded: t.array(t.string),
     /**
      * Signed per-gövt legal-record change (LegalRecordsComponent), keyed

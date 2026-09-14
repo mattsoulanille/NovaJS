@@ -79,6 +79,15 @@ export const STATE_HASH_INTERVAL = 60;
 //    peer's own game data — and BeamState, as its real shape) changed
 //    their ENCODED form (nova_plugin/core/game_data_ref.ts), which every
 //    input record, baseline and state hash carries.
+//    Also under 7, no further bump: acceptMission's `mission`,
+//    `missionsStarted[][1]` and `ships[].entity` are TYPED on the Avro
+//    wire (#269: EncodedActiveMissionType / EncodedEntity in
+//    nova_plugin/missions/mission_accept.ts). They are the encoded forms
+//    the record already carried, so the JSON form — what room archives,
+//    desync dumps and older records hold — is unchanged, and the codec
+//    now refuses only what applyAcceptMission's own decode dropped. The
+//    derived schema, and with it the joinRequest fingerprint the relay
+//    compares, changes; that gate is what keeps the two layouts apart.
 export const PROTOCOL_VERSION = 7;
 
 /**
