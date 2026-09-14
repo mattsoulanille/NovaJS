@@ -1,6 +1,6 @@
 import 'jasmine';
 import { canJump, jumpBlocker, jumpRadiusFor } from './jump_readiness.js';
-import { FUEL_PER_JUMP } from '../ship/health_plugin.js';
+import { FUEL_PER_JUMP } from '../ship/index.js';
 import { JUMP_DISTANCE } from './jump_plugin.js';
 
 function inputs(overrides: Partial<Parameters<typeof canJump>[0]> = {}) {

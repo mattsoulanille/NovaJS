@@ -21,49 +21,49 @@ import {
     BayCaptureEvent, BoardingBlockedEvent, clearHostilityToward,
     EscortRepairedEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
-import { AggressionComponent } from '../combat/aggression.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
-import { BoardedComponent, BoardingComponent } from '../ship/boarding_component.js';
-import { InitiateJumpEvent } from '../travel/jump_plugin.js';
-import { LandEvent } from '../travel/planet_plugin.js';
+import { AggressionComponent } from '../combat/index.js';
+import { MissionShipComponent } from '../player/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
+import { BoardedComponent, BoardingComponent } from '../ship/index.js';
+import { InitiateJumpEvent } from '../travel/index.js';
+import { LandEvent } from '../travel/index.js';
 import {
     BayFighterComponent, CollectableEscortComponent, ReturnComponent,
     ReturnWhenTargetRemovedComponent, startReturnHome,
-} from '../escorts/bay_plugin.js';
-import { CollisionHitterComponent } from '../core/collision_interaction.js';
-import { HurtboxHullComponent } from '../core/collisions_plugin.js';
-import { isBelowDisableThreshold } from '../ship/disabled_component.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
+} from '../escorts/index.js';
+import { CollisionHitterComponent } from '../core/index.js';
+import { HurtboxHullComponent } from '../core/index.js';
+import { isBelowDisableThreshold } from '../ship/index.js';
+import { CargoComponent } from '../ship/index.js';
 import {
     CollisionEvent, CollisionVulnerabilityComponent,
-} from '../core/collision_interaction.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { cappedEscortCount, MAX_ESCORTS } from '../escorts/escort_cap.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { escortParent } from '../escorts/escort_command_plugin.js';
-import { OwnerComponent, SourceComponent } from '../combat/fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { isInFlock } from '../combat/flock.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+} from '../core/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { cappedEscortCount, MAX_ESCORTS } from '../escorts/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { escortParent } from '../escorts/index.js';
+import { OwnerComponent, SourceComponent } from '../combat/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { isInFlock } from '../combat/index.js';
+import { GovtComponent } from '../core/index.js';
+import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { PlayerEscortComponent } from '../player/player_escort.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { PlayerEscortComponent } from '../player/index.js';
 import {
     CreditsComponent, MissionsComponent,
-} from '../player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../reputation/reputation_plugin.js';
+} from '../player/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
-} from '../player/ship_control.js';
-import { ShipComponent, ShipDataComponent } from '../ship/ship_plugin.js';
-import { PersComponent } from '../spawn/pers_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+} from '../player/index.js';
+import { ShipComponent, ShipDataComponent } from '../ship/index.js';
+import { PersComponent } from '../spawn/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 const BOARDER = 'boarder';
 const SECOND_BOARDER = 'boarder2';

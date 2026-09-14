@@ -4,11 +4,11 @@ import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, getDefaultShipPhysics, ShipData } from 'novadatainterface/ship_data';
 import { World } from 'nova_ecs/world';
 import { getPluginGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { FuelComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { ControlledByComponent } from '../player/ship_control.js';
+import { ControlledByComponent } from '../player/index.js';
 import { shipFuelBounds, ShipPhysicsComponent } from './ship_plugin.js';
 
 /**

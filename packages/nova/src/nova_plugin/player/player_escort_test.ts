@@ -13,18 +13,18 @@ import { World } from 'nova_ecs/world';
 import {
     BayFighterComponent, CollectableEscortComponent, ReturnComponent,
     ReturnWhenTargetRemovedComponent,
-} from '../escorts/bay_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+} from '../escorts/index.js';
+import { completeEntity } from '../spawn/index.js';
 import { EscortCommandComponent } from './escort_command.js';
-import { OwnerComponent, SourceComponent } from '../combat/fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { ArmorComponent, FuelComponent } from '../ship/health_plugin.js';
-import { InitiateJumpEvent } from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { OwnerComponent, SourceComponent } from '../combat/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { ArmorComponent, FuelComponent } from '../ship/index.js';
+import { InitiateJumpEvent } from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { MissionShipComponent } from './mission_ship_component.js';
-import { FormationComponent } from '../npc/npc_ai_plugin.js';
-import { LandEvent, PlanetComponent, PlanetDataComponent } from '../travel/planet_plugin.js';
+import { FormationComponent } from '../npc/index.js';
+import { LandEvent, PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import {
     durableEscortFields, escortDeal, escortDealFields, EscortLandingComponent,
     EscortPayrollComponent, NO_DEAL, PlayerEscort, PlayerEscortComponent,
@@ -34,7 +34,7 @@ import {
     escortFollows, EscortJump, EscortJumpEvent, EscortLanded,
     EscortLandedEvent, escortsOnPayroll, ESCORT_LAND_DISTANCE_SQUARED,
     sweepableEscorts, playerEscortLink, steerToStellar,
-} from '../escorts/player_escort_plugin.js';
+} from '../escorts/index.js';
 import { ControlledByComponent } from './ship_control.js';
 import { prepareCarriedEscort } from '../../spaceport/landed_escorts.js';
 

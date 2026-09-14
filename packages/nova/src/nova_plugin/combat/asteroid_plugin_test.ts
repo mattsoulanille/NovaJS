@@ -20,17 +20,17 @@ import {
     MAX_ASTEROID_SPEED,
     spawnAsteroids,
 } from './asteroid_plugin.js';
-import { TumbleAnimationComponent } from '../core/animation_plugin.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
-import { BlastDamageComponent } from '../ship/blast_data.js';
-import { CollisionEvent } from '../core/collision_interaction.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
-import { SimulationGameDataResource } from '../core/game_data_resource.js';
-import { IdFactory, IdFactoryResource } from '../core/id_factory.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ProjectileDataComponent } from '../core/projectile_data.js';
+import { TumbleAnimationComponent } from '../core/index.js';
+import { CargoComponent } from '../ship/index.js';
+import { BlastDamageComponent } from '../ship/index.js';
+import { CollisionEvent } from '../core/index.js';
+import { DamagedEvent } from '../ship/index.js';
+import { SimulationGameDataResource } from '../core/index.js';
+import { IdFactory, IdFactoryResource } from '../core/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { ProjectileDataComponent } from '../core/index.js';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
-import { ShipPhysicsComponent } from '../ship/ship_plugin.js';
+import { ShipPhysicsComponent } from '../ship/index.js';
 
 function stubGettable<T>(items: Record<string, T>) {
     return {

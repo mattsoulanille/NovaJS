@@ -9,11 +9,11 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { GameDataAggregator } from '../../server/parsing/game_data_aggregator.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { PlayerShipSelector } from '../player/player_ship_plugin.js';
-import { applyControlEvents } from '../player/ship_control.js';
+import { PlayerShipSelector } from '../player/index.js';
+import { applyControlEvents } from '../player/index.js';
 import {
     applySetPlanetTarget, LandEvent, LandingBlockedEvent, PlanetComponent,
     PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent,
@@ -21,10 +21,10 @@ import {
 } from './planet_plugin.js';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
-import { applyHail } from '../encounters/hail_plugin.js';
-import { CreditsComponent } from '../player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../reputation/reputation_plugin.js';
-import { landable } from '../core/landable.js';
+import { applyHail } from '../encounters/index.js';
+import { CreditsComponent } from '../player/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
+import { landable } from '../core/index.js';
 import { clearanceDeniedMessage } from '../../display/status_bar_content.js';
 
 // Thessaly Reach holds four stellars, in this order: Port Amberline (a

@@ -9,7 +9,7 @@ import {
     shipGoalOfferable,
     SystemInfo,
 } from './mission_ship_logic.js';
-import { GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE } from '../player/mission_ship_state.js';
+import { GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE } from '../player/index.js';
 
 const SYSTEMS: SystemInfo[] = [
     { id: 'nova:128', govt: 'nova:128', links: ['nova:129', 'nova:130'] },

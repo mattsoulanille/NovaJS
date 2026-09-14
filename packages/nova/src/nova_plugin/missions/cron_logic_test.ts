@@ -1,13 +1,13 @@
 import 'jasmine';
 import { CronData, getDefaultCronData } from 'novadatainterface/cron_data';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
-import { dayNumber } from '../player/calendar.js';
+import { dayNumber } from '../player/index.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryAccess,
     DiscoveryLevel, resetDiscoveryNCBWarnings,
-} from '../player/discovery.js';
+} from '../player/index.js';
 import { runCronsForDays } from './cron_logic.js';
-import { CronStates } from '../player/player_state_plugin.js';
+import { CronStates } from '../player/index.js';
 
 function makeCron(partial: Partial<CronData> = {}): CronData {
     return {

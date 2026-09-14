@@ -10,11 +10,11 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { ProjectileComponent } from '../core/projectile_data.js';
+import { ProjectileComponent } from '../core/index.js';
 
 /**
  * wëap SubLimit (EVN Bible ~:3280-3284): "If you have defined a

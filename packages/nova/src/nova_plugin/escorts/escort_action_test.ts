@@ -10,36 +10,36 @@ import { World } from 'nova_ecs/world';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
 } from '../../spaceport/escort_fees.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
 import {
     applyEscortAction, escortUpgradeTarget, manageableEscort, releaseEscort,
     replaceEscortShipClass,
 } from './escort_action.js';
-import { CargoComponent, cargoUsed } from '../ship/cargo_plugin.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { ArmorComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { JumpComponent } from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { CargoComponent, cargoUsed } from '../ship/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { GovtComponent } from '../core/index.js';
+import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { JumpComponent } from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
 import {
     escortSaleQueued, EscortLandingComponent, pendingEscortUpgrade,
     PlayerEscortComponent,
-} from '../player/player_escort.js';
-import { CreditsComponent } from '../player/player_state_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
+} from '../player/index.js';
+import { CreditsComponent } from '../player/index.js';
+import { ControlledByComponent } from '../player/index.js';
 import {
     ShipComponent, ShipDataComponent, ShipPhysicsComponent,
-} from '../ship/ship_plugin.js';
-import { Stat } from '../core/stat.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { OwnerComponent, SourceComponent } from '../ship/weapon_components.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+} from '../ship/index.js';
+import { Stat } from '../core/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { OwnerComponent, SourceComponent } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

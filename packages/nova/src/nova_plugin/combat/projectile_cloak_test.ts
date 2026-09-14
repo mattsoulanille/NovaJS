@@ -11,12 +11,12 @@ import {
     CloakActiveComponent,
     CloakActiveState,
     CloakScannerComponent,
-} from '../ship/cloak_plugin.js';
+} from '../ship/index.js';
 import { OwnerComponent } from './fire_weapon_plugin.js';
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from './guidance.js';
-import { ProjectileDataComponent } from '../core/projectile_data.js';
+import { ProjectileDataComponent } from '../core/index.js';
 import { ProjectileGuidanceSystem } from './projectile_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 
 function makeMovement(x: number, y: number): MovementState {
     return {

@@ -11,16 +11,16 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { BayFighterComponent } from './bay_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { EscortCommandComponent } from '../player/escort_command.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { EscortCommandComponent } from '../player/index.js';
+import { GovtComponent } from '../core/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { TargetComponent } from '../ship/target_component.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * NPC carriers launching and using their fighters.

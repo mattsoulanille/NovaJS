@@ -2,14 +2,14 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { SerializerPlugin, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
-import { CargoComponent } from '../ship/cargo_plugin.js';
+import { CargoComponent } from '../ship/index.js';
 import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from './mission_accept.js';
-import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from '../player/player_state_plugin.js';
-import { ActiveRanksComponent, ControlBitsComponent } from '../ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { LegalRecordsComponent } from '../reputation/reputation_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { NpcComponent } from '../npc/npc_ai_plugin.js';
+import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from '../player/index.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../ncb/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { NpcComponent } from '../npc/index.js';
 import { ShipOfferSpentComponent } from './mission_accept.js';
 
 /**

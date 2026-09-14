@@ -8,10 +8,10 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { JumpComponent, JUMP_DISTANCE } from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { GovtComponent } from '../core/index.js';
+import { JumpComponent, JUMP_DISTANCE } from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     NpcComponent, NPC_DEPART_RADIUS,

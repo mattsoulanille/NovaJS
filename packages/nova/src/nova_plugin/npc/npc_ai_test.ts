@@ -4,7 +4,7 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementState } from 'nova_ecs/plugins/movement_plugin';
-import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation/govt_disposition.js';
+import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation/index.js';
 import {
     chaserBlocksJump, chooseNearest, Formation, formationOffset,
     formationSlotPosition, FLEE_JUMP_BLOCK_RANGE,

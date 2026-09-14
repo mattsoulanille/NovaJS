@@ -10,26 +10,26 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { UUID } from 'nova_ecs/arg_types';
 import { System } from 'nova_ecs/system';
-import { BoardedComponent, plunderSpent } from '../ship/boarding_component.js';
-import { ExplodingComponent } from '../ship/death_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { BoardedComponent, plunderSpent } from '../ship/index.js';
+import { ExplodingComponent } from '../ship/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { GovtComponent } from '../core/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { InitiateJumpEvent } from '../travel/jump_plugin.js';
+import { MissionShipComponent } from '../player/index.js';
+import { InitiateJumpEvent } from '../travel/index.js';
 import {
     NpcComponent, npcPlunderCredits, NPC_PLUNDER_CREDIT_FRACTION,
     NPC_PLUNDER_CREDIT_MINIMUM, NPC_PLUNDER_TAKES_FROM_PLAYERS,
     PlayerPlunderedEvent,
 } from './npc_ai_plugin.js';
-import { BRIBE_FRACTION_LARGE, BRIBE_MINIMUM, bribeAmount } from '../reputation/hail.js';
-import { ActiveMission, CreditsComponent, MissionsComponent } from '../player/player_state_plugin.js';
+import { BRIBE_FRACTION_LARGE, BRIBE_MINIMUM, bribeAmount } from '../reputation/index.js';
+import { ActiveMission, CreditsComponent, MissionsComponent } from '../player/index.js';
 import { playerPlunderedMessage } from '../../display/status_bar_content.js';
-import { ControlledByComponent } from '../player/ship_control.js';
-import { Stat } from '../core/stat.js';
+import { ControlledByComponent } from '../player/index.js';
+import { Stat } from '../core/index.js';
 
 /**
  * ============================================================================

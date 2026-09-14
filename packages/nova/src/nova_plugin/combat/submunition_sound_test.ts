@@ -7,11 +7,11 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { FireSubs, WeaponEntries } from './fire_weapon_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { SoundEvent } from '../core/sound_plugin.js';
+import { SoundEvent } from '../core/index.js';
 
 // The Polaron Multi-Torpedo: the stock weapon that splits into five
 // Polaron Torpedoes, each of which carries the same firing sound. Firing

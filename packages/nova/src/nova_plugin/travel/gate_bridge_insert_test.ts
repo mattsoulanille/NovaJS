@@ -7,11 +7,11 @@ import { getSyntheticGameData } from "../../communication/simulation_test_fixtur
 import { SYNTHETIC } from "novaparse/synthetic/universe";
 import { SimulationBridgeClient } from "../../communication/simulation_bridge_client.js";
 import { SimulationBridgeHost } from "../../communication/simulation_bridge_host.js";
-import { makeShip } from "../ship/make_ship.js";
+import { makeShip } from "../ship/index.js";
 import { makeSystem } from "../make_system.js";
-import { completeEntity } from "../spawn/entity_data_loader.js";
+import { completeEntity } from "../spawn/index.js";
 import { GateArrivalComponent } from "./gate_transit_plugin.js";
-import { PlayerShipSelector } from "../player/player_ship_plugin.js";
+import { PlayerShipSelector } from "../player/index.js";
 
 // NOTE: this covers the insertion path *inside* one live bridge. The
 // 2026-07 "ship missing at destination" hang lived one level up, in

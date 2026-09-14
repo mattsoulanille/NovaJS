@@ -14,28 +14,28 @@ import { World } from 'nova_ecs/world';
 import {
     AGGRESSION_DAMAGE_THRESHOLD, AGGRESSION_WINDOW_MS, AggressionComponent,
 } from './aggression.js';
-import { CloakActiveComponent } from '../ship/cloak_plugin.js';
-import { DamagedEvent, ExplodingComponent } from '../ship/death_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { CloakActiveComponent } from '../ship/index.js';
+import { DamagedEvent, ExplodingComponent } from '../ship/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
-import { SimulationGameDataResource } from '../core/game_data_resource.js';
-import { GovtComponent } from '../core/govt_component.js';
-import { applyHail } from '../encounters/hail_plugin.js';
+import { SimulationGameDataResource } from '../core/index.js';
+import { GovtComponent } from '../core/index.js';
+import { applyHail } from '../encounters/index.js';
 import {
     isHostileTarget, selectNearestHostile, styleForTarget,
 } from './hostility.js';
-import { IffComponent } from '../reputation/iff_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { IffComponent } from '../reputation/index.js';
+import { makeShip } from '../ship/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
-} from '../ncb/ncb_plugin.js';
+} from '../ncb/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
-import { CreditsComponent } from '../player/player_state_plugin.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { CreditsComponent } from '../player/index.js';
 import { isPointDefenseCandidate } from './point_defense.js';
-import { applyControlEvents, ControlledByComponent } from '../player/ship_control.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { applyControlEvents, ControlledByComponent } from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
 import { applySetTarget } from './target_plugin.js';
 
 const PEER = 'test peer';

@@ -5,13 +5,13 @@ import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_da
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { Entity } from 'nova_ecs/entity';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { countsTowardEscortCap, MAX_ESCORTS } from '../escorts/escort_cap.js';
-import { FiringGroupComponent } from '../ship/firing_group.js';
-import { EscortPayrollComponent } from '../player/player_escort.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
+import { DisabledComponent } from '../ship/index.js';
+import { countsTowardEscortCap, MAX_ESCORTS } from '../escorts/index.js';
+import { FiringGroupComponent } from '../ship/index.js';
+import { EscortPayrollComponent } from '../player/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { MissionShipComponent } from '../player/index.js';
+import { ShipComponent } from '../ship/index.js';
 import {
     buildMissionShipSpawns,
     liveMissionShips,
@@ -30,13 +30,13 @@ import {
     registerShip,
     shipDied,
     ShipObjective,
-} from '../player/mission_ship_state.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
-import { FormationComponent, NpcComponent } from '../npc/npc_ai_plugin.js';
+} from '../player/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
 import {
     ActiveMission, MissionsComponent, PendingAutoAbortShipsComponent,
-} from '../player/player_state_plugin.js';
-import { TargetComponent } from '../ship/target_component.js';
+} from '../player/index.js';
+import { TargetComponent } from '../ship/index.js';
 
 const MISSION_ID = 'nova:500';
 const OWNER = 'owner-uuid';

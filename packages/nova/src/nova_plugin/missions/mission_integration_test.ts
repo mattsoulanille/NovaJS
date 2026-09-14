@@ -7,9 +7,9 @@ import {
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { MissionSession, advanceEntityDate, processEntityLanding } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { dayNumber, daysPerJump } from '../player/calendar.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { dayNumber, daysPerJump } from '../player/index.js';
+import { CargoComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import {
     acceptOffer,
     LOCATION_BAR,
@@ -25,19 +25,19 @@ import {
 import { offerSubstitutions, rollOffers } from '../../spaceport/mission_offers.js';
 import { expandMissionText } from './mission_text.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
-import { GOAL_DESTROY, goalSupported } from '../player/mission_ship_state.js';
+import { GOAL_DESTROY, goalSupported } from '../player/index.js';
 import { shipGoalOfferable } from './mission_ship_logic.js';
-import { ControlBitsComponent } from '../ncb/ncb_plugin.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { CombatRatingComponent } from '../reputation/reputation_plugin.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { MissionShipComponent } from '../player/index.js';
+import { OutfitsStateComponent } from '../ship/index.js';
+import { CombatRatingComponent } from '../reputation/index.js';
 import {
     CreditsComponent,
     GameDateComponent,
     MissionsComponent,
     PendingAutoAbortShipsComponent,
     PendingMissionNotice, PendingMissionNoticesComponent,
-} from '../player/player_state_plugin.js';
+} from '../player/index.js';
 
 /**
  * Drives a real stock-scenario delivery mission — nova:128 "Delivery

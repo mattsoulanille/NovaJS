@@ -4,10 +4,10 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { GovtComponent } from './govt_component.js';
-import { JammingComponent } from '../combat/jamming_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { JammingComponent } from '../combat/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 
 // These assertions stay on the real Nova game data (Nova_Data): the whole

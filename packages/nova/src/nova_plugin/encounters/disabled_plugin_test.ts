@@ -12,7 +12,7 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { CloakActiveComponent } from '../ship/cloak_plugin.js';
+import { CloakActiveComponent } from '../ship/index.js';
 import {
     deriveRepair,
     DisabledComponent,
@@ -26,20 +26,20 @@ import {
     repairedArmor,
     REPAIR_MARGIN_FRACTION,
     rollRepairTime,
-} from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { SourceComponent } from '../combat/fire_weapon_plugin.js';
-import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/health_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+} from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { SourceComponent } from '../combat/index.js';
+import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     FormationComponent, formationSlotPosition,
-} from '../npc/npc_ai_plugin.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/outfit_plugin.js';
-import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/ship_control.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/ship_plugin.js';
-import { PlayerSoundEvent } from '../core/sound_plugin.js';
-import { Stat } from '../core/stat.js';
+} from '../npc/index.js';
+import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
+import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { PlayerSoundEvent } from '../core/index.js';
+import { Stat } from '../core/index.js';
 
 /** A gameData stub exposing only Outfit.getCached. */
 function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {
@@ -527,7 +527,7 @@ describe('ship disabling in a live world', () => {
     it('disable-only weapons floor armor above zero; a normal weapon ' +
         'finishes the job', async () => {
             const { DamagedEvent, DISABLE_ONLY_ARMOR_FLOOR, ExplodingComponent } =
-                await import('../ship/death_plugin.js');
+                await import('../ship/index.js');
             const ionBarrage = {
                 shield: 100_000, armor: 100_000, ionization: 0,
                 ionizationColor: 0xffffff, passThroughShield: 0,
@@ -589,9 +589,9 @@ describe('ship disabling in a live world', () => {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             'worker', { npcs: false });
-        const { makeNpcShip } = await import('../spawn/npc_spawn_plugin.js');
-        const { NpcComponent } = await import('../npc/npc_ai_plugin.js');
-        const { TargetComponent } = await import('../ship/target_component.js');
+        const { makeNpcShip } = await import('../spawn/index.js');
+        const { NpcComponent } = await import('../npc/index.js');
+        const { TargetComponent } = await import('../ship/index.js');
         const { Position } = await import('nova_ecs/datatypes/position');
         const { Angle } = await import('nova_ecs/datatypes/angle');
 
@@ -633,7 +633,7 @@ describe('ship disabling in a live world', () => {
         // already-launched missile would destroy the prey and turn
         // this into a death test instead of a disable test.
         const { ProjectileDataComponent } =
-            await import('../core/projectile_data.js');
+            await import('../core/index.js');
         for (const [uuid, entity] of [...world.entities]) {
             if (entity.components.has(ProjectileDataComponent)) {
                 world.entities.delete(uuid);

@@ -7,10 +7,10 @@ import { World } from 'nova_ecs/world';
 import {
     AFTERBURNER_FACTOR, decayedSpeedCap, OVERSPEED_DECAY_FACTOR,
 } from './afterburner_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
-import { ShipControlStateComponent } from '../player/ship_control.js';
+import { ShipControlStateComponent } from '../player/index.js';
 
 const SHIP_ID = 'test:ship';
 const BASE_SPEED = getDefaultShipPhysics().speed;

@@ -1,6 +1,6 @@
 import "jasmine";
 import { getDefaultPlanetData, PlanetData } from "novadatainterface/planet_data";
-import { TumbleAnimationComponent } from "../core/animation_plugin.js";
+import { TumbleAnimationComponent } from "../core/index.js";
 import { makePlanet } from "./make_planet.js";
 import { PlanetComponent } from "./planet_plugin.js";
 

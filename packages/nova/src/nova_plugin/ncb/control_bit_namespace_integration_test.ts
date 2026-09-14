@@ -13,8 +13,8 @@ import { parseNCBSet } from './ncb.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
-} from '../pilot/save_game.js';
-import { ShipComponent } from '../ship/ship_plugin.js';
+} from '../pilot/index.js';
+import { ShipComponent } from '../ship/index.js';
 
 const P0 = FIRST_PRIVATE_PHYSICAL_CONTROL_BIT;
 

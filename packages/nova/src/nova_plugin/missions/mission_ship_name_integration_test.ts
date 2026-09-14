@@ -4,14 +4,14 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { startMissionById } from './mission_logic.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { ControlBitsComponent } from '../ncb/ncb_plugin.js';
+import { MissionShipComponent } from '../player/index.js';
+import { ControlBitsComponent } from '../ncb/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../player/player_state_plugin.js';
+} from '../player/index.js';
 import { GameDataAggregator } from '../../server/parsing/game_data_aggregator.js';
 
 /**

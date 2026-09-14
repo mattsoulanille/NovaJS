@@ -12,19 +12,19 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
-import { AggressionComponent } from '../combat/aggression.js';
-import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
-import { CompositeHull, HitboxHullComponent } from '../core/collisions_plugin.js';
+import { AggressionComponent } from '../combat/index.js';
+import { CollisionVulnerabilityComponent } from '../core/index.js';
+import { CompositeHull, HitboxHullComponent } from '../core/index.js';
 import { DamagedEvent, DeathEvent, ExplodingComponent } from './death_plugin.js';
 import { DisabledComponent, isBelowDisableThreshold } from './disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { ArmorComponent, ShieldComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
-import { CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponent } from '../reputation/reputation_plugin.js';
-import { ControlledByComponent } from '../player/ship_control.js';
+import { CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponent } from '../reputation/index.js';
+import { ControlledByComponent } from '../player/index.js';
 import { ShipDataComponent } from './ship_plugin.js';
-import { Stat } from '../core/stat.js';
+import { Stat } from '../core/index.js';
 import {
     FINAL_EXPLOSION_NATURAL_RADIUS, finalExplosionScale,
     MAX_SECONDARY_EXPLOSIONS, MIN_SECONDARY_EXPLOSIONS,

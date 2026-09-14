@@ -6,17 +6,17 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getSyntheticGameData, makeSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { loadAsteroidGameData } from '../combat/asteroid_plugin.js';
+import { loadAsteroidGameData } from '../combat/index.js';
 import {
     completeEntity, loadEntityGameData, loadShipGameData, loadWeaponGameData,
     loadWeaponsGameData,
 } from './entity_data_loader.js';
-import { WeaponEntries } from '../combat/fire_weapon_plugin.js';
-import { HitboxHullComponent } from '../core/collisions_plugin.js';
-import { BayFighterComponent } from '../escorts/bay_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { WeaponEntries } from '../combat/index.js';
+import { HitboxHullComponent } from '../core/index.js';
+import { BayFighterComponent } from '../escorts/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { OutfitsStateComponent } from '../ship/outfit_plugin.js';
+import { OutfitsStateComponent } from '../ship/index.js';
 
 function fakeGettable<T>(items: Record<string, T>) {
     return {

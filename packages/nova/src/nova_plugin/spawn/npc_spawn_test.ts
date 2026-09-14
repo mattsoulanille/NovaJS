@@ -10,7 +10,7 @@ import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { SimulationGameDataResource } from '../core/game_data_resource.js';
+import { SimulationGameDataResource } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     buildNpcSpawnTable, buildPersSpawnTable,

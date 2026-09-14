@@ -3,8 +3,8 @@ import { v4 } from 'uuid';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { makeShip } from '../ship/make_ship.js';
+import { completeEntity } from '../spawn/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { JammingComponent, SystemInterferenceResource } from './jamming_plugin.js';
 

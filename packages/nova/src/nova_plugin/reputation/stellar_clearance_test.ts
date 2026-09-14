@@ -6,7 +6,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
 import { LegalRecords } from './reputation.js';
-import { ranksAllowLanding } from '../ncb/rank_logic.js';
+import { ranksAllowLanding } from '../ncb/index.js';
 import {
     clearanceDenial, contributeBits, govtRequirementsMet, isMissionDestination,
     MIN_STATUS_IGNORED, MIN_STATUS_NEVER, planetClearance, stellarClearance,

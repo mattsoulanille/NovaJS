@@ -5,11 +5,11 @@ import {
     getSyntheticGameData,
     makeSimulationBridgeHarness,
 } from '../../communication/simulation_test_fixture.js';
-import { DamagedEvent, DeathEvent } from '../ship/death_plugin.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
+import { DamagedEvent, DeathEvent } from '../ship/index.js';
+import { DisabledComponent } from '../ship/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { MissionShipComponent } from '../player/index.js';
 import {
     GOAL_BOARD,
     GOAL_CHASE_OFF,
@@ -19,18 +19,18 @@ import {
     GOAL_RESCUE,
     ShipObjective,
     shipsToSpawn,
-} from '../player/mission_ship_state.js';
-import { BoardedComponent } from '../ship/boarding_component.js';
-import { CargoComponent } from '../ship/cargo_plugin.js';
-import { CreditsComponent } from '../player/player_state_plugin.js';
-import { FuelComponent } from '../ship/health_plugin.js';
+} from '../player/index.js';
+import { BoardedComponent } from '../ship/index.js';
+import { CargoComponent } from '../ship/index.js';
+import { CreditsComponent } from '../player/index.js';
+import { FuelComponent } from '../ship/index.js';
 import { missionCargoKey } from './mission_logic.js';
-import { makeNpcShip } from '../spawn/npc_spawn_plugin.js';
+import { makeNpcShip } from '../spawn/index.js';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { ActiveMission, MissionsComponent } from '../player/player_state_plugin.js';
-import { SystemHoldComponent } from '../npc/system_hold.js';
+import { ActiveMission, MissionsComponent } from '../player/index.js';
+import { SystemHoldComponent } from '../npc/index.js';
 
 const LETHAL_DAMAGE = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,

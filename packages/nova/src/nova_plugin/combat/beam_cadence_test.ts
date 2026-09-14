@@ -14,17 +14,17 @@ import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent, BeamStateComponent } from './beam_plugin.js';
-import { DamagedEvent } from '../ship/death_plugin.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { DamagedEvent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponConstructors, WeaponEntries,
 } from './fire_weapon_plugin.js';
 import { zeroOrderGuidance } from './guidance.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 import { ORIGINAL_FRAME_MS } from './weapon_plugin.js';
-import { WeaponsStateComponent } from '../ship/weapons_state.js';
+import { WeaponsStateComponent } from '../ship/index.js';
 
 const SHIP_ID = SYNTHETIC.ships.skiff;
 const NEEDLE_BEAM = SYNTHETIC.weapons.needleBeam;  // beam, Reload 0, Count 1, Inaccuracy 5.

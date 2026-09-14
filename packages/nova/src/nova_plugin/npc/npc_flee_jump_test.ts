@@ -9,12 +9,12 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
-import { DisabledComponent } from '../ship/disabled_component.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
-import { ArmorComponent } from '../ship/health_plugin.js';
-import { Stat } from '../core/stat.js';
-import { FinishJumpEvent, InitiateJumpEvent, JumpComponent, JumpState, JumpStateType, VANISH_DESTINATION, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS } from '../travel/jump_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { DisabledComponent } from '../ship/index.js';
+import { completeEntity } from '../spawn/index.js';
+import { ArmorComponent } from '../ship/index.js';
+import { Stat } from '../core/index.js';
+import { FinishJumpEvent, InitiateJumpEvent, JumpComponent, JumpState, JumpStateType, VANISH_DESTINATION, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS } from '../travel/index.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { FLEE_JUMP_BLOCK_RANGE, NpcComponent, NPC_DEPART_RADIUS } from './npc_ai_plugin.js';
 

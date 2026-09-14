@@ -5,8 +5,8 @@ import {
     cappedEscortCount, CarriedEscortEntry, countsTowardEscortCap,
     MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
 } from './escort_cap.js';
-import { MissionShipComponent } from '../player/mission_ship_component.js';
-import { EscortProvenance, PlayerEscortComponent } from '../player/player_escort.js';
+import { MissionShipComponent } from '../player/index.js';
+import { EscortProvenance, PlayerEscortComponent } from '../player/index.js';
 
 /**
  * Maintainer ruling #161: six escorts, counting only the ones the player

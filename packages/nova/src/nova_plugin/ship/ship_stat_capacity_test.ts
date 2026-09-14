@@ -8,12 +8,12 @@ import { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import { applySimulationInputs } from '../../communication/simulation_input.js';
 import { getPluginGameData } from '../../communication/simulation_test_fixture.js';
-import { completeEntity, loadEntityGameData } from '../spawn/entity_data_loader.js';
+import { completeEntity, loadEntityGameData } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from '../make_system.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
-import { PlayerShipSelector } from '../player/player_ship_plugin.js';
+import { PlayerShipSelector } from '../player/index.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 

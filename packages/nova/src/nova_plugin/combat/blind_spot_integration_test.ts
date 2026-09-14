@@ -10,11 +10,11 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getPluginGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/entity_data_loader.js';
+import { completeEntity } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
-import { makeShip } from '../ship/make_ship.js';
+import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { TargetComponent } from '../ship/target_component.js';
+import { TargetComponent } from '../ship/index.js';
 
 // Ships. The Wren Skiff has no shïp-level blind spots; the Bastion Hulk
 // is rear-blind (shïp Flags 0x4000), as the stock Fed Destroyer/Carrier
