@@ -10,7 +10,10 @@ import { decodePayVal } from '../reputation/index.js';
 /**
  * How an active mission ends: abort (Axxx / the abort button), fail (Fxxx
  * / deadline / sim-flagged) and completion at its destination. Split out
- * of mission_logic.ts.
+ * of mission_logic.ts. The Axxx/Fxxx operators are INJECTED through the
+ * machinery (MissionMachineryContext.missionOperators) rather than
+ * imported back from mission_set_strings: importing them here made the
+ * missions modules import each other in a cycle (#266).
  */
 
 /** Axxx / the abort button: run OnAbort, drop cargo, remove. */

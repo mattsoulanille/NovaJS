@@ -13,7 +13,7 @@ import { DeathEvent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
-import { missionCargoKey } from './mission_logic.js';
+import { missionCargoKey } from './mission_cargo.js';
 import {
     ShipOfferSpentComponent, ShipOfferSpentType,
 } from './mission_accept.js';

@@ -1,10 +1,7 @@
 import { MissionData } from 'novadatainterface/mission_data';
-import {
-    matchesStellarRef,
-    MissionContext,
-    setStringPrefix,
-    StellarInfo,
-} from './mission_logic.js';
+import { MissionContext } from './mission_context.js';
+import { setStringPrefix } from './mission_ids.js';
+import { matchesStellarRef, StellarInfo } from './mission_stellar.js';
 import { goalSupported, ShipObjective } from '../player/index.js';
 
 /**

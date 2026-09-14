@@ -165,4 +165,32 @@ export interface MissionMachineryContext {
      * numeric reference.
      */
     shipExists?(globalId: string): boolean;
+    /**
+     * The Sxxx / Axxx / Fxxx mission operators, INJECTED rather than
+     * imported: mission_set_strings wires them onto the NCB hooks, and
+     * importing their implementations (mission_accept_offer /
+     * mission_transitions) from there would make the missions modules
+     * import each other in a cycle (#266). The venue that owns the
+     * machinery supplies them — MissionSession does; a machinery
+     * without them reports the operators unimplemented, like any other
+     * unwired NCB hook.
+     *
+     * Each handler receives the machinery it was injected on (the same
+     * object) and the mission's ALREADY-RESOLVED global id (the bare
+     * mïsn number is resolved stock-first by makeMissionSetHooks before
+     * the handler runs), so the bare module functions inject verbatim:
+     * `{ startMission: startMissionById, abortMission, failMission }`.
+     * `outfits` and `depth` are the running set string's grant map and
+     * recursion depth: the handlers re-enter the machinery with them, so
+     * a started mission's OnAccept sees the same outfits and a scripted
+     * cycle still terminates at the depth guard.
+     */
+    missionOperators?: {
+        startMission(machinery: MissionMachineryContext, missionId: string,
+            outfits?: Map<string, number>, depth?: number): void;
+        abortMission(machinery: MissionMachineryContext, missionId: string,
+            outfits?: Map<string, number>, depth?: number): void;
+        failMission(machinery: MissionMachineryContext, missionId: string,
+            outfits?: Map<string, number>, depth?: number): void;
+    };
 }

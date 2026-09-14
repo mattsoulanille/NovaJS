@@ -6,10 +6,12 @@ import {
     abortMission,
     acceptOffer,
     failExpiredMissions,
+    failMission,
     makeMissionOffer,
     matchesStellarRef,
     missionMapMarks,
     runPendingShipDone,
+    startMissionById,
     MissionContext,
     MissionMachineryContext,
     missionMatchesLocation,
@@ -22,7 +24,7 @@ import {
     StellarInfo,
     stellarRecord,
     stellarVisible,
-} from './mission_logic.js';
+} from './index.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
 } from '../player/index.js';
@@ -96,6 +98,15 @@ function makeMachinery(state: MissionWorkingState,
             freeCargoSpace: state.cargoCapacity,
             ...ctxPartial,
         }),
+        // The Sxxx/Axxx/Fxxx operators, injected exactly as MissionSession
+        // injects them (the bare module functions; #266). Specs that need
+        // a machinery WITHOUT them spread over this with
+        // `missionOperators: undefined`.
+        missionOperators: {
+            startMission: startMissionById,
+            abortMission,
+            failMission,
+        },
         random: () => 0.5,
     };
 }
@@ -1005,6 +1016,12 @@ describe('accept / landing / completion flow', () => {
                     freeCargoSpace: state.cargoCapacity - used,
                 });
             },
+            // Injected exactly as MissionSession injects them (#266).
+            missionOperators: {
+                startMission: startMissionById,
+                abortMission,
+                failMission,
+            },
             random: () => 0.5,
         };
     }
@@ -1463,6 +1480,32 @@ describe('accept / landing / completion flow', () => {
 });
 
 describe('mission set-string hooks (Sxxx/Axxx/Fxxx)', () => {
+    // The Sxxx/Axxx/Fxxx operators are INJECTED through the machinery
+    // (missionOperators), not imported: mission_set_strings must not
+    // import mission_accept_offer / mission_transitions, or the missions
+    // modules would form an import cycle (issue #266). A machinery
+    // without them — the bare literal every test fixture builds — runs
+    // the rest of the set string and reports the operators unimplemented,
+    // exactly like any other unwired NCB hook.
+    it('leaves Sxxx/Axxx/Fxxx unimplemented when the machinery injects none',
+        () => {
+            const started = makeMission({
+                id: 'nova:210',
+                returnStel: 129,
+                returnStelId: 'nova:129',
+                onAccept: 'b77',
+            });
+            const state = makeState();
+            const machinery: MissionMachineryContext = {
+                ...makeMachinery(state, [started]),
+                missionOperators: undefined,
+            };
+            runMissionSetString(machinery, 's210 b77', 'nova');
+            expect(state.missions.has('nova:210')).toBe(false);
+            // The non-mission operators of the same string still ran.
+            expect(state.bits.has(77)).toBe(true);
+        });
+
     it('Sxxx starts a mission by id through the real machinery', () => {
         const started = makeMission({
             id: 'nova:210',

@@ -1,7 +1,7 @@
 import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_data';
-import { MissionContext } from './mission_logic.js';
+import { MissionContext } from './mission_context.js';
 import {
     auxShipsMatchSystem,
     resolveShipObjective,

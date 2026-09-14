@@ -1,7 +1,5 @@
-import { startMissionById } from './mission_accept_offer.js';
 import { resolveNumberedResource, systemDiscoveryOperators } from './mission_ids.js';
 import { MissionMachineryContext } from './mission_machinery.js';
-import { abortMission, failMission } from './mission_transitions.js';
 import {
     makeControlBitHooks, NCBParseError, NCBSetHooks, runNCBSet,
 } from '../ncb/index.js';
@@ -10,9 +8,11 @@ import {
  * Running a mission's set strings (OnAccept, OnSuccess, ...): the NCB set
  * hooks wired to the real machinery — outfits, ranks, discovery, ship
  * changes and the Sxxx/Axxx/Fxxx mission operators. Split out of
- * mission_logic.ts. Imports mission_accept_offer / mission_transitions and is
- * imported by them: the cycle is function-level only (nothing runs at
- * module evaluation), exactly the recursion the single file had.
+ * mission_logic.ts. The mission operators are INJECTED through the
+ * machinery (MissionMachineryContext.missionOperators) rather than
+ * imported from mission_accept_offer / mission_transitions: importing
+ * them here made the missions modules import each other in a cycle
+ * (#266), and nothing evaluates at module load to justify one.
  */
 
 /**
@@ -67,22 +67,30 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
     // (getMission doubles as the missions-exists lookup; MissionUniverse
     // keeps missionsById). A plug-in's S<stock-n> starts nova:n rather
     // than warning about a phantom id under the plug-in's own prefix.
+    // The operators themselves are injected (see missionOperators):
+    // without them the hooks stay unset and runNCBSet reports each
+    // operation unimplemented, like any other unwired NCB hook.
+    const operators = machinery.missionOperators;
+    if (!operators) {
+        return hooks;
+    }
     const resolveMissionId = (id: number) => resolveNumberedResource(
         id, runningMissionPrefix,
         globalId => machinery.getMission(globalId) !== undefined);
     hooks.startMission = id => {
-        startMissionById(machinery, resolveMissionId(id), outfits, depth + 1);
+        operators.startMission(machinery, resolveMissionId(id), outfits,
+            depth + 1);
     };
     hooks.abortMission = id => {
         const globalId = resolveMissionId(id);
         if (state.missions.has(globalId)) {
-            abortMission(machinery, globalId, outfits, depth + 1);
+            operators.abortMission(machinery, globalId, outfits, depth + 1);
         }
     };
     hooks.failMission = id => {
         const globalId = resolveMissionId(id);
         if (state.missions.has(globalId)) {
-            failMission(machinery, globalId, outfits, depth + 1);
+            operators.failMission(machinery, globalId, outfits, depth + 1);
         }
     };
     return hooks;

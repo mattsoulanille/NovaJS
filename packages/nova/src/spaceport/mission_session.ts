@@ -11,9 +11,10 @@ import {
     WeaponsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import {
-    runCronsForDays, failExpiredMissions, MissionContext, MissionEvent, MissionMachineryContext,
-    MissionWorkingState, processLanding, runMissionSetString, runPendingAutoAborts,
-    runPendingShipDone, stellarInfoOf,
+    abortMission, failExpiredMissions, failMission, MissionContext, MissionEvent,
+    MissionMachineryContext, MissionWorkingState, processLanding,
+    runCronsForDays, runMissionSetString, runPendingAutoAborts,
+    runPendingShipDone, startMissionById, stellarInfoOf,
 } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
@@ -136,6 +137,16 @@ export class MissionSession {
             discovery: playerDiscovery,
             systemExists: universe.systemsLoaded
                 ? (id: string) => universe.hasSystem(id) : undefined,
+            // The Sxxx/Axxx/Fxxx operators, injected so the set-string
+            // module need not import their implementations (which import
+            // it back — #266). The same functions the accept/transition
+            // modules run, so a scripted start and the abort button
+            // behave identically.
+            missionOperators: {
+                startMission: startMissionById,
+                abortMission,
+                failMission,
+            },
         };
     }
 

@@ -8,7 +8,7 @@ import { CronState, CronStates } from '../player/index.js';
 import {
     ownsOutfit, resolveNumberedResource, setStringPrefix,
     systemDiscoveryOperators,
-} from './mission_logic.js';
+} from './mission_ids.js';
 import { DiscoveryAccess, DiscoveryNCBOperators } from '../player/index.js';
 
 /**

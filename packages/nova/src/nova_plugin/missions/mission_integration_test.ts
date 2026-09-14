@@ -21,7 +21,7 @@ import {
     MissionOffer,
     missionMatchesLocation,
     stellarVisible,
-} from './mission_logic.js';
+} from './index.js';
 import { offerSubstitutions, rollOffers } from '../../spaceport/mission_offers.js';
 import { expandMissionText } from './mission_text.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';

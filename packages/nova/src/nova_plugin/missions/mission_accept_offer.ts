@@ -15,6 +15,10 @@ import { decodePayVal } from '../reputation/index.js';
  * Taking a mission on: acceptOffer (registering the ActiveMission with
  * its accept-time picks frozen, or running an immediate auto-abort),
  * refuseOffer, and the Sxxx scripted start. Split out of mission_logic.ts.
+ * The Sxxx operator is INJECTED through the machinery
+ * (MissionMachineryContext.missionOperators) rather than imported back
+ * from mission_set_strings: importing it here made the missions modules
+ * import each other in a cycle (#266).
  */
 
 /**
