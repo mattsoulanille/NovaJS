@@ -12,7 +12,7 @@ import { getPluginGameData } from '../../communication/simulation_test_fixture.j
 import { canBuyOutfit, OutfitterContext } from '../../spaceport/outfitter_rules.js';
 import { BayFighterComponent } from '../escorts/index.js';
 import { DamagedEvent } from '../ship/index.js';
-import { completeEntity, loadWeaponGameData } from '../spawn/index.js';
+import { completeEntity, loadOutfitsGameData } from '../spawn/index.js';
 import { EscortCommandComponent } from '../player/index.js';
 import { ESCORT_FIRE_RANGE } from '../escorts/index.js';
 import { makeShip } from '../ship/index.js';
@@ -172,14 +172,16 @@ describe('flying the real Intelligent EMP Torpedo', () => {
             }
             const world = await makeSystem(SYSTEM, gameData, undefined,
                 { npcs: false });
-            // The tube is not part of any ship's stock loadout, so its
-            // closure (the bay, shïp 666, and the torpedo's own weapons)
-            // has to be warmed the way staging would warm it.
-            await loadWeaponGameData(gameData, BAY);
-            // The tube and its ammo are not in any ship's stock loadout
-            // either, and the ammo count is read synchronously.
-            await gameData.data.Outfit.get(TUBE_OUTFIT);
-            await gameData.data.Outfit.get(TORPEDO_OUTFIT);
+            // The tube and its ammo are not in any ship's stock loadout,
+            // so fitting them in flight (below) stages them the way an
+            // accepted mission's outfit grant does: the outfit data
+            // itself (the ammo count is read synchronously), the bay's
+            // closure (shïp 666 and the torpedo's own weapons) and THIS
+            // world's weapon entries. Warming only the shared cache
+            // (loadWeaponGameData) left the entries to build on the
+            // first shot — the unstaged-closure pattern #279 warns about.
+            await loadOutfitsGameData(world, [TUBE_OUTFIT, TORPEDO_OUTFIT]);
+            const warn = spyOn(console, 'warn').and.callThrough();
 
             const damaged: Array<{ uuid: string, armor: number }> = [];
             world.addSystem(new System({
@@ -276,5 +278,11 @@ describe('flying the real Intelligent EMP Torpedo', () => {
             expect(warheadHits.length)
                 .withContext(`a 100-armor EMP hit landed; saw `
                     + JSON.stringify(damaged)).toBeGreaterThan(0);
+            // Every weapon that fired — the bay, and the torpedo's own
+            // warhead and tractor — was staged, so the dev diagnostic
+            // had nothing to say.
+            expect(warn.calls.allArgs().flat().join('\n'))
+                .withContext('no weapon built its entry unstaged')
+                .not.toContain('never staged');
         });
 });

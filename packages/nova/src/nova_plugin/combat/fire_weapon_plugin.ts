@@ -10,7 +10,7 @@ import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
-import { IdFactory, IdFactoryResource } from '../core/index.js';
+import { IdFactory, IdFactoryResource, StagedWeaponIds } from '../core/index.js';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
@@ -786,7 +786,38 @@ export const FireWeaponPlugin: Plugin = {
         world.resources.set(WeaponConstructors, new Map());
         const weaponConstructors = world.resources.get(WeaponConstructors)!;
 
+        // Dev-build diagnostic for the unstaged-closure pattern (#279,
+        // the class behind #240): an entry built straight from `get`
+        // carries only its wëap, so a bay launches fighters whose hull
+        // sprite sheet lands on a load-timing-dependent tick and a
+        // projectile's shot sprite can miss the first frames. Whether
+        // that bites depends on the SHARED game-data cache's warmth —
+        // which is why a spec doing this passed or failed with whatever
+        // ran before it. The staging contract (loadWeaponsGameData and
+        // kin) records the ids it covered in StagedWeaponIds — a
+        // makeSystem resource, so worlds that never stage anything (the
+        // ship builder, the display world) leave it unset and are never
+        // warned about. In a staging world, a get on an id nothing
+        // staged is warned about in development builds and left alone
+        // in production ones: the check must not touch sim behaviour.
+        const stagedWeaponIds = world.resources.get(StagedWeaponIds);
+        const warnOnUnstaged = (id: string) => {
+            if (stagedWeaponIds === undefined
+                || process.env.NODE_ENV === 'production'
+                || stagedWeaponIds.has(id)) {
+                return;
+            }
+            console.warn(`WeaponEntries.get('${id}') built an entry for a `
+                + 'weapon whose closure this world never staged: a bay '
+                + 'launches fighters whose hull sprite sheet is not '
+                + 'cached, and a projectile\'s shot sprite can miss its '
+                + 'first frames. Stage it first (loadWeaponsGameData, '
+                + 'loadEntityGameData, loadOutfitsGameData) and read the '
+                + 'entry with getCached.');
+        };
+
         const weaponEntries = new Gettable<WeaponEntry | undefined>(async id => {
+            warnOnUnstaged(id);
             // A dangling wëap reference (a plug-in ship or outfit naming a
             // weapon it never shipped) has no entry, so it never fires;
             // see entity_data_loader's loadIfDefined. Other failures

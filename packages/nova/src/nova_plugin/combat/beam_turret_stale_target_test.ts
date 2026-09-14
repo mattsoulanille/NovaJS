@@ -13,7 +13,7 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent } from './beam_plugin.js';
 import { DamagedEvent, ExplodingComponent } from '../ship/index.js';
-import { completeEntity } from '../spawn/index.js';
+import { completeEntity, loadWeaponsGameData } from '../spawn/index.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponConstructors, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
@@ -118,6 +118,13 @@ describe('beam turret with a dead target', () => {
         const victim = await addShip(world, gameData, 'victim', 1060, 1000);
         shooter.components.set(TargetComponent, { target: 'victim' });
 
+        // No staged entity carries the turrets below, so stage them the
+        // way the loader stages a ship's own weapons: closure plus this
+        // world's entries. A bare WeaponEntries.get builds the entry
+        // from the wëap alone — the unstaged-closure pattern #279 warns
+        // about, which passes or fails with the shared cache's warmth.
+        await loadWeaponsGameData(world, [ARC_TURRET, LANCE_BEAM]);
+
         // Let the providers attach hitboxes/hurtboxes.
         for (let i = 0; i < 20; i++) {
             world.step();
@@ -128,9 +135,10 @@ describe('beam turret with a dead target', () => {
         return { gameData, world, shooter, bystander, victim };
     }
 
+    /** Staged in setUp, so the cache read is the contract. */
     async function getWeapon(world: World, id: string) {
-        const weapon = await world.resources.get(WeaponEntries)!.get(id);
-        expect(weapon).withContext(`weapon ${id} loaded`).toBeDefined();
+        const weapon = world.resources.get(WeaponEntries)!.getCached(id);
+        expect(weapon).withContext(`weapon ${id} staged`).toBeDefined();
         return weapon!;
     }
 

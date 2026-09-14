@@ -8,7 +8,7 @@ import { AsteroidComponent, loadAsteroidGameData } from "../combat/index.js";
 import { WeaponEntries } from "../combat/index.js";
 import { SimulationGameDataResource } from "../core/index.js";
 import { GovtComponent } from "../core/index.js";
-import { stageEncodedComponentsGameData } from "../core/index.js";
+import { stageEncodedComponentsGameData, StagedWeaponIds } from "../core/index.js";
 import { loadWithRetries } from "../core/index.js";
 import { OutfitsStateComponent } from "../ship/index.js";
 import { PlanetComponent } from "../travel/index.js";
@@ -207,8 +207,20 @@ async function loadOutfitWeaponsGameData(gameData: SimulationGameDataInterface,
 /**
  * Primes the lazily-constructed weapon entries so the first shot of
  * each weapon does not depend on when its entry finished building.
+ * These are also the ids whose closure this world has staged, which is
+ * what WeaponEntries.get's dev warning (#279) keys off — so every
+ * staging path primes through here, npc_spawn's stageShip included.
  */
-async function primeWeaponEntries(world: World, weaponIds: Set<string>) {
+export async function primeWeaponEntries(world: World,
+    weaponIds: Set<string>) {
+    // Record BEFORE priming: the priming get is itself an entry build,
+    // and it must see these ids as already staged.
+    const staged = world.resources.get(StagedWeaponIds);
+    if (staged) {
+        for (const id of weaponIds) {
+            staged.add(id);
+        }
+    }
     const weaponEntries = world.resources.get(WeaponEntries);
     if (weaponEntries) {
         await Promise.all([...weaponIds].map(id => weaponEntries.get(id)));

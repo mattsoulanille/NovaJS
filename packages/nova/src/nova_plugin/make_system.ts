@@ -9,7 +9,7 @@ import { completeEntity } from "./spawn/index.js";
 import { configureSnapshotPolicies } from "./snapshot_policies.js";
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from "./combat/index.js";
 import { SystemInterferenceResource } from "./combat/index.js";
-import { IdFactory, IdFactoryResource } from "./core/index.js";
+import { IdFactory, IdFactoryResource, StagedWeaponIds } from "./core/index.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { spawnAsteroids } from "./combat/index.js";
 import { spawnNpcs } from "./spawn/index.js";
@@ -65,6 +65,12 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // DEFAULT_MISSILE_GUIDANCE in guidance.ts ('smart' = hard-to-dodge
     // leading missiles; 'simple' = dodgeable point-at-current-position).
     world.resources.set(MissileGuidanceResource, { mode: DEFAULT_MISSILE_GUIDANCE });
+    // Which weapons' closures this world has staged. Simulation worlds
+    // stage entities (loadEntityGameData et al.); the dev warning on a
+    // bare WeaponEntries.get (#279) keys off this. Worlds that never
+    // stage anything (the ship builder, the display world) leave it
+    // unset, and the warning stays off there.
+    world.resources.set(StagedWeaponIds, new Set<string>());
     if (platformOverride) {
         world.resources.set(PlatformResource, platformOverride);
     }

@@ -15,7 +15,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { BeamDataComponent, BeamStateComponent } from './beam_plugin.js';
 import { DamagedEvent } from '../ship/index.js';
-import { completeEntity } from '../spawn/index.js';
+import { completeEntity, loadWeaponsGameData } from '../spawn/index.js';
 import {
     OwnerComponent, VulnerableToPD, WeaponConstructors, WeaponEntries,
 } from './fire_weapon_plugin.js';
@@ -101,6 +101,12 @@ describe('beam fire cadence and damage on the original frame clock', () => {
         const shooter = await addShip(world, gameData, 'shooter', 1000, 1000);
         const victim = await addShip(world, gameData, 'victim',
             1000, 1000 - VICTIM_AHEAD);
+        // No staged entity carries the beams below, so stage them the
+        // way the loader stages a ship's own weapons: closure plus this
+        // world's entries. A bare WeaponEntries.get builds the entry
+        // from the wëap alone — the unstaged-closure pattern #279 warns
+        // about, which passes or fails with the shared cache's warmth.
+        await loadWeaponsGameData(world, [NEEDLE_BEAM, WIDE_LANCE]);
         for (let i = 0; i < 20; i++) {
             world.step();
         }
@@ -109,9 +115,8 @@ describe('beam fire cadence and damage on the original frame clock', () => {
         return { gameData, world, shooter, victim };
     }
 
-    /** Mounts `id` on the shooter and holds its trigger. */
+    /** Staged in setUp, so the cache read is the contract. */
     async function holdFire(world: World, shooter: Entity, id: string) {
-        await world.resources.get(WeaponEntries)!.get(id);
         const state = shooter.components.get(WeaponsStateComponent)!.get(id)!;
         state.count = 1;
         state.fireGroup = 'primary';
@@ -168,7 +173,9 @@ describe('beam fire cadence and damage on the original frame clock', () => {
     it('Wide Lance: on screen for its 15 frames, damaging for all of them '
         + '(#93)', async () => {
             const { world, shooter } = await setUp();
-            const lance = await world.resources.get(WeaponEntries)!.get(WIDE_LANCE);
+            // Staged in setUp; the cache read is the contract.
+            const lance = world.resources.get(WeaponEntries)!
+                .getCached(WIDE_LANCE);
             damaged = [];
             const beam = lance!.fireFromEntity('shooter', false)!;
             expect(beam).toBeDefined();
@@ -295,14 +302,18 @@ describe('a beam with a positive Decay outlives its damage (real data)', () => {
             };
             const shooter = await add('shooter', 1000, 1000);
             const victim = await add('victim', 1000, 940);
+            // No staged entity carries the Pulse Laser, so stage it the
+            // way the loader stages a ship's own weapons (#279).
+            await loadWeaponsGameData(world, [PULSE_LASER]);
             for (let i = 0; i < 20; i++) {
                 world.step();
             }
             place(shooter, 1000, 1000);
             place(victim, 1000, 940);
 
-            const laser = await world.resources.get(WeaponEntries)!
-                .get(PULSE_LASER);
+            // Staged above; the cache read is the contract.
+            const laser = world.resources.get(WeaponEntries)!
+                .getCached(PULSE_LASER);
             damaged.length = 0;
             expect(laser!.fireFromEntity('shooter', false)).toBeDefined();
 

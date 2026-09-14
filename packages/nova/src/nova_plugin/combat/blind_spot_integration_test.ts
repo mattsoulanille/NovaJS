@@ -10,7 +10,7 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     getIntegrationGameData, getPluginGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
-import { completeEntity } from '../spawn/index.js';
+import { completeEntity, loadWeaponsGameData } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -100,12 +100,20 @@ describe('turret blind spots', () => {
      * Whether `weaponId` produces a shot from the shooter this tick.
      * Fired with inaccuracy off so the geometry is exact and the result
      * is a pure function of the bearing.
+     *
+     * No staged entity carries the turret, so it is staged the way the
+     * loader stages a ship's own weapons: closure plus this world's
+     * entries. A bare WeaponEntries.get builds the entry from the wëap
+     * alone — the unstaged-closure pattern #279 warns about, which
+     * passes or fails with the shared cache's warmth.
      */
     async function firesAt(bearing: Bearing, weaponId: string,
         shipId = SKIFF): Promise<boolean> {
         const { world } = await setUp(bearing, shipId);
-        const weapon = await world.resources.get(WeaponEntries)!.get(weaponId);
-        expect(weapon).withContext(`weapon ${weaponId} loaded`).toBeDefined();
+        await loadWeaponsGameData(world, [weaponId]);
+        // Staged above; the cache read is the contract.
+        const weapon = world.resources.get(WeaponEntries)!.getCached(weaponId);
+        expect(weapon).withContext(`weapon ${weaponId} staged`).toBeDefined();
         return weapon!.fireFromEntity('shooter', false) !== undefined;
     }
 
@@ -214,8 +222,10 @@ describe('turret blind spots', () => {
         // once at a live one proves nothing was consumed in between.
         it('does not restart when a blind-spot shot is refused', async () => {
             const { world } = await setUp('astern');
-            const weapon =
-                await world.resources.get(WeaponEntries)!.get(FLANK_TURRET);
+            await loadWeaponsGameData(world, [FLANK_TURRET]);
+            // Staged above; the cache read is the contract.
+            const weapon = world.resources.get(WeaponEntries)!
+                .getCached(FLANK_TURRET);
             expect(weapon!.fireFromEntity('shooter', false)).toBeUndefined();
             expect(weapon!.fireFromEntity('shooter', false)).toBeUndefined();
 
