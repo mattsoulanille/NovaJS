@@ -1,7 +1,7 @@
 import { isLeft } from "fp-ts/lib/Either.js";
 import * as t from 'io-ts';
 import { formatIoTsErrors } from "nova_ecs/plugins/serializer_plugin";
-import { WireWorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
+import { WireWorldSnapshot, WireWorldSnapshotType } from "nova_ecs/plugins/snapshot_plugin";
 import { warnThrottled } from "../common/log_throttle.js";
 import { InputRecord, InputRecordType, WireTick } from "./simulation_input.js";
 
@@ -88,6 +88,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    now refuses only what applyAcceptMission's own decode dropped. The
 //    derived schema, and with it the joinRequest fingerprint the relay
 //    compares, changes; that gate is what keeps the two layouts apart.
+//    Also under 7, no further bump: the component lists of a wire
+//    snapshot (catchUp baselines, desync dumps) and of an addEntity
+//    record are typed by the world-independent registry (#268,
+//    wire_snapshot_components.ts) — a change to the SCHEMA, which the
+//    fingerprint gate above identifies and refuses across builds on
+//    its own; the message kinds, the persisted forms (room archives,
+//    desync dumps on disk) and the encoded component forms are
+//    unchanged. Since 7, every component codec is part of the schema,
+//    so the fingerprint — not this number — is the wire format's
+//    identity; this number moves for semantic protocol changes.
 export const PROTOCOL_VERSION = 7;
 
 /**
@@ -271,25 +281,15 @@ export type RollbackProtocolMessage =
  * deep decode of a megabyte baseline on every join would cost more
  * than it protects; both messages are server-trusted or gated by the
  * relay anyway (see simulation_bridge.ts and rollback_relay.ts).
+ *
+ * The snapshot's structural codec is nova_ecs's WireWorldSnapshotType,
+ * whose component lists are ONE shared codec instance
+ * (WireComponentListType): the socket schema's derivation
+ * (wire_schemas.ts, with the world-independent registry of
+ * wire_snapshot_components.ts) recognises the list by identity and
+ * types each component's data — while the runtime gate here stays
+ * structural, exactly as before.
  */
-
-const WireComponentType = t.tuple([
-    t.string, t.unknown, t.union([t.literal('serializer'), t.literal('wire')]),
-]);
-
-const WireEntityType = t.intersection([
-    t.type({
-        uuid: t.string,
-        components: t.array(WireComponentType),
-    }),
-    t.partial({ name: t.string }),
-]);
-
-const WireWorldSnapshotType: t.Type<WireWorldSnapshot, unknown> = t.type({
-    entities: t.array(WireEntityType),
-    singleton: t.array(WireComponentType),
-    resources: t.array(t.unknown),
-});
 
 const ArchiveBaselineType: t.Type<ArchiveBaseline, unknown> = t.type({
     tick: WireTick,

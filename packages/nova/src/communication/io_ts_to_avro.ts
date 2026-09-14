@@ -2,6 +2,7 @@ import * as t from 'io-ts';
 import { PositionType } from 'nova_ecs/datatypes/position';
 import { AngleType, VectorType } from 'nova_ecs/datatypes/vector';
 import { EncodedComponentList, markerType, Serializer, WireShapedType } from 'nova_ecs/plugins/serializer_plugin';
+import { WireComponentListType } from 'nova_ecs/plugins/snapshot_plugin';
 
 /**
  * ============================================================================
@@ -97,6 +98,15 @@ export interface AvroSchemaNode {
     components?: Record<string, string>;
     /** `componentUnion`: the branch for components the serializer lacks. */
     extra?: string;
+    /**
+     * `componentUnion`: the item tuple's arity. Absent = 2, the ECS
+     * component list's `[name, data]`; 3 = a WIRE SNAPSHOT's `[name,
+     * data, encoding]` (nova_ecs snapshot_plugin WireComponentListType),
+     * whose branch records carry an `encoding` enum field after `data`
+     * and whose data is the JSON-safe capture form — see
+     * `componentList` for what the codecs do with both.
+     */
+    tupleArity?: 2 | 3;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,9 +151,10 @@ export interface DerivationOptions {
     name?: string;
     hooks?: CodecHooks;
     /**
-     * Types the ECS component list by the serializer's registered
-     * component codecs (see `componentList` above). Without it the
-     * list's data stays `t.unknown`, i.e. opaque.
+     * Types the component lists — the ECS EncodedComponentList and a
+     * wire snapshot's WireComponentListType — by the serializer's
+     * registered component codecs (see `componentList` below). Without
+     * it the lists' data stays `t.unknown`, i.e. opaque.
      */
     serializer?: Serializer;
 }
@@ -326,6 +337,9 @@ class Deriver {
         }
         if (codec === EncodedComponentList && this.options.serializer) {
             return this.componentList(this.options.serializer, path, codec);
+        }
+        if (codec === WireComponentListType && this.options.serializer) {
+            return this.componentList(this.options.serializer, path, codec, 3);
         }
         return this.deriveByTag(codec, path, nameHint);
     };
@@ -868,12 +882,44 @@ class Deriver {
      * length plus one byte per component over the data itself; a
      * record-with-83-nullable-fields shape was measured to cost ~84
      * bytes per entity in absent markers. List order is preserved.
+     *
+     * `tupleArity` selects the list's item shape: 2 for the ECS
+     * component list (`[name, encoded]`), 3 for a wire snapshot's
+     * (`[name, encoded, encoding]`, nova_ecs snapshot_plugin
+     * WireComponentListType). A wire snapshot's list differs from the
+     * ECS list in two ways the codecs (avro_binary componentUnion and
+     * the avsc reference) honour:
+     *
+     *   - Each branch record carries the pair's `encoding` tag after
+     *     its data, as a one-byte enum: the receiving world's restore
+     *     routes by it (snapshot_plugin restoreWireComponents decodes a
+     *     'wire' pair through the snapshot policies' wire codec and a
+     *     'serializer' pair through the serializer), so the wire must
+     *     carry exactly what the sender captured. The extra branch
+     *     carries it too.
+     *   - The data is the JSON-SAFE capture form (snapshot_plugin
+     *     toJsonSafe: −0, NaN, ±Infinity and undefined ride as the
+     *     `{$negzero}` / `{$nonfinite}` / `{$undefined}` sentinels the
+     *     JSON wire and the persisted forms need). The schema'd fields
+     *     hold those values natively, so the codecs unwrap the
+     *     sentinels before a typed branch's write and re-wrap after its
+     *     read: the bytes carry IEEE doubles and absent optionals, and
+     *     the decoded snapshot is the same JSON-safe shape the sender
+     *     captured (what a desync dump is written to disk as, and what
+     *     restore's fromJsonSafe expects). The extra branch's opaque
+     *     data is carried as is, sentinels included.
      */
-    private componentList(serializer: Serializer, path: string, codec: t.Any): AvroSchema {
+    private componentList(serializer: Serializer, path: string, codec: t.Any,
+        tupleArity: 2 | 3 = 2): AvroSchema {
         const union: AvroSchemaNode = {
             type: [], logicalType: 'componentUnion', components: {},
         };
         const branches = union.type as AvroSchema[];
+        // The encoding tag's enum, defined once (the first branch of the
+        // first arity-3 list) and referenced by name after.
+        const encodingField = (): AvroField => ({
+            name: 'encoding', type: this.wireEncodingEnum(),
+        });
         const componentNames = [...serializer.componentsByName.keys()].sort();
         for (const componentName of componentNames) {
             const component = serializer.componentsByName.get(componentName)!;
@@ -887,16 +933,25 @@ class Deriver {
                 componentName);
             branches.push({
                 type: 'record', name: branchName,
-                fields: [{ name: 'data', type: schema }],
+                fields: [
+                    { name: 'data', type: schema },
+                    ...(tupleArity === 3 ? [encodingField()] : []),
+                ],
             });
         }
         // A component the serializer does not know, by name.
         const extra = this.uniqueName('Component_extra');
         union.extra = extra;
+        // The arity annotation rides the UNION node (the array's items),
+        // which is what both compilers hand to componentUnion.
+        if (tupleArity === 3) {
+            union.tupleArity = 3;
+        }
         branches.push({
             type: 'record', name: extra, fields: [
                 { name: 'name', type: 'string' },
                 { name: 'data', type: { type: 'bytes', logicalType: 'opaque' } },
+                ...(tupleArity === 3 ? [encodingField()] : []),
             ],
         });
         const list: AvroSchemaNode = { type: 'array', items: union };
@@ -904,6 +959,21 @@ class Deriver {
         // second use references the branch records by name.
         this.listSchemas.set(codec, list);
         return list;
+    }
+
+    private wireEncodingName: string | undefined;
+
+    /** The wire snapshot pair's `encoding` tag: defined once, then by name. */
+    private wireEncodingEnum(): AvroSchema {
+        if (this.wireEncodingName) {
+            return this.wireEncodingName;
+        }
+        this.wireEncodingName = this.uniqueName('WireComponentEncoding');
+        this.namedKinds.set(this.wireEncodingName, 'enum');
+        return {
+            type: 'enum', name: this.wireEncodingName,
+            symbols: ['serializer', 'wire'],
+        };
     }
 }
 

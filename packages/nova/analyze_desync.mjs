@@ -130,11 +130,36 @@ async function variantDiffCount(records, checkpoint, gameData) {
     return diffSnapshots(wireSnapshotWorld(world), checkpoint.snapshot);
 }
 
-/** Wire components as a name -> JSON map, peer-local excluded. */
+/**
+ * A wire value as canonical JSON: object keys sorted, and a key whose
+ * value is the `{$undefined}` sentinel dropped. The truth is captured
+ * in this process (construction key order, `undefined` props present),
+ * the client's checkpoint crossed the typed binary wire (an Avro
+ * record's fields come back in schema order, a present undefined as an
+ * absent optional); neither is a difference the components' codecs
+ * see, and the diff must not report them as one.
+ */
+function canonicalJson(value) {
+    return JSON.stringify(value, (_key, inner) => {
+        if (inner === null || typeof inner !== 'object' || Array.isArray(inner)) {
+            return inner;
+        }
+        const canonical = {};
+        for (const key of Object.keys(inner).sort()) {
+            const child = inner[key];
+            if (!(child && typeof child === 'object' && child.$undefined === true)) {
+                canonical[key] = child;
+            }
+        }
+        return canonical;
+    });
+}
+
+/** Wire components as a name -> canonical JSON map, peer-local excluded. */
 function componentMap(wireEntity) {
     return new Map(wireEntity.components
         .filter(([name]) => !PEER_LOCAL_COMPONENTS.has(name))
-        .map(([name, data]) => [name, JSON.stringify(data)]));
+        .map(([name, data]) => [name, canonicalJson(data)]));
 }
 
 const clip = value => value.length > 200 ? value.slice(0, 200) + '…' : value;
@@ -199,8 +224,8 @@ function diffSnapshots(truth, client) {
         }
     }
     truth.resources.forEach((resource, i) => {
-        const expected = JSON.stringify(resource);
-        const actual = JSON.stringify(client.resources[i]);
+        const expected = canonicalJson(resource);
+        const actual = canonicalJson(client.resources[i]);
         if (expected !== actual) {
             lines.push(`resource[${i}]:\n    truth:  ${clip(expected)}\n`
                 + `    client: ${clip(actual)}`);

@@ -342,18 +342,19 @@ describe('io-ts to Avro derivation', () => {
         });
 
         it('the live wire schema types the envelopes end to end', () => {
-            // What is left opaque is exactly the component lists (the
-            // socket has no serializer; see wireMessageDerivation) —
-            // #269 typed the acceptMission record's mission payloads,
-            // which used to be three of these. The ships' entities and
-            // addEntity's share EncodedEntity, so the one untyped node
-            // is reported at its first site.
+            // What is left opaque is exactly the rollback protocol's
+            // own t.unknown nodes. The component lists — a wire
+            // snapshot's (catchUp baselines, desync dumps), an
+            // addEntity record's and an accepted mission ship's (they
+            // share EncodedEntity) — are typed by the world-independent
+            // registry (wire_snapshot_components.ts, #268), and the
+            // acceptMission record's mission payloads by
+            // EncodedActiveMissionType (#269); a component whose codec
+            // the derivation could not type would appear here, and this
+            // pin is what makes that loud.
             const { failures } = wireMessageDerivation();
             expect(summarize(failures)).toEqual([
-                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',
                 'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.resources[]',
-                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.singleton[][1]',
-                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity.components[][1]',
             ]);
             expect(liveWireCodec().encoding).toBe('avro');
             expect(liveWireFingerprint()).toMatch(/^[0-9a-f]{16}$/);

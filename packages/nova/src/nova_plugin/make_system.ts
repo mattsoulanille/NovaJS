@@ -19,6 +19,7 @@ import { Platform, PlatformResource } from "./core/index.js";
 import { GovtsResource } from "./reputation/index.js";
 import { SystemIdResource } from "./core/index.js";
 import { SystemPlugin } from "./system_plugin.js";
+import { assertWireRegistryCovers } from "../communication/wire_snapshot_components.js";
 
 
 /** The simulation runs at a fixed 60Hz. */
@@ -82,6 +83,10 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     useFixedTimestep(world, SIMULATION_STEP_MS);
 
     configureSnapshotPolicies(world);
+    // Every component this world can put on the wire must be typed by
+    // the socket schema's world-independent registry; one the registry
+    // lacks fails here, by name, rather than crossing opaquely.
+    assertWireRegistryCovers(world);
 
     // Load the system's planets before the world ever steps: the
     // simulation must not resolve data asynchronously mid-simulation,

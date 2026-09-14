@@ -1,3 +1,4 @@
+import { fromJsonSafe, toJsonSafe } from 'nova_ecs/plugins/snapshot_plugin';
 import { ByteReader, ByteWriter } from './avro_bytes.js';
 import { readDynamic, writeDynamic } from './dynamic_encoding.js';
 import { AvroSchema, AvroSchemaNode } from './io_ts_to_avro.js';
@@ -668,40 +669,60 @@ class Compiler {
     }
 
     /**
-     * One `[name, data]` pair of a component list: the branch index is
-     * the component, the branch record's one field is the data.
+     * One pair of a component list: the branch index is the component,
+     * the branch record's `data` field is the data. A wire snapshot's
+     * list (`tupleArity` 3, io_ts_to_avro componentList) is `[name,
+     * data, encoding]`: the branch record's `encoding` enum follows the
+     * data, and a typed branch's data — the JSON-safe capture form —
+     * has its sentinels unwrapped before the write (nova_ecs
+     * fromJsonSafe) and re-wrapped after the read (toJsonSafe), so the
+     * bytes hold −0/NaN/undefined natively and the decoded pair is the
+     * shape the sender captured. The extra branch's opaque data is
+     * carried as is.
      */
     private componentUnion(schema: AvroSchemaNode): Codec {
         const components = schema.components ?? {};
         const extra = schema.extra!;
-        const byComponent = new Map<string, { index: number, data: Codec }>();
-        const byIndex: { component: string, data: Codec }[] = [];
+        const arity = schema.tupleArity ?? 2;
+        const byComponent = new Map<string, { index: number, branch: ComponentBranch }>();
+        const byIndex: { component: string, branch: ComponentBranch }[] = [];
         let extraIndex = -1;
+        let extraBranch: ComponentBranch | undefined;
         (schema.type as AvroSchema[]).forEach((branch, index) => {
-            // The branch record `{data}` is defined at the list's first
-            // use and referenced by name after. Its one field is written
-            // directly; the record itself is registered under its name
-            // (compiled once, from the field codec) so the reference
-            // resolves.
+            // The branch records are defined at the list's first use
+            // and referenced by name after. Their fields are written
+            // directly; each record is also registered under its name
+            // so the reference resolves.
             const name = typeof branch === 'string' ? branch : (branch as AvroSchemaNode).name!;
+            const entry = this.componentBranch(name,
+                typeof branch === 'string' ? undefined : branch as AvroSchemaNode);
             if (name === extra) {
-                if (typeof branch !== 'string') {
-                    this.compile(branch);
-                }
                 extraIndex = index;
+                extraBranch = entry;
                 return;
             }
-            const data = this.componentBranch(name,
-                typeof branch === 'string' ? undefined : branch as AvroSchemaNode);
             const component = components[name]!;
-            byComponent.set(component, { index, data });
-            byIndex[index] = { component, data };
+            byComponent.set(component, { index, branch: entry });
+            byIndex[index] = { component, branch: entry };
         });
+        const writeEncoding = (branch: ComponentBranch, value: unknown[], out: ByteWriter) => {
+            if (arity === 3) {
+                branch.encoding!.write(value[2], out);
+            }
+        };
+        const readEncoding = (branch: ComponentBranch, pair: unknown[], input: ByteReader) => {
+            if (arity === 3) {
+                pair.push(branch.encoding!.read(input));
+            }
+            return pair;
+        };
         return {
             bucket: 'array',
             write: (value, out) => {
-                if (!Array.isArray(value) || value.length !== 2 || typeof value[0] !== 'string') {
-                    throw expected('a [name, data] pair', value);
+                if (!Array.isArray(value) || value.length !== arity
+                    || typeof value[0] !== 'string') {
+                    throw expected(arity === 3 ? 'a [name, data, encoding] triple'
+                        : 'a [name, data] pair', value);
                 }
                 const [name, data] = value as [string, unknown];
                 const entry = byComponent.get(name);
@@ -709,11 +730,13 @@ class Compiler {
                     out.writeZigZag(extraIndex);
                     out.writeString(name);
                     OPAQUE.write(data, out);
+                    writeEncoding(extraBranch!, value, out);
                     return;
                 }
                 out.writeZigZag(entry.index);
                 try {
-                    entry.data.write(data, out);
+                    entry.branch.data.write(arity === 3 ? fromJsonSafe(data) : data, out);
+                    writeEncoding(entry.branch, value, out);
                 } catch (error) {
                     at(error, name);
                 }
@@ -722,21 +745,23 @@ class Compiler {
                 const index = input.readZigZag();
                 if (index === extraIndex) {
                     const name = input.readString();
-                    return [name, OPAQUE.read(input)];
+                    return readEncoding(extraBranch!, [name, OPAQUE.read(input)], input);
                 }
                 const entry = byIndex[index];
                 if (!entry) {
                     throw new RangeError(`avro: component index ${index}`);
                 }
-                return [entry.component, entry.data.read(input)];
+                const data = entry.branch.data.read(input);
+                return readEncoding(entry.branch,
+                    [entry.component, arity === 3 ? toJsonSafe(data) : data], input);
             },
         };
     }
 
-    /** The data codec of each component branch record, by branch name. */
-    private readonly componentBranches = new Map<string, Codec>();
+    /** The field codecs of each component branch record, by branch name. */
+    private readonly componentBranches = new Map<string, ComponentBranch>();
 
-    private componentBranch(name: string, node: AvroSchemaNode | undefined): Codec {
+    private componentBranch(name: string, node: AvroSchemaNode | undefined): ComponentBranch {
         const known = this.componentBranches.get(name);
         if (known) {
             return known;
@@ -744,15 +769,49 @@ class Compiler {
         if (!node) {
             throw new Error(`avro: component branch ${name} referenced before its definition`);
         }
-        const data = this.compile(node.fields![0]!.type);
+        // Field order is fixed by the derivation: [name,] data[, encoding].
+        const field = (fieldName: string) => node.fields!.find(f => f.name === fieldName);
+        const encodingField = field('encoding');
+        const branch: ComponentBranch = {
+            data: this.compile(field('data')!.type),
+            encoding: encodingField ? this.compile(encodingField.type) : undefined,
+        };
+        const named = field('name') !== undefined;
+        // The record as a whole, under its own name, so a reference to
+        // it resolves: the extra branch is `{name, data, encoding?}`, a
+        // component branch `{data, encoding?}`.
         this.define(node, () => ({
             bucket: 'object',
-            write: (value, out) => data.write((value as { data: unknown }).data, out),
-            read: input => ({ data: data.read(input) }),
+            write: (value, out) => {
+                const record = value as { name?: string, data: unknown, encoding?: unknown };
+                if (named) {
+                    STRING.write(record.name, out);
+                }
+                branch.data.write(record.data, out);
+                branch.encoding?.write(record.encoding, out);
+            },
+            read: input => {
+                const record: Record<string, unknown> = {};
+                if (named) {
+                    record['name'] = STRING.read(input);
+                }
+                record['data'] = branch.data.read(input);
+                if (branch.encoding) {
+                    record['encoding'] = branch.encoding.read(input);
+                }
+                return record;
+            },
         }));
-        this.componentBranches.set(name, data);
-        return data;
+        this.componentBranches.set(name, branch);
+        return branch;
     }
+}
+
+/** A component branch record's field codecs: the data, and for a wire
+ * snapshot's list (`tupleArity` 3) the encoding tag after it. */
+interface ComponentBranch {
+    data: Codec;
+    encoding: Codec | undefined;
 }
 
 function writeOptional(union: UnionCodec, value: unknown, out: ByteWriter) {
