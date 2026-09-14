@@ -1,18 +1,20 @@
 import { isLeft } from "fp-ts/lib/Either.js";
+import * as t from 'io-ts';
 import { RollbackSimulation } from "nova_ecs/plugins/rollback_plugin";
 import { restoreWireWorldSnapshot, restoreWorld, snapshotWorld, SnapshotPolicies, SnapshotPoliciesResource, wireSnapshotOfSnapshot, WorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { loadEntityGameData, loadOutfitsGameData, loadWireSnapshotGameData } from "../nova_plugin/spawn/index.js";
 import {
-    deriveEntityComponents, ControlEvent, stageEncodedComponentsGameData,
+    deriveEntityComponents, ControlEvent, ControlEventType, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
+import { warnThrottled } from "../common/log_throttle.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
@@ -858,6 +860,28 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     controlEvents(events: ControlEvent[]) {
+        // Validate BEFORE scheduling, with the same codec the wire uses
+        // on a relayed record: the authoring host's own records never
+        // cross that codec, so this is the only check its controls get.
+        // Scheduling an invalid one applied it locally while the relay
+        // refused the published record — the authoring peer diverging
+        // from its own input (the binary_wire_e2e 'stop' incident), a
+        // self-inflicted desync the relay convicted. Refused as a whole
+        // batch, at the wire's granularity for one control input; the
+        // apply path (simulation_input.ts) refuses the same shapes
+        // deterministically, so the two ends can never disagree.
+        const decoded = t.array(ControlEventType).decode(events);
+        if (isLeft(decoded)) {
+            // Name the offending event (index, field, value), as the
+            // relay's drop path does, so the warning points at the
+            // caller's bug rather than restating the schema.
+            warnThrottled('bridge-controlEvents-invalid', () =>
+                'Dropping controlEvents: events fail the wire codec '
+                + `(state must be false | 'start' | 'repeat', action a `
+                + 'known ControlAction): '
+                + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
+            return;
+        }
         this.schedule({ kind: 'control', events });
     }
 

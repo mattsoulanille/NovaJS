@@ -30,6 +30,8 @@ import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
 import { wrapRollbackMessage } from './rollback_protocol.js';
+import { ShipControlStateComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
+import { resetWarnThrottle } from '../common/log_throttle.js';
 
 const FooComponent = new Component<{ x: number }>('Foo');
 
@@ -68,6 +70,59 @@ describe('SimulationBridge', () => {
 
         const host = new SimulationBridgeHost(world, makeFakeSimulationData());
         client = new SimulationBridgeClient(host, serializer);
+    });
+
+    it('controlEvents refuses events the wire codec would refuse', async () => {
+        // The avro-wire e2e desync: the AUTHORING client sent
+        // state:'stop', applied it to its own timeline, and had the
+        // record refused by the wire codec — the host played a control
+        // the rest of the room never saw, a self-inflicted desync the
+        // relay convicted. The host now runs the same predicate the
+        // wire does BEFORE scheduling, so its timeline only ever holds
+        // controls the room will accept.
+        const ship = new Entity('ship')
+            .addComponent(ControlledByComponent, { peerId: 'local' })
+            // No communicator in this world, so local play resolves the
+            // controlled ship through PlayerShipSelector (ship_control.ts).
+            .addComponent(PlayerShipSelector, undefined);
+        world.entities.set('ship', ship);
+        // The drop warning is throttled per key for a second across the
+        // whole process (common/log_throttle.ts): forget any earlier
+        // spec's firing so the count below is this spec's alone.
+        resetWarnThrottle();
+        const warn = spyOn(console, 'warn');
+        client.controlEvents([
+            { action: 'accelerate', state: 'stop' } as never,
+            { action: 'firePrimary', state: 'start' },
+        ]);
+        client.step();
+        const state = ship.components.get(ShipControlStateComponent);
+        expect(state?.get('accelerate')).toBeUndefined();
+        expect(state?.get('firePrimary')).toBeUndefined();
+        expect(warn.calls.count()).toBe(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('controlEvents');
+
+        // The valid shapes still apply.
+        client.controlEvents([{ action: 'accelerate', state: 'start' }]);
+        client.step();
+        expect(ship.components.get(ShipControlStateComponent)
+            ?.get('accelerate')).toBe('start');
+    });
+
+    it('the controlEvents drop warning names the offending event', () => {
+        // A static "fails the wire codec" line leaves the caller
+        // hunting: the warning carries the decode errors (event index,
+        // field, value), as the relay's own drop path does.
+        resetWarnThrottle();
+        const warn = spyOn(console, 'warn');
+        client.controlEvents([
+            { action: 'firePrimary', state: 'start' },
+            { action: 'accelerate', state: 'stop' } as never,
+        ]);
+        expect(warn.calls.count()).toBe(1);
+        const line = String(warn.calls.mostRecent().args[0]);
+        expect(line).toContain('1.state');
+        expect(line).toContain('stop');
     });
 
     it('adds and removes entities through bridge commands', async () => {
