@@ -7,8 +7,10 @@
  * not (all) in the simulation: the two escort rosters
  * (spaceport/landed_escorts.ts explains them), the LOST roster (escorts
  * that vanished from the world without dying — ruling #148, see
- * `noteRemoved`), the formation-slot floor, and the escorts a loaded save
- * is still carrying as encoded blobs. Plus the operations over them that
+ * `noteRemoved`), the LOST FIGHTERS (bay fighters that did the same,
+ * owed a round of ammo — issue #258, see `lostFighters`), the
+ * formation-slot floor, and the escorts a loaded save is still carrying
+ * as encoded blobs. Plus the operations over them that
  * browser.ts used to spread across a dozen functions: the take-and-restock
  * drains, the standing flushes, the bar hire spawn, the mission-ship
  * preparation, and the "what escorts does this pilot own" read the save
@@ -29,7 +31,10 @@ import { v4 } from 'uuid';
 import type {
     AsyncSimulationBridgeClient,
 } from '../communication/async_simulation_bridge_client.js';
-import { countsTowardEscortCap } from '../nova_plugin/escorts/index.js';
+import { SourceComponent } from '../nova_plugin/combat/index.js';
+import {
+    BayFighterComponent, countsTowardEscortCap, FighterRefund,
+} from '../nova_plugin/escorts/index.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
 } from '../nova_plugin/missions/index.js';
@@ -45,7 +50,7 @@ import {
 } from '../spaceport/landed_escorts.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
-    buildHiredEscort, insertEscortBatch,
+    buildHiredEscort, FleetInsertionResult, insertEscortBatch,
 } from './fleet_insertion.js';
 import type { SimulationGameData } from './gamedata/simulation_game_data.js';
 
@@ -81,6 +86,27 @@ export interface RestoredSaveEscorts {
      * cleanup outright. See SavedFleetOwner in save_game.ts.
      */
     readonly armament: ReadonlySet<string> | undefined;
+}
+
+/**
+ * A bay fighter that left the world without dying and without docking
+ * (see FleetLedger.lostFighters): what the refund record needs, and the
+ * player it is owed to.
+ */
+export interface LostFighter {
+    /** The player ship uuid the fighter belonged to. */
+    player: string;
+    /** The uuid the fighter had in the world it left. */
+    uuid: string;
+    /**
+     * The carrier that launched it (its SourceComponent): the player's
+     * own ship, or a hired carrier escort — under the uuid it had when
+     * the fighter was lost. A carrier that is itself re-inserted comes
+     * back under a fresh uuid; {@link refundLostFighters} remaps.
+     */
+    carrier: string;
+    /** Global id of the bay wëap it was launched from. */
+    bayWeaponId: string;
 }
 
 export class FleetLedger {
@@ -135,12 +161,14 @@ export class FleetLedger {
      *               commands reset). Until then it rides the save like a
      *               landed escort, so it survives a session too.
      *
-     * Bay fighters and mission escorts are never recorded: a fighter that
-     * docks with its carrier is deleted without dying and is the
-     * magazine's business, and a mission ship is respawned by the mission
-     * machinery (mission_ship_spawn.ts). An entity the world re-adds
-     * under the same uuid (a correction that removed and restored it) is
-     * taken back off this roster ({@link escortReturned}).
+     * Mission escorts are never recorded: a mission ship is respawned by
+     * the mission machinery (mission_ship_spawn.ts). Bay fighters are
+     * not recorded HERE either — they are ammunition, not escorts to
+     * respawn — but a fighter lost by the same evidence goes on
+     * {@link lostFighters} and is refunded to its bay (issue #258). An
+     * entity the world re-adds under the same uuid (a correction that
+     * removed and restored it) is taken back off either roster
+     * ({@link escortReturned}).
      *
      * A per-player client roster like the other two: entries for other
      * peers' players are dropped when the roster is taken, never
@@ -148,10 +176,41 @@ export class FleetLedger {
      */
     readonly lost: CarriedEscort[] = [];
     /**
-     * Uuids a DeathEvent was seen for, so a removal that follows one is
-     * read as a destruction (see `lost`). Bounded: the newest
-     * RECENT_DEATHS entries are kept, which is orders of magnitude more
-     * than the frames between a death and its entity's removal.
+     * ========================================================================
+     * LOST FIGHTERS, OWED A ROUND (issue #258, extending ruling #148)
+     * ========================================================================
+     *
+     * Bay fighters of the player's fleet that LEFT THE WORLD WITHOUT
+     * DYING AND WITHOUT DOCKING — the same lost-versus-destroyed evidence
+     * `lost` uses, plus one more explained removal: a fighter that docks
+     * with its carrier is deleted without a death, and the simulation
+     * says so (FighterDockedEvent, {@link noteDocked}) because the dock
+     * already credited the round. Everything else — an insertion that
+     * never took, a correction, a desync — is a round that vanished from
+     * the magazine, and the maintainer's ruling is to give it back.
+     *
+     * The refund is a docking's effect and nothing more: one round to
+     * the carrier's bay, never past the bay's ceiling, and NO fighter is
+     * respawned. It is sent as a `refundFighter` input record (escorts/
+     * bay_plugin.ts applyRefundFighter) by {@link refundLostFighters},
+     * at the same moments the lost roster is retried — the next system
+     * entry, a same-system land-and-lift-off, and the standing flushes
+     * that put a held or failed batch down — rather than the moment of
+     * the loss: a correction that restores the fighter can arrive frames
+     * later ({@link escortReturned}), and a refund already sent could not
+     * be taken back. A carrier that is a hired escort gets the round when
+     * it is back in the world (under whatever uuid the re-insertion
+     * minted); a carrier that is gone for good is dropped silently.
+     *
+     * Session-only: unlike `lost`, this does not ride the save.
+     */
+    readonly lostFighters: LostFighter[] = [];
+    /**
+     * Uuids whose removal is EXPLAINED — a DeathEvent was seen for them
+     * (a destruction, see `lost`), or a FighterDockedEvent (a docking,
+     * see `lostFighters`). Bounded: the newest RECENT_DEATHS entries are
+     * kept, which is orders of magnitude more than the frames between
+     * the event and its entity's removal.
      */
     private readonly recentDeaths = new Set<string>();
     /** See RestoredSaveEscorts. Drained by the first system entry. */
@@ -186,12 +245,22 @@ export class FleetLedger {
     }
 
     /**
+     * A FighterDockedEvent was seen for `uuid`: its removal is a docking,
+     * whose round the simulation already credited (see `lostFighters`).
+     */
+    noteDocked(uuid: string): void {
+        this.noteDeath(uuid);
+    }
+
+    /**
      * The display world is about to drop `entity` (the simulation removed
      * it this frame; the frame's events have already been emitted, so a
-     * carry event has filed it and a death has been noted). Records it on
-     * `lost` when it is a hired or captured escort of `player` (or of any
-     * player when `player` is undefined — the local player is between
-     * worlds; the take filters by player) that neither died nor was
+     * carry event has filed it and a death or a docking has been noted).
+     * Records it on `lost` when it is a hired or captured escort of
+     * `player` (or of any player when `player` is undefined — the local
+     * player is between worlds; the take filters by player) that neither
+     * died nor was carried, and on `lostFighters` when it is a bay
+     * fighter of that player's fleet that neither died, docked nor was
      * carried. Returns whether it was recorded.
      *
      * The entity kept is a serializer round trip of the display entity:
@@ -206,10 +275,32 @@ export class FleetLedger {
         if (!marker || (player !== undefined && marker.player !== player)) {
             return false;
         }
-        if (!countsTowardEscortCap(entity) || this.recentDeaths.has(uuid)) {
+        if (this.recentDeaths.has(uuid)) {
             return false;
         }
         if (this.rosters.some(roster => roster.some(row => row.uuid === uuid))) {
+            return false;
+        }
+        const bay = entity.components.get(BayFighterComponent);
+        if (bay) {
+            // A fighter's round goes back to the bay that launched it
+            // (issue #258): recorded with its carrier and bay. One with
+            // no carrier link cannot be attributed and is not recorded.
+            const carrier = entity.components.get(SourceComponent);
+            if (carrier === undefined
+                || this.lostFighters.some(row => row.uuid === uuid)) {
+                return false;
+            }
+            this.lostFighters.push({
+                player: marker.player, uuid, carrier,
+                bayWeaponId: bay.bayWeaponId,
+            });
+            console.warn(`Bay fighter ${uuid} left the world without dying `
+                + 'or docking; its round will be refunded when its fleet '
+                + 'next enters the world.');
+            return true;
+        }
+        if (!countsTowardEscortCap(entity)) {
             return false;
         }
         const decoded = serializer.decode(serializer.encode(entity));
@@ -229,6 +320,22 @@ export class FleetLedger {
         if (index >= 0) {
             this.lost.splice(index, 1);
         }
+        const fighter = this.lostFighters.findIndex(row => row.uuid === uuid);
+        if (fighter >= 0) {
+            this.lostFighters.splice(fighter, 1);
+        }
+    }
+
+    /**
+     * Takes the lost fighters owed to `player` — at the same moments
+     * {@link takeLost} runs, and by the same rule: other peers' entries
+     * are dropped (this client never refunds them). The caller sends the
+     * refunds (refundLostFighters).
+     */
+    takeLostFighters(player: string): LostFighter[] {
+        const taken = this.lostFighters.filter(row => row.player === player);
+        this.lostFighters.length = 0;
+        return taken;
     }
 
     /**
@@ -386,6 +493,7 @@ export class FleetLedger {
             landed: this.landed.map(strip),
             jumping: this.jumping.map(strip),
             lost: this.lost.map(strip),
+            lostFighters: this.lostFighters.map(row => ({ ...row })),
         };
     }
 
@@ -394,6 +502,7 @@ export class FleetLedger {
         this.landed.length = 0;
         this.jumping.length = 0;
         this.lost.length = 0;
+        this.lostFighters.length = 0;
         this.recentDeaths.clear();
         this.restoredSave = undefined;
         this.slotFloor = undefined;
@@ -491,19 +600,78 @@ export async function spawnHiredEscorts(ctx: FleetContext,
 /**
  * Re-inserts escorts the simulation handed over (landed with the player,
  * or departed with them into hyperspace) at formation stations on their
- * leader, and RETURNS THE ONES THAT COULD NOT BE INSERTED so the caller
- * can put them back on a roster (client/fleet_insertion.ts has the whole
- * policy; issue #31). The standing flushes retry them on a later frame.
+ * leader, and RETURNS THE ONES THAT COULD NOT BE INSERTED (`failed`) so
+ * the caller can put them back on a roster (client/fleet_insertion.ts
+ * has the whole policy; issue #31). The standing flushes retry them on
+ * a later frame.
  */
 async function insertCarriedEscorts(ctx: FleetContext,
     bridge: AsyncSimulationBridgeClient, displayWorld: World,
     leaderUuid: string, leader: Entity, escorts: CarriedEscort[]):
-    Promise<CarriedEscort[]> {
+    Promise<FleetInsertionResult> {
     const base = ctx.fleet.nextClientSlot(displayWorld, leaderUuid);
     ctx.fleet.noteSlotsUsed(leaderUuid, base + escorts.length);
-    const { failed } = await insertEscortBatch(bridge, leaderUuid, leader,
-        escorts, base, v4, ctx.ownerUuid());
-    return failed;
+    return insertEscortBatch(bridge, leaderUuid, leader, escorts, base, v4,
+        ctx.ownerUuid());
+}
+
+/** The part of the simulation bridge the refund needs. */
+export interface RefundBridge {
+    refundFighter(refund: FighterRefund): Promise<void>;
+}
+
+/**
+ * THE REFUND OF THE LOST FIGHTERS (issue #258; FleetLedger.lostFighters
+ * explains the ruling). Runs right after an escort batch has gone (back)
+ * into the world beside `player` — a system entry, a lift-off, or a
+ * standing flush — with `reinserted` mapping each carried escort's
+ * roster uuid to the uuid it was inserted under. Every fighter owed to
+ * `player` whose carrier can be found gets one `refundFighter` record:
+ *
+ *   the player's own ship        the player was just inserted under
+ *                                `player`, the uuid it has kept all
+ *                                session;
+ *   a carrier in this batch      under its fresh uuid (`reinserted`);
+ *   a carrier still in flight    a hired carrier that never left the
+ *                                world (a same-system lift-off), under
+ *                                the uuid it still has — and still the
+ *                                player's, by its ownership marker;
+ *   a carrier on a roster        not back yet (held for a multi-jump
+ *                                chain, landed late, itself lost): the
+ *                                row WAITS for the insertion that
+ *                                brings it back;
+ *   anything else                the carrier is gone for good —
+ *                                destroyed, released, sold — and the
+ *                                round is dropped silently.
+ *
+ * A record the bridge refuses (a closing bridge mid-transition) keeps
+ * its row, re-keyed to the carrier it resolved, for the next attempt.
+ * Other peers' rows are dropped by the take.
+ */
+export async function refundLostFighters(ctx: FleetContext,
+    bridge: RefundBridge, displayWorld: World | undefined, player: string,
+    reinserted: ReadonlyMap<string, string>): Promise<void> {
+    const { fleet } = ctx;
+    for (const row of fleet.takeLostFighters(player)) {
+        const inFlight = displayWorld?.entities.get(row.carrier)?.components
+            .get(PlayerEscortComponent)?.player === player;
+        const carrier = row.carrier === player ? player
+            : reinserted.get(row.carrier) ?? (inFlight ? row.carrier : undefined);
+        if (carrier === undefined) {
+            if (fleet.rosters.some(roster =>
+                roster.some(escort => escort.uuid === row.carrier))) {
+                fleet.lostFighters.push(row);
+            }
+            continue;
+        }
+        try {
+            await bridge.refundFighter({ carrier, bayWeaponId: row.bayWeaponId });
+        } catch (e) {
+            console.warn(`Failed to refund lost fighter ${row.uuid}; it will `
+                + 'be retried:', e);
+            fleet.lostFighters.push({ ...row, carrier });
+        }
+    }
 }
 
 /**
@@ -530,8 +698,13 @@ export async function flushLandedEscorts(ctx: FleetContext,
         return;
     }
     // Whatever could not go in goes back on the roster for the next frame.
-    ctx.fleet.landed.push(...await insertCarriedEscorts(ctx, bridge,
-        displayWorld, playerUuid, leader, mine));
+    const inserted = await insertCarriedEscorts(ctx, bridge, displayWorld,
+        playerUuid, leader, mine);
+    ctx.fleet.landed.push(...inserted.failed);
+    // A lost fighter whose carrier landed late is owed its round now
+    // that the carrier is back (issue #258).
+    await refundLostFighters(ctx, bridge, displayWorld, playerUuid,
+        inserted.reinserted);
 }
 
 /**
@@ -564,8 +737,14 @@ export async function flushCarriedJumpEscorts(ctx: FleetContext,
         return;
     }
     // Whatever could not go in goes back on the roster for the next frame.
-    ctx.fleet.jumping.push(...await insertCarriedEscorts(ctx, bridge,
-        displayWorld, playerUuid, leader, mine));
+    const inserted = await insertCarriedEscorts(ctx, bridge, displayWorld,
+        playerUuid, leader, mine);
+    ctx.fleet.jumping.push(...inserted.failed);
+    // A lost fighter whose carrier rode this batch (held through a
+    // multi-jump chain, or retried after a failed insertion) is owed its
+    // round now that the carrier is back (issue #258).
+    await refundLostFighters(ctx, bridge, displayWorld, playerUuid,
+        inserted.reinserted);
 }
 
 /**

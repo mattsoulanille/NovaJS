@@ -58,7 +58,7 @@ import {
     releaseClaim, TransitPlan,
 } from './client_state.js';
 import { insertPlayerAndFleet } from './fleet_insertion.js';
-import { prepareMissionShips } from './fleet_ledger.js';
+import { prepareMissionShips, refundLostFighters } from './fleet_ledger.js';
 import { ClientRuntime, SERVER_PEER_TIMEOUT_MS } from './runtime.js';
 import { isSessionEnded, TransitionScope } from './session_transitions.js';
 
@@ -457,6 +457,18 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // An escort whose own insertion rejected is not dropped: the standing
     // flush puts it down on a later frame (issue #31).
     fleet.jumping.push(...inserted.failed);
+    // THE REFUND OF THE LOST FIGHTERS (issue #258): a bay fighter that
+    // left the previous world without dying or docking is a round owed
+    // to its carrier's bay, credited now that the fleet is back in a
+    // world — the player's own bays at once (the player just went in),
+    // a hired carrier's when the carrier did (this batch, or the flush
+    // that puts a held or failed one down). AFTER the roster pushes
+    // above, so a carrier not yet back is seen as carried and waited
+    // for rather than dropped. No fighter is respawned.
+    await refundLostFighters({
+        fleet, gameData,
+        ownerUuid: () => communicator.uuid ?? undefined,
+    }, bridge, displayWorld, uuid, inserted.reinserted);
     // The new bridge starts from a fresh delta stream, so drop any
     // bookkeeping from the previous system's sync.
     syncedComponents.clear();

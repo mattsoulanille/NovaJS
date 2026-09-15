@@ -39,7 +39,7 @@ import {
     requestLaunch, swapDockedShip,
 } from './client_state.js';
 import { insertPlayerAndFleet } from './fleet_insertion.js';
-import { prepareMissionShips } from './fleet_ledger.js';
+import { prepareMissionShips, refundLostFighters } from './fleet_ledger.js';
 import type { ClientRuntime } from './runtime.js';
 
 /**
@@ -136,6 +136,14 @@ export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
         entity: launching,
         ...(planetId ? { stellar: planetId } : {}),
     });
+}
+
+/** The fleet-insertion dependencies, as the standing flushes build them. */
+function fleetContext(runtime: ClientRuntime) {
+    return {
+        fleet: runtime.fleet, gameData: runtime.gameData,
+        ownerUuid: () => runtime.communicator.uuid ?? undefined,
+    };
 }
 
 /**
@@ -277,6 +285,14 @@ export async function runDockingFrame(runtime: ClientRuntime,
                 row => lostEntities.has(row.entity)));
             fleet.landed.push(...inserted.failed.filter(
                 row => !lostEntities.has(row.entity)));
+            // THE LOST-FIGHTER REFUND AT A LIFT-OFF (issue #258): the
+            // same moment as the lost-escort retry above. The player's
+            // own bays are credited now; a hired carrier's when the
+            // carrier is back — in this batch, still in flight, or by
+            // the flush that puts a failed one down (hence after the
+            // roster pushes above).
+            await refundLostFighters(fleetContext(runtime), bridge, world,
+                docked.uuid, inserted.reinserted);
         } catch (e) {
             // The player's own insertion rejected: nothing went in.
             // Everything goes back where it was — the escorts to the
@@ -363,6 +379,9 @@ export async function runDockingFrame(runtime: ClientRuntime,
                 row => gateLostEntities.has(row.entity)));
             fleet.landed.push(...inserted.failed.filter(
                 row => !gateLostEntities.has(row.entity)));
+            // The lost-fighter refund, as at the spaceport launch above.
+            await refundLostFighters(fleetContext(runtime), bridge, world,
+                docked.uuid, inserted.reinserted);
         } catch (e) {
             // Same failure policy as the spaceport launch above: each half
             // back to the roster it came from.

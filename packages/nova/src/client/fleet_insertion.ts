@@ -105,6 +105,14 @@ export interface FleetInsertionResult {
      * inserted under (see the module comment). Empty on success.
      */
     failed: CarriedEscort[];
+    /**
+     * Roster uuid -> the uuid it was inserted under, for every CARRIED
+     * escort that went in (the batch comes back under fresh uuids). What
+     * lets a record that names an escort by its old uuid — a lost bay
+     * fighter's carrier (client/fleet_ledger.ts refundLostFighters,
+     * issue #258) — find the escort in the world it just entered.
+     */
+    reinserted: Map<string, string>;
     /** The slot after the last one this insertion handed out. */
     nextSlot: number;
 }
@@ -169,18 +177,22 @@ export async function insertEscortBatch(bridge: FleetBridge,
     const rows = new Map<Entity, CarriedEscort>(
         escorts.map(escort => [escort.entity, escort]));
     const failed: CarriedEscort[] = [];
+    const reinserted = new Map<string, string>();
     for (const { uuid, entity } of prepared) {
+        const row = rows.get(entity);
         try {
             await bridge.addEntity(uuid, entity);
+            if (row) {
+                reinserted.set(row.uuid, uuid);
+            }
         } catch (e) {
             console.warn(`Failed to re-insert carried escort ${uuid}:`, e);
-            const row = rows.get(entity);
             if (row) {
                 failed.push({ ...row, uuid });
             }
         }
     }
-    return { failed, nextSlot: baseSlot + escorts.length };
+    return { failed, reinserted, nextSlot: baseSlot + escorts.length };
 }
 
 /**
@@ -210,6 +222,7 @@ export async function insertPlayerAndFleet(args: FleetInsertion):
     const escortResult = await insertEscortBatch(bridge, playerUuid, player,
         escorts, baseSlot, mintUuid, ownerUuid);
     const failed = [...escortResult.failed];
+    const { reinserted } = escortResult;
     let slot = escortResult.nextSlot;
     for (const shipId of hires) {
         let escort: Entity | undefined;
@@ -251,5 +264,5 @@ export async function insertPlayerAndFleet(args: FleetInsertion):
             console.warn('Failed to spawn mission ship:', e);
         }
     }
-    return { failed, nextSlot: slot };
+    return { failed, reinserted, nextSlot: slot };
 }
