@@ -34,5 +34,11 @@ COPY --from=installer /app .
 
 EXPOSE 8000
 
+# A deployed server runs in production mode: an outgoing wire message the
+# Avro schema cannot carry is dropped with a warning (and the same policy
+# is announced to the bundle it serves) instead of thrown as in
+# development. The installer stage's ENV does not reach this stage.
+ENV NODE_ENV=production
+
 WORKDIR /app/packages/nova
 CMD ["npm", "run", "start"]

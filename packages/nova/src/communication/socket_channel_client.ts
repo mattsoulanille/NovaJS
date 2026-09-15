@@ -7,6 +7,9 @@ import {
 } from "../common/version_handshake.js";
 import { decodeWire, WireCodec } from "./wire_codec.js";
 import { liveWireCodec } from "./wire_schemas.js";
+import {
+    defaultWireSendPolicy, reportUncarriable, WireSendPolicy,
+} from "./wire_send_policy.js";
 
 /**
  * The close code and reason the client answers a TEXT frame with. The
@@ -35,6 +38,8 @@ export class SocketChannelClient implements ChannelClient {
     /** How socket messages become frames; the live wire unless a test
      * supplies its own. */
     private readonly codec: WireCodec;
+    /** What `sendFrame` does with a message the codec rejects. */
+    private readonly sendPolicy: WireSendPolicy;
 
     /**
      * Set once the server has refused this client for a build mismatch.
@@ -48,13 +53,21 @@ export class SocketChannelClient implements ChannelClient {
     private versionRefused = false;
 
     constructor({ webSocket, warn, timeout, webSocketFactory, maxPings,
-        buildVersion, onVersionMismatch, codec }: {
+        buildVersion, onVersionMismatch, codec, sendPolicy }: {
             webSocket?: WebSocket,
             warn?: ((m: string) => void),
             timeout?: number,
             webSocketFactory?: () => WebSocket,
             maxPings?: number,
             codec?: WireCodec,
+            /**
+             * What to do with a message the codec cannot encode
+             * (wire_send_policy.ts). The browser passes the policy the
+             * server announced in the page; a caller that passes nothing
+             * gets this process's own (`NODE_ENV`): strict under the
+             * spec runner.
+             */
+            sendPolicy?: WireSendPolicy,
             /**
              * This bundle's build stamp, announced on the connect URL so
              * the server can refuse a stale client before admitting it.
@@ -80,6 +93,7 @@ export class SocketChannelClient implements ChannelClient {
         });
 
         this.codec = codec ?? liveWireCodec();
+        this.sendPolicy = sendPolicy ?? defaultWireSendPolicy();
         this.webSocket = this.adopt(webSocket ?? this.webSocketFactory());
         this.warn = warn ?? console.warn;
         this.timeout = timeout ?? 1200;
@@ -207,26 +221,31 @@ export class SocketChannelClient implements ChannelClient {
             return;
         }
         this.reconnectIfClosed();
-        if (this.webSocket.readyState === this.webSocket.OPEN) {
-            for (const queued of this.messageQueue) {
-                this.sendFrame(queued);
-            }
-            this.messageQueue.length = 0;
-            this.sendFrame(message);
-        } else {
-            this.messageQueue.push(message);
+        this.messageQueue.push(message);
+        if (this.webSocket.readyState !== this.webSocket.OPEN) {
+            return;
+        }
+        // Each message leaves the queue BEFORE it goes out, so a strict
+        // sendFrame throw (a message the wire cannot carry) discards
+        // that message alone: the ones behind it stay queued, in order,
+        // for the next send.
+        while (this.messageQueue.length > 0) {
+            this.sendFrame(this.messageQueue.shift()!);
         }
     }
 
-    /** One socket message as one BINARY frame. */
+    /**
+     * One socket message as one BINARY frame. A message the wire schema
+     * does not admit is a bug in the sender: never sent, and under the
+     * strict policy thrown to the caller (wire_send_policy.ts).
+     */
     private sendFrame(message: SocketMessage) {
         let frame: Uint8Array;
         try {
             frame = this.codec.encode(SocketMessage.encode(message));
         } catch (error) {
-            // A message the wire schema does not admit is a bug in the
-            // sender; dropping it beats taking the socket down.
-            this.warn(`Not sending a message the ${this.codec.encoding} wire `
+            reportUncarriable(this.sendPolicy, this.warn,
+                `Not sending a message the ${this.codec.encoding} wire `
                 + `cannot carry: ${String(error)}`);
             return;
         }

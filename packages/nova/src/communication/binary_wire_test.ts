@@ -12,6 +12,7 @@ import { SocketChannelClient } from './socket_channel_client.js';
 import { SocketChannelServer, TEXT_FRAME_CLOSE_CODE } from './socket_channel_server.js';
 import { AvroWireCodec } from './wire_codec.js';
 import { liveWireCodec, liveWireFingerprint } from './wire_schemas.js';
+import { UncarriableMessageError, WireSendPolicy } from './wire_send_policy.js';
 
 const BUILD = 'binary-wire-build';
 
@@ -55,8 +56,12 @@ describe('the binary wire', () => {
         await new Promise<void>(resolve => httpServer.close(() => resolve()));
     });
 
-    /** A client channel on Node's own WebSocket, with the live codec. */
-    function connectClient(): { client: SocketChannelClient, frames: unknown[] } {
+    /**
+     * A client channel on Node's own WebSocket, with the live codec.
+     * `sendPolicy` omitted is the client's own default: strict under the
+     * spec runner.
+     */
+    function connectClient(sendPolicy?: WireSendPolicy): { client: SocketChannelClient, frames: unknown[] } {
         const frames: unknown[] = [];
         const client = new SocketChannelClient({
             webSocketFactory: () => {
@@ -66,6 +71,7 @@ describe('the binary wire', () => {
             },
             warn: m => warnings.push(`client: ${m}`),
             timeout: 5000,
+            sendPolicy,
         });
         clients.push(client);
         return { client, frames };
@@ -127,24 +133,63 @@ describe('the binary wire', () => {
         expect(warnings.filter(w => w !== 'client: Connected')).toEqual([]);
     });
 
-    it('drops a message the schema cannot carry, with a warning, and keeps the socket', async () => {
-        const server = new CommunicatorServer(channel);
-        new MultiRoom(server).join('nova:129');
-        const { client } = connectClient();
-        const communicator = new CommunicatorClient(client);
-        const rooms = new MultiRoom(communicator);
-        const room = rooms.join('nova:129');
-        await firstValueFrom(room.peers.current.pipe(filter(peers => peers.has('server'))));
+    /**
+     * A message the schema cannot carry is a bug in the sender (#272):
+     * in development (the default under the spec runner) the send
+     * THROWS; in production (`npm run start:prod`, which announces the
+     * policy to the client) it is dropped with a warning. The socket
+     * survives either way, on both ends.
+     */
+    describe('a message the schema cannot carry', () => {
+        const legacy = { legacy: 'delta-sync message' };
 
-        const atServer: unknown[] = [];
-        server.messages.subscribe(m => atServer.push(m.message));
-        room.sendMessage({ legacy: 'delta-sync message' }, 'server');
-        room.sendMessage(wrapRollbackMessage({ kind: 'tickSync', tick: 3 }), 'server');
-        await new Promise(resolve => setTimeout(resolve, 100));
-        expect(atServer.length).toBe(1);
-        expect(warnings.some(w => /client: Not sending a message the avro wire cannot carry/.test(w)))
-            .toBeTrue();
-        expect(client.connected.value).toBeTrue();
+        async function joined(sendPolicy?: WireSendPolicy) {
+            const server = new CommunicatorServer(channel);
+            const serverRoom = new MultiRoom(server).join('nova:129');
+            const { client } = connectClient(sendPolicy);
+            const communicator = new CommunicatorClient(client);
+            const room = new MultiRoom(communicator).join('nova:129');
+            await firstValueFrom(room.peers.current.pipe(filter(peers => peers.has('server'))));
+            const atServer: unknown[] = [];
+            server.messages.subscribe(m => atServer.push(m.message));
+            const atClient: unknown[] = [];
+            room.messages.subscribe(m => atClient.push(m.message));
+            return { client, room, serverRoom, atServer, atClient };
+        }
+
+        it('is a hard error for the client in development, and the socket stays', async () => {
+            const { client, room, atServer } = await joined();
+            expect(() => room.sendMessage(legacy, 'server'))
+                .toThrowError(UncarriableMessageError, /avro wire cannot carry/);
+            room.sendMessage(wrapRollbackMessage({ kind: 'tickSync', tick: 3 }), 'server');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            expect(atServer.length).toBe(1);
+            expect(warnings.filter(w => /cannot carry/.test(w))).toEqual([]);
+            expect(client.connected.value).toBeTrue();
+        });
+
+        it('is a hard error for the server in development, and the client stays', async () => {
+            const { client, room, serverRoom, atClient } = await joined();
+            expect(() => serverRoom.sendMessage(legacy, room.uuid!))
+                .toThrowError(UncarriableMessageError, /avro wire cannot carry/);
+            serverRoom.sendMessage(wrapRollbackMessage({ kind: 'tickSync', tick: 3 }), room.uuid!);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            expect(atClient.length).toBe(1);
+            expect(warnings.filter(w => /cannot carry/.test(w))).toEqual([]);
+            expect(client.connected.value).toBeTrue();
+            expect(channel.clients.has(room.uuid!)).toBeTrue();
+        });
+
+        it('is dropped with a warning in production, and the socket stays', async () => {
+            const { client, room, atServer } = await joined('recover');
+            expect(() => room.sendMessage(legacy, 'server')).not.toThrow();
+            room.sendMessage(wrapRollbackMessage({ kind: 'tickSync', tick: 3 }), 'server');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            expect(atServer.length).toBe(1);
+            expect(warnings.some(w => /client: Not sending a message the avro wire cannot carry/.test(w)))
+                .toBeTrue();
+            expect(client.connected.value).toBeTrue();
+        });
     });
 
     it('closes a client that speaks the old JSON (text) wire, with the reason', async () => {

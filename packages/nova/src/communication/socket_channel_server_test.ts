@@ -10,6 +10,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { Callbacks, On, trackOn } from "./test_utils.js";
 import { decodeWireOrThrow } from "./wire_codec.js";
 import { socketCodecFor } from "./wire_schemas.js";
+import { UncarriableMessageError } from "./wire_send_policy.js";
 
 /**
  * The frames here go through a schema'd codec whose payload is untyped
@@ -349,6 +350,57 @@ describe("SocketChannelServer", function () {
         client1.sendMessage({ ping: true });
 
         expect(client1.lastMessage!.pong).toBe(true);
+    });
+
+    /**
+     * A message the wire codec cannot encode (#272): a hard error under
+     * the strict policy — the default here, NODE_ENV not being
+     * production — and a dropped-with-a-warning under recover. Never
+     * sent, and never the client's problem, in either.
+     */
+    describe("a message the wire cannot carry", () => {
+        // The opaque payload encoding has no branch for a function.
+        const uncarriable = { f: () => 1 };
+
+        function connect(server: SocketChannelServer) {
+            const client = new ClientHarness(server);
+            wssCallbacks["connection"][0](client.websocket as unknown as WebSocket);
+            client.open();
+            return { client, uuid: [...server.clients][0] };
+        }
+
+        it("throws under the default (strict) policy and keeps the client", () => {
+            const warn = jasmine.createSpy<(m: string) => void>("warn");
+            const server = new SocketChannelServer({ wss, timeout: 10, codec, warn });
+            const { client, uuid } = connect(server);
+
+            expect(() => server.send(uuid, uncarriable)).toThrowError(UncarriableMessageError,
+                /Not sending a message to .* the avro wire cannot carry/);
+            expect(client.frames).toEqual([]);
+            expect(warn).not.toHaveBeenCalled();
+            expect(client.websocket.close).not.toHaveBeenCalled();
+            expect(server.clients.has(uuid)).toBeTrue();
+
+            expect(server.send(uuid, { ok: true })).toBeTrue();
+            expect(client.lastMessage!.message).toEqual({ ok: true });
+        });
+
+        it("drops it with a warning under the recover policy", () => {
+            const warn = jasmine.createSpy<(m: string) => void>("warn");
+            const server = new SocketChannelServer({
+                wss, timeout: 10, codec, warn, sendPolicy: 'recover',
+            });
+            const { client, uuid } = connect(server);
+
+            expect(server.send(uuid, uncarriable)).toBeFalse();
+            expect(client.frames).toEqual([]);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.calls.mostRecent().args[0])
+                .toMatch(/Not sending a message to .* the avro wire cannot carry/);
+
+            expect(server.send(uuid, { ok: true })).toBeTrue();
+            expect(client.lastMessage!.message).toEqual({ ok: true });
+        });
     });
 });
 

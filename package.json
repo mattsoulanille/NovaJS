@@ -29,6 +29,7 @@
     "clean": "rimraf .turbo && npm run clean --workspaces --if-present",
     "test": "turbo run test",
     "start": "turbo run start",
+    "start:prod": "npm run start:prod --workspace=nova",
     "dev": "turbo watch dev"
   },
   "dependencies": {

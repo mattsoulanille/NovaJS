@@ -1,7 +1,11 @@
 import 'jasmine';
 import express from 'express';
+import * as fs from 'fs';
 import * as http from 'http';
 import { AddressInfo } from 'net';
+import * as os from 'os';
+import * as path from 'path';
+import { injectClientConfig, WIRE_SEND_POLICY_META } from '../common/client_config.js';
 import { Gettable } from 'novadatainterface/gettable';
 import { GameDataInterface } from 'novadatainterface/game_data_interface';
 import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
@@ -233,7 +237,8 @@ describe('GameDataServer request routes', () => {
             gameData, app,
             '/nonexistent/html', '/nonexistent/bundle',
             '/nonexistent/bundle.map', '/nonexistent/worker',
-            '/nonexistent/worker.map', '/nonexistent/settings');
+            '/nonexistent/worker.map', '/nonexistent/settings',
+            { wireSendPolicy: 'strict' });
 
         server = await new Promise<http.Server>(resolve => {
             const s = app.listen(0, () => resolve(s));
@@ -330,5 +335,66 @@ describe('GameDataServer request routes', () => {
         const resp = await fetch(`${baseUrl}/gameData/data/Ship/a`);
         expect(resp.status).toBe(200);
         expect(await resp.json()).toEqual({ name: 'ShipA' });
+    });
+});
+
+/**
+ * The served page carries the server's client config (#272): this is
+ * how `npm run start:prod`'s policy reaches the bundle, which reads it
+ * before opening its socket (common/client_config.ts).
+ */
+describe('GameDataServer index route', () => {
+    let server: http.Server;
+    let baseUrl: string;
+    let htmlDir: string;
+    const page = '<!DOCTYPE HTML>\n<html>\n<head>\n  <title>Nova</title>\n</head>\n'
+        + '<body>\n  <script src="browser_bundle.js"></script>\n</body>\n</html>\n';
+
+    beforeAll(async () => {
+        htmlDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nova-index-'));
+        fs.writeFileSync(path.join(htmlDir, 'index.html'), page);
+        const app = express();
+        setupRoutes(
+            makeGameData({}), app,
+            path.join(htmlDir, 'index.html'), '/nonexistent/bundle',
+            '/nonexistent/bundle.map', '/nonexistent/worker',
+            '/nonexistent/worker.map', '/nonexistent/settings',
+            { wireSendPolicy: 'recover' });
+        server = await new Promise<http.Server>(resolve => {
+            const s = app.listen(0, () => resolve(s));
+        });
+        baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    });
+
+    afterAll(async () => {
+        await new Promise<void>((resolve, reject) =>
+            server.close(err => err ? reject(err) : resolve()));
+        fs.rmSync(htmlDir, { recursive: true, force: true });
+    });
+
+    it('serves index.html with the client config injected, as html, uncached', async () => {
+        const resp = await fetch(`${baseUrl}/`);
+        expect(resp.status).toBe(200);
+        expect(resp.headers.get('content-type')).toContain('text/html');
+        expect(resp.headers.get('cache-control')).toContain('no-cache');
+        const html = await resp.text();
+        expect(html).toBe(injectClientConfig(page, { wireSendPolicy: 'recover' }));
+        expect(html).toContain(`<meta name="${WIRE_SEND_POLICY_META}" content="recover">`);
+    });
+
+    it('serves it for any unclaimed path, as before', async () => {
+        const resp = await fetch(`${baseUrl}/some/deep/link?enter`);
+        expect(resp.status).toBe(200);
+        expect(await resp.text()).toContain(`<meta name="${WIRE_SEND_POLICY_META}"`);
+    });
+
+    it('404s when the page is missing', async () => {
+        fs.rmSync(path.join(htmlDir, 'index.html'));
+        try {
+            const resp = await fetch(`${baseUrl}/`);
+            expect(resp.status).toBe(404);
+        } finally {
+            fs.writeFileSync(path.join(htmlDir, 'index.html'), page);
+        }
     });
 });

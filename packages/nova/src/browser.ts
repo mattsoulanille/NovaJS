@@ -39,6 +39,8 @@ import { installVersionCheck } from "./client/version_reload.js";
 import { CommunicatorClient } from "./communication/communicator_client.js";
 import { MultiRoom } from "./communication/multi_room_communicator.js";
 import { SocketChannelClient } from "./communication/socket_channel_client.js";
+import { defaultWireSendPolicy } from "./communication/wire_send_policy.js";
+import { readClientConfig } from "./common/client_config.js";
 import { BUILD_VERSION } from "./common/generated_build_version.js";
 import { DEBUG_FLAGS } from "./debug_flags.js";
 import {
@@ -268,9 +270,18 @@ window.addEventListener('resize', () => applyDisplayScale());
 // server refusing this socket outright, which is the actual enforcement.
 // Both routes end in at most ONE automatic reload.
 const { onVersionMismatch, onAdmitted } = installVersionCheck(BUILD_VERSION);
+// The wire send policy (strict in development, recover in production) is
+// the SERVER's: it announced it in this page (common/client_config.ts),
+// so `npm run start:prod` switches both ends. A page without one (an
+// older server, a static host) falls back to this bundle's own NODE_ENV.
+const clientConfig = readClientConfig(document);
+const wireSendPolicy = clientConfig?.wireSendPolicy ?? defaultWireSendPolicy();
+console.log(`wire send policy: ${wireSendPolicy} `
+    + `(${clientConfig ? 'announced by the server' : 'this bundle\'s default'})`);
 const channel = new SocketChannelClient({
     buildVersion: BUILD_VERSION,
     onVersionMismatch,
+    sendPolicy: wireSendPolicy,
 });
 // `connected` flips true on the first message the server sends, which it
 // only sends to a client it has ADMITTED -- and it only admits matching

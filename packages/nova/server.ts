@@ -15,6 +15,8 @@ import { Worker } from "worker_threads";
 import { CommunicatorServer } from "./src/communication/communicator_server.js";
 import { MultiRoom } from './src/communication/multi_room_communicator.js';
 import { SocketChannelServer } from "./src/communication/socket_channel_server.js";
+import { wireSendPolicyFor } from "./src/communication/wire_send_policy.js";
+import { ClientConfig } from "./src/common/client_config.js";
 import { SimulationGameDataResource } from './src/nova_plugin/core/index.js';
 import { makeShip } from "./src/nova_plugin/ship/index.js";
 import { SIMULATION_STEP_MS } from "./src/nova_plugin/make_system.js";
@@ -59,6 +61,16 @@ const httpServer = http.createServer(app);
 
 console.log("build version: " + BUILD_VERSION);
 
+// The dev/production switch is NODE_ENV (`npm run start:prod` sets it).
+// The socket layer follows it here, and the same policy is announced to
+// every client in the page it serves (setupRoutes below), so both ends of
+// the wire always agree without a rebuild. See wire_send_policy.ts.
+const clientConfig: ClientConfig = {
+    wireSendPolicy: wireSendPolicyFor(process.env.NODE_ENV),
+};
+console.log(`wire send policy: ${clientConfig.wireSendPolicy} `
+    + `(NODE_ENV=${process.env.NODE_ENV ?? ''})`);
+
 // The client's build-version preflight. Registered here, before
 // setupRoutes' catch-all `/` handler, for the same reason the title-music
 // route below is. This route only REPORTS the build; the enforcement is
@@ -98,6 +110,7 @@ const clientSettingsDir = path.join(__dirname, "../settings");
 const channel = new SocketChannelServer({
     server: httpServer,
     buildVersion: BUILD_VERSION,
+    sendPolicy: clientConfig.wireSendPolicy,
 });
 const novaParseWorkerPath = path.join(__dirname, "src/server/parsing/nova_parse_worker_bundle.cjs");
 
@@ -134,6 +147,7 @@ async function startGame() {
         simulationWorkerBundlePath,
         simulationWorkerBundleMapPath,
         clientSettingsDir,
+        clientConfig,
     );
 
     httpServer.listen(port, function () {
