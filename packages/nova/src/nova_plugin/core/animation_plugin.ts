@@ -5,7 +5,7 @@ import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { Provide } from "nova_ecs/provide";
-import { animationRefType, gameDataRefType } from "./game_data_ref.js";
+import { animationRefType } from "./game_data_ref.js";
 import { ProjectileDataComponent } from "./projectile_data.js";
 
 export const AnimationComponent = new Component<Animation>('AnimationComponent');
@@ -75,14 +75,19 @@ export const AnimationPlugin: Plugin = {
         world.addComponent(AnimationComponent);
         world.addComponent(ExplosionDataComponent);
         world.addComponent(TumbleAnimationComponent);
-        // On the wire as references into this world's own game data
-        // (game_data_ref.ts): an Animation by its owner's id, an
-        // ExplosionData by its id. Staged before any decode.
+        // On the wire as a reference into this world's own game data
+        // (game_data_ref.ts): an Animation by its owner's id. Staged
+        // before any decode.
         world.resources.get(SerializerResource)?.addComponent(
             AnimationComponent, animationRefType(world));
-        world.resources.get(SerializerResource)?.addComponent(
-            ExplosionDataComponent,
-            gameDataRefType<ExplosionData>(world, 'Explosion', 'ExplosionData'));
+        // ExplosionDataComponent is deliberately NOT serializer-
+        // registered (ruling #272): explosions are sound and graphics —
+        // display-side entities (display/explosion_plugin.ts) in the
+        // display world, which has no serializer — and area damage is
+        // the projectile's / beam's. No simulation entity carries the
+        // component, so it never crosses the wire, never enters a
+        // snapshot and has no snapshot policy; wire_snapshot_components
+        // _test pins it out of the registry.
         world.resources.get(SerializerResource)?.addComponent(
             TumbleAnimationComponent, TumbleAnimation);
 

@@ -6,51 +6,50 @@ import { Gettable } from 'novadatainterface/gettable';
 import { isNovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { WireShapedType } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
-import type { DisplayAssetDataInterface } from '../../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from './game_data_resource.js';
+import { SimulationGameDataResource } from './game_data_resource.js';
 
 /**
  * ============================================================================
  * Game data on the wire: references, not copies (#225)
  * ============================================================================
  *
- * Six serializer-registered components hold PARSED GAME DATA — the
+ * Five serializer-registered components hold PARSED GAME DATA — the
  * ship class (ShipData), the planet (PlanetData), a weapon
- * (ProjectileData, BeamData), an explosion (ExplosionData), and the
- * Animation any of those (or an asteroid) contributes. Every peer
- * loads the same data set (the build handshake requires plug-in
- * parity), so sending the data itself — kilobytes per entity, in every
- * input record that inserts one, every baseline a joiner reconstructs
- * from, every frame the display receives — sent nothing the receiver
- * did not already have. They cross the wire as a REFERENCE into the
- * receiving peer's own game data:
+ * (ProjectileData, BeamData), and the Animation any of those (or an
+ * asteroid) contributes. Every peer loads the same data set (the build
+ * handshake requires plug-in parity), so sending the data itself —
+ * kilobytes per entity, in every input record that inserts one, every
+ * baseline a joiner reconstructs from, every frame the display
+ * receives — sent nothing the receiver did not already have. They
+ * cross the wire as a REFERENCE into the receiving peer's own game
+ * data:
  *
- *   ShipData, PlanetData, ProjectileData, BeamData, ExplosionData
- *       `{id}` — the data's own nova id, resolved in the Ship, Planet,
- *       Weapon (checked to be the projectile or beam kind) or Explosion
- *       table. Nothing per-entity: a component's value is always the
- *       cached object for that id (escort upgrades swap in another
- *       class's object, escort_action.ts, still by id). Explosions are
- *       display-side entities (display/explosion_plugin.ts) and their
- *       table is the display's asset data; the simulation's game data
- *       has none, and no simulation entity carries one. A receiver
- *       that has the display's asset data (the display's frames)
- *       stages Explosion refs there; one that does not (the
- *       simulation: records, baselines, the bridge host) has nowhere
- *       to stage them and nothing to decode them with, so it leaves
- *       them to the decode, which reports the missing table.
+ *   ShipData, PlanetData, ProjectileData, BeamData
+ *       `{id}` — the data's own nova id, resolved in the Ship, Planet
+ *       or Weapon (checked to be the projectile or beam kind) table.
+ *       Nothing per-entity: a component's value is always the cached
+ *       object for that id (escort upgrades swap in another class's
+ *       object, escort_action.ts, still by id).
  *   AnimationComponent
  *       `{owner, id}` — an Animation has no table of its own; it is a
- *       field of its owner (`ship`, `planet`, `weapon`, `explosion`,
- *       `asteroid`, or an asteroid's `asteroidDebris`). The owner is
- *       found by object identity: every Animation a world holds came
- *       out of a cached data object, so an index over the caches
- *       answers it (built lazily, extended when a lookup misses).
+ *       field of its owner (`ship`, `planet`, `weapon`, `asteroid`, or
+ *       an asteroid's `asteroidDebris`). The owner is found by object
+ *       identity: every Animation a world holds came out of a cached
+ *       data object, so an index over the caches answers it (built
+ *       lazily, extended when a lookup misses).
  *   BeamState
  *       NOT game data — per-beam state that used to share the seven's
  *       opaque passthrough codec. It now has its real io-ts shape
  *       (beam_plugin.ts).
+ *
+ * NOT on the wire: ExplosionData (ruling #272). Explosions are sound
+ * and graphics — display-side entities (display/explosion_plugin.ts)
+ * of the display world, which has no serializer — and area damage is
+ * the projectile's / beam's. No simulation entity carries the
+ * component, the simulation serializer does not register it
+ * (animation_plugin.ts) and its table (the display's asset data) is
+ * one no simulation world holds, so no reference ever names it.
  *
  * Decoding resolves against the cache SYNCHRONOUSLY (`getCached`) and
  * fails loudly on a miss — never a silent placeholder, never an async
@@ -70,8 +69,7 @@ export type GameDataRef = t.TypeOf<typeof GameDataRef>;
 
 /** What owns an Animation, and in which field. */
 export const AnimationOwner = t.keyof({
-    ship: null, planet: null, weapon: null, explosion: null,
-    asteroid: null, asteroidDebris: null,
+    ship: null, planet: null, weapon: null, asteroid: null, asteroidDebris: null,
 }, 'AnimationOwner');
 export type AnimationOwner = t.TypeOf<typeof AnimationOwner>;
 
@@ -80,30 +78,22 @@ export const AnimationRef = t.type({ owner: AnimationOwner, id: t.string }, 'Ani
 export type AnimationRef = t.TypeOf<typeof AnimationRef>;
 
 /** The game-data tables a reference resolves in. */
-export type GameDataTable = 'Ship' | 'Planet' | 'Weapon' | 'Explosion' | 'Asteroid';
+export type GameDataTable = 'Ship' | 'Planet' | 'Weapon' | 'Asteroid';
 
 const OWNER_TABLES: Record<AnimationOwner, GameDataTable> = {
-    ship: 'Ship', planet: 'Planet', weapon: 'Weapon', explosion: 'Explosion',
+    ship: 'Ship', planet: 'Planet', weapon: 'Weapon',
     asteroid: 'Asteroid', asteroidDebris: 'Asteroid',
 };
 
-/**
- * The table `name` in a pair of data sets: the simulation's game data
- * for every table but Explosion, which lives in the display's asset
- * data (`displayAssets`, absent on the simulation side).
- */
-function tableIn(gameData: SimulationGameDataInterface | undefined, name: GameDataTable,
-    displayAssets: DisplayAssetDataInterface | undefined): Gettable<BaseData> | undefined {
-    if (name === 'Explosion') {
-        return displayAssets?.data.Explosion;
-    }
+/** The table `name` of a data set. */
+function tableIn(gameData: SimulationGameDataInterface | undefined,
+    name: GameDataTable): Gettable<BaseData> | undefined {
     return gameData?.data[name] as Gettable<BaseData> | undefined;
 }
 
-/** The table `name` resolves in for `world`: its two data resources. */
+/** The table `name` resolves in for `world`: its simulation game data. */
 function tableOf(world: World, name: GameDataTable): Gettable<BaseData> | undefined {
-    return tableIn(world.resources.get(SimulationGameDataResource), name,
-        world.resources.get(DisplayAssetDataResource));
+    return tableIn(world.resources.get(SimulationGameDataResource), name);
 }
 
 /** The Animation `owner` contributes, if it has one. */
@@ -124,7 +114,7 @@ const animationIndex = new WeakMap<Animation, AnimationRef>();
 function indexAnimations(world: World) {
     const owners: [AnimationOwner, GameDataTable][] = [
         ['ship', 'Ship'], ['planet', 'Planet'], ['weapon', 'Weapon'],
-        ['explosion', 'Explosion'], ['asteroid', 'Asteroid'], ['asteroidDebris', 'Asteroid'],
+        ['asteroid', 'Asteroid'], ['asteroidDebris', 'Asteroid'],
     ];
     for (const [owner, name] of owners) {
         const cached = tableOf(world, name)?.gotten ?? {};
@@ -228,7 +218,6 @@ export const GAME_DATA_REF_COMPONENTS: ReadonlyMap<string, GameDataTable | 'anim
     ['PlanetData', 'Planet'],
     ['ProjectileData', 'Weapon'],
     ['BeamData', 'Weapon'],
-    ['ExplosionData', 'Explosion'],
     ['AnimationComponent', 'animation'],
 ]);
 
@@ -271,27 +260,19 @@ export function collectGameDataRefs(components: Iterable<readonly [string, unkno
 }
 
 /**
- * Loads every referenced id into `gameData`'s caches — and Explosion
- * ids into `displayAssets`' when the receiver has it (the display's
- * frames) — so the decodes that follow resolve synchronously. An id
- * the data set does not have is reported and skipped rather than
- * failing the staging (the decode then fails for that component, and
- * only it): a hostile record can name any id, and a rejected staging
- * wedges the archive on that record for good (see
- * entity_data_loader.ts).
+ * Loads every referenced id into `gameData`'s caches, so the decodes
+ * that follow resolve synchronously. An id the data set does not have
+ * is reported and skipped rather than failing the staging (the decode
+ * then fails for that component, and only it): a hostile record can
+ * name any id, and a rejected staging wedges the archive on that
+ * record for good (see entity_data_loader.ts).
  */
 export async function stageGameDataRefs(gameData: SimulationGameDataInterface,
-    refs: GameDataRefs, displayAssets?: DisplayAssetDataInterface): Promise<void> {
+    refs: GameDataRefs): Promise<void> {
     const loads: Promise<void>[] = [];
     for (const [name, ids] of refs) {
-        const cache = tableIn(gameData, name, displayAssets);
+        const cache = tableIn(gameData, name);
         if (!cache) {
-            // Only Explosion, on a receiver without the display's asset
-            // data: the simulation's game data has no such table, and a
-            // simulation world resolves an ExplosionData ref against a
-            // DisplayAssetDataResource it does not hold either — so the
-            // decode reports it (`this world has no Explosion data`),
-            // and there is nothing for staging to say first.
             continue;
         }
         for (const id of ids) {
@@ -309,13 +290,12 @@ export async function stageGameDataRefs(gameData: SimulationGameDataInterface,
 
 /** `stageGameDataRefs` over one or more encoded component lists. */
 export async function stageEncodedComponentsGameData(gameData: SimulationGameDataInterface,
-    lists: Iterable<Iterable<readonly [string, unknown, ...unknown[]]>>,
-    displayAssets?: DisplayAssetDataInterface): Promise<void> {
+    lists: Iterable<Iterable<readonly [string, unknown, ...unknown[]]>>): Promise<void> {
     const refs: GameDataRefs = new Map();
     for (const components of lists) {
         collectGameDataRefs(components, refs);
     }
     if (refs.size > 0) {
-        await stageGameDataRefs(gameData, refs, displayAssets);
+        await stageGameDataRefs(gameData, refs);
     }
 }

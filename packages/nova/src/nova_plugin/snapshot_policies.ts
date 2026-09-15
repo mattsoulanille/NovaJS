@@ -4,7 +4,7 @@ import { SnapshotPolicies, SnapshotPoliciesResource } from "nova_ecs/plugins/sna
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { DefaultMap } from "nova_ecs/utils";
 import { World } from "nova_ecs/world";
-import { AnimationComponent, ExplosionDataComponent } from "./core/index.js";
+import { AnimationComponent } from "./core/index.js";
 import { AsteroidDataComponent } from "./combat/index.js";
 import { BlastDamageComponent, BlastIgnoreComponent } from "./ship/index.js";
 import { BlastDoneComponent } from "./combat/index.js";
@@ -65,7 +65,9 @@ export function configureSnapshotPolicies(world: World) {
     policies.set(AsteroidDataComponent, { policy: 'share' });
     policies.set(ProjectileDataComponent, { policy: 'share' });
     policies.set(AnimationComponent, { policy: 'share' });
-    policies.set(ExplosionDataComponent, { policy: 'share' });
+    // ExplosionDataComponent has no policy on purpose (ruling #272): no
+    // simulation entity carries it — explosions are display-only
+    // (core/animation_plugin.ts) — so a snapshot never meets it.
     policies.set(BlastDamageComponent, { policy: 'share' });
     policies.set(SourceComponent, { policy: 'share' });
     // CreateTime's data is a primitive number (CreateTimeProvider stamps

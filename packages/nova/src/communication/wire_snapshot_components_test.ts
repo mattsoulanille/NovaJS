@@ -1,12 +1,13 @@
 import 'jasmine';
 import * as t from 'io-ts';
-import { Component } from 'nova_ecs/component';
+import { Component, UnknownComponent } from 'nova_ecs/component';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { SnapshotPoliciesResource, wireSnapshotWorld, WireWorldSnapshot } from 'nova_ecs/plugins/snapshot_plugin';
 import { MessageType } from './communicator_message.js';
 import { avscReferenceCodec } from './avsc_reference.js';
 import { makeDeterminismWorld } from './determinism_harness.js';
 import { deriveAvroSchema } from './io_ts_to_avro.js';
+import { ExplosionDataComponent } from '../nova_plugin/core/index.js';
 import { Target } from '../nova_plugin/ship/index.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { avroWireCodec, AvroWireCodec, decodeWireOrThrow } from './wire_codec.js';
@@ -74,6 +75,31 @@ describe('the typed wire-snapshot component list', () => {
         const missing = [...realNames].filter(name => !registry.has(name)).sort();
         expect(missing).toEqual([]);
         expect(wireRegistryMissing(real)).toEqual([]);
+    }, 60_000);
+
+    it('does not carry ExplosionData: explosions are display-only (ruling #272)', async () => {
+        // Explosions are sound and graphics — display-side entities
+        // (display/explosion_plugin.ts) of the display world, which has
+        // no serializer; area damage is the projectile's / beam's. No
+        // simulation entity ever carries the component, so the
+        // registry, the schema derived from it, a real stepped
+        // simulation world's serializer and its snapshot policies all
+        // leave it out (core/animation_plugin.ts, snapshot_policies.ts).
+        expect(wireSnapshotRegistrySerializer().componentsByName.has('ExplosionData')).toBeFalse();
+        const codec = liveWireCodec() as AvroWireCodec;
+        expect(JSON.stringify(codec.schema)).not.toContain('Component_ExplosionData');
+        const real = await makeDeterminismWorld(2, 'worker', getSyntheticGameData());
+        for (let i = 0; i < 120; i++) {
+            real.step();
+        }
+        expect(real.resources.get(SerializerResource)!.componentsByName.has('ExplosionData'))
+            .toBeFalse();
+        expect(real.resources.get(SnapshotPoliciesResource)!.components
+            .has(ExplosionDataComponent as UnknownComponent)).toBeFalse();
+        const carrying = [...real.entities]
+            .filter(([, entity]) => entity.components.has(ExplosionDataComponent))
+            .map(([uuid]) => uuid);
+        expect(carrying).toEqual([]);
     }, 60_000);
 
     it('a component the registry lacks fails loudly, by name', async () => {
