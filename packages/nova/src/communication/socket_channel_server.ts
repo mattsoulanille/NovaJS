@@ -12,6 +12,9 @@ import {
 } from "../common/version_handshake.js";
 import { decodeWire, WireCodec } from "./wire_codec.js";
 import { liveWireCodec } from "./wire_schemas.js";
+import {
+    defaultWireSendPolicy, reportUncarriable, WireSendPolicy,
+} from "./wire_send_policy.js";
 
 interface Client {
     socket: NodeWebSocket;
@@ -64,6 +67,8 @@ export class SocketChannelServer implements ChannelServer {
     /** How socket messages become frames; the live wire unless a test
      * supplies its own. */
     private readonly codec: WireCodec;
+    /** What `sendRawIfOpen` does with a message the codec rejects. */
+    private readonly sendPolicy: WireSendPolicy;
 
     // Send a ping if a packet hasn't been received in this long
     // If the ping doesn't get back in this much time, disconnect them.
@@ -79,12 +84,19 @@ export class SocketChannelServer implements ChannelServer {
      */
     private readonly buildVersion?: string;
 
-    constructor({ server, warn, wss, timeout, buildVersion, codec }: {
+    constructor({ server, warn, wss, timeout, buildVersion, codec, sendPolicy }: {
         server?: http.Server | https.Server,
         warn?: ((m: string) => void),
         wss?: WebSocketServer, timeout?: number,
         buildVersion?: string,
         codec?: WireCodec,
+        /**
+         * What to do with a message the codec cannot encode
+         * (wire_send_policy.ts). Omitted, it is this process's own
+         * (`NODE_ENV`): strict under the spec runner; `server.ts`
+         * passes it explicitly and announces the same one to clients.
+         */
+        sendPolicy?: WireSendPolicy,
     }) {
 
         if (warn) {
@@ -93,6 +105,7 @@ export class SocketChannelServer implements ChannelServer {
 
         this.buildVersion = buildVersion;
         this.codec = codec ?? liveWireCodec();
+        this.sendPolicy = sendPolicy ?? defaultWireSendPolicy();
 
         if (wss) {
             this.wss = wss;
@@ -132,8 +145,11 @@ export class SocketChannelServer implements ChannelServer {
                 frame = this.codec.encode(SocketMessage.encode(socketMessage));
             } catch (error) {
                 // A message the wire schema does not admit is a bug in
-                // the sender, not a reason to drop the client.
-                this.warn(`Not sending a message to ${destination} the `
+                // the sender, not a reason to drop the client: never
+                // sent, and under the strict policy thrown to the
+                // caller (wire_send_policy.ts).
+                reportUncarriable(this.sendPolicy, this.warn,
+                    `Not sending a message to ${destination} the `
                     + `${this.codec.encoding} wire cannot carry: ${String(error)}`);
                 return false;
             }

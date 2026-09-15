@@ -6,6 +6,7 @@ import { Callbacks, On, trackOn } from "./test_utils.js";
 import { firstValueFrom } from "rxjs";
 import { decodeWireOrThrow } from "./wire_codec.js";
 import { socketCodecFor } from "./wire_schemas.js";
+import { UncarriableMessageError } from "./wire_send_policy.js";
 
 /** A schema'd codec over an untyped payload: any shape, binary frames. */
 const codec = socketCodecFor(t.unknown);
@@ -199,5 +200,74 @@ describe("SocketChannelClient", function () {
         expect(webSocketFactory).toHaveBeenCalled();
 
         clock.uninstall();
+    });
+
+    /**
+     * A message the wire codec cannot encode (#272): a hard error under
+     * the strict policy — the default here, NODE_ENV not being
+     * production — and a dropped-with-a-warning under recover. Never
+     * sent, and never the socket's problem, in either.
+     */
+    describe("a message the wire cannot carry", () => {
+        // The opaque payload encoding has no branch for a function.
+        const uncarriable = { f: () => 1 };
+
+        it("throws under the default (strict) policy and keeps the socket", () => {
+            const client = new SocketChannelClient({ webSocket, warn, codec });
+            expect(() => client.send(uncarriable)).toThrowError(UncarriableMessageError,
+                /Not sending a message the avro wire cannot carry/);
+            expect(webSocket.send).not.toHaveBeenCalled();
+            expect(warn).not.toHaveBeenCalled();
+            expect(webSocket.close).not.toHaveBeenCalled();
+
+            // The next message goes out as usual.
+            client.send({ ok: true });
+            expect(webSocket.send).toHaveBeenCalledTimes(1);
+            expect(sentMessage(webSocket.send.calls.mostRecent().args[0] as Uint8Array).message)
+                .toEqual({ ok: true });
+        });
+
+        it("drops it with a warning under the recover policy", () => {
+            const client = new SocketChannelClient({
+                webSocket, warn, codec, sendPolicy: 'recover',
+            });
+            expect(() => client.send(uncarriable)).not.toThrow();
+            expect(webSocket.send).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.calls.mostRecent().args[0])
+                .toMatch(/Not sending a message the avro wire cannot carry/);
+
+            client.send({ ok: true });
+            expect(webSocket.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("discards only that message from the queue when the socket opens", () => {
+            // Queued while CONNECTING; the flush on open sends them in
+            // order, and the strict throw on the second leaves the third
+            // queued for the next send rather than lost or re-sent.
+            const connecting = jasmine.createSpyObj<WebSocket>("connectingSpy",
+                ["addEventListener", "send", "close", "removeEventListener"], {
+                CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3,
+            });
+            let readyState = 0;
+            Object.defineProperty(connecting, 'readyState', { get: () => readyState });
+            const client = new SocketChannelClient({ webSocket: connecting, warn, codec });
+            client.send({ first: true });
+            client.send(uncarriable);
+            client.send({ third: true });
+            expect(connecting.send).not.toHaveBeenCalled();
+
+            readyState = 1;
+            expect(() => client.send({ fourth: true })).toThrowError(UncarriableMessageError);
+            expect(connecting.send).toHaveBeenCalledTimes(1);
+            expect(sentMessage(connecting.send.calls.argsFor(0)[0] as Uint8Array).message)
+                .toEqual({ first: true });
+
+            client.send({ fifth: true });
+            expect(connecting.send).toHaveBeenCalledTimes(4);
+            expect(connecting.send.calls.allArgs().map(([frame]) =>
+                sentMessage(frame as Uint8Array).message))
+                .toEqual([{ first: true }, { third: true }, { fourth: true }, { fifth: true }]);
+        });
     });
 });
