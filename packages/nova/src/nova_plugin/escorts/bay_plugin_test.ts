@@ -15,8 +15,20 @@ import { getIntegrationGameData } from '../../communication/simulation_test_fixt
 import { SoundEvent } from '../core/index.js';
 import { EscortCommandComponent } from '../player/index.js';
 import { FormationComponent, NpcComponent } from '../npc/index.js';
-import { BayFighterComponent, EXIT_KICK, startReturnHome } from './bay_plugin.js';
+import {
+    applyRefundFighter, BayFighterComponent, EXIT_KICK, FighterDockedEvent,
+    startReturnHome,
+} from './bay_plugin.js';
 import { CollisionEvent, CollisionVulnerabilityComponent } from '../core/index.js';
+import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
+import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { wrapRollbackMessage } from '../../communication/rollback_protocol.js';
+import { SimulationBridgeClient } from '../../communication/simulation_bridge_client.js';
+import { SimulationBridgeHost } from '../../communication/simulation_bridge_host.js';
+import {
+    ControlledByComponent, PlayerEscortComponent, PlayerShipSelector,
+} from '../player/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
 import { makeShip } from '../ship/index.js';
@@ -591,5 +603,137 @@ describe('bay weapons', () => {
             const stateBefore = random.getState();
             await stepWorld(world, 3);
             expect(random.getState()).toEqual(stateBefore);
+        });
+});
+
+/**
+ * ============================================================================
+ * THE LOST-FIGHTER REFUND (issue #258)
+ * ============================================================================
+ *
+ * A bay fighter that vanished from the world without dying and without
+ * docking is a round gone from the magazine; the ruling is to give it
+ * back. The client's ledger proves the loss (client/fleet_ledger_test.ts)
+ * and sends a `refundFighter` input record; these specs pin the SIM half:
+ * the docking notice the ledger tells a dock apart by, and
+ * applyRefundFighter — a docking's effect, owner-checked, bay-checked,
+ * ceiling-capped, and applied exactly once under rollback resimulation.
+ */
+describe('the lost-fighter refund (issue #258)', () => {
+    const PLAYER_PEER = 'player-peer';
+
+    it('a docking announces itself to the display, targeting the fighter',
+        async () => {
+            const { world, carrier } = await makeTestWorld();
+            const [uuid, fighter] = await launchOne(world, carrier);
+            const docked: (string | Entity)[][] = [];
+            world.events.get(FighterDockedEvent).subscribe(
+                ({ data, entities }) => {
+                    expect(data).toEqual({ carrier: CARRIER_UUID });
+                    docked.push([...entities ?? []]);
+                });
+            startReturnHome(fighter);
+            world.emit(CollisionEvent, { other: CARRIER_UUID, initiator: true },
+                [uuid]);
+            await stepWorld(world, 1);
+            expect(world.entities.has(uuid)).toBeFalse();
+            expect(docked).toEqual([[uuid]]);
+        });
+
+    it('credits one round to the player\'s own bay, exactly as a docking '
+        + 'does, and never past the ceiling', async () => {
+            // One bay, MaxAmmo 2: the ceiling is 2.
+            const { world, carrier } = await makeTestWorld({
+                fighterCounts: { [FIGHTER_A_ID]: 2 }, maxAmmo: 2,
+            });
+            carrier.components.set(PlayerShipSelector, undefined);
+            await launchOne(world, carrier);
+            await launchOne(world, carrier);
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(0);
+            const refund = { carrier: CARRIER_UUID, bayWeaponId: BAY_ID };
+            // Local play: no peer, the PlayerShipSelector is the player.
+            expect(applyRefundFighter(world, undefined, refund)).toBeTrue();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
+            expect(applyRefundFighter(world, undefined, refund)).toBeTrue();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
+            // A third round would exceed what the bay can hold.
+            expect(applyRefundFighter(world, undefined, refund)).toBeFalse();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
+        });
+
+    it('refuses a carrier that is not the player\'s, and credits a hired '
+        + 'carrier escort\'s bay', async () => {
+            const { world, carrier } = await makeTestWorld();
+            await launchOne(world, carrier);
+            const player = new Entity('player')
+                .addComponent(PlayerShipSelector, undefined);
+            world.entities.set('player-uuid', player);
+            const refund = { carrier: CARRIER_UUID, bayWeaponId: BAY_ID };
+            // An NPC carrier: nobody's, nothing credited.
+            expect(applyRefundFighter(world, undefined, refund)).toBeFalse();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
+            // Somebody ELSE's escort: still nothing.
+            carrier.components.set(PlayerEscortComponent,
+                { player: 'somebody-else', parent: 'somebody-else' });
+            expect(applyRefundFighter(world, undefined, refund)).toBeFalse();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
+            // The player's own hired carrier: its bay gets the round.
+            carrier.components.set(PlayerEscortComponent,
+                { player: 'player-uuid', parent: 'player-uuid' });
+            expect(applyRefundFighter(world, undefined, refund)).toBeTrue();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
+        });
+
+    it('refuses a bay the carrier does not mount, and a carrier that is '
+        + 'gone', async () => {
+            const { world, carrier } = await makeTestWorld();
+            carrier.components.set(PlayerShipSelector, undefined);
+            await launchOne(world, carrier);
+            expect(applyRefundFighter(world, undefined,
+                { carrier: CARRIER_UUID, bayWeaponId: 'test:noSuchBay' }))
+                .toBeFalse();
+            expect(applyRefundFighter(world, undefined,
+                { carrier: 'no such carrier', bayWeaponId: BAY_ID }))
+                .toBeFalse();
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
+        });
+
+    it('is applied exactly once under a rollback resimulation, as an '
+        + 'input record through the bridge', async () => {
+            const { world, carrier, gameData } = await makeTestWorld();
+            // The record is stamped with this peer, which controls the
+            // carrier.
+            const communicator = new MockCommunicator(PLAYER_PEER);
+            world.resources.set(CommunicatorResource, communicator);
+            carrier.components.set(ControlledByComponent,
+                { peerId: PLAYER_PEER });
+            await launchOne(world, carrier);
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
+
+            const host = new SimulationBridgeHost(world, gameData);
+            const client = new SimulationBridgeClient(host,
+                world.resources.get(SerializerResource)!);
+            client.step(3);
+            await client.refundFighter(
+                { carrier: CARRIER_UUID, bayWeaponId: BAY_ID });
+            client.step(); // The record lands on tick 4.
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
+
+            // A late record for tick 3 arrives: the host rolls back past
+            // the refund's tick and re-lives it. The refund is re-applied
+            // from the input log on the restored state — one round, not
+            // two.
+            communicator.messages.next({
+                source: 'server',
+                message: wrapRollbackMessage({
+                    kind: 'inputs',
+                    record: {
+                        peerId: 'other peer', tick: 3,
+                        inputs: [{ kind: 'setTarget', target: null }],
+                    },
+                }),
+            });
+            client.step(2);
+            expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
         });
 });

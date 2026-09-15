@@ -428,6 +428,7 @@ describe('io-ts to Avro derivation', () => {
                                 { kind: 'setPlanetTarget', target: 'planet' },
                                 { kind: 'hail', action: { kind: 'bribe', target: 'ship' } },
                                 { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'e', toShip: 'nova:128' } },
+                                { kind: 'refundFighter', refund: { carrier: 'c', bayWeaponId: 'nova:150' } },
                                 { kind: 'addEntity', uuid: 'u', entity: { name: 'n', components: [['A', { x: 1 }], ['B', null]] } },
                                 { kind: 'removeEntity', uuid: 'u' },
                                 { kind: 'setJumpRoute', route: ['a', 'b'] },

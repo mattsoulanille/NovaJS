@@ -2,7 +2,7 @@ import { isLeft } from "fp-ts/lib/Either.js";
 import { Entity } from "nova_ecs/entity";
 import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
-import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
@@ -60,6 +60,10 @@ export class SimulationBridgeClient {
 
     escortAction(action: EscortAction) {
         return this.host.escortAction(structuredClone(action));
+    }
+
+    refundFighter(refund: FighterRefund) {
+        return this.host.refundFighter(structuredClone(refund));
     }
 
     acceptMission(accepted: AcceptedMission) {

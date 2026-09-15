@@ -9,7 +9,9 @@ import {
     ControlEvent, ControlEventType, ControlsSubject, deriveEntityComponents,
     SimulationGameDataResource, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
-import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/spawn/index.js";
+import {
+    loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
+} from "../nova_plugin/spawn/index.js";
 import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
 import {
     PlayerShipSelector, applyAnalogControl, applyControlEvents, ControlledByComponent,
@@ -17,7 +19,10 @@ import {
 import { applySetTarget } from "../nova_plugin/combat/index.js";
 import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/index.js";
 import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/missions/index.js";
-import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escorts/index.js";
+import {
+    applyEscortAction, applyRefundFighter, EscortAction, EscortActionType,
+    FighterRefund, FighterRefundType,
+} from "../nova_plugin/escorts/index.js";
 
 /**
  * Everything that changes the simulation from outside is an input,
@@ -63,6 +68,14 @@ export type SimulationInput =
      * money moves (spaceport/escort_deals.ts).
      */
     | { kind: 'escortAction', action: EscortAction }
+    /**
+     * The refund of a bay fighter the client's ledger proved LOST — gone
+     * from the world without a death or a docking (issue #258). One
+     * round back to the named carrier's bay, exactly a docking's
+     * effect; ownership of the carrier and the bay's ceiling are
+     * recomputed sim-side (escorts/bay_plugin.ts applyRefundFighter).
+     */
+    | { kind: 'refundFighter', refund: FighterRefund }
     | { kind: 'addEntity', uuid: string, entity: EncodedEntity }
     | { kind: 'removeEntity', uuid: string }
     | { kind: 'setJumpRoute', route: string[] }
@@ -133,6 +146,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('hail'), action: HailActionType }),
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
+    t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
     t.strict({ kind: t.literal('removeEntity'), uuid: t.string }),
     t.strict({ kind: t.literal('setJumpRoute'), route: t.array(t.string) }),
@@ -233,6 +247,15 @@ export async function loadInputRecordsGameData(
             if (input.kind === 'acceptMission') {
                 await loadOutfitsGameData(world,
                     grantedOutfitIds(input.accepted));
+            }
+            // A refund's ceiling reads the bay wëap from the cache
+            // (refundFighterToBay: MaxAmmo times the bays mounted). The
+            // carrier's own staging warmed it on every world that holds
+            // the carrier, but a world that never staged the bay would
+            // read the ceiling as UNCAPPED and diverge — so the record
+            // stages it itself, like every input that names an id.
+            if (input.kind === 'refundFighter') {
+                await loadWeaponsGameData(world, [input.refund.bayWeaponId]);
             }
         }
     }
@@ -475,6 +498,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'escortAction': {
             applyEscortAction(world, peerId, input.action);
+            break;
+        }
+        case 'refundFighter': {
+            applyRefundFighter(world, peerId, input.refund);
             break;
         }
         case 'removeEntity': {

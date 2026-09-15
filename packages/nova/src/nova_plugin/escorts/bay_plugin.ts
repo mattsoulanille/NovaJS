@@ -1,11 +1,12 @@
 import * as t from 'io-ts';
 import { BayWeaponData, WeaponData } from 'novadatainterface/weapon_data';
-import { Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
+import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
@@ -14,12 +15,14 @@ import { markerType, SerializerResource } from 'nova_ecs/plugins/serializer_plug
 import { Optional } from 'nova_ecs/optional';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
+import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
+import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { HitboxHullComponent, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, findControlledEntity } from '../player/index.js';
 import { ExitPointData } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
 import { WeaponConstructors, WeaponEntry } from '../combat/index.js';
@@ -135,6 +138,106 @@ export function refundFighterToBay(carrier: Entity, bayWeaponId: string,
 
     outfits.get(supplying[0])!.count++;
     return true;
+}
+
+/**
+ * A bay fighter DOCKED with its carrier and was deleted for it
+ * (CollectableEscortAI). Forwarded to the display like DeathEvent, for
+ * the one consumer that needs to tell this deletion from a loss: the
+ * client's fleet ledger reads a removal that neither a death nor a
+ * docking explains as a LOST fighter and refunds its round at the
+ * next fleet re-entry (client/fleet_ledger.ts, issue #258); a docking
+ * already refunded the round here, so it must not be recorded.
+ * Targets the fighter's uuid.
+ */
+export const FighterDockedEvent =
+    new EcsEvent<FighterDocked>('FighterDockedEvent');
+const FighterDockedType = t.type({
+    /** The carrier the fighter docked with (its SourceComponent). */
+    carrier: t.string,
+});
+export type FighterDocked = t.TypeOf<typeof FighterDockedType>;
+registerSimulationBridgeEvent({ event: FighterDockedEvent });
+
+/**
+ * ============================================================================
+ * The refund of a LOST fighter (issue #258)
+ * ============================================================================
+ *
+ * A bay fighter that left the world WITHOUT dying and without docking —
+ * an insertion that never took, a rollback correction, a desync — is
+ * ammunition that vanished from the magazine for no reason the game
+ * gives. The maintainer's ruling: when the client is SURE the fighter
+ * was not destroyed (the same lost-versus-destroyed evidence the escort
+ * ledger uses, client/fleet_ledger.ts), give the bay its round back; a
+ * fighter that was DESTROYED gets nothing. The refund is exactly what a
+ * docking fighter does to its carrier's magazine ({@link
+ * refundFighterToBay}) — one round, to the lowest-sorted supplying
+ * outfit, never past the bay's ceiling — and nothing is respawned.
+ *
+ * The magazine is simulation state, so the refund enters the sim the
+ * way every other client decision does: as a `{ kind: 'refundFighter' }`
+ * SimulationInput (communication/simulation_input.ts), applied here on
+ * every peer at the same tick, from a record the wire codec validates
+ * like every other. The record names the CARRIER and the BAY; who may
+ * refund whom is recomputed against synced state: the carrier must be
+ * the acting player's own ship or one of that player's escorts (a
+ * hired carrier), and must still mount the bay. A record for a carrier
+ * that is gone, or is somebody else's, does nothing.
+ *
+ * The refund is a pure function of the world and the record, so a
+ * rollback that restores the state before its tick and re-applies it
+ * credits the round exactly once — the same idempotence every input
+ * has under resimulation.
+ */
+export interface FighterRefund {
+    /** The carrier whose bay lost the fighter (the fighter's
+     * SourceComponent, as the client last saw it). */
+    carrier: string;
+    /** Global id of the bay wëap the fighter was launched from. */
+    bayWeaponId: string;
+}
+export const FighterRefundType: t.Type<FighterRefund> = t.type({
+    carrier: t.string,
+    bayWeaponId: t.string,
+});
+
+/**
+ * Applies a lost-fighter refund record deterministically on every peer.
+ * Returns whether a round was credited (for specs; the input path
+ * ignores it).
+ */
+export function applyRefundFighter(world: World, peerId: string | undefined,
+    refund: FighterRefund): boolean {
+    const found = findControlledEntity(world, peerId);
+    if (!found) {
+        return false;
+    }
+    const carrier = world.entities.get(refund.carrier);
+    if (!carrier) {
+        return false;
+    }
+    // The player's own ship, or one of the player's escorts (a hired
+    // carrier whose bays launched the fighter). Read off the durable
+    // ownership marker, so a ship that merely holds formation on the
+    // player cannot be handed rounds.
+    const own = refund.carrier === found.uuid
+        || carrier.components.get(PlayerEscortComponent)?.player
+        === found.uuid;
+    if (!own) {
+        return false;
+    }
+    // A bay that is no longer mounted has no magazine to credit.
+    const bays = carrier.components.get(WeaponsStateComponent)
+        ?.get(refund.bayWeaponId)?.count ?? 0;
+    if (bays <= 0) {
+        return false;
+    }
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        return false;
+    }
+    return refundFighterToBay(carrier, refund.bayWeaponId, gameData);
 }
 
 /** Speed, in px/s, a fighter is pushed out of the bay at, on top of
@@ -326,8 +429,8 @@ const CollectableEscortAI = new System({
     events: [CollisionEvent],
     args: [CollisionEvent, SourceComponent, Entities, UUID,
         Optional(BayFighterComponent), SimulationGameDataResource,
-        CollectableEscortComponent] as const,
-    step(collision, source, entities, uuid, bayFighter, gameData) {
+        CollectableEscortComponent, Emit] as const,
+    step(collision, source, entities, uuid, bayFighter, gameData, _c, emit) {
         if (collision.other !== source) {
             return;
         }
@@ -342,6 +445,9 @@ const CollectableEscortAI = new System({
             refundFighterToBay(carrier, bayFighter.bayWeaponId, gameData);
         }
         entities.delete(uuid);
+        // Tell the display this deletion was a docking (issue #258):
+        // an event touches no simulation state and draws no PRNG.
+        emit(FighterDockedEvent, { carrier: source }, [uuid]);
     },
     // #237 pins (shared: *): among the CollisionEvent handlers, after
     // beam's and before blast's.
@@ -465,6 +571,9 @@ export const BayPlugin: Plugin = {
         serializer?.addComponent(ReturnComponent, markerType);
         serializer?.addComponent(CollectableEscortComponent, markerType);
         serializer?.addComponent(ReturnWhenTargetRemovedComponent, markerType);
+        // The docking notice crosses the bridge to the display (issue
+        // #258); it never rides the room wire.
+        serializer?.addEvent(FighterDockedEvent, FighterDockedType);
 
         // Which bay a fighter came from is simulation state (docking
         // refunds ammo to that bay) AND display-world state (the

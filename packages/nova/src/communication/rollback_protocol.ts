@@ -98,6 +98,13 @@ export const STATE_HASH_INTERVAL = 60;
 //    unchanged. Since 7, every component codec is part of the schema,
 //    so the fingerprint — not this number — is the wire format's
 //    identity; this number moves for semantic protocol changes.
+//    Also under 7, no further bump (maintainer's standing ruling for
+//    schema-only changes): the `refundFighter` input kind (#258, a lost
+//    bay fighter's round back to its carrier's bay —
+//    nova_plugin/escorts/bay_plugin.ts applyRefundFighter). A new union
+//    member of SimulationInputType, so the fingerprint changes and the
+//    join gate keeps the two builds apart; every existing kind is
+//    unchanged.
 export const PROTOCOL_VERSION = 7;
 
 /**

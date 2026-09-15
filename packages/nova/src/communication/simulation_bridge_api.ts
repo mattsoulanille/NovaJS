@@ -1,6 +1,6 @@
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
-import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
@@ -19,6 +19,8 @@ export interface SimulationBridgeHostApi {
     setPlanetTarget(target: string | null): void;
     hail(action: HailAction): void;
     escortAction(action: EscortAction): void | Promise<void>;
+    /** A lost bay fighter's round back to its carrier (issue #258). */
+    refundFighter(refund: FighterRefund): void | Promise<void>;
     acceptMission(accepted: AcceptedMission): void | Promise<void>;
     step(count?: number): void;
     snapshot(): SimulationFrame;
@@ -53,6 +55,7 @@ export interface AsyncSimulationBridgeHostApi {
     setPlanetTarget(target: string | null): Promise<void>;
     hail(action: HailAction): Promise<void>;
     escortAction(action: EscortAction): Promise<void>;
+    refundFighter(refund: FighterRefund): Promise<void>;
     acceptMission(accepted: AcceptedMission): Promise<void>;
     step(count?: number): Promise<void>;
     snapshot(): Promise<SimulationFrame>;
