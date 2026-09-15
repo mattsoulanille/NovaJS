@@ -7,6 +7,7 @@
         "build": "node scripts/generate_build_version.mjs && node scripts/clean_stale_dist.mjs && tsc && node esbuild.config.js",
         "test": "jasmine --config=jasmine.json",
         "start": "node dist/server.js",
+    "start:prod": "NODE_ENV=production node dist/server.js",
         "clean": "rimraf dist",
         "dev": "npm run start",
         "visual-compare": "node visual_compare/run.mjs"

@@ -58,9 +58,16 @@ For a git worktree, `scripts/setup_worktree.sh [<commit>]` does the linking, `np
 npm start                  # serves on port 8000 (settings/server.json)
 PORT=8080 npm start        # the PORT env var overrides it
 npm run dev                # rebuild and restart on change (turbo watch)
+npm run start:prod         # the same server in PRODUCTION mode (below)
 ```
 
 Then open [localhost:8000](http://localhost:8000).
+
+#### Development vs. production mode
+
+The one switch is `NODE_ENV`: `npm run start:prod` is `NODE_ENV=production node dist/server.js` (also what the Docker image runs); everything else — `npm start`, `npm run dev`, a bare `node dist/server.js`, the specs — is development. What it changes today is what a sender does with an outgoing wire message the Avro schema cannot carry (`packages/nova/src/communication/wire_send_policy.ts`). Such a message is a bug in the sender, so in development it is a **hard error**: the send throws. In production it is dropped with a warning and the socket is kept.
+
+The policy has to hold on BOTH ends of a socket, and the browser bundle's own `NODE_ENV` is fixed when esbuild builds it — so the client does not use it for this. Instead the server injects the policy it runs under into the `index.html` it serves (a `<meta name="nova-wire-send-policy">` tag; `packages/nova/src/common/client_config.ts`) and the bundle reads it before opening its socket. One command therefore switches both ends without a rebuild; a page loaded from a development server keeps the strict policy until it is reloaded from the production one. The bundle's `NODE_ENV` still governs the bundle-only debug switches (`packages/nova/src/debug_flags.ts`).
 
 ### Testing
 
