@@ -1,6 +1,8 @@
 import * as express from "express";
 import { Express } from "express";
+import * as fs from 'fs';
 import * as path from 'path';
+import { ClientConfig, injectClientConfig } from "../common/client_config.js";
 import { getDefaultControlBitNamespaces } from "novadatainterface/control_bit_namespaces";
 import { idsPath, dataPath, batchPath, settingsPrefix, controlBitNamespacesPath } from "../common/game_data_paths.js";
 import { GameDataInterface } from "novadatainterface/game_data_interface";
@@ -142,6 +144,8 @@ export function setupRoutes(
     simulationWorkerBundlePath: string,
     simulationWorkerBundleMapPath: string,
     settingsDir: string,
+    /** Injected into the served index.html; see common/client_config.ts. */
+    clientConfig: ClientConfig,
 ) {
     return new GameDataServer(
         gameData,
@@ -152,6 +156,7 @@ export function setupRoutes(
         simulationWorkerBundlePath,
         simulationWorkerBundleMapPath,
         settingsDir,
+        clientConfig,
     );
 }
 
@@ -165,7 +170,8 @@ class GameDataServer {
         private readonly bundleMapPath: string,
         private readonly simulationWorkerBundlePath: string,
         private readonly simulationWorkerBundleMapPath: string,
-        private readonly settingsDir: string) {
+        private readonly settingsDir: string,
+        private readonly clientConfig: ClientConfig) {
         this.setupRoutes();
     }
 
@@ -237,8 +243,17 @@ class GameDataServer {
             noCache(res).sendFile(this.simulationWorkerBundleMapPath);
         });
 
+        // index.html is read per request (it is tiny) and served with
+        // the server's client config injected into its <head>, which is
+        // how a runtime server setting reaches the bundle
+        // (common/client_config.ts).
         this.app.use("/", (_req: express.Request, res: express.Response) => {
-            noCache(res).sendFile(this.htmlPath);
+            fs.promises.readFile(this.htmlPath, 'utf8').then(html => {
+                noCache(res).type('html')
+                    .send(injectClientConfig(html, this.clientConfig));
+            }, () => {
+                res.status(404).end();
+            });
         });
     }
 
