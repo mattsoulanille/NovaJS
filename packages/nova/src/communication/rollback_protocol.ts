@@ -98,6 +98,13 @@ export const STATE_HASH_INTERVAL = 60;
 //    unchanged. Since 7, every component codec is part of the schema,
 //    so the fingerprint — not this number — is the wire format's
 //    identity; this number moves for semantic protocol changes.
+//    Also under 7, no further bump: ExplosionData left the registry
+//    (ruling #272 — explosions are display-only sound and graphics; no
+//    simulation entity ever carried the component, so no record,
+//    baseline, dump or archive ever held one) and the AnimationRef
+//    owner enum lost `explosion` with it. A schema change the
+//    fingerprint gate identifies; no message kind, persisted form or
+//    encoded component form is affected.
 export const PROTOCOL_VERSION = 7;
 
 /**
