@@ -10,6 +10,7 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
+import type { FighterRefund } from '../nova_plugin/escorts/index.js';
 import { PlayerEscortComponent, CreditsComponent } from '../nova_plugin/player/index.js';
 import { FuelComponent, ShipComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { Stat } from '../nova_plugin/core/index.js';
@@ -81,12 +82,16 @@ describe('the docking frame takes the lost roster at a lift-off (issue #257)',
         function bench(kind: 'landed' | 'gateMap') {
             const inserted: string[] = [];
             const insertedEntities: Entity[] = [];
+            const refunds: FighterRefund[] = [];
             const bridge = {
                 addEntity: async (uuid: string, entity: Entity) => {
                     inserted.push(uuid);
                     insertedEntities.push(entity);
                 },
                 removeEntity: async () => undefined,
+                refundFighter: async (refund: FighterRefund) => {
+                    refunds.push(refund);
+                },
             };
             const world = new World('display');
             const live = {
@@ -112,8 +117,43 @@ describe('the docking frame takes the lost roster at a lift-off (issue #257)',
             } as unknown as ClientRuntime;
             return {
                 runtime, live, inserted, insertedEntities, player, fleet,
-                state, data,
+                state, data, refunds,
             };
+        }
+
+        /**
+         * THE LOST-FIGHTER REFUND AT A LIFT-OFF (issue #258): a bay
+         * fighter lost without dying or docking is a round owed to its
+         * carrier's bay, sent as a refundFighter record at the same
+         * moment the lost roster is retried — the player's own bay at
+         * once, a hired carrier's under the uuid the launch just
+         * re-inserted it under.
+         */
+        for (const kind of ['landed', 'gateMap'] as const) {
+            it(`refunds the lost fighters at the ${kind} lift-off: the `
+                + 'player\'s own, and a landed carrier\'s under its fresh uuid',
+                async () => {
+                    const { runtime, live, inserted, player, fleet, state,
+                        refunds } = bench(kind);
+                    const carrier = lostEscort('carrier-old');
+                    fleet.landed.push(carrier);
+                    fleet.lostFighters.push(
+                        { player: PLAYER, uuid: 'f1', carrier: PLAYER,
+                            bayWeaponId: 'nova:150' },
+                        { player: PLAYER, uuid: 'f2', carrier: 'carrier-old',
+                            bayWeaponId: 'nova:151' });
+                    state.apply(s => kind === 'landed'
+                        ? requestLaunch(s, player) : requestGateLaunch(s, player));
+                    await runDockingFrame(runtime, live);
+                    expect(inserted.length).toBe(2);
+                    expect(inserted[0]).toBe(PLAYER);
+                    expect(inserted[1]).not.toBe('carrier-old');
+                    expect(refunds).toEqual([
+                        { carrier: PLAYER, bayWeaponId: 'nova:150' },
+                        { carrier: inserted[1], bayWeaponId: 'nova:151' },
+                    ]);
+                    expect(fleet.lostFighters).toEqual([]);
+                });
         }
 
         it('respawns a lost escort at the spaceport launch, un-restocked, '

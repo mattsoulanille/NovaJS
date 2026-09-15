@@ -9,14 +9,17 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { loadEntityGameData, loadOutfitsGameData, loadWireSnapshotGameData } from "../nova_plugin/spawn/index.js";
+import {
+    loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
+    loadWireSnapshotGameData,
+} from "../nova_plugin/spawn/index.js";
 import {
     deriveEntityComponents, ControlEvent, ControlEventType, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { warnThrottled } from "../common/log_throttle.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
-import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
@@ -918,6 +921,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     async escortAction(action: EscortAction) {
         this.schedule({ kind: 'escortAction', action });
+    }
+
+    /**
+     * A lost bay fighter's round back to its carrier's bay (issue #258,
+     * escorts/bay_plugin.ts applyRefundFighter). Stages the bay wëap
+     * first — the refund's ceiling reads it from this worker's own
+     * cache — the same closure loadInputRecordsGameData stages for every
+     * other world applying the record.
+     */
+    async refundFighter(refund: FighterRefund) {
+        await loadWeaponsGameData(this.world, [refund.bayWeaponId]);
+        this.schedule({ kind: 'refundFighter', refund });
     }
 
     /**

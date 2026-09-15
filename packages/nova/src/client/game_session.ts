@@ -43,7 +43,7 @@ import { GateTransitEvent, FinishJumpEvent, LandEvent } from '../nova_plugin/tra
 import type { AcceptedMission } from '../nova_plugin/missions/index.js';
 import { MultiRoomResource, NovaPlugin } from '../nova_plugin/nova_plugin.js';
 import {
-    EscortJumpEvent, EscortLandedEvent,
+    EscortJumpEvent, EscortLandedEvent, FighterDockedEvent,
 } from '../nova_plugin/escorts/index.js';
 import { DeathEvent } from '../nova_plugin/ship/index.js';
 import { PlayerShipSelector, AnalogControlState } from '../nova_plugin/player/index.js';
@@ -210,6 +210,16 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(DeathEvent).subscribe(({ entities }) => {
             for (const target of entities ?? []) {
                 fleet.noteDeath(typeof target === 'string'
+                    ? target : target.uuid);
+            }
+        });
+        // A docking, noted the same way: the fighter's removal is the
+        // magazine's business — its round was credited by the dock — so
+        // it is not a LOST fighter owed a refund (FleetLedger.lostFighters,
+        // issue #258).
+        world.events.get(FighterDockedEvent).subscribe(({ entities }) => {
+            for (const target of entities ?? []) {
+                fleet.noteDocked(typeof target === 'string'
                     ? target : target.uuid);
             }
         });

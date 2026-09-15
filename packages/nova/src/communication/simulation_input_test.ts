@@ -318,6 +318,8 @@ describe('malformed inputs', () => {
             { kind: 'removePeer', peerId: 7 },
             { kind: 'hail', action: { kind: 'bribe' } },
             { kind: 'acceptMission', accepted: { missionId: 3 } },
+            { kind: 'refundFighter', refund: { carrier: 'c' } },
+            { kind: 'refundFighter', refund: { carrier: 'c', bayWeaponId: 7 } },
             { kind: 'teleport', to: [0, 0] },
             null, 'inputs', 42,
         ]) {
@@ -338,6 +340,7 @@ describe('malformed inputs', () => {
                     { kind: 'setJumpRoute', route: ['nova:130'] },
                     { kind: 'hail', action: { kind: 'bribe', target: 'x' } },
                     { kind: 'escortAction', action: { kind: 'releaseEscort', target: 'e' } },
+                    { kind: 'refundFighter', refund: { carrier: 'c', bayWeaponId: 'nova:150' } },
                     { kind: 'addEntity', uuid: 'x', entity: { components: [['Foo', { x: 1 }]] } },
                     { kind: 'acceptMission', accepted: { missionId: 'nova:1', mission: null } },
                 ],
@@ -347,7 +350,7 @@ describe('malformed inputs', () => {
             expect(isRight(decoded)).toBeTrue();
             if (isRight(decoded)) {
                 expect('junk' in decoded.right).toBeFalse();
-                expect(decoded.right.inputs.length).toBe(9);
+                expect(decoded.right.inputs.length).toBe(10);
             }
             for (const tick of [-1, 1.5, 1e300, 'x', NaN]) {
                 expect(isLeft(InputRecordType.decode({ ...record, tick })))

@@ -20,7 +20,7 @@ import { SimulationGameData } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
-import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
@@ -146,6 +146,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
     async escortAction(action: EscortAction) {
         await this.requireBridge().escortAction(action);
+    }
+
+    async refundFighter(refund: FighterRefund) {
+        await this.requireBridge().refundFighter(refund);
     }
 
     async acceptMission(accepted: AcceptedMission) {

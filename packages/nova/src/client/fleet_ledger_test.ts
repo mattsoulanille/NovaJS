@@ -11,12 +11,14 @@ import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { applySimulationFrame } from '../communication/apply_simulation_frame.js';
 import { SimulationFrame } from '../communication/simulation_frame.js';
-import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
+import { SourceComponent } from '../nova_plugin/combat/index.js';
+import { BayFighterComponent, FighterRefund } from '../nova_plugin/escorts/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { MissionShipComponent, PlayerEscortComponent } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
-import { FleetLedger } from './fleet_ledger.js';
+import { FleetLedger, refundLostFighters } from './fleet_ledger.js';
+import type { SimulationGameData } from './gamedata/simulation_game_data.js';
 
 /**
  * ============================================================================
@@ -130,15 +132,14 @@ describe('the fleet ledger\'s lost roster (ruling #148)', () => {
             expect(fleet.landed.length).toBe(1);
         });
 
-    it('ignores bay fighters and mission ships — the magazine\'s and the '
-        + 'mission machinery\'s business', async () => {
+    it('ignores mission ships — the mission machinery\'s business',
+        async () => {
             const { fleet, remove, escort } = await bench();
-            await escort('fighter', PLAYER, ship => ship.components.set(
-                BayFighterComponent, { bayWeaponId: 'nova:150', slot: 0 } as never));
             await escort('mission', PLAYER, ship => ship.components.set(
                 MissionShipComponent, { mission: 'nova:500', owner: PLAYER }));
-            remove('fighter', 'mission');
+            remove('mission');
             expect(fleet.lost).toEqual([]);
+            expect(fleet.lostFighters).toEqual([]);
         });
 
     it('ignores another player\'s escort when the local player is known, '
@@ -200,6 +201,227 @@ describe('the fleet ledger\'s lost roster (ruling #148)', () => {
             fleet.reset();
             expect(fleet.lost).toEqual([]);
         });
+});
+
+/**
+ * ============================================================================
+ * LOST FIGHTERS, OWED A ROUND (issue #258)
+ * ============================================================================
+ *
+ * The same evidence, one more explained removal (a docking), and a
+ * different remedy: a bay fighter is ammunition, so a lost one is not
+ * respawned — its round goes back to the bay that launched it, through a
+ * `refundFighter` input record sent when the fleet next goes into the
+ * world (refundLostFighters). Destroyed gets nothing; docked already got
+ * its round from the simulation.
+ */
+describe('the fleet ledger\'s lost fighters (issue #258)', () => {
+    const PLAYER = 'player-uuid';
+    const OTHER = 'somebody-else';
+    const CARRIER = 'hired-carrier-uuid';
+    const BAY = 'nova:150';
+    const SHIP_ID = 'test:ship';
+
+    function movement() {
+        return {
+            accelerating: 0, position: new Position(100, 100),
+            rotation: new Angle(0), turnBack: false, turning: 0,
+            velocity: new Vector(0, 0),
+        };
+    }
+
+    async function bench() {
+        const gameData = new MockGameData();
+        gameData.data.Ship.map.set(SHIP_ID,
+            { ...getDefaultShipData(), id: SHIP_ID });
+        const world = await makeSystem('test:system', gameData, undefined,
+            { npcs: false });
+        const serializer = world.resources.get(SerializerResource)!;
+        const display = new World('display');
+        const fleet = new FleetLedger();
+
+        function frame(parts: Partial<SimulationFrame>): SimulationFrame {
+            return { added: [], changed: [], removed: [], events: [], ...parts };
+        }
+
+        /** A bay fighter of `player`, launched by `carrier`, mirrored. */
+        async function fighter(uuid: string, carrier = PLAYER,
+            player = PLAYER) {
+            const ship = makeShip(gameData.data.Ship.map.get(SHIP_ID)!);
+            ship.components.set(MovementStateComponent, movement());
+            ship.components.set(PlayerEscortComponent,
+                { player, parent: carrier });
+            ship.components.set(BayFighterComponent, { bayWeaponId: BAY });
+            ship.components.set(SourceComponent, carrier);
+            await completeEntity(world, ship);
+            applySimulationFrame(frame({ added: [[uuid, serializer.encode(ship)]] }),
+                serializer, display);
+            expect(display.entities.has(uuid)).toBeTrue();
+            return ship;
+        }
+
+        function remove(...uuids: string[]) {
+            applySimulationFrame(frame({ removed: uuids }), serializer, display, {
+                emitEvents: true,
+                onRemove: (uuid, entity) =>
+                    fleet.noteRemoved(uuid, entity, PLAYER, serializer),
+            });
+        }
+
+        /** The refund seam: what the bridge was asked to credit. */
+        const refunds: FighterRefund[] = [];
+        const bridge = {
+            refundFighter: async (refund: FighterRefund) => {
+                refunds.push(refund);
+            },
+        };
+        const ctx = {
+            fleet, gameData: gameData as unknown as SimulationGameData,
+            ownerUuid: () => undefined,
+        };
+        spyOn(console, 'warn');
+        return { fleet, display, fighter, remove, refunds, bridge, ctx };
+    }
+
+    it('records a fighter removed without a death, a docking or a carry '
+        + 'with its carrier and bay — and NOT on the escort roster',
+        async () => {
+            const { fleet, fighter, remove } = await bench();
+            await fighter('f1');
+            remove('f1');
+            expect(fleet.lost).toEqual([]);
+            expect(fleet.lostFighters).toEqual([
+                { player: PLAYER, uuid: 'f1', carrier: PLAYER, bayWeaponId: BAY },
+            ]);
+            expect(fleet.summary().lostFighters).toEqual(fleet.lostFighters);
+            // A session roster: not in the save's escorts.
+            expect(fleet.escortsToSave(PLAYER, undefined)).toEqual([]);
+        });
+
+    it('does NOT record a destroyed fighter, nor one that docked (its '
+        + 'round was credited by the dock)', async () => {
+            const { fleet, fighter, remove } = await bench();
+            await fighter('doomed');
+            await fighter('home');
+            fleet.noteDeath('doomed');
+            fleet.noteDocked('home');
+            remove('doomed', 'home');
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('does NOT record a fighter a carry event filed, nor one with no '
+        + 'carrier link to refund to', async () => {
+            const { fleet, fighter, remove } = await bench();
+            const landing = await fighter('landing');
+            fleet.pushCarried(fleet.landed,
+                { player: PLAYER, uuid: 'landing', entity: landing });
+            await fighter('unlinked', PLAYER, PLAYER);
+            fleet.escortReturned('unlinked');
+            remove('landing');
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('takes a fighter back off the roster when the world re-adds it '
+        + '(a correction that restored it), so nothing is refunded',
+        async () => {
+            const { fleet, fighter, remove } = await bench();
+            await fighter('flicker');
+            remove('flicker');
+            expect(fleet.lostFighters.length).toBe(1);
+            await fighter('flicker');
+            fleet.escortReturned('flicker');
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('refunds the player\'s own fighter to the player at the fleet '
+        + 'entry, and drops other peers\' entries', async () => {
+            const { fleet, fighter, remove, refunds, bridge, ctx }
+                = await bench();
+            await fighter('mine');
+            remove('mine');
+            fleet.lostFighters.push(
+                { player: OTHER, uuid: 'theirs', carrier: OTHER, bayWeaponId: BAY });
+            await refundLostFighters(ctx, bridge, undefined, PLAYER, new Map());
+            expect(refunds).toEqual([{ carrier: PLAYER, bayWeaponId: BAY }]);
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('refunds a hired carrier\'s fighter under the uuid the carrier was '
+        + 'just re-inserted under, or the one it still flies under',
+        async () => {
+            const { fleet, fighter, remove, refunds, bridge, ctx, display }
+                = await bench();
+            await fighter('batch', CARRIER);
+            await fighter('flight', 'in-flight-carrier');
+            remove('batch', 'flight');
+            display.entities.set('in-flight-carrier', new Entity('carrier')
+                .addComponent(PlayerEscortComponent,
+                    { player: PLAYER, parent: PLAYER }));
+            await refundLostFighters(ctx, bridge, display, PLAYER,
+                new Map([[CARRIER, 'fresh-carrier-uuid']]));
+            expect(refunds).toEqual([
+                { carrier: 'fresh-carrier-uuid', bayWeaponId: BAY },
+                { carrier: 'in-flight-carrier', bayWeaponId: BAY },
+            ]);
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('waits for a carrier that is still on a roster, and drops a '
+        + 'fighter whose carrier is gone for good', async () => {
+            const { fleet, fighter, remove, refunds, bridge, ctx, display }
+                = await bench();
+            await fighter('held', CARRIER);
+            await fighter('orphan', 'destroyed-carrier');
+            remove('held', 'orphan');
+            fleet.jumping.push({ player: PLAYER, uuid: CARRIER,
+                entity: new Entity('carrier') });
+            await refundLostFighters(ctx, bridge, display, PLAYER, new Map());
+            expect(refunds).toEqual([]);
+            expect(fleet.lostFighters.map(row => row.uuid)).toEqual(['held']);
+            // The held batch goes down: the carrier's fresh uuid resolves.
+            fleet.jumping.length = 0;
+            await refundLostFighters(ctx, bridge, display, PLAYER,
+                new Map([[CARRIER, 'fresh-carrier-uuid']]));
+            expect(refunds).toEqual([
+                { carrier: 'fresh-carrier-uuid', bayWeaponId: BAY }]);
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('keeps a fighter whose refund the bridge refused, re-keyed to the '
+        + 'carrier it resolved, for the next attempt', async () => {
+            const { fleet, fighter, remove, refunds, ctx } = await bench();
+            await fighter('retry', CARRIER);
+            remove('retry');
+            const refusing = {
+                refundFighter: async () => { throw new Error('closed'); },
+            };
+            await refundLostFighters(ctx, refusing, undefined, PLAYER,
+                new Map([[CARRIER, 'fresh-carrier-uuid']]));
+            expect(fleet.lostFighters).toEqual([{
+                player: PLAYER, uuid: 'retry', carrier: 'fresh-carrier-uuid',
+                bayWeaponId: BAY,
+            }]);
+            const display = new World('display');
+            display.entities.set('fresh-carrier-uuid', new Entity('carrier')
+                .addComponent(PlayerEscortComponent,
+                    { player: PLAYER, parent: PLAYER }));
+            await refundLostFighters(ctx, {
+                refundFighter: async (refund: FighterRefund) => {
+                    refunds.push(refund);
+                },
+            }, display, PLAYER, new Map());
+            expect(refunds).toEqual([
+                { carrier: 'fresh-carrier-uuid', bayWeaponId: BAY }]);
+            expect(fleet.lostFighters).toEqual([]);
+        });
+
+    it('is cleared by the session teardown', async () => {
+        const { fleet, fighter, remove } = await bench();
+        await fighter('gone');
+        remove('gone');
+        fleet.reset();
+        expect(fleet.lostFighters).toEqual([]);
+    });
 });
 
 /** A stand-in for a display-only component the mirror carries. */

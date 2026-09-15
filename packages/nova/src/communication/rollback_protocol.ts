@@ -105,13 +105,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    owner enum lost `explosion` with it. A schema change the
 //    fingerprint gate identifies; no message kind, persisted form or
 //    encoded component form is affected.
+//    Also under 7, no further bump (maintainer's standing ruling for
+//    schema-only changes): the `refundFighter` input kind (#258, a lost
+//    bay fighter's round back to its carrier's bay —
+//    nova_plugin/escorts/bay_plugin.ts applyRefundFighter). A new union
+//    member of SimulationInputType, so the fingerprint changes and the
+//    join gate keeps the two builds apart; every existing kind is
+//    unchanged.
 export const PROTOCOL_VERSION = 7;
 
 /**
- * ============================================================================
- * Trust model
- * ============================================================================
- *
+ * ===================================================================== * Trust model
+ * ===================================================================== *
  * The single statement of who may say what and who checks it; the code
  * comments at each enforcement point refer here by item number. The
  * server is trusted. A client is not: anyone holding the current build
@@ -270,10 +275,8 @@ export type RollbackProtocolMessage =
     | { kind: 'desyncDump', dump: DesyncDump };
 
 /**
- * ============================================================================
- * Wire validation
- * ============================================================================
- *
+ * ===================================================================== * Wire validation
+ * ===================================================================== *
  * `unwrapRollbackMessage` used to be a cast: `{rollback:{kind:'inputs'}}`
  * (no record) threw a TypeError inside an rxjs subscriber, which rxjs 7
  * rethrows on a macrotask — an uncaught exception, i.e. the server
