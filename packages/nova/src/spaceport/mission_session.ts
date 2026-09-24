@@ -27,6 +27,7 @@ import { settleDailyBudget } from './daily_budget.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 import { takeShipDoneTextShown } from './ship_done_shown.js';
+import { loadOrSkip } from './skip_failed_loads.js';
 
 /**
  * The per-hull facts a session derives from the entity and the game data
@@ -609,7 +610,9 @@ export async function loadPayrollShips(entity: Entity,
 
 /**
  * A ship's total cargo capacity in tons: the hull's freeCargo plus any
- * freeCargo granted by its outfits.
+ * freeCargo granted by its outfits. An outfit that fails to load is
+ * skipped (and logged) and the rest still count (#130); before, it cut the
+ * sum short at whichever outfit happened to come first.
  */
 export async function computeCargoCapacity(entity: Entity,
     gameData: SimulationGameDataInterface): Promise<number> {
@@ -621,9 +624,10 @@ export async function computeCargoCapacity(entity: Entity,
         const outfitsState = entity.components.get(OutfitsStateComponent);
         if (outfitsState) {
             for (const [outfitId, { count }] of outfitsState) {
-                const outfit = await gameData.data.Outfit.get(outfitId);
+                const outfit = await loadOrSkip('Cargo capacity', 'outfit',
+                    outfitId, id => gameData.data.Outfit.get(id));
                 cargoCapacity +=
-                    (outfit.physics.freeCargo ?? 0) * count;
+                    (outfit?.physics.freeCargo ?? 0) * count;
             }
         }
     } catch (e) {
@@ -636,7 +640,9 @@ export async function computeCargoCapacity(entity: Entity,
  * The player's combined Contribute mask: the ship's Contribute OR'd
  * with each owned outfit's Contribute (per the EVN Bible's shared
  * Contribute/Require mechanic). Used to gate crön Require. Contribute
- * fields are stored as hex strings; a malformed one is treated as 0.
+ * fields are stored as hex strings; a malformed one is treated as 0. An
+ * outfit that fails to load contributes nothing (and is logged); the rest,
+ * and the ranks, still count (#130).
  */
 export async function computePlayerContribute(entity: Entity,
     gameData: SimulationGameDataInterface): Promise<bigint> {
@@ -656,8 +662,9 @@ export async function computePlayerContribute(entity: Entity,
         if (outfitsState) {
             for (const [outfitId, { count }] of outfitsState) {
                 if (count > 0) {
-                    contribute |= parseMask(
-                        (await gameData.data.Outfit.get(outfitId)).contribute);
+                    const outfit = await loadOrSkip('Player contribute',
+                        'outfit', outfitId, id => gameData.data.Outfit.get(id));
+                    contribute |= parseMask(outfit?.contribute);
                 }
             }
         }
