@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { BayWeaponData, WeaponData } from 'novadatainterface/weapon_data';
-import { Emit, Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -15,10 +15,10 @@ import { markerType, SerializerResource } from 'nova_ecs/plugins/serializer_plug
 import { Optional } from 'nova_ecs/optional';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
-import { World } from 'nova_ecs/world';
+import { SingletonComponent, World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { deriveEntityComponents, SimulationGameDataResource } from '../core/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { HitboxHullComponent, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
@@ -357,6 +357,15 @@ class BayWeaponEntry extends WeaponEntry {
         ship.components.set(EscortCommandComponent,
             { command: 'formation' });
 
+        // Inserted FULLY FORMED, like every other mid-tick spawn (see
+        // spawnNpc): derived last, once the govt its jamming reads is
+        // set. A bare fighter got ShipData, outfits and physics from the
+        // provider systems on the NEXT step, but a snapshot restore
+        // derives them at once — so a world restored from a launch-tick
+        // snapshot (a late joiner's baseline, a rollback) held a
+        // fighter one tick ahead of the live one's, and forked (#134).
+        const [world] = this.runQuery(BayWorldQuery)[0];
+        deriveEntityComponents(world, ship);
         this.entities.set(this.ids.next(`bay:${multiplayerOwner}`), ship);
         const ownerVuln = this.entities.get(source)?.components
             .get(CollisionVulnerabilityComponent);
@@ -388,6 +397,9 @@ class BayWeaponEntry extends WeaponEntry {
 }
 
 const BayFormationQuery = new Query([FormationComponent] as const);
+
+/** The world, for deriving a launched fighter's components. */
+const BayWorldQuery = new Query([GetWorld, SingletonComponent] as const);
 
 /** The launching carrier's identity bits: its multiplayer owner (for the
  * fighter's entity id) and its government (which the fighter inherits). */

@@ -45,6 +45,14 @@ export function registerEntityDeriver<Data>(world: World, deriver: EntityDeriver
 /**
  * Runs the registered derivers on an entity whose game data is already
  * loaded. Synchronous, so it can run at snapshot restore.
+ *
+ * THE INSERTION CONTRACT: every entity enters a simulation world with
+ * this already run on it — genesis (completeEntity), an input record
+ * (addEntity, mission ships), and every mid-tick spawn (spawnNpc, a bay
+ * launch). Snapshot restore runs it on every restored entity, so an
+ * entity the live world held with a deriver still outstanding (left
+ * for its provider system to fill in a step later) would be restored
+ * AHEAD of the live one, and the two worlds fork from that tick (#134).
  */
 export function deriveEntityComponents(world: World, entity: Entity) {
     const derivers = world.resources.get(EntityDeriversResource) ?? [];
