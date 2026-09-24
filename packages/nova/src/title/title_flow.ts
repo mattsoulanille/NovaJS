@@ -44,6 +44,10 @@ import {
     exportPilot, getActivePilot, importOriginalPilot, importPilot,
     ImportResult, listPilots, selectPilot,
 } from './pilot_registry.js';
+import {
+    pilotQuarantineNote, quarantineOnEntryFailure,
+    releaseActivePilotQuarantine,
+} from './pilot_quarantine.js';
 import { ROLLBACK_PANEL, RollbackScreen } from './rollback_screen.js';
 import {
     ABOUT_TEXT, DisplayScaleHandle, fillAboutPlaceholders, PilotDialogActions,
@@ -291,6 +295,19 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
             titleUiLayer.removeChild(aboutPopup.container);
         }
     };
+    /**
+     * A message the title raises itself (a pilot quarantined by a failed
+     * entry), in the same game-drawn frame as About.
+     */
+    const showNotice = async (text: string) => {
+        titleUiLayer.addChild(aboutPopup.container);
+        centreAbout();
+        try {
+            await aboutPopup.show(text, { accept: 'Okay' }, { pict: null });
+        } finally {
+            titleUiLayer.removeChild(aboutPopup.container);
+        }
+    };
 
     // ── Pilot history / rollback ───────────────────────────────────────
     // The rollback view (title/rollback_screen.ts) is a PIXI panel over
@@ -398,7 +415,11 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
     /**
      * Enters the game. From the menu, or from a pilot dialog that
      * resolved with a pilot to fly (the dialog state goes with the
-     * title). A failed entry shows the title again.
+     * title). A failed entry shows the title again; one refused because
+     * the pilot's save names an uninstalled plug-in's content also
+     * quarantines the pilot and tells the player why (title/
+     * pilot_quarantine.ts), leaving the menu free to open or create
+     * another pilot.
      */
     const enterGame = async () => {
         if (state.state.kind !== 'title') {
@@ -410,11 +431,23 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
         music.stop();
         runtime.app.ticker.remove(titleTicker);
         titleUiLayer.removeChild(title.container);
+        let notice: string | undefined;
         try {
             teardownGame = await host.startGame();
+            // The save validated: a quarantine from an earlier attempt
+            // (the plug-in has since been reinstalled) is over.
+            releaseActivePilotQuarantine();
         } catch (e) {
             console.error('Failed to enter game:', e);
+            notice = quarantineOnEntryFailure(e);
             showTitle();
+        }
+        if (notice !== undefined) {
+            const text = notice;
+            await withDialog('notice', async () => {
+                await showNotice(text);
+                return false;
+            });
         }
     };
 
@@ -526,6 +559,10 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
                         }
                         if (isActive) {
                             parts.push('(current)');
+                        }
+                        const quarantined = pilotQuarantineNote(p);
+                        if (quarantined) {
+                            parts.push(quarantined);
                         }
                         const checkpoints =
                             checkpointCount(loadHistory(p.saveKey));
