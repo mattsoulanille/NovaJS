@@ -33,6 +33,7 @@ import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason,
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";
+import { loadEachOrSkip } from "./skip_failed_loads.js";
 
 
 const descWidth = 190;
@@ -422,8 +423,10 @@ export class Outfitter extends Menu<Entity> {
         // ModType 21 (clean legal record) needs govt data: ModVal -1
         // cleans every govt, and cleaning consults InitialRec.
         const govtIds = [...(await this.simulationData.ids).Govt].sort();
-        this.govts = await Promise.all(govtIds.map(async id =>
-            [id, await this.simulationData.data.Govt.get(id)] as const));
+        // Each warm-up below skips (and logs) an id that fails to load
+        // rather than failing the whole shop over it (#130).
+        this.govts = await loadEachOrSkip('Outfitter', 'govt', govtIds,
+            async id => [id, await this.simulationData.data.Govt.get(id)] as const);
         this.ammoSellStrings = await this.loadAmmoSellStrings();
         const itemGrid = await this.makeOutfitsGrid();
         this.itemGrid = itemGrid;
@@ -505,8 +508,8 @@ export class Outfitter extends Menu<Entity> {
 
     private async makeOutfitsGrid() {
         const ids = (await this.simulationData.ids).Outfit;
-        const outfits = await Promise.all(ids.map(id =>
-            this.simulationData.data.Outfit.get(id, 100)));
+        const outfits = await loadEachOrSkip('Outfitter', 'outfit', ids,
+            id => this.simulationData.data.Outfit.get(id, 100));
         outfits.sort((a, b) => b.displayWeight - a.displayWeight);
 
         // Purchase checks look weapons up synchronously, so warm the
@@ -520,8 +523,10 @@ export class Outfitter extends Menu<Entity> {
                 weaponIds.add(outfit.ammoFor);
             }
         }
-        await Promise.all([...weaponIds].map(id =>
-            this.simulationData.data.Weapon.get(id, 100)));
+        // A weapon that will not load is skipped: getWeapon then answers
+        // undefined for it, which the rules already treat as "no weapon".
+        await loadEachOrSkip('Outfitter', 'weapon', [...weaponIds],
+            id => this.simulationData.data.Weapon.get(id, 100));
 
         // The set strings run synchronously, so the ship classes that a
         // change-ship operator can name (stock: oütf 314-318's H165/H178/

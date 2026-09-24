@@ -29,6 +29,7 @@ import { Menu } from './menu.js';
 import { MissionUniverse } from './mission_universe.js';
 import { QuantityDialog } from './quantity_dialog.js';
 import { wrapIndex } from './list_selection.js';
+import { loadEachOrSkip } from './skip_failed_loads.js';
 
 // The 426x252 Trade dialog (PICT 8510). All geometry lives in
 // dialog_layout.ts, measured against trade_center/*.png (1920x1080).
@@ -272,10 +273,12 @@ export class TradeCenter extends Menu<Entity> {
                 this.simulationData.ids,
             ]);
             this.planet = planet;
-            this.junks = await Promise.all(ids.Junk.map(
-                id => this.simulationData.data.Junk.get(id)));
-            this.oopses = await Promise.all(ids.Oops.map(
-                id => this.simulationData.data.Oops.get(id)));
+            // A commodity or price event that fails to load is skipped
+            // (and logged), not the whole exchange (#130).
+            this.junks = await loadEachOrSkip('Trade center', 'junk',
+                ids.Junk, id => this.simulationData.data.Junk.get(id));
+            this.oopses = await loadEachOrSkip('Trade center', 'oops',
+                ids.Oops, id => this.simulationData.data.Oops.get(id));
             // Standard commodity names (STR# 4000) ride on every chär.
             try {
                 if (ids.PlayerStart[0]) {

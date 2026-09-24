@@ -22,6 +22,7 @@ import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
 import { hirePrice } from './escort_fees.js';
 import { shipGateContext } from './ship_gate_context.js';
+import { loadEachOrSkip } from './skip_failed_loads.js';
 import {
     shipHireable, ShipyardContext, ShipyardStellar,
 } from './shipyard_stock_rules.js';
@@ -286,8 +287,10 @@ export class HireEscortDialog {
                 // Not a stock gate: it is what the ränk PriceMod matches.
                 govt: planet.govt,
             };
-            this.ships = await Promise.all(ids.Ship.map(
-                id => this.simulationData.data.Ship.get(id, 100)));
+            // One hull that fails to load is skipped (and logged), not
+            // the whole hire pool (#130).
+            this.ships = await loadEachOrSkip('Bar (hire escort)', 'ship',
+                ids.Ship, id => this.simulationData.data.Ship.get(id, 100));
             this.ships.sort((a, b) => b.displayWeight - a.displayWeight);
         })();
         return this.loadPromise;
