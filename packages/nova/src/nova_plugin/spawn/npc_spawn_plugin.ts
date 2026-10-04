@@ -24,7 +24,7 @@ import { deriveEntityComponents } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
-import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { ArmorComponent, ShieldComponent, shieldFloor } from '../ship/index.js';
 import { IdFactory, IdFactoryResource } from '../core/index.js';
 import { JUMP_ARRIVAL_MARGIN_S, JUMP_DISTANCE } from '../travel/index.js';
 import { loadWithRetries } from '../core/index.js';
@@ -869,7 +869,7 @@ export function makeHulk(entity: Entity, stats: {
     entity.components.set(ShieldComponent, new Stat({
         current: stats.shield,
         max: stats.shield,
-        min: -stats.shield * 0.05,
+        min: shieldFloor(stats.shield),
         recharge: stats.shieldRecharge,
     }));
     // Disabled from tick 0 (repairAt null: an NPC hulk never self-repairs,

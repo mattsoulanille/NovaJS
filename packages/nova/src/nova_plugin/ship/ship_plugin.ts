@@ -21,7 +21,7 @@ import { AnimationComponent, CreateTimeProvider, ProjectileAnimationProvider } f
 import { CollisionVulnerabilityComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
-import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin.js';
+import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent, shieldFloor } from './health_plugin.js';
 import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
@@ -297,7 +297,7 @@ const ShipShieldProvider = shipStatSystem(
     "ShipShieldProvider", ShieldComponent,
     physics => ({
         max: physics.shield,
-        min: -physics.shield * 0.05,
+        min: shieldFloor(physics.shield),
         recharge: physics.shieldRecharge,
     }),
     physics => physics.shield,
