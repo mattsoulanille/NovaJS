@@ -5,15 +5,52 @@ import * as path from 'path';
 import { DesyncDump } from '../communication/rollback_protocol.js';
 import { DesyncRecorder, fingerprintGameData } from './desync_recorder.js';
 
+/** Every non-directory entry (file or symlink) under `dir`. */
+async function entriesUnder(dir: string): Promise<string[]> {
+    return (await fs.readdir(dir, { recursive: true, withFileTypes: true }))
+        .filter(entry => !entry.isDirectory())
+        .map(entry => path.join(entry.parentPath, entry.name))
+        .sort();
+}
+
+/** Whether nothing exists at `p`. A regular file standing where a
+ * directory component should be gives ENOTDIR, not ENOENT; both mean
+ * absent, and anything else is a real error. */
+async function absent(p: string): Promise<boolean> {
+    try {
+        await fs.lstat(p);
+        return false;
+    } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+            return true;
+        }
+        throw e;
+    }
+}
+
 describe('DesyncRecorder', () => {
+    /**
+     * This spec's private temp directory; everything it creates lives
+     * here and goes with it. The recorder's root sits four levels down,
+     * so a write that escapes the root by `..` lands in the sandbox,
+     * where the specs see it, and not in the shared system temp dir.
+     * (Escape specs once probed `<tmpdir>/escaped.json` directly: on
+     * Linux that is `/tmp`, shared by every run on the machine, so one
+     * file leaked there by a pre-fix run turned the spec red for every
+     * later run on that machine; macOS's per-user temp dir hid this.)
+     */
+    let sandbox: string;
     let root: string;
 
     beforeEach(async () => {
-        root = await fs.mkdtemp(path.join(os.tmpdir(), 'desync-recorder-'));
+        sandbox = await fs.mkdtemp(path.join(os.tmpdir(), 'desync-recorder-'));
+        root = path.join(sandbox, 'a', 'b', 'c', 'desyncs');
+        await fs.mkdir(root, { recursive: true });
     });
 
     afterEach(async () => {
-        await fs.rm(root, { recursive: true, force: true });
+        await fs.rm(sandbox, { recursive: true, force: true });
     });
 
     const info = {
@@ -85,18 +122,76 @@ describe('DesyncRecorder', () => {
                     desyncTick: 1.5,
                     tick: '../../x' as unknown as number,
                 });
+                // Absolute paths, in the peer id and both ticks.
+                recorder.recordClientDump('nova:130', '/abs', {
+                    ...dump,
+                    desyncTick: path.join(sandbox, 'abs_escaped') as unknown as number,
+                    tick: '/abs_escaped' as unknown as number,
+                });
+                // NUL bytes, which fs calls reject outright.
+                recorder.recordClientDump('nova:130', 'nul\0peer', {
+                    ...dump,
+                    desyncTick: 'x\0/../../../nul' as unknown as number,
+                });
+                // A crafted room id names a directory of its own.
+                recorder.recordClientDump('../../../room', 'peer-c', dump);
                 await recorder.flush();
-                const [dir] = await fs.readdir(root);
+
+                // Nothing anywhere in the sandbox outside the root: an
+                // escape of up to four levels would land in here.
+                const inside = root + path.sep;
+                expect((await entriesUnder(sandbox))
+                    .filter(entry => !entry.startsWith(inside)))
+                    .toEqual([]);
+                const dirs = (await fs.readdir(root)).sort();
+                expect(dirs.length).toBe(2);
+                const roomDir = dirs.find(dir => dir.endsWith('nova_130_dump'));
+                expect(dirs.find(dir => dir !== roomDir))
+                    .toMatch(/_{9}room_dump$/);
                 // The first falls back to its (valid) capture tick; the
-                // second has no valid tick at all. Both stay inside.
-                expect((await fs.readdir(path.join(root, dir!))).sort())
+                // second and third have no valid tick at all.
+                expect((await fs.readdir(path.join(root, roomDir!))).sort())
                     .toEqual([
                         'client____peer_tickinvalid.json',
+                        'client__abs_tickinvalid.json',
+                        'client_nul_peer_tick210.json',
                         'client_peer-a_tick210.json',
                     ]);
-                await expectAsync(fs.access(path.join(root, '..', 'escaped.json')))
-                    .toBeRejected();
             });
+
+        it('never writes through a symlinked incident directory', async () => {
+            const error = spyOn(console, 'error');
+            const outside = path.join(sandbox, 'outside');
+            await fs.mkdir(outside);
+            const recorder = new DesyncRecorder(root);
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            await recorder.flush();
+            // The incident directory is swapped for a link out of the
+            // root: the recorder's own name for it still passes a
+            // lexical check.
+            const [incident] = await fs.readdir(root);
+            await fs.rm(path.join(root, incident!), { recursive: true });
+            await fs.symlink(outside, path.join(root, incident!));
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            expect(await fs.readdir(outside)).toEqual([]);
+            expect(error).toHaveBeenCalled();
+        });
+
+        it('never writes through a symlinked dump file', async () => {
+            const error = spyOn(console, 'error');
+            const target = path.join(sandbox, 'outside.json');
+            const recorder = new DesyncRecorder(root);
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            await recorder.flush();
+            const [incident] = await fs.readdir(root);
+            await fs.symlink(target, path.join(root, incident!,
+                'client_peer-b_tick180.json'));
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            expect(await absent(target)).toBeTrue();
+            expect(error).toHaveBeenCalled();
+        });
 
         it('caps dumps per incident, bytes per dump, and bytes overall',
             async () => {
@@ -128,6 +223,41 @@ describe('DesyncRecorder', () => {
                         'client_peer-a_tick3.json',
                     ]);
                 expect(warn).toHaveBeenCalledTimes(3);
+            });
+    });
+
+    describe('root layouts', () => {
+        it('records under a root whose parent is a symlink', async () => {
+            // macOS's /tmp -> /private/tmp, or any symlinked data dir:
+            // the containment check must compare resolved paths on
+            // both sides, or every legitimate write is refused.
+            const real = path.join(sandbox, 'real');
+            await fs.mkdir(real);
+            await fs.symlink(real, path.join(sandbox, 'link'));
+            const recorder = new DesyncRecorder(
+                path.join(sandbox, 'link', 'desyncs'));
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            const [incident] = await fs.readdir(path.join(real, 'desyncs'));
+            expect((await fs.readdir(path.join(real, 'desyncs', incident!)))
+                .sort()).toEqual(['baselines.json',
+                    'client_peer-b_tick180.json', 'desync.json', 'log.json']);
+        });
+
+        it('reports, and writes nothing, when a root component is a file',
+            async () => {
+                const error = spyOn(console, 'error');
+                const file = path.join(sandbox, 'file');
+                await fs.writeFile(file, '');
+                const recorder = new DesyncRecorder(path.join(file, 'desyncs'));
+                recorder.recordDesync('nova:130', info,
+                    { baselines: [], log: [] });
+                recorder.recordClientDump('nova:131', 'peer-b', dump);
+                await recorder.flush();
+                expect(error).toHaveBeenCalledTimes(2);
+                expect(await absent(path.join(file, 'desyncs'))).toBeTrue();
+                expect(await entriesUnder(sandbox)).toEqual([file]);
             });
     });
 
