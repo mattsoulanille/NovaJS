@@ -37,11 +37,16 @@ import { OfferPopup, presentOffers } from './offer_popup.js';
  *    loop guard exists for.
  *
  * Before #319 presentOffers skipped both (`if (!text) continue`).
+ *
+ * The set's third text-less mission, Report to the Muster (#141's
+ * follow-up to the Muster Call), is never OFFERED: its AvailBits can never
+ * hold, and only the call's OnRefuse starts it (`s<id>`).
  */
 
 const PORT = SYNTHETIC.planets.port;
 const SUMMONS = SYNTHETIC.missions.silentSummons;
 const WINDFALL = SYNTHETIC.missions.dockWindfall;
+const MUSTER_REPORT = SYNTHETIC.missions.musterReport;
 const WINDFALL_PAY = 900_000_000;
 const WINDFALL_BRIEF =
     'A stranger presses a credit chip into your hand and is gone.';
@@ -78,11 +83,15 @@ function recordingPopup() {
 }
 
 describe('offers with no offer text (#319)', () => {
-    it('are the scenario\'s two text-less missions, and only them', async () => {
+    it('are the scenario\'s three text-less missions, and only them', async () => {
         const { universe } = await bench([]);
         const textless = universe.missions.filter(offerAutoAccepts)
             .map(m => m.id).sort();
-        expect(textless).toEqual([SUMMONS, WINDFALL].sort());
+        expect(textless).toEqual([SUMMONS, WINDFALL, MUSTER_REPORT].sort());
+        // The third is never on offer: its AvailBits (`bN & !bN`) cannot
+        // hold, whatever the player's bits.
+        const report = universe.missions.find(m => m.id === MUSTER_REPORT)!;
+        expect(report.availBits).toMatch(/^b(\d+) & !b\1$/);
     });
 
     it('takes the main-spaceport mission on at landing without asking',

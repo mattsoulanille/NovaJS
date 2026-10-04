@@ -163,7 +163,7 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(13);
+        expect(members.length).toBe(14);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]
