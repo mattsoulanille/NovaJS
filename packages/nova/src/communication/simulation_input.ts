@@ -300,8 +300,11 @@ export async function loadInputRecordsGameData(
 /**
  * The server's uuid when a world has no communicator to ask (the
  * server's own archive sim, offline log replay in analyze_desync.mjs).
- * CommunicatorServer refuses any other uuid for itself, so this is the
- * only value a server-stamped record can ever carry.
+ * A client's worlds always have one, whose `servers` is the set the
+ * server announced in its uuid frame (communicator_client.ts) — empty,
+ * so nobody is a server, until it arrives. CommunicatorServer refuses
+ * any other uuid for itself, so this is the only value a server-stamped
+ * record can ever carry.
  */
 const DEFAULT_SERVER_PEERS: ReadonlySet<string> = new Set(['server']);
 

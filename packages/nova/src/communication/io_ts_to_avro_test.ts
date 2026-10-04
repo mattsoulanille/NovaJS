@@ -407,7 +407,7 @@ describe('io-ts to Avro derivation', () => {
             const messages: t.TypeOf<typeof WireMessageType>[] = [
                 { ping: true },
                 { pong: true },
-                { message: { type: MessageType.uuid, uuid: 'u' } },
+                { message: { type: MessageType.uuid, uuid: 'u', servers: new Set(['server']) } },
                 { message: { type: MessageType.peers, peers: new Set(['a', 'b']) } },
                 { message: { type: MessageType.message, source: 'server', message: { room: 'r', peers: new Set(['a']) } } },
                 { message: { type: MessageType.message, destination: 'server', message: { room: 'r', inRoom: true } } },

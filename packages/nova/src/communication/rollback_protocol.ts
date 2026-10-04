@@ -148,11 +148,19 @@ export const PROTOCOL_VERSION = 7;
  *     destination the client named. The relay is the single fan-out.
  *
  *  4. A CLIENT accepts rollback-protocol messages — inputs, inputLog,
- *     tickSync, catchUp, desync, desyncDumpRequest — only from a source
- *     in `communicator.servers` (simulation_bridge.ts). Every
+ *     tickSync, catchUp, desync, desyncDumpRequest — and room peer
+ *     sets only from a source in `communicator.servers`
+ *     (rollback_messages.ts, multi_room_communicator.ts). Every
  *     legitimate one is relay-originated, so an input record is only
  *     ever applied with a relay-stamped peerId (or none, in local play
- *     before any connection exists).
+ *     before any connection exists). Neither end hardcodes that set:
+ *     the server ANNOUNCES it in the uuid frame that opens every
+ *     connection (communicator_message.ts), and the client takes it
+ *     from there alone (communicator_client.ts). It is empty until the
+ *     announcement, so server-only traffic before it is refused; and
+ *     only the socket's server end can send a uuid frame — the server
+ *     drops any a client sends and re-wraps everything it relays as a
+ *     sourced `message` — so no peer can name itself a server.
  *
  *  5. OWNERSHIP is enforced when a record is APPLIED, deterministically
  *     (simulation_input.ts). A peer owns its player ship and every
@@ -163,10 +171,13 @@ export const PROTOCOL_VERSION = 7;
  *     inherit their carrier's owner). removeEntity, and addEntity over
  *     an existing uuid, need ownership of the target; a fresh addEntity
  *     may not declare another peer as controller or owner; removePeer
- *     is accepted only from a server uuid; nothing peer-authored may
- *     name the singleton. A server-stamped record, and a record with no
- *     peerId, is exempt. Every check reads only synced state plus the
- *     stamped peer, so all peers drop or apply the same input on the
+ *     is accepted only from a server uuid (the announced set of item
+ *     4; a world with no communicator falls back to the server's fixed
+ *     'server', simulation_input.ts DEFAULT_SERVER_PEERS); nothing
+ *     peer-authored may name the singleton. A server-stamped record,
+ *     and a record with no peerId, is exempt. Every check reads only
+ *     synced state, the stamped peer and that set (the same on every
+ *     peer), so all peers drop or apply the same input on the
  *     same tick — the drop is itself deterministic.
  *
  * Deliberately NOT covered: the CONTENT of a peer's own inputs. A peer
