@@ -75,15 +75,20 @@ describe('input record authorisation', () => {
         expect(world.entities.has('own')).toBeTrue();
     });
 
-    it('removePeer removes everything the peer OWNED, not only what it controlled (#354)', () => {
+    it('removePeer removes the peer\'s player ship and DISOWNS the rest of what it owned (#354)', () => {
         const { world } = makeWorld();
         apply(world, 'server', [{ kind: 'removePeer', peerId: 'b' }]);
-        // b's escort (MultiplayerData.owner only) goes with its ship: left
-        // behind it was an orphan no peer owns, which a reconnecting b
-        // (under a new uuid) would collide with re-inserting it.
+        // b's player ship goes; the ship it merely owned (no escort
+        // marker: a mission ship, a spawned NPC) stays, nobody's — the
+        // maintainer's ruling. peer_departure_test.ts has the full
+        // inventory, escorts and fighters included.
         expect(world.entities.has('victim')).toBeFalse();
-        expect(world.entities.has('escort')).toBeFalse();
+        expect(world.entities.has('escort')).toBeTrue();
+        expect(world.entities.get('escort')!.components.has(MultiplayerData))
+            .toBeFalse();
         expect(world.entities.has('own')).toBeTrue();
+        expect(world.entities.get('own')!.components.get(MultiplayerData))
+            .toEqual({ owner: 'a' });
     });
 
     it('reports a refused insertion to the world\'s InputRefusalResource, with its record (#354)', () => {

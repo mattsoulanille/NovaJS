@@ -378,15 +378,39 @@ const MissionShipDepartureSystem = new System({
  * Deletes mission ships whose owner is gone from the simulation or no
  * longer has the mission (see the despawn design in the module
  * comment).
+ *
+ * EXCEPT a ship whose owner's PEER left the room (`ownerDisconnected`,
+ * stamped by removePeer — communication/peer_departure.ts): the
+ * maintainer's ruling keeps every ship of a departed peer but its player
+ * and escorts (#354), so it stays, unowned, for as long as its owner is
+ * absent. What that changes, all of it deterministic (the flag is synced
+ * state): such a ship no longer despawns with its owner's disconnect;
+ * while the owner is away its goal tracking is idle (objectiveOf finds no
+ * owner, exactly as before), any SystemHold keeps it in the system, and it
+ * is otherwise an ordinary unowned ship anybody may fight or board. When
+ * the owner's ship is back under the same uuid (a reconnect's re-entry, or
+ * a lift-off of the ship it was docked with) the flag is cleared here and
+ * the ordinary tether resumes — a mission that ended meanwhile sweeps it
+ * on that same tick.
  */
 const MissionShipCleanupSystem = new System({
     name: 'MissionShipCleanupSystem',
-    args: [MissionShipComponent, UUID, Entities] as const,
-    step(missionShip, uuid, entities) {
+    args: [MissionShipComponent, UUID, Entities, GetEntity] as const,
+    step(missionShip, uuid, entities, shipEntity) {
         const owner = entities.get(missionShip.owner);
         if (!owner) {
+            if (missionShip.ownerDisconnected) {
+                return;
+            }
             entities.delete(uuid);
             return;
+        }
+        if (missionShip.ownerDisconnected) {
+            // The owner is back: the tether resumes (replaced, not
+            // mutated in place — snapshots may share the object).
+            const { ownerDisconnected: _cleared, ...tethered } = missionShip;
+            missionShip = tethered;
+            shipEntity.components.set(MissionShipComponent, tethered);
         }
         if (missionShip.untethered) {
             return;

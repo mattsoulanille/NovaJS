@@ -6,6 +6,7 @@ import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/pl
 import { Resource } from "nova_ecs/resource";
 import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
+import { applyPeerDeparture } from "./peer_departure.js";
 import {
     ControlEvent, ControlEventType, ControlsSubject, deriveEntityComponents,
     SimulationGameDataResource, stageEncodedComponentsGameData,
@@ -596,22 +597,18 @@ function applySimulationInput(world: World, input: SimulationInput,
                     + `from ${peerId}: only the server removes peers`);
                 break;
             }
-            // Everything the departed peer OWNED goes with it: its player
-            // ship (ControlledBy) and everything it inserted
-            // (MultiplayerData.owner: escorts, bay fighters, mission
-            // ships, the NPCs it spawned) — the ownership rule of the
-            // Trust model (rollback_protocol.ts item 5). Controlled-only
-            // removal used to leave a departed peer's escorts in the
-            // room for good, owned by a uuid nobody holds any more; a
-            // client that reconnects under a new uuid re-inserts them
-            // (simulation_bridge_host.ts reenter), which those orphans
-            // would collide with (#354).
-            for (const [uuid, entity] of [...world.entities]) {
-                if (uuid !== SINGLETON_UUID
-                    && ownsEntity(entity, input.peerId)) {
-                    world.entities.delete(uuid);
-                }
-            }
+            // The departed peer's player ship and its escorts (hired,
+            // captured, and the fighters they or the player launched)
+            // leave with it; every other ship it owned stays, DISOWNED —
+            // an ordinary unowned world ship every peer keeps simulating
+            // (the maintainer's ruling, #354; peer_departure.ts has the
+            // inventory and the reasons). Controlled-only removal used to
+            // leave a departed peer's escorts in the room for good, owned
+            // by a uuid nobody holds any more, which a reconnecting
+            // client's re-insertion (simulation_bridge_host.ts reenter)
+            // would collide with; and removing EVERYTHING it owned took
+            // its mission ships with it.
+            applyPeerDeparture(world.entities, peer => peer === input.peerId);
             break;
         }
         case 'setJumpRoute': {
