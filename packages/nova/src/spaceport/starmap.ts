@@ -28,6 +28,7 @@ import {
 } from "./starmap_properties.js";
 import { KEY_PAN_STEP, ZOOM_STEP } from "./starmap_viewport.js";
 import { SystemGraph } from "./system_graph.js";
+import { loadEachOrSkip } from "./skip_failed_loads.js";
 
 /**
  * Client-side persistence for the map's route state, owned by the plugin so
@@ -188,8 +189,10 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
     override async build() {
         await super.build();
         const systemIds = (await this.simulationData.ids).System;
-        this.allSystems = await Promise.all(
-            systemIds.map(s => this.simulationData.data.System.get(s)));
+        // A system that fails to load is left off the map (and logged)
+        // rather than keeping the whole map shut (#130).
+        this.allSystems = await loadEachOrSkip('Starmap', 'system', systemIds,
+            s => this.simulationData.data.System.get(s));
         // Planet/govt/system indices for the properties panel and borders.
         // A failed load must not sink buildPromise (which is built once
         // and awaited by every show()): the universe's load is retryable

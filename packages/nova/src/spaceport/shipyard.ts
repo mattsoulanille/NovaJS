@@ -37,6 +37,7 @@ import {
 import { playerDiscovery } from '../nova_plugin/player/index.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { shipGateContext } from './ship_gate_context.js';
+import { loadEachOrSkip } from './skip_failed_loads.js';
 import {
     canBuyShip as canBuyStockShip,
     ShipyardContext,
@@ -209,8 +210,10 @@ export class Shipyard extends Menu<Entity> {
 
     private async makeShipsGrid() {
         const ids = (await this.simulationData.ids).Ship;
-        const ships = await Promise.all(ids.map(id =>
-            this.simulationData.data.Ship.get(id, 100)));
+        // One hull that fails to load is skipped (and logged), not the
+        // whole shipyard (#130).
+        const ships = await loadEachOrSkip('Shipyard', 'ship', ids,
+            id => this.simulationData.data.Ship.get(id, 100));
         this.allShips = ships;
         const itemGrid = new ItemGrid(this.displayAssets,
             visibleShips(ships, this.stockContext()));
@@ -271,8 +274,8 @@ export class Shipyard extends Menu<Entity> {
     private async loadOutfits() {
         try {
             const ids = (await this.simulationData.ids).Outfit;
-            const outfits = await Promise.all(ids.map(id =>
-                this.simulationData.data.Outfit.get(id)));
+            const outfits = await loadEachOrSkip('Shipyard', 'outfit', ids,
+                id => this.simulationData.data.Outfit.get(id));
             this.allOutfits = new Map(outfits.map(o => [o.id, o]));
         } catch (e) {
             console.warn('Failed to load outfits for ship pricing:', e);

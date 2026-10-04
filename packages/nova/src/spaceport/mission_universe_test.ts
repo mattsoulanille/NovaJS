@@ -69,34 +69,42 @@ describe('MissionUniverse.systemIdOfPlanet across stacked duplicate systems', ()
  * during the first landing's fetch storm) left every later landing, BBS,
  * bar, mission-info and starmap open failing with the same stale error
  * until the page was reloaded.
+ *
+ * Since #130 one rejected RESOURCE no longer fails the load at all: it is
+ * skipped and logged, and the load resolves with everything else (see
+ * venue_warmup_skip_test.ts). The #66 backoff now governs retrying that
+ * partial load, and a load whose id lists themselves fail.
  */
 describe('MissionUniverse.load after a failed fetch', () => {
+    /** Planet nova:128 ("Earth"), whose first `failures` gets fail. */
     function flakyGameData(failures: number) {
         const gameData = new MockGameData();
         gameData.data.Planet.map.set('nova:128', {
             ...getDefaultPlanetData(), id: 'nova:128', name: 'Earth',
         });
         const realGet = gameData.data.Planet.get.bind(gameData.data.Planet);
-        let calls = 0;
+        const counter = { calls: 0 };
         gameData.data.Planet.get = async (id: string) => {
-            if (calls++ < failures) {
+            if (counter.calls++ < failures) {
                 throw new Error(`${id}: HTTP 502`);
             }
             return realGet(id);
         };
-        return gameData;
+        return { gameData, counter };
     }
 
     /** A turn of the timer queue, so a zero backoff has elapsed. */
     const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-    it('retries once the backoff has elapsed, and then stays loaded',
-        async () => {
-            const universe = new MissionUniverse(flakyGameData(1));
+    it('loads without a resource that failed, retries it once the backoff '
+        + 'has elapsed, and then stays loaded', async () => {
+            const universe = new MissionUniverse(flakyGameData(1).gameData);
             universe.retryBackoffMs = 0;
             const warn = spyOn(console, 'warn');
-            await expectAsync(universe.load()).toBeRejectedWithError(/502/);
+            await expectAsync(universe.load()).toBeResolved();
             expect(warn).toHaveBeenCalled();
+            // Skipped for now: the name falls back to the id.
+            expect(universe.planetName('nova:128')).toBe('nova:128');
             await tick();
             await expectAsync(universe.load()).toBeResolved();
             expect(universe.planetName('nova:128')).toBe('Earth');
@@ -105,16 +113,41 @@ describe('MissionUniverse.load after a failed fetch', () => {
             expect(universe.load()).toBe(loaded);
         });
 
-    it('keeps the rejection for the backoff window so a burst of callers '
-        + 'during an outage shares one failed attempt', async () => {
-            const universe = new MissionUniverse(flakyGameData(2));
+    it('keeps a partial load for the backoff window so a burst of callers '
+        + 'during an outage shares one attempt', async () => {
+            const { gameData, counter } = flakyGameData(2);
+            const universe = new MissionUniverse(gameData);
             // A long backoff: within it, load() must not start another
             // fetch storm.
             universe.retryBackoffMs = 60_000;
             spyOn(console, 'warn');
             const first = universe.load();
-            await expectAsync(first).toBeRejected();
-            // Same (failed) attempt handed back, not a new one.
+            await expectAsync(first).toBeResolved();
+            // Same attempt handed back, not a new one.
             expect(universe.load()).toBe(first);
+            expect(counter.calls).toBe(1);
+        });
+
+    it('retries a load whose id lists failed once the backoff has elapsed',
+        async () => {
+            const gameData = new MockGameData();
+            gameData.data.Planet.map.set('nova:128', {
+                ...getDefaultPlanetData(), id: 'nova:128', name: 'Earth',
+            });
+            const realIds = gameData.ids;
+            let idsReads = 0;
+            Object.defineProperty(gameData, 'ids', {
+                get: () => idsReads++ === 0
+                    ? Promise.reject(new Error('ids: HTTP 502')) : realIds,
+            });
+            const universe = new MissionUniverse(gameData);
+            universe.retryBackoffMs = 0;
+            const warn = spyOn(console, 'warn');
+            const first = universe.load();
+            await expectAsync(first).toBeRejectedWithError(/502/);
+            expect(warn).toHaveBeenCalled();
+            await tick();
+            await expectAsync(universe.load()).toBeResolved();
+            expect(universe.planetName('nova:128')).toBe('Earth');
         });
 });

@@ -8,6 +8,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { displayName, isInhabited } from '../nova_plugin/core/index.js';
 import { evaluateNCBTest } from '../nova_plugin/ncb/index.js';
 import { StellarInfo, stellarInfoOf, SystemInfo } from '../nova_plugin/missions/index.js';
+import { loadOrSkip } from './skip_failed_loads.js';
 
 /** A system's Visibility test against the player's bits (blank = visible;
  * a malformed expression fails open, like stellarVisible). */
@@ -124,26 +125,31 @@ export class MissionUniverse {
      * loads again. Callers must still cope with a load that has not
      * succeeded yet (they all catch and warn — the universe is simply not
      * there for that landing/open, and it will be for the next).
+     *
+     * ONE resource failing is not a failed load, though (#130): doLoad
+     * skips (and logs) each id that rejects, and the load resolves with
+     * everything else, so a plug-in's single unparseable mïsn cannot keep
+     * the mission computer, the bar and the landing shut for the whole
+     * session. Such a PARTIAL load is kept only for the same backoff, so a
+     * transient per-id failure is still retried (the next load() after it
+     * re-runs doLoad, which re-fetches just the ids the Gettable dropped).
      */
     load(): Promise<void> {
         if (!this.loadPromise) {
-            const attempt = this.doLoad().then(() => {
-                this.consecutiveFailures = 0;
+            const attempt: Promise<void> = this.doLoad().then(skipped => {
+                if (skipped === 0) {
+                    this.consecutiveFailures = 0;
+                    return;
+                }
+                const backoff = this.scheduleRetry(attempt);
+                console.warn(`Mission universe loaded without ${skipped} `
+                    + `resource(s) that failed (see above); retrying them `
+                    + `after ${backoff}ms.`);
             }, e => {
-                this.consecutiveFailures++;
-                const backoff = Math.min(
-                    this.retryBackoffMs * 2 ** (this.consecutiveFailures - 1),
-                    MissionUniverse.RETRY_BACKOFF_MAX_MS);
+                const backoff = this.scheduleRetry(attempt);
                 console.warn(`Mission universe load failed (attempt `
                     + `${this.consecutiveFailures}); retrying after `
                     + `${backoff}ms:`, e);
-                const timer = setTimeout(() => {
-                    if (this.loadPromise === attempt) {
-                        this.loadPromise = undefined;
-                    }
-                }, backoff);
-                // Don't keep a node process (a spec) alive for the retry.
-                (timer as { unref?: () => void }).unref?.();
                 throw e;
             });
             this.loadPromise = attempt;
@@ -151,26 +157,77 @@ export class MissionUniverse {
         return this.loadPromise;
     }
 
-    private async doLoad() {
+    /**
+     * Counts a failed (or partial) attempt and lets the next load() re-run
+     * doLoad once its backoff has passed. Returns the backoff.
+     */
+    private scheduleRetry(attempt: Promise<void>): number {
+        this.consecutiveFailures++;
+        const backoff = Math.min(
+            this.retryBackoffMs * 2 ** (this.consecutiveFailures - 1),
+            MissionUniverse.RETRY_BACKOFF_MAX_MS);
+        const timer = setTimeout(() => {
+            if (this.loadPromise === attempt) {
+                this.loadPromise = undefined;
+            }
+        }, backoff);
+        // Don't keep a node process (a spec) alive for the retry.
+        (timer as { unref?: () => void }).unref?.();
+        return backoff;
+    }
+
+    /**
+     * Loads the whole universe, skipping (and logging) each resource that
+     * fails to load, and answers how many were skipped. Only the id lists
+     * themselves failing rejects it.
+     *
+     * Every field is assigned after the last await, so a re-run (see
+     * load) swaps the universe over in one step rather than exposing a
+     * half-updated one to a reader between awaits.
+     */
+    private async doLoad(): Promise<number> {
         const ids = await this.gameData.ids;
         const data = this.gameData.data;
 
         // Bounded concurrency: firing thousands of parallel fetches
         // makes Chrome throw ERR_INSUFFICIENT_RESOURCES.
+        let skipped = 0;
+        const each = async <T>(kind: string, list: readonly string[],
+            load: (id: string) => Promise<T>): Promise<T[]> => {
+            const loaded = await pooledMap(list, id =>
+                loadOrSkip('Mission universe', kind, id, load));
+            const kept = loaded.filter((item): item is Awaited<T> =>
+                item !== undefined);
+            skipped += loaded.length - kept.length;
+            return kept;
+        };
         const [missions, planets, systems, govts, crons, ranks] =
             await Promise.all([
-            pooledMap(ids.Mission, async id =>
+            each('mission', ids.Mission, async id =>
                 [id, await data.Mission.get(id)] as const),
-            pooledMap(ids.Planet, async id =>
+            each('planet', ids.Planet, async id =>
                 [id, await data.Planet.get(id)] as const),
-            pooledMap(ids.System, async id =>
+            each('system', ids.System, async id =>
                 [id, await data.System.get(id)] as const),
-            pooledMap(ids.Govt, async id =>
+            each('govt', ids.Govt, async id =>
                 [id, await data.Govt.get(id)] as const),
-            pooledMap(ids.Cron, id => data.Cron.get(id)),
-            pooledMap(ids.Rank, async id =>
+            each('cron', ids.Cron, id => data.Cron.get(id)),
+            each('rank', ids.Rank, async id =>
                 [id, await data.Rank.get(id)] as const),
         ]);
+
+        // Standard cargo names (STR# 4000) ride on every chär; read the
+        // first available one, falling back to the built-in names.
+        let cargoNames: string[] = [];
+        try {
+            const playerStartId = ids.PlayerStart[0];
+            if (playerStartId) {
+                cargoNames = [...(await data.PlayerStart
+                    .get(playerStartId)).cargoNames];
+            }
+        } catch (e) {
+            console.warn('Failed to load standard cargo names:', e);
+        }
 
         this.missionsById = new Map(missions);
         this.planetsById = new Map(planets);
@@ -181,19 +238,7 @@ export class MissionUniverse {
         this.outfitIds = new Set(ids.Outfit);
 
         this.missions = [...this.missionsById.values()];
-
-        // Standard cargo names (STR# 4000) ride on every chär; read the
-        // first available one, falling back to the built-in names.
-        this.cargoNames = [];
-        try {
-            const playerStartId = ids.PlayerStart[0];
-            if (playerStartId) {
-                this.cargoNames = [...(await data.PlayerStart
-                    .get(playerStartId)).cargoNames];
-            }
-        } catch (e) {
-            console.warn('Failed to load standard cargo names:', e);
-        }
+        this.cargoNames = cargoNames;
 
         // Only planets that appear in some system are candidate
         // destinations (spöbs can exist without being placed). Track every
@@ -240,6 +285,7 @@ export class MissionUniverse {
         }));
         this.systemInfosById = new Map(
             this.systemInfos.map(info => [info.id, info]));
+        return skipped;
     }
 
     getSystemInfo(systemId: string): SystemInfo | undefined {
