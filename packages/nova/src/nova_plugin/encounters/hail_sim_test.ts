@@ -11,7 +11,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { AggressionComponent, AGGRESSION_WINDOW_MS } from '../combat/index.js';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, PlayerEscortComponent } from '../player/index.js';
 import { DamagedEvent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SourceComponent } from '../combat/index.js';
@@ -19,7 +19,8 @@ import { completeEntity } from '../spawn/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { applyHail, BRIBE_PACIFY_MS } from './hail_plugin.js';
+import { applyHail, BRIBE_PACIFY_MS, SentHailComponent } from './hail_plugin.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -643,5 +644,161 @@ describe('applyHail: a ship that does not answer hails', () => {
                 { kind: 'requestAssistance', target: 'target' });
             expect(target(world).components.has(AssistingComponent))
                 .toBeFalse();
+        });
+});
+
+/**
+ * #332: applyHail resolved the hailer from the record's peer but took ANY
+ * ship as the target — including another peer's own player ship, whose
+ * AssistingComponent then had AssistBehaviorSystem steer the victim to the
+ * requester and fully heal the requester on arrival. Matthew's ruling:
+ * "For now, buttons pressed should just send the message to the bottom
+ * left info text area on that player's screen. Nothing should take control
+ * of their ship. Players can't repair each other yet."
+ */
+describe('applyHail: another player\'s ship (#332)', () => {
+    const OTHER_PEER = 'other peer';
+
+    /** The test world plus peer B's ship 'victim', within assist range. */
+    async function twoPlayers() {
+        const made = await makeWorld();
+        await made.addShip('victim', 150, 0, ship => {
+            ship.components.set(ControlledByComponent, { peerId: OTHER_PEER });
+        });
+        // Peer A is disabled and badly damaged: exactly the player the
+        // exploit paid off for.
+        const a = player(made.world);
+        a.components.set(DisabledComponent, { repairAt: null });
+        a.components.get(ArmorComponent)!.current = 1;
+        return made;
+    }
+
+    function victim(world: World) {
+        return world.entities.get('victim')!;
+    }
+
+    it('never marks another player\'s ship as assisting, and nobody is '
+        + 'steered or healed', async () => {
+            const { world } = await twoPlayers();
+            const before = victim(world).components
+                .get(MovementStateComponent)!;
+            const turnTo = before.turnTo;
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'victim' });
+            expect(victim(world).components.has(AssistingComponent))
+                .toBeFalse();
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(player(world).components.get(ArmorComponent)!.current)
+                .toBe(1);
+            expect(victim(world).components.get(MovementStateComponent)!
+                .turnTo).toEqual(turnTo);
+        });
+
+    it('takes no bribe from, and pacifies nothing on, a player ship',
+        async () => {
+            const { world } = await twoPlayers();
+            // B shot A a moment ago: A sees B as IFF-hostile (tier 3b),
+            // which is exactly when the dialog offers Beg For Mercy.
+            const now = world.resources.get(TimeResource)!.time;
+            player(world).components.set(AggressionComponent, new Map([
+                ['victim', { at: now, damage: 50, hostile: true }],
+            ]));
+            applyHail(world, PEER, { kind: 'bribe', target: 'victim' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+            expect(player(world).components.get(AggressionComponent)!
+                .has('victim')).toBeTrue();
+        });
+
+    it('sends a message: recorded on the SENDER\'s ship, the target ship '
+        + 'untouched', async () => {
+            const { world } = await twoPlayers();
+            const targetComponents = [...victim(world).components.keys()];
+            applyHail(world, PEER, {
+                kind: 'message', target: 'victim', message: 'greetings',
+            });
+            const sent = player(world).components.get(SentHailComponent);
+            expect(sent).toEqual({
+                to: 'victim', message: 'greetings', seq: 1,
+                at: world.resources.get(TimeResource)!.time,
+            });
+            expect([...victim(world).components.keys()])
+                .toEqual(targetComponents);
+            expect(victim(world).components.has(SentHailComponent))
+                .toBeFalse();
+
+            // Every press is a new message, even of the same button.
+            applyHail(world, PEER, {
+                kind: 'message', target: 'victim', message: 'assistance',
+            });
+            expect(player(world).components.get(SentHailComponent))
+                .toEqual(jasmine.objectContaining({
+                    message: 'assistance', seq: 2,
+                }));
+        });
+
+    it('records no message to an NPC, or to yourself', async () => {
+        const { world, addShip } = await makeWorld();
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+        });
+        applyHail(world, PEER,
+            { kind: 'message', target: 'target', message: 'greetings' });
+        applyHail(world, PEER,
+            { kind: 'message', target: 'player', message: 'greetings' });
+        expect(player(world).components.has(SentHailComponent)).toBeFalse();
+    });
+
+    it('refuses assistance from another player\'s ESCORT', async () => {
+        const { world, addShip } = await makeWorld();
+        player(world).components.set(DisabledComponent, { repairAt: null });
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+            ship.components.set(PlayerEscortComponent,
+                { player: 'their ship', deal: { kind: 'none' } } as never);
+        });
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.has(AssistingComponent)).toBeFalse();
+    });
+
+    it('refuses assistance from a ship another PEER inserted (a mission '
+        + 'ship, a fighter), but not from a server-owned one', async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(MultiplayerData, { owner: OTHER_PEER });
+            });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+
+            target(world).components.set(MultiplayerData, { owner: 'server' });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player' });
+        });
+
+    it('AssistBehaviorSystem never steers a player\'s ship, even given a '
+        + 'stray AssistingComponent', async () => {
+            const { world } = await twoPlayers();
+            victim(world).components.set(AssistingComponent,
+                { client: 'player' });
+            const turnTo = victim(world).components
+                .get(MovementStateComponent)!.turnTo;
+            world.step();
+            expect(victim(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(victim(world).components.get(MovementStateComponent)!
+                .turnTo).toEqual(turnTo);
+            expect(player(world).components.get(ArmorComponent)!.current)
+                .toBe(1);
         });
 });

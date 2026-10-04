@@ -4,6 +4,7 @@
  * and game data, then hand plain values to these helpers.
  */
 import type { GateKind, LandingBlockReason } from '../nova_plugin/travel/index.js';
+import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 
 /** One line of the cargo manifest: an (abbreviated) name and a quantity. */
 export interface CargoLine {
@@ -365,6 +366,29 @@ export function targetGovtLabel(government: string,
  */
 export function escortRepairedMessage(): string {
     return 'Your ship has been repaired and rejoins your formation.';
+}
+
+/**
+ * What ANOTHER PLAYER's hail says on this player's status line (Matthew's
+ * ruling on #332: "For now, buttons pressed should just send the message to
+ * the bottom left info text area on that player's screen"), naming the
+ * sender's ship. The wording is composed HERE, on the receiving client, from
+ * the button the record names (hail_plugin's PlayerHailMessage) — never from
+ * text another client chose. NovaJS's own wording: the original is
+ * single-player and has no such line.
+ */
+export function playerHailMessage(senderShipName: string | undefined,
+    message: PlayerHailMessage): string {
+    const who = senderShipName && senderShipName.trim() !== ''
+        ? `The ${senderShipName}` : 'Another pilot';
+    switch (message) {
+        case 'greetings':
+            return `${who} hails you: "Greetings."`;
+        case 'assistance':
+            return `${who} hails you, requesting assistance.`;
+        case 'mercy':
+            return `${who} hails you, begging for mercy.`;
+    }
 }
 
 /**

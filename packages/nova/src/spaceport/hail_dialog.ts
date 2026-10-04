@@ -3,6 +3,7 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { EscortDeal } from '../nova_plugin/player/index.js';
+import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,
@@ -116,6 +117,15 @@ export interface HailContext {
      * `bribe`, which is the plea a ship answers with a price.
      */
     mercyRefused?: string;
+    /**
+     * The hailed ship is ANOTHER PLAYER's own ship (ruling #332). The column
+     * is the ordinary ship comm's — Greetings, then Request Assistance, or
+     * Beg For Mercy when that ship is IFF-hostile — but a press does nothing
+     * to their ship: it sends the button to the bottom-left status line on
+     * their screen ({@link HailCallbacks.messagePlayer}) and the well says
+     * it went.
+     */
+    playerChannel?: { hostile: boolean };
     /** Escort-management dialog (escort variant only): what this escort
      * costs, what it is worth, and which functions are on offer. */
     escort?: EscortManagement;
@@ -296,6 +306,12 @@ export interface HailCallbacks {
      */
     requestAssistance(): string;
     bribe(): void;
+    /**
+     * A press in a channel to another PLAYER's ship (#332): sends `message`
+     * to their screen through the deterministic input path, and returns the
+     * line this dialog shows for it having gone.
+     */
+    messagePlayer(message: PlayerHailMessage): string;
     /**
      * An escort-management press, already resolved to WHICH of the five
      * escort actions it is (see {@link escortPressAction} — the two deal
@@ -481,10 +497,15 @@ export function frameFor(phase: 'main' | 'haggle',
  * offer buttons are Pay/Leave) or when neither offer exists.
  */
 export function assistSlotAction(phase: 'main' | 'haggle',
-    context?: { assist?: unknown, bribe?: unknown, mercyRefused?: unknown }):
-    'assist' | 'beg' | undefined {
+    context?: {
+        assist?: unknown, bribe?: unknown, mercyRefused?: unknown,
+        playerChannel?: { hostile: boolean },
+    }): 'assist' | 'beg' | undefined {
     if (phase !== 'main' || !context) {
         return undefined;
+    }
+    if (context.playerChannel) {
+        return context.playerChannel.hostile ? 'beg' : 'assist';
     }
     if (context.assist) {
         return 'assist';
@@ -493,6 +514,24 @@ export function assistSlotAction(phase: 'main' | 'haggle',
         return 'beg';
     }
     return undefined;
+}
+
+/**
+ * WHICH MESSAGE a press in a channel to another player's ship sends (#332),
+ * or undefined when the channel is not to a player. Greetings sends a
+ * greeting; the offer slot sends what its caption says — Beg For Mercy to
+ * an IFF-hostile player, Request Assistance otherwise.
+ */
+export function playerChannelMessage(context: HailContext | undefined,
+    button: 'greetings' | 'offer'): PlayerHailMessage | undefined {
+    const channel = context?.playerChannel;
+    if (!channel) {
+        return undefined;
+    }
+    if (button === 'greetings') {
+        return 'greetings';
+    }
+    return channel.hostile ? 'mercy' : 'assistance';
 }
 
 /** Which page of the comm dialog is showing, and with what contents. */
@@ -507,6 +546,8 @@ export type HailPress =
     | { kind: 'greetings' }
     /** The offer slot for a friendly ship, carrying WHAT IT ANSWERED. */
     | { kind: 'assist', answer: string }
+    /** A message to another player went (#332): the well says so. */
+    | { kind: 'sent', answer: string }
     /** The offer slot for a hostile ship / a shut port: onto the haggle page. */
     | { kind: 'beg' }
     /** Pay the demand (the haggle page). */
@@ -577,6 +618,10 @@ export function hailPress(state: HailPage, press: HailPress,
                         body: context.mercyRefused } };
             }
             return state;
+        case 'sent':
+            return context.playerChannel
+                ? { phase, context: { ...context, body: press.answer } }
+                : state;
         case 'cancel':
             return { phase: 'main', context };
         case 'pay': {
@@ -720,13 +765,35 @@ export class HailDialog {
      */
     private pressGreetings() {
         this.beep();
+        if (this.sendToPlayer('greetings')) {
+            return;
+        }
         this.apply({ kind: 'greetings' });
     }
 
     /** The Beg for Mercy press: into the haggle page. */
     private pressBeg() {
         this.beep();
+        if (this.sendToPlayer('offer')) {
+            return;
+        }
         this.apply({ kind: 'beg' });
+    }
+
+    /**
+     * In a channel to another PLAYER's ship every press is a message to
+     * their screen (#332) — never a dialog-driven effect on their ship.
+     * Returns whether the press was one.
+     */
+    private sendToPlayer(button: 'greetings' | 'offer'): boolean {
+        const message = playerChannelMessage(this.context, button);
+        if (!message) {
+            return false;
+        }
+        this.apply({
+            kind: 'sent', answer: this.callbacks.messagePlayer(message),
+        });
+        return true;
     }
 
     /**
@@ -770,6 +837,11 @@ export class HailDialog {
      * where applyHail re-checks the same predicates.
      */
     private pressAssist() {
+        if (this.context?.playerChannel) {
+            this.beep();
+            this.sendToPlayer('offer');
+            return;
+        }
         if (!this.context?.assist) {
             return;
         }

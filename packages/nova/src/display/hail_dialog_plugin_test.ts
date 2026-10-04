@@ -17,7 +17,7 @@ import {
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, PlayerEscortComponent, CreditsComponent,
-    EscortCommandComponent,
+    EscortCommandComponent, ControlledByComponent,
 } from '../nova_plugin/player/index.js';
 import {
     ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
@@ -33,7 +33,7 @@ import {
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress,
-    hailPress, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
+    hailPress, playerChannelMessage, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
 } from '../spaceport/hail_dialog.js';
 import {
     commButtonSlots, escortButtonSlots,
@@ -1490,3 +1490,79 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
             expect(await computeContext(world, gameData)).toBeUndefined();
         });
     });
+
+/**
+ * Ruling #332: "Eventually, hailing a player should open an actual channel of
+ * some kind ... For now, buttons pressed should just send the message to the
+ * bottom left info text area on that player's screen. Nothing should take
+ * control of their ship."
+ */
+describe('computeContext: hailing another PLAYER\'s ship (#332)', () => {
+    function playerTargetWorld() {
+        const built = makeWorld(target => {
+            target.components.set(ControlledByComponent,
+                { peerId: 'the other peer' });
+        });
+        built.world.resources.set(SimulationTimeResource, {
+            time: 60_000, delta_ms: 16, delta_s: 0.016, frame: 3600,
+        });
+        return built;
+    }
+
+    it('opens the ship column, every press of which is a message', async () => {
+        const { world, gameData } = playerTargetWorld();
+        const result = await computeContext(world, gameData);
+        const context = result!.context;
+        expect(context.playerChannel).toEqual({ hostile: false });
+        // No ship-side offer is computed for them at all.
+        expect(context.assist).toBeUndefined();
+        expect(context.bribe).toBeUndefined();
+        expect(commButtonSlots('ship', context))
+            .toEqual(['greetings', 'assist', 'close']);
+        expect(playerChannelMessage(context, 'greetings')).toBe('greetings');
+        expect(playerChannelMessage(context, 'offer')).toBe('assistance');
+    });
+
+    it('offers Beg For Mercy to a player who is IFF-hostile to us', async () => {
+        const { world, gameData } = playerTargetWorld();
+        world.entities.get(PLAYER)!.components.set(AggressionComponent,
+            new Map([[TARGET, { at: 59_000, damage: 40, hostile: true }]]));
+        const context = (await computeContext(world, gameData))!.context;
+        expect(context.playerChannel).toEqual({ hostile: true });
+        expect(context.heading).toContain('Status: Hostile');
+        expect(commButtonSlots('ship', context))
+            .toEqual(['greetings', 'beg', 'close']);
+        expect(playerChannelMessage(context, 'offer')).toBe('mercy');
+    });
+
+    it('says the message went, and keeps the column', async () => {
+        const { world, gameData } = playerTargetWorld();
+        const context = (await computeContext(world, gameData))!.context;
+        const page = hailPress({ phase: 'main', context },
+            { kind: 'sent', answer: 'Message sent.' }, context);
+        expect(page).toEqual({
+            phase: 'main', context: { ...context, body: 'Message sent.' },
+        });
+        // A 'sent' press means nothing outside a player channel.
+        const npcContext: HailContext = {
+            variant: 'ship', heading: '', image: null, body: 'Channel open.',
+        };
+        const npcPage: HailPage = { phase: 'main', context: npcContext };
+        expect(hailPress(npcPage, { kind: 'sent', answer: 'x' }))
+            .toBe(npcPage);
+    });
+
+    it('offers nothing against a ship ANOTHER player owns (their escort)',
+        async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(PlayerEscortComponent, {
+                    player: 'their ship', deal: { kind: 'none' },
+                } as never);
+            });
+            const context = (await computeContext(world, gameData))!.context;
+            expect(context.playerChannel).toBeUndefined();
+            expect(context.assist).toBeUndefined();
+            expect(commButtonSlots('ship', context))
+                .toEqual(['greetings', 'close']);
+        });
+});

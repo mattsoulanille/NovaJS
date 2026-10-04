@@ -229,9 +229,16 @@ export type CommButton =
 export function commButtonSlots(variant: 'ship' | 'planet' | 'escort',
     context: {
         assist?: { free: boolean }, bribe?: unknown, mercyRefused?: unknown,
+        playerChannel?: { hostile: boolean },
     }): CommButton[] {
     if (variant === 'planet') {
         return ['greetings', context.bribe ? 'bribe' : 'tribute', 'close'];
+    }
+    // ANOTHER PLAYER's ship (#332): the same three rows a ship comm has,
+    // the offer slot chosen by that ship's IFF like any other ship's.
+    if (context.playerChannel) {
+        return ['greetings',
+            context.playerChannel.hostile ? 'beg' : 'assist', 'close'];
     }
     // Beg For Mercy whether the plea will be priced (`bribe`) or refused
     // (`mercyRefused`): ruling #297, every IFF-hostile ship shows it in

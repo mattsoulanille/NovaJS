@@ -1,4 +1,4 @@
-import { Emit } from "nova_ecs/arg_types";
+import { Emit, Entities, UUID } from "nova_ecs/arg_types";
 import { Plugin } from "nova_ecs/plugin";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
@@ -8,11 +8,14 @@ import { BEEP_CANT_DO, UiSoundEvent } from "./ui_sound.js";
 import * as PIXI from "pixi.js";
 import {
     SimulationGameDataResource, SystemIdResource, ProjectileAnimationProvider,
+    displayName,
 } from '../nova_plugin/core/index.js';
+import { ShipDataComponent } from '../nova_plugin/ship/index.js';
+import { SimulationTimeResource } from './simulation_time.js';
 import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerPlunderedMessage } from "./status_bar_content.js";
+import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { Stage } from "./stage_resource.js";
@@ -235,6 +238,58 @@ const ShowBayCaptureMessage = new System({
     },
 });
 
+/**
+ * How old (in SIMULATION ms) another player's hail may be when this client
+ * first sees it and still print it. A hail from another peer is applied
+ * here by a rollback correction, a few ticks after the moment it was sent,
+ * and then mirrored to this display on the next frame — well inside this.
+ * What it excludes is the stale one: a SentHail left on a ship this client
+ * only now meets (it jumped in, or joined), which is old news.
+ */
+export const PLAYER_HAIL_FRESH_MS = 5_000;
+
+/** Per sender uuid, the SentHail seq this client has already handled. */
+export const SeenPlayerHailsResource =
+    new Resource<Map<string, number>>('SeenPlayerHails');
+
+/**
+ * ANOTHER PLAYER HAILED US (#332). Their ship carries the SentHail its last
+ * press recorded (hail_plugin.ts — on the SENDER's ship, never ours); every
+ * one addressed to this client's own ship is printed on the status line
+ * once per seq, naming the sender's ship. Runs on the local player only
+ * (PlayerShipSelector), so the sender's own screen shows nothing.
+ *
+ * Pure display: it reads mirrored sim state and never writes it. The
+ * freshness test reads the MIRRORED SIM CLOCK (SentHail.at is sim time).
+ */
+export const ShowPlayerHailMessage = new System({
+    name: 'ShowPlayerHailMessage',
+    args: [Entities, UUID, StatusLineResource, TimeResource,
+        SimulationTimeResource, SeenPlayerHailsResource,
+        PlayerShipSelector] as const,
+    step(entities, me, statusLine, { time }, simulationTime, seen) {
+        // Sorted, so two hails landing in the same frame print in the same
+        // order on every client (the second one wins the line).
+        const senders = [...entities]
+            .filter(([uuid, entity]) => uuid !== me
+                && entity.components.get(SentHailComponent)?.to === me)
+            .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+        for (const [uuid, entity] of senders) {
+            const hail = entity.components.get(SentHailComponent)!;
+            if (seen.get(uuid) === hail.seq) {
+                continue;
+            }
+            seen.set(uuid, hail.seq);
+            if (simulationTime.time - hail.at > PLAYER_HAIL_FRESH_MS) {
+                continue;
+            }
+            const name = entity.components.get(ShipDataComponent)?.name;
+            statusLine.setMessage(playerHailMessage(
+                name ? displayName(name) : undefined, hail.message), time);
+        }
+    },
+});
+
 export const StatusMessagePlugin: Plugin = {
     name: 'StatusMessage',
     async build(world) {
@@ -277,6 +332,8 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowPlayerPlunderedMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
+        world.resources.set(SeenPlayerHailsResource, new Map());
+        world.addSystem(ShowPlayerHailMessage);
     },
     remove(world) {
         world.removeSystem(StatusLineResize);
@@ -287,6 +344,8 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
+        world.removeSystem(ShowPlayerHailMessage);
+        world.resources.delete(SeenPlayerHailsResource);
         // Destroyed, children included: the line's Text owns a canvas
         // texture that leaked with every transit (review #40).
         world.resources.get(StatusLineResource)?.container
