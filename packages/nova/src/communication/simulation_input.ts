@@ -165,15 +165,30 @@ export const InputRecordType: t.Type<InputRecord, unknown> = t.exact(t.intersect
 ]));
 
 /**
- * Applies a tick's input records. Records sort by peerId so every
- * peer applies the same tick's inputs in the same order regardless of
- * arrival order.
+ * Applies a tick's input records in a total order every world shares —
+ * by peerId, then by seq — regardless of the order they reached this
+ * world's list.
+ *
+ * Sorting by peerId alone left one peer's records on a tick in list
+ * order, and that differs between worlds (#359): when the relay retimes
+ * a sender's record N onto a tick where the sender has already applied
+ * its own N+1, the sender appends the echoed N after N+1 while every
+ * other world (and the archive) holds them in relay order, N first. A
+ * control 'start' and its release then leave the ship accelerating on
+ * one world and coasting on the rest. A seq is unique per peer and
+ * counts up in authoring order, so (peerId, seq) is what the author
+ * meant. Records without a seq (the relay's own removePeer records)
+ * sort before a peer's numbered ones and keep their list order, which
+ * is the relay's on every world.
  */
 export function applyInputRecords(world: World, records: InputRecord[]) {
     const sorted = [...records].sort((a, b) => {
         const peerA = a.peerId ?? '';
         const peerB = b.peerId ?? '';
-        return peerA < peerB ? -1 : peerA > peerB ? 1 : 0;
+        if (peerA !== peerB) {
+            return peerA < peerB ? -1 : 1;
+        }
+        return (a.seq ?? -1) - (b.seq ?? -1);
     });
     for (const record of sorted) {
         applySimulationInputs(world, record.inputs, record.peerId);
