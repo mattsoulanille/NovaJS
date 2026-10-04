@@ -16,7 +16,7 @@ import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { SimulationBridgeClient } from "./simulation_bridge_client.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
-import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
+import { novaFilesPresent, requireNovaData } from "../test_support/nova_data_gate.js";
 import { fileURLToPath } from "url";
 
 /**
@@ -269,7 +269,7 @@ export function makePluginNovaParse(pluginDirectories: string[]):
     // The base data is checked too: with an EMPTY plug-in list the
     // every() below is vacuously true, and the spec would otherwise reach
     // the parser's rejection instead of skipping.
-    if (!novaDataInstalled(packageRoot)
+    if (!novaFilesPresent(packageRoot)
         || !pluginPaths.every(p => fs.existsSync(p))) {
         return undefined;
     }
