@@ -14,7 +14,7 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { DesyncInfo, RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
-import { DesyncDump, InputRecord, unwrapRollbackMessage } from './rollback_protocol.js';
+import { DesyncDump, InputRecord, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
@@ -853,11 +853,43 @@ describe('Input-driven rooms', () => {
         expect(hashB.hash).toEqual(hashA.hash);
     }, 240_000);
 
-    it('resync retries until the relay responds again', async () => {
+    it('resync retries while the relay is away, and recovers when it '
+        + 'returns within the cap', async () => {
         // The Android incident's second half: a resync whose join
         // timed out left the peer on a genesis fork, convicted every
         // third checkpoint forever. Resync now keeps retrying (the
-        // sim pauses meanwhile), and gives up only after a cap.
+        // sim pauses meanwhile) — and lands once the relay is back.
+        const peerA = await makePeer('a', undefined, {
+            resyncCooldownMs: 0,
+            resyncJoinTimeoutMs: 150,
+            resyncRetryMs: 10,
+            resyncMaxAttempts: 5,
+        });
+        await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+        for (let tick = 1; tick <= 5; tick++) {
+            peerA.host.step();
+            relay.advanceTicks(1);
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        // The relay vanishes; the first attempts time out. It returns
+        // before the cap, and the same resync reconstructs and joins.
+        relay.close();
+        const resync = peerA.host.resync();
+        await new Promise(resolve => setTimeout(resolve, 200));
+        relay = new RollbackRelay(comms.get('server')!, { autoClock: false });
+        relay.advanceTicks(10);
+        expect(await resync).toBeTrue();
+        expect(peerA.host.status().joined).toBeTrue();
+        expect(peerA.host.status().resyncFailed).toBeUndefined();
+    }, 240_000);
+
+    it('a resync that runs out of attempts freezes the host for good '
+        + '(#333)', async () => {
+        // Ruling admin1: when a resync finally gives up the universe
+        // freezes and the client offers a reload. The host used to step
+        // on over the bare genesis world — no player ship, the clock at
+        // zero — and a later resync could still rebuild underneath a
+        // client that had already been told nothing.
         const peerA = await makePeer('a', undefined, {
             resyncCooldownMs: 0,
             resyncJoinTimeoutMs: 150,
@@ -875,12 +907,111 @@ describe('Input-driven rooms', () => {
         relay.close();
         expect(await peerA.host.resync()).toBeFalse();
         expect(peerA.host.status().joined).toBeFalse();
+        expect(peerA.host.status().resyncFailed).toBeTrue();
 
-        // The relay returns; the next resync reconstructs and joins.
+        // The failure reaches the display once, on a frame that carries
+        // no state: the genesis world the failed attempts left behind
+        // (no 'ship a') is never sent.
+        const failed = peerA.host.snapshot();
+        expect(failed.resyncFailed).toBeTrue();
+        expect(failed.added).toEqual([]);
+        expect(failed.removed).toEqual([]);
+        expect(peerA.host.snapshot().resyncFailed).toBeUndefined();
+
+        // Frozen: stepping does nothing, and even with the relay back no
+        // resync runs again — the page reload is the way out.
+        const tick = peerA.host.status().tick;
+        peerA.host.step(30);
+        expect(peerA.host.status().tick).toBe(tick);
         relay = new RollbackRelay(comms.get('server')!, { autoClock: false });
         relay.advanceTicks(10);
-        expect(await peerA.host.resync()).toBeTrue();
-        expect(peerA.host.status().joined).toBeTrue();
+        expect(await peerA.host.resync()).toBeFalse();
+        expect(peerA.host.status().tick).toBe(tick);
+    }, 240_000);
+
+    it('a staging failure during the initial join waits for the join '
+        + 'instead of reconstructing over it (#333)', async () => {
+        // The worker's init awaits joinRoom outside the `resyncing`
+        // guard. A relayed insertion whose staging fails while that join
+        // is still replaying forces a resync — which restored genesis
+        // and swapped the rollback driver under the join's fast-forward:
+        // two reconstructions interleaved on one world.
+        class JoinRaceHost extends SimulationBridgeHost {
+            active = 0;
+            maxActive = 0;
+            /** Each reconstruction's [start, end] order, for the log. */
+            log: string[] = [];
+            /** Called once, on the first reconstruction's entry. */
+            onFirstReconstruction?: () => void;
+            protected override stageRecords(): Promise<void> {
+                return Promise.reject(new Error('staging always fails'));
+            }
+            protected override async reconstructFromRoom(
+                timeoutMs: number, options: { fresh: boolean }) {
+                const first = this.log.length === 0;
+                this.active++;
+                this.maxActive = Math.max(this.maxActive, this.active);
+                this.log.push('start');
+                if (first) {
+                    this.onFirstReconstruction?.();
+                }
+                try {
+                    return await super.reconstructFromRoom(timeoutMs, options);
+                } finally {
+                    this.active--;
+                    this.log.push('end');
+                }
+            }
+        }
+        const peerA = await makePeer('a');
+        await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+        for (let tick = 1; tick <= 5; tick++) {
+            peerA.host.step();
+            relay.advanceTicks(1);
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        // A long log, so the join's fast-forward spans several yields.
+        relay.advanceTicks(600);
+
+        const peerB = await makePeer('b', undefined, {
+            stagingMaxAttempts: 1, stagingRetryMs: 0,
+            resyncCooldownMs: 0, resyncJoinTimeoutMs: 5_000,
+        }, JoinRaceHost);
+        const hostB = peerB.host as JoinRaceHost;
+        const serializer = peerA.world.resources.get(
+            (await import('nova_ecs/plugins/serializer_plugin')).SerializerResource)!;
+        const ship = await makePeerShip('a', peerA.world);
+        let resync: Promise<boolean> | undefined;
+        const resyncSpy = spyOn(hostB, 'resync').and.callFake(
+            (force?: boolean) => {
+                resync = SimulationBridgeHost.prototype.resync.call(hostB, force);
+                return resync;
+            });
+        hostB.onFirstReconstruction = () => {
+            // Mid-join (the join is now staging or replaying): the server
+            // relays an insertion whose staging will fail.
+            setTimeout(() => comms.get('server')!.sendMessage(
+                wrapRollbackMessage({
+                    kind: 'inputs', record: {
+                        peerId: 'a', tick: 700, inputs: [{
+                            kind: 'addEntity', uuid: 'late insertion',
+                            entity: serializer.encode(ship),
+                        }],
+                    },
+                }) as never, 'b'));
+        };
+
+        const joined = await hostB.joinRoom();
+        expect(joined).toBeTrue();
+        // The join's replay completed against the relay's clock.
+        expect(hostB.status().tick).toBeGreaterThanOrEqual(600);
+        expect(resyncSpy).toHaveBeenCalledWith(true);
+        expect(await resync!).toBeTrue();
+        // One reconstruction at a time: the forced resync waited for
+        // the join to end before restoring genesis.
+        expect(hostB.maxActive).toBe(1);
+        expect(hostB.log).toEqual(['start', 'end', 'start', 'end']);
+        expect(peerB.world.entities.has('ship a')).toBeTrue();
     }, 240_000);
 
     it('a record retimed by the relay converges via the clamp echo', async () => {

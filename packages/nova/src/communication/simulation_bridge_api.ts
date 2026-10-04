@@ -44,6 +44,8 @@ export interface SimulationStatus {
     desyncCount: number;
     /** Result of the most recent joinRoom, if one ran. */
     joined?: boolean;
+    /** A resync ran out of attempts: the host is frozen for good (#333). */
+    resyncFailed?: boolean;
     /** Recent worker-side log lines, newest last (worker entry only). */
     logs?: string[];
 }

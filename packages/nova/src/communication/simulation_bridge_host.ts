@@ -149,6 +149,26 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     desyncCount = 0;
     private lastJoinSucceeded?: boolean;
     private resyncing = false;
+    /**
+     * The worker's own joinRoom while it runs (#333). A reconstruction
+     * like a resync's, but it used to run outside the `resyncing` guard:
+     * a staging failure mid-join forced a resync that restored genesis
+     * and swapped `this.rollback` under the join's fast-forward. A resync
+     * now waits for it before touching the world.
+     */
+    private joinInFlight?: Promise<boolean>;
+    /**
+     * TERMINAL (#333, ruling admin1): a resync ran out of attempts. The
+     * world is a genesis reconstruction with no player in it, and nothing
+     * here can be trusted again, so the host freezes for good: step() and
+     * every input are no-ops, no further resync runs, and snapshot()
+     * sends no state — the display keeps the last real frame it got. The
+     * client is told once, on the next frame ({@link SimulationFrame.
+     * resyncFailed}), saves, and offers a page reload.
+     */
+    private resyncFailed = false;
+    /** Whether a snapshot has already carried `resyncFailed`. */
+    private resyncFailureReported = false;
     // protected so failure-path tests can observe whether a resync proceeded
     // (a proceeding resync refreshes this; a cooldown no-op leaves it).
     protected lastResyncTime = -Infinity;
@@ -294,6 +314,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * exactly what every other peer's does.
      */
     private schedule(input: SimulationInput) {
+        if (this.resyncFailed) {
+            // Frozen for good (#333): nothing is applied or published.
+            return;
+        }
         const received = inputThroughWire(input);
         if (isLeft(received)) {
             const kind = String((input as { kind?: unknown }).kind);
@@ -308,9 +332,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     step(count = 1) {
-        if (this.resyncing) {
+        if (this.resyncing || this.resyncFailed) {
             // Mid-recovery the world is being rebuilt from the input
-            // log; stepping it would fork a fresh timeline.
+            // log; stepping it would fork a fresh timeline. After a
+            // failed recovery it is the bare genesis world (#333).
             return;
         }
         this.integrateRemoteInputs();
@@ -364,6 +389,31 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     // the periodic baseline.
     async joinRoom(timeoutMs = 5000,
         { fresh = true }: { fresh?: boolean } = {}): Promise<boolean> {
+        // One reconstruction at a time (#333): a join started while a
+        // resync (or another join) is rebuilding the world would
+        // interleave with it on the same world and rollback driver.
+        if (this.resyncing || this.joinInFlight || this.resyncFailed) {
+            console.warn('joinRoom while a reconstruction is in flight '
+                + 'or after a failed resync; ignored');
+            return false;
+        }
+        const join = this.reconstructFromRoom(timeoutMs, { fresh });
+        this.joinInFlight = join;
+        try {
+            return await join;
+        } finally {
+            this.joinInFlight = undefined;
+        }
+    }
+
+    /**
+     * The body of a join: catch-up request, staging, baseline restore,
+     * log replay. Called by joinRoom (guarded) and by resync (which holds
+     * `resyncing` itself); protected so a spec can observe whether two
+     * ever overlap.
+     */
+    protected async reconstructFromRoom(timeoutMs: number,
+        { fresh }: { fresh: boolean }): Promise<boolean> {
         const communicator = this.world.resources.get(CommunicatorResource);
         if (!communicator?.uuid) {
             return false;
@@ -466,6 +516,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * rollback correction.
      */
     private integrateStaged(record: InputRecord) {
+        if (this.resyncFailed) {
+            // Frozen for good (#333): nothing integrates any more, and
+            // buffering would only grow until the page reloads.
+            return;
+        }
         // (An escort action needs no staging: none of them builds a ship on
         // the tick it lands. Queueing an upgrade only records the target
         // class on the escort's marker; the class itself is loaded by the
@@ -791,7 +846,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     // is fresh so the ordinary desync-detector callers are cooldown-gated
     // again. Not exposed on the public interface — internal callers only.
     async resync(force = false): Promise<boolean> {
-        if (this.resyncing
+        if (this.resyncing || this.resyncFailed
             || (!force
                 && Date.now() - this.lastResyncTime < this.resyncCooldownMs)) {
             return false;
@@ -800,6 +855,15 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.resyncing = true;
         this.logRollbackEvent('resync');
         try {
+            // The worker's initial join is a reconstruction too (#333):
+            // restoring genesis under it would swap the world and the
+            // rollback driver out from under its fast-forward. Let it
+            // finish; this resync then rebuilds from the full log anyway
+            // (which is what re-stages the record whose failure forced
+            // it).
+            if (this.joinInFlight) {
+                await this.joinInFlight.catch(() => false);
+            }
             // Retry the whole reconstruction until it lands: while
             // `resyncing`, step() is a no-op, so the sim pauses (and
             // publishes no checkpoint hashes) instead of playing on —
@@ -821,8 +885,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // The pinned states describe the abandoned timeline.
                 this.checkpointSnapshots.clear();
                 try {
-                    if (await this.joinRoom(this.resyncJoinTimeoutMs,
-                        { fresh: true })) {
+                    if (await this.reconstructFromRoom(
+                        this.resyncJoinTimeoutMs, { fresh: true })) {
                         return true;
                     }
                 } catch (error) {
@@ -833,6 +897,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 this.logRollbackEvent('resyncRetry', { attempt });
                 if (attempt >= this.resyncMaxAttempts) {
                     console.error(`Resync failed after ${attempt} attempts`);
+                    // Terminal (#333): stepping on from here would play
+                    // the bare genesis world — no player ship, the clock
+                    // at zero — as if it were the session.
+                    this.resyncFailed = true;
+                    this.lastJoinSucceeded = false;
+                    this.remoteInputs = [];
+                    this.remoteInputsGeneration++;
+                    this.pendingInputs = [];
+                    this.queuedEvents = [];
+                    this.logRollbackEvent('resyncFailed', { attempts: attempt });
                     return false;
                 }
                 await new Promise(resolve =>
@@ -848,6 +922,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             tick: this.rollback.tick,
             desyncCount: this.desyncCount,
             joined: this.lastJoinSucceeded,
+            ...(this.resyncFailed ? { resyncFailed: true } : {}),
         };
     }
 
@@ -859,6 +934,9 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     rewind(ticks: number): boolean {
+        if (this.resyncFailed) {
+            return false;
+        }
         // True time travel: restore the past and continue from there,
         // discarding the abandoned future. (rollbackTo, by contrast,
         // replays the inputs back to the present - the netcode
@@ -974,6 +1052,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     snapshot(): SimulationFrame {
+        if (this.resyncFailed) {
+            // Frozen (#333): no state ever leaves the genesis world the
+            // failed recovery left behind, so the display holds the last
+            // real frame. The failure itself is announced exactly once.
+            const announce = !this.resyncFailureReported;
+            this.resyncFailureReported = true;
+            return {
+                added: [], changed: [], removed: [], events: [],
+                ...(announce ? { resyncFailed: true } : {}),
+            };
+        }
         if (this.resyncing) {
             // Mid-resync the world is a genesis reconstruction being
             // replayed forward; serializing it would flash pre-join

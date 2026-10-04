@@ -57,6 +57,11 @@
  *                with no world behind it, made honest)
  *   stranded     a transit whose recovery also failed: no ship anywhere
  *                (the pump "left to run shipless")
+ *   desynced     TERMINAL: the simulation lost sync with the room and its
+ *                resync gave up (#333). The universe is frozen — the
+ *                system is held in `frozen`, deliberately NOT a live
+ *                system, so nothing pumps, steps or saves it — and the
+ *                only way on is the dialog's Reload
  *   tearingDown  teardownGame in progress
  *
  * Client-local module: nothing here touches simulation state.
@@ -172,6 +177,15 @@ export type ClientState =
         readonly claim?: SystemClaim,
     }
     | { readonly kind: 'stranded', readonly reason: string }
+    | {
+        readonly kind: 'desynced',
+        /**
+         * The system as it stood when sync was lost: its display world
+         * stays on screen holding its last frame. Not `system`, on
+         * purpose — `liveSystem` must not see it (see the state list).
+         */
+        readonly frozen: LiveSystem,
+    }
     | { readonly kind: 'tearingDown' };
 
 export type ClientStateKind = ClientState['kind'];
@@ -218,6 +232,8 @@ export function describeState(state: ClientState): string {
                 + `${state.claim ? ', claimed' : ''})`;
         case 'stranded':
             return `stranded(${state.reason})`;
+        case 'desynced':
+            return `desynced(${state.frozen.systemId})`;
     }
 }
 
@@ -295,7 +311,8 @@ export function isDockedForExit(state: ClientState): boolean {
  */
 export function canExitToTitle(state: ClientState): boolean {
     return isInGame(state) && state.kind !== 'entering'
-        && state.kind !== 'tearingDown' && !isDockedForExit(state);
+        && state.kind !== 'tearingDown' && state.kind !== 'desynced'
+        && !isDockedForExit(state);
 }
 
 /** Whether the title menu is in play: no game, no dialog, no rollback. */
@@ -551,6 +568,21 @@ export function swapDockedShip(state: ClientState, entity: Entity): void {
         throw new IllegalTransitionError('swapDockedShip', state);
     }
     docked.entity = entity;
+}
+
+// ── Lost sync ──────────────────────────────────────────────────────────
+
+/**
+ * The simulation's resync gave up (#333): freeze. Only from a state that
+ * has a live system (the failure arrives on that system's frame stream),
+ * and only once — a second report is refused, never re-run.
+ */
+export function loseSync(state: ClientState): ClientState {
+    const system = liveSystem(state);
+    if (!system) {
+        throw new IllegalTransitionError('loseSync', state);
+    }
+    return { kind: 'desynced', frozen: system };
 }
 
 // ── Session ────────────────────────────────────────────────────────────
