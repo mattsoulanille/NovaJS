@@ -100,7 +100,8 @@ describe('SimulationBridge', () => {
         expect(state?.get('accelerate')).toBeUndefined();
         expect(state?.get('firePrimary')).toBeUndefined();
         expect(warn.calls.count()).toBe(1);
-        expect(warn.calls.mostRecent().args[0]).toContain('controlEvents');
+        expect(warn.calls.mostRecent().args[0])
+            .toContain('local control input the wire would refuse');
 
         // The valid shapes still apply.
         client.controlEvents([{ action: 'accelerate', state: 'start' }]);

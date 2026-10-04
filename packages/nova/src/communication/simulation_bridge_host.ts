@@ -1,10 +1,9 @@
 import { isLeft } from "fp-ts/lib/Either.js";
-import * as t from 'io-ts';
 import { RollbackSimulation } from "nova_ecs/plugins/rollback_plugin";
 import { restoreWireWorldSnapshot, restoreWorld, snapshotWorld, SnapshotPolicies, SnapshotPoliciesResource, wireSnapshotOfSnapshot, WorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
@@ -14,7 +13,7 @@ import {
     loadWireSnapshotGameData,
 } from "../nova_plugin/spawn/index.js";
 import {
-    deriveEntityComponents, ControlEvent, ControlEventType, stageEncodedComponentsGameData,
+    deriveEntityComponents, ControlEvent, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { warnThrottled } from "../common/log_throttle.js";
@@ -29,6 +28,7 @@ import { EncodedSimulationBridgeEvent, getRegisteredSimulationBridgeEvents } fro
 import { SimulationBridgeHostApi, SimulationStatus } from "./simulation_bridge_api.js";
 import { DeltaFrameEncoder, SimulationFrame } from "./simulation_frame.js";
 import { RoomClock } from "./room_clock.js";
+import { inputThroughWire } from "./wire_schemas.js";
 
 
 /**
@@ -278,9 +278,32 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * input records: schedule() queues an input for the next stepped
      * tick, where the rollback driver records and applies it. This is
      * the same path resimulation replays.
+     *
+     * The one choke point for this peer's own inputs, so the one place
+     * they are checked (#295): every input runs the wire's own codec
+     * (wire_schemas.ts inputThroughWire) BEFORE it is applied or
+     * published. The authoring host's records never cross the receiving
+     * codecs, so an input the wire refuses used to apply here while the
+     * room never saw it — the sender's socket throws on it (drops it in
+     * production, #272) or the relay's decode drops it — a
+     * self-inflicted desync the relay convicts (#270, the e2e 'stop'
+     * control). Refused per input, with a warning naming its kind; the
+     * rest of the tick's inputs are unaffected. An admitted input is
+     * scheduled as the wire hands it back, so this timeline applies
+     * exactly what every other peer's does.
      */
     private schedule(input: SimulationInput) {
-        this.pendingInputs.push(input);
+        const received = inputThroughWire(input);
+        if (isLeft(received)) {
+            const kind = String((input as { kind?: unknown }).kind);
+            warnThrottled(`bridge-input-invalid:${kind}`, () =>
+                `Dropping a local ${kind} input the wire would refuse: `
+                + received.left);
+            return;
+        }
+        // What the room receives, which is what it applies (stripped of
+        // anything the strict codecs drop): the same input here.
+        this.pendingInputs.push(received.right);
     }
 
     step(count = 1) {
@@ -863,28 +886,6 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     controlEvents(events: ControlEvent[]) {
-        // Validate BEFORE scheduling, with the same codec the wire uses
-        // on a relayed record: the authoring host's own records never
-        // cross that codec, so this is the only check its controls get.
-        // Scheduling an invalid one applied it locally while the relay
-        // refused the published record — the authoring peer diverging
-        // from its own input (the binary_wire_e2e 'stop' incident), a
-        // self-inflicted desync the relay convicted. Refused as a whole
-        // batch, at the wire's granularity for one control input; the
-        // apply path (simulation_input.ts) refuses the same shapes
-        // deterministically, so the two ends can never disagree.
-        const decoded = t.array(ControlEventType).decode(events);
-        if (isLeft(decoded)) {
-            // Name the offending event (index, field, value), as the
-            // relay's drop path does, so the warning points at the
-            // caller's bug rather than restating the schema.
-            warnThrottled('bridge-controlEvents-invalid', () =>
-                'Dropping controlEvents: events fail the wire codec '
-                + `(state must be false | 'start' | 'repeat', action a `
-                + 'known ControlAction): '
-                + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
-            return;
-        }
         this.schedule({ kind: 'control', events });
     }
 

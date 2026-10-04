@@ -1,16 +1,19 @@
+import { Either, isLeft, left, right } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
-import { Serializer } from 'nova_ecs/plugins/serializer_plugin';
+import { formatIoTsErrors, Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import { stat } from '../nova_plugin/core/index.js';
 import { EncodedActiveMissionType } from '../nova_plugin/missions/index.js';
 import { ActiveMissionType } from '../nova_plugin/player/index.js';
-import { CommunicatorMessage, communicatorMessageType } from './communicator_message.js';
+import { CommunicatorMessage, communicatorMessageType, MessageType } from './communicator_message.js';
 import { CodecHook, CodecHooks, Derivation, deriveAvroSchema } from './io_ts_to_avro.js';
 import { RoomMessage, roomMessageType } from './multi_room_communicator.js';
 import { RollbackProtocolMessageType } from './rollback_protocol.js';
 import { SimulationFrameType } from './simulation_frame.js';
-import { WireTick } from './simulation_input.js';
+import { SimulationInput, WireTick } from './simulation_input.js';
 import { SocketMessage, socketMessageType } from './socket_message.js';
-import { AvroWireCodec, avroWireCodec, makeWireCodec, WIRE_ENCODING, WireCodec } from './wire_codec.js';
+import {
+    AvroWireCodec, avroWireCodec, decodeWire, makeWireCodec, WIRE_ENCODING, WireCodec,
+} from './wire_codec.js';
 import { wireSnapshotRegistrySerializer } from './wire_snapshot_components.js';
 
 /**
@@ -126,6 +129,65 @@ export function liveWireCodec(): WireCodec {
 export function liveWireFingerprint(): string | undefined {
     const codec = liveWireCodec();
     return codec.encoding === 'avro' ? (codec as AvroWireCodec).fingerprint : undefined;
+}
+
+/**
+ * `input` as the room receives it — or why the room's wire refuses it.
+ * THE gate for this peer's own inputs (#295): the authoring host's
+ * records never cross the receiving codecs — it schedules them straight
+ * into its own timeline — so an input the wire refuses was applied here
+ * while the room never saw it (the sender's socket throws on it, or
+ * drops it in production, #272; or the relay's decode drops it), a
+ * self-inflicted desync. SimulationBridgeHost.schedule runs this on
+ * every input before it is applied or published.
+ *
+ * It is the wire itself, not a model of it: the input rides a one-input
+ * `inputs` record inside the full socket envelope, through `codec` (the
+ * live socket codec by default) exactly as publishInputs sends it —
+ * `encode` is the sender's socket, which throws on what the schema
+ * rejects — and back through `decodeWire` with WireMessageType, whose
+ * innermost layer is RollbackProtocolMessageType: the relay's and every
+ * peer's receiving gate (unwrapRollbackMessage). The record's own
+ * fields (tick, seq, peerId) are the host's, always valid, so a record
+ * of inputs this admits is one the room admits.
+ *
+ * What comes back (Right) is what every other peer applies: unknown
+ * fields stripped by the strict codecs, an absent required nullable
+ * sent as null. The host applies THAT, not the value it was handed, so
+ * its own timeline holds exactly the input the room holds.
+ */
+export function inputThroughWire(input: SimulationInput,
+    codec: WireCodec = liveWireCodec()): Either<string, SimulationInput> {
+    const frame: WireMessage = {
+        message: {
+            type: MessageType.message,
+            message: {
+                room: '',
+                message: { rollback: { kind: 'inputs', record: { tick: 0, inputs: [input] } } },
+            },
+        },
+    };
+    let bytes: Uint8Array;
+    try {
+        bytes = codec.encode(SocketMessage.encode(frame));
+    } catch (error) {
+        return left(`the ${codec.encoding} wire cannot carry it: ${String(error)}`);
+    }
+    const decoded = decodeWire(codec, WireMessageType, bytes);
+    if (isLeft(decoded)) {
+        return left('the room\'s codec refuses it: '
+            + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
+    }
+    const communicator = decoded.right.message;
+    const rollback = communicator?.type === MessageType.message
+        ? communicator.message.message?.rollback : undefined;
+    const received = rollback?.kind === 'inputs'
+        ? rollback.record.inputs : undefined;
+    if (received?.length !== 1) {
+        // Unreachable: the codec decoded the frame it was handed.
+        return left('the wire handed back a different message');
+    }
+    return right(received[0]!);
 }
 
 /** A schema'd codec over an arbitrary socket payload codec, for specs. */
