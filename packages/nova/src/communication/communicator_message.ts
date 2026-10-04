@@ -6,6 +6,8 @@ export enum MessageType {
     uuid,
     message,
     peers,
+    /** A reconnecting client's previous token (client -> server only). */
+    reconnect,
 }
 
 /**
@@ -21,6 +23,18 @@ export enum MessageType {
  * CommunicatorServer drops any a client sends and re-wraps everything
  * it relays as a `message` — so the announcement's provenance is the
  * socket itself.
+ *
+ * The uuid frame also carries the connection's RECONNECT TOKEN (#354):
+ * an unguessable bearer secret the server generated for THIS connection
+ * alone (communicator_server.ts issueToken). The frame goes to that one
+ * socket, so no other peer ever sees it. A client whose socket died
+ * presents its previous connection's token as the FIRST communicator
+ * frame of its next one — the `reconnect` kind, client -> server — and
+ * the server retires that previous connection at once instead of waiting
+ * for its keepalive to notice a half-open socket. It retires a
+ * connection and nothing more: the new connection keeps its own new uuid
+ * (identity stays per socket) and nothing the old one owned is handed
+ * over. The server never answers a presentation, valid or not.
  */
 export function communicatorMessageType<A, O>(payload: t.Type<A, O, unknown>) {
     return t.union([
@@ -28,6 +42,7 @@ export function communicatorMessageType<A, O>(payload: t.Type<A, O, unknown>) {
             type: t.literal(MessageType.uuid),
             uuid: t.string,
             servers: set(t.string),
+            token: t.string,
         }),
         t.intersection([
             t.type({
@@ -42,6 +57,10 @@ export function communicatorMessageType<A, O>(payload: t.Type<A, O, unknown>) {
         t.type({
             type: t.literal(MessageType.peers),
             peers: set(t.string),
+        }),
+        t.type({
+            type: t.literal(MessageType.reconnect),
+            token: t.string,
         }),
     ]);
 }

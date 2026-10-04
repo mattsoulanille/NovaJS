@@ -29,7 +29,8 @@ import { makeNpcShip } from '../spawn/index.js';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { ActiveMission, MissionsComponent } from '../player/index.js';
+import { ActiveMission, ControlledByComponent, MissionsComponent } from '../player/index.js';
+import { applyInputRecords } from '../../communication/simulation_input.js';
 import { SystemHoldComponent } from '../npc/index.js';
 
 const LETHAL_DAMAGE = {
@@ -197,6 +198,55 @@ describe('mission ships in the shared simulation', () => {
                 await makeWorldWithMissionShip(GOAL_DESTROY);
             expect(world.entities.has(missionShipUuid)).toBe(true);
             // The owner lands / jumps out: their entity leaves the sim.
+            world.entities.delete(shipUuid);
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(world.entities.has(missionShipUuid)).toBe(false);
+        }, 30_000);
+
+    it('keeps a mission ship whose owner\'s PEER left the room, unowned, '
+        + 'and resumes the tether when the owner is back (#354)',
+        async () => {
+            const { world, shipUuid, missionShipUuid, activeObjective } =
+                await makeWorldWithMissionShip(GOAL_DESTROY);
+            const owner = world.entities.get(shipUuid)!;
+            owner.components.set(ControlledByComponent, { peerId: 'peer b' });
+            owner.components.set(MultiplayerData, { owner: 'peer b' });
+            world.entities.get(missionShipUuid)!.components
+                .set(MultiplayerData, { owner: 'peer b' });
+            world.step();
+
+            // The relay's removePeer for b: the player ship leaves, the
+            // mission ship it spawned stays — disowned, and flagged so the
+            // owner-absence despawn keeps it.
+            applyInputRecords(world, [{
+                peerId: 'server', tick: 0,
+                inputs: [{ kind: 'removePeer', peerId: 'peer b' }],
+            }]);
+            expect(world.entities.has(shipUuid)).toBe(false);
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            const stranded = world.entities.get(missionShipUuid);
+            expect(stranded).toBeDefined();
+            expect(stranded!.components.has(MultiplayerData)).toBe(false);
+            expect(stranded!.components.get(MissionShipComponent))
+                .toEqual({ mission: MISSION_ID, owner: shipUuid,
+                    ownerDisconnected: true });
+
+            // The owner's ship is back under the same uuid (a reconnect's
+            // re-entry): the flag clears and the mission tracks it again.
+            world.entities.set(shipUuid, owner);
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(world.entities.get(missionShipUuid)!.components
+                .get(MissionShipComponent))
+                .toEqual({ mission: MISSION_ID, owner: shipUuid });
+            expect(activeObjective()!.live.has(missionShipUuid)).toBe(true);
+
+            // ...and the ordinary despawn applies once more: the owner lands.
             world.entities.delete(shipUuid);
             for (let i = 0; i < 5; i++) {
                 world.step();

@@ -1,5 +1,4 @@
 import * as Comlink from "comlink";
-import { BehaviorSubject, Subject } from "rxjs";
 
 // The worker's console is invisible to most tooling; keep a ring of
 // recent lines and serve it through status() for diagnostics.
@@ -15,7 +14,7 @@ for (const level of ['log', 'warn', 'error'] as const) {
         }
     };
 }
-import { Communicator, CommunicatorResource, Peers } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource } from "nova_ecs/plugins/multiplayer_plugin";
 import { SimulationGameData } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
@@ -27,47 +26,7 @@ import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SimulationFrame } from "./simulation_frame.js";
 import { BrowserSimulationBridgeWorkerApi, BrowserWorkerRoomState } from "./simulation_bridge_browser_worker.js";
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
-
-
-class WorkerRoomCommunicator implements Communicator {
-    readonly messages = new Subject<{ source: string, message: unknown }>();
-    readonly peers = new Peers(new BehaviorSubject(new Set<string>()));
-    // The main thread's announced set (communicator_client.ts), relayed
-    // through init and updateRoomState; nobody is a server until then.
-    readonly servers = new BehaviorSubject(new Set<string>());
-    readonly connected = new BehaviorSubject(false);
-    uuid: string | undefined;
-
-    constructor(
-        private sendToRoom: (message: unknown, destination?: string | Set<string>) => void | Promise<void>,
-        initialState: BrowserWorkerRoomState,
-    ) {
-        this.updateRoomState(initialState);
-    }
-
-    updateRoomState(state: BrowserWorkerRoomState) {
-        if ('uuid' in state) {
-            this.uuid = state.uuid;
-        }
-        if (state.peers) {
-            this.peers.current.next(new Set(state.peers));
-        }
-        if (typeof state.connected === 'boolean') {
-            this.connected.next(state.connected);
-        }
-        if (state.servers) {
-            this.servers.next(new Set(state.servers));
-        }
-    }
-
-    receiveMessage(source: string, message: unknown) {
-        this.messages.next({ source, message });
-    }
-
-    sendMessage(message: unknown, destination?: string | Set<string>) {
-        void this.sendToRoom(message, destination);
-    }
-}
+import { WorkerRoomCommunicator } from "./worker_room_communicator.js";
 
 class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
     private bridge?: SimulationBridgeHost;

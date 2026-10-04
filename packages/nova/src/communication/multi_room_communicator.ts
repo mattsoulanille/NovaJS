@@ -30,6 +30,19 @@ export function roomMessageType<A, O>(payload: t.Type<A, O, unknown>) {
 export const RoomMessage = roomMessageType(t.unknown);
 type RoomMessage = t.TypeOf<typeof RoomMessage>;
 
+/** The communicators that announce identity changes: a reconnect changes
+ * `uuid` (#354; communicator_client.ts `identity`, passed through by the
+ * rooms below). */
+export interface IdentityAnnouncer {
+    readonly identity?: Observable<string | undefined>;
+}
+
+/** The communicator's identity stream, when it announces one. */
+export function identityOf(communicator: Communicator):
+    Observable<string | undefined> | undefined {
+    return (communicator as Communicator & IdentityAnnouncer).identity;
+}
+
 class RoomCommunicator implements Communicator {
     constructor(private communicator: Communicator,
         public messages: Observable<MessageWithSource<unknown>>,
@@ -39,6 +52,11 @@ class RoomCommunicator implements Communicator {
         public connected: BehaviorSubject<boolean>) { }
     get uuid() {
         return this.communicator.uuid;
+    }
+    /** The underlying communicator's identity stream, when it has one
+     * (communicator_client.ts): a reconnect changes `uuid` (#354). */
+    get identity() {
+        return identityOf(this.communicator);
     }
 }
 

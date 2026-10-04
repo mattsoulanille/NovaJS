@@ -62,6 +62,7 @@ import {
     localPlayerShipUuid, spawnHiredEscorts,
 } from './fleet_ledger.js';
 import { FramePump } from './frame_pump.js';
+import { followIdentity } from './identity.js';
 import { preparePlayerStart } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
 import { jumpTo, teardownLiveSystem, WorldWiring } from './system_entry.js';
@@ -306,8 +307,18 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         await new Promise(resolve => setTimeout(resolve, 10));
     }
     const query = new URLSearchParams(window.location.search);
-    const start = await preparePlayerStart(runtime, query, communicator.uuid);
+    // The owner is READ, not captured: the server assigns a uuid per
+    // socket, and a reconnect changes it mid-game (#354).
+    const start = await preparePlayerStart(runtime, query,
+        () => communicator.uuid);
     window.myShip = start.ship;
+    // Everything the client holds out of the simulation (the docked hull,
+    // a transit's carried player, the escort rosters) follows the current
+    // connection; the worker re-enters the room for what it holds
+    // (client/identity.ts, simulation_bridge_host.ts reenter).
+    const identitySubscription = followIdentity(communicator.identity,
+        () => state.state, fleet);
+    sessionDisposers.push(() => identitySubscription.unsubscribe());
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);

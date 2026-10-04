@@ -48,6 +48,14 @@ export interface SimulationStatus {
     resyncFailed?: boolean;
     /** Recent worker-side log lines, newest last (worker entry only). */
     logs?: string[];
+    /**
+     * Set once the room has refused this peer's re-stamped insertions
+     * more times than the host retries (#354, simulation_bridge_host.ts
+     * handleRefusal): the peer cannot get its fleet back into the room
+     * under the identity it has. The terminal path is #333's; until it
+     * lands this flag (and the console) is the only trace.
+     */
+    identityRecoveryFailed?: boolean;
 }
 
 export interface AsyncSimulationBridgeHostApi {

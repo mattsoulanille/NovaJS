@@ -203,6 +203,46 @@ describe("SocketChannelClient", function () {
     });
 
     /**
+     * A socket the SERVER closed (a restart) is replaced by the next send
+     * (reconnectIfClosed). `connected` must still go false before the new
+     * socket's first frame raises it: that edge is what re-joins the
+     * client's rooms (multi_room_communicator.ts joinCurrentRooms, #339),
+     * and without it a reconnected client — under its new uuid (#354) —
+     * sat in no room at all.
+     */
+    it("drops `connected` when it replaces a socket the server closed", () => {
+        const fresh = jasmine.createSpyObj<WebSocket>("freshSocket",
+            ["addEventListener", "send", "close", "removeEventListener"], {
+            CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3, readyState: 0,
+        });
+        let onFreshMessage: ((event: MessageEvent) => void) | undefined;
+        fresh.addEventListener.and.callFake(((type: string,
+            listener: (event: MessageEvent) => void) => {
+            if (type === 'message') {
+                onFreshMessage = listener;
+            }
+        }) as typeof fresh.addEventListener);
+        const client = new SocketChannelClient({
+            webSocket, warn, codec, timeout: 60_000,
+            webSocketFactory: () => fresh,
+        });
+        const seen: boolean[] = [];
+        client.connected.subscribe(value => seen.push(value));
+        // The first frame raises it.
+        callbacks["message"][0]!(frameEvent({ pong: true }));
+        expect(client.connected.value).toBeTrue();
+
+        // The server goes away; the browser marks the socket CLOSED.
+        (Object.getOwnPropertyDescriptor(webSocket, 'readyState')!.get as
+            jasmine.Spy).and.returnValue(3);
+        client.send({ hello: 'again' });
+        expect(client.connected.value).toBeFalse();
+
+        onFreshMessage!(frameEvent({ pong: true }));
+        expect(seen).toEqual([false, true, false, true]);
+    });
+
+    /**
      * A message the wire codec cannot encode (#272): a hard error under
      * the strict policy — the default here, NODE_ENV not being
      * production — and a dropped-with-a-warning under recover. Never

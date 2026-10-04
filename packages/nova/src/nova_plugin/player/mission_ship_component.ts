@@ -46,6 +46,17 @@ export const MissionShipType = t.intersection([t.type({
     /** The ShipSubtitle sibling of `name`, shown in place of the ship
      * class's own subtitle. Absent when the mission sets none. */
     subtitle: t.string,
+    /**
+     * The owning player's PEER left the room (its `removePeer`,
+     * communication/peer_departure.ts) while this ship was in it: the
+     * ship STAYS — an unowned world ship, as the maintainer ruled for
+     * every ship of a departed peer but its player and escorts (#354) —
+     * instead of being swept by MissionShipCleanupSystem's owner-absence
+     * despawn. Cleared by that system the moment the owner's ship is back
+     * in the world (a reconnecting client re-inserts it under the same
+     * entity uuid), after which the ordinary tether applies again.
+     */
+    ownerDisconnected: t.boolean,
 })]);
 export type MissionShip = t.TypeOf<typeof MissionShipType>;
 export const MissionShipComponent =

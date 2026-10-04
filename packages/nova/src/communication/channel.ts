@@ -12,6 +12,14 @@ export interface MessageWithSourceType<M> {
  */
 export interface ChannelServer {
     send(destination: string, message: unknown): void;
+    /**
+     * Closes `client`'s connection from the server end and forgets it,
+     * emitting its `clientDisconnect` synchronously, exactly as its own
+     * close would. A no-op for a client that is already gone. Used to
+     * retire a connection a reconnect token superseded
+     * (communicator_server.ts).
+     */
+    disconnect(client: string): void;
 
     readonly message: Subject<MessageWithSourceType<unknown>>;
     readonly clientConnect: Subject<string>;

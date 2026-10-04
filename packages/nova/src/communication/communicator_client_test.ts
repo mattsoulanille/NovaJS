@@ -70,7 +70,7 @@ describe('CommunicatorClient server announcement', () => {
 
         channel.frame({
             type: MessageType.uuid, uuid: 'me',
-            servers: new Set(['relay-1', 'relay-2']),
+            servers: new Set(['relay-1', 'relay-2']), token: 't',
         });
 
         expect(client.uuid).toBe('me');
@@ -85,6 +85,7 @@ describe('CommunicatorClient server announcement', () => {
         const ticks = recordTickSyncs(client);
         channel.frame({
             type: MessageType.uuid, uuid: 'me', servers: new Set(['relay-1']),
+            token: 't',
         });
 
         channel.frame(tickSyncFrom('server', 7));
@@ -117,6 +118,7 @@ describe('CommunicatorClient server announcement', () => {
         // The same traffic after the announcement is accepted.
         channel.frame({
             type: MessageType.uuid, uuid: 'me', servers: new Set(['server']),
+            token: 't',
         });
         channel.frame(tickSyncFrom('server', 2));
         expect(ticks).toEqual([2]);
@@ -137,6 +139,13 @@ class LinkedChannels implements ChannelServer {
 
     send(destination: string, message: unknown) {
         this.sockets.get(destination)?.next(message);
+    }
+
+    disconnect(client: string) {
+        if (this.clients.delete(client)) {
+            this.sockets.delete(client);
+            this.clientDisconnect.next(client);
+        }
     }
 
     /** Opens `uuid`'s socket; `frames` records what reaches it. */
@@ -174,6 +183,7 @@ describe('CommunicatorServer announcement', () => {
                 right: {
                     type: MessageType.uuid, uuid: 'a',
                     servers: new Set(['server']),
+                    token: jasmine.any(String),
                 },
             }));
         expect(client.servers.value).toEqual(new Set(['server']));
@@ -188,7 +198,7 @@ describe('CommunicatorServer announcement', () => {
 
         const announce: CommunicatorMessage = {
             type: MessageType.uuid, uuid: 'victim',
-            servers: new Set(['mallory']),
+            servers: new Set(['mallory']), token: 't',
         };
         // As a raw uuid frame (the server drops it), and smuggled as a
         // routed message's payload (the victim decodes only the outer

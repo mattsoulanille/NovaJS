@@ -1,9 +1,11 @@
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { Subscription } from "rxjs";
+import { v4 } from "uuid";
 import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { liveWireFingerprint } from "./wire_schemas.js";
+import type { InputRefusal } from "./simulation_input.js";
 
 /** Everything the relay knows about a convicted desync, for the
  * incident recorder. */
@@ -78,6 +80,18 @@ export function mintRoomSeed(): number {
 export class RollbackRelay {
     tick = 0;
     private log: InputRecord[] = [];
+    /**
+     * This relay's TIMELINE: one id per relay instance, i.e. per input log
+     * — a new one whenever the room's log starts over (a server restart,
+     * or a room that emptied and was re-opened). Sent with every catchUp,
+     * so a re-entering peer can tell a room that remembers its old
+     * connection (same timeline: whatever that connection owned besides
+     * its fleet is the room's business now — disowned, or gone) from one
+     * that never knew it (#354, simulation_bridge_host.ts
+     * scheduleReinsertions). Not a secret: it names a log every member
+     * already holds.
+     */
+    readonly timeline = v4();
     /** Peers' state-hash reports awaiting comparison, by tick. */
     private stateHashes =
         new Map<number, Map<string, { hash: string, arrivedAt: number }>>();
@@ -440,6 +454,36 @@ export class RollbackRelay {
             { kind: 'joinWarning', reason }), source);
     }
 
+    /**
+     * An insertion the room refused (#354): the archive applies every
+     * logged record exactly once and reports each authorisation drop here
+     * (room_archive.ts, simulation_input.ts InputRefusalResource). The
+     * drop itself already happened, deterministically, on every world;
+     * this only stops it being SILENT. Logged once (rate-limited per peer,
+     * so a peer flooding refusals cannot flood the log) and told to the
+     * sender alone, if it is still in the room — the notice names the
+     * identity the record was stamped with, so the sender can tell an
+     * insertion it stamped with a stale uuid from any other refusal.
+     */
+    reportRefusal(refusal: InputRefusal) {
+        warnThrottled(`relay-refused:${refusal.peerId}`, () =>
+            `Refused ${refusal.peerId}'s ${refusal.input} of ${refusal.uuid}`
+            + (refusal.tick !== undefined ? ` at tick ${refusal.tick}` : '')
+            + `: ${refusal.reason}`);
+        if (!this.roomPeers().has(refusal.peerId)) {
+            return;
+        }
+        this.room.sendMessage(wrapRollbackMessage({
+            kind: 'inputRefused',
+            peer: refusal.peerId,
+            tick: refusal.tick ?? this.tick,
+            ...(refusal.seq !== undefined ? { seq: refusal.seq } : {}),
+            uuid: refusal.uuid,
+            input: refusal.input,
+            reason: refusal.reason,
+        }), refusal.peerId);
+    }
+
     private handleMessage(source: string, raw: unknown) {
         // Validated: a malformed envelope is dropped here, never
         // dereferenced (one used to throw inside this subscriber and
@@ -547,6 +591,7 @@ export class RollbackRelay {
                 this.room.sendMessage(wrapRollbackMessage({
                     kind: 'catchUp',
                     tick: this.tick,
+                    timeline: this.timeline,
                     records: baseline
                         ? this.log.filter(record => record.tick > baseline.tick)
                         : [...this.log],

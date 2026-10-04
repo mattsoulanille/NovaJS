@@ -2,14 +2,11 @@ import * as Comlink from "comlink";
 import { Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { AsyncSimulationBridgeClient } from "./async_simulation_bridge_client.js";
 import { AsyncSimulationBridgeHostApi } from "./simulation_bridge_api.js";
+import type { WorkerRoomState } from "./worker_room_communicator.js";
 
 
-export interface BrowserWorkerRoomState {
-    uuid?: string;
-    peers?: Set<string>;
-    connected?: boolean;
-    servers?: Set<string>;
-}
+/** What the main thread forwards (worker_room_communicator.ts). */
+export type BrowserWorkerRoomState = WorkerRoomState;
 
 export interface BrowserSimulationBridgeWorkerApi extends AsyncSimulationBridgeHostApi {
     init(

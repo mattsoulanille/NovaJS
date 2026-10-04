@@ -13,7 +13,8 @@ import {
     ShipControlStateComponent,
 } from '../nova_plugin/player/index.js';
 import {
-    applyInputRecords, InputRecordType, SimulationInput, SimulationInputType,
+    applyInputRecords, InputRecordType, InputRefusal, InputRefusalResource,
+    SimulationInput, SimulationInputType,
 } from './simulation_input.js';
 
 /**
@@ -72,6 +73,52 @@ describe('input record authorisation', () => {
         apply(world, 'server', [{ kind: 'removePeer', peerId: 'b' }]);
         expect(world.entities.has('victim')).toBeFalse();
         expect(world.entities.has('own')).toBeTrue();
+    });
+
+    it('removePeer removes the peer\'s player ship and DISOWNS the rest of what it owned (#354)', () => {
+        const { world } = makeWorld();
+        apply(world, 'server', [{ kind: 'removePeer', peerId: 'b' }]);
+        // b's player ship goes; the ship it merely owned (no escort
+        // marker: a mission ship, a spawned NPC) stays, nobody's — the
+        // maintainer's ruling. peer_departure_test.ts has the full
+        // inventory, escorts and fighters included.
+        expect(world.entities.has('victim')).toBeFalse();
+        expect(world.entities.has('escort')).toBeTrue();
+        expect(world.entities.get('escort')!.components.has(MultiplayerData))
+            .toBeFalse();
+        expect(world.entities.has('own')).toBeTrue();
+        expect(world.entities.get('own')!.components.get(MultiplayerData))
+            .toEqual({ owner: 'a' });
+    });
+
+    it('reports a refused insertion to the world\'s InputRefusalResource, with its record (#354)', () => {
+        const { world, serializer } = makeWorld();
+        const refusals: InputRefusal[] = [];
+        world.resources.set(InputRefusalResource, refusal => refusals.push(refusal));
+        applyInputRecords(world, [{
+            peerId: 'a', tick: 7, seq: 3, inputs: [{
+                kind: 'addEntity', uuid: 'decoy',
+                entity: serializer.encode(new Entity('decoy')
+                    .addComponent(MultiplayerData, { owner: 'b' })),
+            }, {
+                kind: 'addEntity', uuid: 'mine',
+                entity: serializer.encode(new Entity('mine')
+                    .addComponent(MultiplayerData, { owner: 'a' })),
+            }],
+        }]);
+        expect(refusals).toEqual([{
+            peerId: 'a', tick: 7, seq: 3, uuid: 'decoy', input: 'addEntity',
+            reason: 'declares owner b',
+        }]);
+        expect(world.entities.has('mine')).toBeTrue();
+        // A world without the resource (every peer's) drops alike, silently.
+        const plain = makeWorld();
+        apply(plain.world, 'a', [{
+            kind: 'addEntity', uuid: 'decoy',
+            entity: plain.serializer.encode(new Entity('decoy')
+                .addComponent(MultiplayerData, { owner: 'b' })),
+        }]);
+        expect(plain.world.entities.has('decoy')).toBeFalse();
     });
 
     it('a world with no communicator still trusts the server\'s uuid '
