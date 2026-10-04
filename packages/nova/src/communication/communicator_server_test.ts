@@ -23,6 +23,11 @@ class MockChannel implements ChannelServer {
     send(destination: string, message: unknown) {
         this.sent.push([destination, message as CommunicatorMessage]);
     }
+    disconnect(client: string) {
+        if (this.clients.delete(client)) {
+            this.clientDisconnect.next(client);
+        }
+    }
 }
 
 describe('CommunicatorServer', () => {

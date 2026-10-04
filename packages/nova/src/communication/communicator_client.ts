@@ -20,10 +20,59 @@ export class CommunicatorClient implements Communicator {
      * after `uuid` and `servers` are updated.
      */
     readonly identity = new BehaviorSubject<string | undefined>(undefined);
+    /**
+     * The reconnect token the server issued THIS connection in its uuid
+     * frame (#354; communicator_server.ts, Trust model item 6). A bearer
+     * secret: held here, in memory, and nowhere else — never forwarded to
+     * the simulation worker, never sent to anyone but the server, never
+     * logged. Presented once, as the first frame of the NEXT connection,
+     * so the server retires this one at once instead of waiting for its
+     * keepalive to notice a half-open socket; then dropped (single use —
+     * the next connection's uuid frame brings a fresh one).
+     *
+     * Memory only, deliberately not localStorage: a page reload is a new
+     * session that re-enters from the pilot save, and its old socket was
+     * closed by the browser on unload (a close the server sees at once),
+     * so there is nothing for a stored token to retire — while a stored
+     * bearer secret would outlive the tab, be readable by any script on
+     * the origin, and be shared by every tab of it.
+     */
+    private reconnectToken: string | undefined = undefined;
 
     constructor(private channel: ChannelClient) {
         this.connected = channel.connected;
+        // Subscribed BEFORE anything built over this communicator (the
+        // rooms re-join on the same edge, multi_room_communicator.ts), so
+        // the token is the new connection's first communicator frame —
+        // the only position the server honours it in.
+        channel.connected.subscribe(connected => {
+            if (connected) {
+                this.presentReconnectToken();
+            }
+        });
         channel.message.subscribe(this.onMessage.bind(this));
+    }
+
+    /**
+     * A connection just came up: if this client held an earlier one,
+     * present that connection's token so the server retires it. The
+     * socket raises `connected` on the new connection's first inbound
+     * frame, before that frame (the new uuid frame) is handled here, so
+     * the token held is still the previous connection's. Unanswered by
+     * design: the client cannot tell whether it retired anything, and
+     * does not need to — the old peer's removePeer, when there is one,
+     * reaches it through the room like any other.
+     */
+    private presentReconnectToken() {
+        const token = this.reconnectToken;
+        if (token === undefined) {
+            return;
+        }
+        this.reconnectToken = undefined;
+        this.channel.send(CommunicatorMessage.encode({
+            type: MessageType.reconnect,
+            token,
+        }));
     }
     /**
      * The server's uuid set, as the server ANNOUNCED it in the uuid
@@ -61,7 +110,12 @@ export class CommunicatorClient implements Communicator {
                 case MessageType.peers:
                     this.peers.current.next(communicatorMessage.peers);
                     break;
+                case MessageType.reconnect:
+                    // Client -> server only; nothing a server sends.
+                    console.warn('Ignoring a reconnect frame from the server');
+                    break;
                 case MessageType.uuid:
+                    this.reconnectToken = communicatorMessage.token;
                     this.uuid = communicatorMessage.uuid;
                     this.servers.next(new Set(communicatorMessage.servers));
                     this.identity.next(communicatorMessage.uuid);

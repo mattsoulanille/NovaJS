@@ -164,6 +164,13 @@ export class SocketChannelServer implements ChannelServer {
         return this.sendRawIfOpen(destination, { message });
     }
 
+    /** Retires a client's connection at once (ChannelServer.disconnect):
+     * the same removal its keepalive timeout performs, socket torn down
+     * and clientDisconnect emitted synchronously. */
+    disconnect(client: string) {
+        this.handleClientClose(client);
+    }
+
     private resetClientTimeout(uuid: string) {
         const client = this.clientMap.get(uuid);
         if (!client) {

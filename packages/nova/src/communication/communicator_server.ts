@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { isLeft } from "fp-ts/lib/Either.js";
 import { Communicator, Peers } from "nova_ecs/plugins/multiplayer_plugin";
 import { BehaviorSubject, Subject } from "rxjs";
@@ -18,11 +19,62 @@ function namesOthers(destination: string | Set<string> | undefined,
     return [...destination].some(dest => dest !== server);
 }
 
+/** CSPRNG bytes in a reconnect token: 256 bits, so guessing one is not
+ * a strategy. */
+const RECONNECT_TOKEN_BYTES = 32;
+
+/**
+ * A fresh reconnect token (#354): node's CSPRNG, never Math.random, and
+ * never anything the simulation can see — tokens live in this class and
+ * in the one client's memory, nowhere else.
+ */
+function generateReconnectToken(): string {
+    return randomBytes(RECONNECT_TOKEN_BYTES).toString('base64url');
+}
+
 export class CommunicatorServer implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
     readonly peers: Peers;
     readonly servers: BehaviorSubject<Set<string>>;
     readonly connected: BehaviorSubject<boolean>;
+    /**
+     * ============================================================
+     * Reconnect tokens (#354; Trust model item 6, rollback_protocol.ts)
+     * ============================================================
+     * Every connection is issued a token in its uuid frame (sendUuid):
+     * a bearer secret only that client and this server know. A client
+     * whose socket died presents its PREVIOUS connection's token as the
+     * first communicator frame of its next connection; the server then
+     * retires that previous connection at once — closes it and emits its
+     * departure through the normal path, so every room sees the old peer
+     * leave (the relay's removePeer) before the new connection's own
+     * traffic is handled — instead of waiting up to a minute for the
+     * keepalive to notice a half-open socket.
+     *
+     * The rules, each of which the presentation path below enforces:
+     *  - one token per connection, issued fresh on every connection and
+     *    forgotten when that connection goes, so a token outlives its
+     *    connection by nothing and is never reissued;
+     *  - single use: redeeming it forgets it;
+     *  - bound to the connection it was issued to: it retires THAT
+     *    connection and nothing else, and only from a different one;
+     *  - honoured only as a connection's FIRST communicator frame: a peer
+     *    already speaking cannot retire anybody with one;
+     *  - never answered: a wrong, spent or misplaced token is ignored,
+     *    and the presenter proceeds as the brand-new connection it is,
+     *    learning nothing about whether the token ever existed;
+     *  - never logged, never relayed, never handed to the simulation;
+     *  - grants no identity: the presenter keeps its own new uuid, and
+     *    nothing the retired connection owned is transferred (its fleet
+     *    leaves with it; the client re-inserts it under the new uuid).
+     */
+    /** Token -> the connection it was issued to. */
+    private readonly tokens = new Map<string, string>();
+    /** Connection -> its token. */
+    private readonly tokenOf = new Map<string, string>();
+    /** Connections that have sent a communicator frame: a token is
+     * honoured only as a connection's first. */
+    private readonly spoken = new Set<string>();
 
     constructor(private channel: ChannelServer, public uuid = 'server') {
         this.connected = channel.connected;
@@ -49,12 +101,24 @@ export class CommunicatorServer implements Communicator {
 
         // Handle messages from the channel
         channel.message.subscribe(({ message: commMessage, source }) => {
+            const firstFrame = !this.spoken.has(source);
+            this.spoken.add(source);
             const maybeMessage = CommunicatorMessage.decode(commMessage);
             if (isLeft(maybeMessage)) {
                 console.warn(`Failed to decode message from ${source}`);
                 return;
             }
             switch (maybeMessage.right.type) {
+                case MessageType.reconnect:
+                    if (firstFrame) {
+                        this.redeemToken(source, maybeMessage.right.token);
+                    } else {
+                        // (The token itself is never logged.)
+                        warnThrottled(`server-late-token:${source}`, () =>
+                            `${source} presented a reconnect token after its `
+                            + 'first frame; ignoring it');
+                    }
+                    return;
                 case MessageType.uuid:
                     console.warn(`${source} tried to change server uuid`);
                     return;
@@ -99,7 +163,50 @@ export class CommunicatorServer implements Communicator {
             this.sendPeers();
         });
 
+        channel.clientDisconnect.subscribe(clientId => {
+            // A token outlives its connection by nothing.
+            this.forgetToken(clientId);
+            this.spoken.delete(clientId);
+        });
         channel.clientDisconnect.subscribe(peerLeave)
+    }
+
+    /** Issues `clientId` a fresh token, replacing any it held. */
+    private issueToken(clientId: string): string {
+        this.forgetToken(clientId);
+        const token = generateReconnectToken();
+        this.tokens.set(token, clientId);
+        this.tokenOf.set(clientId, token);
+        return token;
+    }
+
+    private forgetToken(clientId: string) {
+        const token = this.tokenOf.get(clientId);
+        if (token !== undefined) {
+            this.tokens.delete(token);
+            this.tokenOf.delete(clientId);
+        }
+    }
+
+    /**
+     * `presenter`'s first frame was a reconnect token: retire the
+     * connection it was issued to, if it names a live one other than the
+     * presenter's own. Silent either way (see the token rules above) —
+     * the retirement's only visible effect is the old peer leaving, the
+     * same thing its own close would have caused.
+     */
+    private redeemToken(presenter: string, token: string) {
+        const previous = this.tokens.get(token);
+        if (previous === undefined || previous === presenter) {
+            return;
+        }
+        this.forgetToken(previous);
+        console.log(`Retiring connection ${previous}: superseded by `
+            + `${presenter}'s reconnect`);
+        // Synchronous: the old peer's departure (every room's peer set,
+        // the relay's removePeer record) completes before the presenter's
+        // next frame — its room joins, its catch-up request — is handled.
+        this.channel.disconnect(previous);
     }
 
     private getDestSet(source: string, destination?: string | Set<string>) {
@@ -130,13 +237,16 @@ export class CommunicatorServer implements Communicator {
         }
     }
 
-    /** The client's first frame: its uuid, and the server uuid set it
-     * accepts server-only traffic from (Trust model item 4). */
+    /** The client's first frame: its uuid, the server uuid set it
+     * accepts server-only traffic from (Trust model item 4), and its
+     * connection's reconnect token (item 6). */
     private sendUuid(uuid: string) {
         this.send({
             type: MessageType.uuid,
             uuid,
             servers: new Set(this.servers.value),
+            // To this connection's own socket only.
+            token: this.issueToken(uuid),
         }, uuid);
     }
 
