@@ -64,8 +64,13 @@ describe('a hail from another peer reaches this peer through rollback (#332)',
                     }),
                 });
                 client.step();
-                client.snapshot();
+                const frame = client.snapshot();
 
+                // ...and the frame carries it to this peer's DISPLAY, where
+                // ShowPlayerHailMessage prints it.
+                const senderDelta = frame.changed
+                    .find(([uuid]) => uuid === 'peer-a-ship');
+                expect(JSON.stringify(senderDelta)).toContain('SentHail');
                 expect(world.entities.get('peer-a-ship')!.components
                     .get(SentHailComponent)).toEqual(jasmine.objectContaining({
                         to: shipUuid, message: 'greetings', seq: 1,
@@ -73,5 +78,22 @@ describe('a hail from another peer reaches this peer through rollback (#332)',
                 const mine = world.entities.get(shipUuid)!;
                 expect(mine.components.has(SentHailComponent)).toBeFalse();
                 expect(mine.components.has(AssistingComponent)).toBeFalse();
+
+                // A SECOND correction from before the hail re-simulates
+                // across it: the replayed press is still message 1, not a
+                // new one (the rollback restores the sender's ship).
+                communicator.messages.next({
+                    source: 'server',
+                    message: wrapRollbackMessage({
+                        kind: 'inputs',
+                        record: {
+                            peerId: 'peer-b', tick: tick - 4,
+                            inputs: [{ kind: 'setTarget', target: null }],
+                        },
+                    }),
+                });
+                client.step();
+                expect(world.entities.get('peer-a-ship')!.components
+                    .get(SentHailComponent)?.seq).toBe(1);
             });
     });
