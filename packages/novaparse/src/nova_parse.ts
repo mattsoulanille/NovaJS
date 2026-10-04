@@ -284,9 +284,12 @@ export class NovaParse implements GameDataInterface {
             // Individual bad plug-ins are now skipped with a loud log inside
             // IDSpaceHandler and never reach here as an Error. If we DO get an
             // Error here it means the core "Nova Files" data failed to load,
-            // without which nothing works — so surface it instead of hiding it.
+            // without which nothing works — or two plug-ins resolve to one
+            // namespace (#310) — so surface it instead of hiding it.
+            const cause = isPluginPrefixConflictError(idSpace)
+                ? "plug-in name conflict" : "core data load failed";
             console.error(
-                "NovaParse: failed to build ID space (core data load failed). " +
+                `NovaParse: failed to build ID space (${cause}). ` +
                 "Underlying error: " + (idSpace.stack ?? idSpace.message),
             );
             throw idSpace;
