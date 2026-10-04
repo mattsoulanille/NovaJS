@@ -3,8 +3,8 @@
  *
  * A save names its ship and outfits by global id, and an id's prefix is
  * the plug-in that defines it (`nova:` for the stock data and for
- * plug-ins that override stock ids; otherwise the plug-in file's name,
- * novaparse's pluginPrefixFor). A save written while a plug-in was
+ * plug-ins that override stock ids; otherwise the plug-in's name minus
+ * its extension, novaparse's pluginPrefixFor). A save written while a plug-in was
  * installed keeps naming that plug-in's content after it is removed, and
  * the game data aggregator rejects an id no source defines (#47).
  *
@@ -27,6 +27,15 @@ export interface MissingSaveContent {
     readonly kind: 'ship' | 'outfit';
     /** The global id the save names, e.g. `missing-plugin:128`. */
     readonly id: string;
+    /**
+     * Installed plug-ins that the id's prefix is probably an OLDER name
+     * of, when there are any (absent otherwise). Builds before issue #310
+     * keyed a plug-in by the text before the FIRST dot of its name, so a
+     * save written then names "X 1.0"'s content as `X 1:…`; the plug-in is
+     * still installed, it is just keyed "X 1.0" now. Nothing migrates
+     * such a save (yet), but saying "not installed" would be wrong.
+     */
+    readonly renamedAs?: readonly string[];
 }
 
 /** Existence lookups over the served id lists (NovaIDs). */
@@ -43,18 +52,55 @@ export function missingSaveContent(save: SaveData, ids: SaveContentIds):
     MissingSaveContent[] {
     const ships = new Set(ids.Ship);
     const outfits = new Set(ids.Outfit);
+    const renames = oldPluginNames([...ids.Ship, ...ids.Outfit]);
+    const record = (kind: MissingSaveContent['kind'], id: string):
+        MissingSaveContent => {
+        const plugin = pluginOfId(id);
+        const renamedAs = plugin === undefined ? undefined
+            : renames.get(plugin);
+        return renamedAs ? { kind, id, renamedAs } : { kind, id };
+    };
     const missing: MissingSaveContent[] = [];
     if (!ships.has(save.ship)) {
-        missing.push({ kind: 'ship', id: save.ship });
+        missing.push(record('ship', save.ship));
     }
     const seen = new Set<string>();
     for (const [id] of save.outfits) {
         if (!outfits.has(id) && !seen.has(id)) {
             seen.add(id);
-            missing.push({ kind: 'outfit', id });
+            missing.push(record('outfit', id));
         }
     }
     return missing;
+}
+
+/**
+ * The pre-#310 prefix of each installed plug-in whose prefix CHANGED
+ * with #310 (one with a dot in it: the old rule cut at the first dot),
+ * mapped to the installed prefixes it stood for, sorted. Derived from
+ * the served ship and outfit ids, which are enough here: a save can only
+ * be missing a plug-in's ship or outfit if that plug-in defines some.
+ */
+function oldPluginNames(ids: readonly string[]): Map<string, string[]> {
+    const installed = new Set<string>();
+    for (const id of ids) {
+        const plugin = pluginOfId(id);
+        if (plugin !== undefined && plugin.includes('.')) {
+            installed.add(plugin);
+        }
+    }
+    const renames = new Map<string, string[]>();
+    for (const plugin of [...installed].sort()) {
+        const old = plugin.slice(0, plugin.indexOf('.'));
+        renames.set(old, [...(renames.get(old) ?? []), plugin]);
+    }
+    return renames;
+}
+
+/** Whether any of `missing` is a renamed (not uninstalled) plug-in's. */
+export function namesRenamedPlugin(
+    missing: readonly MissingSaveContent[]): boolean {
+    return missing.some(m => (m.renamedAs?.length ?? 0) > 0);
 }
 
 /**
@@ -77,11 +123,15 @@ export function pluginOfId(id: string): string | undefined {
  *
  *   needs content that is not installed: the plug-in "missing-plugin"
  *   (ship missing-plugin:128)
+ *
+ * A plug-in that is installed under a NEW name (see
+ * MissingSaveContent.renamedAs) is named as such rather than as missing.
  */
 export function describeMissingSaveContent(
     missing: readonly MissingSaveContent[]): string {
     const byPlugin = new Map<string | undefined, string[]>();
-    for (const { kind, id } of missing) {
+    const renamedAs = new Map<string, readonly string[]>();
+    for (const { kind, id, renamedAs: renamed } of missing) {
         const plugin = pluginOfId(id);
         let list = byPlugin.get(plugin);
         if (!list) {
@@ -89,12 +139,22 @@ export function describeMissingSaveContent(
             byPlugin.set(plugin, list);
         }
         list.push(`${kind} ${id}`);
+        if (plugin !== undefined && renamed && renamed.length > 0) {
+            renamedAs.set(plugin, renamed);
+        }
     }
     const parts: string[] = [];
     for (const [plugin, items] of byPlugin) {
+        const renamed = plugin === undefined ? undefined
+            : renamedAs.get(plugin);
         parts.push(plugin === undefined
             ? `stock ids the game data does not define (${items.join(', ')})`
-            : `the plug-in "${plugin}" (${items.join(', ')})`);
+            : renamed
+                ? `the plug-in "${plugin}" (${items.join(', ')}), which is `
+                + `probably the installed ${renamed.map(r => `"${r}"`)
+                    .join(' or ')} under the name older versions of the `
+                + 'game gave it (they cut a plug-in\'s name at its first dot)'
+                : `the plug-in "${plugin}" (${items.join(', ')})`);
     }
     return `needs content that is not installed: ${parts.join('; ')}`;
 }
