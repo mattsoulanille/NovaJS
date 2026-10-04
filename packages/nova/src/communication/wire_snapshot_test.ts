@@ -240,7 +240,7 @@ describe('Wire snapshots', () => {
         if (rollback?.kind !== 'catchUp' || !rollback.baseline) {
             throw new Error('the catch-up did not survive the wire');
         }
-        expect(PROTOCOL_VERSION).toBe(7);
+        expect(PROTOCOL_VERSION).toBe(8);
         await requireLockstep(source, rollback.baseline.snapshot);
     }, 120_000);
 });

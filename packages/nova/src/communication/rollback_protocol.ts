@@ -112,7 +112,37 @@ export const STATE_HASH_INTERVAL = 60;
 //    member of SimulationInputType, so the fingerprint changes and the
 //    join gate keeps the two builds apart; every existing kind is
 //    unchanged.
-export const PROTOCOL_VERSION = 7;
+// 8: three protocol changes landed together (the "protocol 8" wave), so
+//    a v7 and a v8 build never share a room:
+//    - #199: the communicator uuid frame — the server's first frame to a
+//      connecting client — carries the server's own uuid set (`servers`);
+//      the client takes communicator.servers from it instead of the
+//      constant 'server', and accepts no server-only traffic (Trust model
+//      item 4) until it arrives. A v7 server's uuid frame lacks the
+//      field, so a v8 client would never learn a server.
+//    - #155: joinRequest gained the OPTIONAL `systems` — the joiner's
+//      system-order hash (communication/system_order.ts systemOrderHash:
+//      CRC-64-AVRO of its simulation world's JSON-encoded systemNames).
+//      The relay remembers the room's FIRST declaration (forgotten when
+//      the room empties) and answers a different one with the new
+//      `joinWarning` kind (server -> peer, before the catchUp; the peer
+//      logs it and joins anyway — the schema fingerprint stays the only
+//      refusal). Desync incidents (DesyncInfo, desync.json) carry
+//      roomSystemOrder and each reporter's peerSystemOrders, so a record
+//      shows whether the peers ran the same system order.
+//    - #241: PlayerEscort's queued deal is its own encoded state — the
+//      pendingUpgrade / pendingSale flag pair was replaced by a REQUIRED
+//      `deal` field, the discriminated union EscortDeal (none |
+//      upgrade(toShip) | sale; nova_plugin/player/player_escort.ts),
+//      typed on the Avro wire as a kindUnion through the component
+//      registry. The marker's encoded shape, the wire schema fingerprint
+//      and the desync hash input all change; a v7 peer cannot decode a
+//      v8 marker. The pilot save moved to version 4 alongside
+//      (save_migrations.ts v3 -> v4 rewrites each saved escort's marker).
+//    (#188, the Map codec, changed nothing on the wire: Map entries
+//    already encode byte-identically to an Avro map, and the object form
+//    would lose insertion order — see nova_ecs datatypes/map.ts.)
+export const PROTOCOL_VERSION = 8;
 
 /**
  * ===================================================================== * Trust model
