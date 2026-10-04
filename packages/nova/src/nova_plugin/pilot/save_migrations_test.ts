@@ -81,6 +81,7 @@ const MISSION: ActiveMission = {
 const MISSIONS: [string, ActiveMission][] = [['nova:128', MISSION]];
 const CRON: CronState = { phase: 'active', phaseStart: 430064, nextEligible: 0 };
 const CRONS: [string, CronState][] = [['nova:300', CRON]];
+/** An escort exactly as v2 / v3 builds wrote it: no deal queued. */
 const ESCORT_BLOB: SavedEscort = {
     uuid: 'escort-1',
     entity: {
@@ -88,6 +89,29 @@ const ESCORT_BLOB: SavedEscort = {
         name: 'esc',
     },
 };
+/** The same escort at v4: its marker states the (empty) deal. */
+const ESCORT_BLOB_V4: SavedEscort = {
+    uuid: 'escort-1',
+    entity: {
+        components: [['PlayerEscort', {
+            player: 'old-player', parent: 'old-player', deal: { kind: 'none' },
+        }]],
+        name: 'esc',
+    },
+};
+
+/** A saved escort whose PlayerEscort entry is `marker`, beside another component. */
+function escortWithMarker(uuid: string, marker: unknown): SavedEscort {
+    return {
+        uuid,
+        entity: {
+            components: [
+                ['Armor', { current: 100, recharge: 0, max: 100, min: 0 }],
+                ['PlayerEscort', marker],
+            ],
+        },
+    };
+}
 const SQUAD_JSON = {
     missionId: 'nova:614',
     shipObjective: {
@@ -198,7 +222,7 @@ const HISTORY: HistoricalSave[] = [
         name: 'v2, 2026-08-09: + escorts (the version bump)',
         version: 2,
         data: { ...V1_MINIMAL, credits: 5, escorts: [ESCORT_BLOB] },
-        expected: current({ credits: 5, escorts: [ESCORT_BLOB] }),
+        expected: current({ credits: 5, escorts: [ESCORT_BLOB_V4] }),
         restored: { ...FRESH_VIEW, credits: { credits: 5 } },
     },
     {
@@ -207,7 +231,7 @@ const HISTORY: HistoricalSave[] = [
         data: {
             ...V1_MINIMAL, escorts: [ESCORT_BLOB], playerUuid: 'old-player',
         },
-        expected: current({ escorts: [ESCORT_BLOB], playerUuid: 'old-player' }),
+        expected: current({ escorts: [ESCORT_BLOB_V4], playerUuid: 'old-player' }),
         restored: FRESH_VIEW,
     },
     {
@@ -247,6 +271,35 @@ const HISTORY: HistoricalSave[] = [
         expected: current({ autoAbortShips: [SQUAD] }),
         restored: { ...FRESH_VIEW, autoAbortShips: [SQUAD] },
     },
+    {
+        name: 'v3, 2026-09-06: escorts with each queued deal as the flag pair',
+        version: 3,
+        data: {
+            ...current(),
+            escorts: [
+                escortWithMarker('idle', { player: 'p', parent: 'p' }),
+                escortWithMarker('selling',
+                    { player: 'p', parent: 'p', provenance: 'captured', pendingSale: true }),
+                escortWithMarker('upgrading',
+                    { player: 'p', parent: 'p', pendingUpgrade: 'nova:137' }),
+            ],
+        },
+        expected: current({
+            escorts: [
+                escortWithMarker('idle',
+                    { player: 'p', parent: 'p', deal: { kind: 'none' } }),
+                escortWithMarker('selling', {
+                    player: 'p', parent: 'p', provenance: 'captured',
+                    deal: { kind: 'sale' },
+                }),
+                escortWithMarker('upgrading', {
+                    player: 'p', parent: 'p',
+                    deal: { kind: 'upgrade', toShip: 'nova:137' },
+                }),
+            ],
+        }),
+        restored: FRESH_VIEW,
+    },
 ];
 
 describe('save_migrations list', () => {
@@ -259,7 +312,7 @@ describe('save_migrations list', () => {
             expect(migration.summary.length).toBeGreaterThan(0);
         });
         expect(SAVE_VERSION).toBe(FIRST_SAVE_VERSION + SAVE_MIGRATIONS.length);
-        expect(SAVE_VERSION).toBe(3);
+        expect(SAVE_VERSION).toBe(4);
     });
 
     it('every migration is idempotent on its own output', () => {
@@ -283,6 +336,64 @@ describe('save_migrations list', () => {
         expect(wrong.credits).toBe('lots');
         expect(decodeSaveDetailed(JSON.stringify({ version: 2, data: wrong })))
             .toEqual({ ok: false, reason: jasmine.stringContaining('credits') });
+    });
+
+    describe('3 -> 4: the escort marker\'s deal flags become the deal', () => {
+        const toV4 = (marker: unknown) => {
+            const migrated = SAVE_MIGRATIONS[2].migrate(
+                { ...current(), escorts: [escortWithMarker('e', marker)] });
+            const [escort] = migrated.escorts as SavedEscort[];
+            return escort!.entity.components;
+        };
+        const base = { player: 'p', parent: 'p', provenance: 'captured' };
+
+        it('neither flag: none', () => {
+            expect(toV4(base)[1]).toEqual(
+                ['PlayerEscort', { ...base, deal: { kind: 'none' } }]);
+            // A false sale flag was "not queued" to the v3 reader too.
+            expect(toV4({ ...base, pendingSale: false })[1]).toEqual(
+                ['PlayerEscort', { ...base, deal: { kind: 'none' } }]);
+        });
+
+        it('pendingUpgrade: an upgrade to the stored target', () => {
+            expect(toV4({ ...base, pendingUpgrade: 'nova:137' })[1]).toEqual(
+                ['PlayerEscort',
+                    { ...base, deal: { kind: 'upgrade', toShip: 'nova:137' } }]);
+        });
+
+        it('pendingSale: a sale', () => {
+            expect(toV4({ ...base, pendingSale: true })[1]).toEqual(
+                ['PlayerEscort', { ...base, deal: { kind: 'sale' } }]);
+        });
+
+        it('BOTH flags (a hand-edited save): the sale, as v3 settled it', () => {
+            expect(toV4({ ...base, pendingUpgrade: 'nova:137', pendingSale: true })[1])
+                .toEqual(['PlayerEscort', { ...base, deal: { kind: 'sale' } }]);
+        });
+
+        it('leaves every other component, and an already-v4 marker, alone', () => {
+            const v4 = { ...base, deal: { kind: 'upgrade', toShip: 'nova:137' } };
+            const components = toV4(v4);
+            expect(components[0]).toEqual(
+                ['Armor', { current: 100, recharge: 0, max: 100, min: 0 }]);
+            expect(components[1]).toEqual(['PlayerEscort', v4]);
+        });
+
+        it('leaves a mistyped flag for the codec to refuse, as v3\'s did', () => {
+            const rotten = { ...base, pendingUpgrade: 137 };
+            expect(toV4(rotten)[1]).toEqual(['PlayerEscort', rotten]);
+        });
+
+        it('is total on JSON that is not a save\'s escorts', () => {
+            const toV4Raw = SAVE_MIGRATIONS[2].migrate;
+            for (const escorts of [undefined, 'none', [null], [{ uuid: 'x' }],
+                [{ entity: { components: 'none' } }],
+                [{ entity: { components: [null, ['PlayerEscort'], ['PlayerEscort', 3]] } }]]) {
+                const raw = { ...V1_MINIMAL, escorts } as RawSaveData;
+                expect(() => toV4Raw(structuredClone(raw))).not.toThrow();
+                expect(toV4Raw(structuredClone(raw))).toEqual(raw);
+            }
+        });
     });
 
     it('saveDefaults builds fresh arrays on every call', () => {
