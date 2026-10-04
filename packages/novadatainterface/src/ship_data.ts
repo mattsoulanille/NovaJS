@@ -243,6 +243,27 @@ export interface ShipData extends SpaceObjectData {
      * AvailShipType gate rather than the display.
      */
     interfaceGovt: string | null;
+    /**
+     * HAIL TRAITS INHERITED FROM THE CLASS'S ATTRIBUTES GOVT. Two gövt bits
+     * say of themselves "if a ship type has an inherent attributes govt
+     * which includes this flag, all ships of that type will inherit this
+     * property" (EVN Bible, gövt Flags 0x0400 and Flags2 0x0008), so a ship
+     * carries them whichever government its düde flies it under. The
+     * attributes govt is the InherentGovt 128-383 (both associations) or
+     * 1128-1383 (attributes only) reading; a combat-only 2128-2383 govt
+     * passes on nothing (shïp InherentGovt: "no inherent attributes govt").
+     *
+     * Baked to booleans at parse time rather than carried as a govt id so
+     * the simulation can test them without having to stage a second
+     * government for every ship.
+     */
+    /** gövt Flags 0x0400 "Can't hail ships of this govt", inherited. */
+    inheritedCantBeHailed: boolean;
+    /**
+     * gövt Flags2 0x0008 "don't send distress messages and don't respond
+     * with greetings when hailed", inherited.
+     */
+    inheritedNoGreetings: boolean;
     /** Purchase price in credits (shïp Cost). */
     price: number;
     /**
@@ -373,6 +394,8 @@ export function getDefaultShipData(): ShipData {
         inherentAI: 1,
         inherentGovt: null,
         interfaceGovt: null,
+        inheritedCantBeHailed: false,
+        inheritedNoGreetings: false,
         price: 0,
         techLevel: 0,
         hireRandom: 0,

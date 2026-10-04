@@ -1,5 +1,5 @@
 import "jasmine";
-import { interfaceGovtId, ShipParse } from "../../src/parsers/ship_parse.js";
+import { attributesGovtId, interfaceGovtId, ShipParse } from "../../src/parsers/ship_parse.js";
 import { ShipResource } from "../../src/resource_parsers/ship_resource.js";
 import { NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { FPS } from "../../src/parsers/constants.js";
@@ -153,4 +153,71 @@ describe("interfaceGovtId", () => {
         expect(interfaceGovtId(1127)).toBeNull();
         expect(interfaceGovtId(3128)).toBeNull();
     });
+});
+
+/**
+ * The hail traits a class INHERITS from its attributes govt. gövt Flags
+ * 0x0400 ("Can't hail ships of this govt") and Flags2 0x0008 ("don't
+ * respond with greetings when hailed") each add "if a ship type has an
+ * inherent attributes govt which includes this flag, all ships of that type
+ * will inherit this property" — and only the 128-383 and 1128-1383
+ * InherentGovt ranges name an attributes govt.
+ */
+describe("attributesGovtId", () => {
+    it("reads both-associations and attributes-only ids", () => {
+        expect(attributesGovtId(140)).toBe(140);
+        // Stock Wraith (Adult) nova:168 is InherentGovt 1138.
+        expect(attributesGovtId(1138)).toBe(138);
+    });
+
+    it("gives a combat-only govt no attributes govt", () => {
+        expect(attributesGovtId(2138)).toBeNull();
+        expect(attributesGovtId(-1)).toBeNull();
+        expect(attributesGovtId(1127)).toBeNull();
+    });
+});
+
+describe("ShipParse: hail traits inherited from the attributes govt", () => {
+    const silentGovt = { cantBeHailed: true, noDistressMessages: true };
+    const chattyGovt = { cantBeHailed: false, noDistressMessages: false };
+
+    async function parseWithGovt(inherentGovt: number,
+        govt: { cantBeHailed: boolean, noDistressMessages: boolean }) {
+        return parse({
+            inherentGovt,
+            idSpace: {
+                dësc: {}, bööm: {}, shän: {}, PICT: {}, oütf: {}, wëap: {},
+                gövt: { 138: { globalID: "nova:138", ...govt } }, shïp: {},
+            } as unknown as ShipResource["idSpace"],
+        });
+    }
+
+    it("inherits both bits through an attributes-only InherentGovt",
+        async () => {
+            const ship = await parseWithGovt(1138, silentGovt);
+            expect(ship.inheritedCantBeHailed).toBe(true);
+            expect(ship.inheritedNoGreetings).toBe(true);
+        });
+
+    it("inherits them through a both-associations InherentGovt", async () => {
+        const ship = await parseWithGovt(138, silentGovt);
+        expect(ship.inheritedCantBeHailed).toBe(true);
+        expect(ship.inheritedNoGreetings).toBe(true);
+    });
+
+    it("inherits nothing through a COMBAT-only InherentGovt", async () => {
+        const ship = await parseWithGovt(2138, silentGovt);
+        expect(ship.inheritedCantBeHailed).toBe(false);
+        expect(ship.inheritedNoGreetings).toBe(false);
+    });
+
+    it("inherits nothing from a govt without the bits, or no govt",
+        async () => {
+            const chatty = await parseWithGovt(1138, chattyGovt);
+            expect(chatty.inheritedCantBeHailed).toBe(false);
+            expect(chatty.inheritedNoGreetings).toBe(false);
+            const none = await parse({ inherentGovt: -1 });
+            expect(none.inheritedCantBeHailed).toBe(false);
+            expect(none.inheritedNoGreetings).toBe(false);
+        });
 });
