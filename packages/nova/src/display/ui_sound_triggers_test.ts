@@ -1,5 +1,6 @@
 import "jasmine";
 import { getDefaultGovtData } from "novadatainterface/govt_data";
+import { getDefaultShipData } from "novadatainterface/ship_data";
 import { Position } from "nova_ecs/datatypes/position";
 import { Entity } from "nova_ecs/entity";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
@@ -14,7 +15,8 @@ import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import {
     DisabledComponent, DeathEvent, ZeroArmorEvent, ArmorComponent, FuelComponent, ShipComponent,
-    ShipPhysicsComponent, TargetComponent, WeaponsStateComponent,
+    ShipDataComponent, ShipPhysicsComponent, TargetComponent,
+    WeaponsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import {
     JumpComponent, JumpRouteComponent, PlanetTargetComponent,
@@ -27,15 +29,35 @@ import { UiSoundTriggersPlugin } from "./ui_sound_triggers_plugin.js";
 const PLAYER = 'player';
 
 // A spy audio layer: one memoized fake Sound per id records play()/stop().
+// Loops are tracked as @pixi/sound instances (the sound plugin reconciles
+// them and checks they are still there).
 function makeSpyAssets(played: string[], stopped: string[]) {
     const cache = new Map<string, unknown>();
     const Sound = {
         getCached(id: string) {
             if (!cache.has(id)) {
+                const instances: unknown[] = [];
                 cache.set(id, {
                     volume: 0,
-                    play() { played.push(id); },
-                    stop() { stopped.push(id); },
+                    isLoaded: true,
+                    instances,
+                    play(options?: { loop?: boolean }) {
+                        played.push(id);
+                        const instance = {
+                            loop: Boolean(options?.loop),
+                            paused: false,
+                            stop() {
+                                instances.splice(instances.indexOf(instance), 1);
+                                stopped.push(id);
+                            },
+                        };
+                        instances.push(instance);
+                        return instance;
+                    },
+                    stop() {
+                        stopped.push(id);
+                        instances.length = 0;
+                    },
                 });
             }
             return cache.get(id);
@@ -237,7 +259,13 @@ describe('UI sound triggers (audio-layer spy)', () => {
     });
 
     it('loops 371 while your ship explodes and stops it on death', async () => {
-        const { world, played, stopped } = await makeWorld();
+        const { world, played, stopped, player } = await makeWorld();
+        // The display's dying marker is kept on ships (shïp data); the
+        // death loop is derived from it.
+        player.components.set(ShipDataComponent, {
+            ...getDefaultShipData(), initialExplosion: null,
+            finalExplosion: null,
+        } as never);
         world.emit(ZeroArmorEvent, { time: 0, delta_ms: 0, delta_s: 0 } as never,
             [PLAYER]);
         world.step();

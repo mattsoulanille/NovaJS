@@ -16,9 +16,11 @@ import { SoundEventData } from '../nova_plugin/core/index.js';
  * or, from a non-system display context that holds the world, via
  * {@link playUiSound}.
  *
- * The payload reuses SoundEventData so one-shot (`{ id }`), looping
- * (`{ id, loop: true }`) and stop (`{ id, stop: true }`) all work exactly
- * as they do on the other sound channels.
+ * The payload reuses SoundEventData: `{ id }` plays a one-shot,
+ * `{ id, loop: true }` holds a loop of that sound until the matching
+ * `{ id, stop: true }` (the display's loops are reconciled every frame —
+ * see looping_sounds.ts — and this channel is display-local, so neither
+ * edge can be lost on the way).
  */
 export const UiSoundEvent = new EcsEvent<SoundEventData>('UiSoundEvent');
 
