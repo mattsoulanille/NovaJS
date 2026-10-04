@@ -7,6 +7,11 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
 
 export interface SoundEventData {
     id: string,
+    /** Set on the firing sound of a loop-flagged wëap (Flags 0x0010).
+     * The display does not start a loop from it: weapon loops are
+     * derived from the mirrored weapon state every frame
+     * (display/looping_sounds.ts), so no stop is ever needed. A loop
+     * event that state does not cover plays as a one-shot. */
     loop?: boolean,
     /** Stop any current playback of this sound instead of playing it
      * (e.g. clipping the warp-up at the hyperspace transition). */

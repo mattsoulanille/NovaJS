@@ -12,7 +12,7 @@ import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
-    ExplosionDataComponent, DisplayAssetDataResource, SoundEvent, SoundEventData, Stat,
+    ExplosionDataComponent, DisplayAssetDataResource, SoundEvent, Stat,
 } from '../nova_plugin/core/index.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
 import {
@@ -22,11 +22,12 @@ import {
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import {
     ExplosionPlugin, GAME_FRAME_MS, makeExplosion, MAX_EXPLOSION_SPARKS,
-    MIN_EXPLOSION_SPARKS, randomSparkCount, SecondaryExplosionComponent,
-    SPARK_PERIOD_MS, SPARK_RADIUS,
+    MIN_EXPLOSION_SPARKS, PLAYER_DEATH_LOOP, randomSparkCount,
+    SecondaryExplosionComponent, SPARK_PERIOD_MS, SPARK_RADIUS,
 } from './explosion_plugin.js';
 import { SimulationTimeResource } from './simulation_time.js';
-import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from './ui_sound.js';
+import { SOUND_EXPLOSION_LOOP } from './ui_sound.js';
+import { LoopDemandResource } from './looping_sounds.js';
 
 const SHIP = 'player ship';
 
@@ -226,9 +227,8 @@ async function displayWorld(armorCurrent: number,
     const sounds: string[] = [];
     world.events.get(SoundEvent).subscribe(({ data }) => sounds.push(data.id));
     /** The client-local UI sounds (the snd 371 death loop). */
-    const uiSounds: SoundEventData[] = [];
-    world.events.get(UiSoundEvent).subscribe(
-        ({ data }) => uiSounds.push(data));
+    const deathLoop = () => world.resources.get(LoopDemandResource)
+        ?.get(PLAYER_DEATH_LOOP);
 
     /** Starts the death sequence, as the bridge's ZeroArmorEvent does. */
     const zeroArmor = () => world.emit(ZeroArmorEvent,
@@ -255,7 +255,7 @@ async function displayWorld(armorCurrent: number,
     return {
         world, ship, stepTime, explosionCount, newExplosions,
         newExplosionIds, scalesOf, time, simTime,
-        sounds, uiSounds, soundRequests, zeroArmor, die, dieAndVanish,
+        sounds, deathLoop, soundRequests, zeroArmor, die, dieAndVanish,
     };
 }
 
@@ -534,7 +534,7 @@ describe('death sequence explosion sounds', () => {
             // Reconciling the two: the player's own breakup already has
             // the looping death sound, so layering 302 over it would be
             // playing one event twice.
-            const { ship, stepTime, sounds, uiSounds, zeroArmor, die } =
+            const { ship, stepTime, sounds, deathLoop, zeroArmor, die } =
                 await displayWorld(0, { deathDelay: 5, graphics: true });
             ship.components.set(PlayerShipSelector, undefined);
             zeroArmor();
@@ -543,16 +543,45 @@ describe('death sequence explosion sounds', () => {
             }
             expect(sounds.filter(id => id === BREAKUP_SOUND).length)
                 .toEqual(0);
-            expect(uiSounds).toEqual([
-                { id: SOUND_EXPLOSION_LOOP, loop: true }]);
+            expect(deathLoop()).toEqual(SOUND_EXPLOSION_LOOP);
 
             // ...and the loop is stopped by the same death that spawns
             // the final explosion, so the two never overlap.
             die();
             stepTime();
-            expect(uiSounds[uiSounds.length - 1])
-                .toEqual({ id: SOUND_EXPLOSION_LOOP, stop: true });
+            expect(deathLoop()).toBeUndefined();
         });
+
+    /**
+     * #355: the death loop used to be stopped only by the bridged
+     * DeathEvent. A rollback or resync can drop a bridged event, and then
+     * nothing ever stopped the loop. It is derived from the ship's dying
+     * state now, which heals as soon as the respawned armor is full.
+     */
+    it('stops the death loop on respawn even if the DeathEvent never '
+        + 'arrives', async () => {
+            const { ship, stepTime, deathLoop, zeroArmor } =
+                await displayWorld(0, { deathDelay: 5 });
+            ship.components.set(PlayerShipSelector, undefined);
+            zeroArmor();
+            stepTime();
+            expect(deathLoop()).toEqual(SOUND_EXPLOSION_LOOP);
+
+            // The respawn as the mirrored state shows it — full armor —
+            // with its DeathEvent lost on the way.
+            ship.components.set(ArmorComponent,
+                new Stat({ current: 100, recharge: 0, max: 100 }));
+            stepTime();
+            expect(deathLoop()).toBeUndefined();
+        });
+
+    it('never loops the death sound for another ship', async () => {
+        const { stepTime, deathLoop, zeroArmor } =
+            await displayWorld(0, { deathDelay: 5 });
+        zeroArmor();
+        stepTime();
+        expect(deathLoop()).toBeUndefined();
+    });
 
     it('leaves a projectile explosion\'s nested secondaries silent',
         async () => {
@@ -725,7 +754,7 @@ describe('final explosion sound', () => {
 
     it('still plays for the LOCAL player, whose ship respawns instead of '
         + 'being deleted', async () => {
-            const { ship, stepTime, sounds, uiSounds, zeroArmor, die } =
+            const { ship, stepTime, sounds, deathLoop, zeroArmor, die } =
                 await displayWorld(0, stockShip);
             ship.components.set(PlayerShipSelector, undefined);
             zeroArmor();
@@ -734,8 +763,7 @@ describe('final explosion sound', () => {
             stepTime();
             // The breakup loop (snd 371) stops, and the final bööm plays
             // over the everyone-hears channel — one event, not two.
-            expect(uiSounds[uiSounds.length - 1])
-                .toEqual({ id: SOUND_EXPLOSION_LOOP, stop: true });
+            expect(deathLoop()).toBeUndefined();
             expect(sounds.filter(id => id === FINAL_SOUND).length)
                 .toEqual(1);
         });
