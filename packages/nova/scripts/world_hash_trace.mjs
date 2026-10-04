@@ -9,7 +9,7 @@
  * installed. Compare hashes only against a run with the same source.
  */
 import { makeDeterminismWorld } from '../dist/src/communication/determinism_harness.js';
-import { getSyntheticGameData } from '../dist/src/communication/simulation_test_fixture.js';
+import { getIntegrationGameData, getSyntheticGameData } from '../dist/src/communication/simulation_test_fixture.js';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 
 const positional = [];
@@ -25,7 +25,7 @@ const npcCount = Number(positional[0] ?? 8);
 const steps = Number(positional[1] ?? 3000);
 
 const world = await makeDeterminismWorld(npcCount, 'worker',
-    synthetic ? getSyntheticGameData() : undefined);
+    synthetic ? getSyntheticGameData() : getIntegrationGameData());
 for (let i = 1; i <= steps; i++) {
     world.step();
     if (i % 10 === 0) {

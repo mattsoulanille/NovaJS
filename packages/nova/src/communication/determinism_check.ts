@@ -11,13 +11,15 @@
  * entity ids, and no async data loading mid-simulation.
  */
 import { runDeterminismCheck } from "./determinism_harness.js";
+import { getIntegrationGameData } from "./simulation_test_fixture.js";
 
 const npcCount = Number(process.argv[2] ?? 0);
 const steps = Number(process.argv[3] ?? 240);
 
 async function main() {
     console.log(`npcs=${npcCount} steps=${steps}`);
-    const result = await runDeterminismCheck(npcCount, steps, Number(process.argv[4] ?? 0), console.log);
+    const result = await runDeterminismCheck(npcCount, steps, Number(process.argv[4] ?? 0), console.log,
+        getIntegrationGameData());
     if (result.divergedAtStep === undefined) {
         console.log(`DETERMINISTIC over ${result.stepsRun} steps`);
         process.exit(0);

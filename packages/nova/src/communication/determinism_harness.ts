@@ -16,12 +16,15 @@ import { makeShip } from "../nova_plugin/ship/index.js";
 import { PlayerShipSelector, ControlledByComponent } from '../nova_plugin/player/index.js';
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { Platform } from "../nova_plugin/core/index.js";
-import { getIntegrationGameData } from "./simulation_test_fixture.js";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 
 /**
- * Which data set a harness world is built from. The integration set
- * unless a spec passes `getSyntheticGameData()` (simulation_test_fixture).
+ * Which data set a harness world is built from: `getSyntheticGameData()`
+ * or `getIntegrationGameData()` (simulation_test_fixture). Always passed
+ * explicitly. A default of the real data meant a spec that left it off
+ * quietly needed Nova_Data, which is absent on CI. Called from a
+ * `beforeAll`, that is a suite failure rather than a pend
+ * (test_support/nova_data_gate.ts).
  */
 export type GameDataSource = Promise<GameDataAggregator>;
 
@@ -48,7 +51,7 @@ async function settle(world: World, steps: number) {
  */
 export async function makeDeterminismWorld(npcCount: number,
     platform: Platform | undefined = 'worker',
-    gameDataSource: GameDataSource = getIntegrationGameData()): Promise<World> {
+    gameDataSource: GameDataSource): Promise<World> {
     const gameData = await gameDataSource;
     const ids = await gameData.ids;
     const systemId = [...ids.System].sort()[0]!;
@@ -129,8 +132,8 @@ export async function compareWorlds(worldA: World, worldB: World, steps: number,
  * and no warmup is needed; warmupSteps remains for stress variations.
  */
 export async function runDeterminismCheck(npcCount: number, steps: number,
-    warmupSteps = 0, log?: (message: string) => void,
-    gameDataSource: GameDataSource = getIntegrationGameData()): Promise<DeterminismCheckResult> {
+    warmupSteps: number, log: ((message: string) => void) | undefined,
+    gameDataSource: GameDataSource): Promise<DeterminismCheckResult> {
 
     const worldA = await makeDeterminismWorld(npcCount, 'worker', gameDataSource);
     await settle(worldA, warmupSteps);
