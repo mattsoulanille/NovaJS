@@ -12,16 +12,18 @@ import {
 } from '../nova_plugin/ship/index.js';
 import {
     abortMission, failExpiredMissions, failMission, MissionContext, MissionEvent,
-    MissionMachineryContext, MissionWorkingState, processLanding,
-    runCronsForDays, runMissionSetString, runPendingAutoAborts,
-    runPendingShipDone, startMissionById, stellarInfoOf,
+    MissionMachineryContext, MissionWorkingState, outfitsAfterShipChange,
+    processLanding, rehullShip, runCronsForDays, runMissionSetString,
+    runPendingAutoAborts, runPendingShipDone, startMissionById, stellarInfoOf,
 } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
-    commitActiveRanks, ControlBitsComponent,
+    commitActiveRanks, ControlBitsComponent, ShipChangeMode,
 } from '../nova_plugin/ncb/index.js';
+import { warmChangeShipTargets } from './change_ship_targets.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { MissionUniverse } from './mission_universe.js';
+import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { settleDailyBudget } from './daily_budget.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
@@ -786,8 +788,18 @@ export async function advanceEntityDate(entity: Entity, days: number,
         // no prices and so no escort expense — the same "gameData-less
         // callers see less" rule the Contribute mask above follows.
         const payrollShips = await loadPayrollShips(entity, gameData);
+        // A crön's Cxxx / Exxx / Hxxx swaps the hull of the entity held
+        // here, in place (see heldHullChanger).
+        const hull = gameData
+            ? await heldHullChanger(entity, gameData, universe) : undefined;
         settleDateAdvance(entity, days, universe, {
             contribute, getShip: id => payrollShips.get(id),
+            ...(hull ? {
+                changeShip: (id: string, mode: ShipChangeMode,
+                    outfits: Map<string, number>) =>
+                    hull.changeShip(id, mode, outfits),
+                shipExists: hull.shipExists,
+            } : {}),
         });
     } catch (e) {
         console.warn('Cron evaluation failed:', e);
@@ -829,6 +841,16 @@ export function settleDateAdvance(entity: Entity, days: number,
         getShip?: (id: string) => ShipData | undefined,
         /** Whether to step the crons at all (default true). */
         crons?: boolean,
+        /**
+         * A crön's `Cxxx` / `Exxx` / `Hxxx`, for a caller that can swap
+         * the hull of `entity` in place (advanceEntityDate's
+         * heldHullChanger): given the resolved class, the mode and the
+         * crons' working outfits, which it replaces in place with the new
+         * hull's. Absent: the operator is reported unimplemented.
+         */
+        changeShip?: (globalShipId: string, mode: ShipChangeMode,
+            outfits: Map<string, number>) => void,
+        shipExists?: (globalId: string) => boolean,
     }): void {
     ensurePlayerStateComponents(entity);
     if (days <= 0) {
@@ -868,6 +890,11 @@ export function settleDateAdvance(entity: Entity, days: number,
             discovery: playerDiscovery,
             systemExists: universe.systemsLoaded
                 ? (id: string) => universe.hasSystem(id) : undefined,
+            ...(options.changeShip ? {
+                changeShip: (id: string, mode: ShipChangeMode) =>
+                    options.changeShip!(id, mode, ownedOutfits),
+                shipExists: options.shipExists,
+            } : {}),
         });
         entity.components.set(ControlBitsComponent, bits);
         // A crön set string may have granted or dropped a rank (Kxxx /
@@ -944,6 +971,15 @@ async function processInFlightMissions(entity: Entity,
     }
     const session = await MissionSession.create(
         entity, gameData, universe, '<in-flight>');
+    // A Cxxx / Exxx / Hxxx in an OnShipDone, OnFailure or OnAbort run here
+    // swaps the hull of the entity this date advance holds, in place —
+    // the session already points at it, so only its outfits move.
+    const hull = await heldHullChanger(entity, gameData, universe);
+    session.setChangeShipHook((id, mode) => {
+        if (hull.changeShip(id, mode, session.outfits)) {
+            session.retarget(entity, id);
+        }
+    }, hull.shipExists);
     // OnShipDone first: a goal that completed can influence a mission
     // that then fails (e.g. an OnShipDone that starts a timed follow-up).
     runPendingShipDone(session.machinery, session.outfits);
@@ -980,6 +1016,78 @@ async function processInFlightMissions(entity: Entity,
                     ? { specialShipName: e.specialShipName } : {}),
             }))]);
     }
+}
+
+/**
+ * `Cxxx` / `Exxx` / `Hxxx` on an entity this client HOLDS — out of every
+ * world, between systems on a jump or docked at a landing — for the set
+ * strings the date advance runs on it (the crons, and the in-flight
+ * mission upkeep's OnShipDone / OnFailure / OnAbort).
+ *
+ * IN PLACE, unlike the landed transaction's swap (which builds a new hull
+ * and re-points everyone at it): advanceEntityDate's callers hold this one
+ * object — the jump carries it to the next system, the landing's
+ * transaction docked it — and the date advance writes the rest of its
+ * results (bits, ranks, the books, the calendar) onto it after the crons
+ * have run. So the hull is rebuilt as the in-flight change of ship rebuilds
+ * one (nova_plugin/missions/mission_ship_change.ts rehullShip: the pilot
+ * and the flight state carried, nothing of the old hull) with the outfits
+ * C / E / H leave (outfitsAfterShipChange — the landed path's own rule),
+ * and its components then REPLACE this entity's. The hold is carried as it
+ * is, as on the landed path.
+ *
+ * The classes a set string could change to (and every outfit) are warmed
+ * first: the strings run synchronously. `changeShip` returns whether it
+ * swapped, and replaces `outfits` (the caller's working copy) in place with
+ * the new hull's.
+ */
+async function heldHullChanger(entity: Entity,
+    gameData: SimulationGameDataInterface, universe: MissionUniverse) {
+    const shipIds = await warmChangeShipTargets(gameData, universe);
+    return {
+        shipExists: (id: string) => shipIds.has(id),
+        changeShip(globalId: string, mode: ShipChangeMode,
+            outfits: Map<string, number>): boolean {
+            const newShip = gameData.data.Ship.getCached(globalId);
+            if (!newShip) {
+                console.warn(`Change-ship to ${globalId} ignored: `
+                    + 'ship data not loaded');
+                return false;
+            }
+            changeHeldHull(entity, newShip, outfits,
+                id => gameData.data.Outfit.getCached(id), mode);
+            replaceMap(outfits,
+                [...entity.components.get(OutfitsStateComponent) ?? []]
+                    .map(([id, { count }]) => [id, count] as const));
+            return true;
+        },
+    };
+}
+
+/**
+ * The in-place hull swap itself (see heldHullChanger): `entity` becomes a
+ * hull of `newShip`, its components replaced by rehullShip's. The bar's
+ * not-yet-spawned hires (PendingEscortsComponent, spaceport-only) ride
+ * along too, as they do on the shipyard's swap.
+ */
+export function changeHeldHull(entity: Entity, newShip: ShipData,
+    outfits: ReadonlyMap<string, number>,
+    getOutfit: (id: string) => OutfitData | undefined,
+    mode: ShipChangeMode): void {
+    const next = rehullShip(entity, newShip,
+        outfitsAfterShipChange(newShip, outfits, getOutfit, mode));
+    const hires = entity.components.get(PendingEscortsComponent);
+    for (const component of [...entity.components.keys()]) {
+        entity.components.delete(component);
+    }
+    for (const [component, value] of next.components) {
+        entity.components.set(component, value);
+    }
+    if (hires) {
+        entity.components.set(PendingEscortsComponent, hires);
+    }
+    entity.name = next.name;
+    ensurePlayerStateComponents(entity);
 }
 
 /**

@@ -3,7 +3,7 @@ import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
-import { AcceptedMission } from "../nova_plugin/missions/index.js";
+import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { AsyncSimulationBridgeHostApi } from "./simulation_bridge_api.js";
 import { decodeEntityOrThrow } from "./simulation_bridge_client.js";
@@ -101,6 +101,10 @@ export class AsyncSimulationBridgeClient {
 
     async acceptMission(accepted: AcceptedMission) {
         await this.guard(() => this.host.acceptMission(accepted));
+    }
+
+    async refuseMission(refused: RefusedMission) {
+        await this.guard(() => this.host.refuseMission(refused));
     }
 
     async addEntity(uuid: string, entity: Entity) {

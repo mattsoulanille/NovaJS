@@ -2,15 +2,14 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { MissionData } from 'novadatainterface/mission_data';
 import {
-    MissionEvent, MissionWorkingState, setStringPrefix,
+    MissionEvent, MissionWorkingState,
 } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, ControlBitsComponent, ShipChangeMode,
 } from '../nova_plugin/ncb/index.js';
 import {
-    CargoComponent, OutfitsStateComponent,
+    CargoComponent, OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { CreditsComponent, MissionsComponent } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
@@ -26,9 +25,10 @@ import {
     advanceEntityDate, drainPendingMissionNotices, MissionSession,
     processLandingOn, replaceMap, replaceSet,
 } from './mission_session.js';
-import { MissionUniverse, pooledMap } from './mission_universe.js';
+import { MissionUniverse } from './mission_universe.js';
 import { commitPendingEscorts } from './pending_escorts.js';
-import { buildChangedShip, changeShipTargets } from './shipyard_rules.js';
+import { buildChangedShip } from './shipyard_rules.js';
+import { warmChangeShipTargets } from './change_ship_targets.js';
 
 /**
  * ============================================================================
@@ -215,36 +215,6 @@ class SavepointRecord implements Savepoint {
     constructor(readonly label: string, readonly snapshot: Snapshot) { }
 }
 
-/** The mïsn set strings, every one of which may carry a change-ship. */
-const MISSION_SET_STRINGS = [
-    'onAccept', 'onRefuse', 'onSuccess', 'onFailure', 'onAbort', 'onShipDone',
-] as const;
-
-/**
- * {@link missionChangeShipTargets}' answers, per loaded mission list (a
- * universe that reloads builds a new one), so a landing does not re-parse
- * every set string in the game.
- */
-const missionTargetsCache = new WeakMap<readonly MissionData[], string[]>();
-
-/**
- * Every shïp class a mission's set string could change the player's ship
- * to, each resolved under that mission's own writer prefix.
- */
-function missionChangeShipTargets(missions: readonly MissionData[],
-    shipExists: (globalId: string) => boolean): string[] {
-    let targets = missionTargetsCache.get(missions);
-    if (!targets) {
-        targets = changeShipTargets(missions.flatMap(mission =>
-            MISSION_SET_STRINGS.map(field => ({
-                expression: mission[field],
-                prefix: setStringPrefix(mission),
-            }))), shipExists);
-        missionTargetsCache.set(missions, targets);
-    }
-    return targets;
-}
-
 /** A deep copy of a plain-data value (an ActiveMission, a spawn batch). */
 function clone<T>(value: T): T {
     return structuredClone(value);
@@ -341,23 +311,8 @@ export class LandedTransaction {
      * the change then says what it is missing when it runs.
      */
     private async wireShipChanges(): Promise<void> {
-        try {
-            const ids = await this.gameData.ids;
-            this.shipIds = new Set(ids.Ship);
-            const targets = missionChangeShipTargets(this.universe.missions,
-                id => this.shipIds.has(id));
-            if (targets.length > 0) {
-                const data = this.gameData.data;
-                await Promise.all([
-                    ...targets.map(id => data.Ship.get(id)
-                        .catch(() => undefined)),
-                    pooledMap(ids.Outfit, id => data.Outfit.get(id)
-                        .catch(() => undefined)),
-                ]);
-            }
-        } catch (e) {
-            console.warn('Change-ship data failed to load:', e);
-        }
+        this.shipIds = await warmChangeShipTargets(this.gameData,
+            this.universe);
         this.session.setChangeShipHook(
             (id, mode) => this.changeShip(id, mode),
             id => this.shipIds.has(id));
@@ -464,10 +419,22 @@ export class LandedTransaction {
      * returns, over the landing's own session instead of a throwaway one.
      */
     async processLanding(): Promise<MissionEvent[]> {
+        const classBefore = this.hull.components.get(ShipComponent)?.id;
         await advanceEntityDate(this.hull, 1, this.universe, this.gameData);
         // The crons just ran on the entity (bits, ranks, outfits, the
         // books): the working copy and the per-hull facts follow.
         this.session.reseed(this.hull);
+        // A crön's, or an in-flight OnShipDone / OnFailure's, Cxxx / Exxx
+        // / Hxxx swapped the hull IN PLACE during that advance
+        // (mission_session.ts heldHullChanger): the same entity, a new
+        // class. Announced like any other change of ship, so the
+        // Spaceport publishes it (checkpoint, stat rebuild).
+        if (this.hull.components.get(ShipComponent)?.id !== classBefore) {
+            this.announceSwap(this.hull);
+            for (const listener of [...this.shipChangeListeners]) {
+                listener(this.hull);
+            }
+        }
         this.creditsBaseline = creditBalance(this.hull);
         await this.refresh();
         processLandingOn(this.session);

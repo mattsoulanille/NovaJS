@@ -27,26 +27,20 @@ import {
     WeaponsStateComponent,
 } from '../nova_plugin/ship/index.js';
 import {
-    ActiveRanksComponent, AggressionSuppressGovtsComponent, ControlBitsComponent,
+    ActiveRanksComponent, ControlBitsComponent,
     makeControlBitHooks, NCBParseError, runNCBSet, ShipChangeMode, commitActiveRanks,
-    NCBSetOperation, parseNCBSet,
 } from '../nova_plugin/ncb/index.js';
 import {
-    PlayerShipSelector, CreditsComponent, CronStatesComponent, GameDateComponent,
-    MissionsComponent, PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    ControlledByComponent, EscortPayrollComponent, DiscoveryAccess,
+    PlayerShipSelector, CreditsComponent, DiscoveryAccess,
 } from '../nova_plugin/player/index.js';
-import {
-    CombatRatingComponent,
-    LegalRecordsComponent,
-} from '../nova_plugin/reputation/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
 import { outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
 import {
-    resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
+    outfitsAfterShipChange, PLAYER_STATE_COMPONENTS, resolveNumberedResource,
+    setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/missions/index.js';
 import { RankData } from 'novadatainterface/rank_data';
 
@@ -378,57 +372,16 @@ export function cargoForNewShip(cargo: Cargo, newCapacity: number): Cargo {
  * purchase rather than copied, so buildPurchasedShip sets them itself.
  */
 export const CARRIED_COMPONENTS: readonly Component<any>[] = [
-    ControlledByComponent,
-    ControlBitsComponent,
-    // The player's ränks. Not carrying them wiped every rank the pilot
-    // held the moment they traded hulls (ensurePlayerStateComponents seeds
-    // the new entity with an empty set), which is plot state, a shipyard
-    // gate (rank Contribute) and a price discount (ränk PriceMod) all at
-    // once — a second purchase in the same visit would have re-quoted at
-    // full price against a grid that had just lost its rank-gated hulls.
-    ActiveRanksComponent,
-    // ... and the ränk privileges baked off them for the simulation
-    // (ncb_plugin's AggressionSuppressGovtsComponent). Carried in the same
-    // breath as the ranks: leaving it behind would hand the new hull a
-    // pilot whose 0x0100 rank had silently stopped working.
-    AggressionSuppressGovtsComponent,
-    GameDateComponent,
-    MissionsComponent,
-    CronStatesComponent,
-    PendingMissionNoticesComponent,
-    LegalRecordsComponent,
-    CombatRatingComponent,
+    // The pilot's own state, shared with the in-flight change of ship
+    // (nova_plugin/missions/mission_ship_change.ts, where each entry's
+    // reason is recorded).
+    ...PLAYER_STATE_COMPONENTS,
     // Escorts hired at the bar THIS landing, not yet spawned (they spawn
     // at liftoff, browser.ts). Buying a ship between hiring and lifting
     // off must not discard them - the hire fee is already paid. (Review
     // round 6 finding; the loss predated the shipyard-economy rework.)
+    // Docked-only: the lift-off pops it before the hull is encoded.
     PendingEscortsComponent,
-    // The special ships of a mission that auto-aborted at accept THIS
-    // landing (mïsn Flags 0x0001 immediate form — the stock enforcement
-    // squads, nova:614-629), queued on the hull and spawned only at
-    // lift-off (buildMissionShipSpawns). Same shape as the pending escorts
-    // above: accept the warning at the main spaceport, buy a ship before
-    // lifting off, and the batch stayed on the traded-in hull — the squad
-    // the popup promised never came. (PR #142 review finding 1.)
-    //
-    // Safe to share by reference: a plain list, nothing in it scoped to
-    // the hull, and every reader (MissionSession's seed/commit, the
-    // lift-off drain) copies or replaces the array rather than mutating it.
-    PendingAutoAbortShipsComponent,
-    // The PAYROLL MIRROR: the ship-class ids of the escorts drawing a daily
-    // wage (player_escort.ts's EscortPayrollComponent). It is the only
-    // record of them that exists while the player is docked — the escorts
-    // themselves are out of the world on the landed roster — so a hull
-    // traded mid-visit arrived with an EMPTY payroll and every date advance
-    // for the rest of that docked window charged no wages at all. It
-    // re-mirrors itself at liftoff (EscortPayrollSystem), which is what
-    // kept the undercharge to one window rather than making it permanent.
-    //
-    // SAFE TO SHARE BY REFERENCE, like every other entry here: the value is
-    // a plain list of ship-class ids naming the ESCORTS, with nothing in it
-    // scoped to the hull it sits on, and EscortPayrollSystem replaces the
-    // array wholesale rather than mutating it.
-    EscortPayrollComponent,
 ];
 
 /**
@@ -638,42 +591,11 @@ function buildShipEntity(oldShip: Entity, newShip: ShipData,
 export type { ShipChangeMode } from '../nova_plugin/ncb/index.js';
 
 /**
- * The outfits aboard after a Cxxx/Exxx/Hxxx ship change (see
- * ShipChangeMode), in OutfitsStateComponent's shape.
- *
- * "Nonpersistent" for Hxxx is oütf flag 0x0020 — "This item is persistent
- * in the case where the player's ship is changed by a mission set
- * operator. The item's normal persistence for when the player buys or
- * captures a new ship is still controlled by the 0x0004 bit" (Bible
- * ~:1968) — NOT the shipyard's 0x0004. Stock sets 0x0020 on the Vell-os
- * weapons (oütf 221-226) precisely so the plot's H-changes into and out
- * of Vell-os hulls keep them.
+ * The outfits aboard after a Cxxx/Exxx/Hxxx ship change: defined beside
+ * the in-flight change of ship (nova_plugin/missions/mission_ship_change.ts),
+ * which shares it, and re-exported for the venues.
  */
-export function outfitsAfterShipChange(newShip: ShipData,
-    outfits: ReadonlyMap<string, number>,
-    getOutfit: (id: string) => OutfitData | undefined,
-    mode: ShipChangeMode): Map<string, { count: number }> {
-    const merged = new Map<string, { count: number }>();
-    if (mode !== 'keep') {
-        for (const [id, count] of Object.entries(newShip.outfits)) {
-            if (count > 0) {
-                merged.set(id, { count });
-            }
-        }
-    }
-    for (const [id, count] of outfits) {
-        if (count <= 0) {
-            continue;
-        }
-        if (mode === 'dropAndGrantDefaults'
-            && !getOutfit(id)?.persistentOnShipChange) {
-            continue;
-        }
-        const existing = merged.get(id);
-        merged.set(id, { count: (existing?.count ?? 0) + count });
-    }
-    return merged;
-}
+export { outfitsAfterShipChange };
 
 /**
  * Builds the entity the player is in after a mission set operator changed
@@ -702,57 +624,8 @@ export function buildChangedShip(oldShip: Entity, newShip: ShipData,
 }
 
 /**
- * Every shïp global id one of `sources`' set strings could change the
- * player's ship to (`Cxxx` / `Exxx` / `Hxxx`, inside `R(...)` choices too),
- * each number resolved stock-first under its own writer's prefix. A set
- * string runs synchronously, so whoever can run one warms these first (the
- * outfitter for its OnPurchase / OnSell, the landed transaction for every
- * mïsn). An unparseable string is skipped here and warned about when it
- * runs.
+ * Every shïp class a set string could change the player to: defined with
+ * the warm-up that uses it (change_ship_targets.ts), re-exported here for
+ * the outfitter.
  */
-export function changeShipTargets(
-    sources: Iterable<{ expression: string, prefix: string }>,
-    shipExists: (globalId: string) => boolean): string[] {
-    const targets = new Set<string>();
-    const collect = (operations: NCBSetOperation[], prefix: string) => {
-        for (const operation of operations) {
-            if (operation.type === 'changeShip') {
-                targets.add(resolveNumberedResource(
-                    operation.id, prefix, shipExists));
-            } else if (operation.type === 'random') {
-                collect(operation.choices, prefix);
-            }
-        }
-    };
-    for (const { expression, prefix } of sources) {
-        if (!expression) {
-            continue;
-        }
-        try {
-            collect(parseNCBSet(expression), prefix);
-        } catch (error) {
-            if (!(error instanceof NCBParseError)) {
-                throw error;
-            }
-        }
-    }
-    return [...targets].sort();
-}
-
-/*
- * SEAMS left deliberately open.
- *
- * - TECH LEVEL. The shipyard still stocks every ship in the game. Ships
- *   carry the same TechLevel / SpecialTech structure as outfits, so
- *   outfitter_rules.ts meetsTechLevel(ship.techLevel, stellarOf(planet))
- *   is the intended hook; wiring it needs the docked PlanetData plumbed
- *   into the Shipyard menu, which is a separate change from the
- *   economy.
- * - STOCK-OUTFIT DOUBLE COUNTING (judgment call 3). If the trade-in
- *   proves too generous in play, subtract the current hull's
- *   ShipData.outfits from the valued set in tradeInValue.
- * - CONFIRMATION DIALOG. The original asks the player to confirm the
- *   trade before charging. There is no reference screenshot of it in
- *   ui_screenshots/original_macos_screenshots/shipyard, so the Buy
- *   button commits directly and simply greys out when unaffordable.
- */
+export { changeShipTargets } from './change_ship_targets.js';

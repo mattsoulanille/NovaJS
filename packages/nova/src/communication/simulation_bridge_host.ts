@@ -10,17 +10,20 @@ import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import {
-    loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
+    loadEntityGameData, loadWeaponsGameData,
     loadWireSnapshotGameData,
 } from "../nova_plugin/spawn/index.js";
 import {
     deriveEntityComponents, ControlEvent, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
-import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
+import {
+    applyInputRecords, InputRecord, inputNeedsStaging, loadInputRecordsGameData,
+    loadSetStringEffectsGameData, SimulationInput,
+} from "./simulation_input.js";
 import { warnThrottled } from "../common/log_throttle.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
-import { AcceptedMission } from "../nova_plugin/missions/index.js";
+import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
 import { encodedEntityStamps, entityStamps, restampEncodedEntity } from "./peer_identity.js";
@@ -676,8 +679,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // class on the escort's marker; the class itself is loaded by the
         // client that settles the deal at lift-off — see
         // spaceport/escort_deals.ts.)
-        if (record.inputs.some(input => input.kind === 'addEntity'
-            || input.kind === 'acceptMission')) {
+        if (record.inputs.some(inputNeedsStaging)) {
             // If the buffer is cleared while staging (a catch-up log
             // arrived, which contains this record), drop it: pushing
             // after the clear would apply it twice.
@@ -1560,10 +1562,24 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // worker's cache is its own (the display side warming its
         // cache does not warm it), and applying the grant rebuilds the
         // player's weapons/physics from the cache on the very tick the
-        // record lands. Same closure loadInputRecordsGameData stages
-        // for every other world applying this record.
-        await loadOutfitsGameData(this.world, grantedOutfitIds(accepted));
+        // record lands — and so is the class an OnAccept `Cxxx` / `Exxx`
+        // / `Hxxx` changes the player to. Same closure
+        // loadInputRecordsGameData stages for every other world applying
+        // this record.
+        await loadSetStringEffectsGameData(this.world, accepted);
         this.schedule({ kind: 'acceptMission', accepted });
+    }
+
+    /**
+     * An in-flight mission refusal whose OnRefuse did something
+     * (mission_accept.ts RefusedMissionType). Stages what the result
+     * names — granted outfits, the class a change of ship goes to —
+     * BEFORE scheduling, as acceptMission does, so applying it (and
+     * replaying it) is synchronous.
+     */
+    async refuseMission(refused: RefusedMission) {
+        await loadSetStringEffectsGameData(this.world, refused);
+        this.schedule({ kind: 'refuseMission', refused });
     }
 
     snapshot(): SimulationFrame {

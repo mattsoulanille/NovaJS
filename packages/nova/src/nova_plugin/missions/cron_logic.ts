@@ -1,7 +1,7 @@
 import { CronData } from 'novadatainterface/cron_data';
 import { dateFromDayNumber } from '../player/index.js';
 import {
-    makeControlBitHooks, NCBParseError, RankHookOptions, runNCBSet,
+    makeControlBitHooks, NCBParseError, RankHookOptions, runNCBSet, ShipChangeMode,
     evaluateNCBTest,
 } from '../ncb/index.js';
 import { CronState, CronStates } from '../player/index.js';
@@ -48,9 +48,13 @@ import { DiscoveryAccess, DiscoveryNCBOperators } from '../player/index.js';
  * pattern work — a cron that waits until the pilot has been somewhere, or
  * one that hands them a piece of the map.
  *
+ * A change of ship (`Cxxx` / `Exxx` / `Hxxx`) is carried out when the
+ * caller can swap the player's hull (`changeShip` below — the date advance
+ * can, on the entity it holds between systems or docked).
+ *
  * Remaining simplifications (documented gaps): the news strings are not
- * shown, and the mission/ship/stellar operators (Sxxx, Cxxx, Yxxx, ...)
- * are still ignored with a console warning. The player's Contribute mask
+ * shown, and the mission/stellar operators (Sxxx, Yxxx, ...) are still
+ * ignored with a console warning. The player's Contribute mask
  * is the caller's snapshot from the start of the run, so an outfit a cron
  * grants does not contribute to another cron's Require until the next
  * date advance.
@@ -89,6 +93,16 @@ export interface CronEvaluationOptions {
      * resolveExistingNumberedResource) and ignore ids nothing defines.
      */
     systemExists?(globalId: string): boolean;
+    /**
+     * `Cxxx` / `Exxx` / `Hxxx`: swaps the player's hull to the (already
+     * stock-first resolved) class — on the entity, with `ownedOutfits` as
+     * the outfits aboard, which the caller replaces IN PLACE with the new
+     * hull's so the rest of the string and the write-back see them.
+     * Absent: the operator is reported unimplemented, as before.
+     */
+    changeShip?(globalShipId: string, mode: ShipChangeMode): void;
+    /** Whether a shïp id exists, for resolving the change's bare number. */
+    shipExists?(globalId: string): boolean;
 }
 
 /** An ordinal for a (month, day) pair, months normalised to 31 days. */
@@ -172,6 +186,8 @@ interface CronSetContext {
     outfits?: { outfits: Map<string, number>, resolveId(id: number): string };
     /** Exxx (EnableOn) and Xxxx (the set strings) for THIS cron's plug-in. */
     discovery?: DiscoveryNCBOperators;
+    /** Cxxx / Exxx / Hxxx, the number resolved for THIS cron's plug-in. */
+    changeShip?(id: number, mode: ShipChangeMode): void;
 }
 
 function runCronSetString(expression: string, bits: Set<number>,
@@ -180,8 +196,12 @@ function runCronSetString(expression: string, bits: Set<number>,
         return;
     }
     try {
-        runNCBSet(expression, makeControlBitHooks(
-            bits, context.outfits, context.ranks, context.discovery), random);
+        const hooks = makeControlBitHooks(
+            bits, context.outfits, context.ranks, context.discovery);
+        if (context.changeShip) {
+            hooks.changeShip = context.changeShip;
+        }
+        runNCBSet(expression, hooks, random);
     } catch (e) {
         if (e instanceof NCBParseError) {
             console.warn('Bad crön set string:', e.message);
@@ -346,6 +366,7 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
     // rank options' required `active` set.
     const {
         ranks, ownedOutfits, outfitExists, discovery, systemExists,
+        changeShip, shipExists,
     }: CronEvaluationOptions =
         'active' in options ? { ranks: options } : options;
     // Every numeric id in a cron's set string is scoped to the plug-in that
@@ -377,6 +398,10 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
                 // Exxx / Xxxx, in this cron's own plug-in namespace.
                 discovery: systemDiscoveryOperators(
                     discovery, prefix, systemExists),
+                // Cxxx / Exxx / Hxxx, the shïp number stock-first.
+                changeShip: changeShip && ((id: number, mode: ShipChangeMode) =>
+                    changeShip(resolveNumberedResource(id, prefix, shipExists),
+                        mode)),
             }];
         }));
     for (let day = fromDay + 1; day <= toDay; day++) {

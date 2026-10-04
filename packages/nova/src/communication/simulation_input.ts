@@ -12,7 +12,8 @@ import {
     SimulationGameDataResource, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import {
-    applyRoomSeed, loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
+    applyRoomSeed, loadEntityGameData, loadOutfitsGameData,
+    loadShipClassGameData, loadWeaponsGameData,
 } from "../nova_plugin/spawn/index.js";
 import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
 import {
@@ -20,7 +21,10 @@ import {
 } from '../nova_plugin/player/index.js';
 import { applySetTarget } from "../nova_plugin/combat/index.js";
 import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/index.js";
-import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/missions/index.js";
+import {
+    AcceptedMission, AcceptedMissionType, applyAcceptMission,
+    applyRefuseMission, RefusedMission, RefusedMissionType, SetStringEffects,
+} from "../nova_plugin/missions/index.js";
 import {
     applyEscortAction, applyRefundFighter, EscortAction, EscortActionType,
     FighterRefund, FighterRefundType,
@@ -59,6 +63,14 @@ export type SimulationInput =
      * See mission_accept.ts for where the trust boundary sits and why.
      */
     | { kind: 'acceptMission', accepted: AcceptedMission }
+    /**
+     * An in-flight mission REFUSAL with an OnRefuse to run (a përs ship's
+     * LinkMission refused on hail or boarding): the set string's result,
+     * resolved on the owning client and baked in as the same deltas an
+     * acceptance carries — a change of ship and a move of system included.
+     * See mission_accept.ts RefusedMissionType.
+     */
+    | { kind: 'refuseMission', refused: RefusedMission }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
      * own escorts: release it, or queue/cancel an upgrade or a sale
@@ -155,6 +167,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('setPlanetTarget'), target: t.union([t.string, t.null]) }),
     t.strict({ kind: t.literal('hail'), action: HailActionType }),
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
+    t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
     t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
@@ -208,12 +221,35 @@ export function applyInputRecords(world: World, records: InputRecord[]) {
     }
 }
 
-/** The outfit ids an acceptance GRANTS (positive deltas): the ids whose
- * game data every world applying the record must have staged. */
-export function grantedOutfitIds(accepted: AcceptedMission): string[] {
-    return (accepted.outfitsDelta ?? [])
+/** The outfit ids an in-flight set string GRANTS (positive deltas): the
+ * ids whose game data every world applying the record must have staged. */
+export function grantedOutfitIds(effects: SetStringEffects): string[] {
+    return (effects.outfitsDelta ?? [])
         .filter(([, delta]) => delta > 0)
         .map(([id]) => id);
+}
+
+/**
+ * The game data an in-flight set string's result needs on the tick it
+ * applies: the outfits it grants (the providers rebuild weapons and physics
+ * from them) and the shïp class it changes the player to (applyShipChange
+ * reads it with getCached, and the new hull's providers derive from it).
+ * Shared by every world applying the record — the originating host stages
+ * through this before scheduling, every other world from the record.
+ */
+export async function loadSetStringEffectsGameData(world: World,
+    effects: SetStringEffects): Promise<void> {
+    await loadOutfitsGameData(world, grantedOutfitIds(effects));
+    if (effects.shipChange) {
+        await loadShipClassGameData(world, effects.shipChange.shipId);
+    }
+}
+
+/** Whether an input names game data that must be staged before it
+ * applies (see loadInputRecordsGameData). */
+export function inputNeedsStaging(input: SimulationInput): boolean {
+    return input.kind === 'addEntity' || input.kind === 'acceptMission'
+        || input.kind === 'refuseMission';
 }
 
 /**
@@ -272,9 +308,14 @@ export async function loadInputRecordsGameData(
             // tick that differs per peer (the "purchased outfits never
             // staged" desync class, docs/rollback_multiplayer.md (11),
             // in its third costume).
+            // The same goes for the class an in-flight `Cxxx` / `Exxx` /
+            // `Hxxx` changes the player to: applying it reads the ShipData
+            // with getCached and the new hull's providers derive from it.
             if (input.kind === 'acceptMission') {
-                await loadOutfitsGameData(world,
-                    grantedOutfitIds(input.accepted));
+                await loadSetStringEffectsGameData(world, input.accepted);
+            }
+            if (input.kind === 'refuseMission') {
+                await loadSetStringEffectsGameData(world, input.refused);
             }
             // A refund's ceiling reads the bay wëap from the cache
             // (refundFighterToBay: MaxAmmo times the bays mounted). The
@@ -597,6 +638,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         case 'acceptMission': {
             applyAcceptMission(world, peerId,
                 authorizeMissionShips(world, peerId, input.accepted, origin));
+            break;
+        }
+        case 'refuseMission': {
+            applyRefuseMission(world, peerId, input.refused);
             break;
         }
         case 'escortAction': {

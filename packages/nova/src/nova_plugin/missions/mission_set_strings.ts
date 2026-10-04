@@ -49,13 +49,20 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
     } : undefined, systemDiscoveryOperators(machinery.discovery,
         runningMissionPrefix, machinery.systemExists));
 
-    // Cxxx/Exxx/Hxxx, when the caller can swap the player's hull (the
-    // landing's transaction can; see MissionMachineryContext.changeShip).
-    // The shïp number resolves stock-first like every sibling operator.
-    const { changeShip } = machinery;
+    // Cxxx/Exxx/Hxxx, when the caller can swap the player's hull (see
+    // MissionMachineryContext.changeShip for who can). The shïp number
+    // resolves stock-first like every sibling operator.
+    const { changeShip, moveToSystem } = machinery;
     if (changeShip) {
         hooks.changeShip = (id, mode) => changeShip(resolveNumberedResource(
             id, runningMissionPrefix, machinery.shipExists), mode);
+    }
+    // Mxxx/Nxxx, likewise only where the caller can move the player (the
+    // in-flight accept / refusal). The sÿst number resolves stock-first.
+    if (moveToSystem) {
+        hooks.moveToSystem = (id, keepCoordinates) => moveToSystem(
+            resolveNumberedResource(id, runningMissionPrefix,
+                machinery.systemExists), keepCoordinates);
     }
 
     if (depth > 4) {

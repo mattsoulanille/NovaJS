@@ -31,7 +31,9 @@ import {
     EscortActionEvent, HailRequestEvent,
 } from '../display/hail_dialog_plugin.js';
 import { resetJumpFade } from '../display/jump_fade_plugin.js';
-import { AcceptShipMissionEvent } from '../display/ship_mission_offer_plugin.js';
+import {
+    AcceptShipMissionEvent, RefuseShipMissionEvent,
+} from '../display/ship_mission_offer_plugin.js';
 import { LeaveSpaceportEvent } from '../display/spaceport_plugin.js';
 import { SetJumpRouteEvent } from '../display/starmap_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
@@ -41,6 +43,7 @@ import {
 } from '../nova_plugin/core/index.js';
 import { GateTransitEvent, FinishJumpEvent, LandEvent } from '../nova_plugin/travel/index.js';
 import type { AcceptedMission } from '../nova_plugin/missions/index.js';
+import { MissionSystemMoveEvent } from '../nova_plugin/missions/index.js';
 import { MultiRoomResource, NovaPlugin } from '../nova_plugin/nova_plugin.js';
 import {
     EscortJumpEvent, EscortLandedEvent, FighterDockedEvent,
@@ -67,7 +70,8 @@ import { preparePlayerStart } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
 import { jumpTo, teardownLiveSystem, WorldWiring } from './system_entry.js';
 import {
-    followGateTransit, followHyperspaceJump, leaveGateMap,
+    followGateTransit, followHyperspaceJump, followMissionSystemMove,
+    leaveGateMap,
 } from './transit.js';
 
 /** What the session needs from the page beyond the runtime. */
@@ -183,6 +187,16 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
                 console.warn('Failed to accept a ship-offered mission:', e);
             });
         });
+        // A REFUSED ship-offered mission whose OnRefuse did something (a
+        // plug-in's — no stock AvailLoc 2 mission has one): the same road
+        // as an accept, on its own input kind (mission_accept.ts
+        // RefusedMissionType). Nothing to encode — a refusal spawns no
+        // ships.
+        world.events.get(RefuseShipMissionEvent).subscribe(({ data }) => {
+            void bridge.refuseMission(data.record).catch(e => {
+                console.warn('Failed to refuse a ship-offered mission:', e);
+            });
+        });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {
             onLand(runtime, world, data, entities);
         });
@@ -242,6 +256,16 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
                 return;
             }
             followGateTransit(runtime, data, wire);
+        });
+        world.events.get(MissionSystemMoveEvent).subscribe(({ data }) => {
+            // A set string's Mxxx / Nxxx run in flight (an accept or a
+            // refusal, mission_ship_change.ts): the sim has already taken
+            // the ship out of this system. Only the local player follows,
+            // as with a jump.
+            if (!data.entity.components.has(PlayerShipSelector)) {
+                return;
+            }
+            followMissionSystemMove(runtime, data, wire);
         });
         world.events.get(LeaveGateMapEvent).subscribe(({ data }) => {
             leaveGateMap(runtime, data, wire);

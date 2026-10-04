@@ -275,7 +275,8 @@ function misn(def: MisnDef): number[] {
         .uint64(0n) // Require.
         .int16(0) // DatePostInc.
         .string("", 255) // OnShipDone.
-        .string("", 32).string("", 33) // Accept/refuse button captions.
+        .string(def.acceptButton ?? "", 32) // Accept button caption.
+        .string(def.refuseButton ?? "", 33) // Refuse button caption.
         .int16(def.dispWeight)
         .expect(1954).padTo(1970).toArray();
 }

@@ -213,6 +213,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    ownerDisconnected so the owner-absence despawn keeps them
 //    (communication/peer_departure.ts). Schema and sim-rule changes only;
 //    the fingerprint moves, and builds stay version-gated.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): #141's in-flight change of ship. The new
+//    `refuseMission` input kind (a ship-offered mission's OnRefuse,
+//    resolved on the owning client: mission_accept.ts RefusedMissionType)
+//    and two OPTIONAL fields on both it and acceptMission's `accepted` —
+//    `shipChange` {shipId} (Cxxx/Exxx/Hxxx: the hull is replaced at the
+//    player's uuid, nova_plugin/missions/mission_ship_change.ts) and
+//    `moveToSystem` {systemId, keepCoordinates} (Mxxx/Nxxx: the ship
+//    leaves the system and the client follows, MissionSystemMoveEvent).
+//    New union member and fields, so the fingerprint changes and the
+//    join gate keeps the builds apart; every existing kind and field is
+//    unchanged, and an older record (none of the new fields) applies
+//    exactly as before.
 
 export const PROTOCOL_VERSION = 8;
 

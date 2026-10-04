@@ -57,9 +57,10 @@ export const MISN = {
     tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135, wardenCommission: 136,
     refugeCharter: 137, charterRetainer: 138,
     silentSummons: 139, dockWindfall: 140,
+    musterCall: 141, musterReport: 142,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
-export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132 } as const;
+export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132, muster: 133 } as const;
 export const JUNK = { resin: 128, alloy: 129 } as const;
 export const CHAR = { courier: 128 } as const;
 export const BOOM = { burst: 128 } as const;
@@ -83,6 +84,8 @@ export const STRN = {
     meridianGreetings: 7000, raiderGreetings: 7001,
     /** përs comm-dialog quotes and over-the-radio hail quotes (Bible). */
     persCommQuotes: 7100, persHailQuotes: 7101,
+    /** Ship titles a set string's Txxx picks from ('*' = the old name). */
+    shipTitles: 7102,
 } as const;
 /** Control bits the missions set; the scenario's own numbering. */
 export const BITS = {
@@ -99,6 +102,10 @@ export const BITS = {
     summonsTaken: 109,
     /** Gates the Dockside Windfall (never set by the scenario itself). */
     windfallOpen: 110,
+    /** Gates the Muster Call (never set by the scenario itself). */
+    musterOffered: 111,
+    /** Set by both answers to the Muster Call; the refusal also sets 113. */
+    musterAnswered: 112, musterJoined: 113,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -1298,6 +1305,9 @@ export interface MisnDef {
     onAccept: string;
     /** OnRefuse set string; "" unless set. */
     onRefuse?: string;
+    /** The offer's Accept / Refuse button captions; "" (the defaults) unless set. */
+    acceptButton?: string;
+    refuseButton?: string;
     onSuccess: string;
     onFailure: string;
     onAbort: string;
@@ -1594,6 +1604,53 @@ export const MISNS: MisnDef[] = [
         briefText: "A stranger presses a credit chip into your hand and is gone.",
         compText: "", quickBrief: "",
     },
+    {
+        // Offered FROM A SHIP (the muster officer përs), with the buttons
+        // deliberately SWAPPED, the shape of plug-in arpia's mïsn 1112
+        // "Gather up the Team": the REFUSE button is the one that joins,
+        // and its OnRefuse aborts the courier run, moves the pilot to
+        // Ossory Shoal (Mxxx), hands them a Heron Warden (Hxxx), retitles
+        // the ship (Txxx), starts the follow-up — written with a LOWERCASE
+        // `s`, as arpia writes its — and sets two bits. The Accept button
+        // ("no thanks") only records the answer. Only offered once a spec
+        // sets its bit.
+        id: MISN.musterCall, name: "Muster Call",
+        availStel: -1, availLoc: AVAIL_LOC.fromShip, availRecord: 0, availRating: -1,
+        availRandom: 100, travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 0, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: `b${BITS.musterOffered}`,
+        onAccept: `A${MISN.courier} !b${BITS.musterOffered} b${BITS.musterAnswered}`,
+        onRefuse: `A${MISN.courier} !b${BITS.musterOffered} M${SYST.ossory} `
+            + `H${SHIP.warden} T${STRN.shipTitles} s${MISN.musterReport} `
+            + `b${BITS.musterAnswered} b${BITS.musterJoined}`,
+        acceptButton: "My skiff's fine.", refuseButton: "I'll take her gladly.",
+        onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "<OSN>: The Concord is mustering wardens at Ossory Shoal. "
+            + "There's a Heron Warden waiting for you there, if you want her.",
+        briefText: "", compText: "", quickBrief: "Answer the muster call.",
+    },
+    {
+        // The Muster Call's follow-up: never offered (its AvailBits can
+        // never hold), only started by the call's OnRefuse.
+        id: MISN.musterReport, name: "Report to the Muster",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.bar, availRecord: 0,
+        availRating: -1, availRandom: 100, travelStel: SPOB.refuge, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 1000, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: `b${BITS.musterJoined} & !b${BITS.musterJoined}`,
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "",
+        briefText: "Report to Halden Refuge in your new Warden.",
+        compText: "The muster clerk logs your arrival.",
+        quickBrief: "Report to Halden Refuge.",
+    },
 ];
 
 export interface RankDef {
@@ -1762,6 +1819,16 @@ export const PERSONS: PersDef[] = [
         grantClass: -1, grantCount: 0, grantChance: 0,
         subtitle: "Adrift", color: 0x00606060,
     },
+    {
+        // Hails with the Muster Call (mïsn 141). In no sÿst's person list:
+        // specs put the ship where they want it.
+        id: PERS.muster, name: "Muster Officer", linkSystem: -1,
+        govt: GOVT.meridian, aiType: 1, aggression: 1, cowardice: 50,
+        ship: SHIP.skiff, weapons: [], credits: 0, shieldMod: 100,
+        commQuote: -1, hailQuote: -1, linkMission: MISN.musterCall,
+        flags: 0, activeOn: "", grantClass: -1, grantCount: 0, grantChance: 0,
+        subtitle: "Concord recruiter", color: 0,
+    },
 ];
 
 export interface JunkDef {
@@ -1865,6 +1932,10 @@ export const STRING_TABLES: Array<{ id: number, name: string, strings: string[] 
             "<OSN>: Heave to.",
             "<OSN>: I need assistance, can you help?",
         ],
+    },
+    {
+        id: STRN.shipTitles, name: "Ship titles",
+        strings: ["* of the Muster"],
     },
     {
         id: STRN.shipComm, name: "Ship comm strings",
