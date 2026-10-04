@@ -50,9 +50,10 @@ export interface SimulationFrame {
     pacing?: SimulationPacing;
     /**
      * Set on exactly one frame: the first after the host's desync
-     * recovery ran out of attempts (#333). The host is frozen from then
-     * on and every later frame is empty; the client saves, freezes the
-     * universe and offers a reload (client/resync_failure.ts).
+     * recovery ran out of attempts (#333), or its identity recovery after
+     * a reconnect did (#354, the same terminal path). The host is frozen
+     * from then on and every later frame is empty; the client saves,
+     * freezes the universe and offers a reload (client/resync_failure.ts).
      */
     resyncFailed?: boolean;
 }

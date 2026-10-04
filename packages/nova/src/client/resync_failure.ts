@@ -6,7 +6,9 @@
  * The bridge host (communication/simulation_bridge_host.ts) retries a
  * desync recovery a bounded number of times; when the last attempt fails
  * it freezes for good and says so ONCE, on the next frame
- * (SimulationFrame.resyncFailed). The maintainer's ruling for what the
+ * (SimulationFrame.resyncFailed). A reconnect whose identity recovery the
+ * room keeps refusing (#354, giveUpIdentityRecovery) ends the same way,
+ * through the same flag. The maintainer's ruling for what the
  * client does then: "Save and then show a desync error message (a dialog
  * box in-game), freeze the universe, and have a 'Reload' button that
  * reloads the page." In that order:

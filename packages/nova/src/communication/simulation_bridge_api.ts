@@ -54,8 +54,9 @@ export interface SimulationStatus {
      * Set once the room has refused this peer's re-stamped insertions
      * more times than the host retries (#354, simulation_bridge_host.ts
      * handleRefusal): the peer cannot get its fleet back into the room
-     * under the identity it has. The terminal path is #333's; until it
-     * lands this flag (and the console) is the only trace.
+     * under the identity it has. It ends the session through #333's
+     * terminal path, so `resyncFailed` is set with it; this flag says
+     * which give-up it was.
      */
     identityRecoveryFailed?: boolean;
 }

@@ -12,10 +12,14 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { World } from 'nova_ecs/world';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { ClientState, LiveSystem } from '../client/client_state.js';
+import {
+    arrive, beginTransit, claimSystem, ClientState, ClientStateSlot, enterGame,
+    liveSystem, LiveSystem,
+} from '../client/client_state.js';
 import { insertPlayerAndFleet } from '../client/fleet_insertion.js';
 import { FleetLedger } from '../client/fleet_ledger.js';
 import { restampHeldFleet } from '../client/identity.js';
+import { freezeOnResyncFailure } from '../client/resync_failure.js';
 import { resetWarnThrottle } from '../common/log_throttle.js';
 import { connectUrlWithVersion } from '../common/version_handshake.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
@@ -995,6 +999,68 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(atA.length).toBe(1);
             await step(600);
             expect(atA.length).toBe(1);
+        }, 120_000);
+
+        it('ends a never-recoverable identity in #333\'s terminal state, '
+            + 'reported exactly once', async () => {
+            // Integration of #354 with #333: the identity give-up takes
+            // the resync give-up's one terminal path — the host frozen for
+            // good, one frame announcing it, and the client's save and
+            // `desynced` freeze (client/resync_failure.ts; the Reload
+            // dialog on top of it is browser-only) — not a flag of its own.
+            const a = await makePeer('a', 100, {
+                forwardIdentity: false, hostOptions: { identityGraceMs: 300 },
+            });
+            await makePeer('b', -100);
+            const announced: number[] = [];
+            const live = { systemId: SYSTEM } as unknown as LiveSystem;
+            const state = new ClientStateSlot();
+            state.apply(s => arrive(claimSystem(beginTransit(enterGame(s), {
+                kind: 'startup', from: undefined, to: SYSTEM,
+                uuid: a.shipUuid, entity: new Entity(),
+            }), { systemId: SYSTEM }), live));
+            let saves = 0;
+            const runtime = {
+                state,
+                saves: { saveNow: () => { saves++; return true; } },
+            } as unknown as Parameters<typeof freezeOnResyncFailure>[0];
+            // The frame pump's half (client/frame_pump.ts): a frame that
+            // carries `resyncFailed` saves and freezes. (Snapshotted on
+            // every step, even once frozen, to count the announcements.)
+            pumps.push(() => {
+                const frame = a.client.snapshot();
+                if (frame.resyncFailed) {
+                    announced.push(relay.tick);
+                    if (liveSystem(state.state) === live) {
+                        freezeOnResyncFailure(runtime, live);
+                    }
+                }
+            });
+            await step(120);
+            await reconnect(a);
+            await step(30);
+            await insertWorkerStampedEscort(a);
+            for (let i = 0; i < 100 && !a.host.status().identityRecoveryFailed; i++) {
+                await step(10);
+            }
+            expect(a.host.status().identityRecoveryFailed).toBeTrue();
+            expect(a.host.status().resyncFailed).toBeTrue();
+            expect(a.host.status().joined).toBeFalse();
+            const frozenAt = a.host.status().tick;
+            await step(600);
+
+            expect(announced.length).withContext('frames announcing it')
+                .toBe(1);
+            expect(saves).withContext('lost-sync saves').toBe(1);
+            expect(state.state.kind).toBe('desynced');
+            // Frozen: no stepping, no state sent, no further resync.
+            expect(a.host.status().tick).toBe(frozenAt);
+            const later = a.host.snapshot();
+            expect(later.resyncFailed).toBeUndefined();
+            expect(later.added).toEqual([]);
+            expect(later.changed).toEqual([]);
+            expect(await a.host.resync(true)).toBeFalse();
+            expect(a.host.status().tick).toBe(frozenAt);
         }, 120_000);
 
         it('re-enters on a refusal of an entity it holds under a stale id, at most three times', async () => {

@@ -211,6 +211,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * sends no state — the display keeps the last real frame it got. The
      * client is told once, on the next frame ({@link SimulationFrame.
      * resyncFailed}), saves, and offers a page reload.
+     *
+     * The same terminal state ends a failed IDENTITY recovery (#354,
+     * giveUpIdentityRecovery): a room that keeps refusing this peer's
+     * fleet under the identity it has is a session that cannot be
+     * recovered either. One give-up mechanism, entered through
+     * failTerminally from both.
      */
     private resyncFailed = false;
     /** Whether a snapshot has already carried `resyncFailed`. */
@@ -1040,8 +1046,15 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // The pinned states describe the abandoned timeline.
                 this.checkpointSnapshots.clear();
                 try {
-                    if (await this.reconstructFromRoom(
-                        this.resyncJoinTimeoutMs, { fresh: true })) {
+                    const rejoined = await this.reconstructFromRoom(
+                        this.resyncJoinTimeoutMs, { fresh: true });
+                    if (this.resyncFailed) {
+                        // An identity give-up ended the session while the
+                        // reconstruction ran: it stays ended.
+                        this.lastJoinSucceeded = false;
+                        return false;
+                    }
+                    if (rejoined) {
                         return true;
                     }
                 } catch (error) {
@@ -1055,13 +1068,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     // Terminal (#333): stepping on from here would play
                     // the bare genesis world — no player ship, the clock
                     // at zero — as if it were the session.
-                    this.resyncFailed = true;
-                    this.lastJoinSucceeded = false;
-                    this.remoteInputs = [];
-                    this.remoteInputsGeneration++;
-                    this.pendingInputs = [];
-                    this.queuedEvents = [];
-                    this.logRollbackEvent('resyncFailed', { attempts: attempt });
+                    this.failTerminally({ attempts: attempt });
                     return false;
                 }
                 await new Promise(resolve =>
@@ -1415,21 +1422,43 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
 
     /**
      * The room keeps refusing this peer's fleet, and re-entering cannot
-     * change that: stop.
-     *
-     * HOOK (#333): this is where the resync give-up's terminal path belongs
-     * — save, the in-game desync dialog, the frozen universe and its Reload
-     * button (client/resync_failure.ts and the client's `desynced` state,
-     * on branch fix/resync-giveup-dialog, not merged on this base). Until
-     * then the failure is reported through status().identityRecoveryFailed
-     * and the console only.
+     * change that: stop, through the resync give-up's terminal path (#333,
+     * failTerminally) — the host freezes for good, the next frame carries
+     * `resyncFailed` once, and the client saves, freezes the universe and
+     * offers its Reload button (client/resync_failure.ts, the client's
+     * `desynced` state). status().identityRecoveryFailed says which of the
+     * two give-ups it was.
      */
     private giveUpIdentityRecovery(why: string) {
+        if (this.identityRecoveryFailed || this.resyncFailed) {
+            return;
+        }
         this.identityRecoveryFailed = true;
         this.unknownIdentity = undefined;
         console.error('The room refuses this peer\'s fleet under the identity '
             + `this host has; ${why}.`);
         this.logRollbackEvent('identityRecoveryFailed');
+        this.failTerminally({ cause: 'identity' });
+    }
+
+    /**
+     * The ONE terminal give-up (#333): a resync out of attempts, or an
+     * identity recovery the room keeps refusing (#354). Freezes the host
+     * for good (see `resyncFailed`); snapshot() then reports it once.
+     * Idempotent.
+     */
+    private failTerminally(detail: Record<string, string | number>) {
+        if (this.resyncFailed) {
+            return;
+        }
+        this.resyncFailed = true;
+        this.lastJoinSucceeded = false;
+        this.remoteInputs = [];
+        this.remoteInputsGeneration++;
+        this.pendingInputs = [];
+        this.queuedEvents = [];
+        this.reinsertions.clear();
+        this.logRollbackEvent('resyncFailed', detail);
     }
 
     status(): SimulationStatus {
