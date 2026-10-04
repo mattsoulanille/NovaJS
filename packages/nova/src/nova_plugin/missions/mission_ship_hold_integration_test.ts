@@ -13,8 +13,7 @@ import { BoardedComponent } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { makeShip } from '../ship/index.js';
-import { ArmorComponent } from '../ship/index.js';
-import { Stat } from '../core/index.js';
+import { ArmorComponent, ShieldComponent } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { startMissionById } from './mission_accept_offer.js';
 import { MissionShipComponent } from '../player/index.js';
@@ -94,8 +93,15 @@ async function acceptAndSpawn(gameData: GameDataAggregator,
 /**
  * Builds `systemId` (without its own NPC traffic, so nothing distracts the
  * AI) with the mission's owner and its special ships in it. With
- * `unkillable`, each special ship is seeded with an armour it cannot lose
- * in a minute (the armour Stat's Provide keeps an existing `current`).
+ * `unkillable`, the returned `topUp` restores each special ship's shield
+ * and armour to full; stepSeconds calls it before every tick, so no ship
+ * can lose more than one tick's damage (well under its armour alone).
+ *
+ * (An oversized armour Stat seeded on the ship does NOT do this: the
+ * armour provider (ship_plugin.ts shipStatSystem) is a step system that
+ * reconciles the Stat's bounds with the hull's physics every tick, so a
+ * 1,000,000 max is clamped back to the class's own on the first one — and
+ * the pair could, rarely, kill each other within the minute.)
  */
 async function worldWithMissionShips(gameData: GameDataAggregator,
     missionId: string, { unkillable = false } = {}) {
@@ -109,11 +115,6 @@ async function worldWithMissionShips(gameData: GameDataAggregator,
     const uuids: string[] = [];
     for (const ship of ships) {
         ship.components.set(MultiplayerData, { owner: 'owner' });
-        if (unkillable) {
-            ship.components.set(ArmorComponent, new Stat({
-                current: 1_000_000, max: 1_000_000, min: 0, recharge: 0,
-            }));
-        }
         const uuid = v4();
         await completeEntity(world, ship);
         world.entities.set(uuid, ship);
@@ -121,12 +122,27 @@ async function worldWithMissionShips(gameData: GameDataAggregator,
     }
     const objective = () => world.entities.get('owner')!.components
         .get(MissionsComponent)!.get(missionId)!.shipObjective!;
-    return { world, uuids, objective, systemId };
+    const topUp = () => {
+        if (!unkillable) {
+            return;
+        }
+        for (const uuid of uuids) {
+            const ship = world.entities.get(uuid);
+            for (const stat of [ship?.components.get(ArmorComponent),
+                ship?.components.get(ShieldComponent)]) {
+                if (stat && stat.current !== stat.max) {
+                    stat.current = stat.max;
+                }
+            }
+        }
+    };
+    return { world, uuids, objective, systemId, topUp };
 }
 
 /** Steps `seconds` of simulation, reporting whether any of `uuids` ever
  * entered a hyperspace jump or left the world. */
-async function stepSeconds(world: World, uuids: string[], seconds: number) {
+async function stepSeconds(world: World, uuids: string[], seconds: number,
+    beforeTick: () => void = () => undefined) {
     let everJumped = false;
     const modes = new Set<string | undefined>();
     for (let i = 0; i < seconds * SECOND_STEPS; i++) {
@@ -140,6 +156,7 @@ async function stepSeconds(world: World, uuids: string[], seconds: number) {
                 everJumped = true;
             }
         }
+        beforeTick();
         world.step();
         if (i % 60 === 0) {
             await new Promise(resolve => setImmediate(resolve));
@@ -166,8 +183,9 @@ describe('mission special ships with an outstanding goal', () => {
             // each other within the minute (seed-dependent), and a
             // DESTROYED special ship is a different exit from the system
             // than the despawn the hold forbids.
-            const { world, uuids, objective } = await worldWithMissionShips(
-                gameData, BOUNTY_MISSION, { unkillable: true });
+            const { world, uuids, objective, topUp } =
+                await worldWithMissionShips(gameData, BOUNTY_MISSION,
+                    { unkillable: true });
             expect(uuids.length).toBe(2);
             for (const uuid of uuids) {
                 expect(world.entities.get(uuid)!.components
@@ -176,7 +194,7 @@ describe('mission special ships with an outstanding goal', () => {
             }
 
             const { everJumped, modes, present } =
-                await stepSeconds(world, uuids, 60);
+                await stepSeconds(world, uuids, 60, topUp);
             expect(present).toEqual(uuids);
             expect(everJumped).withContext('never begins a jump').toBeFalse();
             expect(modes).not.toContain('depart');
