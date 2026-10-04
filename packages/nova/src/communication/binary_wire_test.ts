@@ -97,6 +97,8 @@ describe('the binary wire', () => {
         await firstValueFrom(room.peers.current.pipe(
             filter(peers => peers.has('server') && peers.size === 2)));
         expect(room.uuid).toBeDefined();
+        // ...and its own uuid set, announced in that first frame (#199).
+        expect(communicator.servers.value).toEqual(new Set(['server']));
 
         // Client -> server: a join request, as the bridge would send.
         const atServer = firstValueFrom(serverRoom.messages);

@@ -33,14 +33,19 @@ export class CommunicatorServer implements Communicator {
             leave: peerLeave,
             initial: channel.clients,
         });
-        for (const peer of this.peers.current.value) {
-            this.sendUuid(peer);
-        }
+        // Clients learn this set from the uuid frame (sendUuid), but a
+        // world with no communicator — the server's archive sim, offline
+        // log replay — still falls back to simulation_input.ts's
+        // DEFAULT_SERVER_PEERS, so the server's own uuid stays fixed.
         if (uuid !== 'server') {
             throw new Error('UUIDs other than \'server\' are not yet supported');
         }
 
         this.servers = new BehaviorSubject(new Set([uuid]));
+        // After `servers` exists: the uuid frame announces it.
+        for (const peer of this.peers.current.value) {
+            this.sendUuid(peer);
+        }
 
         // Handle messages from the channel
         channel.message.subscribe(({ message: commMessage, source }) => {
@@ -125,10 +130,13 @@ export class CommunicatorServer implements Communicator {
         }
     }
 
+    /** The client's first frame: its uuid, and the server uuid set it
+     * accepts server-only traffic from (Trust model item 4). */
     private sendUuid(uuid: string) {
         this.send({
             type: MessageType.uuid,
-            uuid
+            uuid,
+            servers: new Set(this.servers.value),
         }, uuid);
     }
 
