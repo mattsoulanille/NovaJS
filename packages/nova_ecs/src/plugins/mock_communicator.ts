@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject } from 'rxjs';
-import { Communicator, Message, Peers } from './multiplayer_plugin.js';
+import { Communicator, Peers } from './multiplayer_plugin.js';
 
 
 
@@ -18,7 +18,7 @@ export class MockCommunicator implements Communicator {
         this.messages.subscribe(message => this.allMessages.push(message));
     }
 
-    sendMessage(message: Message, destination?: string | Set<string>) {
+    sendMessage(message: unknown, destination?: string | Set<string>) {
         if (!this.uuid) {
             throw new Error('Cannot send a message without a uuid');
         }

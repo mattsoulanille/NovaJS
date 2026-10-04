@@ -1,7 +1,7 @@
 import "jasmine";
 import { v4 } from "uuid";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
-import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { getSyntheticGameData } from "../../communication/simulation_test_fixture.js";
 import { SYNTHETIC } from "novaparse/synthetic/universe";
@@ -27,8 +27,7 @@ describe('gate arrival through the bridge insertion path', () => {
         // Kestrel Drift, the system holding the Kestrel Gate.
         const world = await makeSystem(SYNTHETIC.systems.kestrel, gameData,
             undefined, { npcs: false });
-        const communicator = new MockCommunicator("server");
-        await world.addPlugin(multiplayer(communicator));
+        world.resources.set(CommunicatorResource, new MockCommunicator("server"));
         const serializer = world.resources.get(SerializerResource)!;
         const host = new SimulationBridgeHost(world, gameData);
         const client = new SimulationBridgeClient(host, serializer);

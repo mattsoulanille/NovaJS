@@ -3,7 +3,7 @@ import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Entity } from "nova_ecs/entity";
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from "nova_ecs/plugin";
-import { CommunicatorResource, multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';

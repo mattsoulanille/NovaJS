@@ -292,12 +292,11 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     runtime.transitions.begin();
     const world = new World();
     world.resources.set(SimulationGameDataResource, gameData);
-    // NO legacy delta-sync multiplayer plugin on this world (and no 'main
-    // room' lobby). The simulation lives in the worker (a per-system
-    // rollback room) and the picture in the display world; this outer
-    // world is stepped for NovaPlugin's bookkeeping only, and nothing
-    // reads its entities. See nova_ecs/plugins/multiplayer_plugin.ts
-    // (ownership checks commented out) and server.ts.
+    // No 'main room' lobby (the legacy delta-sync multiplayer plugin
+    // that used it is deleted, #317). The simulation lives in the
+    // worker (a per-system rollback room) and the picture in the
+    // display world; this outer world is stepped for NovaPlugin's
+    // bookkeeping only, and nothing reads its entities.
     world.resources.set(MultiRoomResource, multiRoom);
     await world.addPlugin(NovaPlugin);
     window.world = world;

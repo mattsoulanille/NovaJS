@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { v4 } from "uuid";
-import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 import { FilesystemData } from "../server/parsing/filesystem_data.js";
@@ -346,8 +346,9 @@ export async function makeSimulationBridgeHarness(
     // reason about, so they stay off.
     const world = await makeSystem(systemId, gameData, undefined,
         { npcs: false });
-    const communicator = new MockCommunicator("server");
-    await world.addPlugin(multiplayer(communicator));
+    // The communicator the bridge host reads, as the browser worker
+    // sets it (no legacy delta-sync plugin, #317).
+    world.resources.set(CommunicatorResource, new MockCommunicator("server"));
 
     const shipData = await gameData.data.Ship.get(shipId);
     const ship = makeShip(shipData);
