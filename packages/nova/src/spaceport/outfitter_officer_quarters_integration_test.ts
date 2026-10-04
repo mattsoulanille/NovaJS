@@ -201,8 +201,11 @@ describe('Pilot file PilotFirstname_PilotLastname_cant_hire_officers.plt', () =>
             const roundTripped = [...resolver.toPairs(bits1), ...r1.parkedControlBits]
                 .sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]);
             expect(roundTripped).toEqual(save.controlBits!);
+            // The Hypergate Pass is not in PLUGINS, so its bit parks — under
+            // its post-#310 namespace, which the v4 -> v5 save migration
+            // re-keyed the file's `HypergatePassv1` pair to.
             expect(r1.parkedControlBits.map(([ns]) => ns))
-                .toEqual(['HypergatePassv1']);
+                .toEqual(['HypergatePassv1.0']);
 
             const saved1 = extractSaveData(first, save.system,
                 { resolver, parked: r1.parkedControlBits })!;

@@ -12,7 +12,9 @@ import {
     MissingSaveContentError, quarantineKeyFor, SAVE_KEY, SaveData,
     saveDefaults, setActiveSaveKey,
 } from '../nova_plugin/pilot/index.js';
-import { ShipComponent } from '../nova_plugin/ship/index.js';
+import {
+    OutfitsStateComponent, ShipComponent,
+} from '../nova_plugin/ship/index.js';
 import type { PilotProfile, PrefsStorage } from './client_prefs.js';
 import {
     pilotQuarantineNote, quarantineOnEntryFailure,
@@ -108,16 +110,19 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
     });
 
     /** Two pilots; the second (active) one flies a missing plug-in's ship. */
-    function pilots(save: Partial<SaveData>) {
+    function pilots(save: Partial<SaveData>, version?: number) {
         const other = createPilot(profile('Other Pilot'), store);
         store.setItem(other.saveKey, encodeSave({
             ...saveDefaults(), ship: STOCK_SHIP, outfits: [], system: 'nova:130',
         }));
         const stranded = createPilot(profile('Kestrel Vane'), store);
-        const bytes = encodeSave({
+        const current = encodeSave({
             ...saveDefaults(), ship: STOCK_SHIP, outfits: [], system: 'nova:130',
             credits: 777_777, ...save,
         });
+        // An OLDER build's save: the same payload under its version.
+        const bytes = version === undefined ? current : JSON.stringify(
+            { version, data: JSON.parse(current).data });
         store.setItem(stranded.saveKey, bytes);
         return { other, stranded, bytes };
     }
@@ -229,34 +234,57 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
     });
 
     // Issue #310: a plug-in's prefix used to stop at the first dot of its
-    // name, so a save written then names "HypergatePassv1.0"'s outfit as
-    // HypergatePassv1:447. The plug-in is still installed, keyed
-    // "HypergatePassv1.0" now; the message must not say it is missing and
-    // must not advise reinstalling it. (No migration: the save is refused
-    // and kept, as for a missing plug-in.)
-    it('names a plug-in installed under its new full-base-name prefix '
-        + 'instead of calling it missing', async () => {
+    // name, so a save written then names "X 1.0"'s outfit as X 1:447. When
+    // the old prefix is AMBIGUOUS — "X 1.0" and "X 1.1" are both installed,
+    // both `X 1` under the old rule — the v4 -> v5 transition cannot say
+    // which one was meant and leaves the ids alone (save_migrations.ts,
+    // PLUGIN_PREFIX_RENAMES). The save is refused and kept, and the message
+    // names both plug-ins instead of calling the content missing or
+    // advising a reinstall.
+    it('names the plug-ins an ambiguous pre-#310 prefix stood for instead '
+        + 'of calling it missing', async () => {
             const { stranded, bytes } = pilots({
-                outfits: [['HypergatePassv1:447', 1]],
-            });
+                outfits: [['X 1:447', 1]],
+            }, 4);
             const data = gameData();
-            data.data.Outfit.map.set('HypergatePassv1.0:447',
-                data.data.Outfit.defaultValue!);
+            for (const id of ['X 1.0:447', 'X 1.1:447']) {
+                data.data.Outfit.map.set(id, data.data.Outfit.defaultValue!);
+            }
             const error = await preparePlayerStart(runtimeFor(data).runtime,
                 new URLSearchParams(), 'peer-1').then(() => undefined, e => e);
             expect(isMissingSaveContentError(error)).toBeTrue();
             expect((error as MissingSaveContentError).missing).toEqual([{
-                kind: 'outfit', id: 'HypergatePassv1:447',
-                renamedAs: ['HypergatePassv1.0'],
+                kind: 'outfit', id: 'X 1:447', renamedAs: ['X 1.0', 'X 1.1'],
             }]);
 
             const notice = quarantineOnEntryFailure(error, store)!;
-            expect(notice).toContain('"HypergatePassv1" (outfit '
-                + 'HypergatePassv1:447), which is probably the installed '
-                + '"HypergatePassv1.0" under the name older versions of the '
-                + 'game gave it');
+            expect(notice).toContain('"X 1" (outfit X 1:447), which is '
+                + 'probably the installed "X 1.0" or "X 1.1" under the name '
+                + 'older versions of the game gave it');
             expect(notice).not.toContain('reinstall');
             expect(notice).toContain('open another pilot or create a new one');
+            expect(store.getItem(stranded.saveKey)).toBe(bytes);
+        });
+
+    // The one installed plug-in #310 renamed ("HypergatePassv1.0", keyed
+    // HypergatePassv1 before) is in the transition's table: a v4 save
+    // naming its outfit under the old prefix is re-keyed on load and flies.
+    it('enters a v4 pilot owning the renamed plug-in\'s outfit under its '
+        + 'pre-#310 prefix, re-keyed', async () => {
+            const { stranded, bytes } = pilots({
+                outfits: [[STOCK_OUTFIT, 1], ['HypergatePassv1:447', 1]],
+                ranks: ['HypergatePassv1:159'],
+            }, 4);
+            const data = gameData();
+            data.data.Outfit.map.set('HypergatePassv1.0:447',
+                data.data.Outfit.defaultValue!);
+            const start = await preparePlayerStart(runtimeFor(data).runtime,
+                new URLSearchParams(), 'peer-1');
+            expect([...start.ship.components.get(OutfitsStateComponent)!.keys()])
+                .toEqual([STOCK_OUTFIT, 'HypergatePassv1.0:447']);
+            expect(getActivePilot(store)?.quarantine).toBeUndefined();
+            // Re-keyed in memory; the stored bytes change only when the
+            // session next writes the save (as v5).
             expect(store.getItem(stranded.saveKey)).toBe(bytes);
         });
 

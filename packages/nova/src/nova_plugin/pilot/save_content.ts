@@ -32,8 +32,11 @@ export interface MissingSaveContent {
      * of, when there are any (absent otherwise). Builds before issue #310
      * keyed a plug-in by the text before the FIRST dot of its name, so a
      * save written then names "X 1.0"'s content as `X 1:…`; the plug-in is
-     * still installed, it is just keyed "X 1.0" now. Nothing migrates
-     * such a save (yet), but saying "not installed" would be wrong.
+     * still installed, it is just keyed "X 1.0" now. The v4 -> v5 save
+     * migration re-keys only the plug-ins in its static table
+     * (save_migrations.ts, PLUGIN_PREFIX_RENAMES); anything else — an
+     * ambiguous old prefix above all — reaches this check unchanged, and
+     * saying "not installed" would be wrong.
      */
     readonly renamedAs?: readonly string[];
 }

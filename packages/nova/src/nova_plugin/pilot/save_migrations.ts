@@ -26,23 +26,30 @@ import { latestVersion, Migration } from '../../common/migrations.js';
  *                    (08-17), discovery (08-19), autoAbortShips (09-05).
  *   v3 (2026-09-06)  the fields whose absence always meant one thing are
  *                    REQUIRED; the migration writes that one thing.
- *   v4 (this build)  each saved escort's PlayerEscort marker states its
+ *   v4 (2026-10-03)  each saved escort's PlayerEscort marker states its
  *                    queued deal as ONE field, `deal` (EscortDeal: none |
  *                    upgrade(toShip) | sale), in place of the
  *                    `pendingUpgrade` / `pendingSale` flag pair — the first
  *                    migration that reaches INSIDE the escort blobs (see
  *                    save_game.ts's WIRE COMPATIBILITY note).
+ *   v5 (this build)  ids and namespaces of a plug-in whose id-space prefix
+ *                    changed with issue #310 (the prefix was the text
+ *                    before its name's FIRST dot; it is now the whole base
+ *                    name minus one known extension) are re-keyed from the
+ *                    old prefix to the new one, by the static table
+ *                    PLUGIN_PREFIX_RENAMES — a TEMPORARY transition (see
+ *                    the table for what removing it entails).
  *
  * FORWARD COMPATIBILITY (a save written by this build, read by the
  * previous one). The previous build's decodeSave refuses any envelope
- * whose version exceeds its own SAVE_VERSION of 3, so it QUARANTINES every
- * save this build writes — that is the version bump itself. Unlike v3,
- * the v4 payload is NOT a superset of its predecessor: the flag pair is
- * gone from every escort marker, so a reader that ignored the version
- * would bring every escort back with its queued deal forgotten. Exported
- * pilot files carry the same envelope and are refused by the previous
- * build's importer for the same reason. The quarantine keeps the bytes;
- * nothing is destroyed.
+ * whose version exceeds its own SAVE_VERSION, so it QUARANTINES every
+ * save this build writes — that is the version bump itself. The v4
+ * payload was NOT a superset of v3 (the deal flag pair is gone from every
+ * escort marker), and a v5 payload names a renamed plug-in's content
+ * under prefixes the v4 build's own quarantine check would refuse anyway.
+ * Exported pilot files carry the same envelope and are refused by the
+ * previous build's importer for the same reason. The quarantine keeps the
+ * bytes; nothing is destroyed.
  */
 
 /** The oldest save version this build reads (there was never a v0). */
@@ -189,6 +196,183 @@ function escortDealsAsState(raw: RawSaveData): RawSaveData {
     return raw;
 }
 
+/**
+ * ----------------------------------------------------------------------------
+ * v4 -> v5: plug-ins whose id-space prefix changed with issue #310
+ * ----------------------------------------------------------------------------
+ *
+ * Old prefix -> new prefix, for each INSTALLED plug-in whose prefix the
+ * #310 rule changed. Before #310 a plug-in's prefix was the text before
+ * the first dot of its file name; it is now the base name minus one known
+ * extension (novaparse's pluginBaseName / PLUGIN_FILE_EXTENSIONS). Of the
+ * 26 plug-ins in the maintainer's Plug-ins directory exactly one changed:
+ * the extensionless `HypergatePassv1.0`, which was keyed `HypergatePassv1`.
+ *
+ * A STATIC TABLE, deliberately (maintainer's ruling on #310, 2026-10-03):
+ * a migration is a pure function of the save's JSON and cannot see the
+ * Plug-ins directory, and the only affected saves are the maintainer's own
+ * pilots. Each entry is unambiguous by construction — exactly one
+ * installed plug-in cut at its first dot gives the old prefix — which is
+ * the ambiguity guard: an old prefix that stood for two plug-ins (`X 1`
+ * for both `X 1.0` and `X 1.1`, the collision #310 exists to fix) is not
+ * in the table, so its ids are left as they are and the #131 check
+ * (save_content.ts) quarantines the pilot, naming the plug-ins it is
+ * probably an older name of. The same goes for any plug-in not listed.
+ *
+ * TEMPORARY. Once the maintainer's pilots have been loaded and re-saved by
+ * a v5 build, this transition has done its job. Removing it means: empty
+ * the table (or make the v4 -> v5 entry `raw => raw`, keeping the version
+ * numbering), or, when the older transitions go too, raise
+ * FIRST_SAVE_VERSION to 5 and drop entries 1-4 of SAVE_MIGRATIONS (saves
+ * older than v5 are then refused as too old and quarantined), and delete
+ * this section and its specs (save_migrations_test.ts, "4 -> 5").
+ */
+export const PLUGIN_PREFIX_RENAMES: ReadonlyMap<string, string> = new Map([
+    ['HypergatePassv1', 'HypergatePassv1.0'],
+]);
+
+/**
+ * The commodity-key tags a cargo key puts in front of a global id
+ * (`junk:<id>`, trade_logic.ts; `mission:<id>`, mission_cargo.ts).
+ * Spelled out, like PLAYER_ESCORT_COMPONENT: the shape a save HAD.
+ */
+const ID_KEY_TAGS = ['junk:', 'mission:'];
+
+/**
+ * `value` with an old prefix re-keyed, when it is a global id of a renamed
+ * plug-in (`HypergatePassv1:447`) or a tagged cargo key around one
+ * (`junk:HypergatePassv1:12`); otherwise `value` itself. Only a WHOLE
+ * string of that form matches, so free text is never touched.
+ */
+function renamedId(value: string): string {
+    for (const tag of ID_KEY_TAGS) {
+        if (value.startsWith(tag)) {
+            const inner = renamedId(value.slice(tag.length));
+            if (inner !== value.slice(tag.length)) {
+                return tag + inner;
+            }
+        }
+    }
+    const colon = value.lastIndexOf(':');
+    if (colon <= 0 || !/^-?\d+$/.test(value.slice(colon + 1))) {
+        return value;
+    }
+    const renamed = PLUGIN_PREFIX_RENAMES.get(value.slice(0, colon));
+    return renamed === undefined ? value : `${renamed}${value.slice(colon)}`;
+}
+
+/**
+ * `value` with every renamed id re-keyed, wherever it sits: a string, an
+ * array element, an object's value OR key (an encoded component may key a
+ * record by id, e.g. a weapons table). Walks the whole JSON, which is
+ * what reaches inside the missions' frozen objectives, the auto-abort
+ * squads and every saved escort blob without listing their shapes.
+ */
+function renameIdsDeep(value: unknown): unknown {
+    if (typeof value === 'string') {
+        return renamedId(value);
+    }
+    if (Array.isArray(value)) {
+        return value.map(renameIdsDeep);
+    }
+    if (isRecord(value)) {
+        const out: Record<string, unknown> = {};
+        for (const [key, inner] of Object.entries(value)) {
+            out[renamedId(key)] = renameIdsDeep(inner);
+        }
+        return out;
+    }
+    return value;
+}
+
+/**
+ * The top-level `[id, value]` lists of the save, by field. An entry the
+ * rename would put on a key the list ALREADY has is dropped: the entry
+ * already under the new prefix was written by a build that knew it (a
+ * cron state the #310 build kept progressing), so it is the current one.
+ */
+const KEYED_ID_FIELDS = ['outfits', 'missions', 'cargo', 'cronStates',
+    'reputations', 'discovery'];
+
+function renameKeyedList(list: unknown): unknown {
+    if (!Array.isArray(list)) {
+        return renameIdsDeep(list);
+    }
+    const present = new Set(list.flatMap(entry =>
+        Array.isArray(entry) && typeof entry[0] === 'string' ? [entry[0]] : []));
+    return list.flatMap(entry => {
+        if (Array.isArray(entry) && typeof entry[0] === 'string') {
+            const key = renamedId(entry[0]);
+            if (key !== entry[0] && present.has(key)) {
+                return [];
+            }
+        }
+        return [renameIdsDeep(entry)];
+    });
+}
+
+/** A bare plug-in prefix (a namespace), re-keyed when it was renamed. */
+function renamedPrefix(value: unknown): unknown {
+    return typeof value === 'string'
+        ? PLUGIN_PREFIX_RENAMES.get(value) ?? value : value;
+}
+
+/** `list` without later repeats (by JSON value), order kept. */
+function withoutRepeats(list: unknown[]): unknown[] {
+    const seen = new Set<string>();
+    return list.filter(entry => {
+        const key = JSON.stringify(entry);
+        if (seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * v4 -> v5: re-key every id and namespace of a plug-in in
+ * PLUGIN_PREFIX_RENAMES. Where a save holds them:
+ *
+ *   ids (`P:n`)      ship, system, outfits, missions (key, and the
+ *                    record's mission / planet / düde / system / gövt ids
+ *                    incl. its frozen shipObjective), cargo keys (`junk:`,
+ *                    `mission:`), cronStates, reputations (gövt ids),
+ *                    ranks, discovery (system ids), autoAbortShips, and
+ *                    anything inside a saved escort's entity blob — by the
+ *                    deep walk, renameIdsDeep.
+ *   namespaces (`P`) controlBits pairs ([namespace, raw bit], parked bits
+ *                    of an unloaded plug-in included) and the `plugins`
+ *                    manifest. The legacy `novaControlBits` are physical
+ *                    numbers (no prefix; the #310 rename moved no plug-in
+ *                    in the load order, which sorts the unchanged entry
+ *                    names), playerUuid / escort uuids are uuids.
+ *
+ * Set-like lists (ranks, controlBits, plugins) drop a repeat the rename
+ * creates; keyed lists keep the entry already under the new key (see
+ * KEYED_ID_FIELDS). Idempotent (nothing old is left to rename) and total
+ * on any JSON: a field of the wrong shape is walked or left for the codec.
+ */
+function renamePluginPrefixes(raw: RawSaveData): RawSaveData {
+    const out: RawSaveData = {};
+    for (const [field, value] of Object.entries(raw)) {
+        if (KEYED_ID_FIELDS.includes(field)) {
+            out[field] = renameKeyedList(value);
+        } else if (field === 'controlBits' && Array.isArray(value)) {
+            out[field] = withoutRepeats(value.map(pair =>
+                Array.isArray(pair) && pair.length === 2
+                    ? [renamedPrefix(pair[0]), pair[1]] : pair));
+        } else if (field === 'plugins' && Array.isArray(value)) {
+            out[field] = withoutRepeats(value.map(renamedPrefix));
+        } else if (field === 'ranks' && Array.isArray(value)) {
+            out[field] = withoutRepeats(value.map(renameIdsDeep));
+        } else {
+            out[field] = renameIdsDeep(value);
+        }
+    }
+    return out;
+}
+
 export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
     {
         from: 1, to: 2,
@@ -209,6 +393,13 @@ export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
             + 'deal as `deal` (none / upgrade / sale) in place of the '
             + 'pendingUpgrade / pendingSale flag pair',
         migrate: escortDealsAsState,
+    },
+    {
+        from: 4, to: 5,
+        summary: 'ids and namespaces of plug-ins whose prefix changed with '
+            + '#310 (first dot -> full base name) are re-keyed to the new '
+            + 'prefix (temporary transition: PLUGIN_PREFIX_RENAMES)',
+        migrate: renamePluginPrefixes,
     },
 ];
 
