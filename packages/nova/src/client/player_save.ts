@@ -151,14 +151,22 @@ export class PlayerPersistence {
      * with nothing to persist. In flight, also notices state changes the
      * SIMULATION made since the last checkpoint — a capture, a mission
      * accepted from a ship — and records a checkpoint for them.
+     *
+     * Returns whether a save was written. Nothing is written unless the
+     * client holds a player ship in a LIVE system, which is what keeps a
+     * broken moment from overwriting a good save: mid-jump, stranded, or
+     * frozen after a failed resync (the `desynced` state, #333 — whose
+     * system is deliberately not live) the stored save stands, so the
+     * periodic and pagehide saves cannot replace it either.
      */
-    saveNow(): void {
+    saveNow(): boolean {
         const data = this.buildSaveData();
         if (!data) {
-            return;
+            return false;
         }
         writeSave(data);
         this.noticeFlightChanges(data);
+        return true;
     }
 
     /** Seeds the in-flight change baseline from the stored history. */

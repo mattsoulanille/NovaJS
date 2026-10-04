@@ -39,6 +39,7 @@ import { runDockingFrame } from './docking.js';
 import {
     flushCarriedJumpEscorts, flushLandedEscorts, localPlayerShipUuid,
 } from './fleet_ledger.js';
+import { onResyncFailed } from './resync_failure.js';
 import type { ClientRuntime } from './runtime.js';
 
 // Fixed-timestep bookkeeping: real elapsed ms not yet simulated.
@@ -359,6 +360,14 @@ export class FramePump {
                 await bridge.step(steps);
                 const frame = await bridge.snapshot();
                 if (liveSystem(runtime.state.state) !== live) {
+                    return;
+                }
+                if (frame.resyncFailed) {
+                    // The host's desync recovery gave up and it is frozen
+                    // for good (#333): save, freeze, offer a reload. The
+                    // frame carries no state; nothing is applied, and the
+                    // `desynced` state stops this pump from here on.
+                    onResyncFailed(runtime, live);
                     return;
                 }
                 // The frame's game-data references resolve in the
