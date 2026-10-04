@@ -437,10 +437,10 @@ export function applyHail(world: World, peerId: string | undefined,
         // playtest bug was an assisting ship flying at the player while still
         // shooting its opponent.
         //
-        // Checked AFTER canRequestAssistance so the ineligible cases (healthy
-        // player, hostile govt) keep their existing outcomes, and evaluated
-        // from synced state with the same predicate the dialog uses, so every
-        // peer refuses on the same tick.
+        // Checked in the dialog's order (escort, no need, busy, then the
+        // government's willingness below) and evaluated from synced state
+        // with the same predicates the dialog uses, so every peer refuses on
+        // the same tick — and a busy ship never takes the player's money.
         if (shipIsFighting({
             npcMode: targetNpcMode,
             npcTarget: target.components.get(TargetComponent)?.target,
