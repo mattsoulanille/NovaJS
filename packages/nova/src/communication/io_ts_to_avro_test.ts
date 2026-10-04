@@ -247,6 +247,48 @@ describe('io-ts to Avro derivation', () => {
             expect(roundTrip(codec, value)).toEqual(value);
         });
 
+        // #188 asked whether string/number-keyed Maps should ride as
+        // objects (an Avro `map`). They should not: Avro writes a map as
+        // blocks of (string key, value) — exactly the bytes of the array
+        // of {_0: string, _1: value} entry records the derivation emits,
+        // so the change would save nothing but move the fingerprint —
+        // and a map READS into a JS object, which lists integer-like keys
+        // first, ascending, losing the insertion order the simulation
+        // iterates in (weapons fire in it).
+        describe('Maps (#188)', () => {
+            const keys = ['nova:200', '10', '2', '__proto__', 'b'];
+
+            it('round-trip in insertion order with key types, -0 and NaN intact', () => {
+                const strings = new Map<string, number>(keys.map((key, i) => [key, i]));
+                strings.set('z', -0);
+                strings.set('n', NaN);
+                const back = roundTrip(map(t.string, t.number), strings) as Map<string, number>;
+                expect([...back.keys()]).toEqual([...keys, 'z', 'n']);
+                expect(Object.is(back.get('z'), -0)).toBeTrue();
+                expect(Number.isNaN(back.get('n'))).toBeTrue();
+
+                const numbers = new Map([[10, 'ten'], [2, 'two'], [-1.5, 'neg'], [0, 'zero']]);
+                const numeric = roundTrip(map(t.number, t.string), numbers) as Map<number, string>;
+                expect([...numeric.entries()]).toEqual([...numbers.entries()]);
+
+                expect((roundTrip(map(t.string, t.number), new Map()) as Map<string, number>).size)
+                    .toBe(0);
+            });
+
+            it('encode to the same bytes an Avro map would, and an Avro map loses the order', () => {
+                const codec = map(t.string, t.number);
+                const { schema } = deriveAvroSchema(codec, { name: 'M' });
+                const entries = new Map([['nova:200', 1], ['b', 2], ['a', 3]]);
+                const asEntries = avroWireCodec(schema).encode(codec.encode(entries));
+                const asMap = avroWireCodec({ type: 'map', values: 'double' });
+                expect([...asEntries]).toEqual([...asMap.encode(Object.fromEntries(entries))]);
+
+                const ordered = new Map([['nova:200', 1], ['10', 2], ['2', 3]]);
+                const read = asMap.decode(avroWireCodec(schema).encode(codec.encode(ordered)));
+                expect(Object.keys(read as object)).toEqual(['2', '10', 'nova:200']);
+            });
+        });
+
         it('cannot map a t.record whose keys are not strings', () => {
             const { failures } = deriveAvroSchema(t.record(t.number, t.string));
             expect(summarize(failures)).toEqual(['unmapped $']);
