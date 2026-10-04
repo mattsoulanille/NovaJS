@@ -20,7 +20,7 @@ import { DisabledComponent, ShipComponent, TargetComponent } from '../nova_plugi
 import { shipDisposition, LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
     AcceptedMission, ShipOfferSpentComponent, MissionOffer, buildAcceptedMissionShips,
-    expandMissionText,
+    expandMissionText, offerAutoAccepts,
 } from '../nova_plugin/missions/index.js';
 import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
@@ -241,6 +241,15 @@ export async function presentShipOffer(world: World, targetUuid: string,
     if (!offer) {
         return false;
     }
+    if (offerAutoAccepts(offer.data)) {
+        // A LinkMission with NO offer text is taken on unasked (#319), the
+        // rule every offer site follows (offerAutoAccepts): straight to the
+        // accept a click would run, ships, briefing and all. No përs in
+        // the stock data or the installed plug-ins links one today.
+        await acceptShipOffer(world, player, target, targetUuid, pers, offer,
+            gameData, universe, popup, systemId);
+        return true;
+    }
     const text = await expandOfferText(world, universe, offer,
         persComponent.name || pers.name, offer.data.offerText);
     if (!text.trim()) {
@@ -248,8 +257,8 @@ export async function presentShipOffer(world: World, targetUuid: string,
         // empty": mïsn Flags 0x0400 (invisible) hides a mission from the
         // player-info list, not from its own offer — mïsn 133 and the
         // four Refuel Traders are all invisible and all have offer text.
-        // An offer with NO text has nothing to show and no way for the
-        // player to consent, so it is not made.
+        // Authored text that EXPANDS to nothing for this player (a dësc
+        // of conditionals) has nothing to show, so that offer is not made.
         return false;
     }
 

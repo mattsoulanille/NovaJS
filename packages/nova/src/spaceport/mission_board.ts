@@ -15,8 +15,8 @@ import { Button } from './button.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import {
-    activeAsOffer, offerRollsForSystem, offerSubstitutions, rollOffers,
-    stillOffered,
+    activeAsOffer, autoAcceptOffers, offerRollsForSystem, offerSubstitutions,
+    rollOffers, stillOffered,
 } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { OpenStarmapOptions } from './starmap.js';
@@ -291,9 +291,14 @@ export class MissionBoard extends Menu<Entity> {
         this.visit = this.transaction.savepoint('mission board');
         // The system visit's rolls (mission_offers.ts OfferRolls): closing
         // and reopening the board does not reroll a 10% mission.
-        this.offers = rollOffers(session, this.universe,
-            this.location, offerRollsForSystem(this.universe.systemIdOfPlanet(
-                this.planetId, session.state.bits)));
+        const rolls = offerRollsForSystem(this.universe.systemIdOfPlanet(
+            this.planetId, session.state.bits));
+        // A listing with no offer text has nothing to list it WITH: it is
+        // taken on as the board opens, through the same accept a click
+        // runs (#319, offerAutoAccepts), and never becomes a row.
+        const { accepted, remaining } = autoAcceptOffers(session,
+            rollOffers(session, this.universe, this.location, rolls), rolls);
+        this.offers = remaining;
         this.buildRows();
         this.selectedIndex = this.rows.findIndex(
             row => row.kind !== 'header');
@@ -301,6 +306,15 @@ export class MissionBoard extends Menu<Entity> {
         this.refreshHeader();
         this.refreshList();
         this.refreshDescription();
+        // ...and its briefing, if it has one, is what the board opens on,
+        // where a clicked accept would have shown it.
+        const briefs = accepted.map(offer => expandMissionText(
+            offer.data.briefText, this.substitutionsFor(offer,
+                session.state.missions.get(offer.data.id)),
+            this.descContext())).filter(brief => brief);
+        if (briefs.length > 0) {
+            this.text.description.text = briefs.join('\n\n');
+        }
         return super.show(input);
     }
 

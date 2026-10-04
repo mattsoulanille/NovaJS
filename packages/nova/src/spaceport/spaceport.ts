@@ -710,9 +710,10 @@ export class Spaceport extends Menu<Entity> {
         const session = transaction.session;
         // The system visit's rolls (mission_offers.ts OfferRolls): a
         // second landing in this system sees the same AvailRandom answers.
+        const rolls = offerRollsForSystem(
+            this.universe.systemIdOfPlanet(this.id, session.state.bits));
         const offers = rollOffers(session, this.universe,
-            LOCATION_MAIN_SPACEPORT, offerRollsForSystem(
-                this.universe.systemIdOfPlanet(this.id, session.state.bits)))
+            LOCATION_MAIN_SPACEPORT, rolls)
             .filter(offer => offer.acceptable);
         if (offers.length === 0) {
             return;
@@ -720,7 +721,7 @@ export class Spaceport extends Menu<Entity> {
         const visit = transaction.savepoint('landing offers');
         try {
             await presentOffers(this.offerPopup, session, this.universe,
-                offers);
+                offers, rolls);
         } finally {
             // RELEASED WHATEVER HAPPENS. presentOffers awaits a popup per
             // offer, and every accept has already mutated the working copy

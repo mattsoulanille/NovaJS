@@ -19,6 +19,36 @@ import { decodePayVal } from '../reputation/index.js';
 /** Axxx / the abort button: run OnAbort, drop cargo, remove. */
 export function abortMission(machinery: MissionMachineryContext,
     missionId: string, outfits?: Map<string, number>, depth = 0): void {
+    endByAbort(machinery, missionId, outfits, depth, true);
+}
+
+/**
+ * A DEFERRED auto-abort (mïsn Flags 0x0001 on a board/rescue goal — see
+ * deferredAutoAbort) ending the mission: everything {@link abortMission}
+ * does EXCEPT the CompReward abort reversal (Flags 0x0040).
+ *
+ * The one rule for both kinds of auto-abort (#320): an auto-abort is the
+ * mission's own scripted end, not the player walking out on it. So it runs
+ * what the Bible attaches to the auto-abort itself — OnAbort ("Any control
+ * bits pointed to by the mission's OnAbort fields will be automatically
+ * set when the mission aborts", Flags 0x0001), the Pay under Flags2 0x0002
+ * ("Apply mission Pay on auto-abort"), the fuel under Flags 0x0008 — and
+ * never the 0x0040 "-5x CompReward reversal on abort", which punishes an
+ * abort the PLAYER chose (OnAbort: "evaluated when the mission is aborted
+ * by the player"). The immediate auto-abort in acceptOffer already worked
+ * that way; this path used to reuse abortMission whole and so applied the
+ * reversal, the asymmetry #320 asked about. The maintainer's ruling there:
+ * "An auto-abort can still pay if the mission says it should" — the
+ * auto-abort is not a penalty in itself.
+ */
+export function autoAbortMission(machinery: MissionMachineryContext,
+    missionId: string, outfits?: Map<string, number>, depth = 0): void {
+    endByAbort(machinery, missionId, outfits, depth, false);
+}
+
+function endByAbort(machinery: MissionMachineryContext,
+    missionId: string, outfits: Map<string, number> | undefined,
+    depth: number, applyAbortReversal: boolean): void {
     const { state } = machinery;
     const active = state.missions.get(missionId);
     if (!active) {
@@ -28,7 +58,9 @@ export function abortMission(machinery: MissionMachineryContext,
     unloadMissionCargo(state, active);
     const mission = machinery.getMission(missionId);
     if (mission) {
-        applyOutcomeReputation(machinery, mission, 'abort');
+        if (applyAbortReversal) {
+            applyOutcomeReputation(machinery, mission, 'abort');
+        }
         runMissionSetString(machinery, mission.onAbort,
             setStringPrefix(mission), outfits, depth);
     }
