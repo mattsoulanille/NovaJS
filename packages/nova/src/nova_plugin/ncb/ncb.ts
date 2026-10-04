@@ -407,6 +407,36 @@ function countNCBTest(expression: NCBTestExpression,
 }
 
 /**
+ * The control bits a parsed test expression reads (its `Bxxx` terms,
+ * bare-number bits included), sorted and de-duplicated. Empty means the
+ * expression's value cannot depend on the bits at all — whatever bits a
+ * context holds, it evaluates the same.
+ */
+export function referencedControlBits(expression: NCBTestExpression): number[] {
+    const bits = new Set<number>();
+    const visit = (node: NCBTestExpression) => {
+        switch (node.type) {
+            case 'bit':
+                bits.add(node.bit);
+                break;
+            case 'not':
+                visit(node.operand);
+                break;
+            case 'and':
+            case 'or':
+            case 'count':
+                node.operands.forEach(visit);
+                break;
+            case 'compare':
+                visit(node.count);
+                break;
+        }
+    };
+    visit(expression);
+    return [...bits].sort((a, b) => a - b);
+}
+
+/**
  * Evaluates a control bit test expression. A blank expression is true.
  * Throws `NCBParseError` on malformed expressions.
  */

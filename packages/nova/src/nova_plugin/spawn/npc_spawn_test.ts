@@ -14,9 +14,10 @@ import { SimulationGameDataResource } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     buildNpcSpawnTable, buildPersSpawnTable,
-    fleetAllowedInSystem, MAX_NPC_POPULATION, persAllowedInSystem,
+    fleetAllowedInSystem, NpcSpawnEntry, MAX_NPC_POPULATION, persAllowedInSystem,
     PERS_SPAWN_CHANCE, pickPersEntry, pickWeighted, rollPopulationTarget,
 } from './npc_spawn_plugin.js';
+import { effectiveNpcSpawnEntries, NO_SPAWN_BITS, spawnTableBits } from './spawn_bits.js';
 
 function govt(overrides: Partial<ReturnType<typeof getDefaultGovtData>>) {
     return { ...getDefaultGovtData(), ...overrides };
@@ -386,10 +387,11 @@ describe('NPC genesis load failures', () => {
 /**
  * shïp AppearOn — "Ships of this type will not show up in dude resources
  * if this expression evaluates to false" (EVN Bible ~:2594) — filters
- * each düde's ship list when the spawn table is built. It is read the way
- * flët AppearOn is read: at genesis, against an EMPTY bit set (the
- * module's multiplayer constraint), from data the table stages anyway,
- * so every peer computes the same table.
+ * each düde's ship list. A test that reads no control bit is decided when
+ * the table is built; one that reads a bit stays in the CANDIDATE table
+ * with its test, for the room's spawn bits to decide (spawn_bits.ts, #140:
+ * the bits of the first player to enter the empty system). Before that
+ * latch — the genesis population — the table is read under the EMPTY set.
  */
 describe('buildNpcSpawnTable and shïp AppearOn', () => {
     const SYSTEM = 'test:system';
@@ -423,25 +425,42 @@ describe('buildNpcSpawnTable and shïp AppearOn', () => {
         return buildNpcSpawnTable(world, SYSTEM, systemData);
     }
 
-    it('drops a ship class whose AppearOn needs a bit nobody can have set',
-        async () => {
+    const shipsOf = (entries: NpcSpawnEntry[]) =>
+        entries.map(entry => entry.dude?.ships.map(({ id }) => id));
+
+    it('drops, under the empty set, a ship class whose AppearOn needs a bit '
+        + 'set — and admits it under bits that set it', async () => {
             const entries = await tableFor(
                 [{ id: 'test:dude', ships: ['test:plain', 'test:gated',
                     'test:negated'] }],
                 { 'test:plain': '', 'test:gated': 'b1', 'test:negated': '!b1' });
+            // The candidates carry the bit-reading tests; the plain class
+            // carries none (its state is what it always was).
             expect(entries.length).toBe(1);
-            expect(entries[0].dude?.ships.map(({ id }) => id))
-                .toEqual(['test:plain', 'test:negated']);
+            expect(entries[0].dude?.ships).toEqual([
+                { id: 'test:plain', weight: 1 },
+                { id: 'test:gated', weight: 1, appearOn: 'b1' },
+                { id: 'test:negated', weight: 1, appearOn: '!b1' },
+            ]);
+            expect(shipsOf(effectiveNpcSpawnEntries(entries, NO_SPAWN_BITS)))
+                .toEqual([['test:plain', 'test:negated']]);
+            expect(shipsOf(effectiveNpcSpawnEntries(entries, new Set([1]))))
+                .toEqual([['test:plain', 'test:gated']]);
+            expect(spawnTableBits({ entries })).toEqual([1]);
         });
 
-    it('drops the düde altogether when every class is gated, so its weight '
-        + 'goes to the rest of the table', async () => {
+    it('drops the düde altogether when the bits admit none of its classes, '
+        + 'so its weight goes to the rest of the table', async () => {
             const entries = await tableFor([
                 { id: 'test:story', ships: ['test:gated', 'test:gated2'] },
                 { id: 'test:common', ships: ['test:plain'] },
             ], { 'test:gated': 'b1', 'test:gated2': 'b2 & !b3',
                 'test:plain': '' });
-            expect(entries.map(entry => entry.dude?.ships.map(({ id }) => id)))
+            expect(shipsOf(effectiveNpcSpawnEntries(entries, NO_SPAWN_BITS)))
+                .toEqual([['test:plain']]);
+            expect(shipsOf(effectiveNpcSpawnEntries(entries, new Set([2]))))
+                .toEqual([['test:gated2'], ['test:plain']]);
+            expect(shipsOf(effectiveNpcSpawnEntries(entries, new Set([2, 3]))))
                 .toEqual([['test:plain']]);
         });
 
@@ -451,33 +470,42 @@ describe('buildNpcSpawnTable and shïp AppearOn', () => {
             const entries = await tableFor(
                 [{ id: 'test:dude', ships: ['test:broken', 'test:plain'] }],
                 { 'test:broken': 'b1 &', 'test:plain': '' });
-            expect(entries[0].dude?.ships.map(({ id }) => id))
-                .toEqual(['test:plain']);
+            expect(shipsOf(entries)).toEqual([['test:plain']]);
             expect(warn).toHaveBeenCalled();
         });
 
-    it('does not stage a class it filtered out', async () => {
-        const { gameData, systemData } = mockData(
-            [{ id: 'test:dude', ships: ['test:gated'] }],
-            { 'test:gated': 'b1' });
-        const world = await makeSystem(SYSTEM, gameData, undefined,
-            { npcs: false });
-        // Staging a class fetches its sprite sheet (entity_data_loader's
-        // loadShipGameData); the filter runs first, so a gated class
-        // never reaches it.
-        const sheetGet = spyOn(gameData.data.SpriteSheet, 'get')
-            .and.callThrough();
-        expect(await buildNpcSpawnTable(world, SYSTEM, systemData))
-            .toEqual([]);
-        expect(sheetGet).not.toHaveBeenCalled();
+    it('decides a test that reads no bit once, at build time', async () => {
+        // `o128` (owns an outfit) is false for a shared spawn whatever the
+        // bits: dropped here, not stored for the latch.
+        const entries = await tableFor(
+            [{ id: 'test:dude', ships: ['test:outfit', 'test:plain'] }],
+            { 'test:outfit': 'o128', 'test:plain': 'p0 | !o128' });
+        expect(entries[0].dude?.ships).toEqual([{ id: 'test:plain', weight: 1 }]);
+        expect(spawnTableBits({ entries })).toEqual([]);
     });
 
-    it('filters the story variants out of real parsed düdes', async () => {
+    it('stages a gated class (a latched table spawns it synchronously) but '
+        + 'not one no bit set can admit', async () => {
+            const { gameData, systemData } = mockData(
+                [{ id: 'test:dude', ships: ['test:never', 'test:gated'] }],
+                { 'test:never': 'o128', 'test:gated': 'b1' });
+            const world = await makeSystem(SYSTEM, gameData, undefined,
+                { npcs: false });
+            // Staging a class fetches its sprite sheet (entity_data_loader's
+            // loadShipGameData).
+            const sheetGet = spyOn(gameData.data.SpriteSheet, 'get')
+                .and.callThrough();
+            const entries = await buildNpcSpawnTable(world, SYSTEM, systemData);
+            expect(shipsOf(entries)).toEqual([['test:gated']]);
+            expect(sheetGet).toHaveBeenCalledTimes(1);
+        });
+
+    it('filters the story variants of real parsed düdes by the bits', async () => {
         // düde "Story Variants" mixes a gated class (the Shrike Ghost,
         // AppearOn `b102`), its complement (the Bastion Hulk, `!b102`)
         // and an ungated one (the Mote Drone); düde "Gated Only" is the
         // Ghost and the Hulk and nothing else. Against the empty bit set
-        // the Ghost goes and the rest stay.
+        // the Ghost goes and the rest stay; with b102 set, the Hulk goes.
         const gameData = await getSyntheticGameData();
         const system = SYNTHETIC.systems.thessaly;
         const world = await makeSystem(system, gameData, undefined,
@@ -491,11 +519,16 @@ describe('buildNpcSpawnTable and shïp AppearOn', () => {
         const entries = await buildNpcSpawnTable(world, system, systemData);
         // (Roaming flëts whose LinkSyst admits this system join the table
         // too; only the düde entries are under test.)
-        expect(entries.filter(entry => entry.dude)
-            .map(entry => entry.dude?.ships.map(({ id }) => id)))
-            .toEqual([
-                [SYNTHETIC.ships.hulk, SYNTHETIC.ships.mote],
-                [SYNTHETIC.ships.hulk],
-            ]);
+        const dudeShips = (bits: ReadonlySet<number>) =>
+            shipsOf(effectiveNpcSpawnEntries(entries, bits)
+                .filter(entry => entry.dude));
+        expect(dudeShips(NO_SPAWN_BITS)).toEqual([
+            [SYNTHETIC.ships.hulk, SYNTHETIC.ships.mote],
+            [SYNTHETIC.ships.hulk],
+        ]);
+        expect(dudeShips(new Set([102]))).toEqual([
+            [SYNTHETIC.ships.ghost, SYNTHETIC.ships.mote],
+            [SYNTHETIC.ships.ghost],
+        ]);
     }, 120_000);
 });
