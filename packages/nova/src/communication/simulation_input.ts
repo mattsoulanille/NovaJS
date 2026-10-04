@@ -428,13 +428,13 @@ function applySimulationInput(world: World, input: SimulationInput,
         case 'control': {
             // The same predicate the wire codec enforces on a relayed
             // record (SimulationInputType's control branch). The
-            // authoring host's own records never cross that codec — it
-            // schedules them straight into its timeline — so without
-            // this check an invalid control (the e2e script's
-            // state:'stop') applied locally while the relay refused the
-            // published record: a self-inflicted desync. Refusing here
-            // too is a pure function of the payload, so every world
-            // drops (or applies) the same control at the same tick.
+            // authoring host now runs the wire itself on every input it
+            // schedules (#295, simulation_bridge_host.ts schedule), so
+            // its own invalid control (the e2e script's state:'stop')
+            // never reaches here; this stays for any record that
+            // reaches applyInputRecords without crossing the codec.
+            // Refusing is a pure function of the payload, so every
+            // world drops (or applies) the same control at the same tick.
             const decoded = t.array(ControlEventType).decode(input.events);
             if (!isLeft(decoded)) {
                 applyControlEvents(world, peerId, input.events);
