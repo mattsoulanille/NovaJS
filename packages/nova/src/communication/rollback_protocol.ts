@@ -142,6 +142,34 @@ export const STATE_HASH_INTERVAL = 60;
 //    (#188, the Map codec, changed nothing on the wire: Map entries
 //    already encode byte-identically to an Avro map, and the object form
 //    would lose insertion order — see nova_ecs datatypes/map.ts.)
+//    Also under 8, no further bump: the NpcSpawner component's codec
+//    gained OPTIONAL fields (#140, nova_plugin/spawn/spawn_bits.ts). They
+//    are `appearOn` on a düde ship class and on a fleet entry,
+//    `roamingShare` on a roaming-fleet entry, and `activeOn` / `evenShare`
+//    on a përs entry, all present only on tables some NCB test gates on a
+//    control bit. On the spawner itself they are `spawnBits` (the room's
+//    spawn bits: the first entrant's control bits restricted to those the
+//    tables read, latched once by NpcRespawnSystem) and `avgShips` (gated
+//    tables only). The wire schema fingerprint changes, and so does the
+//    desync-hash input of a gated system once an entrant arrives. No
+//    message kind, input kind or persisted pilot form changes. An older
+//    snapshot decodes as an ungated, unlatched spawner.
+//    Also under 8, no further bump: a hail to ANOTHER PLAYER's ship is a
+//    message, never a ship action (#332, nova_plugin/encounters/
+//    hail_plugin.ts). HailActionType (the `hail` input's action) gained
+//    the `message` branch ({ kind: 'message', target, message }), whose
+//    `message` is the pressed button's id (PlayerHailMessage: greetings
+//    | assistance | mercy), never free text. It is recorded as the new
+//    synced component
+//    SentHail ({ to, message, seq, at }) on the SENDER's own ship —
+//    serializer- and delta-registered, typed on the Avro wire through the
+//    component registry — and the recipient's client prints it once per
+//    seq on its status line. The wire schema fingerprint and the
+//    desync-hash input of a world holding a SentHail change. No message
+//    kind or input kind is added and no persisted pilot form changes; the
+//    older hail actions encode as before.
+//    (#333's SimulationFrame.resyncFailed rides the worker-to-display
+//    bridge only; it is not on the wire.)
 export const PROTOCOL_VERSION = 8;
 
 /**
