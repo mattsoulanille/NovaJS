@@ -4,7 +4,7 @@ import { GovtData } from 'novadatainterface/govt_data';
 import { PersData } from 'novadatainterface/pers_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { SystemData } from 'novadatainterface/system_data';
-import { GetWorld } from 'nova_ecs/arg_types';
+import { GetWorld, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -15,6 +15,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
+import { Optional } from 'nova_ecs/optional';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
@@ -28,12 +29,16 @@ import { ArmorComponent, ShieldComponent } from '../ship/index.js';
 import { IdFactory, IdFactoryResource } from '../core/index.js';
 import { JUMP_ARRIVAL_MARGIN_S, JUMP_DISTANCE } from '../travel/index.js';
 import { loadWithRetries } from '../core/index.js';
-import { evaluateNCBTest } from '../ncb/index.js';
-import { GOAL_RESCUE } from '../player/index.js';
+import { ControlBitsComponent } from '../ncb/index.js';
+import { ControlledByComponent, GOAL_RESCUE } from '../player/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { FormationComponent, NpcComponent, formationSlotPosition } from '../npc/index.js';
 import { PersComponent } from './pers_plugin.js';
+import {
+    classifySpawnTest, effectiveNpcSpawnEntries, effectivePersEntries,
+    latchedSpawnBits, NO_SPAWN_BITS, spawnTableBits,
+} from './spawn_bits.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import { Stat } from '../core/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
@@ -69,17 +74,15 @@ import { TargetComponent } from '../ship/index.js';
  *    folded into the table under a shared ROAMING_FLEET_WEIGHT so
  *    fleets stay occasional rather than dominating the dude traffic.
  *
- * MULTIPLAYER DESIGN CONSTRAINT (AppearOn): a flët's AppearOn NCB test
- * is evaluated at genesis against an EMPTY control-bit set. Control
- * bits are per-player mission state, but fleet spawning is shared-sim
- * state that must be identical for every peer in a room — one player's
- * mission bits cannot make a fleet exist for everyone (or worse, only
- * on their own world: an instant desync). Until missions land and a
- * design for shared-vs-personal encounters exists, only fleets whose
- * AppearOn passes with no bits set (i.e. unconditional or negated-bit
- * expressions) can spawn. shïp AppearOn, which gates the ship classes a
- * düde may pick from, is read under exactly the same rule (see
- * buildNpcSpawnTable).
+ * MULTIPLAYER DESIGN CONSTRAINT (AppearOn, #140): control bits are
+ * per-player mission state, but fleet spawning is shared-sim state that
+ * must be identical for every peer in a room — so ONE bit set gates the
+ * room's spawns: the bits of the first player to enter the system while
+ * it was empty, latched into the spawner as synced state (spawn_bits.ts
+ * has the whole design). flët AppearOn, the shïp AppearOn that gates the
+ * ship classes a düde may pick from, and përs ActiveOn all read it. The
+ * genesis population, built before anyone has entered, reads the empty
+ * set, exactly as every spawn did before the latch existed.
  *
  * përs unique characters ride the same machinery: the Bible's "When
  * ships are created, there is a 5% chance that a specific AI-person
@@ -118,9 +121,8 @@ import { TargetComponent } from '../ship/index.js';
  * Nova itself must resolve that overlap somehow; nothing in the Bible
  * says how, and every alternative reading costs more (see above).
  *
- * ActiveOn is evaluated under the same empty-bit-set constraint as
- * flët AppearOn either way, and ship/govt are staged like everything
- * else. At most one living instance of a person exists in the system
+ * ActiveOn is evaluated under the same room-spawn-bits rule as flët
+ * AppearOn either way, and ship/govt are staged like everything else. At most one living instance of a person exists in the system
  * at a time. See pers_plugin.ts for what of the përs resource is and
  * isn't applied.
  */
@@ -139,7 +141,19 @@ export const INITIAL_SPAWN_HALF_SIZE = 2000;
  * relative to dude weights that typically sum to ~100. */
 const ROAMING_FLEET_WEIGHT = 15;
 
-const WeightedShip = t.type({ id: t.string, weight: t.number });
+/*
+ * The `appearOn` / `activeOn` / `roamingShare` / `evenShare` fields below
+ * are all OPTIONAL and present only on a table some test gates on a
+ * control bit (see spawn_bits.ts): an ungated table's state is exactly
+ * what it was before the room spawn bits existed.
+ */
+const WeightedShip = t.intersection([
+    t.type({ id: t.string, weight: t.number }),
+    t.partial({
+        /** This class's shïp AppearOn, when it reads a control bit. */
+        appearOn: t.string,
+    }),
+]);
 
 const DudeSpawn = t.type({
     /** Düde AIType; 0 = each ship's InherentAI. */
@@ -165,6 +179,15 @@ export const NpcSpawnEntry = t.intersection([t.type({
 }), t.partial({
     dude: DudeSpawn,
     fleet: FleetSpawn,
+    /** The fleet's flët AppearOn, when it reads a control bit. */
+    appearOn: t.string,
+    /**
+     * A roaming (LinkSyst) fleet whose `weight` is the WHOLE roaming
+     * weight, shared evenly by the roaming fleets the room's bits admit.
+     * Set on every roaming entry of a table where some roaming fleet is
+     * gated; otherwise each carries its fixed share, as always.
+     */
+    roamingShare: t.boolean,
 })]);
 export type NpcSpawnEntry = t.TypeOf<typeof NpcSpawnEntry>;
 
@@ -203,6 +226,14 @@ export const PersSpawnEntry = t.intersection([t.type({
      * what every other person gets anyway).
      */
     holdsForOffer: t.boolean,
+    /** This person's përs ActiveOn, when it reads a control bit. */
+    activeOn: t.string,
+    /**
+     * A LinkSyst-pool person (a system with no Person list) in a pool
+     * some ActiveOn gates: `chance` is recomputed as an even share of
+     * 100% over the people the room's bits admit.
+     */
+    evenShare: t.boolean,
 })]);
 export type PersSpawnEntry = t.TypeOf<typeof PersSpawnEntry>;
 
@@ -221,6 +252,20 @@ export const NpcSpawnerType = t.intersection([t.type({
     /** The people eligible to appear here (see the module comment).
      * Optional so pre-përs snapshots still decode. */
     persEntries: t.array(PersSpawnEntry),
+    /**
+     * The ROOM'S SPAWN BITS (#140, spawn_bits.ts): the control bits of
+     * the first player ship this world contained, restricted to the
+     * bits this spawner's tests read, sorted. Absent until that ship
+     * appears — and forever, on a table no test gates — and never
+     * rewritten once set.
+     */
+    spawnBits: t.array(t.number),
+    /**
+     * The sÿst AvgShips, kept on a gated table only: a system whose
+     * empty-set table spawned nothing at genesis rolls its population
+     * target when the latch admits something (spawn_bits.ts).
+     */
+    avgShips: t.number,
 })]);
 export type NpcSpawnerType = t.TypeOf<typeof NpcSpawnerType>;
 export const NpcSpawnerComponent = new Component<NpcSpawnerType>('NpcSpawner');
@@ -331,12 +376,14 @@ async function stageShip(world: World, shipId: string, govt: string | null) {
 }
 
 /**
- * Builds the system's NPC spawn table: resolves the sÿst dude/fleet
- * entries and the roaming LinkSyst fleets, evaluates flët AppearOn and
- * each düde ship class's shïp AppearOn against an empty bit set (see
- * the multiplayer constraint above), and stages every ship class and
- * govt the table can spawn. Reads only genesis-staged data — never a
- * player's bits — so every peer builds the same table.
+ * Builds the system's CANDIDATE NPC spawn table: resolves the sÿst
+ * dude/fleet entries and the roaming LinkSyst fleets, decides every flët
+ * AppearOn and düde ship class's shïp AppearOn that reads no control
+ * bit, keeps the ones that do with their test for the room's spawn bits
+ * (spawn_bits.ts; see the multiplayer constraint above), and stages
+ * every ship class and govt the table can ever spawn. Reads only
+ * genesis-staged data — never a player's bits — so every peer builds the
+ * same table.
  */
 export async function buildNpcSpawnTable(world: World, systemId: string,
     systemData: SystemData): Promise<NpcSpawnEntry[]> {
@@ -360,60 +407,63 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     // Neither is an entry the data GATES OUT (AppearOn, below): that is
     // the same answer on every world.
 
-    // AppearOn: empty bit set (per-player bits cannot drive shared
-    // spawns; see the module comment). `Exxx` ("has the player explored
-    // system xxx") is left unwired for the same reason and reads false:
-    // discovery is per-CLIENT, per-pilot state that lives in the browser
-    // (discovery_store.ts), and this table is genesis state every peer
-    // must compute identically. Threading the local pilot's record in
-    // here would make one player's map knowledge decide what spawns for
-    // everybody, and would desync a multiplayer system the moment two
+    // AppearOn: a test that reads no control bit is decided here, once,
+    // as it always was; one that reads a bit stays in the table WITH its
+    // test, staged like everything else, for the room's spawn bits to
+    // decide (spawn_bits.ts — the first entrant's bits, latched by
+    // NpcRespawnSystem). Under the empty set the effective table is
+    // exactly the one this builder used to produce. An unparseable test
+    // is false under every bit set: dropped here, warned about.
+    //
+    // `Exxx` ("has the player explored system xxx") reads false under
+    // every bit set: discovery is per-CLIENT, per-pilot state that lives
+    // in the browser (discovery_store.ts), and threading the local
+    // pilot's record in here would make one player's map knowledge decide
+    // what spawns for everybody — and desync a system the moment two
     // pilots with different maps met in it. (Moot in practice: no flët
     // AppearOn in stock or in any installed plug-in uses `Exxx` — see
     // ncb.ts's hasExplored — but the ruling is what keeps it that way.)
-    const emptyBits = { getBit: () => false };
-    const appears = (fleet: FleetData) => {
-        try {
-            return evaluateNCBTest(fleet.appearOn, emptyBits);
-        } catch (e) {
-            console.warn(`Bad AppearOn for fleet ${fleet.id}: ${e}`);
-            return false;
+    //
+    // Returns undefined to DROP the entry, else the test to store (absent
+    // for an always-true one).
+    const gate = (expression: string, what: string):
+        { appearOn?: string } | undefined => {
+        const test = classifySpawnTest(expression);
+        switch (test.kind) {
+            case 'invalid':
+                console.warn(`Bad AppearOn for ${what}: ${test.error}`);
+                return undefined;
+            case 'constant':
+                return test.value ? {} : undefined;
+            case 'gated':
+                return { appearOn: expression };
         }
     };
     // shïp AppearOn — "Ships of this type will not show up in dude
     // resources if this expression evaluates to false" (Bible ~:2594) —
     // is the same gate one level down, on each of a düde's ship classes,
-    // and is read the same way: against the empty set, at genesis, from
-    // the ShipData the staging below warms anyway. Under that reading the
+    // read from the ShipData the staging below warms anyway. Gated: the
     // stock story-beat variants (the Polaris cloaking hulls nova:257-273
-    // `b1301`/`b323`..., the `b8888` pirate variants nova:398-404) never
-    // spawn, and düde nova:182 — four nova:406 `b1307` — spawns nothing;
-    // the negated-bit majority (every `!b333` Fed/Auroran capital ship)
-    // spawns as before. A düde left with no ships (every class gated
-    // out) is dropped identically everywhere — that is data, not a load
-    // failure: its weight goes to the rest of the table.
-    const shipAppears = (ship: ShipData) => {
-        try {
-            return evaluateNCBTest(ship.appearOn, emptyBits);
-        } catch (e) {
-            console.warn(`Bad AppearOn for ship ${ship.id}: ${e}`);
-            return false;
-        }
-    };
-
+    // `b1301`/`b323`..., the `b8888` pirate variants nova:398-404, düde
+    // nova:182's four nova:406 `b1307`) spawn once the first entrant has
+    // the bit; the negated-bit majority (every `!b333` Fed/Auroran
+    // capital ship) spawns until they do. A düde none of whose classes the
+    // room's bits admit is dropped from the effective table — data, not
+    // a load failure: its weight goes to the rest of the table.
     for (const { id, weight } of systemData.dudes) {
         const dude = await loadWithRetries(
             () => gameData.data.Dude.get(id), `düde ${id}`);
-        const ships: Array<{ id: string, weight: number }> = [];
+        const ships: Array<{ id: string, weight: number, appearOn?: string }> = [];
         for (const ship of dude.ships) {
             const shipData = await loadWithRetries(
                 () => gameData.data.Ship.get(ship.id),
                 `NPC ship ${ship.id}`);
-            if (!shipAppears(shipData)) {
+            const gated = gate(shipData.appearOn, `ship ${shipData.id}`);
+            if (!gated) {
                 continue;
             }
             await stageShip(world, ship.id, dude.govt);
-            ships.push({ id: ship.id, weight: ship.weight });
+            ships.push({ id: ship.id, weight: ship.weight, ...gated });
         }
         if (ships.length > 0) {
             entries.push({
@@ -440,10 +490,11 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     for (const { id, weight } of systemData.fleets) {
         const fleet = await loadWithRetries(
             () => gameData.data.Fleet.get(id), `flët ${id}`);
-        if (!appears(fleet)) {
+        const gated = gate(fleet.appearOn, `fleet ${fleet.id}`);
+        if (!gated) {
             continue;
         }
-        entries.push({ weight, fleet: await stageFleet(fleet) });
+        entries.push({ weight, fleet: await stageFleet(fleet), ...gated });
     }
 
     // Roaming fleets: scan every flët's LinkSyst against this system.
@@ -455,7 +506,7 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
         ? await loadWithRetries(() => gameData.data.Govt.get(systemData.govt!),
             `system govt ${systemData.govt}`)
         : undefined;
-    const roaming: FleetData[] = [];
+    const roaming: Array<{ fleet: FleetData, gated: { appearOn?: string } }> = [];
     const fleetIds = [...(await gameData.ids).Fleet].sort();
     for (const fleetId of fleetIds) {
         const fleet = await loadWithRetries(
@@ -468,14 +519,25 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
                 : undefined;
         const allowed = fleetAllowedInSystem(link, systemId,
             systemData.govt, systemGovtData, linkGovtData);
-        if (allowed && appears(fleet)) {
-            roaming.push(fleet);
+        const gated = allowed ? gate(fleet.appearOn, `fleet ${fleet.id}`)
+            : undefined;
+        if (gated) {
+            roaming.push({ fleet, gated });
         }
     }
-    for (const fleet of roaming) {
+    // The roaming fleets share ROAMING_FLEET_WEIGHT evenly. When some
+    // of them are gated, HOW MANY share it is the room's bits' call, so
+    // each entry carries the whole weight and is marked to be divided
+    // by the admitted count (spawn_bits.ts effectiveNpcSpawnEntries) —
+    // the same division as here, so the empty set's weights are these.
+    const roamingShare = roaming.some(({ gated }) => gated.appearOn !== undefined);
+    for (const { fleet, gated } of roaming) {
         entries.push({
-            weight: ROAMING_FLEET_WEIGHT / roaming.length,
+            weight: roamingShare ? ROAMING_FLEET_WEIGHT
+                : ROAMING_FLEET_WEIGHT / roaming.length,
             fleet: await stageFleet(fleet),
+            ...gated,
+            ...(roamingShare ? { roamingShare: true } : {}),
         });
     }
 
@@ -503,9 +565,10 @@ async function pooledMap<T, R>(items: readonly T[],
  * Builds the system's përs table (see the module comment for where the
  * people come from and what the chances mean): the sÿst Person list
  * when the system has one, otherwise the LinkSyst pool spread evenly.
- * ActiveOn must pass with no bits set either way (the same shared-spawn
- * constraint as flët AppearOn), and every ship class and govt the table
- * can spawn is staged. Resource order (and sorted ids, and order-
+ * ActiveOn is read like flët AppearOn either way (decided here when it
+ * reads no control bit, kept for the room's spawn bits when it does —
+ * spawn_bits.ts), and every ship class and govt the table can ever
+ * spawn is staged. Resource order (and sorted ids, and order-
  * preserving pooled loads) so the table is identical on every world;
  * the bounded concurrency and per-ship-class dedup keep the fallback
  * scan of several hundred përs resources off the genesis critical path.
@@ -517,23 +580,34 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         throw new Error('Expected SimulationGameDataResource to exist');
     }
 
-    // ActiveOn under an empty bit set (per-player bits cannot drive
-    // shared spawns; nor can `Exxx`, per-player map knowledge — see
-    // buildFleetSpawnTable's emptyBits).
-    const active = (pers: PersData) => {
-        try {
-            return !pers.activeOn || evaluateNCBTest(pers.activeOn,
-                { getBit: () => false });
-        } catch (e) {
-            console.warn(`Bad ActiveOn for përs ${pers.id}: ${e}`);
-            return false;
+    // ActiveOn exactly as buildNpcSpawnTable reads AppearOn: decided here
+    // when it reads no control bit, stored for the room's spawn bits when
+    // it does (spawn_bits.ts), false (and warned about) when it does not
+    // parse. `Exxx` reads false — per-player map knowledge; see there.
+    // Returns undefined to drop the person, else the test to store.
+    const active = (pers: PersData): { activeOn?: string } | undefined => {
+        if (!pers.activeOn) {
+            return {};
+        }
+        const test = classifySpawnTest(pers.activeOn);
+        switch (test.kind) {
+            case 'invalid':
+                console.warn(`Bad ActiveOn for përs ${pers.id}: ${test.error}`);
+                return undefined;
+            case 'constant':
+                return test.value ? {} : undefined;
+            case 'gated':
+                return { activeOn: pers.activeOn };
         }
     };
+    type Eligible = { pers: PersData, chance: number, activeOn?: string };
 
     // Load failures fail construction rather than dropping the person
     // or their ship class (#60) — see buildNpcSpawnTable's ruling; the
     // përs table is the same genesis state.
-    let eligible: Array<{ pers: PersData, chance: number }>;
+    let eligible: Eligible[];
+    /** A LinkSyst pool that some ActiveOn gates (see evenShare). */
+    let evenShare = false;
     if (systemData.persons.length > 0) {
         // The authored cast. LinkSyst is deliberately not consulted
         // (see the module comment: 160 of 228 stock entries would die).
@@ -542,9 +616,9 @@ export async function buildPersSpawnTable(world: World, systemId: string,
                 const pers = await loadWithRetries(
                     () => gameData.data.Pers.get(id),
                     `përs ${id} listed by ${systemId}`);
-                return active(pers) ? { pers, chance } : undefined;
-            })).filter((entry): entry is { pers: PersData, chance: number } =>
-                entry !== undefined);
+                const gated = active(pers);
+                return gated ? { pers, chance, ...gated } : undefined;
+            })).filter((entry): entry is Eligible => entry !== undefined);
     } else {
         const systemGovtData = systemData.govt
             ? await loadWithRetries(
@@ -566,10 +640,19 @@ export async function buildPersSpawnTable(world: World, systemId: string,
                 systemGovtData, linkGovtData)) {
                 return undefined;
             }
-            return active(pers) ? pers : undefined;
-        })).filter((pers): pers is PersData => pers !== undefined);
-        // Evenly over the whole 5% window: the Bible's flat rate.
-        eligible = pool.map(pers => ({ pers, chance: 100 / pool.length }));
+            const gated = active(pers);
+            return gated ? { pers, ...gated } : undefined;
+        })).filter((entry): entry is { pers: PersData, activeOn?: string } =>
+            entry !== undefined);
+        // Evenly over the whole 5% window: the Bible's flat rate. With a
+        // gated member, how many share it is the room's bits' call, so
+        // the share is recomputed over the admitted people
+        // (spawn_bits.ts effectivePersEntries) by this same division.
+        evenShare = pool.some(({ activeOn }) => activeOn !== undefined);
+        eligible = pool.map(entry => ({
+            ...entry,
+            chance: evenShare ? 100 : 100 / pool.length,
+        }));
     }
 
     // Stage each distinct ship-class/govt pair once.
@@ -606,7 +689,7 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         }
     });
 
-    return eligible.map(({ pers, chance }) => ({
+    return eligible.map(({ pers, chance, activeOn }) => ({
             id: pers.id,
             name: pers.name,
             subtitle: pers.subtitle,
@@ -616,6 +699,8 @@ export async function buildPersSpawnTable(world: World, systemId: string,
             chance,
             ...(pers.linkMission && rescueMissions.has(pers.linkMission)
                 ? { holdsForOffer: true } : {}),
+            ...(activeOn !== undefined ? { activeOn } : {}),
+            ...(evenShare ? { evenShare: true } : {}),
         }));
 }
 
@@ -896,8 +981,9 @@ export function jumpInState(shipData: ShipData,
 }
 
 /**
- * Spawns one draw from the spawn table: a single dude ship, or a whole
- * fleet (lead + escorts in formation slots). `atEdge` selects jump-in
+ * Spawns one draw from the spawn table — the candidate tables as `bits`
+ * see them (spawn_bits.ts; the empty set by default): a single dude
+ * ship, or a whole fleet (lead + escorts in formation slots). `atEdge` selects jump-in
  * kinematics (respawns) vs. scattered in-system placement (genesis).
  * Deterministic: seeded Random only, ids from the IdFactory, and
  * getCached reads staged at genesis.
@@ -915,9 +1001,14 @@ export function jumpInState(shipData: ShipData,
  */
 export function spawnNpc(world: World,
     gameData: SimulationGameDataInterface, ids: IdFactory, random: Random,
-    entries: NpcSpawnEntry[], atEdge: boolean,
-    persEntries: readonly PersSpawnEntry[] = []): number {
+    candidates: readonly NpcSpawnEntry[], atEdge: boolean,
+    persCandidates: readonly PersSpawnEntry[] = [],
+    bits: ReadonlySet<number> = NO_SPAWN_BITS): number {
     const entities = world.entities;
+    // The tables `bits` (the room's spawn bits, or the empty set before
+    // the latch — spawn_bits.ts) admit; for an ungated table, the table.
+    const entries = effectiveNpcSpawnEntries(candidates, bits);
+    const persEntries = effectivePersEntries(persCandidates, bits);
     // Each spawn draw may also create a unique person (see
     // maybeSpawnPers); rolled first so the draw count per spawn stays
     // fixed regardless of what the dude/fleet pick does.
@@ -1036,10 +1127,14 @@ export async function spawnNpcs(world: World, systemId: string,
         throw new Error('Expected game data, random, and id factory resources');
     }
 
+    // The CANDIDATE tables (spawn_bits.ts): genesis runs before anyone
+    // has entered, so the initial population sees them under the empty
+    // bit set — the very tables, weights and draws of the empty-set rule.
     const entries = await buildNpcSpawnTable(world, systemId, systemData);
     const persEntries = await buildPersSpawnTable(world, systemId, systemData);
-    const targetCount = entries.length === 0 ? 0
-        : rollPopulationTarget(systemData.avgShips, random);
+    const targetCount =
+        effectiveNpcSpawnEntries(entries, NO_SPAWN_BITS).length === 0 ? 0
+            : rollPopulationTarget(systemData.avgShips, random);
 
     let population = 0;
     // Fleets can overshoot the target by their escort count; that's
@@ -1047,39 +1142,82 @@ export async function spawnNpcs(world: World, systemId: string,
     // decays as ships depart.
     for (let guard = 0; population < targetCount && guard < 100; guard++) {
         population += spawnNpc(world, gameData, ids, random, entries,
-            false, persEntries);
+            false, persEntries, NO_SPAWN_BITS);
     }
 
+    const gated = spawnTableBits({ entries, persEntries }).length > 0;
     const spawner = new Entity('npc spawner')
         .addComponent(NpcSpawnerComponent, {
             targetCount,
             entries,
             nextSpawn: 0,
             persEntries,
+            // Only a gated table can need it (latchSpawnBits).
+            ...(gated ? { avgShips: systemData.avgShips } : {}),
         });
     world.entities.set('npc spawner', spawner);
 }
 
 const LiveNpcsQuery = new Query([NpcComponent] as const);
+/** Player ships: the room's entrants (spawn_bits.ts). */
+const EntrantsQuery = new Query(
+    [ControlledByComponent, Optional(ControlBitsComponent), UUID] as const);
+
+/**
+ * Latches the room's spawn bits (spawn_bits.ts) from the first player
+ * ship this world contains: on the first tick one is present, keep the
+ * bits of the lowest-uuid player ship among those the spawner's tests
+ * read. Once set, never rewritten. A table no test gates never latches
+ * (it has nothing to decide). Deterministic: synced state in, synced
+ * state out, uuid-sorted, and the one Random draw — the deferred
+ * population roll — happens only on a gated table that spawned nothing
+ * at genesis and now has something to spawn.
+ */
+export function latchSpawnBits(spawner: NpcSpawnerType,
+    entrants: ReadonlyArray<readonly [unknown, ReadonlySet<number> | undefined, string]>,
+    random: Random) {
+    if (spawner.spawnBits !== undefined || entrants.length === 0) {
+        return;
+    }
+    const read = spawnTableBits(spawner);
+    if (read.length === 0) {
+        return;
+    }
+    let first = entrants[0]!;
+    for (const entrant of entrants) {
+        if (entrant[2] < first[2]) {
+            first = entrant;
+        }
+    }
+    const own = first[1];
+    spawner.spawnBits = own ? read.filter(bit => own.has(bit)) : [];
+    if (spawner.targetCount === 0 && spawner.avgShips !== undefined
+        && effectiveNpcSpawnEntries(spawner.entries,
+            latchedSpawnBits(spawner)).length > 0) {
+        spawner.targetCount = rollPopulationTarget(spawner.avgShips, random);
+    }
+}
 
 /**
  * Replaces departed/destroyed NPCs one at a time, jumping in at the
  * system edge, until the population is back at target. Mirrors
- * AsteroidRespawnSystem.
+ * AsteroidRespawnSystem. Also latches the room's spawn bits, first, so
+ * a respawn on the entrant's own tick already sees them.
  */
 export const NpcRespawnSystem = new System({
     name: 'NpcRespawnSystem',
-    args: [NpcSpawnerComponent, LiveNpcsQuery, TimeResource, GetWorld,
-        RandomResource, IdFactoryResource,
+    args: [NpcSpawnerComponent, LiveNpcsQuery, EntrantsQuery, TimeResource,
+        GetWorld, RandomResource, IdFactoryResource,
         SimulationGameDataResource] as const,
-    step(spawner, liveNpcs, time, world, random, ids, gameData) {
+    step(spawner, liveNpcs, entrants, time, world, random, ids, gameData) {
+        latchSpawnBits(spawner, entrants, random);
         if (time.time < spawner.nextSpawn
             || liveNpcs.length >= spawner.targetCount) {
             return;
         }
         spawner.nextSpawn = time.time + NPC_RESPAWN_INTERVAL_MS;
         spawnNpc(world, gameData, ids, random, spawner.entries, true,
-            spawner.persEntries ?? []);
+            spawner.persEntries ?? [], latchedSpawnBits(spawner));
     },
     // After TimeSystem for the same late-join determinism reason as
     // AsteroidMotionSystem.

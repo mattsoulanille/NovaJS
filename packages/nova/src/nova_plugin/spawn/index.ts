@@ -8,6 +8,7 @@
 export * from './entity_data_loader.js';
 export * from './pers_plugin.js';
 export * from './npc_spawn_plugin.js';
+export * from './spawn_bits.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { PersPlugin } from './pers_plugin.js';

@@ -18,6 +18,7 @@ import {
     PersSpawnEntry,
     spawnNpc,
 } from './npc_spawn_plugin.js';
+import { effectivePersEntries, NO_SPAWN_BITS } from './spawn_bits.js';
 
 /**
  * përs spawning. The MECHANISM specs run on the synthetic scenario (its
@@ -129,11 +130,15 @@ describe('përs spawning', () => {
             const systemData = await gameData.data.System.get('nova:136');
             expect(systemData.persons).toEqual([]);
 
-            const table = await buildPersSpawnTable(
+            const candidates = await buildPersSpawnTable(
                 harness.world, 'nova:136', systemData);
             const again = await buildPersSpawnTable(
                 harness.world, 'nova:136', systemData);
-            expect(table).toEqual(again);
+            expect(candidates).toEqual(again);
+            // The table the empty bit set sees (the genesis population's;
+            // spawn_bits.ts): the pool's even share is over the people it
+            // admits.
+            const table = effectivePersEntries(candidates, NO_SPAWN_BITS);
 
             // The whole pool shares the Bible's flat 5% evenly.
             const total = table.reduce((sum, e) => sum + e.chance, 0);
@@ -171,20 +176,23 @@ describe('përs spawning', () => {
         const gameData = await getIntegrationGameData();
 
         // The shared-spawn constraint: a person whose ActiveOn needs a
-        // set control bit (Jack Folstam, "b0 & !b8") is excluded even
-        // when the system's Person fields name him, because per-player
-        // bits cannot drive shared spawns (see the npc_spawn_plugin
-        // module comment).
+        // set control bit (Jack Folstam, "b0 & !b8") is excluded under
+        // the empty bit set — the genesis population's — even when the
+        // system's Person fields name him, and admitted once the room's
+        // spawn bits (the first entrant's, spawn_bits.ts) set b0.
         const jackSystem = await gameData.data.System.get('nova:132');
         expect(jackSystem.persons).toContain({ id: 'nova:131', chance: 10 });
         expect((await gameData.data.Pers.get('nova:131')).activeOn)
             .toBe('b0 & !b8');
 
-        const jackTable = await buildPersSpawnTable(
+        const candidates = await buildPersSpawnTable(
             harness.world, 'nova:132', jackSystem);
+        const jackTable = effectivePersEntries(candidates, NO_SPAWN_BITS);
         expect(jackTable.some(entry => entry.id === 'nova:131')).toBeFalse();
         // The rest of that system's authored cast survives.
         expect(jackTable.length).toBe(jackSystem.persons.length - 1);
+        expect(effectivePersEntries(candidates, new Set([0]))
+            .find(entry => entry.id === 'nova:131')?.chance).toBe(10);
     }, 120_000);
 
     it('spawns people deterministically, at most one of each',
