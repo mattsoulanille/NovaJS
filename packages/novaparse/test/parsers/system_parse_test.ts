@@ -14,14 +14,17 @@ function makeIdSpace(): NovaResources {
     idSpace.gövt[128] = stub("nova:128");
     idSpace.përs[510] = stub("nova:510");
     idSpace.përs[511] = stub("nova:511");
+    idSpace.flët[145] = stub("nova:145");
     return idSpace;
 }
 
 /**
  * A sÿst listing përs 510 (2%), 511 (15%), and a missing përs 512 (30%)
- * in its Person fields.
+ * in its Person fields, with the given ReinfFleet / ReinfTime /
+ * ReinfIntrval.
  */
-function buildSyst(): ResourceBuilder {
+function buildSyst(
+    reinforcement: [number, number, number] = [-1, 0, 0]): ResourceBuilder {
     const b = new ResourceBuilder();
     b.int16(42).int16(-84)                                          // position
         .array([129, ...Array(15).fill(-1)], v => b.int16(v))       // links
@@ -39,16 +42,16 @@ function buildSyst(): ResourceBuilder {
         .int16(0)                                                   // murk
         .uint16(0)                                                  // asteroidTypes
         .string("", 0x100)                                          // visibility
-        .int16(-1)                                                  // reinf fleet
-        .int16(0)                                                   // reinf time
-        .int16(0)                                                   // reinf interval
+        .int16(reinforcement[0])                                    // reinf fleet
+        .int16(reinforcement[1])                                    // reinf time
+        .int16(reinforcement[2])                                    // reinf interval
         .skip(0x10);                                                // unused
     return b;
 }
 
-function parseSystem() {
+function parseSystem(reinforcement?: [number, number, number]) {
     const resource = new SystResource(
-        buildSyst().resource("sÿst", 128, "Test System"), makeIdSpace());
+        buildSyst(reinforcement).resource("sÿst", 128, "Test System"), makeIdSpace());
     resource.globalID = "nova:128";
     resource.prefix = "nova";
     return SystemParse(resource, () => { });
@@ -74,5 +77,31 @@ describe("SystemParse", () => {
     it("stays JSON-serializable", async () => {
         const system = await parseSystem();
         expect(() => JSON.stringify(system)).not.toThrow();
+    });
+
+    it("resolves the reinforcement fleet with its delay and regeneration "
+        + "interval (Sol: flët 145, 480 frames, 1 day)", async () => {
+            const system = await parseSystem([145, 480, 1]);
+            expect(system.reinforcements).toEqual({
+                fleet: "nova:145", delayFrames: 480, regenerationDays: 1,
+            });
+        });
+
+    it("keeps a ReinfIntrval of 0 (a fleet every day)", async () => {
+        const system = await parseSystem([145, 300, 0]);
+        expect(system.reinforcements!.regenerationDays).toBe(0);
+    });
+
+    it("has no reinforcements for ReinfFleet -1 or 0", async () => {
+        expect((await parseSystem([-1, 0, 0])).reinforcements).toBeNull();
+        // 198 stock systems store 0 here, the Bible's other "unused" value.
+        expect((await parseSystem([0, 450, 3])).reinforcements).toBeNull();
+    });
+
+    it("drops an unresolvable reinforcement fleet with a warning", async () => {
+        spyOn(console, "warn");
+        expect((await parseSystem([999, 450, 3])).reinforcements).toBeNull();
+        expect(console.warn).toHaveBeenCalledWith(
+            jasmine.stringContaining("reinforcement fleet"));
     });
 });

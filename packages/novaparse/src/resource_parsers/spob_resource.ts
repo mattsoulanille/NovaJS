@@ -51,7 +51,8 @@ class SpobResource extends BaseResource {
     ambientSound: number;
     /** düde id of the defence fleet; -1 = none. */
     defenseDude: number;
-    /** Number of defence ships (see EVN Bible p. 60 for the wave encoding). */
+    /** Number of defence ships, raw; 1000+ is the wave encoding decoded by
+     * planet_parse.ts decodeDefenseCount (EVN Bible p. 60). */
     defenseCount: number;
     /** Second 16-bit flag set (animation, hypergate/wormhole, ... — p. 61). */
     flags2: number;

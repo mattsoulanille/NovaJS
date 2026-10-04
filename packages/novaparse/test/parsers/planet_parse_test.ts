@@ -2,7 +2,7 @@ import "jasmine";
 import { getDefaultPictData } from "novadatainterface/pict_data";
 import { getEmptyNovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { SpobResource } from "../../src/resource_parsers/spob_resource.js";
-import { PlanetParse } from "../../src/parsers/planet_parse.js";
+import { decodeDefenseCount, PlanetParse } from "../../src/parsers/planet_parse.js";
 import { ResourceBuilder } from "../resource_parsers/resource_builder.js";
 
 /**
@@ -21,6 +21,19 @@ function buildSpob(opts: {
     /** The eight SpecialTech slots (short lists are padded with -1). */
     specialTech?: number[],
     flags?: number,
+    tribute?: number,
+    defenseDude?: number,
+    defenseCount?: number,
+    onDominate?: string,
+    onRelease?: string,
+    gravity?: number,
+    weapon?: number,
+    strength?: number,
+    deadType?: number,
+    deadTime?: number,
+    explosion?: number,
+    onDestroy?: string,
+    onRegen?: string,
 }): ResourceBuilder {
     const links = [...opts.hyperlinks];
     while (links.length < 8) {
@@ -34,30 +47,30 @@ function buildSpob(opts: {
     b.int16(100).int16(200)                    // position
         .int16(opts.type ?? 30)                // graphic type
         .uint32(opts.flags ?? 0)               // flags
-        .int16(0)                              // tribute
+        .int16(opts.tribute ?? 0)              // tribute
         .int16(opts.techLevel ?? 0)            // techLevel
         .array(special.slice(0, 3), v => b.int16(v)) // specialTech (first 3)
         .int16(-1)                             // government
         .int16(0)                              // minStatus
         .int16(opts.landingPictID ?? 0)        // landingPictID (CustPicID)
         .int16(opts.ambientSound)              // ambientSound / emergence angle
-        .int16(-1)                             // defenseDude
-        .int16(0)                              // defenseCount
+        .int16(opts.defenseDude ?? -1)         // defenseDude
+        .int16(opts.defenseCount ?? 0)         // defenseCount
         .uint16(opts.flags2)                   // flags2
         .int16(opts.animationDelay ?? 0)       // animationDelay
         .int16(0)                              // frame0Bias
         .array(links, v => b.int16(v))         // hyperlinks
-        .string("", 0xff)                      // onDominate
-        .string("", 0xff)                      // onRelease
+        .string(opts.onDominate ?? "", 0xff)   // onDominate
+        .string(opts.onRelease ?? "", 0xff)    // onRelease
         .int32(opts.fee)                       // landingFee
-        .int16(0)                              // gravity
-        .int16(-1)                             // weapon
-        .int32(0)                              // strength
-        .int16(-1)                             // deadType
-        .int16(-1)                             // deadTime
-        .int16(-1)                             // explosion
-        .string("", 0xff)                      // onDestroy
-        .string("", 0xff)                      // onRegen
+        .int16(opts.gravity ?? 0)              // gravity
+        .int16(opts.weapon ?? -1)              // weapon
+        .int32(opts.strength ?? 0)             // strength
+        .int16(opts.deadType ?? -1)            // deadType
+        .int16(opts.deadTime ?? -1)            // deadTime
+        .int16(opts.explosion ?? -1)           // explosion
+        .string(opts.onDestroy ?? "", 0xff)    // onDestroy
+        .string(opts.onRegen ?? "", 0xff)      // onRegen
         .array(special.slice(3), v => b.int16(v)); // specialTech (last 5)
     return b;
 }
@@ -405,4 +418,220 @@ describe("PlanetParse outfitter stock fields", () => {
             expect(planet.flags.buysAnyOutfit).toBe(true);
             expect(planet.gate!.kind).toBe("hypergate");
         });
+});
+
+describe("decodeDefenseCount (spöb DefCount wave encoding)", () => {
+    it("reads a DefCount below 1000 as that many ships, all at once", () => {
+        expect(decodeDefenseCount(1)).toEqual({ count: 1, waveSize: null });
+        expect(decodeDefenseCount(12)).toEqual({ count: 12, waveSize: null });
+        expect(decodeDefenseCount(999)).toEqual({ count: 999, waveSize: null });
+    });
+
+    it("decodes the Bible's two wave examples", () => {
+        // "a value of 1082 would be four waves of two ships for a total of
+        // eight. A value of 2005 would create waves of five ships each,
+        // with 100 ships total".
+        expect(decodeDefenseCount(1082)).toEqual({ count: 8, waveSize: 2 });
+        expect(decodeDefenseCount(2005)).toEqual({ count: 100, waveSize: 5 });
+    });
+
+    it("decodes the stock DefCounts", () => {
+        expect(decodeDefenseCount(2206)).toEqual({ count: 120, waveSize: 6 });
+        expect(decodeDefenseCount(3406)).toEqual({ count: 240, waveSize: 6 });
+        expect(decodeDefenseCount(7006)).toEqual({ count: 600, waveSize: 6 });
+    });
+
+    it("subtracts 1 from the FIRST digit of a five-digit DefCount", () => {
+        // 32767 -> "3276" less one leading unit -> 2276 ships, waves of 7:
+        // exactly ResForge's documented "max 2276".
+        expect(decodeDefenseCount(32767)).toEqual({ count: 2276, waveSize: 7 });
+        expect(decodeDefenseCount(12345)).toEqual({ count: 234, waveSize: 5 });
+    });
+
+    it("launches a wave-encoded fleet at once when the wave digit is 0", () => {
+        expect(decodeDefenseCount(1080)).toEqual({ count: 8, waveSize: null });
+    });
+
+    it("decodes no ships for zero, negative and zero-total DefCounts", () => {
+        expect(decodeDefenseCount(0)).toBeNull();
+        expect(decodeDefenseCount(-1)).toBeNull();
+        expect(decodeDefenseCount(1003)).toBeNull();
+        expect(decodeDefenseCount(10004)).toBeNull();
+    });
+});
+
+describe("PlanetParse defence, weapon, domination and destruction (#306)", () => {
+    let idSpace: ReturnType<typeof getEmptyNovaResources>;
+    const stub = (globalID: string) => ({ globalID }) as never;
+
+    beforeEach(() => {
+        idSpace = getEmptyNovaResources();
+        idSpace.düde[130] = stub("nova:130");
+        idSpace.wëap[196] = stub("nova:196");
+        idSpace.bööm[128] = stub("nova:128");
+        idSpace.bööm[131] = stub("nova:131");
+        idSpace.spïn[1040] = ({ spriteID: 2077 }) as never;
+        idSpace.rlëD[2077] = stub("nova:2077");
+        idSpace.rlëD[2049] = stub("nova:2049");
+        idSpace.rlëD[2099] = stub("nova:2099");
+    });
+
+    function parseWith(opts: Partial<Parameters<typeof buildSpob>[0]>) {
+        const spob = new SpobResource(
+            buildSpob({
+                flags2: 0, hyperlinks: [], ambientSound: -1, fee: 0, ...opts,
+            }).resource("spöb", 200), idSpace);
+        return parse(spob);
+    }
+
+    it("projects a wave-launched defence fleet (Earth: düde 130, 7006)",
+        async () => {
+            const planet = await parseWith({
+                defenseDude: 130, defenseCount: 7006,
+            });
+            expect(planet.defense).toEqual(
+                { dude: "nova:130", count: 600, waveSize: 6 });
+        });
+
+    it("projects an all-at-once defence fleet", async () => {
+        const planet = await parseWith({ defenseDude: 130, defenseCount: 4 });
+        expect(planet.defense).toEqual(
+            { dude: "nova:130", count: 4, waveSize: null });
+    });
+
+    it("has no defence fleet for DefenseDude -1, a no-ship DefCount, or an" +
+        " unresolvable düde", async () => {
+        expect((await parseWith({ defenseDude: -1, defenseCount: 2206 }))
+            .defense).toBeNull();
+        expect((await parseWith({ defenseDude: 130, defenseCount: 0 }))
+            .defense).toBeNull();
+        expect((await parseWith({ defenseDude: 130, defenseCount: -1 }))
+            .defense).toBeNull();
+        spyOn(console, "warn");
+        expect((await parseWith({ defenseDude: 999, defenseCount: 2206 }))
+            .defense).toBeNull();
+        expect(console.warn).toHaveBeenCalled();
+    });
+
+    it("resolves the weapon and its fires-only-when-provoked bit", async () => {
+        expect((await parseWith({ weapon: 196 })).weapon)
+            .toEqual({ id: "nova:196", firesOnlyWhenProvoked: false });
+        expect((await parseWith({ weapon: 196, flags2: 0x0200 })).weapon)
+            .toEqual({ id: "nova:196", firesOnlyWhenProvoked: true });
+    });
+
+    it("is unarmed for Weapon 0 and -1", async () => {
+        expect((await parseWith({ weapon: 0 })).weapon).toBeNull();
+        expect((await parseWith({ weapon: -1, flags2: 0x0200 })).weapon)
+            .toBeNull();
+    });
+
+    it("pays an explicit Tribute as stored", async () => {
+        const planet = await parseWith({ tribute: 6000, techLevel: 4 });
+        expect(planet.domination.tribute).toBe(6000);
+    });
+
+    it("pays the default 1000 x TechLevel for Tribute 0 or -1", async () => {
+        expect((await parseWith({ tribute: 0, techLevel: 3 }))
+            .domination.tribute).toBe(3000);
+        expect((await parseWith({ tribute: -1, techLevel: 5 }))
+            .domination.tribute).toBe(5000);
+    });
+
+    it("carries the domination flag and NCB hooks", async () => {
+        const planet = await parseWith({
+            flags2: 0x0020, onDominate: "b6100", onRelease: "!b6100",
+        });
+        expect(planet.domination).toEqual({
+            tribute: 0, alwaysDominated: true,
+            onDominate: "b6100", onRelease: "!b6100",
+        });
+        expect((await parseWith({})).domination.alwaysDominated).toBeFalse();
+    });
+
+    it("decodes Strength, with 0 and -1 invincible", async () => {
+        expect((await parseWith({ strength: 2500 })).destruction.strength)
+            .toBe(2500);
+        expect((await parseWith({ strength: 0 })).destruction.strength)
+            .toBeNull();
+        expect((await parseWith({ strength: -1 })).destruction.strength)
+            .toBeNull();
+    });
+
+    it("decodes DeadTime: 0 daily, N days, -1 never", async () => {
+        expect((await parseWith({ deadTime: 0 }))
+            .destruction.regenerationDays).toBe(0);
+        expect((await parseWith({ deadTime: 7 }))
+            .destruction.regenerationDays).toBe(7);
+        expect((await parseWith({ deadTime: -1 }))
+            .destruction.regenerationDays).toBeNull();
+    });
+
+    it("resolves DeadType through spïn like the live graphic", async () => {
+        // spïn 1040 -> rlëD 2077, not the linear 2040.
+        expect((await parseWith({ deadType: 40 })).destruction.deadGraphic)
+            .toBe("nova:2077");
+        // No spïn 1049: the linear approximation (2049).
+        expect((await parseWith({ deadType: 49 })).destruction.deadGraphic)
+            .toBe("nova:2049");
+        // Above the rlëD 2056 gap: Type 100 -> 2099.
+        expect((await parseWith({ deadType: 100 })).destruction.deadGraphic)
+            .toBe("nova:2099");
+        expect((await parseWith({ deadType: -1 })).destruction.deadGraphic)
+            .toBeNull();
+    });
+
+    it("resolves ExplodType, with and without the +1000 sparks", async () => {
+        const plain = (await parseWith({ explosion: 3 })).destruction;
+        expect(plain.explosion).toBe("nova:131");
+        expect(plain.explosionSparks).toBeNull();
+        const sparks = (await parseWith({ explosion: 1003 })).destruction;
+        expect(sparks.explosion).toBe("nova:131");
+        expect(sparks.explosionSparks).toBe("nova:128");
+        const none = (await parseWith({ explosion: -1 })).destruction;
+        expect(none.explosion).toBeNull();
+        expect(none.explosionSparks).toBeNull();
+    });
+
+    it("decodes the destruction Flags2 bits and NCB hooks", async () => {
+        const d = (await parseWith({
+            flags2: 0x0040 | 0x0080, onDestroy: "b6200", onRegen: "!b6200",
+        })).destruction;
+        expect(d.startsDestroyed).toBeTrue();
+        expect(d.animateOnlyWhenDestroyed).toBeTrue();
+        expect(d.onDestroy).toBe("b6200");
+        expect(d.onRegen).toBe("!b6200");
+        const plain = (await parseWith({})).destruction;
+        expect(plain.startsDestroyed).toBeFalse();
+        expect(plain.animateOnlyWhenDestroyed).toBeFalse();
+    });
+
+    it("decodes the deadly bit and the signed gravity", async () => {
+        expect((await parseWith({ flags2: 0x0100 })).deadly).toBeTrue();
+        expect((await parseWith({ flags2: 0x0200 })).deadly).toBeFalse();
+        expect((await parseWith({ gravity: 25 })).gravity).toBe(25);
+        expect((await parseWith({ gravity: -40 })).gravity).toBe(-40);
+    });
+
+    it("keeps each Flags2 bit to its own field", async () => {
+        // Hypergate + provoked + deadly together must not bleed into the
+        // domination or destruction bits.
+        const planet = await parseWith({
+            flags2: 0x1000 | 0x0200 | 0x0100, weapon: 196,
+        });
+        expect(planet.gate!.kind).toBe("hypergate");
+        expect(planet.weapon!.firesOnlyWhenProvoked).toBeTrue();
+        expect(planet.deadly).toBeTrue();
+        expect(planet.domination.alwaysDominated).toBeFalse();
+        expect(planet.destruction.startsDestroyed).toBeFalse();
+        expect(planet.destruction.animateOnlyWhenDestroyed).toBeFalse();
+    });
+
+    it("stays JSON-serializable", async () => {
+        const planet = await parseWith({
+            defenseDude: 130, defenseCount: 2206, weapon: 196,
+            explosion: 1003, deadType: 40,
+        });
+        expect(JSON.parse(JSON.stringify(planet))).toEqual(planet);
+    });
 });

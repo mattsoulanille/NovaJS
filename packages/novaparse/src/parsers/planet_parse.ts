@@ -2,7 +2,10 @@ import { Animation, getDefaultAnimationImage, getDefaultExitPoints } from "novad
 import { BaseData } from "novadatainterface/base_data";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
 import { getDefaultPictData } from "novadatainterface/pict_data";
-import { GateData, PlanetData, TradeTier } from "novadatainterface/planet_data";
+import {
+    GateData, PlanetData, PlanetDefenseFleet, PlanetDestructionData,
+    PlanetDominationData, PlanetWeaponData, TradeTier,
+} from "novadatainterface/planet_data";
 import { DamageType } from "novadatainterface/weapon_data";
 import { BLEND_MODES } from "novadatainterface/blend_modes";
 import { SpobResource } from "../resource_parsers/spob_resource.js";
@@ -15,6 +18,43 @@ const MIN_RESOURCE_ID = 128;
 /** CustPicID is parsed as a uint16 (spob_resource.ts), so the usual
  * "omitted" encoding of -1 arrives as 65535 rather than a negative. */
 const NO_CUSTOM_LANDING_PICT = 65535;
+
+/**
+ * Decodes the spöb DefCount field (EVN Bible, spöb resource): below 1000 it
+ * is a plain ship count launched all at once; from 1000 up "ships will be
+ * launched from the planet or station in waves. The last number in this
+ * field is the number of ships in each wave, and the first 3-4 numbers
+ * (minus 1 from the first digit) are the total number of ships". A wave
+ * size of 0 means no waves (ResForge: "0 = unlimited"). Returns null when
+ * the field describes no ships at all (DefCount <= 0, or a wave encoding
+ * whose total is 0). See PlanetDefenseFleet for the five-digit reading.
+ */
+export function decodeDefenseCount(defCount: number):
+    { count: number, waveSize: number | null } | null {
+    if (defCount < 1000) {
+        return defCount > 0 ? { count: defCount, waveSize: null } : null;
+    }
+    const waveSize = defCount % 10;
+    // "The first 3-4 numbers": every digit but the last.
+    const leading = Math.floor(defCount / 10);
+    // "Minus 1 from the first digit": subtract one unit of the leading
+    // digit's place value (100 for 1000-9999, 1000 for 10000-32767).
+    const count = leading - 10 ** (String(leading).length - 1);
+    if (count <= 0) {
+        return null;
+    }
+    return { count, waveSize: waveSize === 0 ? null : waveSize };
+}
+
+/**
+ * The linear rlëD approximation for a stellar graphic Type, for when there
+ * is no spïn: 2000 + Type, less a one-id gap above the missing rlëD 2056
+ * (the same rule SpobResource.graphic applies to the live Type).
+ */
+function linearStellarGraphic(type: number): number {
+    const graphic = type + 2000;
+    return graphic > 2058 ? graphic - 1 : graphic;
+}
 
 export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => void): Promise<PlanetData> {
     var base: BaseData = await BaseParse(spob, notFoundFunction);
@@ -189,6 +229,97 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         }
     }
 
+    // Stellar defence, weapon, domination and destruction (#306). Parsed
+    // only — no gameplay reads these yet. Every id here is a SOFT
+    // reference, like the sÿst spawn tables: an unresolvable one degrades
+    // to "none" with a warning rather than going through notFoundFunction,
+    // which throws in strict mode and would fail a stellar that parsed
+    // before these fields existed.
+    let defense: PlanetDefenseFleet | null = null;
+    const defenseCount = decodeDefenseCount(spob.defenseCount);
+    if (spob.defenseDude >= 128 && defenseCount) {
+        const dude = spob.idSpace.düde[spob.defenseDude];
+        if (dude) {
+            defense = { dude: dude.globalID, ...defenseCount };
+        } else {
+            console.warn("Missing düde id " + spob.defenseDude
+                + " for the defence fleet of spöb " + base.id);
+        }
+    }
+
+    // Weapon "0 or -1  No weapon", "128-383  Stellar has a weapon of this
+    // type".
+    let weapon: PlanetWeaponData | null = null;
+    if (spob.weapon >= 128) {
+        const weap = spob.idSpace.wëap[spob.weapon];
+        if (weap) {
+            weapon = {
+                id: weap.globalID,
+                firesOnlyWhenProvoked: Boolean(spob.flags2 & 0x0200),
+            };
+        } else {
+            console.warn("Missing wëap id " + spob.weapon
+                + " for spöb " + base.id);
+        }
+    }
+
+    // Tribute "-1 or 0  Default amount (1000 credits x Tech Level)".
+    const tribute = spob.tribute > 0 ? spob.tribute : 1000 * spob.techLevel;
+
+    // DeadType "-1  Don't display different graphic type when destroyed",
+    // "0-255  Display this stellar graphic when destroyed": a stellar Type,
+    // resolved through spïn exactly like the live graphic above.
+    let deadGraphic: string | null = null;
+    if (spob.deadType >= 0) {
+        const deadSpin = spob.idSpace.spïn[1000 + spob.deadType];
+        const deadRled = deadSpin
+            ? deadSpin.spriteID : linearStellarGraphic(spob.deadType);
+        deadGraphic = spob.idSpace.rlëD[deadRled]?.globalID ?? null;
+        if (!deadGraphic) {
+            console.warn("Missing rlëD id " + deadRled
+                + " for the destroyed graphic of spöb " + base.id);
+        }
+    }
+
+    // ExplodType: the resource has already applied the +128 (and stripped
+    // the +1000 sparks bias into explosionSparks); -1 arrives as null.
+    let explosion: string | null = null;
+    if (spob.explosion !== null && spob.explosion >= 128) {
+        explosion = spob.idSpace.bööm[spob.explosion]?.globalID ?? null;
+        if (!explosion) {
+            console.warn("Missing bööm id " + spob.explosion
+                + " for spöb " + base.id);
+        }
+    }
+    // The sparks are explosion type 0 (bööm 128) in the spöb's own id
+    // space, exactly as ship_parse resolves finalExplosionSparks.
+    const explosionSparks = explosion && spob.explosionSparks
+        ? (spob.idSpace.bööm[128]?.globalID ?? null) : null;
+
+    const domination: PlanetDominationData = {
+        tribute,
+        alwaysDominated: Boolean(spob.flags2 & 0x0020),
+        // The NCB strings were rewritten to physical bits by
+        // ncb_namespace before any parser runs (NCB_FIELDS["spöb"]).
+        onDominate: spob.onDominate,
+        onRelease: spob.onRelease,
+    };
+
+    const destruction: PlanetDestructionData = {
+        // Strength "Set this to 0 or -1 for an invincible stellar".
+        strength: spob.strength > 0 ? spob.strength : null,
+        startsDestroyed: Boolean(spob.flags2 & 0x0040),
+        deadGraphic,
+        animateOnlyWhenDestroyed: Boolean(spob.flags2 & 0x0080),
+        // DeadTime "0 for a stellar that regenerates at the end of every
+        // day, or -1 for a stellar that never regenerates on its own".
+        regenerationDays: spob.deadTime >= 0 ? spob.deadTime : null,
+        explosion,
+        explosionSparks,
+        onDestroy: spob.onDestroy,
+        onRegen: spob.onRegen,
+    };
+
     return {
         ...base,
         landingDesc: desc,
@@ -243,5 +374,15 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         position: [spob.position[0], spob.position[1]],
         gate,
         landingFee: spob.landingFee,
+        defense,
+        weapon,
+        domination,
+        destruction,
+        // Flags2 0x0100 "Stellar is deadly - all ships that touch it are
+        // destroyed immediately".
+        deadly: Boolean(spob.flags2 & 0x0100),
+        // Gravity "0 for none, positive for stellars that pull, negative
+        // for stellars that push": signed, passed through.
+        gravity: spob.gravity,
     }
 }

@@ -50,7 +50,7 @@ class SystResource extends BaseResource {
     asteroidTypes: number;
     /** NCB test controlling whether the system is visible. */
     visibility: string;
-    /** flët id sent to defend the system; -1 = none. */
+    /** flët id sent to defend the system; 0 or -1 = none (SystemParse decodes it). */
     reinforcementFleet: number;
     /** Frames the reinforcement fleet waits before jumping in. */
     reinforcementTime: number;
