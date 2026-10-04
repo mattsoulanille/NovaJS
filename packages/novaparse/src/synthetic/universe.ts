@@ -54,7 +54,7 @@ export const DUDE = { traders: 128, patrol: 129, raiders: 130, variants: 131, ga
 export const FLET = { raiderWing: 128 } as const;
 export const MISN = {
     courier: 128, gateSurvey: 129, bounty: 130, rescue: 131, salvage: 132,
-    tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135,
+    tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135, wardenCommission: 136,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132 } as const;
@@ -86,6 +86,8 @@ export const STRN = {
 export const BITS = {
     courierAccepted: 100, courierDone: 101, surveyAccepted: 102,
     errandAccepted: 103, errandRefused: 104, outfitterErrandOpen: 105,
+    /** Gates the Warden Commission (never set by the scenario itself). */
+    commissionOffered: 106,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -1462,6 +1464,25 @@ export const MISNS: MisnDef[] = [
         briefText: "Take five tons of luxuries to Halden Refuge and return.",
         compText: "The outfitter pays, and asks no questions.",
         quickBrief: "Run luxuries to Halden Refuge, then return.",
+    },
+    {
+        // A bar job whose OnAccept CHANGES THE PILOT'S SHIP (`Hxxx`, the
+        // shape of stock's Vell-os and Thunderforge plot turns): the pilot
+        // is handed a Heron Warden. Only offered once a spec sets its bit.
+        id: MISN.wardenCommission, name: "Warden Commission",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.bar, availRecord: 0,
+        availRating: -1, availRandom: 100, travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 0, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: `b${BITS.commissionOffered}`,
+        onAccept: `!b${BITS.commissionOffered} H${SHIP.warden}`,
+        onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 1,
+        offerText: "A Concord officer has a Heron Warden that needs a captain.",
+        briefText: "The Warden is yours. Your old skiff goes to the yard.",
+        compText: "", quickBrief: "Captain the Heron Warden.",
     },
 ];
 
