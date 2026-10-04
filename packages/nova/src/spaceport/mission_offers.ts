@@ -98,6 +98,24 @@ export function rollOffers(session: MissionSession,
 }
 
 /**
+ * Whether an offer rolled earlier in this visit is STILL on offer: its
+ * mïsn's availability (AvailBits, AvailRecord, AvailRating, "not already
+ * active", ...) judged again against the session's working copy as it
+ * stands NOW. The offers are frozen when they are rolled — destinations,
+ * cargo and the AvailRandom answer must not change while the player looks
+ * at them — but an accept or a refuse in the same visit can change what
+ * the player qualifies for: a plug-in's two mutually exclusive missions
+ * (each `!bX` in its AvailBits, `bX` in its OnAccept) must not both be
+ * acceptable in one sitting (#324's ruling). The AvailRandom roll and the
+ * frozen choices are untouched; only the gates are re-asked.
+ */
+export function stillOffered(session: MissionSession,
+    offer: MissionOffer): boolean {
+    return missionMatchesLocation(offer.data, offer.data.availLoc,
+        session.machinery.offerContext());
+}
+
+/**
  * The <DST>/<RET>/... substitution table for one offer. `currentDay`
  * is the player's day number, used only to derive an offer's deadline
  * when the (not-yet-active) offer has a time limit; an already-active
@@ -106,6 +124,9 @@ export function rollOffers(session: MissionSession,
  */
 export function offerSubstitutions(universe: MissionUniverse,
     currentDay: number, offer: MissionOffer,
+    /** The player's control bits: <DSY>/<RSY> name the copy of a stacked
+     * system that is active for THEM (#325). */
+    bits: ReadonlySet<number>,
     active?: ActiveMission) {
     const travel = active?.travelPlanet ?? offer.travelPlanet;
     const ret = active?.returnPlanet ?? offer.returnPlanet;
@@ -114,9 +135,9 @@ export function offerSubstitutions(universe: MissionUniverse,
             ? currentDay + offer.data.timeLimit : null);
     return {
         destinationStellar: universe.planetName(travel ?? ret),
-        destinationSystem: universe.systemNameOfPlanet(travel ?? ret),
+        destinationSystem: universe.systemNameOfPlanet(travel ?? ret, bits),
         returnStellar: universe.planetName(ret),
-        returnSystem: universe.systemNameOfPlanet(ret),
+        returnSystem: universe.systemNameOfPlanet(ret, bits),
         cargoType: offer.cargoType >= 0
             ? cargoName(offer.cargoType, universe.cargoNames) : undefined,
         cargoQty: offer.cargoQty > 0 ? offer.cargoQty : undefined,

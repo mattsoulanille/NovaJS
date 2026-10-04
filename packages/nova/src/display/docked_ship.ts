@@ -1,3 +1,4 @@
+import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { Resource } from 'nova_ecs/resource';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
@@ -51,9 +52,9 @@ export class DockedShip {
     /**
      * The landing's transaction (spaceport/landed_transaction.ts), set by
      * the spaceport once its landing has opened one, so the client's
-     * docked readers (the save writer, the specs) can reach the working
-     * copy the venues are editing. Unset before the landing's data is in,
-     * and at a hypergate dock.
+     * docked readers can reach the working copy the venues are editing —
+     * {@link component} reads through it. Unset before the landing's data
+     * is in, and at a hypergate dock.
      */
     transaction?: LandedTransaction;
     /**
@@ -84,6 +85,23 @@ export class DockedShip {
     /** The hull the player is docked in RIGHT NOW (see swapEntity). */
     get entity(): Entity {
         return this.ship;
+    }
+
+    /**
+     * ONE OF THE PLAYER'S COMPONENTS AS IT STANDS RIGHT NOW — what every
+     * docked reader asks instead of `entity.components.get` (the
+     * starmap's NCB visibility, Legal Status and marks, the status bar's
+     * credits and cargo). While a landing's transaction is attached, that
+     * is its working copy (LandedTransaction.playerComponent): the hull is
+     * only written when a venue closes, so inside the BBS it still holds
+     * what the player had before the BBS opened (#324, #246). Without one
+     * — the landing gap before it opens, a hypergate dock — the hull is
+     * the only copy there is.
+     */
+    component<T>(component: Component<T>): T | undefined {
+        return this.transaction
+            ? this.transaction.playerComponent(component)
+            : this.ship.components.get(component);
     }
 
     /**

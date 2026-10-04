@@ -1,13 +1,20 @@
 import { ShipData } from 'novadatainterface/ship_data';
+import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { MissionData } from 'novadatainterface/mission_data';
 import {
     MissionEvent, MissionWorkingState, setStringPrefix,
 } from '../nova_plugin/missions/index.js';
-import { ShipChangeMode } from '../nova_plugin/ncb/index.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
-import { CreditsComponent } from '../nova_plugin/player/index.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent, ShipChangeMode,
+} from '../nova_plugin/ncb/index.js';
+import {
+    CargoComponent, OutfitsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import { CreditsComponent, MissionsComponent } from '../nova_plugin/player/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
+import { JumpRoute, JumpRouteComponent } from '../nova_plugin/travel/index.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {
     EscortDealEntry, EscortDealSettlement, settleEscortDeals,
@@ -128,6 +135,33 @@ import { buildChangedShip, changeShipTargets } from './shipyard_rules.js';
  * module-level registry to leak. At Leave every visit has released, so
  * the lift-off settlement finds no hold open; the freeze stays as the
  * invariant that makes the settlement safe to call at any point.
+ *
+ * ---------------------------------------------------------------------------
+ * EVERY DOCKED READER reads the working copy, through {@link playerComponent}
+ * ---------------------------------------------------------------------------
+ *
+ * Because the hull is only written at a flush, the hull is STALE for as
+ * long as a savepoint is open: inside the BBS, after an accept, it still
+ * holds the bits, records, missions, credits and cargo of before the BBS
+ * opened. Anything that reads the player's data while docked — the
+ * starmap (NCB visibility, the Legal Status line, the orange marks), the
+ * status bar's credits and cargo, the spaceport's own map key — therefore
+ * asks {@link playerComponent} (or `DockedShip.component`, which forwards
+ * here while a landing is open), never the hull: it answers with the
+ * working copy for every component the transaction owns, and with the
+ * hull for the rest. That is what makes a mission accepted in this visit
+ * count AT ONCE — a mutually exclusive second offer stops being offered,
+ * the map shows the system the OnAccept bit revealed, the status bar
+ * shows the payout — without moving when anything settles: the hull is
+ * still written at the flushes alone.
+ *
+ * The player's JUMP ROUTE rides along the same way (#323). While docked
+ * the ship is in no world, so a course plotted on the docked map had
+ * nowhere to go: the sim's setJumpRoute input found no ship and was
+ * dropped. The map now edits the route this accessor hands it, and every
+ * flush (so the lift-off commit too) writes it onto the hull, whose
+ * insertion record carries it into the simulation. It is the player's
+ * plan rather than a venue's edit, so no savepoint captures it.
  *
  * ---------------------------------------------------------------------------
  * WHAT DOES NOT CHANGE
@@ -252,6 +286,12 @@ export class LandedTransaction {
      */
     private shipIds = new Set<string>();
     private closed = false;
+    /**
+     * The player's jump route while docked: what the docked map edits
+     * and every flush writes onto the hull (see the module comment).
+     * Seeded from the hull as it touched down.
+     */
+    private readonly jumpRoute: JumpRoute;
 
     private constructor(session: MissionSession,
         readonly gameData: SimulationGameDataInterface,
@@ -260,6 +300,10 @@ export class LandedTransaction {
         this.session = session;
         this.hull = session.target;
         this.creditsBaseline = creditBalance(this.hull);
+        this.jumpRoute = {
+            route: [...this.hull.components.get(JumpRouteComponent)?.route
+                ?? []],
+        };
     }
 
     /**
@@ -357,6 +401,55 @@ export class LandedTransaction {
     /** How many savepoints are open. */
     get depth(): number {
         return this.savepoints.length;
+    }
+
+    /**
+     * THE PLAYER'S DATA AS IT STANDS RIGHT NOW, for any docked reader (see
+     * the module comment): the working copy for the components this
+     * transaction owns — ControlBits, LegalRecords, ActiveRanks, Missions,
+     * Credits, Cargo, OutfitsState — and the player's jump route; the
+     * hull's own component for everything else (the ship class, shield,
+     * armor, fuel, the date). Owned values are the working objects
+     * themselves, so a reader sees later edits too and must NOT write
+     * them; OutfitsState is a fresh snapshot in the component's shape.
+     * The one exception to "read only" is the jump route, which the
+     * docked map edits in place exactly as it edits an in-flight ship's.
+     */
+    playerComponent<T>(component: Component<T>): T | undefined {
+        if (this.closed) {
+            // Lifted off: commit() flushed everything onto the hull.
+            return this.hull.components.get(component);
+        }
+        const state = this.session.state;
+        const owned = (value: unknown) => value as T;
+        const asked = component as Component<unknown>;
+        if (asked === ControlBitsComponent) {
+            return owned(state.bits);
+        }
+        if (asked === LegalRecordsComponent && state.records) {
+            return owned(state.records);
+        }
+        if (asked === ActiveRanksComponent && state.ranks) {
+            return owned(state.ranks);
+        }
+        if (asked === MissionsComponent) {
+            return owned(state.missions);
+        }
+        if (asked === CreditsComponent) {
+            return owned(state.credits);
+        }
+        if (asked === CargoComponent) {
+            return owned(state.cargo);
+        }
+        if (asked === OutfitsStateComponent) {
+            return owned(new Map([...this.session.outfits]
+                .filter(([, count]) => count > 0)
+                .map(([id, count]) => [id, { count }])));
+        }
+        if (asked === JumpRouteComponent) {
+            return owned(this.jumpRoute);
+        }
+        return this.hull.components.get(component);
     }
 
     // ── The landing ─────────────────────────────────────────────────────
@@ -572,6 +665,14 @@ export class LandedTransaction {
             this.creditsBaseline = live;
         }
         commitPendingEscorts(entity, this.hired);
+        // The route the docked map plotted (#323). A hull that never had
+        // the component gains none for an empty route (the in-world
+        // provider supplies it at insertion), as with the auto-abort list.
+        if (this.jumpRoute.route.length > 0
+            || entity.components.has(JumpRouteComponent)) {
+            entity.components.set(JumpRouteComponent,
+                { route: [...this.jumpRoute.route] });
+        }
         const fresh = events.slice(this.eventsFlushed);
         this.eventsFlushed = events.length;
         return fresh;
