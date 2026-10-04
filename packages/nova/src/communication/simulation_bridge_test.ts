@@ -723,6 +723,12 @@ describe('SimulationBridge', () => {
                 this.resyncCalls.push({ force, proceeded });
                 return result;
             }
+            /** Starts the cooldown as a resync that LANDED would (a
+             * resync that gives up is terminal since #333, so one cannot
+             * be used to warm it any more). */
+            warmCooldown() {
+                this.lastResyncTime = Date.now();
+            }
         }
 
         function makeStagingHost() {
@@ -768,15 +774,13 @@ describe('SimulationBridge', () => {
         it('resyncs on staging failure even inside the resync cooldown', async () => {
             const { host, relayInsertion } = makeStagingHost();
 
-            // Warm the cooldown: a plain resync now runs and stamps
-            // lastResyncTime, so any *non-forced* resync for the next 10s
-            // would no-op.
-            await host.resync();
-            expect(host.resyncCalls[0]).toEqual({ force: false, proceeded: true });
+            // Warm the cooldown, so any *non-forced* resync for the next
+            // 10s would no-op.
+            host.warmCooldown();
 
             // Sanity: a plain resync inside the cooldown is a no-op.
             await host.resync();
-            expect(host.resyncCalls[1]).toEqual({ force: false, proceeded: false });
+            expect(host.resyncCalls[0]).toEqual({ force: false, proceeded: false });
 
             // Now relay an insertion whose staging will fail. The
             // staging-failure path must force a resync that PROCEEDS despite
@@ -793,6 +797,77 @@ describe('SimulationBridge', () => {
             expect(forced.length).toBeGreaterThanOrEqual(1);
             // The forced staging-failure resync bypassed the cooldown.
             expect(forced.some(c => c.proceeded)).toBe(true);
+        });
+    });
+
+    describe('a resync that gives up (#333)', () => {
+        // No relay answers, so every attempt's join times out and the
+        // resync runs out of attempts: the terminal failure, whose
+        // handling ruling admin1 set — save, freeze, reload.
+        function makeFailingHost() {
+            const communicator = new MockCommunicator('client');
+            world.resources.set(CommunicatorResource, communicator);
+            const host = new SimulationBridgeHost(world, makeFakeSimulationData(), {
+                resyncMaxAttempts: 2,
+                resyncRetryMs: 0,
+                resyncJoinTimeoutMs: 10,
+                resyncCooldownMs: 0,
+            });
+            return { host, communicator };
+        }
+
+        it('reports the failure on exactly one frame, and never sends the '
+            + 'genesis world', async () => {
+            const { host } = makeFailingHost();
+            host.step(5);
+            // The display already holds the pre-failure world.
+            world.entities.set('player', new Entity('player')
+                .addComponent(FooComponent, { x: 1 }));
+            expect(host.snapshot().added.map(([uuid]) => uuid))
+                .toEqual(['player']);
+            expect(host.status().resyncFailed).toBeUndefined();
+
+            expect(await host.resync()).toBeFalse();
+            // Every attempt restored genesis, which has no 'player'; a
+            // frame encoding it would remove the player's ship from the
+            // display. The failure frame carries no state at all.
+            expect(world.entities.has('player')).toBeFalse();
+            const failed = host.snapshot();
+            expect(failed).toEqual({
+                added: [], changed: [], removed: [], events: [],
+                resyncFailed: true,
+            });
+            // Exactly once: later frames are empty and unflagged.
+            for (let i = 0; i < 3; i++) {
+                host.step();
+                const later = host.snapshot();
+                expect(later.resyncFailed).toBeUndefined();
+                expect(later.removed).toEqual([]);
+                expect(later.added).toEqual([]);
+            }
+            expect(host.status().resyncFailed).toBeTrue();
+        });
+
+        it('freezes: no stepping, no inputs, no further resync', async () => {
+            const { host, communicator } = makeFailingHost();
+            host.step(5);
+            expect(await host.resync()).toBeFalse();
+            const tick = host.status().tick;
+            const sent = spyOn(communicator, 'sendMessage').and.callThrough();
+
+            host.controlEvents([{ action: 'accelerate', state: 'start' }]);
+            host.setTarget('someone');
+            host.step(10);
+            expect(host.status().tick).toBe(tick);
+            // Nothing was published to the room either.
+            expect(sent).not.toHaveBeenCalled();
+            expect(host.rewind(1)).toBeFalse();
+
+            // A desync conviction or a forced (staging-failure) resync no
+            // longer reconstructs: the page reload is the way out.
+            expect(await host.resync(true)).toBeFalse();
+            expect(await host.joinRoom(10)).toBeFalse();
+            expect(host.status().tick).toBe(tick);
         });
     });
 });
