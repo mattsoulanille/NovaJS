@@ -158,6 +158,16 @@ export class SocketChannelClient implements ChannelClient {
         if (this.webSocket.readyState === this.webSocket.CONNECTING
             || this.webSocket.readyState === this.webSocket.OPEN) {
             this.disconnect();
+        } else if (this.connected.value) {
+            // The SERVER closed the socket (a restart, a dropped link the
+            // browser noticed first) and this is the first send since:
+            // still drop `connected` before the new socket's first frame
+            // raises it again. That false -> true edge is what re-joins
+            // the client's rooms (multi_room_communicator.ts
+            // joinCurrentRooms); without it the new socket, under its new
+            // uuid, was in no room at all and the relay dropped
+            // everything it sent (#354, #339).
+            this.connected.next(false);
         }
         this.webSocket = this.adopt(this.webSocketFactory());
         this.webSocket.addEventListener("message", this.messageListener);
