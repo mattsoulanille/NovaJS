@@ -452,6 +452,66 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
                 }, 300_000);
         }
 
+        it('lets a reconnecting peer re-enter without re-rolling the room '
+            + 'or re-latching its spawn bits (#354 meets #140)', async () => {
+            // Integration: a reconnect hands the peer a NEW uuid; the
+            // server's removePeer takes the old one's fleet out of the
+            // room and the host re-enters under the new id — a resync, then
+            // the fleet re-inserted (simulation_bridge_host.ts reenter).
+            // The room is still live, so its seed record (tick 1) must not
+            // roll it again, and the re-inserted ship — a ControlledBy
+            // ship, which is what the spawner latches on — must not latch
+            // the bits again.
+            await openRoom(VAEL, 9, vaelData());
+            const a = await join('a');
+            const b = await join('b');
+            align(a, b);
+            await enter(a, [b], [STORY_BIT]);
+            // B, without the bit, enters the live room: no re-latch.
+            await enter(b, [a], []);
+            await run([a, b], 120);
+            align(a, b);
+            const before = new Set([...a.world.entities.keys()].filter(uuid =>
+                a.world.entities.get(uuid)!.components.has(NpcComponent)));
+            expect(before.size).toBeGreaterThan(0);
+
+            // A's socket drops and comes straight back under a new uuid.
+            const comm = comms.get('a')!;
+            comms.delete('a');
+            comm.uuid = 'a2';
+            comms.set('a2', comm);
+            setMembers(['b', 'a2']);
+            for (let i = 0; i < 300
+                && !(a.world.entities.get('ship a')?.components
+                    .get(ControlledByComponent)?.peerId === 'a2'); i++) {
+                await run([a, b], 1);
+            }
+            expect(a.world.entities.get('ship a')?.components
+                .get(ControlledByComponent)?.peerId)
+                .withContext('the player ship, re-inserted under the new id')
+                .toBe('a2');
+            await run([a, b], 240);
+            align(a, b);
+            await archive.update();
+
+            for (const world of [a.world, b.world, archive.archiveWorld!]) {
+                expect(world.entities.get('ship a')?.components
+                    .get(ControlledByComponent)?.peerId).toBe('a2');
+                expect(spawnerOf(world).awaitingEntrant).toBeUndefined();
+                expect(spawnerOf(world).spawnBits).toEqual([STORY_BIT]);
+                expect(npcShips(world)).not.toContain(SYNTHETIC.ships.hulk);
+            }
+            // Not re-rolled: whatever of the pre-reconnect population is
+            // still in the system is the same ships, on every world.
+            const survivors = [...before].filter(uuid => b.world.entities.has(uuid));
+            expect(survivors.length).toBeGreaterThan(0);
+            for (const uuid of survivors) {
+                expect(a.world.entities.has(uuid)).withContext(uuid).toBeTrue();
+            }
+            expect(hash(a.world)).toBe(hash(b.world));
+            expect(desyncs).toBe(0);
+        }, 300_000);
+
         it('restores a late joiner to the live world', async () => {
             await openRoom(VAEL, 9, vaelData());
             const a = await join('a');
