@@ -22,7 +22,6 @@ import type { SimulationGameData } from './client/gamedata/simulation_game_data.
 import type { CommunicatorClient } from './communication/communicator_client.js';
 import type { MultiRoom } from './communication/multi_room_communicator.js';
 import type { DEBUG_FLAGS } from './debug_flags.js';
-import type { DebugSettings } from './debug_settings.js';
 import type { ScaleLayout } from './display/display_scale.js';
 import type { HailDialog } from './spaceport/hail_dialog.js';
 import type { OfferPopup } from './spaceport/offer_popup.js';
@@ -100,8 +99,6 @@ declare global {
         /** The simulation serializer (the harness's handle on the synced
          * component singletons). */
         novaSimSerializer?: Serializer;
-        /** Debug toggles, e.g. novaDebug.showCollisionShapes = true. */
-        novaDebug?: DebugSettings;
         /** The player's ship entity (player_ship_plugin, shipyard, ...). */
         myShip?: Entity;
 

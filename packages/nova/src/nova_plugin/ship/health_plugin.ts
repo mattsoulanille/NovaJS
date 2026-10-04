@@ -11,6 +11,26 @@ import { applyStatDelta, getStatDelta, HitboxHullProvider, PartialStat, stat, St
 
 
 export const ShieldComponent = new Component<Stat>('Shield');
+
+/**
+ * How far below zero a ship's shield can be driven, as a fraction of its
+ * max: a shield collapses to -5% of capacity, so it must regenerate that
+ * 5% back before it absorbs damage again (DamageSystem lets a hit through
+ * to the armor unless the shield is still above zero after it).
+ *
+ * DELIBERATE TUNING, not a Bible figure (maintainer ruling #313: "it also
+ * behaves like that" in the original; the 5% itself is unmeasured). Dates
+ * from the 2022 ionization commit 58a23bf8. Every ship's shield Stat —
+ * ShipShieldProvider and the NPC hulk seeding — takes its floor from
+ * shieldFloor so the two can never drift apart.
+ */
+export const SHIELD_FLOOR_FRACTION = 0.05;
+
+/** The shield Stat's `min` for a ship whose shield capacity is `maxShield`. */
+export function shieldFloor(maxShield: number): number {
+    return -maxShield * SHIELD_FLOOR_FRACTION;
+}
+
 export const ArmorComponent = new Component<Stat>('Armor');
 export const IonizationComponent = new Component<Stat>('Ionization');
 // Fuel isn't health, but it recharges and is serialized exactly like
