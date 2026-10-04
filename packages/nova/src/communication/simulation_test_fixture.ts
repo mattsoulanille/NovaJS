@@ -319,11 +319,14 @@ function linkOnce(target: string, link: string) {
 
 /**
  * A controlled battlefield: the sorted-first system with the sorted-first
- * ship in it, bridged. Runs on the integration data unless another set
- * is given (`makeSimulationBridgeHarness(getSyntheticGameData())`).
+ * ship in it, bridged, on the data set given:
+ * `makeSimulationBridgeHarness(getSyntheticGameData())`, or
+ * `getIntegrationGameData()` for a spec about stock content. No default:
+ * one that read the real data made Nova_Data a silent requirement (see
+ * determinism_harness.ts' GameDataSource).
  */
 export async function makeSimulationBridgeHarness(
-    gameDataSource: Promise<GameDataAggregator> = getIntegrationGameData()) {
+    gameDataSource: Promise<GameDataAggregator>) {
     const gameData = await gameDataSource;
     const ids = await gameData.ids;
     const systemId = [...ids.System].sort()[0];

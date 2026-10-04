@@ -78,7 +78,7 @@ describe('përs spawning', () => {
     // derelict-Leviathan-at-Sol regression are facts about stock data.
     it("draws a listing system's people from its Person fields only",
         async () => {
-            const harness = await makeSimulationBridgeHarness();
+            const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
             const gameData = await getIntegrationGameData();
             const sol = await gameData.data.System.get('nova:130');
 
@@ -122,7 +122,7 @@ describe('përs spawning', () => {
     // Terrapin nova:142's own fields, are the point of the spec.
     it('falls back to the LinkSyst pool where no Person list is authored',
         async () => {
-            const harness = await makeSimulationBridgeHarness();
+            const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
             const gameData = await getIntegrationGameData();
             // Fomalhaut lists nobody — like 480 of the 545 stock
             // systems — so LinkSyst is all there is to go on.
@@ -167,7 +167,7 @@ describe('përs spawning', () => {
 
     // Stays on REAL data: Jack Folstam's stock ActiveOn "b0 & !b8".
     it('excludes people whose ActiveOn needs a control bit', async () => {
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
         const gameData = await getIntegrationGameData();
 
         // The shared-spawn constraint: a person whose ActiveOn needs a
