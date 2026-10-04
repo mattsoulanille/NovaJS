@@ -195,6 +195,47 @@ export const AnimationGraphicCleanup = new System({
     }
 });
 
+/**
+ * A SHIP whose animation changed under its graphic gets a new graphic.
+ *
+ * AnimationGraphicLoader builds a graphic once per entity (it has no
+ * `update:` list) and the graphic captures its sprites at construction, so
+ * an entity that keeps its uuid but changes hull — an in-flight `Cxxx` /
+ * `Exxx` / `Hxxx` (nova_plugin/missions/mission_ship_change.ts) replaces the
+ * player's ship at the same uuid, and the display entity is updated in
+ * place — would go on drawing the old hull. This hands the old graphic
+ * back exactly as AnimationGraphicCleanup does when an entity is deleted,
+ * and drops the graphic components so the loader builds one for the
+ * animation the entity carries now.
+ *
+ * Ships only: what a ship draws is its hull's animation, and nothing else
+ * reassigns a ship's AnimationComponent. Compared by animation id — two
+ * hulls sharing a shän draw the same sprites, and the decoded component
+ * of an unchanged hull is a fresh object every frame.
+ */
+export const AnimationGraphicHullChangeSystem = new System({
+    name: 'AnimationGraphicHullChange',
+    args: [ShipComponent, AnimationComponent, AnimationGraphicComponent,
+        AnimationGraphicPoolResource, Space, GetEntity] as const,
+    step(_ship, animation, graphic, poolResource, space, entity) {
+        const current = currentIfDraft(animation);
+        const graphicNow = originalIfDraft(graphic);
+        const built = graphicNow.builtAnimation;
+        if (!built || !current || built.id === current.id) {
+            return;
+        }
+        const pool = originalIfDraft(poolResource);
+        if (pool.release(graphicNow)) {
+            graphicNow.container.visible = false;
+        } else {
+            originalIfDraft(space).removeChild(graphicNow.container);
+        }
+        entity.components.delete(AnimationGraphicComponent);
+        entity.components.delete(AnimationGraphicLoadedComponent);
+    },
+    before: [AnimationGraphicLoader],
+});
+
 export const AnimationGraphicInsert = new System({
     name: 'AnimationGraphicInsert',
     events: [AddEvent],
@@ -215,6 +256,7 @@ export const AnimationGraphicPlugin: Plugin = {
         world.addSystem(TumbleDrawSystem);
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(AnimationGraphicInsert);
+        world.addSystem(AnimationGraphicHullChangeSystem);
     },
     remove(world) {
         world.removeSystem(AnimationGraphicLoader);
@@ -223,6 +265,7 @@ export const AnimationGraphicPlugin: Plugin = {
         world.removeSystem(TumbleDrawSystem);
         world.removeSystem(AnimationGraphicCleanup);
         world.removeSystem(AnimationGraphicInsert);
+        world.removeSystem(AnimationGraphicHullChangeSystem);
         world.resources.delete(AnimationGraphicPoolResource);
     }
 }

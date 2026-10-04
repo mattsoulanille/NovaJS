@@ -111,7 +111,9 @@ export type TransitKind =
     /** A hypergate pick or a wormhole (GateTransitEvent / LeaveGateMapEvent). */
     | 'gate'
     /** A failed transit putting the ship back into the system it left. */
-    | 'reenter';
+    | 'reenter'
+    /** A set string's Mxxx / Nxxx run in flight (MissionSystemMoveEvent). */
+    | 'move';
 
 export interface TransitPlan {
     readonly kind: TransitKind;

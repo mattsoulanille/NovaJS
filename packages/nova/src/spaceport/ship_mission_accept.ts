@@ -6,10 +6,11 @@ import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_pl
 import {
     AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
     LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
-    missionMatchesLocation,
+    missionMatchesLocation, RefusedMission, refuseOffer, SetStringEffects,
+    ShipChange, SystemMove,
 } from '../nova_plugin/missions/index.js';
 import {
-    ShipObjective, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
+    ShipObjective, ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent,
     dayNumber,
 } from '../nova_plugin/player/index.js';
 import {
@@ -19,7 +20,9 @@ import {
 import {
     CombatRatingComponent, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
-import { MissionSession } from './mission_session.js';
+import { MissionSession, replaceMap } from './mission_session.js';
+import { warmChangeShipTargets } from './change_ship_targets.js';
+import { buildChangedShip } from './shipyard_rules.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
     shipOffers, ShipOfferTrigger, shipOfferTrigger,
@@ -256,6 +259,141 @@ function missionsAfter(copy: Entity, missionId: string) {
 }
 
 /**
+ * A MissionSession over a detached copy of the player, with the in-flight
+ * operators the simulation can carry out wired onto it:
+ *
+ *  `Cxxx` / `Exxx` / `Hxxx`  the copy's hull is swapped EXACTLY as the
+ *               landed path swaps a docked one — LandedTransaction.changeShip:
+ *               shipyard_rules' buildChangedShip over the WORKING outfits,
+ *               the session re-pointed at the new hull and the working
+ *               outfits made its own (in place) — so C / E / H mean here
+ *               what they mean in a spaceport, and the rest of the string
+ *               runs on the new hull. The class rides the record as
+ *               `shipChange` (nova_plugin/missions/mission_ship_change.ts).
+ *  `Mxxx` / `Nxxx`  recorded as `moveToSystem` for the simulation to carry
+ *               out (MissionSystemMoveSystem).
+ *
+ * The classes a change could go to (and every outfit) are warmed first,
+ * because the set string runs synchronously (change_ship_targets.ts).
+ */
+async function detachedSession(player: Entity,
+    gameData: SimulationGameDataInterface, universe: MissionUniverse,
+    systemId: string | undefined) {
+    const copy = detachPlayerState(player);
+    const shipIds = await warmChangeShipTargets(gameData, universe);
+    // No checkpoint announcement from the detached copy: it lacks the
+    // outfits/cron/etc. components a snapshot needs. The client's periodic
+    // save notices the new mission on the real player entity instead
+    // (checkpoint_requests.ts describeFlightChanges).
+    const session = await MissionSession.create(copy, gameData, universe,
+        inFlightStellar(universe, systemId),
+        { announceCheckpoints: false });
+    const before = detachPlayerState(copy);
+    const outcome: { shipChange?: ShipChange, moveToSystem?: SystemMove } = {};
+    session.setChangeShipHook((id, mode) => {
+        const newShip = gameData.data.Ship.getCached(id);
+        if (!newShip) {
+            console.warn(`Change-ship to ${id} ignored: ship data not loaded`);
+            return;
+        }
+        const hull = buildChangedShip(session.target, newShip,
+            session.outfits, outfitId => gameData.data.Outfit.getCached(outfitId),
+            mode);
+        session.retarget(hull, newShip.id);
+        replaceMap(session.outfits,
+            [...hull.components.get(OutfitsStateComponent) ?? []]
+                .map(([outfitId, { count }]) => [outfitId, count] as const));
+        outcome.shipChange = { shipId: newShip.id };
+    }, id => shipIds.has(id));
+    session.machinery.moveToSystem = (systemId, keepCoordinates) => {
+        outcome.moveToSystem = { systemId, keepCoordinates };
+    };
+    return { session, before, outcome };
+}
+
+/**
+ * What a set string did to the detached copy, as the DELTAS an in-flight
+ * record carries (SetStringEffects): `before` is the copy as it was,
+ * `after` the hull the session committed onto — the copy itself, or the
+ * hull a change of ship swapped in. `missionId` is the mission the record
+ * is ABOUT (it has a field of its own on an accept), left out of
+ * missionsStarted.
+ */
+function diffSetStringEffects(before: Entity, after: Entity,
+    missionId: string,
+    outcome: { shipChange?: ShipChange, moveToSystem?: SystemMove }):
+    SetStringEffects {
+    const creditsBefore = before.components.get(CreditsComponent)?.credits ?? 0;
+    const creditsAfter = after.components.get(CreditsComponent)?.credits ?? 0;
+    // mïsn DatePostInc: an immediate auto-abort settles at accept, so
+    // MissionSession.commit has already pushed the copy's calendar. Diffed
+    // like everything else here rather than read off the mïsn, so whatever
+    // else learns to move the date is carried for free.
+    const dateBefore = before.components.get(GameDateComponent);
+    const dateAfter = after.components.get(GameDateComponent);
+    const dateDelta = dateBefore && dateAfter
+        ? dayNumber(dateAfter) - dayNumber(dateBefore) : 0;
+    const bits = diffSet(
+        before.components.get(ControlBitsComponent) ?? new Set<number>(),
+        after.components.get(ControlBitsComponent) ?? new Set<number>());
+    const ranks = diffSet(
+        before.components.get(ActiveRanksComponent) ?? new Set<string>(),
+        after.components.get(ActiveRanksComponent) ?? new Set<string>());
+    // The ränk 0x0100 suppression set the sim reads. Diffed like the ranks
+    // themselves rather than re-derived on the far side, because the
+    // simulation has no ränk data to derive it from (rank_logic.ts).
+    const suppressGovts = diffSet(
+        before.components.get(AggressionSuppressGovtsComponent)
+        ?? new Set<string>(),
+        after.components.get(AggressionSuppressGovtsComponent)
+        ?? new Set<string>());
+    const cargo = diffCounts(before.components.get(CargoComponent) ?? new Map(),
+        after.components.get(CargoComponent) ?? new Map());
+    const outfitCounts = (entity: Entity) => new Map(
+        [...(entity.components.get(OutfitsStateComponent) ?? [])]
+            .map(([id, state]) => [id, state.count] as const));
+    // A change of ship's outfits (C keeps them, E adds the class's
+    // defaults, H drops the non-persistent ones) land here too: the new
+    // hull's outfits against the old's.
+    const outfits = diffCounts(outfitCounts(before), outfitCounts(after));
+    // The REST of the mission list: what the string's own Sxxx started
+    // and its Axxx/Fxxx ended, besides the mission the record is about.
+    // See AcceptedMissionType.missionsStarted.
+    const missionsBefore = before.components.get(MissionsComponent)
+        ?? new Map<string, ActiveMission>();
+    const missionsNow = after.components.get(MissionsComponent)
+        ?? new Map<string, ActiveMission>();
+    const missionsStarted: [string, EncodedActiveMission][] = [...missionsNow]
+        .filter(([id]) => id !== missionId && !missionsBefore.has(id))
+        .map(([id, started]) => [id, ActiveMissionType.encode(started)]);
+    const missionsEnded = [...missionsBefore.keys()]
+        .filter(id => id !== missionId && !missionsNow.has(id));
+    const records = diffCounts(
+        before.components.get(LegalRecordsComponent) ?? new Map(),
+        after.components.get(LegalRecordsComponent) ?? new Map());
+    return {
+        ...(creditsAfter !== creditsBefore
+            ? { creditsDelta: creditsAfter - creditsBefore } : {}),
+        ...(dateDelta > 0 ? { dateDelta } : {}),
+        ...(bits.added.length ? { bitsSet: bits.added } : {}),
+        ...(bits.removed.length ? { bitsCleared: bits.removed } : {}),
+        ...(ranks.added.length ? { ranksGranted: ranks.added } : {}),
+        ...(ranks.removed.length ? { ranksRevoked: ranks.removed } : {}),
+        ...(suppressGovts.added.length
+            ? { suppressGovtsAdded: suppressGovts.added } : {}),
+        ...(suppressGovts.removed.length
+            ? { suppressGovtsRemoved: suppressGovts.removed } : {}),
+        ...(cargo.length ? { cargoDelta: cargo } : {}),
+        ...(outfits.length ? { outfitsDelta: outfits } : {}),
+        ...(missionsStarted.length ? { missionsStarted } : {}),
+        ...(missionsEnded.length ? { missionsEnded } : {}),
+        ...(records.length ? { recordsDelta: records } : {}),
+        ...(outcome.shipChange ? { shipChange: outcome.shipChange } : {}),
+        ...(outcome.moveToSystem ? { moveToSystem: outcome.moveToSystem } : {}),
+    };
+}
+
+/**
  * Accepts `offer` against a detached copy of the player's state and
  * returns the input record that reproduces it in the simulation, or null
  * when the accept was refused (a full hold, the 16-mission cap).
@@ -288,64 +426,20 @@ export async function buildShipMissionAccept(player: Entity,
     } = {}): Promise<ShipMissionAccept | null> {
     const { offeredBy, offeredByFate } = options;
     const ships = options.ships ?? [];
-    const copy = detachPlayerState(player);
-    // No checkpoint announcement from the detached copy: it lacks the
-    // outfits/cron/etc. components a snapshot needs. The client's periodic
-    // save notices the new mission on the real player entity instead
-    // (checkpoint_requests.ts describeFlightChanges).
-    const session = await MissionSession.create(copy, gameData, universe,
-        inFlightStellar(universe, options.systemId),
-        { announceCheckpoints: false });
-    const before = detachPlayerState(copy);
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
     const result = acceptOffer(session.machinery, offer, session.outfits);
     if (!result.accepted) {
         return null;
     }
     const events = session.commit();
+    // The hull the session committed onto: the copy, or the one an
+    // OnAccept `Cxxx` / `Exxx` / `Hxxx` swapped in.
+    const after = session.target;
+    const effects = diffSetStringEffects(before, after, offer.data.id,
+        outcome);
 
-    const creditsBefore = before.components.get(CreditsComponent)!.credits;
-    const creditsAfter = copy.components.get(CreditsComponent)!.credits;
-    // mïsn DatePostInc: an immediate auto-abort settles at accept, so
-    // MissionSession.commit has already pushed the copy's calendar. Diffed
-    // like everything else here rather than read off the mïsn, so whatever
-    // else learns to move the date is carried for free.
-    const dateBefore = before.components.get(GameDateComponent);
-    const dateAfter = copy.components.get(GameDateComponent);
-    const dateDelta = dateBefore && dateAfter
-        ? dayNumber(dateAfter) - dayNumber(dateBefore) : 0;
-    const bits = diffSet(before.components.get(ControlBitsComponent)!,
-        copy.components.get(ControlBitsComponent)!);
-    const ranks = diffSet(before.components.get(ActiveRanksComponent)!,
-        copy.components.get(ActiveRanksComponent)!);
-    // The ränk 0x0100 suppression set the sim reads. Diffed like the ranks
-    // themselves rather than re-derived on the far side, because the
-    // simulation has no ränk data to derive it from (rank_logic.ts).
-    const suppressGovts = diffSet(
-        before.components.get(AggressionSuppressGovtsComponent)
-        ?? new Set<string>(),
-        copy.components.get(AggressionSuppressGovtsComponent)
-        ?? new Set<string>());
-    const cargo = diffCounts(before.components.get(CargoComponent)!,
-        copy.components.get(CargoComponent)!);
-    const outfitCounts = (entity: Entity) => new Map(
-        [...(entity.components.get(OutfitsStateComponent) ?? [])]
-            .map(([id, state]) => [id, state.count] as const));
-    const outfits = diffCounts(outfitCounts(before), outfitCounts(copy));
-    // The REST of the mission list: what the OnAccept's own Sxxx started
-    // and its Axxx/Fxxx ended, besides the mission being accepted (which
-    // has its own field below). See AcceptedMissionType.missionsStarted.
-    const missionsBefore = before.components.get(MissionsComponent)!;
-    const missionsNow = copy.components.get(MissionsComponent)!;
-    const missionsStarted: [string, EncodedActiveMission][] = [...missionsNow]
-        .filter(([id]) => id !== offer.data.id && !missionsBefore.has(id))
-        .map(([id, started]) => [id, ActiveMissionType.encode(started)]);
-    const missionsEnded = [...missionsBefore.keys()]
-        .filter(id => !missionsNow.has(id));
-    const records = diffCounts(
-        before.components.get(LegalRecordsComponent)!,
-        copy.components.get(LegalRecordsComponent)!);
-
-    const active = missionsAfter(copy, offer.data.id);
+    const active = missionsAfter(after, offer.data.id);
     // An IMMEDIATE auto-abort mission never becomes active
     // (mission_logic's acceptOffer) — but its effects are real, and for
     // a ship-offered one they are the entire mission: mïsn 133's four
@@ -383,23 +477,56 @@ export async function buildShipMissionAccept(player: Entity,
             // përs flags actually said to do something ('stay' is the
             // absence of the field).
             ...(offeredBy && offeredByFate ? { offeredByFate } : {}),
-            ...(creditsAfter !== creditsBefore
-                ? { creditsDelta: creditsAfter - creditsBefore } : {}),
-            ...(dateDelta > 0 ? { dateDelta } : {}),
-            ...(bits.added.length ? { bitsSet: bits.added } : {}),
-            ...(bits.removed.length ? { bitsCleared: bits.removed } : {}),
-            ...(ranks.added.length ? { ranksGranted: ranks.added } : {}),
-            ...(ranks.removed.length ? { ranksRevoked: ranks.removed } : {}),
-            ...(suppressGovts.added.length
-                ? { suppressGovtsAdded: suppressGovts.added } : {}),
-            ...(suppressGovts.removed.length
-                ? { suppressGovtsRemoved: suppressGovts.removed } : {}),
-            ...(cargo.length ? { cargoDelta: cargo } : {}),
-            ...(outfits.length ? { outfitsDelta: outfits } : {}),
-            ...(missionsStarted.length ? { missionsStarted } : {}),
-            ...(missionsEnded.length ? { missionsEnded } : {}),
-            ...(records.length ? { recordsDelta: records } : {}),
+            ...effects,
             ...(ships.length ? { ships } : {}),
+        },
+    };
+}
+
+/** A refusal's record, plus anything its OnRefuse gave the player to read. */
+export interface ShipMissionRefusal {
+    record: RefusedMission;
+    /** E.g. the briefing of a mission the OnRefuse started (Sxxx). */
+    events: MissionEvent[];
+}
+
+/**
+ * Refuses `offer` against a detached copy of the player's state — its
+ * OnRefuse set string, run by the same machinery the landed boards run it
+ * with (refuseOffer) — and returns the input record that reproduces the
+ * result in the simulation. Null when there is nothing to carry: an empty
+ * OnRefuse (every stock AvailLoc 2 mission's), or one whose every operation
+ * is one the simulation cannot carry (a `Txxx`, say).
+ *
+ * The motivating case is plug-in arpia's mïsn 1112, whose REFUSE button is
+ * the one reading "I accept gladly." (see RefusedMissionType).
+ */
+export async function buildShipMissionRefusal(player: Entity,
+    offer: MissionOffer, gameData: SimulationGameDataInterface,
+    universe: MissionUniverse, options: {
+        /** Entity uuid of the përs ship that made the offer. */
+        offeredBy?: string,
+        /** The system the offer was made in (see buildShipMissionAccept). */
+        systemId?: string,
+    } = {}): Promise<ShipMissionRefusal | null> {
+    if (!offer.data.onRefuse?.trim()) {
+        return null;
+    }
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    refuseOffer(session.machinery, offer, session.outfits);
+    const events = session.commit();
+    const effects = diffSetStringEffects(before, session.target,
+        offer.data.id, outcome);
+    if (Object.keys(effects).length === 0) {
+        return null;
+    }
+    return {
+        events,
+        record: {
+            missionId: offer.data.id,
+            ...(options.offeredBy ? { offeredBy: options.offeredBy } : {}),
+            ...effects,
         },
     };
 }

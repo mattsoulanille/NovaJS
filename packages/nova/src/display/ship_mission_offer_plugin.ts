@@ -20,7 +20,7 @@ import { DisabledComponent, ShipComponent, TargetComponent } from '../nova_plugi
 import { shipDisposition, LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
     AcceptedMission, ShipOfferSpentComponent, MissionOffer, buildAcceptedMissionShips,
-    expandMissionText,
+    expandMissionText, RefusedMission,
 } from '../nova_plugin/missions/index.js';
 import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
@@ -29,7 +29,7 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import {
-    buildShipMissionAccept, buildShipMissionOffer,
+    buildShipMissionAccept, buildShipMissionOffer, buildShipMissionRefusal,
 } from '../spaceport/ship_mission_accept.js';
 import {
     ShipOfferGates, shipOfferConsequence, ShipOfferTrigger,
@@ -78,13 +78,17 @@ import { SweepPlanetCornersSystem } from "./planet_corners_plugin.js";
  * every peer replays (nova_plugin/missions/mission_accept.ts). Nothing here mutates
  * the display world's mirror of the player.
  *
- * REFUSING DOES NOTHING, deliberately. The Bible gives a mission an OnRefuse
- * set string, and running one in flight would need an input record of its
- * own — but no stock AvailLoc 2 mission has a non-empty OnRefuse (all 13
- * are empty), so the honest implementation is to run nothing and say so.
- * The original re-offers a refused mission on the next hail, and so does
- * this: refusing leaves no state behind. ACCEPTING does — the sim marks the
- * hull with ShipOfferSpentComponent — so one offer is taken at most once.
+ * REFUSING RUNS OnRefuse, through an input record of its own. No stock
+ * AvailLoc 2 mission has a non-empty OnRefuse (all 13 are empty), so in
+ * stock content a refusal still does nothing at all — but plug-in arpia's
+ * mïsn 1112 swaps its buttons, and its OnRefuse is the accept: it aborts
+ * the previous mission, moves the player to another system in a new ship
+ * and starts the next one. The refusal is resolved against a detached
+ * copy exactly like an accept (buildShipMissionRefusal) and travels as
+ * RefuseShipMissionEvent -> bridge.refuseMission. The original re-offers a
+ * refused mission on the next hail, and so does this: a refusal leaves the
+ * offer on the table. ACCEPTING takes it — the sim marks the hull with
+ * ShipOfferSpentComponent — so one offer is taken at most once.
  */
 
 /**
@@ -97,6 +101,14 @@ export const AcceptShipMissionEvent = new EcsEvent<{
     record: AcceptedMission,
     ships: Entity[],
 }>('AcceptShipMissionEvent');
+
+/**
+ * A refused ship-offered mission whose OnRefuse did something, on its way
+ * to the simulation bridge (game_session.ts -> bridge.refuseMission).
+ */
+export const RefuseShipMissionEvent = new EcsEvent<{
+    record: RefusedMission,
+}>('RefuseShipMissionEvent');
 
 /** The popup every ship offer is shown on, built once per display world. */
 export const ShipOfferPopupResource =
@@ -261,12 +273,50 @@ export async function presentShipOffer(world: World, targetUuid: string,
             : (offer.data.refuseButton || 'Refuse'),
     }, { pict: offer.data.offerPict, style: 'offer' });
     if (choice !== 'accept') {
-        // See the module note: nothing is run, nothing is remembered.
+        // See the module note: OnRefuse runs, the offer stays on the table.
+        await refuseShipOffer(world, player, targetUuid, offer, gameData,
+            universe, popup, pers, systemId);
         return true;
     }
     await acceptShipOffer(world, player, target, targetUuid, pers, offer,
         gameData, universe, popup, systemId);
     return true;
+}
+
+/**
+ * The refuse half: OnRefuse resolved against a detached copy, dispatched
+ * when it did anything, and whatever it gave the player to read shown —
+ * the same shape as the accept half below, minus the ships.
+ */
+async function refuseShipOffer(world: World,
+    player: { uuid: string, entity: Entity }, targetUuid: string,
+    offer: MissionOffer, gameData: SimulationGameDataInterface,
+    universe: MissionUniverse, popup: OfferPopup, pers: PersData,
+    systemId: string | undefined): Promise<void> {
+    let refusal;
+    try {
+        refusal = await buildShipMissionRefusal(player.entity, offer,
+            gameData, universe, { offeredBy: targetUuid, systemId });
+    } catch (e) {
+        console.warn('Failed to refuse a ship-offered mission:', e);
+        return;
+    }
+    if (!refusal) {
+        return;
+    }
+    world.emit(RefuseShipMissionEvent, { record: refusal.record });
+    for (const event of refusal.events) {
+        if (!event.text?.trim()) {
+            continue;
+        }
+        const text = await expandOfferText(world, universe, offer,
+            pers.name, event.text, {
+            payment: event.payment,
+            specialShipName: event.specialShipName,
+        });
+        await popup.show(text, { accept: 'OK' },
+            { pict: offer.data.briefPict, style: 'briefing' });
+    }
 }
 
 /** The accept half: resolve, build the ships, dispatch, show the brief. */

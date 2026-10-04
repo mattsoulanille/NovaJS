@@ -152,15 +152,29 @@ export interface MissionMachineryContext {
     /**
      * `Cxxx` / `Exxx` / `Hxxx` (change the player's ship to type xxx; the
      * three outfit treatments are ncb.ts's ShipChangeMode).
-     * The ship is an ENTITY swap, which only the owner of the docked
-     * entity can perform, so this is supplied by the landing's transaction
-     * (spaceport/landed_transaction.ts — for every landed venue: an oütf
-     * OnPurchase like stock 314's `H165`, a mïsn OnAccept like stock
-     * 197's `H381`) and is otherwise (in flight) reported as an
-     * unimplemented hook. `globalShipId` is already resolved stock-first
-     * through `shipExists`.
+     * The ship is an ENTITY swap, so whoever owns the entity the machinery
+     * runs over supplies it: the landing's transaction for every landed
+     * venue (spaceport/landed_transaction.ts — an oütf OnPurchase like
+     * stock 314's `H165`, a mïsn OnAccept like stock 197's `H381`), the
+     * date advance for the crons and in-flight mission upkeep it runs on a
+     * held entity (spaceport/mission_session.ts advanceEntityDate), and the
+     * detached copy an in-flight accept or refusal is resolved against
+     * (spaceport/ship_mission_accept.ts), whose result the simulation then
+     * applies (nova_plugin/missions/mission_ship_change.ts). A machinery
+     * without it reports the operator unimplemented. `globalShipId` is
+     * already resolved stock-first through `shipExists`.
      */
     changeShip?(globalShipId: string, mode: ShipChangeMode): void;
+    /**
+     * `Mxxx` / `Nxxx` (move the player to system xxx: on top of its first
+     * stellar, or keeping the x/y coordinates). Supplied only by the
+     * in-flight accept / refusal (spaceport/ship_mission_accept.ts), which
+     * records it on the record the simulation applies
+     * (MissionSystemMoveSystem); everywhere else it is reported as an
+     * unimplemented hook. `globalSystemId` is already resolved stock-first
+     * through `systemExists`.
+     */
+    moveToSystem?(globalSystemId: string, keepCoordinates: boolean): void;
     /**
      * Whether a shïp with this global id exists, so the change-ship
      * operators resolve their bare number stock-first like every other

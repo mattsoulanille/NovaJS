@@ -21,6 +21,10 @@
  * into, and the save that stands is the last one written".
  */
 import type { Entity } from 'nova_ecs/entity';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
 import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
     GateArrivalComponent, planGateTransitRecovery, planHyperspaceJumpRecovery,
@@ -120,6 +124,84 @@ async function advanceDateForJump(runtime: ClientRuntime, entity: Entity):
         console.warn('Failed to advance the date on jump; jumping anyway '
             + 'without the date cost:', e);
     }
+}
+
+/**
+ * A set string run in flight moved the player to another system (`Mxxx` /
+ * `Nxxx` — MissionSystemMoveEvent, nova_plugin/missions/mission_ship_change.ts).
+ * The simulation has already taken the ship (and swept its escorts onto
+ * the jump roster); this places it where the Bible says and carries it
+ * there through the same room switch a jump uses. A failed follow-through
+ * re-enters the origin, as a failed jump does.
+ *
+ *   Mxxx  "The player will be put on top of the first stellar in the
+ *         system, or in the center of the system if no stellars exist
+ *         there." At rest, heading kept.
+ *   Nxxx  "The player will remain at the same x/y coordinates, relative to
+ *         the center of the system." Velocity and heading kept.
+ *
+ * No date passes and no fuel is spent: the Bible's move is instantaneous,
+ * and the player never entered hyperspace.
+ */
+export function followMissionSystemMove(runtime: ClientRuntime,
+    data: DepartingShip & { systemId: string, keepCoordinates: boolean },
+    wire: WorldWiring): void {
+    const origin = activeSystemId(runtime.state.state);
+    void runtime.transitions.run(async () => {
+        if (!data.keepCoordinates) {
+            await placeOnFirstStellar(data.entity, data.systemId,
+                runtime.gameData);
+        }
+        try {
+            await jumpTo(runtime, {
+                kind: 'move', from: origin, to: data.systemId, uuid: data.uuid,
+                entity: data.entity,
+            }, wire);
+        } catch (e) {
+            if (isSessionEnded(e)) {
+                return; // See followHyperspaceJump.
+            }
+            console.warn('Mission move to another system failed:', e);
+            await abortHyperspaceJump(runtime, data, origin,
+                `Mission move to ${data.systemId} failed.`, wire);
+        }
+    }).catch(e => {
+        if (!isSessionEnded(e)) {
+            console.error('Mission move follow-through failed:', e);
+        }
+    });
+}
+
+/**
+ * Mxxx's placement: on top of `systemId`'s first stellar (its sÿst's first
+ * spöb), or at the centre when it has none or its data cannot be read. A
+ * fresh MovementState (never an in-place edit), at rest, heading kept.
+ */
+export async function placeOnFirstStellar(entity: Entity, systemId: string,
+    gameData: SimulationGameDataInterface): Promise<void> {
+    let position = new Position(0, 0);
+    try {
+        const system = await gameData.data.System.get(systemId);
+        const first = system.planets[0];
+        if (first) {
+            const planet = await gameData.data.Planet.get(first);
+            position = new Position(planet.position[0], planet.position[1]);
+        }
+    } catch (e) {
+        console.warn(`Could not place the player on ${systemId}'s first `
+            + 'stellar; using the system centre:', e);
+    }
+    const movement = entity.components.get(MovementStateComponent);
+    if (!movement) {
+        return;
+    }
+    entity.components.set(MovementStateComponent, {
+        ...movement,
+        position,
+        velocity: new Vector(0, 0),
+        accelerating: 0,
+        teleportCount: (movement.teleportCount ?? 0) + 1,
+    });
 }
 
 /**
