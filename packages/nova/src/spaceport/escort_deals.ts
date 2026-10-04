@@ -22,7 +22,7 @@ import { formatPrice } from './format_price.js';
  * EscortDeal, written with withEscortDeal); THIS module is the other end,
  * where the money moves. The deal is READ through escortDeal and CLEARED
  * through withEscortDeal(marker, NO_DEAL) here as everywhere else, so the
- * pendingUpgrade / pendingSale encoding has one reader and one writer.
+ * marker's `deal` has one reader and one writer.
  *
  * WHEN: as the player departs the spaceport (Matthew's ruling, tracker
  * #249 / #253) — ANY spaceport, shipyard or not — from the Leave button,
@@ -77,26 +77,24 @@ import { formatPrice } from './format_price.js';
  *  - AN UPGRADE charges the escort's shïp EscUpgrdCost and swaps the class
  *    through the same replaceEscortShipClass the simulation uses, cargo
  *    clamp included.
- *  - A SALE WINS over an upgrade if both are somehow set. They are mutually
- *    exclusive by construction (queueing either clears the other), so this
- *    is only reachable through a hand-edited save; selling is the reading
- *    that cannot leave the player holding a hull they did not want. That
- *    reading is escortDeal's, not a rule of this module.
+ *  - NEVER BOTH. Upgrade and Sell are mutually exclusive (ruling #249), and
+ *    the marker stores ONE deal (player_escort.ts's EscortDealType), so
+ *    there is no escort with a sale and an upgrade queued to arbitrate.
  *  - INSUFFICIENT CREDITS: the upgrade is SKIPPED AND STAYS QUEUED. The
  *    player can leave again when they can afford it — a deal they never
  *    got is not a deal they should lose. (A sale never fails this way: it
  *    pays the player.)
- *  - A STALE TARGET IS DROPPED. `pendingUpgrade` stores the class resolved
+ *  - A STALE TARGET IS DROPPED. An upgrade deal's `toShip` is the class resolved
  *    when the button was pressed; if the escort's CURRENT shïp UpgradeTo no
  *    longer names it (the escort changed class some other way), the queue
  *    is cleared rather than honoured. Charging one class's price for
  *    another class's hull is the failure this exists to prevent.
  *  - A SALE OF A HIRED ESCORT IS DROPPED, not paid: a hired pilot's hull
- *    was never the player's. The flag can only be a hired escort's through
+ *    was never the player's. The deal can only be a hired escort's through
  *    a capture that was later re-classified, or a hand-edited save, but the
- *    rule is re-checked here rather than trusted from the flag — the same
+ *    rule is re-checked here rather than trusted from the deal — the same
  *    policy applyEscortAction follows.
- *  - AN ESCORT WHOSE HOLD IS OPEN IN A VENUE IS SKIPPED ENTIRELY, flags and
+ *  - AN ESCORT WHOSE HOLD IS OPEN IN A VENUE IS SKIPPED ENTIRELY, deal and
  *    all, and stays queued. The trade center checks out working copies of
  *    the landed escorts' holds when it opens and writes them back at Done
  *    (fleet_cargo.ts); settling a SALE in between would splice the escort
@@ -180,10 +178,8 @@ export interface EscortDealSettlement {
  *
  * Deliberately not filtered by the stale-target or affordability rules:
  * loading a class that then turns out not to be needed costs a cache entry,
- * while missing one silently leaves a legitimate deal queued forever. (A
- * marker that somehow carries a sale as well reads as the sale — see
- * escortDeal — and the sale settles first and clears both, so its target
- * is never needed.) Sorted and de-duplicated so the loads are a fixed set.
+ * while missing one silently leaves a legitimate deal queued forever.
+ * Sorted and de-duplicated so the loads are a fixed set.
  */
 export function queuedUpgradeTargets(roster: readonly EscortDealEntry[],
     player: string): string[] {
@@ -202,10 +198,10 @@ export function queuedUpgradeTargets(roster: readonly EscortDealEntry[],
 
 /**
  * Writes an escort's ownership marker with its queued deal cleared —
- * through withEscortDeal, which removes the deal's fields rather than
- * writing `undefined`, so the encoded shape (and so the desync hash) is
- * identical to an escort that never had a deal queued: the same rule
- * escort_action.ts's setEscortDeal follows, because it is the same writer.
+ * through withEscortDeal(marker, NO_DEAL), so the marker states exactly the
+ * deal an escort that never had one queued states, and so encodes (and
+ * hashes) identically: the same writer escort_action.ts's setEscortDeal
+ * uses.
  */
 function clearDeals(entity: Entity, marker: PlayerEscort): void {
     entity.components.set(PlayerEscortComponent, withEscortDeal(marker, NO_DEAL));
@@ -258,7 +254,7 @@ function wingOf(roster: readonly EscortDealEntry[], uuid: string): Set<string> {
  * settle it on the next visit than to refit against a cold cache).
  *
  * Returns what happened, so the caller can report it and apply the net
- * credits. Every deal that is settled or dropped has its flag cleared, so
+ * credits. Every deal that is settled or dropped is cleared, so
  * calling this again on the same roster is a no-op — a second Leave, or a
  * departure whose insertion was refused and retried, cannot settle
  * anything twice.
@@ -294,7 +290,7 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         }
         clearDeals(entry.entity, marker);
         if (escortProvenance(entry.entity) !== 'captured') {
-            continue; // Never the player's to sell; the flag just goes.
+            continue; // Never the player's to sell; the deal just goes.
         }
         const shipData = entry.entity.components.get(ShipDataComponent);
         if (!shipData) {
@@ -353,7 +349,7 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         settlement.upgraded.push({
             uuid: entry.uuid, fromShip: shipData.id, toShip: pending, cost,
         });
-        // Clear the flags BEFORE the swap: replaceEscortShipClass leaves
+        // Clear the deal BEFORE the swap: replaceEscortShipClass leaves
         // the ownership marker alone, but reading the marker after the
         // class has moved would invite exactly the confusion the stale
         // check above exists to catch.

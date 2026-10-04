@@ -17,7 +17,7 @@ import {
     replaceEscortShipClass,
 } from './escort_action.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { GovtComponent } from '../core/index.js';
 import { ArmorComponent, ShieldComponent } from '../ship/index.js';
@@ -149,7 +149,7 @@ async function makeWorld() {
                 { command: 'formation' });
             ship.components.set(FiringGroupComponent, { group: PLAYER });
             ship.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER, provenance });
+                { player: PLAYER, parent: PLAYER, provenance, deal: NO_DEAL });
             ship.components.set(GovtComponent, { id: GOVT });
             ship.components.set(NpcComponent, { aiType: 1, mode: 'travel' });
         }, 0, 2_000);
@@ -308,7 +308,7 @@ describe('releasing an escort', () => {
                 ship.components.set(OwnerComponent, { owner: ESCORT });
                 ship.components.set(SourceComponent, ESCORT);
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: ESCORT, provenance: 'hired' });
+                    { player: PLAYER, parent: ESCORT, provenance: 'hired', deal: NO_DEAL });
             }, 0, 2_010);
 
             const released = releaseEscort(ESCORT, fixture.world.entities);
@@ -410,7 +410,7 @@ describe('queueing a sale of a captured escort', () => {
         + 'which reads as hired', async () => {
             const escort = await fixture.addEscort(ESCORT, 'captured');
             escort.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER });
+                { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             queueSale();
             expect(escortSaleQueued(escort)).toBeFalse();
         });
@@ -588,6 +588,7 @@ describe('replaceEscortShipClass (the refit itself, run at lift-off)',
                 expect(escort.components.get(PlayerEscortComponent))
                     .toEqual({
                         player: PLAYER, parent: PLAYER, provenance: 'hired',
+                        deal: NO_DEAL,
                     });
                 expect(escort.components.get(FormationComponent))
                     .toEqual({ leader: PLAYER, slot: 0 });

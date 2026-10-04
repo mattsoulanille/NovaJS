@@ -2,7 +2,9 @@ import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { CargoComponent, ShipComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/index.js';
+import {
+    EscortDeal, NO_DEAL, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
 import {
     EscortDealEntry, escortSettlementReport, queuedUpgradeTargets,
     settleEscortDeals,
@@ -54,8 +56,7 @@ const getShip = (id: string) => SHIPS.get(id);
 function entry(uuid: string, options: {
     shipId?: string,
     provenance?: 'hired' | 'captured',
-    pendingUpgrade?: string,
-    pendingSale?: boolean,
+    deal?: EscortDeal,
     parent?: string,
     player?: string,
 } = {}): EscortDealEntry {
@@ -67,9 +68,7 @@ function entry(uuid: string, options: {
             player: options.player ?? PLAYER,
             parent: options.parent ?? options.player ?? PLAYER,
             provenance: options.provenance ?? 'captured',
-            ...options.pendingUpgrade !== undefined
-                ? { pendingUpgrade: options.pendingUpgrade } : {},
-            ...options.pendingSale ? { pendingSale: true } : {},
+            deal: options.deal ?? NO_DEAL,
         });
     return { player: options.player ?? PLAYER, uuid, entity };
 }
@@ -82,9 +81,9 @@ describe('queuedUpgradeTargets', () => {
     it('names every class the roster\'s queued upgrades will need, sorted '
         + 'and de-duplicated', () => {
             const roster = [
-                entry('a', { pendingUpgrade: BETTER }),
-                entry('b', { pendingUpgrade: BETTER }),
-                entry('c', { pendingUpgrade: PLAIN }),
+                entry('a', { deal: { kind: 'upgrade', toShip: BETTER } }),
+                entry('b', { deal: { kind: 'upgrade', toShip: BETTER } }),
+                entry('c', { deal: { kind: 'upgrade', toShip: PLAIN } }),
                 entry('d'),
             ];
             expect(queuedUpgradeTargets(roster, PLAYER))
@@ -93,7 +92,7 @@ describe('queuedUpgradeTargets', () => {
 
     it('ignores another player\'s escorts', () => {
         const roster = [entry('a',
-            { player: OTHER_PLAYER, pendingUpgrade: BETTER })];
+            { player: OTHER_PLAYER, deal: { kind: 'upgrade', toShip: BETTER } })];
         expect(queuedUpgradeTargets(roster, PLAYER)).toEqual([]);
     });
 });
@@ -102,7 +101,7 @@ describe('settling a queued SALE', () => {
     it('pays the Bible\'s 10%-of-cost default and DROPS the escort from '
         + 'the roster, so it never lifts off', () => {
             // SHIP: price 150,000, EscSellValue 0 -> 15,000.
-            const sold = entry('sold', { pendingSale: true });
+            const sold = entry('sold', { deal: { kind: 'sale' } });
             const kept = entry('kept');
             const roster = [sold, kept];
             const settled = settleEscortDeals(roster, PLAYER, 1_000, getShip);
@@ -116,7 +115,7 @@ describe('settling a queued SALE', () => {
     it('pays the class\'s own EscSellValue when it has one', () => {
         const ships = new Map(SHIPS);
         ships.set(SHIP, { ...SHIPS.get(SHIP)!, escortSellValue: 25_000 });
-        const sold = entry('sold', { pendingSale: true });
+        const sold = entry('sold', { deal: { kind: 'sale' } });
         sold.entity.components.set(ShipDataComponent, ships.get(SHIP)!);
         const roster = [sold];
         expect(settleEscortDeals(roster, PLAYER, 0,
@@ -126,7 +125,7 @@ describe('settling a queued SALE', () => {
 
     it('takes the sold escort\'s OWN WING with it — a wing was the '
         + 'player\'s only through its carrier', () => {
-            const carrier = entry('carrier', { pendingSale: true });
+            const carrier = entry('carrier', { deal: { kind: 'sale' } });
             const wing = entry('wing', { parent: 'carrier' });
             const deeper = entry('deeper', { parent: 'wing' });
             const other = entry('other');
@@ -139,29 +138,29 @@ describe('settling a queued SALE', () => {
     it('DROPS a sale flagged on a HIRED escort rather than paying for a '
         + 'hull that was never the player\'s', () => {
             const hired = entry('hired',
-                { provenance: 'hired', pendingSale: true });
+                { provenance: 'hired', deal: { kind: 'sale' } });
             const roster = [hired];
             const settled = settleEscortDeals(roster, PLAYER, 0, getShip);
             expect(settled.credits).toBe(0);
             expect(settled.sold).toEqual([]);
             expect(roster).toEqual([hired]);
             // ...and the impossible flag is cleared, not left to try again.
-            expect(markerOf(hired.entity).pendingSale).toBeUndefined();
+            expect(markerOf(hired.entity).deal.kind).not.toBe('sale');
         });
 
     it('leaves another player\'s queued sale entirely alone', () => {
         const theirs = entry('theirs',
-            { player: OTHER_PLAYER, pendingSale: true });
+            { player: OTHER_PLAYER, deal: { kind: 'sale' } });
         const roster = [theirs];
         expect(settleEscortDeals(roster, PLAYER, 0, getShip).credits).toBe(0);
         expect(roster).toEqual([theirs]);
-        expect(markerOf(theirs.entity).pendingSale).toBeTrue();
+        expect(markerOf(theirs.entity).deal).toEqual({ kind: 'sale' });
     });
 });
 
 describe('settling a queued UPGRADE', () => {
     it('charges EscUpgrdCost and swaps the class in place', () => {
-        const escort = entry('e', { pendingUpgrade: BETTER });
+        const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
         const roster = [escort];
         const settled = settleEscortDeals(roster, PLAYER, 100_000, getShip);
         expect(settled.credits).toBe(-UPGRADE_COST);
@@ -176,7 +175,7 @@ describe('settling a queued UPGRADE', () => {
     });
 
     it('clamps cargo to the new hull\'s hold (replaceEscortShipClass)', () => {
-        const escort = entry('e', { pendingUpgrade: BETTER });
+        const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
         escort.entity.components.set(CargoComponent,
             new Map([['cargo:0', 40], ['cargo:4', 30]]));
         settleEscortDeals([escort], PLAYER, 100_000, getShip);
@@ -187,13 +186,13 @@ describe('settling a queued UPGRADE', () => {
 
     it('SKIPS an upgrade the player cannot afford and KEEPS IT QUEUED',
         () => {
-            const escort = entry('e', { pendingUpgrade: BETTER });
+            const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
             const settled =
                 settleEscortDeals([escort], PLAYER, UPGRADE_COST - 1, getShip);
             expect(settled.credits).toBe(0);
             expect(settled.upgraded).toEqual([]);
             expect(escort.entity.components.get(ShipComponent)?.id).toBe(SHIP);
-            expect(markerOf(escort.entity).pendingUpgrade).toBe(BETTER);
+            expect(markerOf(escort.entity).deal).toEqual({ kind: 'upgrade', toShip: BETTER });
         });
 
     it('DROPS a queue whose stored target no longer matches the escort\'s '
@@ -202,27 +201,27 @@ describe('settling a queued UPGRADE', () => {
             // struck; charging one class's price for another's hull is
             // exactly what the stored target exists to prevent.
             const escort = entry('e',
-                { shipId: PLAIN, pendingUpgrade: BETTER });
+                { shipId: PLAIN, deal: { kind: 'upgrade', toShip: BETTER } });
             const settled =
                 settleEscortDeals([escort], PLAYER, 1_000_000, getShip);
             expect(settled.upgraded).toEqual([]);
             expect(settled.credits).toBe(0);
             expect(escort.entity.components.get(ShipComponent)?.id).toBe(PLAIN);
-            expect(markerOf(escort.entity).pendingUpgrade).toBeUndefined();
+            expect(markerOf(escort.entity).deal.kind).not.toBe('upgrade');
         });
 
     it('keeps a queue whose target class is not loaded, rather than '
         + 'dropping it', () => {
-            const escort = entry('e', { pendingUpgrade: BETTER });
+            const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
             const settled = settleEscortDeals([escort], PLAYER, 1_000_000,
                 id => id === BETTER ? undefined : SHIPS.get(id));
             expect(settled.upgraded).toEqual([]);
-            expect(markerOf(escort.entity).pendingUpgrade).toBe(BETTER);
+            expect(markerOf(escort.entity).deal).toEqual({ kind: 'upgrade', toShip: BETTER });
         });
 
     it('leaves another player\'s queued upgrade alone', () => {
         const theirs = entry('theirs',
-            { player: OTHER_PLAYER, pendingUpgrade: BETTER });
+            { player: OTHER_PLAYER, deal: { kind: 'upgrade', toShip: BETTER } });
         expect(settleEscortDeals([theirs], PLAYER, 1_000_000, getShip)
             .upgraded).toEqual([]);
         expect(theirs.entity.components.get(ShipComponent)?.id).toBe(SHIP);
@@ -231,7 +230,7 @@ describe('settling a queued UPGRADE', () => {
 
 describe('the settlement as a whole', () => {
     it('is IDEMPOTENT — a retried departure cannot settle twice', () => {
-        const escort = entry('e', { pendingUpgrade: BETTER });
+        const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
         const roster = [escort];
         expect(settleEscortDeals(roster, PLAYER, 100_000, getShip).credits)
             .toBe(-UPGRADE_COST);
@@ -247,8 +246,8 @@ describe('the settlement as a whole', () => {
     it('settles SALES FIRST, so their proceeds pay for the upgrades', () => {
         // 15,000 from the sale turns an unaffordable 50,000 upgrade into
         // an affordable one.
-        const sold = entry('sold', { pendingSale: true });
-        const upgrading = entry('up', { pendingUpgrade: BETTER });
+        const sold = entry('sold', { deal: { kind: 'sale' } });
+        const upgrading = entry('up', { deal: { kind: 'upgrade', toShip: BETTER } });
         const roster = [sold, upgrading];
         const settled =
             settleEscortDeals(roster, PLAYER, UPGRADE_COST - 15_000, getShip);
@@ -260,24 +259,12 @@ describe('the settlement as a whole', () => {
 
     it('stops charging once the running balance runs out, leaving the rest '
         + 'queued', () => {
-            const first = entry('a', { pendingUpgrade: BETTER });
-            const second = entry('b', { pendingUpgrade: BETTER });
+            const first = entry('a', { deal: { kind: 'upgrade', toShip: BETTER } });
+            const second = entry('b', { deal: { kind: 'upgrade', toShip: BETTER } });
             const settled = settleEscortDeals([first, second], PLAYER,
                 UPGRADE_COST, getShip);
             expect(settled.upgraded.map(u => u.uuid)).toEqual(['a']);
-            expect(markerOf(second.entity).pendingUpgrade).toBe(BETTER);
-        });
-
-    it('SELLS rather than upgrades if a hand-edited save somehow set both',
-        () => {
-            const escort = entry('e',
-                { pendingUpgrade: BETTER, pendingSale: true });
-            const roster = [escort];
-            const settled =
-                settleEscortDeals(roster, PLAYER, 1_000_000, getShip);
-            expect(settled.sold.length).toBe(1);
-            expect(settled.upgraded).toEqual([]);
-            expect(roster).toEqual([]);
+            expect(markerOf(second.entity).deal).toEqual({ kind: 'upgrade', toShip: BETTER });
         });
 
     it('does nothing at all to a roster with no queued deals', () => {
@@ -290,13 +277,15 @@ describe('the settlement as a whole', () => {
 
     it('restores the marker\'s ENCODED SHAPE when a deal is settled, so it '
         + 'hashes like an escort that never had one', () => {
-            const escort = entry('e', { pendingUpgrade: BETTER });
+            const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
             settleEscortDeals([escort], PLAYER, 1_000_000, getShip);
             expect(markerOf(escort.entity)).toEqual({
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
+                deal: NO_DEAL,
             });
-            expect(Object.keys(markerOf(escort.entity)).sort())
-                .toEqual(['parent', 'player', 'provenance']);
+            // Key for key what a marker that never queued anything holds.
+            expect(Object.keys(markerOf(escort.entity)))
+                .toEqual(Object.keys(markerOf(entry('fresh').entity)));
         });
 });
 
@@ -307,7 +296,7 @@ describe('the settlement as a whole', () => {
  */
 describe('escortSettlementReport (the departure dialog)', () => {
     it('reports a single sale in the singular, with the sum', () => {
-        const roster = [entry('sold', { pendingSale: true })];
+        const roster = [entry('sold', { deal: { kind: 'sale' } })];
         const settled = settleEscortDeals(roster, PLAYER, 0, getShip);
         expect(escortSettlementReport(settled))
             .toBe('1 escort was sold for a profit of 15,000 cr.');
@@ -315,8 +304,8 @@ describe('escortSettlementReport (the departure dialog)', () => {
 
     it('reports several upgrades in the plural, summing their costs', () => {
         const roster = [
-            entry('a', { pendingUpgrade: BETTER }),
-            entry('b', { pendingUpgrade: BETTER }),
+            entry('a', { deal: { kind: 'upgrade', toShip: BETTER } }),
+            entry('b', { deal: { kind: 'upgrade', toShip: BETTER } }),
         ];
         const settled = settleEscortDeals(roster, PLAYER, 1_000_000, getShip);
         expect(escortSettlementReport(settled))
@@ -325,8 +314,8 @@ describe('escortSettlementReport (the departure dialog)', () => {
 
     it('puts the sales line before the upgrades line', () => {
         const roster = [
-            entry('up', { pendingUpgrade: BETTER }),
-            entry('sold', { pendingSale: true }),
+            entry('up', { deal: { kind: 'upgrade', toShip: BETTER } }),
+            entry('sold', { deal: { kind: 'sale' } }),
         ];
         const settled = settleEscortDeals(roster, PLAYER, 1_000_000, getShip);
         expect(escortSettlementReport(settled)).toBe(
@@ -336,7 +325,7 @@ describe('escortSettlementReport (the departure dialog)', () => {
 
     it('says nothing about a deal that stayed queued, and nothing at all '
         + 'when nothing settled — so no dialog is shown', () => {
-            const unaffordable = entry('e', { pendingUpgrade: BETTER });
+            const unaffordable = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
             const settled = settleEscortDeals([unaffordable], PLAYER,
                 UPGRADE_COST - 1, getShip);
             expect(escortSettlementReport(settled)).toBeUndefined();

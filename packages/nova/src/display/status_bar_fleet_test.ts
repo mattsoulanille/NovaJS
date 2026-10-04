@@ -3,7 +3,7 @@ import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/index.js';
 import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
-import { MissionShipComponent, PlayerEscortComponent } from '../nova_plugin/player/index.js';
+import { MissionShipComponent, PlayerEscortComponent, NO_DEAL } from '../nova_plugin/player/index.js';
 import { sumFleetCargo } from '../spaceport/fleet_cargo.js';
 import {
     cargoDisplayOf, fleetCargoMembers, playerEscortEntities,
@@ -60,7 +60,7 @@ function escortEntity(shipId: string, { player = PLAYER, cargo, fighter = false,
     const entity = new Entity();
     entity.components.set(ShipComponent, { id: shipId });
     entity.components.set(PlayerEscortComponent,
-        { player, parent: player, detached: false });
+        { player, parent: player, detached: false, deal: NO_DEAL });
     if (cargo) {
         entity.components.set(CargoComponent, new Map(cargo));
     }

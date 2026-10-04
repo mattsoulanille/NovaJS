@@ -22,7 +22,7 @@ import {
     EscortRepairedEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
 import { AggressionComponent } from '../combat/index.js';
-import { MissionShipComponent } from '../player/index.js';
+import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import { BoardedComponent, BoardingComponent } from '../ship/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
@@ -365,6 +365,7 @@ describe('boarding in a live world', () => {
                         .toEqual({
                             player: BOARDER, parent: BOARDER,
                             provenance: 'captured',
+                            deal: NO_DEAL,
                         });
                 });
 
@@ -496,7 +497,7 @@ describe('boarding in a live world', () => {
             for (let i = 0; i < n; i++) {
                 const escort = new Entity();
                 escort.components.set(PlayerEscortComponent,
-                    { player: BOARDER, provenance: 'hired' });
+                    { player: BOARDER, provenance: 'hired', deal: NO_DEAL });
                 if (extra.includes('fighter')) {
                     escort.components.set(BayFighterComponent,
                         { bayWeaponId: 'nova:150', slot: i } as any);
@@ -837,7 +838,7 @@ describe('boarding in a live world', () => {
             const { world, boarder } = await wingWorld();
             const mine = world.entities.get('wing:a')!;
             mine.components.set(PlayerEscortComponent,
-                { player: BOARDER, parent: BOARDER });
+                { player: BOARDER, parent: BOARDER, deal: NO_DEAL });
             world.step();
 
             captureAsEscort(world, boarder);
@@ -1084,7 +1085,7 @@ describe('boarding in a live world', () => {
          */
         async function formerEscortWorld(player = BOARDER) {
             const ctx = await boardingWorld();
-            ctx.target.components.set(PlayerEscortComponent, { player });
+            ctx.target.components.set(PlayerEscortComponent, { player, deal: NO_DEAL });
             ctx.world.step();
             return ctx;
         }
@@ -1552,7 +1553,7 @@ describe('boarding in a live world', () => {
 
                 // The hulk is now the boarder's escort (durably marked).
                 target.components.set(PlayerEscortComponent,
-                    { player: BOARDER, parent: BOARDER });
+                    { player: BOARDER, parent: BOARDER, deal: NO_DEAL });
                 world.step();
 
                 press(world, BOARDER, 'board');
@@ -1977,7 +1978,7 @@ describe('bay-capture shortcut', () => {
     describe('precedence over the former-escort repair', () => {
         /** The hulk is durably marked as the boarder's (former) escort. */
         function markFormerEscort(world: World, target: Entity) {
-            target.components.set(PlayerEscortComponent, { player: BOARDER });
+            target.components.set(PlayerEscortComponent, { player: BOARDER, deal: NO_DEAL });
             world.step();
         }
 

@@ -33,7 +33,7 @@ import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
-    escortProvenance, escortSaleQueued, pendingEscortUpgrade,
+    escortDealOf, escortProvenance,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
 import {
@@ -46,7 +46,7 @@ import {
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     EscortManagement, EscortPressAction, escortReadout, HailContext,
-    HailDialog,
+    HailDialog, queuedDealKind,
 } from '../spaceport/hail_dialog.js';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
@@ -531,9 +531,7 @@ export async function computeContext(world: World,
                 // the same synced marker the simulation writes them to
                 // (player_escort.ts) — so re-opening the channel, or
                 // opening it on another peer, shows the same box.
-                pendingUpgrade:
-                    pendingEscortUpgrade(shipTarget) !== undefined,
-                pendingSale: escortSaleQueued(shipTarget),
+                queuedDeal: queuedDealKind(escortDealOf(shipTarget)),
             };
             const label = provenance === 'captured'
                 ? 'Captured Escort:' : 'Hired Escort:';

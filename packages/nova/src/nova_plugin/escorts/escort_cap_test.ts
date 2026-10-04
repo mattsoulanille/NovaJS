@@ -5,7 +5,7 @@ import {
     cappedEscortCount, CarriedEscortEntry, countsTowardEscortCap,
     MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
 } from './escort_cap.js';
-import { MissionShipComponent } from '../player/index.js';
+import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { EscortProvenance, PlayerEscortComponent } from '../player/index.js';
 
 /**
@@ -25,6 +25,7 @@ describe('the escort cap (#161)', () => {
         const entity = new Entity();
         entity.components.set(PlayerEscortComponent, {
             player, ...(provenance ? { provenance } : {}),
+            deal: NO_DEAL,
         });
         if (extra.includes('fighter')) {
             entity.components.set(BayFighterComponent,

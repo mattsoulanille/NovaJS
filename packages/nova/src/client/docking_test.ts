@@ -95,7 +95,7 @@ describe('the docking frame while landed (ruling #249)', () => {
                 .addComponent(MovementStateComponent, movement())
                 .addComponent(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, provenance: 'captured',
-                    pendingSale: true,
+                    deal: { kind: 'sale' },
                 }),
         };
         const fleet = new FleetLedger();
@@ -124,7 +124,7 @@ describe('the docking frame while landed (ruling #249)', () => {
             // Leave, not the frame loop's.
             expect(fleet.landed).toEqual([escort]);
             expect(escort.entity.components.get(PlayerEscortComponent)!
-                .pendingSale).toBeTrue();
+                .deal).toEqual({ kind: 'sale' });
             expect(player.components.get(CreditsComponent)!.credits)
                 .toBe(1_000);
         });

@@ -1,4 +1,5 @@
 import 'jasmine';
+import { isRight } from 'fp-ts/lib/Either.js';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
@@ -26,7 +27,7 @@ import { MissionShipComponent } from './mission_ship_component.js';
 import { FormationComponent } from '../npc/index.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import {
-    durableEscortFields, escortDeal, escortDealFields, EscortLandingComponent,
+    durableEscortFields, EscortDeal, escortDeal, EscortLandingComponent,
     EscortPayrollComponent, NO_DEAL, PlayerEscort, PlayerEscortComponent,
     withEscortDeal,
 } from './player_escort.js';
@@ -148,7 +149,7 @@ describe('player escort ownership', () => {
         const escort = await addEscort('escort');
         world.step();
         expect(escort.components.get(PlayerEscortComponent))
-            .toEqual({ player: PLAYER, parent: PLAYER });
+            .toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
     });
 
     it('does not mark an escort of an NPC leader', async () => {
@@ -186,7 +187,7 @@ describe('player escort ownership', () => {
             });
             world.step();
             expect(fighter.components.get(PlayerEscortComponent))
-                .toEqual({ player: PLAYER, parent: 'carrier' });
+                .toEqual({ player: PLAYER, parent: 'carrier', deal: NO_DEAL });
         });
 
     it('keeps the marker when the player leaves the world', async () => {
@@ -227,13 +228,13 @@ describe('player escort ownership', () => {
             escort.components.set(PlayerEscortComponent, {
                 // A deliberately WRONG parent, so the system must re-stamp.
                 player: PLAYER, parent: 'stale', provenance: 'captured',
-                pendingUpgrade: 'test:better', pendingSale: false,
+                deal: { kind: 'upgrade', toShip: 'test:better' },
             });
             world.step();
             const marker = escort.components.get(PlayerEscortComponent);
             expect(marker?.parent).toBe(PLAYER);
             expect(marker?.provenance).toBe('captured');
-            expect(marker?.pendingUpgrade).toBe('test:better');
+            expect(marker?.deal).toEqual({ kind: 'upgrade', toShip: 'test:better' });
         });
 
     it('carries a queued SALE through a re-parenting too', async () => {
@@ -242,11 +243,11 @@ describe('player escort ownership', () => {
         world.step();
         escort.components.set(PlayerEscortComponent, {
             player: PLAYER, parent: 'stale', provenance: 'captured',
-            pendingSale: true,
+            deal: { kind: 'sale' },
         });
         world.step();
-        expect(escort.components.get(PlayerEscortComponent)?.pendingSale)
-            .toBeTrue();
+        expect(escort.components.get(PlayerEscortComponent)?.deal)
+            .toEqual({ kind: 'sale' });
     });
 });
 
@@ -462,7 +463,7 @@ describe('escorts landing with the player', () => {
         world.events.get(EscortLandedEvent).subscribe(
             ({ data }) => landed.push(data));
         escort.components.set(PlayerEscortComponent,
-            { player: PLAYER, parent: PLAYER, detached: true });
+            { player: PLAYER, parent: PLAYER, detached: true, deal: NO_DEAL });
         escort.components.set(EscortLandingComponent, { planet: PLANET });
 
         world.step();
@@ -733,7 +734,7 @@ describe('escorts following a gate transit', () => {
             expect(prepared!.components.get(FormationComponent))
                 .toEqual({ leader: PLAYER, slot: 0 });
             expect(prepared!.components.get(PlayerEscortComponent))
-                .toEqual({ player: PLAYER, parent: PLAYER });
+                .toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
         });
 
     it('does not carry anything at an ordinary stellar', async () => {
@@ -826,7 +827,7 @@ describe('sweepableEscorts', () => {
             // And the marker is back-filled, so the carried entity knows
             // its own parent for re-attachment.
             expect(fresh.components.get(PlayerEscortComponent))
-                .toEqual({ player: PLAYER, parent: PLAYER });
+                .toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
         });
 
     it('does not sweep the player, a mission ship, or an NPC\'s wing',
@@ -901,6 +902,7 @@ describe('the escort payroll', () => {
         await addEscort('prize', 0, 250, ship => {
             ship.components.set(PlayerEscortComponent, {
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
+                deal: NO_DEAL,
             });
         });
         world.step();
@@ -913,7 +915,7 @@ describe('the escort payroll', () => {
             const { world, addEscort } = await makeWorld();
             await addEscort('legacy', 0, 250, ship => {
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER });
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             });
             world.step();
             expect(escortsOnPayroll(world.entities, PLAYER))
@@ -987,71 +989,68 @@ describe('steerToStellar', () => {
 
 /**
  * ============================================================================
- * The queued deal as one explicit state over the flag pair
+ * The queued deal IS the marker's encoded state
  * ============================================================================
  *
- * `pendingUpgrade` / `pendingSale` are the WIRE encoding of EscortDeal
- * (player_escort.ts); these pin the decode, the encode, the exclusivity
- * the single writer enforces, and that the encoding is byte-for-byte what
- * the previous build wrote — so nothing on the wire, in the desync hash,
- * or in an existing save moves.
+ * PlayerEscort.deal is the EscortDeal itself (player_escort.ts) — the
+ * encoded form the wire, the desync hash and the save carry — not a flag
+ * pair decoded into one. These pin the codec's shape (one required field,
+ * one of three kinds, no "both"), the read, and the single writer.
  */
-describe('EscortDeal over the PlayerEscort marker', () => {
-    const base: PlayerEscort = { player: 'p', parent: 'p', provenance: 'captured' };
+describe('EscortDeal on the PlayerEscort marker', () => {
+    const base: PlayerEscort =
+        { player: 'p', parent: 'p', provenance: 'captured', deal: NO_DEAL };
+    const UPGRADE: EscortDeal = { kind: 'upgrade', toShip: 'test:better' };
+    const SALE: EscortDeal = { kind: 'sale' };
 
-    it('decodes each encoding, and an escort from before deals existed as none', () => {
-        expect(escortDeal(undefined)).toEqual(NO_DEAL);
-        expect(escortDeal({ player: 'p', parent: 'p' })).toEqual(NO_DEAL);
-        expect(escortDeal({ ...base, pendingUpgrade: 'test:better' }))
-            .toEqual({ kind: 'upgrade', toShip: 'test:better' });
-        expect(escortDeal({ ...base, pendingSale: true })).toEqual({ kind: 'sale' });
-        // A false flag is "not queued", as escortSaleQueued always read it.
-        expect(escortDeal({ ...base, pendingSale: false })).toEqual(NO_DEAL);
-    });
-
-    it('encodes to exactly the flag pair the previous build wrote', () => {
-        expect(escortDealFields(NO_DEAL)).toEqual({});
-        expect(escortDealFields({ kind: 'upgrade', toShip: 'test:better' }))
-            .toEqual({ pendingUpgrade: 'test:better' });
-        expect(escortDealFields({ kind: 'sale' })).toEqual({ pendingSale: true });
-        // Round trip, both ways.
-        for (const deal of [NO_DEAL, { kind: 'upgrade', toShip: 'x' } as const,
-            { kind: 'sale' } as const]) {
-            expect(escortDeal({ ...base, ...escortDealFields(deal) })).toEqual(deal);
+    it('the codec carries each deal as itself', () => {
+        for (const deal of [NO_DEAL, UPGRADE, SALE]) {
+            const decoded = PlayerEscort.decode({ ...base, deal });
+            expect(isRight(decoded)).toBeTrue();
+            expect(isRight(decoded) && decoded.right.deal).toEqual(deal);
+            expect(PlayerEscort.encode({ ...base, deal }).deal).toEqual(deal);
         }
     });
 
-    it('writes ONE deal at a time, removing the other rather than falsing it', () => {
-        const selling = withEscortDeal(
-            { ...base, pendingUpgrade: 'test:better' }, { kind: 'sale' });
-        // The key is GONE, not undefined: an undefined-valued key would
-        // hash differently on a peer that never queued anything.
-        expect(selling).toEqual({ ...base, pendingSale: true });
-        expect('pendingUpgrade' in selling).toBeFalse();
-        const upgrading = withEscortDeal(selling,
-            { kind: 'upgrade', toShip: 'test:better' });
-        expect(upgrading).toEqual({ ...base, pendingUpgrade: 'test:better' });
-        expect('pendingSale' in upgrading).toBeFalse();
-        // Cancelling restores the pre-deal shape exactly, other fields intact.
+    it('the codec requires a deal, of a kind this build knows', () => {
+        const { deal: _deal, ...withoutDeal } = base;
+        expect(isRight(PlayerEscort.decode(withoutDeal))).toBeFalse();
+        expect(isRight(PlayerEscort.decode(
+            { ...base, deal: { kind: 'lease' } }))).toBeFalse();
+        // An upgrade names its target; there is no upgrade "to nothing".
+        expect(isRight(PlayerEscort.decode(
+            { ...base, deal: { kind: 'upgrade' } }))).toBeFalse();
+        // The retired flag pair is not a way to say a deal any more: a
+        // marker that carries only the flags has no deal and is refused
+        // (an old save's markers are rewritten by the v3 -> v4 migration).
+        expect(isRight(PlayerEscort.decode(
+            { player: 'p', parent: 'p', pendingSale: true }))).toBeFalse();
+    });
+
+    it('escortDeal reads the marker\'s deal, and NO_DEAL off no marker', () => {
+        expect(escortDeal(undefined)).toEqual(NO_DEAL);
+        expect(escortDeal(base)).toEqual(NO_DEAL);
+        expect(escortDeal({ ...base, deal: UPGRADE })).toEqual(UPGRADE);
+        expect(escortDeal({ ...base, deal: SALE })).toEqual(SALE);
+    });
+
+    it('writes ONE deal at a time: queueing either replaces the other', () => {
+        const selling = withEscortDeal({ ...base, deal: UPGRADE }, SALE);
+        expect(selling).toEqual({ ...base, deal: SALE });
+        const upgrading = withEscortDeal(selling, UPGRADE);
+        expect(upgrading).toEqual({ ...base, deal: UPGRADE });
+        // Cancelling restores the pre-deal marker exactly, other fields
+        // intact — the same value a marker that never queued anything has.
         expect(withEscortDeal({ ...upgrading, detached: true }, NO_DEAL))
             .toEqual({ ...base, detached: true });
     });
 
-    it('reads a marker carrying BOTH flags (which no writer produces) as the '
-        + 'sale, which is what the settlement would do with it', () => {
-            const both: PlayerEscort =
-                { ...base, pendingUpgrade: 'test:better', pendingSale: true };
-            expect(escortDeal(both)).toEqual({ kind: 'sale' });
-            // durableEscortFields re-stamps it in the one-deal shape.
-            expect(durableEscortFields(both))
-                .toEqual({ provenance: 'captured', pendingSale: true });
-        });
-
     it('durableEscortFields carries provenance and the deal, never detached', () => {
-        expect(durableEscortFields(undefined)).toEqual({});
-        expect(durableEscortFields({ player: 'p', parent: 'p', detached: true }))
-            .toEqual({});
-        expect(durableEscortFields({ ...base, detached: true, pendingUpgrade: 'x' }))
-            .toEqual({ provenance: 'captured', pendingUpgrade: 'x' });
+        expect(durableEscortFields(undefined)).toEqual({ deal: NO_DEAL });
+        expect(durableEscortFields(
+            { player: 'p', parent: 'p', detached: true, deal: NO_DEAL }))
+            .toEqual({ deal: NO_DEAL });
+        expect(durableEscortFields({ ...base, detached: true, deal: UPGRADE }))
+            .toEqual({ provenance: 'captured', deal: UPGRADE });
     });
 });

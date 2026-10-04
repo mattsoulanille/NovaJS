@@ -4,7 +4,9 @@ import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { CargoComponent, ShipComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
-import { PlayerEscortComponent, CreditsComponent } from '../nova_plugin/player/index.js';
+import {
+    CreditsComponent, EscortDeal, NO_DEAL, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 import { commitFleetHolds, FleetHold } from './fleet_cargo.js';
 import { LandedTransaction } from './landed_transaction.js';
@@ -61,7 +63,7 @@ function gameData(): SimulationGameDataInterface {
 }
 
 function entry(uuid: string, options: {
-    shipId?: string, pendingSale?: boolean, parent?: string,
+    shipId?: string, deal?: EscortDeal, parent?: string,
 } = {}): EscortDealEntry {
     const shipId = options.shipId ?? FREIGHTER;
     const entity = new Entity()
@@ -71,7 +73,7 @@ function entry(uuid: string, options: {
         .addComponent(PlayerEscortComponent, {
             player: PLAYER, parent: options.parent ?? PLAYER,
             provenance: 'captured' as const,
-            ...options.pendingSale ? { pendingSale: true } : {},
+            deal: options.deal ?? NO_DEAL,
         });
     return { player: PLAYER, uuid, entity };
 }
@@ -158,7 +160,7 @@ describe('open fleet holds', () => {
 describe('a rolled-back trade visit', () => {
     it('drops the lease, so the escort\'s queued deals settle at the '
         + 'lift-off as they always would', async () => {
-            const sold = entry('f', { pendingSale: true });
+            const sold = entry('f', { deal: { kind: 'sale' } });
             const roster = [sold];
             const { transaction, visit, holdOpen } = await tradeVisit(roster);
             expect(transaction.holdOpen('f')).toBeTrue();
@@ -190,7 +192,7 @@ describe('a rolled-back trade visit', () => {
 describe('escort deals frozen by an open hold', () => {
     it('leaves a queued SALE queued, then settles it once Done releases the '
         + 'hold — and the goods bought mid-visit reach the escort', async () => {
-            const freighter = entry('f', { pendingSale: true });
+            const freighter = entry('f', { deal: { kind: 'sale' } });
             const roster = [freighter];
             const { transaction, visit, holds, holdOpen } =
                 await tradeVisit(roster);
@@ -203,7 +205,7 @@ describe('escort deals frozen by an open hold', () => {
             expect(roster.length).toBe(1);
             // The deal is still QUEUED, not dropped.
             expect(freighter.entity.components
-                .get(PlayerEscortComponent)!.pendingSale).toBe(true);
+                .get(PlayerEscortComponent)!.deal).toEqual({ kind: 'sale' });
 
             // The player buys 40 tons that spill into this escort's hold,
             // then presses Done: the release commits the holds and closes
@@ -229,7 +231,7 @@ describe('escort deals frozen by an open hold', () => {
             // anywhere in the subtree has to hold the sale back. Only the
             // wing (a freighter) carries cargo; the carrier is a fighter.
             const carrier = entry('carrier',
-                { shipId: FIGHTER, pendingSale: true });
+                { shipId: FIGHTER, deal: { kind: 'sale' } });
             const wing = entry('wing', { parent: 'carrier' });
             const roster = [carrier, wing];
             const { transaction, visit, holdOpen } = await tradeVisit(roster);
@@ -250,7 +252,7 @@ describe('escort deals frozen by an open hold', () => {
         async () => {
             const freighter = entry('f');
             const fighter = entry('g',
-                { shipId: FIGHTER, pendingSale: true });
+                { shipId: FIGHTER, deal: { kind: 'sale' } });
             const roster = [freighter, fighter];
             // Only the freighter carries cargo, so only it is leased.
             const { transaction, holdOpen } = await tradeVisit(roster);
@@ -264,7 +266,7 @@ describe('escort deals frozen by an open hold', () => {
 
     it('WITHOUT the lease, the sale strands the hold — the bug this pins',
         () => {
-            const freighter = entry('f', { pendingSale: true });
+            const freighter = entry('f', { deal: { kind: 'sale' } });
             const roster = [freighter];
             const holds = [hold(freighter)];
             // No lease: settlement cannot see the exchange.

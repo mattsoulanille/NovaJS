@@ -10,7 +10,7 @@ import { completeEntity } from '../spawn/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
-import { MissionShipComponent } from '../player/index.js';
+import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
@@ -248,7 +248,7 @@ describe('mïsn 792 (Karrod\'s flagship) across system changes', () => {
             expect(ships.length).toBeGreaterThan(0);
             for (const [, entity] of ships) {
                 entity.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER });
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             }
             for (const kind of ['jump', 'gate'] as const) {
                 expect(sweepableEscorts(world.entities, PLAYER, kind))

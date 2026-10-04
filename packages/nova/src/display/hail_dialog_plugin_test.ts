@@ -196,8 +196,7 @@ describe('computeContext: the escort management offer', () => {
                 ?.context.escort;
             expect(escort?.upgrade)
                 .toEqual({ toShip: UPGRADE, cost: 50_000, canAfford: true });
-            expect(escort?.pendingUpgrade).toBeFalse();
-            expect(escort?.pendingSale).toBeFalse();
+            expect(escort?.queuedDeal).toBeUndefined();
         });
 
     it('withdraws the offer — "This ship class cannot be upgraded." — when '
@@ -288,13 +287,12 @@ describe('computeContext: the escort management offer', () => {
             const { world, gameData } = escortWorld(target => {
                 target.components.set(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, provenance: 'captured',
-                    pendingUpgrade: UPGRADE,
+                    deal: { kind: 'upgrade', toShip: UPGRADE },
                 });
             });
             const escort = (await computeContext(world, gameData))
                 ?.context.escort;
-            expect(escort?.pendingUpgrade).toBeTrue();
-            expect(escort?.pendingSale).toBeFalse();
+            expect(escort?.queuedDeal).toBe('upgrade');
             expect(escortReadout(escort!).split('\n')[0])
                 .toBe(UPGRADE_QUEUED_TEXT);
             expect(escortButtonSlots(escort!)[0])
@@ -305,12 +303,12 @@ describe('computeContext: the escort management offer', () => {
         const { world, gameData } = escortWorld(target => {
             target.components.set(PlayerEscortComponent, {
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
-                pendingSale: true,
+                deal: { kind: 'sale' },
             });
         });
         const escort = (await computeContext(world, gameData))
             ?.context.escort;
-        expect(escort?.pendingSale).toBeTrue();
+        expect(escort?.queuedDeal).toBe('sale');
         expect(escortReadout(escort!).split('\n')[1]).toBe(SALE_QUEUED_TEXT);
         expect(escortButtonSlots(escort!)[1])
             .toEqual({ slot: 'cancelSale', enabled: true });
@@ -323,7 +321,7 @@ describe('computeContext: the escort management offer', () => {
             const { world, gameData } = escortWorld(target => {
                 target.components.set(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, provenance: 'hired',
-                    pendingUpgrade: UPGRADE,
+                    deal: { kind: 'upgrade', toShip: UPGRADE },
                 });
             });
             const escort = (await computeContext(world, gameData))

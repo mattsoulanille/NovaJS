@@ -11,7 +11,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import type { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import type { FighterRefund } from '../nova_plugin/escorts/index.js';
-import { PlayerEscortComponent, CreditsComponent } from '../nova_plugin/player/index.js';
+import { PlayerEscortComponent, CreditsComponent, NO_DEAL } from '../nova_plugin/player/index.js';
 import { FuelComponent, ShipComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { Stat } from '../nova_plugin/core/index.js';
 import { CarriedEscort } from '../spaceport/landed_escorts.js';
@@ -75,6 +75,7 @@ describe('the docking frame takes the lost roster at a lift-off (issue #257)',
                     .addComponent(MovementStateComponent, movement())
                     .addComponent(PlayerEscortComponent, {
                         player: PLAYER, parent: PLAYER, provenance: 'hired',
+                        deal: NO_DEAL,
                     }),
             };
         }

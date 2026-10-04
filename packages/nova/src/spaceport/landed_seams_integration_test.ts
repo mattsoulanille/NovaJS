@@ -188,8 +188,8 @@ describe('the seams between landed venues', () => {
                 .addComponent(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER,
                     ...(deal === 'upgrade'
-                        ? { provenance: 'hired', pendingUpgrade: BETTER_ESCORT }
-                        : { provenance: 'captured', pendingSale: true }),
+                        ? { provenance: 'hired', deal: { kind: 'upgrade', toShip: BETTER_ESCORT } }
+                        : { provenance: 'captured', deal: { kind: 'sale' } }),
                 }),
         };
     }
@@ -424,8 +424,8 @@ describe('the seams between landed venues', () => {
                     // Still queued, still the old class, still aboard.
                     expect(roster.length).toBe(1);
                     expect(roster[0].entity.components
-                        .get(PlayerEscortComponent)!.pendingUpgrade)
-                        .toBe(BETTER_ESCORT);
+                        .get(PlayerEscortComponent)!.deal)
+                        .toEqual({ kind: 'upgrade', toShip: BETTER_ESCORT });
                     expect(roster[0].entity.components.get(ShipComponent)?.id)
                         .toBe(ESCORT_SHIP);
                 });

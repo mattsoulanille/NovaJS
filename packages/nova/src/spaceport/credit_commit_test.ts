@@ -212,7 +212,7 @@ describe('venue credit commits compose with concurrent writers', () => {
                         .addComponent(ShipDataComponent, catalogue.get(ESCORT)!)
                         .addComponent(PlayerEscortComponent, {
                             player: PLAYER, parent: PLAYER,
-                            provenance: 'hired', pendingUpgrade: BETTER,
+                            provenance: 'hired', deal: { kind: 'upgrade', toShip: BETTER },
                         }),
                 }];
             }
@@ -248,7 +248,7 @@ describe('venue credit commits compose with concurrent writers', () => {
                     expect(creditBalance(entity)).toBe(100_000);
                     // Still queued: it will settle at a later departure.
                     expect(deals[0].entity.components.get(PlayerEscortComponent)!
-                        .pendingUpgrade).toBe(BETTER);
+                        .deal).toEqual({ kind: 'upgrade', toShip: BETTER });
 
                     // Done: the venue's delta lands and the balance is what
                     // the player saw — not the -40,000 the live gate gave.

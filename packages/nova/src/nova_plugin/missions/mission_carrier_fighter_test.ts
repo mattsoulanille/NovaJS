@@ -14,7 +14,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { BayFighterComponent } from '../escorts/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
@@ -213,7 +213,7 @@ async function makeWorld({ mission }: { mission: boolean }) {
                 { mission: MISSION, owner: PLAYER });
         } else {
             ship.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER, provenance: 'hired' });
+                { player: PLAYER, parent: PLAYER, provenance: 'hired', deal: NO_DEAL });
         }
     });
 
@@ -342,7 +342,7 @@ describe('a mission carrier\'s bay fighters', () => {
                 .toEqual({ player: PLAYER, parent: CARRIER });
             expect(fighter.components.get(PlayerEscortComponent))
                 .withContext(`${uuid}'s ownership marker`)
-                .toEqual({ player: PLAYER, parent: CARRIER });
+                .toEqual({ player: PLAYER, parent: CARRIER, deal: NO_DEAL });
         }
         const swept = sweepableEscorts(world.entities, PLAYER, 'jump');
         for (const [uuid] of wing) {

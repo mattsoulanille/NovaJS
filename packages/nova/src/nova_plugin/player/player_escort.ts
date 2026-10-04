@@ -28,11 +28,73 @@ import { Entity } from 'nova_ecs/entity';
  * in the plugin (and without an import cycle).
  */
 
+/**
+ * ============================================================================
+ * The queued DEAL, as its own state
+ * ============================================================================
+ *
+ * What the player has decided to do with an escort at the next spaceport
+ * departure (spaceport/escort_deals.ts settles it as they lift off from ANY
+ * spaceport, behind the pre-departure report dialog — rulings #249/#253):
+ * nothing, an upgrade to a resolved class, or a sale. ONE of the three,
+ * never two — Upgrade and Sell are mutually exclusive toggles (ruling
+ * #249), and this codec is what makes that structural: there is no
+ * encoding of "both".
+ *
+ *   { kind: 'none' }             nothing queued
+ *   { kind: 'upgrade', toShip }  a QUEUED UPGRADE to the global ship id
+ *                                `toShip`, funds permitting
+ *   { kind: 'sale' }             a QUEUED SALE: the escort is sold off and
+ *                                does NOT lift off with the player.
+ *                                CAPTURED escorts only — a hired pilot's
+ *                                hull was never the player's to sell — and
+ *                                the settlement re-checks that rather than
+ *                                trusting the deal.
+ *
+ * An upgrade's TARGET IS RESOLVED AT QUEUE TIME — it is the class's own
+ * shïp UpgradeTo as of the press, stored rather than re-derived — so the
+ * settlement can tell a deal that is still the deal it was struck for from
+ * one whose escort has changed class some other way since. A stored target
+ * that no longer matches the escort's current UpgradeTo is dropped rather
+ * than honoured (see settleEscortDeals). It is NOT a price: EscUpgrdCost is
+ * re-read from the escort's class when the deal settles, exactly as every
+ * other escort figure is (escort_fees.ts).
+ *
+ * THIS IS THE ENCODED FORM, not a view over one. PlayerEscortComponent is
+ * serializer-registered, so the marker's codec is what crosses the wire,
+ * is hashed for desync detection, and is written into the pilot save
+ * inside each escort's entity blob (save_game.ts). The deal rides it as
+ * this discriminated union, which the wire's schema reflection types as an
+ * Avro `kindUnion` (communication/io_ts_to_avro.ts): one branch index, plus
+ * the target id for an upgrade — not an opaque blob. It replaced the
+ * `pendingUpgrade` / `pendingSale` flag pair (protocol 8, save version 4 —
+ * nova_plugin/pilot/save_migrations.ts rewrites an older save's markers).
+ *
+ * A CLOSED union, not common/open_enum.ts: the kind is not data-driven,
+ * every reader switches over it exhaustively, and a deal of a kind this
+ * build does not know could not be settled, so refusing it at the codec is
+ * the right outcome.
+ */
+export const EscortDealType = t.union([
+    t.type({ kind: t.literal('none') }),
+    t.type({ kind: t.literal('upgrade'), toShip: t.string }),
+    t.type({ kind: t.literal('sale') }),
+], 'EscortDeal');
+export type EscortDeal = t.TypeOf<typeof EscortDealType>;
+
 export const PlayerEscort = t.intersection([t.type({
     /** The player ship this escort ultimately belongs to. Stable across
      * the player landing, departing, and jumping (the player's ship keeps
      * its uuid across all three). */
     player: t.string,
+    /**
+     * What is queued against this escort for the next spaceport
+     * departure. REQUIRED, so 'none' has exactly one encoding — every
+     * marker states its deal. See {@link EscortDealType}; written only
+     * through `withEscortDeal` (and carried across a re-stamp by
+     * `durableEscortFields`).
+     */
+    deal: EscortDealType,
 }), t.partial({
     /**
      * The escort's IMMEDIATE leader when it was last seen attached: the
@@ -81,38 +143,6 @@ export const PlayerEscort = t.intersection([t.type({
      * fleet the game has no provenance record for. See `escortProvenance`.
      */
     provenance: t.union([t.literal('hired'), t.literal('captured')]),
-    /**
-     * A QUEUED UPGRADE: the global ship id this escort will be swapped to
-     * the next time its player leaves a spaceport, funds permitting
-     * (spaceport/escort_deals.ts). Absent means nothing is queued.
-     *
-     * The TARGET IS RESOLVED AT QUEUE TIME — it is the class's own shïp
-     * UpgradeTo as of the press, stored rather than re-derived — so the
-     * settlement can tell a deal that is still the deal it was struck for
-     * from one whose escort has changed class some other way since. A
-     * stored target that no longer matches the escort's current
-     * UpgradeTo is dropped rather than honoured (see settleEscortDeals).
-     *
-     * NOT a price: EscUpgrdCost is re-read from the escort's class when
-     * the deal settles, exactly as every other escort figure is
-     * (escort_fees.ts).
-     *
-     * ONE HALF OF THE ENCODING OF {@link EscortDeal}: this and
-     * `pendingSale` are the wire form of a single queued-deal state, and
-     * are mutually exclusive — read them through `escortDeal`, write them
-     * through `withEscortDeal`.
-     */
-    pendingUpgrade: t.string,
-    /**
-     * A QUEUED SALE: this escort will be sold off (and will NOT lift off
-     * with the player) the next time its player leaves a spaceport.
-     * CAPTURED escorts only — a hired pilot's hull was never the
-     * player's to sell — and the settlement re-checks that rather than
-     * trusting the flag.
-     *
-     * The other half of the {@link EscortDeal} encoding; see above.
-     */
-    pendingSale: t.boolean,
 })]);
 export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
 
@@ -121,88 +151,39 @@ export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
  * The escort's LIFECYCLE, explicitly
  * ============================================================================
  *
- * The marker above is a bag of optional flags because it is a WIRE shape:
- * PlayerEscortComponent is serializer-registered, so its codec is what
- * crosses the wire, is hashed for desync detection, and is written into
- * the pilot save inside each escort's entity blob (save_game.ts). Changing
- * that encoding is a PROTOCOL_VERSION bump and a save migration of every
- * escort blob at once, and the wire side must stay additive — so the
- * encoding stays as it is, and the lifecycle is made explicit ABOVE it:
+ * Two durable facts about the player's relationship with an escort ride
+ * the marker:
  *
  *   provenance   how the escort became the player's (escortProvenance;
- *                absent on the wire = 'hired', the reading that cannot be
- *                turned into cash);
+ *                absent = 'hired', the reading that cannot be turned into
+ *                cash);
  *   deal         what the player has decided to do with it at the next
- *                spaceport departure (escortDeal): nothing, an upgrade to
- *                a resolved class, or a sale — ONE of the three, never two
- *                (ruling #249: Upgrade and Sell are mutually exclusive).
+ *                spaceport departure — {@link EscortDealType}, stored as
+ *                itself.
  *
- * `pendingUpgrade` / `pendingSale` are the encoding of `deal`:
- *
- *   { kind: 'none' }             neither field present
- *   { kind: 'upgrade', toShip }  pendingUpgrade: toShip
- *   { kind: 'sale' }             pendingSale: true
- *
- * escortDeal decodes (a marker with BOTH flags — which no writer produces;
- * every writer goes through withEscortDeal — reads as the sale, because
- * that is what the settlement does with it: sales settle first and clear
- * both flags, so the upgrade would never have happened), escortDealFields
- * encodes, and the encoding is exactly the bytes the previous build
- * wrote, so the desync hash, the wire and every existing save are
- * untouched. The in-memory marker keeps the flag fields because they ARE
- * the codec's fields; every reader (escort_action.ts, the settlement in
+ * Every reader (escort_action.ts, the settlement in
  * spaceport/escort_deals.ts, the hail dialog's view) goes through
- * escortDeal, and turning the marker itself into the explicit shape is
- * the follow-up that needs the protocol bump.
+ * `escortDeal`, and every writer through `withEscortDeal`.
  */
-export type EscortDeal =
-    | { readonly kind: 'none' }
-    | { readonly kind: 'upgrade', readonly toShip: string }
-    | { readonly kind: 'sale' };
-
 export const NO_DEAL: EscortDeal = { kind: 'none' };
 
-/** The queued deal a marker encodes (see EscortDeal for the reading). */
-export function escortDeal(marker: PlayerEscort | undefined): EscortDeal {
-    if (!marker) {
-        return NO_DEAL;
-    }
-    if (marker.pendingSale) {
-        return { kind: 'sale' };
-    }
-    if (marker.pendingUpgrade !== undefined) {
-        return { kind: 'upgrade', toShip: marker.pendingUpgrade };
-    }
-    return NO_DEAL;
-}
-
 /**
- * The flag pair that encodes `deal` — and NOTHING for 'none': an absent
- * field is part of the encoding (an undefined-valued key would hash
- * differently on a peer that never queued anything).
+ * The queued deal on a marker — NO_DEAL when there is no marker at all
+ * (the ship is not the player's, so nothing can be queued against it).
  */
-export function escortDealFields(deal: EscortDeal):
-    Pick<PlayerEscort, 'pendingUpgrade' | 'pendingSale'> {
-    switch (deal.kind) {
-        case 'none':
-            return {};
-        case 'upgrade':
-            return { pendingUpgrade: deal.toShip };
-        case 'sale':
-            return { pendingSale: true };
-    }
+export function escortDeal(marker: PlayerEscort | undefined): EscortDeal {
+    return marker?.deal ?? NO_DEAL;
 }
 
 /**
  * `marker` with its queued deal replaced by `deal` — the ONE way a deal
- * is written. Every other field is kept; the previous deal's fields are
- * removed rather than overwritten, so cancelling restores exactly the
- * encoded shape the marker had before anything was queued.
+ * is written. Every other field is kept, and the old deal is replaced
+ * whole, which is what keeps the two deal kinds exclusive: queueing either
+ * one cancels the other.
  */
 export function withEscortDeal(marker: PlayerEscort, deal: EscortDeal):
     PlayerEscort {
-    const { pendingUpgrade: _upgrade, pendingSale: _sale, ...rest } = marker;
-    return { ...rest, ...escortDealFields(deal) };
+    return { ...marker, deal };
 }
 
 /** How an escort came to be the player's. See PlayerEscort.provenance. */
@@ -230,20 +211,24 @@ export function escortProvenance(escort: Entity): EscortProvenance {
     return escort.components.get(PlayerEscortComponent)?.provenance ?? 'hired';
 }
 
+/** The deal queued against this escort (NO_DEAL for an unmarked ship). */
+export function escortDealOf(escort: Entity): EscortDeal {
+    return escortDeal(escort.components.get(PlayerEscortComponent));
+}
+
 /**
  * The class a QUEUED upgrade would swap this escort to, or undefined when
  * none is queued. See EscortDeal — the value is the target resolved when
  * the player pressed the button, not a live re-derivation.
  */
 export function pendingEscortUpgrade(escort: Entity): string | undefined {
-    const deal = escortDeal(escort.components.get(PlayerEscortComponent));
+    const deal = escortDealOf(escort);
     return deal.kind === 'upgrade' ? deal.toShip : undefined;
 }
 
 /** Whether a sale is queued for this escort. See EscortDeal. */
 export function escortSaleQueued(escort: Entity): boolean {
-    return escortDeal(escort.components.get(PlayerEscortComponent)).kind
-        === 'sale';
+    return escortDealOf(escort).kind === 'sale';
 }
 
 /**
@@ -252,8 +237,7 @@ export function escortSaleQueued(escort: Entity): boolean {
  * rebuild of that marker:
  *
  *   `provenance`   how the escort was acquired (hired / captured);
- *   the deal       what is queued for the next departure (EscortDeal, in
- *                  its `pendingUpgrade` / `pendingSale` encoding).
+ *   `deal`         what is queued for the next departure (EscortDeal).
  *
  * Both are facts about the PLAYER'S RELATIONSHIP with this ship — how
  * they got it, and what they have decided to do with it at the next
@@ -270,13 +254,21 @@ export function escortSaleQueued(escort: Entity): boolean {
  * the component's encoded shape, and with it the desync hash).
  */
 export function durableEscortFields(existing: PlayerEscort | undefined):
-    Partial<PlayerEscort> {
+    DurableEscortFields {
     return {
         ...(existing?.provenance !== undefined
             ? { provenance: existing.provenance } : {}),
-        ...escortDealFields(escortDeal(existing)),
+        deal: escortDeal(existing),
     };
 }
+
+/**
+ * What {@link durableEscortFields} returns: the deal always (it is a
+ * required field — a marker with nothing queued states NO_DEAL), the rest
+ * only when set.
+ */
+export type DurableEscortFields =
+    Pick<PlayerEscort, 'deal'> & Partial<PlayerEscort>;
 
 /**
  * {@link durableEscortFields} plus `detached` — everything an IN-PLACE
@@ -294,7 +286,7 @@ export function durableEscortFields(existing: PlayerEscort | undefined):
  * re-attachment: the flag has just served its purpose and must clear.
  */
 export function carriedEscortFields(existing: PlayerEscort | undefined):
-    Partial<PlayerEscort> {
+    DurableEscortFields {
     const carried = durableEscortFields(existing);
     if (existing?.detached) {
         carried.detached = true;

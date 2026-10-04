@@ -13,7 +13,7 @@ import {
 } from '../nova_plugin/escorts/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import {
-    EscortCommandComponent, EscortLandingComponent, PlayerEscortComponent,
+    EscortCommandComponent, EscortLandingComponent, PlayerEscortComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import {
     OwnerComponent, SourceComponent,
@@ -149,7 +149,7 @@ describe('carried escort round trip', () => {
                 ship.components.set(EscortCommandComponent,
                     { command: 'holdPosition' });
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER, detached: true });
+                    { player: PLAYER, parent: PLAYER, detached: true, deal: NO_DEAL });
                 // Battle damage. Set directly: the armor Stat is normally
                 // provided by a Provide system when the world steps, and
                 // this fixture never adds the entity to a world.
@@ -213,7 +213,7 @@ describe('carried escort round trip', () => {
                 .toEqual({ group: PLAYER });
             // The stale detached flag is gone: it is attached again.
             expect(restored!.components.get(PlayerEscortComponent))
-                .toEqual({ player: PLAYER, parent: PLAYER });
+                .toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             expect(restored!.components.has(EscortLandingComponent))
                 .toBeFalse();
             const restoredMovement =
@@ -239,7 +239,7 @@ describe('carried escort round trip', () => {
             const escort = await makeEscort(ship => {
                 ship.components.set(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, detached: true,
-                    provenance: 'captured', pendingUpgrade: 'test:better',
+                    provenance: 'captured', deal: { kind: 'upgrade', toShip: 'test:better' },
                 });
             });
             const leader = new Entity();
@@ -249,7 +249,7 @@ describe('carried escort round trip', () => {
                 PLAYER, leader, 0);
             expect(escort.components.get(PlayerEscortComponent)).toEqual({
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
-                pendingUpgrade: 'test:better',
+                deal: { kind: 'upgrade', toShip: 'test:better' },
             });
         });
 
@@ -261,7 +261,7 @@ describe('carried escort round trip', () => {
             const escort = await makeEscort(ship => {
                 ship.components.set(PlayerEscortComponent, {
                     player: PLAYER, parent: PLAYER, provenance: 'captured',
-                    pendingSale: true,
+                    deal: { kind: 'sale' },
                 });
             });
             const leader = new Entity();
@@ -269,8 +269,8 @@ describe('carried escort round trip', () => {
             prepareCarriedEscort(
                 { player: PLAYER, uuid: 'escort', entity: escort },
                 PLAYER, leader, 0);
-            expect(escort.components.get(PlayerEscortComponent)?.pendingSale)
-                .toBeTrue();
+            expect(escort.components.get(PlayerEscortComponent)?.deal)
+                .toEqual({ kind: 'sale' });
         });
 
     it('keeps a carrier escort and its fighters together in a batch',
@@ -278,7 +278,7 @@ describe('carried escort round trip', () => {
             const { makeEscort } = await makeFixture();
             const carrier = await makeEscort(ship => {
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER });
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             });
             const wing = await makeEscort(ship => {
                 ship.components.set(OwnerComponent, { owner: 'old carrier' });
@@ -286,7 +286,7 @@ describe('carried escort round trip', () => {
                 ship.components.set(ReturnWhenTargetRemovedComponent,
                     undefined);
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: 'old carrier' });
+                    { player: PLAYER, parent: 'old carrier', deal: NO_DEAL });
             });
             const leader = new Entity();
             leader.components.set(MovementStateComponent, movement(0, 0));
@@ -313,7 +313,7 @@ describe('carried escort round trip', () => {
                 .toEqual({ owner: carrierUuid });
             expect(wing.components.get(SourceComponent)).toEqual(carrierUuid);
             expect(wing.components.get(PlayerEscortComponent))
-                .toEqual({ player: PLAYER, parent: carrierUuid });
+                .toEqual({ player: PLAYER, parent: carrierUuid, deal: NO_DEAL });
             // The flock root stays the player for firing immunity.
             expect(wing.components.get(FiringGroupComponent))
                 .toEqual({ group: PLAYER });
@@ -324,7 +324,7 @@ describe('carried escort round trip', () => {
             const { makeEscort } = await makeFixture();
             const orphan = await makeEscort(ship => {
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: 'carrier that died' });
+                    { player: PLAYER, parent: 'carrier that died', deal: NO_DEAL });
             });
             const leader = new Entity();
             leader.components.set(MovementStateComponent, movement(0, 0));
