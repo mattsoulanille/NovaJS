@@ -249,6 +249,38 @@ export async function loadOutfitsGameData(world: World,
 }
 
 /**
+ * Stages a shïp CLASS a ship in flight is about to become — an in-flight
+ * set string's `Cxxx` / `Exxx` / `Hxxx` (missions/mission_ship_change.ts) —
+ * exactly as loadEntityGameData stages a ship being inserted: the ShipData
+ * the change reads with getCached, its sprite sheet (the hull geometry
+ * derives from it), its stock loadout's weapon closure, and this world's
+ * WeaponEntries. The outfits the change grants are staged by the caller
+ * (loadOutfitsGameData), like any other grant.
+ *
+ * A class the data set does not have is reported and skipped — the change
+ * then misses on every world alike — but any other failure (a fetch on a
+ * browser worker) rejects, so the insertion-staging retry / resync path
+ * handles it rather than this world quietly diverging from the room.
+ */
+export async function loadShipClassGameData(world: World, shipId: string) {
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        throw new Error('Expected SimulationGameDataResource to exist');
+    }
+    const weaponIds = new Set<string>();
+    try {
+        await loadShipGameData(gameData, shipId, weaponIds);
+    } catch (e) {
+        if (!isNovaIDNotFoundError(e)) {
+            throw e;
+        }
+        console.warn(`Ship class ${shipId} could not be staged: ${e.message}`);
+        return;
+    }
+    await primeWeaponEntries(world, weaponIds);
+}
+
+/**
  * Stages weapons by id — their closure (animation sprite sheets,
  * submunitions, and for a bay the fighter it launches: that ship's
  * data, hull sprite sheet and loadout) and this world's WeaponEntries

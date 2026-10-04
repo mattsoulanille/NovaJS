@@ -31,6 +31,7 @@ export * from './mission_accept_offer.js';
 export * from './mission_transitions.js';
 export * from './mission_landing.js';
 export * from './cron_logic.js';
+export * from './mission_ship_change.js';
 export * from './mission_accept.js';
 export * from './mission_ship_plugin.js';
 export * from './mission_ship_spawn.js';
@@ -38,10 +39,11 @@ export * from './mission_text.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { MissionShipPlugin } from './mission_ship_plugin.js';
+import { MissionShipChangePlugin } from './mission_ship_change.js';
 
 export const MissionsDomain: Domain = {
     name: 'missions',
-    dependsOn: ['combat', 'core', 'escorts', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn'],
-    plugins: [MissionShipPlugin],
+    dependsOn: ['combat', 'core', 'escorts', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn', 'travel'],
+    plugins: [MissionShipPlugin, MissionShipChangePlugin],
 };
 export const MissionsDomainPlugin = domainPlugin(MissionsDomain);

@@ -889,7 +889,7 @@ export const EscortReattachSystem = new System({
  * leader, heading, and destination all belong to the system just left —
  * an escort would arrive and immediately start warping out again.
  */
-function sweepJumpingEscort(escort: Entity, escortUuid: string,
+export function sweepJumpingEscort(escort: Entity, escortUuid: string,
     to: string, playerUuid: string,
     entities: { delete(uuid: string): unknown },
     emit: EmitFunction): void {

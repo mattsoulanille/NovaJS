@@ -2,11 +2,12 @@ import * as t from 'io-ts';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import { Component } from 'nova_ecs/component';
 import { EncodedEntity, SerializerResource, formatIoTsErrors } from 'nova_ecs/plugins/serializer_plugin';
+import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { CargoComponent } from '../ship/index.js';
 import { deriveEntityComponents } from '../core/index.js';
 import { addDays } from '../player/index.js';
-import { ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from '../player/index.js';
+import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from '../player/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
     ControlBitsComponent,
@@ -20,6 +21,9 @@ import { ShipPhysicsComponent } from '../ship/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
 import { findControlledEntity } from '../player/index.js';
+import {
+    applyShipChange, MissionSystemMoveRequestEvent, ShipChangeType, SystemMoveType,
+} from './mission_ship_change.js';
 
 /**
  * ============================================================================
@@ -142,75 +146,14 @@ export const AcceptedMissionShipType = t.type({
 export type AcceptedMissionShip = t.TypeOf<typeof AcceptedMissionShipType>;
 
 /**
- * The result of an in-flight mission acceptance, as it crosses the wire.
- *
- * JSON-SAFE BY CONSTRUCTION, which is not optional: input records reach
- * other peers through `JSON.stringify` (socket_channel_client), so a Map,
- * a Set or a Position class instance would arrive as `{}`. Every field
- * here is a primitive, an array, or an io-ts ENCODED value — the mission
- * goes through ActiveMissionType.encode, whose `map` codec emits tuple
- * pairs, and the ships through the Serializer, exactly as `addEntity`
- * already does.
+ * What a set string run IN FLIGHT did to the player, as DELTAS (see the
+ * module note): the fields an in-flight record carries for an accept
+ * (AcceptedMissionType) and for a refusal (RefusedMissionType) alike,
+ * applied by {@link applySetStringEffects}. Every field is optional and
+ * omitted when the string left that part of the player alone, so the
+ * records stay small and older ones simply carry fewer of them.
  */
-export const AcceptedMissionType = t.intersection([t.type({
-    /** The mïsn global id being accepted. */
-    missionId: t.string,
-    /** The fully resolved ActiveMission, encoded (see the module note on
-     * why the client resolves it). Null for an `autoAborted` accept,
-     * which never produces one. Typed in its ENCODED form — the codec
-     * validates the shape without converting it; see
-     * EncodedActiveMissionType (#269). */
-    mission: t.union([EncodedActiveMissionType, t.null]),
-}), t.partial({
-    /**
-     * mïsn Flags 0x0001 in its IMMEDIATE form: "the mission auto-aborts
-     * as soon as it is accepted", used by missions whose only purpose is
-     * to fire a set of effects. The mission never becomes active, so
-     * `mission` is null and nothing is added to the player's list — but
-     * its EFFECTS are real, and for a ship-offered one they are the whole
-     * point.
-     *
-     * The stock case is mïsn 133 "Derelict Decoy": autoAbort +
-     * cantRefuse + invisible, PayVal 0, OnAccept empty, ShipCount 4,
-     * ShipDude 133 (Pirate), ShipBehav 0 ("always attack the player"),
-     * ShipStart 1 ("jump in from hyperspace"). Its entire content is the
-     * four pirates in `ships` below — the trap you took the bait for.
-     *
-     * IDEMPOTENCE for this shape cannot come from the mission list (there
-     * is no mission to find there), so it comes from the offering hull:
-     * see ShipOfferSpentComponent.
-     */
-    autoAborted: t.boolean,
-    /**
-     * The uuid of the ship that offered it (a përs). Carried so the sim
-     * can settle the përs's own consequences — Flags 0x0100 "don't spawn
-     * again", Flags 0x0040 "replace it with the special ship" — against
-     * the right hull, and so a spec can see which ship an offer came
-     * from. The offer's VALIDITY is not re-derived from it; see the
-     * module note.
-     */
-    offeredBy: t.string,
-    /**
-     * What accepting does to the OFFERING hull, decided by the përs
-     * flags on the client (shipOfferConsequence) because the simulation
-     * cannot read përs data:
-     *
-     *  'replace'  përs Flags 0x0040, "when its LinkMission (with a
-     *             single special ship) is accepted, the special ship
-     *             replaces this përs ship in place". The `ships` batch
-     *             below IS the replacement — built at the përs's own
-     *             position — so the hull is deleted in the SAME apply
-     *             and the ship visibly "becomes" the special ship.
-     *             (Matthew's ruling: the përs is never pulled out of the
-     *             world and put back; one atomic swap.)
-     *  'leave'    përs Flags 0x0800, "the person leaves after its
-     *             mission is accepted". The hull is NOT deleted — its
-     *             own NPC AI is told to depart now, so it flies out
-     *             under power the way any other NPC leaves a system.
-     *
-     * Absent means 'stay' (the derelicts you board keep floating there).
-     */
-    offeredByFate: t.union([t.literal('replace'), t.literal('leave')]),
+const SET_STRING_EFFECT_PROPS = {
     /** Signed credit change from the accept (PayVal, OnAccept's Pxxx). */
     creditsDelta: t.number,
     /**
@@ -288,6 +231,99 @@ export const AcceptedMissionType = t.intersection([t.type({
      */
     recordsDelta: t.array(t.tuple([t.string, t.number])),
     /**
+     * `Cxxx` / `Exxx` / `Hxxx`: the shïp class the player ENDED UP in
+     * (mission_ship_change.ts). What the change did to the outfits (C keeps
+     * them, E adds the class's defaults, H drops the non-persistent ones and
+     * adds the defaults) is already in `outfitsDelta` — the client ran the
+     * landed path's buildChangedShip on its detached copy — so the sim only
+     * swaps the hull, after every delta above has been applied.
+     */
+    shipChange: ShipChangeType,
+    /**
+     * `Mxxx` / `Nxxx`: the system the player is moved to. The ship leaves
+     * this world on the next step (MissionSystemMoveSystem) — after the
+     * change of ship, whichever came first in the string: both act on the
+     * pilot's own state, so their order there does not change the result.
+     */
+    moveToSystem: SystemMoveType,
+};
+
+/** The effect fields on their own (both records carry them). */
+export const SetStringEffectsType = t.partial(SET_STRING_EFFECT_PROPS);
+export type SetStringEffects = t.TypeOf<typeof SetStringEffectsType>;
+
+/**
+ * The result of an in-flight mission acceptance, as it crosses the wire.
+ *
+ * JSON-SAFE BY CONSTRUCTION, which is not optional: input records reach
+ * other peers through `JSON.stringify` (socket_channel_client), so a Map,
+ * a Set or a Position class instance would arrive as `{}`. Every field
+ * here is a primitive, an array, or an io-ts ENCODED value — the mission
+ * goes through ActiveMissionType.encode, whose `map` codec emits tuple
+ * pairs, and the ships through the Serializer, exactly as `addEntity`
+ * already does.
+ */
+export const AcceptedMissionType = t.intersection([t.type({
+    /** The mïsn global id being accepted. */
+    missionId: t.string,
+    /** The fully resolved ActiveMission, encoded (see the module note on
+     * why the client resolves it). Null for an `autoAborted` accept,
+     * which never produces one. Typed in its ENCODED form — the codec
+     * validates the shape without converting it; see
+     * EncodedActiveMissionType (#269). */
+    mission: t.union([EncodedActiveMissionType, t.null]),
+}), t.partial({
+    /**
+     * mïsn Flags 0x0001 in its IMMEDIATE form: "the mission auto-aborts
+     * as soon as it is accepted", used by missions whose only purpose is
+     * to fire a set of effects. The mission never becomes active, so
+     * `mission` is null and nothing is added to the player's list — but
+     * its EFFECTS are real, and for a ship-offered one they are the whole
+     * point.
+     *
+     * The stock case is mïsn 133 "Derelict Decoy": autoAbort +
+     * cantRefuse + invisible, PayVal 0, OnAccept empty, ShipCount 4,
+     * ShipDude 133 (Pirate), ShipBehav 0 ("always attack the player"),
+     * ShipStart 1 ("jump in from hyperspace"). Its entire content is the
+     * four pirates in `ships` below — the trap you took the bait for.
+     *
+     * IDEMPOTENCE for this shape cannot come from the mission list (there
+     * is no mission to find there), so it comes from the offering hull:
+     * see ShipOfferSpentComponent.
+     */
+    autoAborted: t.boolean,
+    /**
+     * The uuid of the ship that offered it (a përs). Carried so the sim
+     * can settle the përs's own consequences — Flags 0x0100 "don't spawn
+     * again", Flags 0x0040 "replace it with the special ship" — against
+     * the right hull, and so a spec can see which ship an offer came
+     * from. The offer's VALIDITY is not re-derived from it; see the
+     * module note.
+     */
+    offeredBy: t.string,
+    /**
+     * What accepting does to the OFFERING hull, decided by the përs
+     * flags on the client (shipOfferConsequence) because the simulation
+     * cannot read përs data:
+     *
+     *  'replace'  përs Flags 0x0040, "when its LinkMission (with a
+     *             single special ship) is accepted, the special ship
+     *             replaces this përs ship in place". The `ships` batch
+     *             below IS the replacement — built at the përs's own
+     *             position — so the hull is deleted in the SAME apply
+     *             and the ship visibly "becomes" the special ship.
+     *             (Matthew's ruling: the përs is never pulled out of the
+     *             world and put back; one atomic swap.)
+     *  'leave'    përs Flags 0x0800, "the person leaves after its
+     *             mission is accepted". The hull is NOT deleted — its
+     *             own NPC AI is told to depart now, so it flies out
+     *             under power the way any other NPC leaves a system.
+     *
+     * Absent means 'stay' (the derelicts you board keep floating there).
+     */
+    offeredByFate: t.union([t.literal('replace'), t.literal('leave')]),
+    ...SET_STRING_EFFECT_PROPS,
+    /**
      * Special/aux ships this acceptance spawns INTO THE CURRENT SYSTEM —
      * the Derelict Decoy's four pirates jumping in the moment you take
      * the bait. They ride this record rather than a follow-up input so
@@ -299,6 +335,84 @@ export const AcceptedMissionType = t.intersection([t.type({
     ships: t.array(AcceptedMissionShipType),
 })]);
 export type AcceptedMission = t.TypeOf<typeof AcceptedMissionType>;
+
+/**
+ * A set string's own starts and ends (`Sxxx` / `Axxx` / `Fxxx` naming
+ * other missions — see missionsStarted). Each start is guarded the way an
+ * accepted mission is — present already: skip; at the cap: skip — so a
+ * record replayed against a world that got there by another route cannot
+ * double a mission or vault the cap; ending a mission that is not there
+ * is a no-op.
+ */
+function applyMissionListDeltas(missions: Map<string, ActiveMission>,
+    effects: SetStringEffects, source: string): void {
+    for (const [id, encoded] of effects.missionsStarted ?? []) {
+        if (missions.has(id) || missions.size >= MAX_ACTIVE_MISSIONS) {
+            continue;
+        }
+        const decoded = ActiveMissionType.decode(encoded);
+        if (isLeft(decoded)) {
+            console.warn(`Dropping mission ${id} started by ${source}: `
+                + 'it failed to decode');
+            continue;
+        }
+        missions.set(id, decoded.right);
+    }
+    for (const id of effects.missionsEnded ?? []) {
+        missions.delete(id);
+    }
+}
+
+/**
+ * The result of REFUSING a mission in flight (a përs ship's LinkMission,
+ * mïsn AvailLoc 2): its OnRefuse set string, resolved on the owning client
+ * against a detached copy of the player exactly as an accept's OnAccept is
+ * (spaceport/ship_mission_accept.ts buildShipMissionRefusal), and carried
+ * as the same deltas.
+ *
+ * Plug-in arpia's mïsn 1112 "Gather up the Team" is why this exists: its
+ * Refuse button is the one that says "I accept gladly.", and its OnRefuse
+ * (`A1111 !b20196 M401 H445 T25091 s1113 b20200 b20205`) aborts the
+ * previous mission, moves the player to another system in a new ship and
+ * starts the next mission. No stock AvailLoc 2 mission has an OnRefuse.
+ *
+ * NO IDEMPOTENCE KEY, deliberately, unlike an accept. A refusal leaves the
+ * offer on the table (the original re-offers a refused mission on the next
+ * hail), so every refusal is its own decision by the player and runs its
+ * OnRefuse — two records are two refusals. A rollback resimulation is not
+ * a second refusal: it restores the world from before the record and
+ * applies it once.
+ */
+export const RefusedMissionType = t.intersection([t.type({
+    /** The mïsn global id being refused. */
+    missionId: t.string,
+}), t.partial({
+    /** The uuid of the përs ship that made the offer, for the record. */
+    offeredBy: t.string,
+    ...SET_STRING_EFFECT_PROPS,
+})]);
+export type RefusedMission = t.TypeOf<typeof RefusedMissionType>;
+
+/**
+ * Applies an in-flight refusal on every peer at the same tick: the actor
+ * from `peerId` (never the record), then the OnRefuse's deltas — its
+ * mission starts and ends, and everything {@link applySetStringEffects}
+ * applies, the change of ship and the move of system included.
+ */
+export function applyRefuseMission(world: World, peerId: string | undefined,
+    refused: RefusedMission): void {
+    const controlled = findControlledEntity(world, peerId);
+    if (!controlled) {
+        return;
+    }
+    const player = controlled.entity;
+    const missions = player.components.get(MissionsComponent);
+    if (missions) {
+        applyMissionListDeltas(missions, refused,
+            `the refusal of ${refused.missionId}`);
+    }
+    applySetStringEffects(world, controlled.uuid, player, refused);
+}
 
 /**
  * "This hull's LinkMission offer has been taken." Written onto the
@@ -384,21 +498,8 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
     // is guarded the way the primary is — present already: skip; at the
     // cap: skip — so a record replayed against a world that got there by
     // another route cannot double a mission or vault the cap.
-    for (const [id, encoded] of accepted.missionsStarted ?? []) {
-        if (missions.has(id) || missions.size >= MAX_ACTIVE_MISSIONS) {
-            continue;
-        }
-        const decoded = ActiveMissionType.decode(encoded);
-        if (isLeft(decoded)) {
-            console.warn(`Dropping mission ${id} started by the accept of `
-                + `${accepted.missionId}: it failed to decode`);
-            continue;
-        }
-        missions.set(id, decoded.right);
-    }
-    for (const id of accepted.missionsEnded ?? []) {
-        missions.delete(id);
-    }
+    applyMissionListDeltas(missions, accepted,
+        `the accept of ${accepted.missionId}`);
     if (offering) {
         offering.components.set(ShipOfferSpentComponent,
             { missionId: accepted.missionId });
@@ -412,99 +513,8 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
         offering.components.delete(SystemHoldComponent);
     }
 
-    if (accepted.creditsDelta) {
-        const credits = player.components.get(CreditsComponent);
-        if (credits) {
-            // Clamped at zero: a mission may cost more than the player
-            // has, but EV Nova has no debt.
-            credits.credits =
-                Math.max(0, credits.credits + accepted.creditsDelta);
-        }
-    }
-    // mïsn DatePostInc on an auto-abort accept. Forward only, and pure
-    // arithmetic on a synced component, so it replays identically.
-    if (accepted.dateDelta && accepted.dateDelta > 0) {
-        const date = player.components.get(GameDateComponent);
-        if (date) {
-            player.components.set(GameDateComponent,
-                addDays(date, accepted.dateDelta));
-        }
-    }
-    const bits = player.components.get(ControlBitsComponent);
-    if (bits) {
-        for (const bit of accepted.bitsSet ?? []) {
-            bits.add(bit);
-        }
-        for (const bit of accepted.bitsCleared ?? []) {
-            bits.delete(bit);
-        }
-    }
-    const ranks = player.components.get(ActiveRanksComponent);
-    if (ranks) {
-        for (const rank of accepted.ranksGranted ?? []) {
-            ranks.add(rank);
-        }
-        for (const rank of accepted.ranksRevoked ?? []) {
-            ranks.delete(rank);
-        }
-    }
-    // ... and the baked privileges those ranks carry, applied as the same
-    // kind of delta so the two can never disagree about what the player
-    // holds. Seeded when absent: an entity from a build before this
-    // component existed still gains the rank it was just granted.
-    if ((accepted.suppressGovtsAdded?.length ?? 0) > 0
-        || (accepted.suppressGovtsRemoved?.length ?? 0) > 0) {
-        const suppressGovts = player.components
-            .get(AggressionSuppressGovtsComponent) ?? new Set<string>();
-        for (const govt of accepted.suppressGovtsAdded ?? []) {
-            suppressGovts.add(govt);
-        }
-        for (const govt of accepted.suppressGovtsRemoved ?? []) {
-            suppressGovts.delete(govt);
-        }
-        player.components.set(
-            AggressionSuppressGovtsComponent, suppressGovts);
-    }
-    // Legal records, as deltas over whatever the record is NOW (a kill
-    // between the client's diff and this apply composes rather than being
-    // erased). Seeded when absent, like the suppression set above.
-    if ((accepted.recordsDelta?.length ?? 0) > 0) {
-        const records = player.components.get(LegalRecordsComponent)
-            ?? new Map<string, number>();
-        for (const [govtId, delta] of accepted.recordsDelta ?? []) {
-            // No gövt data in the simulation: an entry the diff produced
-            // was materialized on the client, so it is read back raw.
-            addRecord(records, govtId, undefined, delta);
-        }
-        player.components.set(LegalRecordsComponent, records);
-    }
-    const cargo = player.components.get(CargoComponent);
-    if (cargo) {
-        for (const [key, delta] of accepted.cargoDelta ?? []) {
-            const left = (cargo.get(key) ?? 0) + delta;
-            if (left > 0) {
-                cargo.set(key, left);
-            } else {
-                cargo.delete(key);
-            }
-        }
-    }
-    const outfits = player.components.get(OutfitsStateComponent);
-    if (outfits && (accepted.outfitsDelta?.length ?? 0) > 0) {
-        for (const [id, delta] of accepted.outfitsDelta ?? []) {
-            const left = (outfits.get(id)?.count ?? 0) + delta;
-            if (left > 0) {
-                outfits.set(id, { count: left });
-            } else {
-                outfits.delete(id);
-            }
-        }
-        // The same re-derivation MissionSession.commit does when outfits
-        // change: weapons and physics are computed FROM the outfit set,
-        // so they are dropped and rebuilt by their provider systems.
-        player.components.delete(WeaponsStateComponent);
-        player.components.delete(ShipPhysicsComponent);
-    }
+    // Everything the OnAccept did to the pilot, the change of ship last.
+    applySetStringEffects(world, controlled.uuid, player, accepted);
 
     // The ships come last, after the mission they belong to is in place:
     // MissionShipTrackSystem looks its objective up through the owner's
@@ -538,6 +548,128 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
     }
 
     applyOfferingShipFate(world, accepted);
+}
+
+/**
+ * The DELTAS of an in-flight set string (SET_STRING_EFFECT_PROPS), applied
+ * to the player's ship at `uuid` — the shared half of an accept and a
+ * refusal. Every write composes with the state as it is NOW (a delta, never
+ * an absolute), and the hull swap comes last so the new hull carries the
+ * pilot as every other delta left it. Returns the entity the player is in
+ * afterwards.
+ *
+ * Synchronous and free of randomness and wall-clock reads (the rollback
+ * driver replays it).
+ */
+export function applySetStringEffects(world: World, uuid: string,
+    player: Entity, effects: SetStringEffects): Entity {
+    if (effects.creditsDelta) {
+        const credits = player.components.get(CreditsComponent);
+        if (credits) {
+            // Clamped at zero: a mission may cost more than the player
+            // has, but EV Nova has no debt.
+            credits.credits =
+                Math.max(0, credits.credits + effects.creditsDelta);
+        }
+    }
+    // mïsn DatePostInc on an auto-abort accept. Forward only, and pure
+    // arithmetic on a synced component, so it replays identically.
+    if (effects.dateDelta && effects.dateDelta > 0) {
+        const date = player.components.get(GameDateComponent);
+        if (date) {
+            player.components.set(GameDateComponent,
+                addDays(date, effects.dateDelta));
+        }
+    }
+    const bits = player.components.get(ControlBitsComponent);
+    if (bits) {
+        for (const bit of effects.bitsSet ?? []) {
+            bits.add(bit);
+        }
+        for (const bit of effects.bitsCleared ?? []) {
+            bits.delete(bit);
+        }
+    }
+    const ranks = player.components.get(ActiveRanksComponent);
+    if (ranks) {
+        for (const rank of effects.ranksGranted ?? []) {
+            ranks.add(rank);
+        }
+        for (const rank of effects.ranksRevoked ?? []) {
+            ranks.delete(rank);
+        }
+    }
+    // ... and the baked privileges those ranks carry, applied as the same
+    // kind of delta so the two can never disagree about what the player
+    // holds. Seeded when absent: an entity from a build before this
+    // component existed still gains the rank it was just granted.
+    if ((effects.suppressGovtsAdded?.length ?? 0) > 0
+        || (effects.suppressGovtsRemoved?.length ?? 0) > 0) {
+        const suppressGovts = player.components
+            .get(AggressionSuppressGovtsComponent) ?? new Set<string>();
+        for (const govt of effects.suppressGovtsAdded ?? []) {
+            suppressGovts.add(govt);
+        }
+        for (const govt of effects.suppressGovtsRemoved ?? []) {
+            suppressGovts.delete(govt);
+        }
+        player.components.set(
+            AggressionSuppressGovtsComponent, suppressGovts);
+    }
+    // Legal records, as deltas over whatever the record is NOW (a kill
+    // between the client's diff and this apply composes rather than being
+    // erased). Seeded when absent, like the suppression set above.
+    if ((effects.recordsDelta?.length ?? 0) > 0) {
+        const records = player.components.get(LegalRecordsComponent)
+            ?? new Map<string, number>();
+        for (const [govtId, delta] of effects.recordsDelta ?? []) {
+            // No gövt data in the simulation: an entry the diff produced
+            // was materialized on the client, so it is read back raw.
+            addRecord(records, govtId, undefined, delta);
+        }
+        player.components.set(LegalRecordsComponent, records);
+    }
+    const cargo = player.components.get(CargoComponent);
+    if (cargo) {
+        for (const [key, delta] of effects.cargoDelta ?? []) {
+            const left = (cargo.get(key) ?? 0) + delta;
+            if (left > 0) {
+                cargo.set(key, left);
+            } else {
+                cargo.delete(key);
+            }
+        }
+    }
+    const outfits = player.components.get(OutfitsStateComponent);
+    if (outfits && (effects.outfitsDelta?.length ?? 0) > 0) {
+        for (const [id, delta] of effects.outfitsDelta ?? []) {
+            const left = (outfits.get(id)?.count ?? 0) + delta;
+            if (left > 0) {
+                outfits.set(id, { count: left });
+            } else {
+                outfits.delete(id);
+            }
+        }
+        // The same re-derivation MissionSession.commit does when outfits
+        // change: weapons and physics are computed FROM the outfit set,
+        // so they are dropped and rebuilt by their provider systems.
+        player.components.delete(WeaponsStateComponent);
+        player.components.delete(ShipPhysicsComponent);
+    }
+
+    // Cxxx / Exxx / Hxxx: the hull is replaced at the same uuid, carrying
+    // the pilot every delta above has just written (mission_ship_change.ts).
+    let ship = player;
+    if (effects.shipChange) {
+        ship = applyShipChange(world, uuid, player, effects.shipChange);
+    }
+    // Mxxx / Nxxx: the ship leaves this system at the head of this tick's
+    // step, in the hull it now has (MissionSystemMoveSystem).
+    if (effects.moveToSystem) {
+        world.emit(MissionSystemMoveRequestEvent,
+            { ...effects.moveToSystem }, [uuid]);
+    }
+    return ship;
 }
 
 /**

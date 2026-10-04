@@ -2,7 +2,7 @@ import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
-import { AcceptedMission } from "../nova_plugin/missions/index.js";
+import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { SimulationFrame } from "./simulation_frame.js";
 
@@ -22,6 +22,8 @@ export interface SimulationBridgeHostApi {
     /** A lost bay fighter's round back to its carrier (issue #258). */
     refundFighter(refund: FighterRefund): void | Promise<void>;
     acceptMission(accepted: AcceptedMission): void | Promise<void>;
+    /** An in-flight refusal whose OnRefuse did something. */
+    refuseMission(refused: RefusedMission): void | Promise<void>;
     step(count?: number): void;
     snapshot(): SimulationFrame;
     addEntity(uuid: string, entity: EncodedEntity): void | Promise<void>;
@@ -57,6 +59,7 @@ export interface AsyncSimulationBridgeHostApi {
     escortAction(action: EscortAction): Promise<void>;
     refundFighter(refund: FighterRefund): Promise<void>;
     acceptMission(accepted: AcceptedMission): Promise<void>;
+    refuseMission(refused: RefusedMission): Promise<void>;
     step(count?: number): Promise<void>;
     snapshot(): Promise<SimulationFrame>;
     addEntity(uuid: string, entity: EncodedEntity): Promise<void>;
