@@ -2,6 +2,7 @@ import * as PIXI from "pixi.js";
 import { Animation, BlinkPattern } from "novadatainterface/animation";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SpriteSheetSprite } from "./sprite_sheet_sprite.js";
+import { ShipMotionDisplayState } from "./ship_motion_display.js";
 
 /**
  * An AnimationGraphic is responsible for managing all the PIXI Sprites
@@ -48,6 +49,13 @@ export class AnimationGraphic {
      */
     lastWeaponFired?: number;
     weaponFireSeen = false;
+    /**
+     * The delayed bank set and smoothed engine glow (ship_motion_display.ts,
+     * #357), advanced by ObjectDrawSystem on the display clock. Tagged
+     * with the entity it was built for; cleared by reset() when a pooled
+     * graphic is reused, so a new ship never inherits a bank or a glow.
+     */
+    motionDisplay?: ShipMotionDisplayState;
     private animation: Animation | Promise<Animation>;
     /**
      * The animation this graphic's sprites were actually BUILT from,
@@ -149,6 +157,7 @@ export class AnimationGraphic {
         // match).
         this.lastWeaponFired = undefined;
         this.weaponFireSeen = false;
+        this.motionDisplay = undefined;
         this.rotation = 0;
     }
 

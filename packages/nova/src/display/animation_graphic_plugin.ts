@@ -22,6 +22,7 @@ import { AnimationGraphic } from "./animation_graphic.js";
 import { AnimationGraphicPool, AnimationGraphicPoolResource } from "./animation_graphic_pool.js";
 import { CameraFocus, Space } from "./space_resource.js";
 import { ZIndex } from "./z_index.js";
+import { stepShipMotionDisplay } from "./ship_motion_display.js";
 
 export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicLoadedComponent = new Component<AnimationGraphic>('AnimationGraphicLoaded');
@@ -116,18 +117,23 @@ export const AnimationGraphicProvider = Provide({
 
 export const ObjectDrawSystem = new System({
     name: "ObjectDrawSystem",
-    args: [MovementStateComponent, AnimationGraphicComponent, CameraFocus] as const,
-    step: (movementState, graphic, cameraFocus) => {
-        if (movementState.turning < 0) {
-            graphic.setFramesToUse('left');
-        } else if (movementState.turning > 0) {
-            graphic.setFramesToUse('right');
-        } else {
-            graphic.setFramesToUse('normal');
-        }
+    args: [MovementStateComponent, AnimationGraphicComponent, CameraFocus,
+        TimeResource, UUID] as const,
+    step: (movementState, graphic, cameraFocus, time, uuid) => {
+        // The bank set and the engine glow are smoothed on the display
+        // clock (#357): a ship banks only after turning the same way for
+        // BANK_DELAY_MS, and its glow ramps over GLOW_FADE_MS, so single-
+        // tick steering flickers no longer flip its sprite set or blink
+        // its glow. Every layer of the graphic (hull, glow, lights, weapon
+        // overlay) takes the same set, and the target-pane thumbnail
+        // renders this same graphic, so they all agree.
+        const motion = stepShipMotionDisplay(graphic.motionDisplay, uuid,
+            movementState.turning, movementState.accelerating, time.time);
+        graphic.motionDisplay = motion.state;
+        graphic.setFramesToUse(motion.frames);
 
-        graphic.glowAlpha = movementState.accelerating *
-            (1 - (Math.random() * 0.2));
+        // The shimmer rides on top of the smoothed level.
+        graphic.glowAlpha = motion.glow * (1 - (Math.random() * 0.2));
 
         // Draw at the toroidal copy of the position nearest the camera, so an
         // object just across the loop boundary (e.g. the Sol wormhole) is
