@@ -25,7 +25,7 @@ import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { CommunicatorClient } from './communicator_client.js';
 import { CommunicatorServer } from './communicator_server.js';
 import { MultiRoom } from './multi_room_communicator.js';
-import { unwrapRollbackMessage } from './rollback_protocol.js';
+import { unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { DesyncInfo, RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
@@ -48,7 +48,7 @@ const SYSTEM = SYNTHETIC.systems.thessaly;
  * false` withholds identity updates — a worker that only ever learned its
  * init-time uuid, the shape of the incident (#354).
  */
-function workerView(room: Communicator, forwardIdentity: boolean):
+function workerView(room: Communicator, forwardIdentity: boolean | IdentityGate):
     WorkerRoomCommunicator {
     const worker = new WorkerRoomCommunicator(
         (message, destination) => room.sendMessage(message, destination),
@@ -57,13 +57,39 @@ function workerView(room: Communicator, forwardIdentity: boolean):
         receiveRoomMessage: (source, message) =>
             worker.receiveMessage(source, message),
         updateRoomState: state => {
-            if (!forwardIdentity && 'uuid' in state) {
-                return;
+            if ('uuid' in state) {
+                if (forwardIdentity === false) {
+                    return;
+                }
+                if (forwardIdentity instanceof IdentityGate
+                    && forwardIdentity.hold(() => worker.updateRoomState(state))) {
+                    return;
+                }
             }
             worker.updateRoomState(state);
         },
     });
     return worker;
+}
+
+/** Holds identity updates back while closed: a worker whose forwarded
+ * identity lags the socket's. */
+class IdentityGate {
+    private held: (() => void)[] = [];
+    closed = false;
+    hold(update: () => void): boolean {
+        if (!this.closed) {
+            return false;
+        }
+        this.held.push(update);
+        return true;
+    }
+    open() {
+        this.closed = false;
+        for (const update of this.held.splice(0)) {
+            update();
+        }
+    }
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -160,6 +186,8 @@ describe('a socket reconnect mid-game (#354)', () => {
         socket: SocketChannelClient;
         communicator: CommunicatorClient;
         room: Communicator;
+        /** The simulation's view of the room (the browser worker's). */
+        worker: WorkerRoomCommunicator;
         world: World;
         host: SimulationBridgeHost;
         client: SimulationBridgeClient;
@@ -183,7 +211,10 @@ describe('a socket reconnect mid-game (#354)', () => {
     }
 
     async function makePeer(name: string, x: number,
-        { forwardIdentity = true } = {}): Promise<Peer> {
+        { forwardIdentity = true, hostOptions = {} }: {
+            forwardIdentity?: boolean | IdentityGate,
+            hostOptions?: ConstructorParameters<typeof SimulationBridgeHost>[2],
+        } = {}): Promise<Peer> {
         const gameData = await getSyntheticGameData();
         const socket = new SocketChannelClient({
             webSocketFactory: () => new WebSocket(
@@ -199,16 +230,18 @@ describe('a socket reconnect mid-game (#354)', () => {
             && room.peers.current.value.has(communicator.uuid),
             `${name} in the room`);
         const world = await makeSystem(SYSTEM, gameData, 'worker', { npcs: false });
-        world.resources.set(CommunicatorResource,
-            workerView(room, forwardIdentity));
-        const host = new SimulationBridgeHost(world, gameData);
+        const worker = workerView(room, forwardIdentity);
+        world.resources.set(CommunicatorResource, worker);
+        const host = new SimulationBridgeHost(world, gameData, hostOptions);
         const serializer = world.resources.get(SerializerResource)!;
         const client = new SimulationBridgeClient(host, serializer);
         expect(await host.joinRoom()).toBeTrue();
         const shipUuid = `ship ${name}`;
         await client.addEntity(shipUuid,
             await makePlayerShip(world, communicator.uuid!, x));
-        const peer = { name, socket, communicator, room, world, host, client, shipUuid };
+        const peer = {
+            name, socket, communicator, room, worker, world, host, client, shipUuid,
+        };
         peers.push(peer);
         return peer;
     }
@@ -251,9 +284,10 @@ describe('a socket reconnect mid-game (#354)', () => {
     /** No conviction, and the peer's checkpoint reports since `fromTick`
      * match the archive (the log's true simulation) — several of them, so
      * "no desync" is not a peer that simply stopped reporting. */
-    function expectInLockstep(peer: Peer, fromTick: number) {
-        expect(desyncs.map(d => `tick ${d.tick}: ${d.convicted.join()}`))
-            .toEqual([]);
+    function expectInLockstep(peer: Peer, fromTick: number,
+        { convictionsFrom = 0 } = {}) {
+        expect(desyncs.filter(d => d.tick >= convictionsFrom)
+            .map(d => `tick ${d.tick}: ${d.convicted.join()}`)).toEqual([]);
         const mine = reports.filter(report =>
             report.source === peer.communicator.uuid && report.tick >= fromTick
             && archive.hashAt(report.tick) !== undefined);
@@ -477,36 +511,112 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(desyncs).toEqual([]);
         }, 120_000);
 
-        it('re-enters on a refusal a bounded number of times, then reports the failure', async () => {
-            // A worker that never learns its new uuid (the identity
-            // forwarding broken): its insertions after a reconnect go out
-            // stamped with the OLD id and are refused, every time.
-            const a = await makePeer('a', 100, { forwardIdentity: false });
+        /** An escort stamped by the worker's identity, as a worker-side
+         * spawn is: after a reconnect the worker has not followed, the
+         * OLD one. */
+        async function insertWorkerStampedEscort(peer: Peer) {
+            const escort = await makePlayerShip(peer.world, peer.worker.uuid!, 200);
+            escort.components.delete(ControlledByComponent);
+            await peer.client.addEntity('escort a', escort);
+        }
+
+        it('waits for an identity the room knows and the worker has not learned yet, then recovers', async () => {
+            // The worker's forwarded identity lags the socket's past the
+            // room's refusal of an insertion it made in the gap.
+            const gate = new IdentityGate();
+            const a = await makePeer('a', 100, { forwardIdentity: gate });
             const b = await makePeer('b', -100);
             const atA = refusalsAt(a);
             await step(120);
+            gate.closed = true;
+            const { after } = await reconnect(a);
+            await insertWorkerStampedEscort(a);
+            for (let i = 0; i < 100 && atA.length === 0; i++) {
+                await step(10);
+            }
+            expect(atA.map(notice => notice.peer)).toEqual([after]);
+            expect(a.host.status().identityRecoveryFailed).toBeUndefined();
+
+            // The identity arrives: its change re-enters, the escort the
+            // room refused going back in under the current id.
+            gate.open();
+            const recoveredAt = relay.tick;
+            await step(900);
+            await archive.update();
+
+            expect(a.host.status().identityRecoveryFailed).toBeUndefined();
+            // (The gap itself may be convicted: the worker played on under
+            // an id the room no longer stamps. From the recovery on, none.)
+            expectInLockstep(a, recoveredAt + 300,
+                { convictionsFrom: recoveredAt + 300 });
+            expectInLockstep(b, recoveredAt + 300,
+                { convictionsFrom: recoveredAt + 300 });
+            const owned = { owner: after, controller: undefined };
+            expect(stamps(archive.archiveWorld, 'escort a')).toEqual(owned);
+            expect(stamps(b.world, 'escort a')).toEqual(owned);
+            expect(stamps(archive.archiveWorld, a.shipUuid))
+                .toEqual({ owner: after, controller: after });
+        }, 120_000);
+
+        it('reports the failure rather than loop when the worker never learns its identity', async () => {
+            // The identity forwarding broken: nothing this worker inserts
+            // under the id it has can ever be accepted.
+            const a = await makePeer('a', 100, {
+                forwardIdentity: false, hostOptions: { identityGraceMs: 300 },
+            });
+            await makePeer('b', -100);
+            const atA = refusalsAt(a);
+            await step(120);
             await reconnect(a);
-            await step(60);
-            const escort = await makePlayerShip(a.world, a.communicator.uuid!, 200);
-            escort.components.delete(ControlledByComponent);
-            // Stamped by the worker's (stale) identity, as a worker-side
-            // spawn would be.
-            escort.components.set(MultiplayerData,
-                { owner: a.world.resources.get(CommunicatorResource)!.uuid! });
-            await a.client.addEntity('escort a', escort);
-            for (let i = 0; i < 20 && !a.host.status().identityRecoveryFailed; i++) {
-                await step(120);
+            await step(30);
+            await insertWorkerStampedEscort(a);
+            for (let i = 0; i < 100 && !a.host.status().identityRecoveryFailed; i++) {
+                await step(10);
             }
             expect(a.host.status().identityRecoveryFailed).toBeTrue();
-            const refused = atA.length;
-            // The original insertion, then each of the (at most three)
-            // re-entries' re-inserted fleet (the ship and the escort).
-            expect(refused).toBeGreaterThanOrEqual(4);
-            expect(refused).toBeLessThanOrEqual(1 + 3 * 2);
-            // And it stops: no further re-entries, no further refusals.
+            // One refusal, no re-entry to be refused again — and it stays
+            // that way.
+            expect(atA.length).toBe(1);
             await step(600);
-            expect(atA.length).toBe(refused);
-            expect(b.world.entities.has('escort a')).toBeFalse();
+            expect(atA.length).toBe(1);
+        }, 120_000);
+
+        it('re-enters on a refusal of an entity it holds under a stale id, at most three times', async () => {
+            const a = await makePeer('a', 100);
+            await addOwnedShip(a, 'escort a', 150);
+            await makePeer('b', -100);
+            await step(120);
+            const { before, after } = await reconnect(a);
+            await step(600);
+            expect(stamps(a.world, 'escort a')?.owner).toBe(after);
+            const error = spyOn(console, 'error').and.callThrough();
+            // A refusal of an escort this world still holds under the old
+            // id (as a local application under it that the re-entry
+            // missed would leave it): each one re-enters, re-stamped.
+            const refuse = () => {
+                a.world.entities.get('escort a')!.components.set(
+                    MultiplayerData, { owner: before });
+                a.worker.receiveMessage('server', wrapRollbackMessage({
+                    kind: 'inputRefused', peer: after, tick: relay.tick,
+                    uuid: 'escort a', input: 'addEntity',
+                    reason: `declares owner ${before}`,
+                }));
+            };
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                refuse();
+                await step(300);
+                // The re-entry rebuilt the world from the room, where the
+                // escort is the current connection's.
+                expect(stamps(a.world, 'escort a')?.owner)
+                    .withContext(`re-entry ${attempt}`).toBe(after);
+                expect(a.host.status().identityRecoveryFailed).toBeUndefined();
+            }
+            refuse();
+            await step(30);
+            expect(a.host.status().identityRecoveryFailed).toBeTrue();
+            expect(error.calls.allArgs().filter(args =>
+                String(args[0]).includes('giving up after 3 re-entries')).length)
+                .toBe(1);
         }, 120_000);
     });
 });

@@ -23,7 +23,7 @@ import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
-import { entityStamps, restampEncodedEntity } from "./peer_identity.js";
+import { encodedEntityStamps, entityStamps, restampEncodedEntity } from "./peer_identity.js";
 import { systemOrderHash } from "./system_order.js";
 import { makeNpc } from "../nova_plugin/npc/index.js";
 import {
@@ -102,6 +102,12 @@ const REINSERTION_MAX_ATTEMPTS = 5;
  * looping would never end.
  */
 const MAX_REFUSAL_REENTRIES = 3;
+/**
+ * How long a refusal naming an identity this host has never held waits for
+ * that identity to be forwarded (it is normally milliseconds behind the
+ * socket) before the failure is reported (#354, handleRefusal).
+ */
+const IDENTITY_GRACE_MS = 5_000;
 /** How many rollback-machinery events the black-box ring retains. */
 const ROLLBACK_LOG_CAPACITY = 64;
 
@@ -208,6 +214,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private preResyncFleet?: Map<string, EncodedEntity>;
     /** Re-entries a refusal notice has caused (handleRefusal). */
     private refusalReentries = 0;
+    /** A refusal named an identity this host has not (yet) learned. */
+    private unknownIdentity?: { peer: string, since: number };
     private identityRecoveryFailed = false;
     // protected so failure-path tests can observe whether a resync proceeded
     // (a proceeding resync refreshes this; a cooldown no-op leaves it).
@@ -219,6 +227,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private readonly resyncMaxAttempts: number;
     private readonly stagingMaxAttempts: number;
     private readonly stagingRetryMs: number;
+    private readonly identityGraceMs: number;
 
     constructor(
         private world: World,
@@ -228,15 +237,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             resyncRetryMs = RESYNC_RETRY_MS,
             resyncMaxAttempts = RESYNC_MAX_ATTEMPTS,
             stagingMaxAttempts = STAGING_MAX_ATTEMPTS,
-            stagingRetryMs = STAGING_RETRY_MS }: {
+            stagingRetryMs = STAGING_RETRY_MS,
+            identityGraceMs = IDENTITY_GRACE_MS }: {
                 resyncCooldownMs?: number,
                 resyncJoinTimeoutMs?: number,
                 resyncRetryMs?: number,
                 resyncMaxAttempts?: number,
                 stagingMaxAttempts?: number,
                 stagingRetryMs?: number,
+                identityGraceMs?: number,
             } = {},
     ) {
+        this.identityGraceMs = identityGraceMs;
         this.resyncCooldownMs = resyncCooldownMs;
         this.resyncJoinTimeoutMs = resyncJoinTimeoutMs;
         this.resyncRetryMs = resyncRetryMs;
@@ -373,6 +385,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     step(count = 1) {
         // A reconnect changed this peer's uuid (#354): re-enter under it.
         this.noteIdentity();
+        this.checkUnknownIdentity();
         if (this.resyncing) {
             // Mid-recovery the world is being rebuilt from the input
             // log; stepping it would fork a fresh timeline.
@@ -962,9 +975,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * way: records relayed while the socket was down went to the dead one.
      */
     private reenter() {
+        const current = this.world.resources.get(CommunicatorResource)?.uuid;
         const fleet = this.resyncing ? this.preResyncFleet : this.captureOwnFleet();
         for (const [uuid, entity] of fleet ?? []) {
-            if (!this.reinsertions.has(uuid)) {
+            // Only what is stamped with a STALE own id: whatever already
+            // carries the current one is the room's business, and its log
+            // has the truth about it (re-inserting it could resurrect a
+            // ship the room destroyed).
+            const stale = current !== undefined && encodedEntityStamps(entity)
+                .some(id => this.isStaleOwnId(id, current));
+            if (stale && !this.reinsertions.has(uuid)) {
                 this.reinsertions.set(uuid, { entity, attempts: 0 });
             }
         }
@@ -1129,14 +1149,19 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     /**
      * The room refused one of this peer's insertions (#354; the archive
      * reports every refusal once, rollback_relay.ts reportRefusal). Logged
-     * once per notice. When the refused entity is one this peer holds
-     * under an id other than the one the room stamped the record with —
-     * the identity it inserted under is stale — it re-enters, re-stamped
-     * to its current id, rather than desync at every checkpoint. Bounded:
-     * a re-entry that keeps being refused means the current id is wrong
-     * too, and the failure is reported instead (giveUpIdentityRecovery).
-     * Any other refusal is the room's deterministic verdict; nothing a
-     * re-entry would change.
+     * once per notice. Then, by what the notice says about identity:
+     *
+     *  - The room stamped the record with an id this host has NEVER held:
+     *    its view of its own identity is behind the socket's. Normally the
+     *    forwarded identity is a moment away (and its change re-enters);
+     *    if it has not arrived within the grace (IDENTITY_GRACE_MS), no
+     *    re-entry under the id this host has can ever be accepted, and the
+     *    failure is reported (giveUpIdentityRecovery) instead of looping.
+     *  - The refused entity is in this world under one of this peer's
+     *    other, STALE ids: it re-enters, re-stamped — at most
+     *    MAX_REFUSAL_REENTRIES times, then the failure is reported.
+     *  - Anything else is the room's deterministic verdict, which no
+     *    re-entry would change.
      */
     private handleRefusal(notice: InputRefusedNotice) {
         console.warn(`The room refused this peer's ${notice.input} of `
@@ -1144,22 +1169,47 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.logRollbackEvent('inputRefused', {
             uuid: notice.uuid, recordTick: notice.tick,
         });
+        if (this.identityRecoveryFailed) {
+            return;
+        }
+        if (!this.ownPeerIds.has(notice.peer)) {
+            this.unknownIdentity ??= { peer: notice.peer, since: Date.now() };
+            return;
+        }
         const local = this.world.entities.get(notice.uuid);
         const insertedStale = local !== undefined && entityStamps(local)
-            .some(id => id !== notice.peer && this.ownPeerIds.has(id));
-        if (!insertedStale || this.identityRecoveryFailed) {
+            .some(id => this.isStaleOwnId(id, notice.peer));
+        if (!insertedStale) {
             return;
         }
         if (this.refusalReentries >= MAX_REFUSAL_REENTRIES) {
-            this.giveUpIdentityRecovery();
+            this.giveUpIdentityRecovery(`giving up after `
+                + `${MAX_REFUSAL_REENTRIES} re-entries`);
             return;
         }
         this.refusalReentries++;
         this.reenter();
     }
 
+    /** handleRefusal's wait for an identity the room knows and this host
+     * does not (yet): cleared once it arrives, fatal past the grace. */
+    private checkUnknownIdentity() {
+        if (!this.unknownIdentity || this.identityRecoveryFailed) {
+            return;
+        }
+        if (this.ownPeerIds.has(this.unknownIdentity.peer)) {
+            this.unknownIdentity = undefined;
+            return;
+        }
+        if (Date.now() - this.unknownIdentity.since > this.identityGraceMs) {
+            this.giveUpIdentityRecovery('the room knows this peer as '
+                + `${this.unknownIdentity.peer}, which this host never learned`);
+        }
+    }
+
     /**
-     * The room keeps refusing this peer's fleet: stop re-entering.
+     * The room keeps refusing this peer's fleet, and re-entering cannot
+     * change that: stop.
      *
      * HOOK (#333): this is where the resync give-up's terminal path belongs
      * — save, the in-game desync dialog, the frozen universe and its Reload
@@ -1168,11 +1218,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * then the failure is reported through status().identityRecoveryFailed
      * and the console only.
      */
-    private giveUpIdentityRecovery() {
+    private giveUpIdentityRecovery(why: string) {
         this.identityRecoveryFailed = true;
-        console.error('The room keeps refusing this peer\'s fleet under its '
-            + `current identity; giving up after ${MAX_REFUSAL_REENTRIES} `
-            + 're-entries.');
+        this.unknownIdentity = undefined;
+        console.error('The room refuses this peer\'s fleet under the identity '
+            + `this host has; ${why}.`);
         this.logRollbackEvent('identityRecoveryFailed');
     }
 
