@@ -24,6 +24,8 @@ import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
 import { encodedEntityStamps, entityStamps, restampEncodedEntity } from "./peer_identity.js";
+import { classifyPeerDeparture } from "./peer_departure.js";
+import { DeathEvent } from "../nova_plugin/ship/index.js";
 import { systemOrderHash } from "./system_order.js";
 import { makeNpc } from "../nova_plugin/npc/index.js";
 import {
@@ -108,6 +110,18 @@ const MAX_REFUSAL_REENTRIES = 3;
  * socket) before the failure is reported (#354, handleRefusal).
  */
 const IDENTITY_GRACE_MS = 5_000;
+
+/**
+ * One of this peer's own entities, captured for a re-entry (#354): its
+ * insertion-record encoding, and whether it is part of this peer's FLEET
+ * — its player ship, escorts and their fighters (peer_departure.ts), what
+ * a departure removes and a re-entry always brings back — rather than
+ * another ship it owned, which a departure merely disowns.
+ */
+interface CapturedEntity {
+    entity: EncodedEntity;
+    fleet: boolean;
+}
 /** How many rollback-machinery events the black-box ring retains. */
 const ROLLBACK_LOG_CAPACITY = 64;
 
@@ -202,8 +216,41 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     /** Own entities waiting to be re-inserted after a re-entry's
      * rejoin, by uuid, in insertion order (player ships first). */
     private reinsertions = new Map<string, {
-        entity: EncodedEntity, heldSince?: number, attempts: number,
+        entity: EncodedEntity, fleet: boolean,
+        /** The room timeline this host was on when it captured the
+         * entity (rollback_relay.ts `timeline`). */
+        timeline?: string,
+        heldSince?: number, attempts: number,
     }>();
+    /** The timeline (rollback_relay.ts) of the room last joined. */
+    private roomTimeline?: string;
+    /** Uuids of insertions the room told this peer it refused
+     * (handleRefusal): never in the room, so their absence from it is no
+     * verdict on them. */
+    private refusedInsertions = new Set<string>();
+    /**
+     * ============================================================
+     * Un-destroyed return (#354, the maintainer's ruling 2)
+     * ============================================================
+     * "Player and escorts return un-destroyed if they were somehow
+     * destroyed after the player disconnected." The room's half of that
+     * needs nothing here: whatever the room does to the old connection's
+     * copy while this peer is away (a destruction included) never reaches
+     * this world, so the re-entry's capture still has the ship, and puts
+     * it back. THIS world's half: while disconnected it plays on alone,
+     * and a fleet ship it sees die then (on inputs and predictions the
+     * room never confirmed) would be missing from that capture. So the
+     * fleet is captured again the moment the connection drops, every
+     * fleet ship that dies from then on is noted, and the re-entry
+     * restores those from the disconnect-time capture. A ship destroyed
+     * BEFORE the disconnect is in neither capture and stays destroyed.
+     * (Player ships never leave the world on death — they respawn,
+     * death_plugin.ts PlayerDeathSystem — so in practice this is the
+     * escorts and the fighters.)
+     */
+    private disconnectFleet?: Map<string, CapturedEntity>;
+    private diedSinceDisconnect = new Set<string>();
+    private wasConnected = false;
     private reinsertionInFlight = false;
     /** The identity changed while a resync was running: run another once
      * it ends, so the rejoin happens under the new id. */
@@ -211,7 +258,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     /** This peer's fleet as it stood when the last resync began: what an
      * identity change mid-resync re-inserts (the world being rebuilt
      * holds nothing worth capturing). */
-    private preResyncFleet?: Map<string, EncodedEntity>;
+    private preResyncFleet?: Map<string, CapturedEntity>;
     /** Re-entries a refusal notice has caused (handleRefusal). */
     private refusalReentries = 0;
     /** A refusal named an identity this host has not (yet) learned. */
@@ -280,7 +327,20 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             });
             // The identity this host starts under: no re-entry for it.
             this.noteIdentity();
+            communicator.connected.subscribe(
+                connected => this.noteConnected(connected));
         }
+        world.events.get(DeathEvent).subscribe(({ entities }) => {
+            if (!this.disconnectFleet || this.resyncing) {
+                return;
+            }
+            for (const target of entities ?? []) {
+                const uuid = typeof target === 'string' ? target : target.uuid;
+                if (this.disconnectFleet.get(uuid)?.fleet) {
+                    this.diedSinceDisconnect.add(uuid);
+                }
+            }
+        });
         for (const registration of getRegisteredSimulationBridgeEvents()) {
             world.events.get(registration.event).subscribe(({ data, entities }) => {
                 const tick = this.steppingTick;
@@ -534,6 +594,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // against the new position.
         this.roomClock.resetDrift();
         this.lastJoinSucceeded = true;
+        this.roomTimeline = catchUp.timeline;
         this.logRollbackEvent('join', {
             catchUpTick: catchUp.tick,
             baselineTick: catchUp.baseline?.tick ?? 'none',
@@ -976,8 +1037,19 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     private reenter() {
         const current = this.world.resources.get(CommunicatorResource)?.uuid;
-        const fleet = this.resyncing ? this.preResyncFleet : this.captureOwnFleet();
-        for (const [uuid, entity] of fleet ?? []) {
+        const fleet = new Map(
+            (this.resyncing ? this.preResyncFleet : this.captureOwnFleet()) ?? []);
+        // The fleet ships this world saw die after the connection dropped,
+        // as they stood at the drop (ruling 2; see disconnectFleet).
+        for (const uuid of [...this.diedSinceDisconnect].sort()) {
+            const captured = this.disconnectFleet?.get(uuid);
+            if (captured?.fleet && !fleet.has(uuid)) {
+                fleet.set(uuid, captured);
+            }
+        }
+        this.disconnectFleet = undefined;
+        this.diedSinceDisconnect.clear();
+        for (const [uuid, { entity, fleet: inFleet }] of fleet) {
             // Only what is stamped with a STALE own id: whatever already
             // carries the current one is the room's business, and its log
             // has the truth about it (re-inserting it could resurrect a
@@ -985,7 +1057,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             const stale = current !== undefined && encodedEntityStamps(entity)
                 .some(id => this.isStaleOwnId(id, current));
             if (stale && !this.reinsertions.has(uuid)) {
-                this.reinsertions.set(uuid, { entity, attempts: 0 });
+                this.reinsertions.set(uuid, {
+                    entity, fleet: inFleet, timeline: this.roomTimeline,
+                    attempts: 0,
+                });
             }
         }
         this.logRollbackEvent('reenter', { entities: this.reinsertions.size });
@@ -997,17 +1072,33 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     /**
+     * The connection went down (or came up). On the drop, the fleet is
+     * captured as it stands, for the un-destroyed return (disconnectFleet).
+     */
+    private noteConnected(connected: boolean) {
+        if (!connected && this.wasConnected) {
+            this.disconnectFleet = this.resyncing
+                ? this.preResyncFleet : this.captureOwnFleet();
+            this.diedSinceDisconnect.clear();
+        }
+        this.wasConnected = connected;
+    }
+
+    /**
      * Every entity in this world stamped with one of this peer's ids, wire
      * encoded as an insertion record carries it (peer-local markers
-     * stripped). Player ships first — escorts' formations and fighters'
-     * bays name them — then by uuid.
+     * stripped), each marked fleet or not (peer_departure.ts). Player
+     * ships first — escorts' formations and fighters' bays name them —
+     * then by uuid.
      */
-    private captureOwnFleet(): Map<string, EncodedEntity> {
-        const fleet = new Map<string, EncodedEntity>();
+    private captureOwnFleet(): Map<string, CapturedEntity> {
+        const fleet = new Map<string, CapturedEntity>();
         const serializer = this.world.resources.get(SerializerResource);
         if (!serializer || this.ownPeerIds.size === 0) {
             return fleet;
         }
+        const fleetUuids = new Set(classifyPeerDeparture(this.world.entities,
+            id => this.ownPeerIds.has(id)).fleet);
         const own = [...this.world.entities].filter(([uuid, entity]) =>
             uuid !== 'singleton'
             && entityStamps(entity).some(id => this.ownPeerIds.has(id)));
@@ -1019,9 +1110,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         for (const [uuid, entity] of own) {
             const encoded = structuredClone(serializer.encode(entity));
             fleet.set(uuid, {
-                ...encoded,
-                components: encoded.components.filter(
-                    ([name]) => !PEER_LOCAL_COMPONENTS.has(name)),
+                entity: {
+                    ...encoded,
+                    components: encoded.components.filter(
+                        ([name]) => !PEER_LOCAL_COMPONENTS.has(name)),
+                },
+                fleet: fleetUuids.has(uuid),
             });
         }
         return fleet;
@@ -1060,6 +1154,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * current id is done. One the room holds for somebody else is not this
      * peer's to replace. The rest go in as ONE batch, staged first, so the
      * whole fleet lands on one tick.
+     *
+     * The FLEET (player ships, escorts, their fighters) always comes back
+     * — the room removed it with the old connection, and the maintainer's
+     * ruling returns it as this peer last had it, un-destroyed. Any OTHER
+     * own entity (mission ships, spawned NPCs) the old connection's
+     * removePeer DISOWNED and left in the room (peer_departure.ts): if
+     * the room is on the timeline this peer captured it from, it is the
+     * room's now — held there unowned (left alone), or gone since
+     * (destroyed, departed: not resurrected). Only a room on a DIFFERENT
+     * timeline (a restarted server, a room that emptied and started over)
+     * never knew it, and gets it back like the fleet.
      */
     private scheduleReinsertions() {
         if (this.reinsertions.size === 0 || this.reinsertionInFlight
@@ -1073,9 +1178,20 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         const batch: [string, EncodedEntity][] = [];
         for (const [uuid, pending] of [...this.reinsertions]) {
             const existing = this.world.entities.get(uuid);
+            const roomRemembers = !pending.fleet
+                && pending.timeline !== undefined
+                && pending.timeline === this.roomTimeline
+                && !this.refusedInsertions.has(uuid);
             if (existing) {
                 const stamps = entityStamps(existing);
                 if (stamps.length > 0 && stamps.every(id => id === current)) {
+                    this.reinsertions.delete(uuid);
+                    continue;
+                }
+                if (stamps.length === 0) {
+                    // Disowned by the old connection's removePeer: a world
+                    // ship now, nobody's to replace.
+                    this.logRollbackEvent('disowned', { uuid });
                     this.reinsertions.delete(uuid);
                     continue;
                 }
@@ -1092,6 +1208,13 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 }
                 console.warn(`Not re-inserting ${uuid}: the room holds it `
                     + 'for another peer');
+                this.reinsertions.delete(uuid);
+                continue;
+            }
+            if (roomRemembers) {
+                // Disowned and then gone from the room (destroyed, or it
+                // left): the room's verdict stands.
+                this.logRollbackEvent('disownedGone', { uuid });
                 this.reinsertions.delete(uuid);
                 continue;
             }
@@ -1141,6 +1264,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 continue;
             }
             this.reinsertions.delete(uuid);
+            this.refusedInsertions.delete(uuid);
             this.schedule({ kind: 'addEntity', uuid, entity });
         }
         this.logRollbackEvent('reinserted', { entities: batch.length });
@@ -1169,6 +1293,9 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.logRollbackEvent('inputRefused', {
             uuid: notice.uuid, recordTick: notice.tick,
         });
+        // Whatever else follows, the room never took this entity from us:
+        // its absence there is no verdict (scheduleReinsertions).
+        this.refusedInsertions.add(notice.uuid);
         if (this.identityRecoveryFailed) {
             return;
         }

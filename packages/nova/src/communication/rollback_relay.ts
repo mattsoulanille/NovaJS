@@ -1,5 +1,6 @@
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { Subscription } from "rxjs";
+import { v4 } from "uuid";
 import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
@@ -69,6 +70,18 @@ const TIMELY_REPORT_TICKS = 240;
 export class RollbackRelay {
     tick = 0;
     private log: InputRecord[] = [];
+    /**
+     * This relay's TIMELINE: one id per relay instance, i.e. per input log
+     * — a new one whenever the room's log starts over (a server restart,
+     * or a room that emptied and was re-opened). Sent with every catchUp,
+     * so a re-entering peer can tell a room that remembers its old
+     * connection (same timeline: whatever that connection owned besides
+     * its fleet is the room's business now — disowned, or gone) from one
+     * that never knew it (#354, simulation_bridge_host.ts
+     * scheduleReinsertions). Not a secret: it names a log every member
+     * already holds.
+     */
+    readonly timeline = v4();
     /** Peers' state-hash reports awaiting comparison, by tick. */
     private stateHashes =
         new Map<number, Map<string, { hash: string, arrivedAt: number }>>();
@@ -547,6 +560,7 @@ export class RollbackRelay {
                 this.room.sendMessage(wrapRollbackMessage({
                     kind: 'catchUp',
                     tick: this.tick,
+                    timeline: this.timeline,
                     records: baseline
                         ? this.log.filter(record => record.tick > baseline.tick)
                         : [...this.log],

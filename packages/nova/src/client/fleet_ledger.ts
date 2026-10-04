@@ -313,9 +313,16 @@ export class FleetLedger {
 
     /**
      * The world holds `uuid` again (a correction removed and restored the
-     * same entity): it was never lost.
+     * same entity): it was never lost — and, if a death was noted for it,
+     * never destroyed either. The second case is a reconnect's re-entry
+     * putting back a fleet ship that died after the connection dropped
+     * (#354, the maintainer's ruling: "Player and escorts return
+     * un-destroyed"; simulation_bridge_host.ts disconnectFleet): the death
+     * no longer explains anything, and a later removal that nothing
+     * explains must count as a loss again, not as that old destruction.
      */
     escortReturned(uuid: string): void {
+        this.recentDeaths.delete(uuid);
         const index = this.lost.findIndex(row => row.uuid === uuid);
         if (index >= 0) {
             this.lost.splice(index, 1);

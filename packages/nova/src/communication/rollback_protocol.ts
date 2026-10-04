@@ -149,6 +149,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    OWNED (MultiplayerData.owner), not only what it controlled — what
 //    this file's Trust model and the client's comments always said it
 //    did; builds are version-gated, so no mixed room applies both rules.
+//    (Narrowed by the next paragraph: the fleet only, the rest disowned.)
+//    Also under 8, no further bump (the same standing ruling; #354's second
+//    lane): the RECONNECT TOKEN — the communicator uuid frame gained a
+//    REQUIRED `token` (a 256-bit CSPRNG bearer secret per connection), and
+//    the communicator envelope a new `reconnect` kind (client -> server,
+//    its previous connection's token, honoured only as a connection's
+//    first frame) with which a reconnecting client has the server retire
+//    its half-open old connection at once instead of after the keepalive
+//    (Trust model item 6). catchUp gained the OPTIONAL `timeline` (the
+//    relay's log identity, rollback_relay.ts). MissionShipComponent gained
+//    the OPTIONAL `ownerDisconnected`. And removePeer changed again, by the
+//    maintainer's ruling: it removes the departed peer's player ship and
+//    ESCORTS (hired, captured, and their and the player's bay fighters)
+//    and DISOWNS everything else it owned — MultiplayerData cleared, the
+//    ship an ordinary world ship; its mission ships flagged
+//    ownerDisconnected so the owner-absence despawn keeps them
+//    (communication/peer_departure.ts). Schema and sim-rule changes only;
+//    the fingerprint moves, and builds stay version-gated.
 //    (#188, the Map codec, changed nothing on the wire: Map entries
 //    already encode byte-identically to an Avro map, and the object form
 //    would lose insertion order — see nova_ecs datatypes/map.ts.)
@@ -219,6 +237,37 @@ export const PROTOCOL_VERSION = 8;
  *     synced state, the stamped peer and that set (the same on every
  *     peer), so all peers drop or apply the same input on the
  *     same tick — the drop is itself deterministic.
+ *     When a peer LEAVES, the relay's removePeer removes its player
+ *     ship and escorts (and their fighters) and DISOWNS everything
+ *     else it owned: MultiplayerData is cleared, and the ship is an
+ *     ordinary world ship nobody may replace or remove by input
+ *     (peer_departure.ts). Nothing a departed peer owned is ever
+ *     transferred to another peer.
+ *
+ *  6. RECONNECT TOKENS (#354) let a client retire its OWN previous
+ *     connection, nothing more. CommunicatorServer issues every
+ *     connection a fresh token in its uuid frame — 256 bits from node's
+ *     CSPRNG (crypto.randomBytes; never Math.random, never inside the
+ *     simulation), sent on that socket alone, so no other peer ever
+ *     sees it, and never logged. A client holds it in memory only
+ *     (communicator_client.ts says why not localStorage) and presents
+ *     it as the FIRST communicator frame of its next connection; the
+ *     server then retires the connection the token was issued to —
+ *     closes it and emits its departure through the normal path, so
+ *     every room sees the old peer leave (removePeer, item 5) before
+ *     the new connection's own traffic is handled — and forgets the
+ *     token (single use; a token also dies with its connection). A
+ *     token presented later than the first frame, by the connection it
+ *     belongs to, or unknown (wrong, spent, a restarted server's) is
+ *     ignored, unanswered: the presenter proceeds as the brand-new
+ *     connection it is and learns nothing about whether it existed. A
+ *     token grants no IDENTITY: the presenter keeps its own new uuid
+ *     (identity stays per socket, item 1), and nothing the retired
+ *     connection owned is handed to it — its fleet leaves with it and
+ *     the client re-inserts it as any peer inserts its own ships. What
+ *     a stolen token buys is therefore exactly what the victim's own
+ *     disconnect does; keeping it secret (one socket, memory, no logs)
+ *     is what keeps it from being stolen.
  *
  * Deliberately NOT covered: the CONTENT of a peer's own inputs. A peer
  * may insert whatever it likes as its own (a hull with absurd stats,
@@ -331,9 +380,13 @@ export type RollbackProtocolMessage =
         kind: 'inputRefused', peer: string, tick: number, seq?: number,
         uuid: string, input: string, reason: string,
     }
+    /** `timeline`: the relay's log identity (rollback_relay.ts
+     * `timeline`), new whenever the room's log starts over; a re-entry
+     * compares it with the one it last joined (#354). Optional in the
+     * codec only so a test relay double may omit it. */
     | {
         kind: 'catchUp', tick: number, records: InputRecord[],
-        baseline?: ArchiveBaseline,
+        baseline?: ArchiveBaseline, timeline?: string,
     }
     /** A peer's world hash for a settled tick (peer -> server). */
     | { kind: 'stateHash', tick: number, hash: string }
@@ -437,7 +490,7 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
                 tick: WireTick,
                 records: t.array(InputRecordType),
             }),
-            t.partial({ baseline: ArchiveBaselineType }),
+            t.partial({ baseline: ArchiveBaselineType, timeline: t.string }),
         ])),
         t.strict({ kind: t.literal('stateHash'), tick: WireTick, hash: t.string }),
         t.exact(t.intersection([

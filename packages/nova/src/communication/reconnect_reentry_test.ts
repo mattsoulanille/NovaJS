@@ -19,8 +19,15 @@ import { restampHeldFleet } from '../client/identity.js';
 import { resetWarnThrottle } from '../common/log_throttle.js';
 import { connectUrlWithVersion } from '../common/version_handshake.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { ControlledByComponent } from '../nova_plugin/player/index.js';
-import { makeShip } from '../nova_plugin/ship/index.js';
+import { DeathAIComponent, FormationComponent } from '../nova_plugin/npc/index.js';
+import {
+    ControlledByComponent, MissionShipComponent, NO_DEAL, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
+import { DeathEvent, makeShip } from '../nova_plugin/ship/index.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { applySimulationFrame } from './apply_simulation_frame.js';
+import { CommunicatorMessage, MessageType } from './communicator_message.js';
+import { InputRecord, SimulationInput } from './simulation_input.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { CommunicatorClient } from './communicator_client.js';
 import { CommunicatorServer } from './communicator_server.js';
@@ -122,6 +129,9 @@ describe('a socket reconnect mid-game (#354)', () => {
     let port: number;
     let sockets: SocketChannelClient[];
     let peers: Peer[];
+    let serverRoom: Communicator;
+    /** Display mirrors pumped on every step (mirror below). */
+    let pumps: (() => void)[];
 
     async function startServer(listenPort = 0) {
         httpServer = http.createServer();
@@ -132,7 +142,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         await new Promise<void>(resolve =>
             httpServer.listen(listenPort, () => resolve()));
         port = (httpServer.address() as AddressInfo).port;
-        const serverRoom = new MultiRoom(new CommunicatorServer(channel))
+        serverRoom = new MultiRoom(new CommunicatorServer(channel))
             .join(SYSTEM);
         serverRoom.messages.subscribe(({ source, message }) => {
             const unwrapped = unwrapRollbackMessage(message);
@@ -169,6 +179,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         reports = [];
         sockets = [];
         peers = [];
+        pumps = [];
         await startServer();
     });
 
@@ -255,6 +266,9 @@ describe('a socket reconnect mid-game (#354)', () => {
             if (relay.tick % 30 === 0) {
                 await archive.update();
             }
+            for (const pump of pumps) {
+                pump();
+            }
             await sleep(1);
         }
     }
@@ -307,9 +321,89 @@ describe('a socket reconnect mid-game (#354)', () => {
         await peer.client.addEntity(uuid, ship);
     }
 
+    /** A hired escort of the peer's player ship, stamped the way
+     * fleet_insertion.ts buildHiredEscort stamps one: owned, marked, in
+     * formation, and removed on death like any NPC. Part of the FLEET
+     * (peer_departure.ts). */
+    async function addEscort(peer: Peer, uuid: string, x: number, slot = 0) {
+        const ship = await makePlayerShip(peer.world, peer.communicator.uuid!, x);
+        ship.components.delete(ControlledByComponent);
+        ship.components.set(PlayerEscortComponent, {
+            player: peer.shipUuid, parent: peer.shipUuid, provenance: 'hired',
+            deal: NO_DEAL,
+        });
+        ship.components.set(FormationComponent, { leader: peer.shipUuid, slot });
+        ship.components.set(DeathAIComponent, undefined);
+        await peer.client.addEntity(uuid, ship);
+    }
+
+    /** A mission ship the peer's mission spawned at system entry
+     * (fleet_insertion.ts): owned, and tethered to the player ship
+     * (untethered: no mission to hold, only the owner's presence). */
+    async function addMissionShip(peer: Peer, uuid: string, x: number) {
+        const ship = await makePlayerShip(peer.world, peer.communicator.uuid!, x);
+        ship.components.delete(ControlledByComponent);
+        ship.components.set(MissionShipComponent, {
+            mission: 'synthetic:mission', owner: peer.shipUuid, untethered: true,
+        });
+        await peer.client.addEntity(uuid, ship);
+    }
+
+    /** Server-authored inputs, exactly as the relay authors removePeer:
+     * logged and broadcast for the next tick. Exempt from ownership (Trust
+     * model item 5), so they can do to a peer's ship what the room's
+     * simulation might while that peer is away. */
+    function serverInputs(inputs: SimulationInput[]) {
+        const record: InputRecord = {
+            peerId: 'server', tick: relay.tick + 1, inputs,
+        };
+        (relay as unknown as { log: InputRecord[] }).log.push(record);
+        serverRoom.sendMessage(wrapRollbackMessage({ kind: 'inputs', record }));
+    }
+
+    /** A half-open drop: neither direction of the socket carries anything
+     * any more, and its close never reaches the server, which still holds
+     * the connection. Returns the real close. */
+    function halfOpen(peer: Peer): () => void {
+        const dead = peer.socket.webSocket;
+        const close = dead.close.bind(dead);
+        dead.close = () => undefined;
+        dead.send = () => undefined;
+        return close;
+    }
+
+    /** The client's display world and fleet ledger, fed by the peer's
+     * frames exactly as client/frame_pump.ts feeds them (game_session.ts
+     * notes deaths and dockings from the frame's events first). */
+    function mirror(peer: Peer) {
+        const display = new World('display');
+        const serializer = peer.world.resources.get(SerializerResource)!;
+        const fleet = new FleetLedger();
+        pumps.push(() => {
+            const frame = peer.client.snapshot();
+            for (const event of frame.events) {
+                if (event.name === DeathEvent.name) {
+                    for (const uuid of event.entityUuids ?? []) {
+                        fleet.noteDeath(uuid);
+                    }
+                }
+            }
+            applySimulationFrame(frame, serializer, display, {
+                onRemove: (uuid, entity) =>
+                    fleet.noteRemoved(uuid, entity, peer.shipUuid, serializer),
+            });
+            for (const [uuid] of frame.added) {
+                fleet.escortReturned(uuid);
+            }
+        });
+        return { display, fleet };
+    }
+
     it('re-enters the room under the new uuid with zero desyncs, a second peer converging', async () => {
         const a = await makePeer('a', 100);
-        await addOwnedShip(a, 'escort a', 150);
+        await addEscort(a, 'escort a', 150);
+        await addOwnedShip(a, 'npc a', 400);
+        await addMissionShip(a, 'mission a', 450);
         await step(5);
         const b = await makePeer('b', -100);
         await step(240);
@@ -333,6 +427,21 @@ describe('a socket reconnect mid-game (#354)', () => {
         expect(stamps(archive.archiveWorld, 'escort a')).toEqual(owned);
         expect(stamps(b.world, 'escort a')).toEqual(owned);
         expect(stamps(a.world, 'escort a')).toEqual(owned);
+        // The clean close's removePeer DISOWNED the rest (the maintainer's
+        // ruling): the room kept them as world ships, and the re-entry left
+        // them that way rather than reclaiming them.
+        const disowned = { owner: undefined, controller: undefined };
+        for (const uuid of ['npc a', 'mission a']) {
+            for (const [where, world] of [['archive', archive.archiveWorld],
+                ['a', a.world], ['b', b.world]] as const) {
+                expect(stamps(world, uuid)).withContext(`${uuid} on ${where}`)
+                    .toEqual(disowned);
+            }
+        }
+        // The mission ship's tether resumed with its owner's ship back
+        // under the same uuid.
+        expect(archive.archiveWorld!.entities.get('mission a')!.components
+            .get(MissionShipComponent)?.ownerDisconnected).toBeUndefined();
         // b's own ship never moved owners.
         expect(stamps(archive.archiveWorld, b.shipUuid)).toEqual(
             { owner: b.communicator.uuid, controller: b.communicator.uuid });
@@ -340,7 +449,8 @@ describe('a socket reconnect mid-game (#354)', () => {
 
     it('re-enters a RESTARTED server, which has no memory of either peer', async () => {
         const a = await makePeer('a', 100);
-        await addOwnedShip(a, 'escort a', 150);
+        await addEscort(a, 'escort a', 150);
+        await addOwnedShip(a, 'npc a', 400);
         await step(5);
         const b = await makePeer('b', -100);
         await step(240);
@@ -368,6 +478,10 @@ describe('a socket reconnect mid-game (#354)', () => {
         const owned = { owner: reconnectedA.after, controller: undefined };
         expect(stamps(archive.archiveWorld, 'escort a')).toEqual(owned);
         expect(stamps(b.world, 'escort a')).toEqual(owned);
+        // A room on a NEW timeline never knew the old connection, so
+        // nothing was disowned: the rest of what a owns comes back too.
+        expect(stamps(archive.archiveWorld, 'npc a')).toEqual(owned);
+        expect(stamps(b.world, 'npc a')).toEqual(owned);
     }, 120_000);
 
     it('keeps the ship it was docked with: a reconnect while landed, then the lift-off', async () => {
@@ -424,19 +538,19 @@ describe('a socket reconnect mid-game (#354)', () => {
         expect(stamps(b.world, a.shipUuid)).toEqual(expected);
     }, 120_000);
 
-    it('waits for the old copy to leave a room whose server has not noticed the old socket died', async () => {
+    it('without a token, waits for the old copy to leave a room whose server has not noticed the old socket died', async () => {
         const a = await makePeer('a', 100);
-        await addOwnedShip(a, 'escort a', 150);
+        await addEscort(a, 'escort a', 150);
         await step(5);
         const b = await makePeer('b', -100);
         await step(240);
 
         // A half-open drop: the client gives up on its socket, but the
         // close never reaches the server, which still has the OLD uuid in
-        // the room — with the ship it owns.
-        const dead = a.socket.webSocket;
-        const close = dead.close.bind(dead);
-        dead.close = () => undefined;
+        // the room — with the ship it owns. And no token to present (the
+        // keepalive path every pre-token build took).
+        const close = halfOpen(a);
+        a.communicator['reconnectToken'] = undefined;
         const { before, after } = await reconnect(a);
         await step(300);
         await archive.update();
@@ -468,6 +582,306 @@ describe('a socket reconnect mid-game (#354)', () => {
         expect(stamps(archive.archiveWorld, 'escort a')).toEqual(owned);
         expect(stamps(b.world, 'escort a')).toEqual(owned);
     }, 120_000);
+
+    it('with its token, retires the half-open old connection at once: no wait, zero desyncs, a second peer converging', async () => {
+        const a = await makePeer('a', 100);
+        await addEscort(a, 'escort a', 150);
+        await step(5);
+        const b = await makePeer('b', -100);
+        await step(240);
+
+        halfOpen(a);
+        const { before, after } = await reconnect(a);
+        // The old peer left the room on the token alone — the socket is
+        // still open as far as the server's keepalive knows.
+        await until(() => !relay['roomPeers']().has(before),
+            'the old connection retired', 2_000);
+        expect(channel.clients.has(before)).toBeFalse();
+        const retiredAt = relay.tick;
+        await step(120);
+        await archive.update();
+        // The fleet is back, well inside the keepalive's minute.
+        const expected = { owner: after, controller: after };
+        expect(stamps(archive.archiveWorld, a.shipUuid)).toEqual(expected);
+        expect(stamps(archive.archiveWorld, 'escort a'))
+            .toEqual({ owner: after, controller: undefined });
+        await step(480);
+        await archive.update();
+
+        expectInLockstep(a, retiredAt);
+        expectInLockstep(b, retiredAt);
+        expect(stamps(b.world, a.shipUuid)).toEqual(expected);
+        expect(stamps(a.world, a.shipUuid)).toEqual(expected);
+        expect(stamps(b.world, 'escort a'))
+            .toEqual({ owner: after, controller: undefined });
+        // Exactly one removePeer for the old connection, on one tick.
+        const removals = relay.inputLog.filter(record => record.inputs.some(
+            input => input.kind === 'removePeer' && input.peerId === before));
+        expect(removals.length).toBe(1);
+    }, 120_000);
+
+    it('removes a departed peer\'s player ship and escorts, and disowns the rest, on every world', async () => {
+        const a = await makePeer('a', 100);
+        await addEscort(a, 'escort a', 150);
+        await addOwnedShip(a, 'npc a', 400);
+        await addMissionShip(a, 'mission a', 450);
+        const b = await makePeer('b', -100);
+        await step(240);
+        for (const uuid of [a.shipUuid, 'escort a', 'npc a', 'mission a']) {
+            expect(archive.archiveWorld!.entities.has(uuid)).withContext(uuid)
+                .toBeTrue();
+        }
+
+        // a leaves for good.
+        const gone = a.communicator.uuid!;
+        peers.splice(peers.indexOf(a), 1);
+        a.socket.disconnect();
+        await until(() => !relay['roomPeers']().has(gone), 'a gone');
+        const leftAt = relay.tick;
+        await step(600);
+        await archive.update();
+
+        expectInLockstep(b, leftAt);
+        for (const [where, world] of [['archive', archive.archiveWorld],
+            ['b', b.world]] as const) {
+            expect(world!.entities.has(a.shipUuid)).withContext(where).toBeFalse();
+            expect(world!.entities.has('escort a')).withContext(where).toBeFalse();
+            for (const uuid of ['npc a', 'mission a']) {
+                expect(stamps(world, uuid)).withContext(`${uuid} on ${where}`)
+                    .toEqual({ owner: undefined, controller: undefined });
+            }
+            // Kept by the owner-absence despawn, flagged.
+            expect(world!.entities.get('mission a')!.components
+                .get(MissionShipComponent)?.ownerDisconnected)
+                .withContext(where).toBeTrue();
+        }
+    }, 120_000);
+
+    it('returns the fleet un-destroyed: ships gone after the disconnect come back, the ledger counts no loss or death, and one gone before it stays gone', async () => {
+        const a = await makePeer('a', 100);
+        await addEscort(a, 'escort 0', 130, 0);
+        await addEscort(a, 'escort 1', 150, 1);
+        await addEscort(a, 'escort 2', 170, 2);
+        await addOwnedShip(a, 'npc a', 400);
+        await addOwnedShip(a, 'npc b', 450);
+        const b = await makePeer('b', -100);
+        await step(240);
+
+        // BEFORE the disconnect: escort 0 leaves the fleet for good, on
+        // every world (its owner's own removal; done before the ledger is
+        // watching, since a bare removal is the ledger's ordinary
+        // unexplained loss, ruling #148 — nothing to do with a reconnect).
+        a.client.removeEntity('escort 0');
+        await step(60);
+        expect(archive.archiveWorld!.entities.has('escort 0')).toBeFalse();
+        const { display, fleet } = mirror(a);
+        await step(60);
+        for (const uuid of ['escort 1', 'escort 2']) {
+            expect(display.entities.has(uuid)).withContext(uuid).toBeTrue();
+        }
+
+        // The connection drops, half-open, and the client notices.
+        halfOpen(a);
+        a.socket.disconnect();
+        // While a is away, the room loses escort 1 (to the room's own
+        // simulation, which a never hears of: a server-stamped removal
+        // stands in for its destruction there)...
+        serverInputs([{ kind: 'removeEntity', uuid: 'escort 1' }]);
+        // (One of the ships it merely owns goes the same way: NOT fleet,
+        // so NOT returned — the room's verdict on a disowned ship stands.)
+        serverInputs([{ kind: 'removeEntity', uuid: 'npc a' }]);
+        // ...and a's world, playing on alone, watches escort 2 die (a
+        // real DeathEvent; the ledger notes it).
+        a.world.emit(DeathEvent, a.world.resources.get(TimeResource)!,
+            ['escort 2']);
+        await step(120);
+        expect(archive.archiveWorld!.entities.has('escort 1')).toBeFalse();
+        expect(a.world.entities.has('escort 1')).toBeTrue();
+        expect(a.world.entities.has('escort 2')).toBeFalse();
+        expect(display.entities.has('escort 2')).toBeFalse();
+
+        const { after } = await reconnect(a);
+        const rejoinedAt = relay.tick;
+        await step(600);
+        await archive.update();
+
+        expectInLockstep(a, rejoinedAt);
+        expectInLockstep(b, rejoinedAt);
+        const owned = { owner: after, controller: undefined };
+        for (const uuid of ['escort 1', 'escort 2']) {
+            for (const [where, world] of [['archive', archive.archiveWorld],
+                ['a', a.world], ['b', b.world]] as const) {
+                expect(stamps(world, uuid)).withContext(`${uuid} on ${where}`)
+                    .toEqual(owned);
+            }
+            expect(display.entities.has(uuid)).withContext(uuid).toBeTrue();
+        }
+        for (const [where, world] of [['archive', archive.archiveWorld],
+            ['a', a.world], ['b', b.world]] as const) {
+            expect(world!.entities.has('escort 0')).withContext(where).toBeFalse();
+            expect(world!.entities.has('npc a')).withContext(where).toBeFalse();
+            // The one the room kept is a world ship now, not reclaimed.
+            expect(stamps(world, 'npc b')).withContext(where)
+                .toEqual({ owner: undefined, controller: undefined });
+        }
+        // Neither return is booked as a loss to respawn (a duplicate at the
+        // next system entry) nor kept as a death (which would explain away
+        // a later, real loss).
+        expect(fleet.lost.map(row => row.uuid)).toEqual([]);
+        const deaths = (fleet as unknown as { recentDeaths: Set<string> })
+            .recentDeaths;
+        expect(deaths.has('escort 1')).toBeFalse();
+        expect(deaths.has('escort 2')).toBeFalse();
+    }, 120_000);
+
+    describe('the reconnect token', () => {
+        interface Connection {
+            name: string;
+            socket: SocketChannelClient;
+            communicator: CommunicatorClient;
+            room: Communicator;
+            /** Every communicator frame this socket received. */
+            frames: unknown[];
+        }
+
+        async function connect(name: string): Promise<Connection> {
+            const socket = new SocketChannelClient({
+                webSocketFactory: () => new WebSocket(
+                    connectUrlWithVersion(`ws://127.0.0.1:${port}`, BUILD)),
+                warn: () => undefined,
+                timeout: 600_000,
+            });
+            sockets.push(socket);
+            const frames: unknown[] = [];
+            socket.message.subscribe(frame => frames.push(frame));
+            const communicator = new CommunicatorClient(socket);
+            const room = new MultiRoom(communicator).join(SYSTEM);
+            await until(() => communicator.uuid !== undefined
+                && room.peers.current.value.has(communicator.uuid),
+                `${name} in the room`);
+            return { name, socket, communicator, room, frames };
+        }
+
+        const tokenOf = (connection: Connection) =>
+            connection.communicator['reconnectToken'] as string | undefined;
+
+        /** Reconnects over a half-open drop, presenting `token` (the
+         * connection's own by default). */
+        async function reconnectWith(connection: Connection, token?: string) {
+            const before = connection.communicator.uuid!;
+            const dead = connection.socket.webSocket;
+            dead.close = () => undefined;
+            dead.send = () => undefined;
+            if (token !== undefined) {
+                connection.communicator['reconnectToken'] = token;
+            }
+            connection.socket.reconnect();
+            await until(() => connection.communicator.uuid !== before
+                && connection.room.peers.current.value.has(
+                    connection.communicator.uuid!),
+                `${connection.name} back under a new uuid`);
+            return { before, after: connection.communicator.uuid! };
+        }
+
+        /** Let the server handle whatever is in flight. */
+        const settle = () => sleep(100);
+
+        const serverPeers = () => serverRoom.peers.current.value;
+
+        it('is issued per connection, fresh each time, and reaches no one else', async () => {
+            const a = await connect('a');
+            const b = await connect('b');
+            const log = spyOn(console, 'log').and.callThrough();
+            const warn = spyOn(console, 'warn').and.callThrough();
+            const error = spyOn(console, 'error').and.callThrough();
+            const first = tokenOf(a)!;
+            expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/); // 256 bits, base64url
+            expect(tokenOf(b)).not.toBe(first);
+            await reconnectWith(a);
+            const second = tokenOf(a)!;
+            expect(second).not.toBe(first);
+            await settle();
+
+            const carries = (frames: unknown[], token: string) =>
+                frames.some(frame => JSON.stringify(frame,
+                    (_key, value) => value instanceof Set ? [...value] : value)
+                    .includes(token));
+            expect(carries(b.frames, first)).toBeFalse();
+            expect(carries(b.frames, second)).toBeFalse();
+            expect(carries(a.frames, first)).toBeTrue();
+            // Never logged, by the server or the clients.
+            const logged = [log, warn, error].some(spy => spy.calls.allArgs()
+                .some(args => args.some(arg => String(arg).includes(first)
+                    || String(arg).includes(second))));
+            expect(logged).toBeFalse();
+        }, 30_000);
+
+        it('a wrong token retires nobody: the half-open old connection stays until the server notices', async () => {
+            const a = await connect('a');
+            const b = await connect('b');
+            const { before, after } = await reconnectWith(a,
+                'A'.repeat(43));
+            await settle();
+            expect(serverPeers().has(before)).toBeTrue();
+            expect(serverPeers().has(after)).toBeTrue();
+            expect(serverPeers().has(b.communicator.uuid!)).toBeTrue();
+            expect(channel.clients.has(before)).toBeTrue();
+        }, 30_000);
+
+        it('a spent token retires nobody, however often it is replayed', async () => {
+            const a = await connect('a');
+            const b = await connect('b');
+            const spent = tokenOf(a)!;
+            const first = await reconnectWith(a);
+            await until(() => !serverPeers().has(first.before), 'a retired');
+            // Replayed from another fresh connection, and by a itself.
+            const c = await connect('c');
+            const replayed = await reconnectWith(c, spent);
+            const again = await reconnectWith(a, spent);
+            await settle();
+            expect(serverPeers().has(first.after)).toBeTrue();
+            expect(serverPeers().has(again.before)).toBeTrue();
+            expect(serverPeers().has(replayed.before)).toBeTrue();
+            expect(serverPeers().has(b.communicator.uuid!)).toBeTrue();
+        }, 30_000);
+
+        it('another client\'s token, from a connection already speaking, retires nobody and is not spent by it', async () => {
+            const b = await connect('b');
+            const mallory = await connect('mallory');
+            const stolen = tokenOf(b)!;
+            mallory.socket.send(CommunicatorMessage.encode({
+                type: MessageType.reconnect, token: stolen,
+            }));
+            await settle();
+            expect(serverPeers().has(b.communicator.uuid!)).toBeTrue();
+            expect(channel.clients.has(b.communicator.uuid!)).toBeTrue();
+            // b's own reconnect still retires its old connection with it.
+            const { before } = await reconnectWith(b);
+            await until(() => !serverPeers().has(before), 'b\'s old connection retired');
+            expect(serverPeers().has(mallory.communicator.uuid!)).toBeTrue();
+        }, 30_000);
+
+        it('grants no identity: the presenter gets a NEW uuid, and nothing the old connection owned', async () => {
+            const a = await makePeer('a', 100);
+            await addEscort(a, 'escort a', 150);
+            await step(120);
+            halfOpen(a);
+            // Detach a's simulation, so nothing re-inserts the fleet: what
+            // the token alone does to it is all that is left to see.
+            peers.splice(peers.indexOf(a), 1);
+            const { before, after } = await reconnect(a);
+            await until(() => !relay['roomPeers']().has(before), 'retired');
+            await step(60);
+            await archive.update();
+            expect(after).not.toBe(before);
+            expect(archive.archiveWorld!.entities.has(a.shipUuid)).toBeFalse();
+            expect(archive.archiveWorld!.entities.has('escort a')).toBeFalse();
+            const stampedAfter = [...archive.archiveWorld!.entities.values()]
+                .filter(entity => entity.components.get(MultiplayerData)?.owner === after
+                    || entity.components.get(ControlledByComponent)?.peerId === after);
+            expect(stampedAfter).toEqual([]);
+        }, 60_000);
+    });
 
     describe('refused insertions are not silent', () => {
         function refusalsAt(peer: Peer) {
@@ -585,7 +999,7 @@ describe('a socket reconnect mid-game (#354)', () => {
 
         it('re-enters on a refusal of an entity it holds under a stale id, at most three times', async () => {
             const a = await makePeer('a', 100);
-            await addOwnedShip(a, 'escort a', 150);
+            await addEscort(a, 'escort a', 150);
             await makePeer('b', -100);
             await step(120);
             const { before, after } = await reconnect(a);
