@@ -37,7 +37,7 @@ export interface GateData {
  * fields (EVN Bible, spöb resource; TMPL offsets 28 and 30).
  *
  * PARSED ONLY: nothing in the game launches defence fleets yet (see the
- * stellar-defence feature request referenced from tracker issue #306).
+ * gameplay feature request, tracker issue #353).
  */
 export interface PlanetDefenseFleet {
     /**
@@ -121,7 +121,7 @@ export interface PlanetDominationData {
      * spöb Flags2 0x0020: "Stellar is always dominated (all your base are
      * belong to us)". No stock stellar sets it. The Bible defines no
      * "can never be dominated" flag; what makes a stellar dominatable at
-     * all is engine behaviour, not data (see the feature request).
+     * all is engine behaviour, not data (see feature request #353).
      */
     alwaysDominated: boolean;
     /**
@@ -347,7 +347,7 @@ export interface PlanetData extends SpaceObjectData {
     /*
      * Stellar defence, weapons, domination, destruction, deadliness and
      * gravity (tracker issue #306). These are PARSED ONLY: nothing in the
-     * game reads them yet — the gameplay is a separate feature request —
+     * game reads them yet — the gameplay is feature request #353 —
      * so they change neither the simulation nor the wire (PlanetData
      * crosses the wire as an id reference). Each sentinel is decoded here,
      * so consumers never see the raw -1 / 0 / 1000+ encodings.

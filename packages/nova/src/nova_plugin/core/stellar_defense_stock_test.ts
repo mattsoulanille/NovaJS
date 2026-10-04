@@ -8,7 +8,7 @@ import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data
  * Pins the stellar defence / weapon / domination / destruction fields and
  * the sÿst reinforcement fields (tracker issue #306) on a few stock
  * stellars and systems. They are PARSED ONLY — no gameplay reads them yet
- * (see the feature request linked from #306) — so this pins the parser's
+ * (feature request #353) — so this pins the parser's
  * decoding of the real data, not any behaviour.
  */
 describe('stellar defence and reinforcement fields against real Nova data',

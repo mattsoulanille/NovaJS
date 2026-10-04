@@ -40,7 +40,7 @@ export interface SystemPersonChance {
  * OutfitData.reinforcementInhibitorClass — suppresses it.)
  *
  * PARSED ONLY: nothing in the game calls in reinforcements yet (see the
- * feature request referenced from tracker issue #306).
+ * gameplay feature request, tracker issue #353).
  */
 export interface SystemReinforcements {
     /** Global flët id of the reinforcement fleet (ReinfFleet 128+). */
