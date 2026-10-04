@@ -356,7 +356,16 @@ describe('NPC genesis load failures', () => {
         const warn = spyOn(console, 'warn');
         await expectAsync(buildNpcSpawnTable(makeWorld({ sheet: 99 }), SYSTEM, withDude))
             .toBeRejectedWithError(new RegExp(`sprite sheet ${SHEET}`));
-        expect(warn).not.toHaveBeenCalled();
+        // The failure must not be WARNED AWAY: no warning about this
+        // sheet. Only warnings that name it count — console.warn is
+        // process-wide, and a warning from unrelated work still in
+        // flight (a real-data parse outliving an earlier suite, e.g.
+        // novaparse's "Missing flët id … for the reinforcement fleet")
+        // used to fail this spec intermittently under load (#352).
+        const aboutThisSheet = warn.calls.allArgs().filter(args =>
+            args.some(arg => /sprite sheet/i.test(String(arg))
+                || String(arg).includes(SHEET)));
+        expect(aboutThisSheet).toEqual([]);
     });
 
     it('absorbs a transient sprite sheet failure and keeps the entry', async () => {
