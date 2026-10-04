@@ -84,11 +84,15 @@ export type CatchUpMessage = Extract<RollbackProtocolMessage, { kind: 'catchUp' 
  * promise settles, so the caller's bookkeeping happens ahead of any
  * microtask that could observe the reply. A `joinRefused` (the relay's
  * wire schema differs) ends the attempt at once, with the reason
- * logged: retrying would be refused again.
+ * logged: retrying would be refused again. A `joinWarning` (the room
+ * declared a different system order, #155) is logged and the join
+ * goes on. `systems` is this peer's system-order hash
+ * (system_order.ts), declared on every request.
  */
 export function requestCatchUp(
     communicator: Communicator,
-    { timeoutMs, fresh }: { timeoutMs: number, fresh: boolean },
+    { timeoutMs, fresh, systems }:
+        { timeoutMs: number, fresh: boolean, systems?: string },
     onCatchUp: (catchUp: CatchUpMessage) => void,
 ): Promise<CatchUpMessage | undefined> {
     return new Promise<CatchUpMessage | undefined>(resolve => {
@@ -111,6 +115,8 @@ export function requestCatchUp(
                 subscription.unsubscribe();
                 console.error(`The relay refused the join: ${rollbackMessage.reason}`);
                 resolve(undefined);
+            } else if (rollbackMessage?.kind === 'joinWarning') {
+                console.warn(`The relay warned about this join: ${rollbackMessage.reason}`);
             }
         });
         const request = () => {
@@ -126,6 +132,7 @@ export function requestCatchUp(
                     protocol: PROTOCOL_VERSION,
                     ...(fresh ? { fresh } : {}),
                     ...(schema !== undefined ? { schema } : {}),
+                    ...(systems !== undefined ? { systems } : {}),
                 }), server);
             }
         };

@@ -60,6 +60,8 @@ describe('DesyncRecorder', () => {
         convicted: ['b'],
         archiveOutvoted: false,
         peerProtocols: { a: 1, b: 0 },
+        roomSystemOrder: '00000000000000aa',
+        peerSystemOrders: { a: '00000000000000aa', b: '00000000000000bb' },
     };
     const dump: DesyncDump = {
         tick: 210,
@@ -274,6 +276,19 @@ describe('DesyncRecorder', () => {
             .toBe(fingerprintGameData({ Ship: ['nova:128'] }));
         // Stable across processes: a fixed input hashes identically.
         expect(desync.gameDataFingerprint).toMatch(/^[0-9a-f]{16}$/);
+    });
+
+    it('stamps the room\'s and each reporter\'s system-order hash (#155)', async () => {
+        const recorder = new DesyncRecorder(root);
+        recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+        await recorder.flush();
+        const [incident] = await fs.readdir(root);
+        const desync = JSON.parse(await fs.readFile(
+            path.join(root, incident!, 'desync.json'), 'utf8'));
+        // The incident shows the peers did not run the same order.
+        expect(desync.roomSystemOrder).toBe('00000000000000aa');
+        expect(desync.peerSystemOrders)
+            .toEqual({ a: '00000000000000aa', b: '00000000000000bb' });
     });
 
     it('suppresses repeat incidents for a room within the cooldown', async () => {

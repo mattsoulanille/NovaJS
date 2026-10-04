@@ -68,6 +68,19 @@ console.log(`Incident: room ${desync.roomId}, convicted checkpoint tick `
 console.log(`  reported hashes:`, Object.fromEntries(desync.hashes));
 console.log(`  canonical: ${desync.canonical}, convicted:`,
     desync.convicted, desync.archiveOutvoted ? '(ARCHIVE OUTVOTED)' : '');
+// #155: each reporter's declared system-order hash against the room's
+// first declaration. A difference means the peers did not even run the
+// same systems in the same order — no replay below can explain that.
+const reorderedPeers = Object.entries(desync.peerSystemOrders ?? {})
+    .filter(([, systems]) => systems !== desync.roomSystemOrder);
+if (desync.roomSystemOrder && reorderedPeers.length > 0) {
+    console.error(`\n*** SYSTEM ORDER MISMATCH ***\n`
+        + `The room's system order is ${desync.roomSystemOrder}, but:`,
+        Object.fromEntries(reorderedPeers), '\n');
+} else if (desync.roomSystemOrder) {
+    console.log(`  system order: every declaring reporter ran `
+        + `${desync.roomSystemOrder}`);
+}
 
 const tick = world => world.resources.get(TimeResource).frame;
 

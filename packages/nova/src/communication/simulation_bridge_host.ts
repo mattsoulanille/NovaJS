@@ -22,6 +22,7 @@ import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
+import { systemOrderHash } from "./system_order.js";
 import { makeNpc } from "../nova_plugin/npc/index.js";
 import { PEER_LOCAL_COMPONENTS, AnalogControlState } from '../nova_plugin/player/index.js';
 import { EncodedSimulationBridgeEvent, getRegisteredSimulationBridgeEvents } from "./simulation_bridge_events.js";
@@ -367,7 +368,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (!communicator?.uuid) {
             return false;
         }
-        const catchUp = await requestCatchUp(communicator, { timeoutMs, fresh },
+        const catchUp = await requestCatchUp(communicator, {
+            timeoutMs, fresh,
+            // #155: lets the relay notice a peer whose world runs its
+            // systems in a different order from the room's.
+            systems: systemOrderHash(this.world.systemNames),
+        },
             reply => {
                 // Records relayed to us before this reply were
                 // logged by the relay before it built the reply
