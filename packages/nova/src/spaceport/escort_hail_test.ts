@@ -120,7 +120,7 @@ describe('escortReadout (the escort box\'s upper well)', () => {
         + 'once an upgrade is queued', () => {
             // hail/hail_escort_upgrading.png, verbatim: the price is no
             // longer the news, and the wage line below it is untouched.
-            expect(escortReadout({ ...HIRED, pendingUpgrade: true }))
+            expect(escortReadout({ ...HIRED, queuedDeal: 'upgrade' }))
                 .toBe([
                     'Will be upgraded at next shipyard',
                     '',
@@ -131,7 +131,7 @@ describe('escortReadout (the escort box\'s upper well)', () => {
     it('replaces the SELL PRICE line once a sale is queued, leaving the '
         + 'upgrade price standing', () => {
             // hail/sell_captured_escort.png, verbatim.
-            expect(escortReadout({ ...CAPTURED, pendingSale: true }))
+            expect(escortReadout({ ...CAPTURED, queuedDeal: 'sale' }))
                 .toBe([
                     'Upgrade Cost: 35,000 credits',
                     'Will be sold off at next shipyard',
@@ -224,7 +224,7 @@ describe('escortButtonSlots (the escort box\'s four fixed rows)', () => {
             // could not afford to queue it again: un-queueing must never
             // be refusable.
             const broke: EscortManagement = {
-                ...HIRED, pendingUpgrade: true,
+                ...HIRED, queuedDeal: 'upgrade',
                 upgrade: {
                     toShip: 'nova:137', cost: 50_000, canAfford: false,
                 },
@@ -237,7 +237,7 @@ describe('escortButtonSlots (the escort box\'s four fixed rows)', () => {
         + 'leaves Upgrade Escort LIVE beside it', () => {
             // hail/sell_captured_escort.png: mutual exclusion is enforced
             // by the press cancelling the other deal, NOT by greying.
-            const slots = escortButtonSlots({ ...CAPTURED, pendingSale: true });
+            const slots = escortButtonSlots({ ...CAPTURED, queuedDeal: 'sale' });
             expect(slots[1]).toEqual({ slot: 'cancelSale', enabled: true });
             expect(slots[0]).toEqual({ slot: 'upgradeEscort', enabled: true });
         });
@@ -265,8 +265,8 @@ describe('escortButtonSlots (the escort box\'s four fixed rows)', () => {
     it('keeps Release and Close Channel live in every case', () => {
         for (const escort of [HIRED, CAPTURED, { provenance: 'hired' as const },
             { provenance: 'captured' as const },
-            { ...CAPTURED, pendingSale: true },
-            { ...CAPTURED, pendingUpgrade: true }]) {
+            { ...CAPTURED, queuedDeal: 'sale' as const },
+            { ...CAPTURED, queuedDeal: 'upgrade' as const }]) {
             const slots = escortButtonSlots(escort);
             expect(slots[2]).toEqual({ slot: 'release', enabled: true });
             expect(slots[3]).toEqual({ slot: 'close', enabled: true });
@@ -277,10 +277,10 @@ describe('escortButtonSlots (the escort box\'s four fixed rows)', () => {
 describe('escortPressAction (which action a row means right now)', () => {
     it('queues, then cancels, on the same button', () => {
         expect(escortPressAction(HIRED, 'upgrade')).toBe('queueUpgrade');
-        expect(escortPressAction({ ...HIRED, pendingUpgrade: true },
+        expect(escortPressAction({ ...HIRED, queuedDeal: 'upgrade' },
             'upgrade')).toBe('cancelUpgrade');
         expect(escortPressAction(CAPTURED, 'sell')).toBe('queueSale');
-        expect(escortPressAction({ ...CAPTURED, pendingSale: true }, 'sell'))
+        expect(escortPressAction({ ...CAPTURED, queuedDeal: 'sale' }, 'sell'))
             .toBe('cancelSale');
     });
 
@@ -300,7 +300,7 @@ describe('escortPressAction (which action a row means right now)', () => {
     it('CANCELS regardless of affordability — un-queueing always works',
         () => {
             expect(escortPressAction({
-                ...HIRED, pendingUpgrade: true,
+                ...HIRED, queuedDeal: 'upgrade',
                 upgrade: { toShip: 'x', cost: 1, canAfford: false },
             }, 'upgrade')).toBe('cancelUpgrade');
         });
@@ -315,7 +315,7 @@ describe('the deal rows TOGGLE and the channel stays open', () => {
     it('queues an upgrade and re-renders the readout, keeping the channel',
         () => {
             const next = pressed(HIRED, 'upgradeEscort');
-            expect(next.pendingUpgrade).toBeTrue();
+            expect(next.queuedDeal).toBe('upgrade');
             // ...and the body the dialog draws moves with it.
             const page1 = hailPress(page(HIRED), { kind: 'upgradeEscort' });
             expect(page1).not.toBe('close');
@@ -328,25 +328,23 @@ describe('the deal rows TOGGLE and the channel stays open', () => {
     it('un-queues on the next press, restoring the price line', () => {
         const queued = pressed(HIRED, 'upgradeEscort');
         const cancelled = pressed(queued, 'upgradeEscort');
-        expect(cancelled.pendingUpgrade).toBeFalse();
+        expect(cancelled.queuedDeal).toBeUndefined();
         expect(escortReadout(cancelled)).toBe(escortReadout(HIRED));
     });
 
     it('queues a sale and re-renders the sell row', () => {
         const next = pressed(CAPTURED, 'sellEscort');
-        expect(next.pendingSale).toBeTrue();
+        expect(next.queuedDeal).toBe('sale');
         expect(escortReadout(next).split('\n')[1]).toBe(SALE_QUEUED_TEXT);
-        expect(pressed(next, 'sellEscort').pendingSale).toBeFalse();
+        expect(pressed(next, 'sellEscort').queuedDeal).toBeUndefined();
     });
 
     it('queueing one CANCELS the other', () => {
         const sold = pressed(CAPTURED, 'sellEscort');
         const upgrading = pressed(sold, 'upgradeEscort');
-        expect(upgrading.pendingUpgrade).toBeTrue();
-        expect(upgrading.pendingSale).toBeFalse();
+        expect(upgrading.queuedDeal).toBe('upgrade');
         const soldAgain = pressed(upgrading, 'sellEscort');
-        expect(soldAgain.pendingSale).toBeTrue();
-        expect(soldAgain.pendingUpgrade).toBeFalse();
+        expect(soldAgain.queuedDeal).toBe('sale');
     });
 
     it('IGNORES a press the context does not offer', () => {
@@ -385,7 +383,7 @@ describe('Release is the one press that ends the conversation', () => {
     });
 
     it('closes even with a deal queued — the escort takes it with it', () => {
-        expect(hailPress(page({ ...CAPTURED, pendingSale: true }),
+        expect(hailPress(page({ ...CAPTURED, queuedDeal: 'sale' }),
             { kind: 'releaseEscort' })).toBe('close');
     });
 });

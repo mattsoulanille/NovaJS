@@ -304,17 +304,16 @@ export function escortButtonSlots(escort: {
     provenance: 'hired' | 'captured',
     upgrade?: { canAfford: boolean },
     sell?: unknown,
-    pendingUpgrade?: boolean,
-    pendingSale?: boolean,
+    queuedDeal?: 'upgrade' | 'sale',
 }): EscortButtonSlot[] {
     return [
-        escort.pendingUpgrade
+        escort.queuedDeal === 'upgrade'
             ? { slot: 'cancelUpgrade', enabled: true }
             : {
                 slot: 'upgradeEscort',
                 enabled: !!escort.upgrade && escort.upgrade.canAfford,
             },
-        escort.pendingSale
+        escort.queuedDeal === 'sale'
             ? { slot: 'cancelSale', enabled: true }
             : { slot: 'sellEscort', enabled: !!escort.sell },
         { slot: 'release', enabled: true },
