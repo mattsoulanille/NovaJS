@@ -7,8 +7,23 @@ import {
     NCBSetOperation,
     parseNCBSet,
     parseNCBTest,
+    referencedControlBits,
     runNCBSet,
 } from './ncb.js';
+
+describe('referencedControlBits', () => {
+    it('lists every bit a test reads, sorted, once', () => {
+        expect(referencedControlBits(parseNCBTest(
+            '(b13 & !b2) | ([b7 b13 4] = 2) | o128 | e131 | g | p1')))
+            .toEqual([2, 4, 7, 13]);
+    });
+
+    it('is empty for a test whose value no bit can change', () => {
+        expect(referencedControlBits(parseNCBTest(''))).toEqual([]);
+        expect(referencedControlBits(parseNCBTest('o128 | !g & p0')))
+            .toEqual([]);
+    });
+});
 
 function bitContext(...bits: number[]) {
     const set = new Set(bits);
