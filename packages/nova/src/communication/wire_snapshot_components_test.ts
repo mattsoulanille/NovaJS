@@ -13,7 +13,8 @@ import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { avroWireCodec, AvroWireCodec, decodeWireOrThrow } from './wire_codec.js';
 import { liveWireCodec, novaCodecHooks, WireMessage, WireMessageType } from './wire_schemas.js';
 import {
-    assertWireRegistryCovers, wireRegistryMissing, wireSnapshotRegistrySerializer,
+    assertWireRegistryCovers, freshWireRegistryComponentNames, wireRegistryMissing,
+    wireSnapshotRegistrySerializer,
 } from './wire_snapshot_components.js';
 
 /**
@@ -101,6 +102,31 @@ describe('the typed wire-snapshot component list', () => {
             .map(([uuid]) => uuid);
         expect(carrying).toEqual([]);
     }, 60_000);
+
+    it('builds the same registry on a browser main thread as on node', () => {
+        // The registry reads the plugin set's SYNCHRONOUS registrations.
+        // On a browser's main thread the platform used to be detected as
+        // 'browser', where ShipController awaits KeyboardPlugin before
+        // PlayerShipPlugin: ShipControl fell out of the prefix, the
+        // coverage check in makeSystem threw, and no real browser could
+        // enter a system (the node-client E2E never saw it). The registry
+        // world pins its platform, so a `window` changes nothing.
+        const onNode = freshWireRegistryComponentNames();
+        expect(onNode).toContain('ShipControl');
+        const globals = globalThis as { window?: unknown };
+        const hadWindow = 'window' in globals;
+        const previous = globals.window;
+        globals.window = {};
+        try {
+            expect(freshWireRegistryComponentNames()).toEqual(onNode);
+        } finally {
+            if (hadWindow) {
+                globals.window = previous;
+            } else {
+                delete globals.window;
+            }
+        }
+    });
 
     it('a component the registry lacks fails loudly, by name', async () => {
         // A registration the registry world's synchronous plugin build

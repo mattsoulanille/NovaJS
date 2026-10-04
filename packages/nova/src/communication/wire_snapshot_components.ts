@@ -6,7 +6,8 @@ import { MultiplayerData, MultiplayerDataType } from 'nova_ecs/plugins/multiplay
 import { MissileGuidanceResource } from '../nova_plugin/combat/index.js';
 import { ControlledByComponent, ControlledByType } from '../nova_plugin/player/index.js';
 import {
-    IdFactory, IdFactoryResource, SimulationGameDataResource, SystemIdResource,
+    IdFactory, IdFactoryResource, PlatformResource, SimulationGameDataResource,
+    SystemIdResource,
 } from '../nova_plugin/core/index.js';
 import { SystemPlugin } from '../nova_plugin/system_plugin.js';
 
@@ -57,6 +58,16 @@ function buildRegistryWorld(): World {
     const world = new World('wire-snapshot-registry');
     world.resources.set(SimulationGameDataResource, {} as never);
     world.resources.set(SystemIdResource, 'wire-snapshot-registry');
+    // The registry must be the same on every peer and in every context,
+    // so the platform is PINNED rather than detected. Detected, a
+    // browser's main thread is 'browser': ShipController then awaits
+    // KeyboardPlugin before PlayerShipPlugin, which pushes ShipControl's
+    // registration out of the synchronous prefix this function reads —
+    // the registry lacked it there, makeSystem's coverage check threw,
+    // and nobody could enter a system from a real browser (and
+    // ControlsPlugin rejected on the stub game data). 'node' takes no
+    // platform-only branch.
+    world.resources.set(PlatformResource, 'node');
     world.resources.set(RandomResource, new Random(0));
     world.resources.set(IdFactoryResource, new IdFactory('wire-snapshot-registry'));
     world.resources.set(MissileGuidanceResource, { mode: 'smart' });
@@ -71,6 +82,17 @@ function buildRegistryWorld(): World {
     // world carries it).
     serializer.addComponent(MultiplayerData, MultiplayerDataType);
     return world;
+}
+
+/**
+ * The registry's component names from a FRESH registry world, bypassing
+ * the memo. For the spec that pins the registry platform-independent
+ * (a memoized registry built earlier in the run would hide a
+ * context-dependent build).
+ */
+export function freshWireRegistryComponentNames(): string[] {
+    return [...buildRegistryWorld().resources.get(SerializerResource)!
+        .componentsByName.keys()].sort();
 }
 
 let registrySerializer: Serializer | undefined;
