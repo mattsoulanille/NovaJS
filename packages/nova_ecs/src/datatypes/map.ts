@@ -2,9 +2,22 @@ import { isLeft, right } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 
 /**
- * A Map codec, encoded as an array of [key, value] tuples. Tracker
- * issue: string- and number-keyed maps could encode as plain objects
- * instead (a wire-format change, so it needs a PROTOCOL_VERSION bump).
+ * A Map codec, encoded as an array of [key, value] tuples — in the Map's
+ * insertion order, which is simulation state (the weapons map is fired
+ * in it; missions run in acceptance order).
+ *
+ * Deliberately NOT a plain object for string/number keys (#188, closed
+ * on measurement): a JS object lists integer-like keys first and
+ * ascending, so it cannot carry that order (and an object built by
+ * assignment, as the Avro map reader builds one, turns a `__proto__`
+ * key into a prototype); hashWorld sorts object keys, so it would stop
+ * seeing the order too; and this encoded form is what saves persist (a
+ * mission's `live` map). Nor would it save anything on the binary wire
+ * for the string keys every map in the game uses: nova's io_ts_to_avro
+ * derives an array of {_0, _1} entry records, which Avro writes as
+ * exactly the bytes of an Avro `map` (blocks of string key + value) —
+ * measured byte-identical on every frame of a 600-tick, 100-entity
+ * combat run. map_test, world_hash_test and io_ts_to_avro_test pin it.
  *
  * A subclass rather than a bare `new t.Type` so schema reflection
  * (nova's io_ts_to_avro) can see the key and value codecs — see

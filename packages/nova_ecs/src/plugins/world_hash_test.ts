@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import 'jasmine';
 import { Component } from '../component.js';
+import { map } from '../datatypes/map.js';
 import { Entity } from '../entity.js';
 import { World } from '../world.js';
 import { SerializerPlugin, SerializerResource } from './serializer_plugin.js';
@@ -52,6 +53,24 @@ describe('hashWorld', () => {
         expect(Object.keys(worlds[1]!.entities.get('a')!.components.get(PointComponent)!))
             .toEqual(['y', 'x']);
         expect(hashWorld(worlds[0]!).hash).toEqual(hashWorld(worlds[1]!).hash);
+    });
+
+    // #188: the key-order insensitivity above is for OBJECT keys, which
+    // are not state. A Map's insertion order is — it is the order the
+    // simulation iterates (weapons fire in it) — and the map codec's
+    // [key, value][] encoding keeps it an ARRAY, so the hash sees it.
+    // An object encoding of maps would have the hash sort it away.
+    it('depends on the insertion order of a Map component', () => {
+        const WeaponsComponent = new Component<Map<string, number>>('Weapons');
+        const hashes = [[['a', 1], ['b', 2]], [['b', 2], ['a', 1]]].map(entries => {
+            const world = makeWorld();
+            world.resources.get(SerializerResource)!
+                .addComponent(WeaponsComponent, map(t.string, t.number));
+            world.entities.set('ship', new Entity('ship').addComponent(WeaponsComponent,
+                new Map(entries as [string, number][])));
+            return hashWorld(world).hash;
+        });
+        expect(hashes[0]).not.toEqual(hashes[1]);
     });
 
     it('changes when component state changes', () => {
