@@ -28,6 +28,8 @@ import { SystemPlugin } from '../nova_plugin/system_plugin.js';
  * 2026-07 without being mirrored here, breaking every ship purchase).
  * When adding a required resource to make_system.ts, add it here too;
  * ship_build_world_test.ts pins that this function keeps working.
+ * Resources a system reads through `Optional(...)` (e.g. GovtsResource,
+ * which this world omits) resolve to `undefined` here.
  *
  * Determinism note: this scratch world only computes ship stats and is
  * discarded, so the fixed Random seed is fine.

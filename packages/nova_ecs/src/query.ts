@@ -63,7 +63,23 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     // Prevent query from being a subtype of EcsEvent
     private readonly _querySymbol = querySymbol;
     readonly components: ReadonlySet<UnknownComponent>;
+    /**
+     * The resources this query REQUIRES: its direct Resource args plus
+     * the required resources of its modifiers' queries and of its
+     * nested Query args (recursively). `World.addSystem` refuses a
+     * system whose query requires a resource the world lacks, and
+     * `ResourceMap.delete` refuses to remove one a system requires.
+     * A resource reached only through `Optional` is not required (it
+     * resolves to `undefined` when absent); see `referencedResources`.
+     */
     readonly resources: ReadonlySet<UnknownResource>;
+    /**
+     * Every resource whose set / delete can change this query's cached
+     * per-entity results: `resources` plus the resources modifiers
+     * resolve through their declared `reaches` (e.g. `Optional(R)`).
+     * The query cache invalidates on set and delete of these.
+     */
+    readonly referencedResources: ReadonlySet<UnknownResource>;
     readonly queries: Query[];
     readonly componentsBinSet: BinSet<UnknownComponent>;
     /**
@@ -108,12 +124,23 @@ export class Query<QueryArgs extends readonly ArgTypes[]
             a => a instanceof Component) as UnknownComponent[]),
         ...modifierComponents]);
 
-        this.resources = new Set([...(unwrappedArgs.filter(
-            a => (a instanceof Resource)) as UnknownResource[]),
-        ...modifierResources]);
-
         this.queries = [...(unwrappedArgs.filter(
             (a): a is Query => (a instanceof Query)))];
+
+        // A nested Query arg resolves its own args (resources included)
+        // when this query runs, so its required resources are this
+        // query's too: without them addSystem would accept a system
+        // whose first step throws `Missing resource`.
+        const nestedQueryResources = this.queries
+            .flatMap(query => [...query.resources]);
+
+        this.resources = new Set([...(unwrappedArgs.filter(
+            a => (a instanceof Resource)) as UnknownResource[]),
+        ...modifierResources, ...nestedQueryResources]);
+
+        this.referencedResources = new Set([...this.resources,
+            ...modifiers.flatMap(modifier =>
+                [...referencedResourcesOfArg(modifier)])]);
 
         this.componentsBinSet = BinSetC.of(this.components);
 
@@ -143,6 +170,27 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     toString() {
         return `Query(${this.name ?? 'unnamed'})`;
     }
+}
+
+/**
+ * The resources an arg's resolved value can depend on, for
+ * `Query.referencedResources`: a Resource itself, or for a modifier its
+ * query's referenced resources plus those of its declared `reaches`
+ * (what its transform resolves through GetArg). Nested Queries keep
+ * their results live in their own cache entry, so they add nothing.
+ */
+function referencedResourcesOfArg(arg: ArgTypes): ReadonlySet<UnknownResource> {
+    arg = unwrapReadOnly(arg);
+    if (arg instanceof Resource) {
+        return new Set([arg as UnknownResource]);
+    }
+    if (arg instanceof ArgModifier) {
+        const modifier = arg as UnknownArgModifier;
+        return new Set([...modifier.query.referencedResources,
+            ...(modifier.reaches ?? []).flatMap(
+                reached => [...referencedResourcesOfArg(reached)])]);
+    }
+    return new Set();
 }
 
 /**
