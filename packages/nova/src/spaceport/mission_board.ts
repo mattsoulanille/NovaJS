@@ -561,6 +561,12 @@ export class MissionBoard extends Menu<Entity> {
         if (this.transaction && this.visit) {
             this.transaction.release(this.visit);
         }
+        if (this.transaction) {
+            // Done hands back the hull the player is in NOW: an accepted
+            // mission's `Cxxx`/`Exxx`/`Hxxx` swaps it through the
+            // transaction (LandedTransaction.changeShip).
+            this.input = this.transaction.ship;
+        }
         this.visit = undefined;
         if (this.ownsTransaction) {
             this.transaction = undefined;

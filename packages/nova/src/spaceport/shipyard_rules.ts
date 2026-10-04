@@ -29,6 +29,7 @@ import {
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent, ControlBitsComponent,
     makeControlBitHooks, NCBParseError, runNCBSet, ShipChangeMode, commitActiveRanks,
+    NCBSetOperation, parseNCBSet,
 } from '../nova_plugin/ncb/index.js';
 import {
     PlayerShipSelector, CreditsComponent, CronStatesComponent, GameDateComponent,
@@ -698,6 +699,44 @@ export function buildChangedShip(oldShip: Entity, newShip: ShipData,
     return buildShipEntity(oldShip, newShip,
         outfitsAfterShipChange(newShip, outfits, getOutfit, mode),
         oldShip.components.get(CreditsComponent)?.credits ?? 0, getOutfit);
+}
+
+/**
+ * Every shïp global id one of `sources`' set strings could change the
+ * player's ship to (`Cxxx` / `Exxx` / `Hxxx`, inside `R(...)` choices too),
+ * each number resolved stock-first under its own writer's prefix. A set
+ * string runs synchronously, so whoever can run one warms these first (the
+ * outfitter for its OnPurchase / OnSell, the landed transaction for every
+ * mïsn). An unparseable string is skipped here and warned about when it
+ * runs.
+ */
+export function changeShipTargets(
+    sources: Iterable<{ expression: string, prefix: string }>,
+    shipExists: (globalId: string) => boolean): string[] {
+    const targets = new Set<string>();
+    const collect = (operations: NCBSetOperation[], prefix: string) => {
+        for (const operation of operations) {
+            if (operation.type === 'changeShip') {
+                targets.add(resolveNumberedResource(
+                    operation.id, prefix, shipExists));
+            } else if (operation.type === 'random') {
+                collect(operation.choices, prefix);
+            }
+        }
+    };
+    for (const { expression, prefix } of sources) {
+        if (!expression) {
+            continue;
+        }
+        try {
+            collect(parseNCBSet(expression), prefix);
+        } catch (error) {
+            if (!(error instanceof NCBParseError)) {
+                throw error;
+            }
+        }
+    }
+    return [...targets].sort();
 }
 
 /*

@@ -152,11 +152,13 @@ export interface MissionMachineryContext {
     /**
      * `Cxxx` / `Exxx` / `Hxxx` (change the player's ship to type xxx; the
      * three outfit treatments are ncb.ts's ShipChangeMode).
-     * The ship is an ENTITY swap, which only the venue holding the docked
-     * entity can perform, so this is supplied by that venue (the
-     * outfitter, for an oütf OnPurchase like stock 314's `H165`) and is
-     * otherwise reported as an unimplemented hook. `globalShipId` is
-     * already resolved stock-first through `shipExists`.
+     * The ship is an ENTITY swap, which only the owner of the docked
+     * entity can perform, so this is supplied by the landing's transaction
+     * (spaceport/landed_transaction.ts — for every landed venue: an oütf
+     * OnPurchase like stock 314's `H165`, a mïsn OnAccept like stock
+     * 197's `H381`) and is otherwise (in flight) reported as an
+     * unimplemented hook. `globalShipId` is already resolved stock-first
+     * through `shipExists`.
      */
     changeShip?(globalShipId: string, mode: ShipChangeMode): void;
     /**

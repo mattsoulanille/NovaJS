@@ -195,11 +195,8 @@ export class Spaceport extends Menu<Entity> {
         buttons.refuel.click.subscribe(this.refuel.bind(this));
 
         this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
-        // A ship change from an OnPurchase set string (Cxxx/Exxx/Hxxx)
-        // is a hull swap like a shipyard purchase, published the same way
-        // — see adoptPurchasedShip.
-        this.outfitter.onShipChanged =
-            ship => this.adoptPurchasedShip(ship, 'Changed ship to');
+        // (A ship change from an OnPurchase set string is published off
+        // the landing's transaction, like every venue's — see show.)
         const showOutfitter = async () => {
             // No stellar data yet (the spaceport's keys go live before its
             // build finishes — see show) or no such venue here: nothing
@@ -258,6 +255,9 @@ export class Spaceport extends Menu<Entity> {
             // The board mutates missions, cargo, credits, control
             // bits, and (through Gxxx grants) outfits.
             this.input = await this.missionComputer.show(this.input);
+            // An accepted mission's `Hxxx` may have swapped the hull (see
+            // show); its stat providers may still be running.
+            await this.shipBuild;
             this.refreshRefuelButton();
             this.rebindControls();
         };
@@ -277,6 +277,8 @@ export class Spaceport extends Menu<Entity> {
             this.setLiveStatus(() => this.bar.dockedStatus());
             this.input = await this.bar.show(this.input);
             this.setLiveStatus(undefined);
+            // As at the BBS: an accepted mission may have changed ships.
+            await this.shipBuild;
             this.refreshRefuelButton();
             this.rebindControls();
         };
@@ -497,12 +499,23 @@ export class Spaceport extends Menu<Entity> {
             this.dockedShip.transaction = this.transaction;
         }
         if (this.transaction) {
+            // A `Cxxx` / `Exxx` / `Hxxx` in ANY set string the landing
+            // runs — a mission's OnSuccess here in the landing pass, its
+            // OnAccept at a popup, the bar or the BBS, its OnAbort from the
+            // mission-info dialog, an outfit's OnPurchase — swaps the hull
+            // through the transaction, and is published here exactly as a
+            // shipyard purchase is (see adoptPurchasedShip).
+            this.transaction.onShipChanged(
+                ship => this.adoptPurchasedShip(ship, 'Changed ship to'));
             try {
                 events = await this.transaction.processLanding();
             } catch (e) {
                 console.warn('Mission landing processing failed:', e);
             }
         }
+        // The hull the landing pass left the player in (a completion's
+        // set string can have changed it).
+        input = this.transaction?.ship ?? input;
         this.refreshRefuelButton(input);
 
         // The spaceport is shown (super.show binds controls + reveals the
@@ -520,6 +533,10 @@ export class Spaceport extends Menu<Entity> {
             this.popupBlocker.bind();
             try {
                 await this.presentLandingPopups(input, events);
+                // A landing offer's `Hxxx` (stock nova:197, 320, 361, 748)
+                // may have swapped the hull: its stat providers finish
+                // before the spaceport is interactive.
+                await this.shipBuild;
             } finally {
                 this.popupBlocker.unbind();
                 // Guarded: if the spaceport was departed while the popups
@@ -730,6 +747,9 @@ export class Spaceport extends Menu<Entity> {
         try {
             await presentVenueOffersIn(this.transaction, this.offerPopup,
                 location);
+            // A shipyard offer's `Hxxx` (stock nova:709) may have swapped
+            // the hull the venue is about to open over.
+            await this.shipBuild;
         } catch (e) {
             console.warn('Venue mission offers failed:', e);
         } finally {

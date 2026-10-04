@@ -23,7 +23,7 @@ function systemVisible(visibility: string, bits: ReadonlySet<number>): boolean {
 }
 
 /** Maps over `items` with at most `concurrency` calls in flight. */
-async function pooledMap<T, R>(items: readonly T[],
+export async function pooledMap<T, R>(items: readonly T[],
     map: (item: T) => Promise<R>, concurrency = 12): Promise<R[]> {
     const results = new Array<R>(items.length);
     let next = 0;
