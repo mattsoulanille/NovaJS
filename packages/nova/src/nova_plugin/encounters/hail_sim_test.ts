@@ -9,7 +9,9 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { AggressionComponent } from '../combat/index.js';
+import { AggressionComponent, AGGRESSION_WINDOW_MS } from '../combat/index.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { EscortCommandComponent, PlayerEscortComponent } from '../player/index.js';
 import { DamagedEvent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SourceComponent } from '../combat/index.js';
@@ -17,7 +19,8 @@ import { completeEntity } from '../spawn/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { applyHail, BRIBE_PACIFY_MS } from './hail_plugin.js';
+import { applyHail, BRIBE_PACIFY_MS, SentHailComponent } from './hail_plugin.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -33,6 +36,13 @@ async function makeWorld() {
     gameData.data.Ship.map.set('test:ship', {
         ...getDefaultShipData(),
         id: 'test:ship',
+    });
+    // A class that INHERITS gövt 0x0400 from its attributes govt (the stock
+    // Wraith (Adult) nova:185, InherentGovt 159).
+    gameData.data.Ship.map.set('test:wraith', {
+        ...getDefaultShipData(),
+        id: 'test:wraith',
+        inheritedCantBeHailed: true,
     });
 
     // A hostile, bribe-taking pirate govt.
@@ -52,6 +62,14 @@ async function makeWorld() {
     armed.id = 'test:armed';
     armed.flags.warshipsTakeBribes = true;
     gameData.data.Govt.map.set('test:armed', armed);
+    // Nothing to say and nothing to offer: Flags2 0x0001 + 0x0008, what the
+    // stock Krypt (gövt 140, Flags2 0x002b) carries.
+    const krypt = getDefaultGovtData();
+    krypt.id = 'test:krypt';
+    krypt.flags2.noAssistOrMercy = true;
+    krypt.flags2.noDistressMessages = true;
+    gameData.data.Govt.map.set('test:krypt', krypt);
+    await gameData.data.Govt.get('test:krypt');
     await gameData.data.Govt.get('test:pirate');
     await gameData.data.Govt.get('test:meek');
     await gameData.data.Govt.get('test:armed');
@@ -59,8 +77,9 @@ async function makeWorld() {
     const world = await makeSystem('test:system', gameData);
 
     async function addShip(uuid: string, x: number, y: number,
-        setup: (ship: ReturnType<typeof makeShip>) => void = () => { }) {
-        const ship = makeShip(gameData.data.Ship.map.get('test:ship')!);
+        setup: (ship: ReturnType<typeof makeShip>) => void = () => { },
+        shipId = 'test:ship') {
+        const ship = makeShip(gameData.data.Ship.map.get(shipId)!);
         ship.components.set(MovementStateComponent, {
             accelerating: 0,
             position: new Position(x, y),
@@ -494,5 +513,292 @@ describe('applyHail: request assistance', () => {
                 .toBe(p.components.get(ArmorComponent)!.max);
             expect(target(world).components.has(AssistingComponent))
                 .toBeFalse();
+        });
+});
+
+/**
+ * #297 and its ruling: "Hostility in the hailing channel should reflect the
+ * iff of that ship, not the government stance." applyHail used to read only
+ * the NPC-posture half of the corners' tier 3 (target on the player AND mode
+ * 'attack'); it now asks hostility.ts's isIffHostile, the predicate the
+ * corners paint with. The load-bearing difference is tier 3b, RECENT
+ * AGGRESSION: a ship that shot the player inside AGGRESSION_WINDOW_MS is red
+ * in the corners even after it breaks its lock and runs.
+ */
+describe('applyHail: hostility is the ship\'s IFF (ruling #297)', () => {
+    /** A neutral-govt warship that shot the player and is now FLEEING. */
+    async function fleeingAggressor(govt: string, shotAgoMs: number) {
+        const made = await makeWorld();
+        const { world, addShip } = made;
+        player(world).components.set(DisabledComponent, { repairAt: null });
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: govt });
+            ship.components.set(NpcComponent, { aiType: 3, mode: 'flee' });
+            ship.components.set(TargetComponent, { target: undefined });
+        });
+        const now = world.resources.get(TimeResource)!.time;
+        player(world).components.set(AggressionComponent, new Map([
+            ['target', { at: now - shotAgoMs, damage: 120, hostile: true }],
+        ]));
+        return made;
+    }
+
+    it('refuses assistance from a fleeing RECENT AGGRESSOR', async () => {
+        // The corners are red (tier 3b); the channel offers Beg For Mercy,
+        // not Request Assistance, so the sim must refuse the errand too —
+        // otherwise the ship that just disabled the player flies over and
+        // repairs them.
+        const { world } = await fleeingAggressor('test:meek', 0);
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.has(AssistingComponent)).toBeFalse();
+    });
+
+    it('takes a bribe from a fleeing recent aggressor whose govt bargains',
+        async () => {
+            const { world } = await fleeingAggressor('test:armed', 0);
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            // 10% of 100k (armed is not a largerBribes govt).
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(90_000);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBe('player');
+        });
+
+    it('assists again once the aggression window has passed', async () => {
+        const { world } = await fleeingAggressor('test:meek',
+            AGGRESSION_WINDOW_MS);
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.get(AssistingComponent))
+            .toEqual({ client: 'player' });
+    });
+
+    it('takes no bribe once the window has passed (not IFF-hostile)',
+        async () => {
+            const { world } = await fleeingAggressor('test:armed',
+                AGGRESSION_WINDOW_MS);
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+        });
+
+    it('refuses assistance from an ESCORT engaging the player', async () => {
+        // An escort holding its leader's perimeter against us (command
+        // 'defend', TargetComponent on us) is red in the corners before its
+        // first shot lands; it is no rescuer either.
+        const { world, addShip } = await makeWorld();
+        player(world).components.set(DisabledComponent, { repairAt: null });
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+            ship.components.set(TargetComponent, { target: 'player' });
+            ship.components.set(EscortCommandComponent,
+                { command: 'defend', target: 'player' });
+        });
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.has(AssistingComponent)).toBeFalse();
+    });
+
+    it('takes no bribe from a non-bribing govt: the plea is refused',
+        async () => {
+            // Beg For Mercy is OFFERED to every IFF-hostile ship now, so the
+            // press can reach the sim for a govt that does not bargain; it
+            // must cost nothing and change nothing.
+            const { world } = await fleeingAggressor('test:meek', 0);
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBeUndefined();
+        });
+});
+
+/**
+ * Ruling #297: "Some ships don't respond to hails at all (no hailing channel
+ * appears), like the krypt pod and wraith." The dialog never opens for one,
+ * and the sim refuses anything a tampered client sends at one.
+ */
+describe('applyHail: a ship that does not answer hails', () => {
+    it('neither assists nor bargains (gövt 0x0001 + 0x0008, the Krypt)',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:krypt' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+            });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+        });
+
+    it('refuses a class that INHERITS Can\'t-hail (the gövt 159 Wraith)',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+            }, 'test:wraith');
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+        });
+});
+
+/**
+ * #332: applyHail resolved the hailer from the record's peer but took ANY
+ * ship as the target — including another peer's own player ship, whose
+ * AssistingComponent then had AssistBehaviorSystem steer the victim to the
+ * requester and fully heal the requester on arrival. Matthew's ruling:
+ * "For now, buttons pressed should just send the message to the bottom
+ * left info text area on that player's screen. Nothing should take control
+ * of their ship. Players can't repair each other yet."
+ */
+describe('applyHail: another player\'s ship (#332)', () => {
+    const OTHER_PEER = 'other peer';
+
+    /** The test world plus peer B's ship 'victim', within assist range. */
+    async function twoPlayers() {
+        const made = await makeWorld();
+        await made.addShip('victim', 150, 0, ship => {
+            ship.components.set(ControlledByComponent, { peerId: OTHER_PEER });
+        });
+        // Peer A is disabled and badly damaged: exactly the player the
+        // exploit paid off for.
+        const a = player(made.world);
+        a.components.set(DisabledComponent, { repairAt: null });
+        a.components.get(ArmorComponent)!.current = 1;
+        return made;
+    }
+
+    function victim(world: World) {
+        return world.entities.get('victim')!;
+    }
+
+    it('never marks another player\'s ship as assisting, and nobody is '
+        + 'steered or healed', async () => {
+            const { world } = await twoPlayers();
+            const before = victim(world).components
+                .get(MovementStateComponent)!;
+            const turnTo = before.turnTo;
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'victim' });
+            expect(victim(world).components.has(AssistingComponent))
+                .toBeFalse();
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(player(world).components.get(ArmorComponent)!.current)
+                .toBe(1);
+            expect(victim(world).components.get(MovementStateComponent)!
+                .turnTo).toEqual(turnTo);
+        });
+
+    it('takes no bribe from, and pacifies nothing on, a player ship',
+        async () => {
+            const { world } = await twoPlayers();
+            // B shot A a moment ago: A sees B as IFF-hostile (tier 3b),
+            // which is exactly when the dialog offers Beg For Mercy.
+            const now = world.resources.get(TimeResource)!.time;
+            player(world).components.set(AggressionComponent, new Map([
+                ['victim', { at: now, damage: 50, hostile: true }],
+            ]));
+            applyHail(world, PEER, { kind: 'bribe', target: 'victim' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+            expect(player(world).components.get(AggressionComponent)!
+                .has('victim')).toBeTrue();
+        });
+
+    it('sends a message: recorded on the SENDER\'s ship, the target ship '
+        + 'untouched', async () => {
+            const { world } = await twoPlayers();
+            const targetComponents = [...victim(world).components.keys()];
+            applyHail(world, PEER, {
+                kind: 'message', target: 'victim', message: 'greetings',
+            });
+            const sent = player(world).components.get(SentHailComponent);
+            expect(sent).toEqual({
+                to: 'victim', message: 'greetings', seq: 1,
+                at: world.resources.get(TimeResource)!.time,
+            });
+            expect([...victim(world).components.keys()])
+                .toEqual(targetComponents);
+            expect(victim(world).components.has(SentHailComponent))
+                .toBeFalse();
+
+            // Every press is a new message, even of the same button.
+            applyHail(world, PEER, {
+                kind: 'message', target: 'victim', message: 'assistance',
+            });
+            expect(player(world).components.get(SentHailComponent))
+                .toEqual(jasmine.objectContaining({
+                    message: 'assistance', seq: 2,
+                }));
+        });
+
+    it('records no message to an NPC, or to yourself', async () => {
+        const { world, addShip } = await makeWorld();
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+        });
+        applyHail(world, PEER,
+            { kind: 'message', target: 'target', message: 'greetings' });
+        applyHail(world, PEER,
+            { kind: 'message', target: 'player', message: 'greetings' });
+        expect(player(world).components.has(SentHailComponent)).toBeFalse();
+    });
+
+    it('refuses assistance from another player\'s ESCORT', async () => {
+        const { world, addShip } = await makeWorld();
+        player(world).components.set(DisabledComponent, { repairAt: null });
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+            ship.components.set(PlayerEscortComponent,
+                { player: 'their ship', deal: { kind: 'none' } } as never);
+        });
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.has(AssistingComponent)).toBeFalse();
+    });
+
+    it('refuses assistance from a ship another PEER inserted (a mission '
+        + 'ship, a fighter), but not from a server-owned one', async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(MultiplayerData, { owner: OTHER_PEER });
+            });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+
+            target(world).components.set(MultiplayerData, { owner: 'server' });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player' });
+        });
+
+    it('AssistBehaviorSystem never steers a player\'s ship, even given a '
+        + 'stray AssistingComponent', async () => {
+            const { world } = await twoPlayers();
+            victim(world).components.set(AssistingComponent,
+                { client: 'player' });
+            const turnTo = victim(world).components
+                .get(MovementStateComponent)!.turnTo;
+            world.step();
+            expect(victim(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(victim(world).components.get(MovementStateComponent)!
+                .turnTo).toEqual(turnTo);
+            expect(player(world).components.get(ArmorComponent)!.current)
+                .toBe(1);
         });
 });

@@ -152,6 +152,15 @@ describe('commButtonSlots', () => {
             .toEqual(['greetings', 'beg', 'close']);
     });
 
+    it('offers Beg For Mercy to a hostile ship that will not be bought',
+        () => {
+            // Ruling #297: every IFF-hostile ship shows Beg For Mercy in
+            // place of Request Assistance; whether the plea is priced or
+            // refused is the press's business.
+            expect(commButtonSlots('ship', { mercyRefused: 'No way.' }))
+                .toEqual(['greetings', 'beg', 'close']);
+        });
+
     it('prefers assistance over a bribe when somehow both are offered', () => {
         expect(commButtonSlots('ship',
             { assist: { free: true }, bribe: { amount: 1 } })[1])

@@ -17,6 +17,9 @@ import {
     MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MISC_STRING_TABLE,
     NO_NEED_RESPONSE_COUNT, NO_NEED_RESPONSE_FALLBACK,
     NO_NEED_RESPONSE_FIRST_INDEX, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX,
+    mercyRefusedText, MERCY_REFUSED_COUNT, MERCY_REFUSED_FALLBACK,
+    MERCY_REFUSED_FIRST_INDEX, shipNoResponseText, SHIP_NO_RESPONSE_COUNT,
+    SHIP_NO_RESPONSE_FALLBACK, SHIP_NO_RESPONSE_FIRST_INDEX,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -185,6 +188,52 @@ describe('StringTable against real Nova data', () => {
             for (const seed of [0, 1, 2, 3, 4, 987654]) {
                 expect(group)
                     .toContain(mercyAcceptedText(table.strings, seed));
+            }
+        });
+
+    it('pins the ship no-response group (STR# 3000, indices 5-9) a silent '
+        + 'ship gets on the status line', async () => {
+            const gameData = await getIntegrationGameData();
+            const table =
+                await gameData.data.StringTable.get(HAIL_RESPONSE_TABLE);
+            const group = table.strings.slice(SHIP_NO_RESPONSE_FIRST_INDEX,
+                SHIP_NO_RESPONSE_FIRST_INDEX + SHIP_NO_RESPONSE_COUNT);
+            expect(group).toEqual([
+                'No response.',
+                'No response to communication.',
+                'No response detected.',
+                'Sensors are picking up only static.',
+                'No response on this channel.',
+            ]);
+            expect(table.strings[SHIP_NO_RESPONSE_FIRST_INDEX])
+                .toBe(SHIP_NO_RESPONSE_FALLBACK);
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(group).toContain(shipNoResponseText(table.strings, seed));
+            }
+        });
+
+    it('pins the refused-mercy group (STR# 3000, indices 95-99)',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const table =
+                await gameData.data.StringTable.get(HAIL_RESPONSE_TABLE);
+            const group = table.strings.slice(MERCY_REFUSED_FIRST_INDEX,
+                MERCY_REFUSED_FIRST_INDEX + MERCY_REFUSED_COUNT);
+            expect(group).toEqual([
+                'In your dreams, pal.', 'Yeah, right!', 'No way.', 'You wish.',
+                'Not a chance.',
+            ]);
+            expect(table.strings[MERCY_REFUSED_FIRST_INDEX])
+                .toBe(MERCY_REFUSED_FALLBACK);
+            // Neighbours: the pay-me-first group before, the deal-struck
+            // group after — an off-by-five would have a pirate that will not
+            // be bought thank the player for their business.
+            expect(table.strings[MERCY_REFUSED_FIRST_INDEX - 5])
+                .toBe("You'll have to pay me first.");
+            expect(table.strings[MERCY_REFUSED_FIRST_INDEX + 5])
+                .toBe('A pleasure doing business with you.');
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(group).toContain(mercyRefusedText(table.strings, seed));
             }
         });
 

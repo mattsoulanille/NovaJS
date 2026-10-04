@@ -10,6 +10,8 @@ import { getSyntheticGameData } from '../communication/simulation_test_fixture.j
 import { showsHailQuote } from '../spaceport/ship_mission_offer.js';
 import { boardingDialogPhase } from './boarding_plugin.js';
 import { shipOfferGates } from './ship_mission_offer_plugin.js';
+import { AggressionComponent, AGGRESSION_WINDOW_MS } from '../nova_plugin/combat/index.js';
+import { SimulationTimeResource } from './simulation_time.js';
 
 /**
  * The display side of a ship-offered mission: which dialog owns the
@@ -130,6 +132,34 @@ describe('shipOfferGates (what the world says about a përs)', () => {
             busy.components.set(NpcComponent,
                 { mode: 'attack', departAt: 1e15 } as never);
             expect((await shipOfferGates(makeWorld(busy), busy, gameData))
+                .attackingPlayer).toBeFalse();
+        });
+
+    it('calls a RECENT AGGRESSOR attacking even after it breaks its lock',
+        async () => {
+            // #297: the gate quotes hostility.ts's isAttackingPlayer (tier 3
+            // of the one hostility rule) instead of a narrower NPC-posture
+            // copy, so a ship that shot the player inside the aggression
+            // window counts, exactly as its red corners say.
+            const gameData = await getSyntheticGameData();
+            const runner = new Entity('pirate');
+            runner.components.set(NpcComponent,
+                { mode: 'flee', departAt: 1e15 } as never);
+            const world = makeWorld(runner);
+            world.resources.set(SimulationTimeResource, {
+                time: 50_000, delta_ms: 16, delta_s: 0.016, frame: 3000,
+            });
+            world.entities.get('player')!.components.set(AggressionComponent,
+                new Map([['target', { at: 45_000, damage: 50, hostile: true }]]));
+            expect((await shipOfferGates(world, runner, gameData))
+                .attackingPlayer).toBeTrue();
+
+            // ...and stops counting when the window closes.
+            world.resources.set(SimulationTimeResource, {
+                time: 45_000 + AGGRESSION_WINDOW_MS, delta_ms: 16,
+                delta_s: 0.016, frame: 4500,
+            });
+            expect((await shipOfferGates(world, runner, gameData))
                 .attackingPlayer).toBeFalse();
         });
 

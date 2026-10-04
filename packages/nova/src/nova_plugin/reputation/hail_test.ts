@@ -22,6 +22,7 @@ import {
     NO_NEED_RESPONSE_FALLBACK,
     NO_NEED_RESPONSE_FIRST_INDEX,
     planetTakesBribes,
+    shipAnswersHails,
     shipHailResponse,
     shipTakesBribes,
 } from './hail.js';
@@ -80,51 +81,136 @@ describe('bribeAmount', () => {
 describe('shipHailResponse', () => {
     it('cantBeHailed govts do not answer', () => {
         expect(shipHailResponse(withFlags({ cantBeHailed: true }),
-            'neutral', 3)).toEqual({ kind: 'cantHail' });
+            false, 3)).toEqual({ kind: 'cantHail' });
     });
-    it('hostile ship offers a bribe when the govt bargains', () => {
+    it('an IFF-hostile ship offers Beg For Mercy, priced when the govt '
+        + 'bargains', () => {
         expect(shipHailResponse(withFlags({ warshipsTakeBribes: true }),
-            'hostile', 3)).toEqual({ kind: 'hostile', canBribe: true });
+            true, 3)).toEqual({ kind: 'hostile', canBeg: true, canBribe: true });
     });
-    it('hostile ship of a non-bribing govt offers no bribe', () => {
-        expect(shipHailResponse(govt(), 'hostile', 3))
-            .toEqual({ kind: 'hostile', canBribe: false });
+    it('an IFF-hostile ship of a non-bribing govt STILL offers Beg For '
+        + 'Mercy - the plea is refused, not hidden (ruling #297)', () => {
+        expect(shipHailResponse(govt(), true, 3))
+            .toEqual({ kind: 'hostile', canBeg: true, canBribe: false });
     });
-    it('noAssistOrMercy suppresses the bribe option even for a bribing govt',
+    it('noAssistOrMercy disables Beg For Mercy even for a bribing govt',
         () => {
             const g = withFlags({ warshipsTakeBribes: true });
             g.flags2 = { ...g.flags2, noAssistOrMercy: true };
-            expect(shipHailResponse(g, 'hostile', 3))
-                .toEqual({ kind: 'hostile', canBribe: false });
+            expect(shipHailResponse(g, true, 3))
+                .toEqual({ kind: 'hostile', canBeg: false, canBribe: false });
         });
     it('friendly / neutral ships greet and are talkative by default', () => {
-        expect(shipHailResponse(govt(), 'friendly', 3))
+        expect(shipHailResponse(govt(), false, 3))
             .toEqual({ kind: 'greeting', talkative: true });
-        expect(shipHailResponse(govt(), 'neutral', 1))
+        expect(shipHailResponse(govt(), false, 1))
             .toEqual({ kind: 'greeting', talkative: true });
     });
     it('noDistressMessages govts answer but are not talkative', () => {
         expect(shipHailResponse(withFlags2({ noDistressMessages: true }),
-            'neutral', 3)).toEqual({ kind: 'greeting', talkative: false });
+            false, 3)).toEqual({ kind: 'greeting', talkative: false });
     });
+    it('a class that INHERITS no-greetings answers but is not talkative',
+        () => {
+            expect(shipHailResponse(govt(), false, 3,
+                { inheritedNoGreetings: true }))
+                .toEqual({ kind: 'greeting', talkative: false });
+        });
     it('a govt-less ship greets talkatively', () => {
-        expect(shipHailResponse(undefined, 'neutral', undefined))
+        expect(shipHailResponse(undefined, false, undefined))
             .toEqual({ kind: 'greeting', talkative: true });
     });
-    it('a neutral-govt ship ATTACKING the player answers with hostility', () => {
-        // Behavioral hostility: a ship the player provoked is hostile in the
-        // dialog regardless of its politics, and a bribing govt still bargains.
-        expect(shipHailResponse(withFlags({ warshipsTakeBribes: true }),
-            'neutral', 3, /*attackingPlayer=*/true))
-            .toEqual({ kind: 'hostile', canBribe: true });
-        expect(shipHailResponse(govt(), 'neutral', 3, true))
-            .toEqual({ kind: 'hostile', canBribe: false });
+    it('hostility is the IFF verdict, NOT the government stance', () => {
+        // Ruling #297: "Hostility in the hailing channel should reflect the
+        // iff of that ship, not the government stance." A xenophobic govt
+        // whose ship is not IFF-hostile (bought off, say) answers like any
+        // other; a peaceful one whose ship is IFF-hostile answers hostile.
+        expect(shipHailResponse(withFlags({ xenophobic: true }), false, 3))
+            .toEqual({ kind: 'greeting', talkative: true });
+        expect(shipHailResponse(govt(), true, 3).kind).toBe('hostile');
     });
     it('a cantBeHailed ship stays silent even while attacking the player',
         () => {
             expect(shipHailResponse(withFlags({ cantBeHailed: true }),
-                'neutral', 3, true)).toEqual({ kind: 'cantHail' });
+                true, 3)).toEqual({ kind: 'cantHail' });
         });
+    it('a class that INHERITS cantBeHailed stays silent', () => {
+        expect(shipHailResponse(govt(), false, 3,
+            { inheritedCantBeHailed: true })).toEqual({ kind: 'cantHail' });
+    });
+});
+
+/**
+ * Ruling #297: "Some ships don't respond to hails at all (no hailing channel
+ * appears), like the krypt pod and wraith, and some don't have a 'request
+ * assistance' button (Polaris (often) and Dechtakar)." The flag words below
+ * are the stock data's, read off the real files (see shipAnswersHails).
+ */
+describe('shipAnswersHails', () => {
+    /** A govt carrying a raw Flags2 word, decoded the way the parser does. */
+    function withRawFlags2(raw: number, cantBeHailed = false): GovtData {
+        const g = withFlags({ cantBeHailed });
+        g.flags2 = {
+            ...g.flags2,
+            noAssistOrMercy: Boolean(raw & 0x0001),
+            noDistressMessages: Boolean(raw & 0x0008),
+            roadsideAssistance: Boolean(raw & 0x0010),
+        };
+        return g;
+    }
+
+    it('silences the Krypt (govt 140 Flags2 0x002b, 163 0x0029) and the '
+        + 'Wraith (138/139 Flags2 0x00ab): nothing to say, nothing to offer',
+        () => {
+            expect(shipAnswersHails(withRawFlags2(0x002b))).toBeFalse();
+            expect(shipAnswersHails(withRawFlags2(0x0029))).toBeFalse();
+            expect(shipAnswersHails(withRawFlags2(0x00ab))).toBeFalse();
+        });
+
+    it('silences 0x0400, on the govt or inherited by the class', () => {
+        // Wraith govt 159 (Flags 0x0c80); Wraith (Adult) nova:185 inherits
+        // it through InherentGovt 159.
+        expect(shipAnswersHails(withRawFlags2(0, true))).toBeFalse();
+        expect(shipAnswersHails(govt(), { inheritedCantBeHailed: true }))
+            .toBeFalse();
+    });
+
+    it('silences a no-assist govt whose CLASS inherits no-greetings', () => {
+        expect(shipAnswersHails(withRawFlags2(0x0001),
+            { inheritedNoGreetings: true })).toBeFalse();
+    });
+
+    it('lets the Dechtakar answer (govt 142 Rimerta, Flags2 0x0027): the '
+        + 'channel opens, there is just no Request Assistance', () => {
+        const dechtakar = withRawFlags2(0x0027);
+        expect(shipAnswersHails(dechtakar)).toBeTrue();
+        expect(canRequestAssistance({ disposition: 'neutral',
+            govt: dechtakar })).toBeFalse();
+        expect(shipHailResponse(dechtakar, false, 3))
+            .toEqual({ kind: 'greeting', talkative: false });
+    });
+
+    it('lets the Polaris answer, with assistance only where the govt allows',
+        () => {
+            // Polaris (130, Flags2 0x0020) assists; the Nil-kemorya, who
+            // also answer as "Polaris" (147, Flags2 0x0003), do not: the
+            // "often" of the ruling.
+            const polaris = withRawFlags2(0x0020);
+            const nilkemorya = withRawFlags2(0x0003);
+            expect(shipAnswersHails(polaris)).toBeTrue();
+            expect(shipAnswersHails(nilkemorya)).toBeTrue();
+            expect(canRequestAssistance({ disposition: 'neutral',
+                govt: polaris })).toBeTrue();
+            expect(canRequestAssistance({ disposition: 'neutral',
+                govt: nilkemorya })).toBeFalse();
+        });
+
+    it('answers for an ordinary or govt-less ship', () => {
+        expect(shipAnswersHails(govt())).toBeTrue();
+        expect(shipAnswersHails(undefined)).toBeTrue();
+        // 0x0008 alone (the Hypergate govt, 183) still answers.
+        expect(shipAnswersHails(withRawFlags2(0x0008))).toBeTrue();
+    });
 });
 
 describe('canRequestAssistance', () => {
@@ -156,11 +242,11 @@ describe('canRequestAssistance', () => {
         // The assistance exploit: a neutral warship shooting a disabled player
         // must not also offer to fly over and repair them.
         expect(canRequestAssistance({ disposition: 'neutral', govt: govt(),
-            attackingPlayer: true })).toBe(false);
+            iffHostile: true })).toBe(false);
         // Even a Roadside-Assistance govt refuses while attacking.
         expect(canRequestAssistance({ disposition: 'neutral',
             govt: withFlags2({ roadsideAssistance: true }),
-            attackingPlayer: true })).toBe(false);
+            iffHostile: true })).toBe(false);
     });
 });
 

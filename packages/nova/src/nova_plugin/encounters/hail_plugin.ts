@@ -1,6 +1,9 @@
 import * as t from 'io-ts';
 import { GovtData } from 'novadatainterface/govt_data';
 import { Entities, GetEntity } from 'nova_ecs/arg_types';
+import { Component } from 'nova_ecs/component';
+import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
+import { CommunicatorResource, MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
@@ -21,8 +24,8 @@ import {
     bribeAmount,
     canRequestAssistance,
     planetTakesBribes,
+    shipHailResponse,
     shipIsFighting,
-    shipTakesBribes,
 } from '../reputation/index.js';
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
@@ -36,9 +39,11 @@ import { shipDisposition } from '../reputation/index.js';
 import {
     isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
-import { AggressionComponent } from '../combat/index.js';
+import { AggressionComponent, isIffHostile } from '../combat/index.js';
 import { ShootAllWeaponsComponent } from '../npc/index.js';
-import { CreditsComponent, MissionsComponent } from '../player/index.js';
+import {
+    ControlledByComponent, CreditsComponent, MissionsComponent, PlayerEscortComponent,
+} from '../player/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { findControlledEntity } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
@@ -76,12 +81,125 @@ import { TargetComponent } from '../ship/index.js';
  */
 export type HailAction =
     | { kind: 'requestAssistance', target: string }
-    | { kind: 'bribe', target: string };
+    | { kind: 'bribe', target: string }
+    /** A button pressed in a channel to ANOTHER PLAYER's ship (#332). */
+    | { kind: 'message', target: string, message: PlayerHailMessage };
+
+/**
+ * WHAT A HAIL TO ANOTHER PLAYER SAYS (Matthew's ruling on #332): "Eventually,
+ * hailing a player should open an actual channel of some kind for them to
+ * communicate instead of the normal hailing window ... For now, buttons
+ * pressed should just send the message to the bottom left info text area on
+ * that player's screen. Nothing should take control of their ship. Players
+ * can't repair each other yet."
+ *
+ * One value per button of the ship comm's column — Greetings, and the offer
+ * slot's Request Assistance or (IFF-hostile) Beg For Mercy. The record names
+ * the BUTTON, never free text: the wording is composed by the receiving
+ * client (display/status_bar_content's playerHailMessage), so a tampered
+ * client cannot write arbitrary text onto another player's screen.
+ */
+export type PlayerHailMessage = 'greetings' | 'assistance' | 'mercy';
+export const PlayerHailMessageType: t.Type<PlayerHailMessage> = t.union([
+    t.literal('greetings'), t.literal('assistance'), t.literal('mercy'),
+]);
 
 export const HailActionType: t.Type<HailAction> = t.union([
     t.type({ kind: t.literal('requestAssistance'), target: t.string }),
     t.type({ kind: t.literal('bribe'), target: t.string }),
+    t.type({
+        kind: t.literal('message'), target: t.string,
+        message: PlayerHailMessageType,
+    }),
 ]);
+
+/**
+ * The last hail message a player's ship SENT to another player's ship.
+ *
+ * It lives on the SENDER's own ship, not the recipient's: applyHail never
+ * writes to a ship another peer controls (#332). The recipient's client
+ * finds it by scanning for a SentHail addressed to its own ship (`to`) and
+ * prints it once per `seq` on its status line
+ * (display/status_message_plugin's ShowPlayerHailMessage).
+ *
+ * WHY STATE, NOT AN EVENT. Another peer's record reaches this peer AFTER the
+ * tick it is stamped for, so it is applied by a rollback resimulation — and
+ * the bridge deliberately drops events re-emitted for a tick the display has
+ * already been sent (simulation_bridge_host's eventsForwardedThrough): an
+ * event would never reach the one screen it is for. State converges through
+ * the delta stream however the record arrived.
+ *
+ * `seq` counts this ship's messages (each press is a new one, even of the
+ * same button); `at` is the SIMULATION time it was sent, so a client that
+ * first sees the component long afterwards (entering the system) does not
+ * replay a stale message.
+ */
+export interface SentHail {
+    to: string;
+    message: PlayerHailMessage;
+    seq: number;
+    at: number;
+}
+export const SentHailType: t.Type<SentHail> = t.type({
+    to: t.string,
+    message: PlayerHailMessageType,
+    seq: t.number,
+    at: t.number,
+});
+export const SentHailComponent = new Component<SentHail>('SentHail');
+
+/**
+ * Whether the hailed ship belongs to ANOTHER player, so that no hail may
+ * change it (#332, and rollback_protocol's trust-model item 5: a peer acts
+ * only on what it owns). Three ownership markers, any one of which is enough:
+ *
+ *  - ControlledByComponent: a player's own ship. Every ship that carries one
+ *    and is not the hailer's is somebody else's.
+ *  - PlayerEscortComponent.player: a hired or captured escort, by the uuid
+ *    of the player SHIP it belongs to.
+ *  - MultiplayerData.owner: the PEER that inserted it — escorts, bay
+ *    fighters, captured prizes, mission ships. A server peer's ownership is
+ *    not "another player's" (the same exemption simulation_input's mayActOn
+ *    makes), and local play (no peerId) has nobody else to protect.
+ *
+ * Pure over synced state plus the record's stamped peer, so every peer
+ * refuses the same hail at the same tick.
+ */
+export function hailTargetBelongsToAnotherPlayer(world: World,
+    target: Entity, hailerUuid: string, peerId: string | undefined): boolean {
+    if (target.components.has(ControlledByComponent)) {
+        return true;
+    }
+    const escortOf = target.components.get(PlayerEscortComponent)?.player;
+    if (escortOf !== undefined && escortOf !== hailerUuid) {
+        return true;
+    }
+    const owner = target.components.get(MultiplayerData)?.owner;
+    if (peerId === undefined || owner === undefined || owner === peerId) {
+        return false;
+    }
+    const servers = world.resources.get(CommunicatorResource)?.servers.value
+        ?? DEFAULT_SERVER_PEERS;
+    return !servers.has(owner);
+}
+
+/** The server's uuid when a world has no communicator (simulation_input's
+ * DEFAULT_SERVER_PEERS, which is not importable from nova_plugin). */
+const DEFAULT_SERVER_PEERS: ReadonlySet<string> = new Set(['server']);
+
+/**
+ * Records a message to another player's ship on the SENDER's ship (see
+ * SentHail). The only thing a hail to a player does in the simulation.
+ */
+function sendPlayerHail(world: World, sender: Entity, to: string,
+    message: PlayerHailMessage) {
+    const previous = sender.components.get(SentHailComponent);
+    sender.components.set(SentHailComponent, {
+        to, message,
+        seq: (previous?.seq ?? 0) + 1,
+        at: world.resources.get(TimeResource)?.time ?? 0,
+    });
+}
 
 /** How long a bribe keeps a hostile ship off the player's back, in ms.
  * TUNABLE / ASSUMPTION: the Bible doesn't quantify the reprieve; a bribe in
@@ -212,7 +330,24 @@ export function applyHail(world: World, peerId: string | undefined,
         }
         return;
     }
-    if (!target.components.has(ShipComponent)) {
+    if (!target.components.has(ShipComponent) || action.target === found.uuid) {
+        return;
+    }
+    // ANOTHER PLAYER'S SHIP (#332): no hail may change it. Hailing a human
+    // player's own ship sends them a message and does nothing else — it is
+    // recorded on the SENDER's ship, never theirs — and every ship action
+    // (assistance, a bribe) against it, or against a ship another player
+    // owns, is refused outright: "Nothing should take control of their
+    // ship. Players can't repair each other yet."
+    if (target.components.has(ControlledByComponent)) {
+        if (action.kind === 'message') {
+            sendPlayerHail(world, player, action.target, action.message);
+        }
+        return;
+    }
+    if (action.kind === 'message'
+        || hailTargetBelongsToAnotherPlayer(world, target, found.uuid,
+            peerId)) {
         return;
     }
     const targetGovt = lookupGovt(world,
@@ -222,22 +357,28 @@ export function applyHail(world: World, peerId: string | undefined,
     const playerRecords = player.components.get(LegalRecordsComponent);
     const disposition = shipDisposition(targetGovt, playerGovt, playerRecords);
 
-    // Behavioral hostility: a ship whose AI is attacking the player (mode
-    // 'attack' with its target pointed at the player) is hostile regardless
-    // of politics — the same rule the target corners use (iff_plugin's
-    // targetCornerStyle), including the legacy dev-enemy ShootAllWeapons
-    // marker. Computed from synced state so it matches the display dialog.
-    const targetsPlayer =
-        target.components.get(TargetComponent)?.target === found.uuid;
+    // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on #297),
+    // not a narrower NPC-posture copy of it: the one predicate the target
+    // corners paint with (hostility.ts's isIffHostile), so a recent
+    // aggressor that has since broken its lock, or another player's escort
+    // holding its perimeter against us, is as hostile here as its red
+    // brackets say. Every input is synced, so the display dialog reaches the
+    // same verdict and every peer applies the same outcome.
+    const now = world.resources.get(TimeResource)?.time ?? 0;
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        return;
+    }
+    const iffHostile = isIffHostile(action.target, target, found.uuid,
+        player, gameData, uuid => world.entities.get(uuid), now);
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
-    const attackingPlayer = targetsPlayer && (targetNpcMode === 'attack'
-        || target.components.has(ShootAllWeaponsComponent));
 
     if (action.kind === 'requestAssistance') {
         if (!canRequestAssistance({
             disposition,
             govt: targetGovt,
-            attackingPlayer,
+            iffHostile,
+            ship: target.components.get(ShipDataComponent),
             // ränk 0x0400: "Player can always request battle assistance from
             // ships of the affiliated government" (rank_logic.ts).
             rankAlwaysAssists: ranksAllowAssistance(
@@ -285,11 +426,12 @@ export function applyHail(world: World, peerId: string | undefined,
         return;
     }
 
-    // Bribe / beg for mercy: only a hostile, bribe-taking ship bargains. A
-    // ship actively attacking the player counts as hostile here even if its
-    // politics are neutral (behavioral hostility), so the player can buy it
-    // off just like a politically hostile one.
-    if (disposition !== 'hostile' && !attackingPlayer) {
+    // Bribe / beg for mercy: only an IFF-HOSTILE, bribe-taking ship
+    // bargains — Beg For Mercy is the hostile channel's button. A ship
+    // attacking the player (or that did, inside the aggression window)
+    // counts even if its politics are neutral, so the player can buy it off
+    // just like a politically hostile one.
+    if (!iffHostile) {
         return;
     }
     // ONE PAYMENT PER REPRIEVE. The comm dialog keeps Beg For Mercy in its
@@ -300,12 +442,17 @@ export function applyHail(world: World, peerId: string | undefined,
     // runs from the payment that bought it, and a player who wants a fresh
     // one waits for this one to lapse (or provokes the ship, which voids it).
     if (isPacifiedToward(target.components.get(NpcComponent), found.uuid,
-        world.resources.get(TimeResource)?.time ?? 0)) {
+        now)) {
         return;
     }
+    // The Bible's mercy semantics, the same pure verdict the dialog draws
+    // its offer from (hail.ts's shipHailResponse): a silent ship answers
+    // nothing, a Flags2 0x0001 govt has no Beg For Mercy, and only the
+    // bribe flags make a plea cost money rather than earn a refusal.
     const aiType = target.components.get(NpcComponent)?.aiType;
-    if (targetGovt?.flags2.noAssistOrMercy
-        || !shipTakesBribes(targetGovt, aiType)) {
+    const response = shipHailResponse(targetGovt, iffHostile, aiType,
+        target.components.get(ShipDataComponent));
+    if (response.kind !== 'hostile' || !response.canBribe) {
         return;
     }
     const credits = player.components.get(CreditsComponent);
@@ -405,8 +552,17 @@ function steerToward(movement: MovementState,
 export const AssistBehaviorSystem = new System({
     name: 'AssistBehaviorSystem',
     args: [AssistingComponent, MovementStateComponent, GetEntity,
-        Optional(JumpComponent), Entities] as const,
-    step(assisting, movement, entity, jump, entities) {
+        Optional(JumpComponent), Entities,
+        Optional(ControlledByComponent)] as const,
+    step(assisting, movement, entity, jump, entities, controlledBy) {
+        // NEVER A PLAYER'S SHIP (#332). applyHail refuses to mark one, but
+        // a stray AssistingComponent (a snapshot from an older build, a
+        // future writer) must still not autopilot somebody's ship across
+        // the system and heal whoever it was pointed at.
+        if (controlledBy) {
+            entity.components.delete(AssistingComponent);
+            return;
+        }
         if (jump) {
             // JumpSequenceSystem owns this ship's steering until it leaves.
             // The AssistingComponent is deliberately KEPT: a jump that is
@@ -452,6 +608,14 @@ export const HailPlugin: Plugin = {
         const serializer = world.resources.get(SerializerResource);
         serializer?.addComponent(AssistingComponent, AssistingType);
         world.addComponent(AssistingComponent);
+        // A player-to-player hail (#332) is synced player state: it must
+        // reach the RECIPIENT's display through the delta stream, and ride
+        // snapshots so a rollback across it converges (see SentHail).
+        world.addComponent(SentHailComponent);
+        serializer?.addComponent(SentHailComponent, SentHailType);
+        world.resources.get(DeltaResource)?.addComponent(SentHailComponent, {
+            componentType: SentHailType,
+        });
         world.addSystem(AssistBehaviorSystem);
     },
 };

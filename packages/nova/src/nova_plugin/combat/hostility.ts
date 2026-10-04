@@ -33,7 +33,10 @@ import { TargetComponent } from '../ship/index.js';
  *    here, called by the simulation's ChooseTargetSystem), and
  *  - the "can't do that" beep when 'r' finds nothing
  *    (display/ui_sound_triggers_plugin again, through the same
- *    selectNearestHostile).
+ *    selectNearestHostile), and
+ *  - the comm channel (isIffHostile: the hail dialog's Status line and
+ *    Beg For Mercy offer, and the simulation's applyHail verdict — ruling
+ *    #297), plus tier 3 alone (isAttackingPlayer) for the ship-offer gates.
  *
  * so 'r' provably targets exactly the ships the corners paint red, and
  * the beep provably fires exactly when 'r' does nothing.
@@ -143,29 +146,9 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     const playerGovt = playerGovtId
         ? gameData.data.Govt.getCached(playerGovtId) : undefined;
 
-    const targetsPlayer = targetEntity.components
-        .get(TargetComponent)?.target === playerUuid;
-    const npcMode = targetEntity.components.get(NpcComponent)?.mode;
-    // Another player's ESCORT engaging us — ordered onto us with 'f'
-    // (command 'attack') or holding its leader's perimeter against us
-    // (command 'defend') — is attacking us in every sense that matters,
-    // even before its first shot lands (which is when tier 3b would
-    // catch it). Escorts fly on the escort command, not on NpcComponent
-    // mode 'attack', so the posture reads from EscortCommandComponent;
-    // both commands point TargetComponent at the victim. Matthew: "when
-    // an escort is attacking another player (due to 'f' or due to
-    // defending), it should be IFF hostile from that player's
-    // perspective."
-    const escortCommand = targetEntity.components
-        .get(EscortCommandComponent)?.command;
-    const escortEngaging = escortCommand === 'attack'
-        || escortCommand === 'defend';
-    const attackingPlayer = (targetsPlayer && (npcMode === 'attack'
-        || escortEngaging
-        || targetEntity.components.has(ShootAllWeaponsComponent)))
-        // Tier 3b: what this ship has actually done to us lately.
-        || isRecentAggressor(playerEntity.components.get(AggressionComponent),
-            targetUuid, now);
+    // Tier 3, both halves (isAttackingPlayer below).
+    const attackingPlayer = isAttackingPlayer(targetUuid, targetEntity,
+        playerUuid, playerEntity, now);
 
     // The player's legal records (delta-synced): a govt the player is
     // criminal with shows hostile corners, same rule as the sim.
@@ -178,6 +161,76 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
             ranksSuppressAggression(playerEntity.components
                 .get(AggressionSuppressGovtsComponent), targetGovt?.id)),
         attackingPlayer);
+}
+
+/**
+ * TIER 3 OF THE HOSTILITY RULE on its own: whether `targetEntity` is
+ * attacking the player right now — the BEHAVIOURAL reading, no politics in
+ * it. True when either
+ *
+ *  (a) its posture says so: its TargetComponent points at the player AND it
+ *      is in NPC mode 'attack', OR it is another player's ESCORT engaging us
+ *      (EscortCommandComponent 'attack' or 'defend'), OR it carries the
+ *      legacy dev-enemy ShootAllWeapons marker; or
+ *  (b) it is a RECENT AGGRESSOR (aggression.ts): it shot the player, or
+ *      locked a guided missile on them, within the last
+ *      AGGRESSION_WINDOW_MS.
+ *
+ * Exported so the ship-offer gates (display/ship_mission_offer_plugin's
+ * "begins to attack the player") quote it rather than keeping a narrower
+ * copy. Everything read is synced state, so the display and every peer's
+ * simulation agree. `now` is the SIMULATION clock.
+ */
+export function isAttackingPlayer(targetUuid: string, targetEntity: Entity,
+    playerUuid: string, playerEntity: Entity, now: number): boolean {
+    const targetsPlayer = targetEntity.components
+        .get(TargetComponent)?.target === playerUuid;
+    const npcMode = targetEntity.components.get(NpcComponent)?.mode;
+    // Another player's ESCORT engaging us — ordered onto us with 'f'
+    // (command 'attack') or holding its leader's perimeter against us
+    // (command 'defend') — is attacking us in every sense that matters,
+    // even before its first shot lands (which is when (b) would catch it).
+    // Escorts fly on the escort command, not on NpcComponent mode 'attack',
+    // so the posture reads from EscortCommandComponent; both commands point
+    // TargetComponent at the victim. Matthew: "when an escort is attacking
+    // another player (due to 'f' or due to defending), it should be IFF
+    // hostile from that player's perspective."
+    const escortCommand = targetEntity.components
+        .get(EscortCommandComponent)?.command;
+    const escortEngaging = escortCommand === 'attack'
+        || escortCommand === 'defend';
+    return (targetsPlayer && (npcMode === 'attack'
+        || escortEngaging
+        || targetEntity.components.has(ShootAllWeaponsComponent)))
+        // (b): what this ship has actually done to us lately — what keeps
+        // an attacker red after it breaks its lock or turns to flee, and
+        // the only reading that reaches another player's ship (no govt, no
+        // NPC brain).
+        || isRecentAggressor(playerEntity.components.get(AggressionComponent),
+            targetUuid, now);
+}
+
+/**
+ * "IS THIS SHIP IFF-HOSTILE TO THE PLAYER?" — exactly when
+ * {@link styleForTarget} paints the corners red. The comm channel asks this
+ * question too (Matthew's ruling on #297: "Hostility in the hailing channel
+ * should reflect the iff of that ship, not the government stance"), so the
+ * hail dialog's Status: Hostile line and Beg For Mercy offer, and the
+ * simulation's applyHail verdict, can never disagree with the brackets
+ * around the same ship.
+ *
+ * It is deliberately NOT the government stance alone: a disabled hulk reads
+ * 'disabled', a ship the player has bought off reads neutral to its briber,
+ * and the player's own flock reads friendly, however hostile their
+ * governments are.
+ */
+export function isIffHostile(targetUuid: string, targetEntity: Entity,
+    playerUuid: string, playerEntity: Entity,
+    gameData: SimulationGameDataInterface,
+    getEntity: (uuid: string) => Entity | undefined,
+    now: number): boolean {
+    return styleForTarget(targetUuid, targetEntity, playerUuid, playerEntity,
+        gameData, getEntity, now) === 'hostile';
 }
 
 /** Everything selectNearestHostile needs to make its choice. */
@@ -204,9 +257,9 @@ export interface HostileScanContext {
  */
 export function isHostileTarget(targetUuid: string, targetEntity: Entity,
     ctx: HostileScanContext): boolean {
-    return styleForTarget(targetUuid, targetEntity, ctx.viewerUuid,
+    return isIffHostile(targetUuid, targetEntity, ctx.viewerUuid,
         ctx.viewerEntity, ctx.gameData,
-        uuid => entityFrom(ctx.entities, uuid), ctx.now) === 'hostile';
+        uuid => entityFrom(ctx.entities, uuid), ctx.now);
 }
 
 /**

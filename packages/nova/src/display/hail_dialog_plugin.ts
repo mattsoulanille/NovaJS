@@ -19,20 +19,24 @@ import {
     BUSY_RESPONSE_FALLBACK, assistIsFree, canRequestAssistance, channelOpenText,
     CLEARED_TO_DOCK_INDEX, CLEARED_TO_LAND_INDEX, DOCKING_DENIED_INDEX, genericGreetings,
     greetingText, HAIL_RESPONSE_TABLE, hashString, hostileResponseText, LANDING_DENIED_INDEX,
-    mercyAcceptedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
+    mercyAcceptedText, mercyRefusedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
     NO_NEED_RESPONSE_FALLBACK, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, planetTakesBribes,
+    shipNoResponseText,
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
     shipDisposition, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { HailAction } from '../nova_plugin/encounters/index.js';
+import { HailAction, PlayerHailMessage } from '../nova_plugin/encounters/index.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
+import { isIffHostile } from '../nova_plugin/combat/index.js';
 import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
+    ControlledByComponent, PlayerEscortComponent,
     escortDealOf, escortProvenance,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
@@ -103,6 +107,12 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  */
 
 export const HailDialogResource = new Resource<HailDialog>('HailDialog');
+
+/**
+ * What the response well says after a press in a channel to another
+ * player's ship (#332). NovaJS's own wording: the original is single-player.
+ */
+export const PLAYER_HAIL_SENT_TEXT = 'Message sent.';
 const HailControlsSubscription =
     new Resource<Subscription>('HailControlsSubscription');
 
@@ -396,16 +406,18 @@ export async function computeContext(world: World,
             : undefined;
         const aiType = shipTarget.components.get(NpcComponent)?.aiType;
         const disposition = shipDisposition(govt, playerGovt, playerRecords);
-        // Behavioral hostility: a ship whose AI is attacking the player is
-        // hostile regardless of politics — the same rule the target corners
-        // use (iff_plugin's targetCornerStyle), including the legacy dev-enemy
-        // ShootAllWeapons marker. Read from the same synced components the sim
-        // reads so the dialog and applyHail agree on the outcome.
-        const targetsPlayer = shipTarget.components
-            .get(TargetComponent)?.target === player.uuid;
-        const shipNpcMode = shipTarget.components.get(NpcComponent)?.mode;
-        const attackingPlayer = targetsPlayer && (shipNpcMode === 'attack'
-            || shipTarget.components.has(ShootAllWeaponsComponent));
+        // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on
+        // #297): the one predicate the target corners paint with
+        // (hostility.ts's isIffHostile) — recent aggression and another
+        // player's escort engaging us included — read off the same synced
+        // components the sim's applyHail reads, on the MIRRORED SIM CLOCK
+        // (aggression timestamps are sim time; this world's own
+        // TimeResource is the wall clock). So the Status line, the offer
+        // slot, the corners and applyHail's verdict all agree.
+        const iffHostile = isIffHostile(shipTargetUuid, shipTarget,
+            player.uuid, player.entity, gameData,
+            uuid => world.entities.get(uuid),
+            world.resources.get(SimulationTimeResource)?.time ?? 0);
 
         const shipData = shipTarget.components.get(ShipDataComponent);
         // pers.hailPict is ALREADY a global id (the parser emits e.g.
@@ -429,8 +441,41 @@ export async function computeContext(world: World,
             persName: identity.named ? identity.name : undefined,
             shipClass: shipData?.name,
             govtName: govt?.commName,
-            hostile: disposition === 'hostile' || attackingPlayer,
+            // The ship's IFF alone (ruling #297): "A ship of an unfriendly
+            // government may show as neutral when hailed".
+            hostile: iffHostile,
         });
+
+        // ANOTHER PLAYER'S OWN SHIP (ruling #332): "hailing a player should
+        // [eventually] open an actual channel ... For now, buttons pressed
+        // should just send the message to the bottom left info text area on
+        // that player's screen. Nothing should take control of their ship."
+        // The ship comm's ordinary column — the offer slot by that ship's
+        // IFF like any ship's — whose every press is a message (see
+        // HailContext.playerChannel); nothing is asked of their ship.
+        if (shipTarget.components.has(ControlledByComponent)) {
+            const strings =
+                await loadStrings(displayAssets, HAIL_RESPONSE_TABLE);
+            return {
+                context: {
+                    variant: 'ship', heading, image,
+                    body: channelOpenText(strings, hashString(shipTargetUuid)),
+                    playerChannel: { hostile: iffHostile },
+                },
+                target: shipTargetUuid, isEscort: false,
+                replies: ASSIST_REPLIES_FALLBACK,
+            };
+        }
+        // A ship ANOTHER player owns (their escort, fighter, mission ship):
+        // the simulation refuses every hail action against it (hail_plugin's
+        // hailTargetBelongsToAnotherPlayer), so the channel offers none —
+        // rather than promising help, or a truce, that never comes.
+        const escortOf = shipTarget.components.get(PlayerEscortComponent)?.player;
+        const owner = shipTarget.components.get(MultiplayerData)?.owner;
+        const myOwner = player.entity.components.get(MultiplayerData)?.owner;
+        const othersShip = (escortOf !== undefined && escortOf !== player.uuid)
+            || (owner !== undefined && myOwner !== undefined
+                && owner !== myOwner);
 
         // Is this the player's own direct escort? (one parent hop) Carrier-bay
         // fighters ALSO have a parent link pointed at the player, so they'd
@@ -558,22 +603,19 @@ export async function computeContext(world: World,
             await loadStrings(displayAssets, HAIL_RESPONSE_TABLE);
         const shipSeed = hashString(shipTargetUuid);
 
-        const response = shipHailResponse(govt, disposition, aiType,
-            attackingPlayer);
+        const response = shipHailResponse(govt, iffHostile, aiType, shipData);
         if (response.kind === 'cantHail') {
-            return {
-                context: {
-                    variant: 'ship', heading, image,
-                    body: 'There is no response.',
-                },
-                target: shipTargetUuid, isEscort: false,
-                replies: ASSIST_REPLIES_FALLBACK,
-            };
+            // NO CHANNEL AT ALL (ruling #297: "Some ships don't respond to
+            // hails at all (no hailing channel appears), like the krypt pod
+            // and wraith"). undefined with a ship targeted is the plugin's
+            // cue to print the ship no-response line on the status line
+            // instead — see shipNoResponseLine / openHail.
+            return undefined;
         }
         if (response.kind === 'hostile') {
             const largerBribes = !!govt?.flags.largerBribes;
             const amount = bribeAmount(credits, largerBribes);
-            const bribe = response.canBribe
+            const bribe = response.canBribe && !othersShip
                 ? {
                     amount, canAfford: credits >= amount && amount > 0,
                     purpose: 'mercy' as const,
@@ -583,6 +625,13 @@ export async function computeContext(world: World,
                     accepted: mercyAcceptedText(shipStrings, shipSeed),
                 }
                 : undefined;
+            // BEG FOR MERCY IS OFFERED TO EVERY IFF-HOSTILE SHIP whose govt
+            // has not disabled it (Flags2 0x0001): one that will not be
+            // bought answers the plea with a flat refusal (STR# 3000 95-99)
+            // instead of a price, and keeps fighting.
+            const mercyRefused = response.canBeg && !response.canBribe
+                && !othersShip
+                ? mercyRefusedText(shipStrings, shipSeed) : undefined;
             // A hostile ship answers from the GLOBAL hostile group (STR# 3000
             // 10-14, "What is it?" on hail/hail_hostile.png) INSTEAD of the
             // channel-open line a friendly ship opens with — that is what
@@ -594,7 +643,7 @@ export async function computeContext(world: World,
                     variant: 'ship', heading, image,
                     body: pers?.commQuote?.trim() ? pers.commQuote
                         : hostileResponseText(shipStrings, shipSeed),
-                    bribe,
+                    bribe, mercyRefused,
                 },
                 target: shipTargetUuid, isEscort: false,
                 replies: ASSIST_REPLIES_FALLBACK,
@@ -629,8 +678,8 @@ export async function computeContext(world: World,
         const hailRanks = player.entity.components.get(ActiveRanksComponent);
         const getHailRank = (id: string) =>
             gameData.data.Rank.getCached(id);
-        const assist = canRequestAssistance({
-            disposition, govt, attackingPlayer,
+        const assist = !othersShip && canRequestAssistance({
+            disposition, govt, iffHostile, ship: shipData,
             rankAlwaysAssists: ranksAllowAssistance(
                 hailRanks, getHailRank, govt?.id),
         }) ? {
@@ -818,6 +867,19 @@ export const HailDialogPlugin: Plugin = {
                         { action: { kind: 'bribe', target: currentTarget } });
                 }
             },
+            // A press in a channel to another PLAYER (#332): the button goes
+            // to their status line as a record — the sim notes it on OUR
+            // ship and their client prints it — and our well says it went.
+            messagePlayer: (message: PlayerHailMessage) => {
+                if (currentTarget) {
+                    world.emit(HailRequestEvent, {
+                        action: {
+                            kind: 'message', target: currentTarget, message,
+                        },
+                    });
+                }
+                return PLAYER_HAIL_SENT_TEXT;
+            },
             // The escort box's management functions. Each becomes one
             // EscortActionEvent naming the escort; QUEUEING AN UPGRADE also
             // names the class the box priced, which the simulation checks
@@ -893,6 +955,21 @@ export const HailDialogPlugin: Plugin = {
             playUiSound(world, { id: BEEP_CANT_DO });
         };
 
+        /**
+         * The refusal a SILENT SHIP gets (ruling #297 — the krypt pod, the
+         * wraith: "no hailing channel appears"): the ship-comm table's own
+         * no-response line (STR# 3000 5-9, seeded by the ship's uuid like
+         * every other comm line) on the status line, plus the can't-do beep.
+         * Client-local; nothing reaches the sim.
+         */
+        const refuseShipHail = async (shipUuid: string): Promise<void> => {
+            const shipStrings =
+                await loadStrings(displayAssets, HAIL_RESPONSE_TABLE);
+            showStatusMessage(world,
+                shipNoResponseText(shipStrings, hashString(shipUuid)));
+            playUiSound(world, { id: BEEP_CANT_DO });
+        };
+
         let opening = false;
         const openHail = async (): Promise<void> => {
             if (dialog.container.visible || opening) {
@@ -922,6 +999,11 @@ export const HailDialogPlugin: Plugin = {
                 const computed = await computeContext(world, simulationData,
                     displayAssets);
                 if (!computed) {
+                    // A targeted ship with no context is one that does not
+                    // answer at all (computeContext's cantHail case).
+                    if (shipTarget && world.entities.has(shipTarget)) {
+                        await refuseShipHail(shipTarget);
+                    }
                     return;
                 }
                 currentTarget = computed.target;

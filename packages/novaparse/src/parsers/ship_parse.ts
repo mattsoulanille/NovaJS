@@ -35,6 +35,24 @@ export function interfaceGovtId(inherentGovt: number): number | null {
     return null;
 }
 
+/**
+ * The gövt LOCAL id of a shïp's inherent ATTRIBUTES govt — the one "used
+ * for non-combat things like voice type, distress message flags, etc"
+ * (EVN Bible, shïp InherentGovt) — or null when the class has none. Of the
+ * field's three populated ranges only two carry an attributes govt:
+ * 128-383 (both associations) and 1128-1383 (attributes only, offset by
+ * 1000). 2128-2383 is a combat govt with "no inherent attributes govt".
+ */
+export function attributesGovtId(inherentGovt: number): number | null {
+    if (inherentGovt >= 1128 && inherentGovt <= 1383) {
+        return inherentGovt - 1000;
+    }
+    if (inherentGovt >= 128 && inherentGovt <= 383) {
+        return inherentGovt;
+    }
+    return null;
+}
+
 export type ShipPictMap = Promise<{ [index: string]: string }>;
 export type WeaponOutfitMap = ShipPictMap;
 /** Maps a weapon's global id to the outfit that is its ammo. */
@@ -259,6 +277,13 @@ export async function ShipParse(ship: ShipResource,
         ? (ship.idSpace.gövt[interfaceGovtLocalId]?.globalID ?? null)
         : null;
 
+    // The two hail traits a class inherits from its ATTRIBUTES govt (gövt
+    // Flags 0x0400 and Flags2 0x0008 both say so of themselves). Read off
+    // the raw resource's decoded bits; a dangling id passes on nothing.
+    const attributesLocalId = attributesGovtId(ship.inherentGovt);
+    const attributesGovt = attributesLocalId !== null
+        ? ship.idSpace.gövt[attributesLocalId] : undefined;
+
     // ESCORT UPGRADE TARGET (EVN Bible shïp UpgradeTo ~:2661): a LOCAL shïp
     // id, resolved to a global one exactly like inherentGovt below. BOTH of
     // the Bible's "can't be upgraded" sentinels — 0 and -1 — land under 128
@@ -393,6 +418,8 @@ export async function ShipParse(ship: ShipResource,
         // either association. Most stock player-flyable ships use the
         // attributes-only form, so this is what actually selects the bar.
         interfaceGovt: interfaceGovt,
+        inheritedCantBeHailed: Boolean(attributesGovt?.cantBeHailed),
+        inheritedNoGreetings: Boolean(attributesGovt?.noDistressMessages),
         price: ship.cost,
         techLevel: ship.techLevel,
         hireRandom: ship.hireRandom,
