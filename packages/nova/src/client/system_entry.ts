@@ -34,7 +34,6 @@ import type { AsyncSimulationBridgeClient } from '../communication/async_simulat
 import {
     makeBrowserSimulationBridgeClient,
 } from '../communication/simulation_bridge_browser_worker.js';
-import { DebugSettings } from '../debug_settings.js';
 import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
 import { PixiAppResource } from '../display/pixi_app_resource.js';
@@ -492,9 +491,6 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
         roomSubscriptions,
     };
     state.apply(s => arrive(s, live));
-    // Debug toggles, e.g. novaDebug.showCollisionShapes = true. Settings
-    // carry over when jumping rebuilds the display world.
-    window.novaDebug = new DebugSettings(displayWorld, window.novaDebug);
 }
 
 /** Whether `state` has `systemId` up as its live system (recovery asks). */
