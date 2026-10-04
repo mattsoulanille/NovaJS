@@ -5,6 +5,7 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ShipData } from 'novadatainterface/ship_data';
 import {
     EscortCommandComponent, PlayerEscortComponent, ControlledByComponent,
+    NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import { FiringGroupComponent } from '../nova_plugin/ship/index.js';
 import {
@@ -147,7 +148,8 @@ export function buildHiredEscort(shipData: ShipData, leaderUuid: string,
     // MarkPlayerEscortsSystem would stamp this anyway, one tick later,
     // from the formation link).
     escort.components.set(PlayerEscortComponent,
-        { player: leaderUuid, parent: leaderUuid, provenance: 'hired' });
+        { player: leaderUuid, parent: leaderUuid, provenance: 'hired',
+            deal: NO_DEAL });
     if (ownerUuid) {
         escort.components.set(MultiplayerData, { owner: ownerUuid });
     }

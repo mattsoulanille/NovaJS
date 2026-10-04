@@ -13,7 +13,7 @@ import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import { SoundEvent } from '../core/index.js';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { FormationComponent, NpcComponent } from '../npc/index.js';
 import {
     applyRefundFighter, BayFighterComponent, EXIT_KICK, FighterDockedEvent,
@@ -674,12 +674,12 @@ describe('the lost-fighter refund (issue #258)', () => {
             expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
             // Somebody ELSE's escort: still nothing.
             carrier.components.set(PlayerEscortComponent,
-                { player: 'somebody-else', parent: 'somebody-else' });
+                { player: 'somebody-else', parent: 'somebody-else', deal: NO_DEAL });
             expect(applyRefundFighter(world, undefined, refund)).toBeFalse();
             expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(1);
             // The player's own hired carrier: its bay gets the round.
             carrier.components.set(PlayerEscortComponent,
-                { player: 'player-uuid', parent: 'player-uuid' });
+                { player: 'player-uuid', parent: 'player-uuid', deal: NO_DEAL });
             expect(applyRefundFighter(world, undefined, refund)).toBeTrue();
             expect(outfitCount(carrier, FIGHTER_A_ID)).toBe(2);
         });

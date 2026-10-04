@@ -87,11 +87,11 @@ import { CargoComponent, cargoUsed } from '../ship/index.js';
  *                                    Upgrade Escort button beside it is
  *                                    still LIVE.
  *
- * So the two flags this module writes are the whole of an upgrade's and a
- * sale's simulation effect. They live on the escort's own durable ownership
- * marker (player_escort.ts's PlayerEscort.pendingUpgrade / pendingSale),
- * which is serializer-registered — so they cross the wire, ride rollback
- * snapshots, survive a landing and a jump, and go into the save.
+ * So the deal this module writes is the whole of an upgrade's and a
+ * sale's simulation effect. It lives on the escort's own durable ownership
+ * marker (player_escort.ts's PlayerEscort.deal, an EscortDeal), which is
+ * serializer-registered — so it crosses the wire, rides rollback
+ * snapshots, survives a landing and a jump, and goes into the save.
  *
  * WHERE THE MONEY MOVES: at the pad, not here. spaceport/escort_deals.ts
  * settles a queued deal as the player next LEAVES a spaceport (any
@@ -382,8 +382,8 @@ export function replaceEscortShipClass(escort: Entity, shipId: string,
 /**
  * Rewrites the escort's ownership marker with its queued deal set to
  * `deal`, leaving every other field alone (player_escort.ts's
- * withEscortDeal, which is also what keeps the two deal kinds exclusive
- * and an unqueued deal ABSENT rather than undefined).
+ * withEscortDeal: the deal is ONE field, so setting either kind replaces
+ * the other).
  *
  * `set(...)` rather than a field assignment: the marker is a plain
  * serialized object, and writing a whole new value is what the delta maker
@@ -405,7 +405,7 @@ function setEscortDeal(escort: Entity, deal: EscortDeal): void {
  * ownership, provenance, and the upgrade target.
  *
  * Only RELEASE has an effect on the world here. The other four write (or
- * clear) the two queued-deal flags on the escort's ownership marker; the
+ * clear) the queued deal on the escort's ownership marker; the
  * money and the hull swap happen as the player next leaves a spaceport,
  * in spaceport/escort_deals.ts. See the module comment.
  */

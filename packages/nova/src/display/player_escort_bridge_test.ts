@@ -16,7 +16,7 @@ import {
 } from '../communication/simulation_test_fixture.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import {
-    EscortCommandComponent, EscortLandingComponent, PlayerEscortComponent,
+    EscortCommandComponent, EscortLandingComponent, PlayerEscortComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import { ArmorComponent, makeShip } from '../nova_plugin/ship/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
@@ -92,7 +92,7 @@ describe('player escort sim -> client wiring', () => {
             escort.components.set(EscortCommandComponent,
                 { command: 'formation' });
             escort.components.set(PlayerEscortComponent,
-                { player: shipUuid, parent: shipUuid });
+                { player: shipUuid, parent: shipUuid, deal: NO_DEAL });
             escort.components.set(EscortLandingComponent,
                 { planet: planetUuid! });
             // Battle damage, set directly: the armor Stat's Provide
@@ -159,7 +159,7 @@ describe('player escort sim -> client wiring', () => {
             escort.components.set(FormationComponent,
                 { leader: shipUuid, slot: 0 });
             escort.components.set(PlayerEscortComponent,
-                { player: shipUuid, parent: shipUuid });
+                { player: shipUuid, parent: shipUuid, deal: NO_DEAL });
             await completeEntity(world, escort);
             world.entities.set('live escort', escort);
 

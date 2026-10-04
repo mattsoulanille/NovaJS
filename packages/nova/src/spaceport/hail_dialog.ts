@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
+import { EscortDeal } from '../nova_plugin/player/index.js';
 import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,
@@ -145,17 +146,42 @@ export interface EscortManagement {
     /** The daily wage. HIRED escorts only — a captured hull draws none. */
     dailyFee?: number;
     /**
-     * An upgrade is QUEUED for the next departure (PlayerEscort.
-     * pendingUpgrade). The upgrade row's price line becomes
-     * {@link UPGRADE_QUEUED_TEXT} and its button becomes Cancel Upgrade.
+     * The deal QUEUED for the next departure — the kind of the escort's
+     * PlayerEscort `deal` (player_escort.ts's EscortDeal), absent when
+     * nothing is queued. ONE field rather than one flag per deal because
+     * the two are exclusive (ruling #249): there is no "both" to draw.
      *
-     * The WAGE is unaffected, deliberately: the escort is still flying its
-     * old hull until the deal settles, so it still draws its old hull's
-     * pay (escort_fees.ts prices everything off the CURRENT class).
+     *   'upgrade'  the upgrade row's price line becomes
+     *              {@link UPGRADE_QUEUED_TEXT} and its button Cancel Upgrade;
+     *   'sale'     the resale row's becomes {@link SALE_QUEUED_TEXT} and its
+     *              button Cancel Sale.
+     *
+     * The WAGE is unaffected by an upgrade, deliberately: the escort is
+     * still flying its old hull until the deal settles, so it still draws
+     * its old hull's pay (escort_fees.ts prices everything off the CURRENT
+     * class).
      */
-    pendingUpgrade?: boolean;
-    /** A sale is queued for the next departure. See above. */
-    pendingSale?: boolean;
+    queuedDeal?: QueuedDealKind;
+}
+
+/** A queued deal as the comm box shows it: EscortDeal's kind, minus 'none'. */
+export type QueuedDealKind = Exclude<EscortDeal['kind'], 'none'>;
+
+/** The comm box's reading of an escort's queued deal. */
+export function queuedDealKind(deal: EscortDeal): QueuedDealKind | undefined {
+    return deal.kind === 'none' ? undefined : deal.kind;
+}
+
+/**
+ * `escort` with its queued deal replaced — the box's mirror of
+ * player_escort.ts's withEscortDeal. Queueing one deal replaces the other
+ * (ruling #249); cancelling leaves the field ABSENT, the shape of a box
+ * that never had a deal queued.
+ */
+function withQueuedDeal(escort: EscortManagement,
+    deal: QueuedDealKind | undefined): EscortManagement {
+    const { queuedDeal: _previous, ...rest } = escort;
+    return deal === undefined ? rest : { ...rest, queuedDeal: deal };
 }
 
 /**
@@ -223,12 +249,12 @@ const DIM_READOUT_LINES: ReadonlySet<string> = new Set([
  */
 export function escortReadout(escort: EscortManagement): string {
     const rows = [
-        escort.pendingUpgrade ? UPGRADE_QUEUED_TEXT
+        escort.queuedDeal === 'upgrade' ? UPGRADE_QUEUED_TEXT
             : escort.upgrade
                 ? `Upgrade Cost: ${escort.upgrade.cost.toLocaleString()}`
                 + ` credits`
                 : CANNOT_UPGRADE_TEXT,
-        escort.pendingSale ? SALE_QUEUED_TEXT
+        escort.queuedDeal === 'sale' ? SALE_QUEUED_TEXT
             : escort.sell
                 ? `Sell Price: ${escort.sell.value.toLocaleString()} credits`
                 : '',
@@ -305,12 +331,12 @@ export function escortPressAction(escort: EscortManagement,
         case 'release':
             return 'release';
         case 'upgrade':
-            if (escort.pendingUpgrade) {
+            if (escort.queuedDeal === 'upgrade') {
                 return 'cancelUpgrade';
             }
             return escort.upgrade?.canAfford ? 'queueUpgrade' : undefined;
         case 'sell':
-            if (escort.pendingSale) {
+            if (escort.queuedDeal === 'sale') {
                 return 'cancelSale';
             }
             return escort.sell ? 'queueSale' : undefined;
@@ -582,18 +608,14 @@ export function hailPress(state: HailPage, press: HailPress,
             switch (action) {
                 case 'queueUpgrade':
                     return { phase, context: withEscort(context,
-                        { ...escort, pendingUpgrade: true,
-                            pendingSale: false }) };
-                case 'cancelUpgrade':
-                    return { phase, context: withEscort(context,
-                        { ...escort, pendingUpgrade: false }) };
+                        withQueuedDeal(escort, 'upgrade')) };
                 case 'queueSale':
                     return { phase, context: withEscort(context,
-                        { ...escort, pendingSale: true,
-                            pendingUpgrade: false }) };
+                        withQueuedDeal(escort, 'sale')) };
+                case 'cancelUpgrade':
                 case 'cancelSale':
                     return { phase, context: withEscort(context,
-                        { ...escort, pendingSale: false }) };
+                        withQueuedDeal(escort, undefined)) };
                 default:
                     return state;
             }

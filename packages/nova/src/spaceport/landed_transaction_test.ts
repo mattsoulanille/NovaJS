@@ -12,7 +12,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { makeSystem } from '../nova_plugin/make_system.js';
 import {
     dayNumber, escortDeal, PlayerEscortComponent, withEscortDeal, CreditsComponent,
-    GameDateComponent, MissionsComponent,
+    GameDateComponent, MissionsComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, OutfitsStateComponent, makeShip, ShipComponent, ShipDataComponent,
@@ -328,7 +328,7 @@ describe('the landed transaction', () => {
                     .addComponent(ShipDataComponent, catalogue.get(ESCORT)!)
                     .addComponent(PlayerEscortComponent, {
                         player: PLAYER, parent: PLAYER,
-                        provenance: 'hired', pendingUpgrade: BETTER,
+                        provenance: 'hired', deal: { kind: 'upgrade', toShip: BETTER },
                     }),
             }];
         }
@@ -348,7 +348,7 @@ describe('the landed transaction', () => {
                     PLAYER, id => catalogue.get(id));
                 expect(settled.upgraded).toEqual([]);
                 expect(deals[0].entity.components.get(PlayerEscortComponent)!
-                    .pendingUpgrade).toBe(BETTER);
+                    .deal).toEqual({ kind: 'upgrade', toShip: BETTER });
                 transaction.release(visit);
                 expect(creditBalance(entity)).toBe(10_000);
             });
@@ -381,7 +381,7 @@ describe('the landed transaction', () => {
                     id => catalogue.get(id));
                 expect(settled).toEqual({ sold: [], upgraded: [], credits: 0 });
                 expect(deals[0].entity.components.get(PlayerEscortComponent)!
-                    .pendingUpgrade).toBe(BETTER);
+                    .deal).toEqual({ kind: 'upgrade', toShip: BETTER });
                 expect(creditBalance(entity)).toBe(before);
                 expect(warn).toHaveBeenCalled();
             });
@@ -463,7 +463,7 @@ describe('the landed transaction', () => {
                     velocity: new Vector(0, 0),
                 });
                 escort.components.set(PlayerEscortComponent, withEscortDeal(
-                    { player: PLAYER, parent: PLAYER, provenance: 'captured' },
+                    { player: PLAYER, parent: PLAYER, provenance: 'captured', deal: NO_DEAL },
                     { kind: 'upgrade', toShip: BETTER }));
                 await completeEntity(world, escort);
                 const roster: RosterEscort[] =

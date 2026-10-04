@@ -17,14 +17,14 @@ import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from '../escort
 import { CargoComponent } from '../ship/index.js';
 import { commitFleetHolds } from '../../spaceport/fleet_cargo.js';
 import { completeEntity } from '../spawn/index.js';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { FormationComponent } from '../npc/index.js';
 import {
-    escortProvenance, PlayerEscortComponent,
+    EscortDeal, escortProvenance, PlayerEscort, PlayerEscortComponent,
 } from '../player/index.js';
 import { Stat } from '../core/index.js';
 import {
@@ -46,6 +46,7 @@ import {
 import {
     collectEscortsToSave,
     decodeSave,
+    decodeSaveDetailed,
     encodeSave,
     extractSaveData,
     extractSavedEscorts,
@@ -700,7 +701,7 @@ describe('save_game escorts', () => {
         const { serializer, makeEscort } = fixture;
         const escort = await makeEscort(ship => {
             ship.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER });
+                { player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             // Battle damage and cargo: the state a ship-id list would lose.
             ship.components.set(ArmorComponent, new Stat({
                 current: 23, max: 100, min: 0, recharge: 0,
@@ -723,14 +724,14 @@ describe('save_game escorts', () => {
         expect(restored[0].entity.components.get(CargoComponent))
             .toEqual(new Map([['cargo:2', 5]]));
         expect(restored[0].entity.components.get(PlayerEscortComponent))
-            .toEqual({ player: PLAYER, parent: PLAYER });
+            .toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
     });
 
     it('round-trips an escort held on the DOCKED landed roster', async () => {
         const { serializer, makeEscort } = fixture;
         const escort = await makeEscort(ship => {
             ship.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER, detached: true });
+                { player: PLAYER, parent: PLAYER, detached: true, deal: NO_DEAL });
             ship.components.set(ArmorComponent, new Stat({
                 current: 41, max: 100, min: 0, recharge: 0,
             }));
@@ -760,10 +761,10 @@ describe('save_game escorts', () => {
         const { serializer, makeEscort } = fixture;
         const prize = await makeEscort(ship => ship.components.set(
             PlayerEscortComponent,
-            { player: PLAYER, parent: PLAYER, provenance: 'captured' }));
+            { player: PLAYER, parent: PLAYER, provenance: 'captured', deal: NO_DEAL }));
         const hire = await makeEscort(ship => ship.components.set(
             PlayerEscortComponent,
-            { player: PLAYER, parent: PLAYER, provenance: 'hired' }));
+            { player: PLAYER, parent: PLAYER, provenance: 'hired', deal: NO_DEAL }));
 
         const toSave = collectEscortsToSave(PLAYER,
             [['prize', prize], ['hire', hire]], []);
@@ -780,18 +781,18 @@ describe('save_game escorts', () => {
         // Upgrading and selling an escort are deferred to the next
         // shipyard (nova_plugin/escorts/escort_action.ts), so a player can queue a
         // deal, quit, and come back days later expecting it to be waiting.
-        // Both flags ride the durable ownership marker for exactly that
+        // The deal rides the durable ownership marker for exactly that
         // reason; this is the spec that keeps them in the save.
         const { serializer, makeEscort } = fixture;
         const upgrading = await makeEscort(ship => ship.components.set(
             PlayerEscortComponent, {
                 player: PLAYER, parent: PLAYER, provenance: 'hired',
-                pendingUpgrade: 'nova:137',
+                deal: { kind: 'upgrade', toShip: 'nova:137' },
             }));
         const selling = await makeEscort(ship => ship.components.set(
             PlayerEscortComponent, {
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
-                pendingSale: true,
+                deal: { kind: 'sale' },
             }));
 
         const toSave = collectEscortsToSave(PLAYER,
@@ -800,10 +801,70 @@ describe('save_game escorts', () => {
             extractSavedEscorts(toSave, serializer), serializer);
         const markers = new Map(restored.map(({ uuid, entity }) =>
             [uuid, entity.components.get(PlayerEscortComponent)]));
-        expect(markers.get('upgrading')?.pendingUpgrade).toBe('nova:137');
-        expect(markers.get('upgrading')?.pendingSale).toBeUndefined();
-        expect(markers.get('selling')?.pendingSale).toBeTrue();
-        expect(markers.get('selling')?.pendingUpgrade).toBeUndefined();
+        expect(markers.get('upgrading')?.deal)
+            .toEqual({ kind: 'upgrade', toShip: 'nova:137' });
+        expect(markers.get('selling')?.deal).toEqual({ kind: 'sale' });
+    });
+
+    it('restores a VERSION 3 save\'s queued deals from the flag pair it '
+        + 'wrote, and writes them back as the deal state', async () => {
+        // A v3 build stored the deal as `pendingUpgrade` / `pendingSale`
+        // on each escort's PlayerEscort entry; the v3 -> v4 migration
+        // (save_migrations.ts) rewrites them. Encoded through the REAL
+        // serializer, then turned back into the v3 marker shape, so the
+        // blob is exactly what that build wrote for these escorts.
+        const { serializer, makeEscort } = fixture;
+        const deals: [string, EscortDeal, Record<string, unknown>][] = [
+            ['idle', NO_DEAL, {}],
+            ['selling', { kind: 'sale' }, { pendingSale: true }],
+            ['upgrading', { kind: 'upgrade', toShip: 'nova:137' },
+                { pendingUpgrade: 'nova:137' }],
+        ];
+        const escorts: [string, Entity][] = [];
+        for (const [uuid, deal] of deals) {
+            escorts.push([uuid, await makeEscort(ship => ship.components.set(
+                PlayerEscortComponent, {
+                    player: PLAYER, parent: PLAYER, provenance: 'captured', deal,
+                }))]);
+        }
+        const flags = new Map(deals.map(([uuid, , v3]) => [uuid, v3]));
+        const v3Escorts = extractSavedEscorts(
+            collectEscortsToSave(PLAYER, escorts, []), serializer)
+            .map(({ uuid, entity }) => ({
+                uuid, entity: {
+                    ...entity,
+                    components: entity.components.map(([name, data]) => {
+                        if (name !== 'PlayerEscort') {
+                            return [name, data];
+                        }
+                        const { deal: _deal, ...rest } = data as PlayerEscort;
+                        return [name, { ...rest, ...flags.get(uuid) }];
+                    }),
+                },
+            }));
+        const v3Stored = JSON.stringify(
+            { version: 3, data: { ...SAMPLE, escorts: v3Escorts } });
+        expect(v3Stored).toContain('"pendingSale":true');
+
+        const decoded = decodeSave(v3Stored)!;
+        expect(decoded).toBeDefined();
+        const markers = () => new Map(restoreSavedEscorts(
+            decoded.escorts, serializer).map(({ uuid, entity }) =>
+            [uuid, entity.components.get(PlayerEscortComponent)]));
+        for (const [uuid, deal] of deals) {
+            expect(markers().get(uuid)).toEqual({
+                player: PLAYER, parent: PLAYER, provenance: 'captured', deal,
+            });
+        }
+
+        // Written back by this build: a current save, the flags gone, and
+        // a second load reads exactly what the first did.
+        const rewritten = encodeSave(decoded);
+        expect(rewritten).not.toContain('pendingSale');
+        expect(rewritten).not.toContain('pendingUpgrade');
+        const again = decodeSaveDetailed(rewritten);
+        expect(again).toEqual(
+            { ok: true, data: decoded, version: SAVE_VERSION });
     });
 
     it('restores an escort saved BEFORE provenance existed, and reads it '
@@ -814,22 +875,22 @@ describe('save_game escorts', () => {
             // cash — so no pre-existing save can be mined for credits.
             const { serializer, makeEscort } = fixture;
             const legacy = await makeEscort(ship => ship.components.set(
-                PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+                PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
             const restored = saveAndLoad(extractSavedEscorts(
                 collectEscortsToSave(PLAYER, [['old', legacy]], []),
                 serializer), serializer);
             const marker = restored[0].entity.components
                 .get(PlayerEscortComponent);
-            expect(marker).toEqual({ player: PLAYER, parent: PLAYER });
+            expect(marker).toEqual({ player: PLAYER, parent: PLAYER, deal: NO_DEAL });
             expect(escortProvenance(restored[0].entity)).toBe('hired');
         });
 
     it('includes a batch waiting on a carried jump', async () => {
         const { serializer, makeEscort } = fixture;
         const inWorld = await makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
         const jumping = await makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
         const carriedJump: RosterEscort[] = [
             { player: PLAYER, uuid: 'jumping-1', entity: jumping },
         ];
@@ -851,7 +912,7 @@ describe('save_game escorts', () => {
             // Mid-landing an escort is on the roster while still present
             // in the world it is flying down through.
             const escort = await makeEscort(ship => ship.components.set(
-                PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+                PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
             const roster: RosterEscort[] = [
                 { player: PLAYER, uuid: 'both', entity: escort },
             ];
@@ -866,10 +927,10 @@ describe('save_game escorts', () => {
             const { serializer, makeEscort } = fixture;
             const hauler = await makeEscort(ship => ship.components.set(
                 PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER, detached: true }));
+                { player: PLAYER, parent: PLAYER, detached: true, deal: NO_DEAL }));
             const escortB = await makeEscort(ship => ship.components.set(
                 PlayerEscortComponent,
-                { player: PLAYER, parent: PLAYER, detached: true }));
+                { player: PLAYER, parent: PLAYER, detached: true, deal: NO_DEAL }));
 
             // What Done in the trade center does to the landed roster: the
             // working holds are written onto the escorts themselves. No new
@@ -916,9 +977,9 @@ describe('save_game escorts', () => {
     it('ignores escorts belonging to another player', async () => {
         const { makeEscort } = fixture;
         const mine = await makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
         const theirs = await makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: 'someone-else', parent: 'x' }));
+            PlayerEscortComponent, { player: 'someone-else', parent: 'x', deal: NO_DEAL }));
         const roster: RosterEscort[] = [
             { player: 'someone-else', uuid: 'peer-roster', entity: theirs },
         ];
@@ -931,7 +992,7 @@ describe('save_game escorts', () => {
         + 'carrier under fresh uuids', async () => {
             const { serializer, makeEscort } = fixture;
             const carrier = await makeEscort(ship => ship.components.set(
-                PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+                PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
             const fighter = await makeEscort(ship => {
                 // A launched fighter's whole bay identity.
                 ship.components.set(BayFighterComponent,
@@ -941,7 +1002,7 @@ describe('save_game escorts', () => {
                 ship.components.set(OwnerComponent, { owner: 'carrier-uuid' });
                 ship.components.set(SourceComponent, 'carrier-uuid');
                 ship.components.set(PlayerEscortComponent,
-                    { player: PLAYER, parent: 'carrier-uuid' });
+                    { player: PLAYER, parent: 'carrier-uuid', deal: NO_DEAL });
             });
 
             const toSave = collectEscortsToSave(PLAYER, [
@@ -988,7 +1049,7 @@ describe('save_game escorts', () => {
     it('drops only the escort whose entity no longer decodes', async () => {
         const { serializer, makeEscort } = fixture;
         const good = await makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
         const encoded = extractSavedEscorts(
             collectEscortsToSave(PLAYER, [['good', good]], []), serializer);
         // Structurally a valid blob (EncodedEntity says nothing about a
@@ -1044,7 +1105,7 @@ describe('save_game phantom bay fighters', () => {
     async function fighter(parent: string, carrier: string, bay: string) {
         return fixture.makeEscort(ship => {
             ship.components.set(PlayerEscortComponent,
-                { player: PLAYER, parent });
+                { player: PLAYER, parent, deal: NO_DEAL });
             ship.components.set(BayFighterComponent, { bayWeaponId: bay });
             ship.components.set(ReturnWhenTargetRemovedComponent, undefined);
             ship.components.set(SourceComponent, carrier);
@@ -1090,7 +1151,7 @@ describe('save_game phantom bay fighters', () => {
 
     it('keeps a CARRIER ESCORT\'s fighter, carrier and all', async () => {
         const carrier = await fixture.makeEscort(ship => ship.components.set(
-            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
         // Parented to its carrier, and its carrier is saved beside it.
         const wing = await fighter('carrier', 'carrier', FOREIGN_BAY);
         expect(roundTrip([['carrier', carrier], ['wing', wing]],
@@ -1113,7 +1174,7 @@ describe('save_game phantom bay fighters', () => {
     it('keeps ordinary escorts, which are not fighters at all', async () => {
         const hire = await fixture.makeEscort(ship => ship.components.set(
             PlayerEscortComponent,
-            { player: PLAYER, parent: PLAYER, provenance: 'hired' }));
+            { player: PLAYER, parent: PLAYER, provenance: 'hired', deal: NO_DEAL }));
         expect(roundTrip([['hire', hire]],
             { player: PLAYER, armament: new Set() }))
             .toEqual(['hire']);

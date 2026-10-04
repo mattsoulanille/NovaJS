@@ -27,7 +27,7 @@ import { DEFEND_RADIUS, inFrontQuadrant } from '../escorts/index.js';
 import { Entity } from 'nova_ecs/entity';
 import { FiringGroupComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
-import { PlayerEscortComponent } from './player_escort.js';
+import { PlayerEscortComponent, NO_DEAL } from './player_escort.js';
 import { GovtComponent } from '../core/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -573,7 +573,7 @@ describe('escort commands', () => {
                     .set(NpcComponent, { aiType: 1 })
                     .set(FiringGroupComponent, { group: 'player' })
                     .set(PlayerEscortComponent,
-                        { player: 'player', parent: 'player' });
+                        { player: 'player', parent: 'player', deal: NO_DEAL });
             }],
             // convertToEscort: the captured NPC keeps its brain with
             // mode/aggressor cleared, loses its govt and bay links.
@@ -583,7 +583,7 @@ describe('escort commands', () => {
                         { aiType: 1, mode: undefined, aggressor: undefined })
                     .set(FiringGroupComponent, { group: 'player' })
                     .set(PlayerEscortComponent,
-                        { player: 'player', parent: 'player' });
+                        { player: 'player', parent: 'player', deal: NO_DEAL });
                 escort.components.delete(GovtComponent);
             }],
             // bay_plugin BayWeaponEntry.fire: makeShip (so NO

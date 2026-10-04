@@ -14,7 +14,7 @@ import { SimulationFrame } from '../communication/simulation_frame.js';
 import { SourceComponent } from '../nova_plugin/combat/index.js';
 import { BayFighterComponent, FighterRefund } from '../nova_plugin/escorts/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { MissionShipComponent, PlayerEscortComponent } from '../nova_plugin/player/index.js';
+import { MissionShipComponent, PlayerEscortComponent, NO_DEAL } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { FleetLedger, refundLostFighters } from './fleet_ledger.js';
@@ -64,7 +64,7 @@ describe('the fleet ledger\'s lost roster (ruling #148)', () => {
             const ship = makeShip(gameData.data.Ship.map.get(SHIP_ID)!);
             ship.components.set(MovementStateComponent, movement());
             ship.components.set(PlayerEscortComponent,
-                { player, parent: player, provenance: 'hired' });
+                { player, parent: player, provenance: 'hired', deal: NO_DEAL });
             setup(ship);
             await completeEntity(world, ship);
             applySimulationFrame(frame({ added: [[uuid, serializer.encode(ship)]] }),
@@ -250,7 +250,7 @@ describe('the fleet ledger\'s lost fighters (issue #258)', () => {
             const ship = makeShip(gameData.data.Ship.map.get(SHIP_ID)!);
             ship.components.set(MovementStateComponent, movement());
             ship.components.set(PlayerEscortComponent,
-                { player, parent: carrier });
+                { player, parent: carrier, deal: NO_DEAL });
             ship.components.set(BayFighterComponent, { bayWeaponId: BAY });
             ship.components.set(SourceComponent, carrier);
             await completeEntity(world, ship);
@@ -356,7 +356,7 @@ describe('the fleet ledger\'s lost fighters (issue #258)', () => {
             remove('batch', 'flight');
             display.entities.set('in-flight-carrier', new Entity('carrier')
                 .addComponent(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER }));
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
             await refundLostFighters(ctx, bridge, display, PLAYER,
                 new Map([[CARRIER, 'fresh-carrier-uuid']]));
             expect(refunds).toEqual([
@@ -404,7 +404,7 @@ describe('the fleet ledger\'s lost fighters (issue #258)', () => {
             const display = new World('display');
             display.entities.set('fresh-carrier-uuid', new Entity('carrier')
                 .addComponent(PlayerEscortComponent,
-                    { player: PLAYER, parent: PLAYER }));
+                    { player: PLAYER, parent: PLAYER, deal: NO_DEAL }));
             await refundLostFighters(ctx, {
                 refundFighter: async (refund: FighterRefund) => {
                     refunds.push(refund);

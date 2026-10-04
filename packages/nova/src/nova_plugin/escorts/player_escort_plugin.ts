@@ -45,6 +45,10 @@ import {
     EscortPayrollComponent, escortProvenance, PlayerEscort,
     PlayerEscortComponent,
 } from '../player/index.js';
+
+/** The live chain's half of a PlayerEscort marker (see playerEscortLink). */
+export type PlayerEscortLink = Pick<PlayerEscort, 'player'>
+    & Required<Pick<PlayerEscort, 'parent'>>;
 import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent, ShipPhysicsComponent } from '../ship/index.js';
 
@@ -279,6 +283,11 @@ const carriedFields = carriedEscortFields;
  * here. Both callers of this function are that question:
  * MarkPlayerEscortsSystem and sweepableEscorts.
  *
+ * Returns only the LINK — who the escort belongs to and who it is attached
+ * to. The marker's durable facts (provenance, the queued deal) are not the
+ * chain's to say; every writer spreads them over the link from the
+ * existing marker (carriedEscortFields).
+ *
  * A CAPTURED mission ship is unaffected, for the same reason the sweep's
  * own exclusion is: capturing strips MissionShipComponent
  * (boarding_plugin), so a prize's wing tops out at the player like any
@@ -286,7 +295,7 @@ const carriedFields = carriedEscortFields;
  */
 export function playerEscortLink(uuid: string,
     getEntity: (uuid: string) => Entity | undefined):
-    PlayerEscort | undefined {
+    PlayerEscortLink | undefined {
     const self = getEntity(uuid);
     if (!self) {
         return undefined;

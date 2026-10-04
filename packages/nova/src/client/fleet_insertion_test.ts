@@ -8,7 +8,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { OwnerComponent } from '../nova_plugin/combat/index.js';
 import { FormationComponent } from '../nova_plugin/npc/index.js';
-import { PlayerEscortComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
+import { PlayerEscortComponent, ControlledByComponent, NO_DEAL } from '../nova_plugin/player/index.js';
 import { CarriedEscort } from '../spaceport/landed_escorts.js';
 import {
     buildHiredEscort, FleetBridge, insertEscortBatch, insertPlayerAndFleet,
@@ -38,7 +38,7 @@ function escort(uuid: string, parent?: string): CarriedEscort {
     const entity = ship(uuid);
     if (parent) {
         entity.components.set(PlayerEscortComponent,
-            { player: PLAYER, parent });
+            { player: PLAYER, parent, deal: NO_DEAL });
         entity.components.set(OwnerComponent, { owner: parent });
     }
     return { player: PLAYER, uuid, entity };
@@ -216,7 +216,8 @@ describe('fleet insertion', () => {
                 expect(result.failed[0].entity.components
                     .get(PlayerEscortComponent))
                     .toEqual({ player: PLAYER, parent: PLAYER,
-                        provenance: 'hired' });
+                        provenance: 'hired',
+                        deal: NO_DEAL });
                 // Its slot is still spent: the retry re-places it anyway.
                 expect(result.nextSlot).toBe(2);
             });
@@ -252,7 +253,8 @@ describe('fleet insertion', () => {
                     .toEqual({ leader: PLAYER, slot: 4 });
                 expect(hired.components.get(PlayerEscortComponent))
                     .toEqual({ player: PLAYER, parent: PLAYER,
-                        provenance: 'hired' });
+                        provenance: 'hired',
+                        deal: NO_DEAL });
                 expect(hired.components.get(MultiplayerData))
                     .toEqual({ owner: PEER });
             });

@@ -50,7 +50,7 @@ import {
     PlayerPlunderedEvent,
 } from '../npc/index.js';
 import {
-    EscortLandingComponent, PlayerEscortComponent,
+    EscortLandingComponent, NO_DEAL, PlayerEscortComponent,
 } from '../player/index.js';
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecords } from '../reputation/index.js';
@@ -1108,7 +1108,7 @@ function convertToEscort(target: Entity, targetUuid: string,
         // wage (player_escort.ts's provenance; spaceport/escort_fees.ts).
         target.components.set(PlayerEscortComponent,
             { player: leaderUuid, parent: leaderUuid,
-                provenance: 'captured' });
+                provenance: 'captured', deal: NO_DEAL });
     }
     // Clear leftover hostility so a reverted-to-NPC escort (leader lost)
     // isn't still gunning for the ex-owner. The MODE goes with it: a

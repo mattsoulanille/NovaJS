@@ -5,7 +5,7 @@ import {
     BayFighterComponent, cappedEscortCount, CarriedEscortEntry,
 } from '../nova_plugin/escorts/index.js';
 import {
-    MissionShipComponent, EscortPayrollComponent, PlayerEscortComponent,
+    MissionShipComponent, EscortPayrollComponent, PlayerEscortComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import {
     hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
@@ -34,7 +34,7 @@ describe('the escort cap', () => {
     function escort(player = PLAYER, ...extra: ('fighter' | 'mission')[]):
         CarriedEscortEntry {
         const entity = new Entity();
-        entity.components.set(PlayerEscortComponent, { player });
+        entity.components.set(PlayerEscortComponent, { player, deal: NO_DEAL });
         if (extra.includes('fighter')) {
             entity.components.set(BayFighterComponent,
                 { bayWeaponId: 'nova:150', slot: 0 } as any);
@@ -122,7 +122,7 @@ describe('the escort cap', () => {
             // wage, so a mirror would have missed it.
             const prize = escort();
             prize.entity.components.set(PlayerEscortComponent,
-                { player: PLAYER, provenance: 'captured' });
+                { player: PLAYER, provenance: 'captured', deal: NO_DEAL });
             expect(held(entity, [prize, ...fleet.slice(1)], fleet.slice(0, 1)))
                 .toBe(5);
             // ...and one shot down on the way in is gone from the count,

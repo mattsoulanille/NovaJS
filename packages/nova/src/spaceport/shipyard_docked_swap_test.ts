@@ -290,7 +290,7 @@ describe('a shipyard purchase published to the docked seam', () => {
             entity: new Entity('escort')
                 .addComponent(ShipDataComponent, SHIPS.get(ESCORT_SHIP)!)
                 .addComponent(PlayerEscortComponent,
-                    { player, provenance: 'captured', pendingSale: true }),
+                    { player, provenance: 'captured', deal: { kind: 'sale' } }),
         };
     }
 
