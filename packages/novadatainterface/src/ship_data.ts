@@ -322,6 +322,13 @@ export interface ShipData extends SpaceObjectData {
      */
     longName: string;
     /**
+     * The class name the COMMUNICATIONS dialog shows (shïp CommName): the
+     * hail box's lower well reads "Class: Aur Carrier" for an Aurora
+     * Carrier, not the resource name (ruling #297, "Let's match the
+     * original"). Empty when unset; fall back to the resource name.
+     */
+    commName: string;
+    /**
      * The ship class's subtitle (shïp SubTitle), shown on the second line
      * of the status-bar target display beneath the ship/përs name, e.g.
      * "Heavy Fighter Class" under "Pirate Viper". Empty when unset.
@@ -405,6 +412,7 @@ export function getDefaultShipData(): ShipData {
         escortSellValue: 0,
         shortName: "",
         longName: "",
+        commName: "",
         subtitle: "",
         pilotDesc: "",
         disableArmorFraction: 0.33,

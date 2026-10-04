@@ -182,6 +182,8 @@ describe("the synthetic Nova data set", () => {
                 expect(ship.name).toEqual(def.name);
                 expect(ship.shortName).toEqual(def.shortName);
                 expect(ship.longName).toEqual(def.longName);
+                // shïp CommName, the comm dialog's class line (#297).
+                expect(ship.commName).toEqual(def.commName);
                 expect(ship.desc).toEqual(def.desc);
                 expect(ship.pilotDesc).toEqual(def.pilotDesc);
                 expect(ship.price).toEqual(def.cost);
