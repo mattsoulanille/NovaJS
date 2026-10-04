@@ -310,7 +310,10 @@ export const PROTOCOL_VERSION = 8;
  *     simulation), sent on that socket alone, so no other peer ever
  *     sees it, and never logged. A client holds it in memory only
  *     (communicator_client.ts says why not localStorage) and presents
- *     it as the FIRST communicator frame of its next connection; the
+ *     it as the FIRST communicator frame of its next connection — the
+ *     channel writes it the moment the new socket opens, ahead of
+ *     everything else, and replays nothing queued for the dead
+ *     connection (socket_channel_client.ts, #366); the
  *     server then retires the connection the token was issued to —
  *     closes it and emits its departure through the normal path, so
  *     every room sees the old peer leave (removePeer, item 5) before

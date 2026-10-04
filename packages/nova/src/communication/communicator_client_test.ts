@@ -29,6 +29,9 @@ class MockClientChannel implements ChannelClient {
     disconnect() {
         this.connected.next(false);
     }
+    setReconnectPreamble() {
+        // Never replaces its connection.
+    }
     /** A frame from the socket's server end. */
     frame(message: CommunicatorMessage) {
         this.message.next(CommunicatorMessage.encode(message));
@@ -159,6 +162,7 @@ class LinkedChannels implements ChannelServer {
             connected: new BehaviorSubject(true),
             send: message => this.message.next({ source: uuid, message }),
             disconnect: () => undefined,
+            setReconnectPreamble: () => undefined,
         };
         const client = new CommunicatorClient(socket);
         this.clients.add(uuid);

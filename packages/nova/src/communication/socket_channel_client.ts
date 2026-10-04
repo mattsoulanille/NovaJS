@@ -33,7 +33,39 @@ export class SocketChannelClient implements ChannelClient {
     private pingsSentSinceMessage = 0;
     private messageListener: (m: MessageEvent) => void;
     private closeListener?: (e: CloseEvent) => void;
+    /**
+     * Messages waiting for the socket to open, in order. What may wait
+     * here (#366):
+     *  - a ping or pong never does: each probes the socket it is written
+     *    to, so one that cannot be written now is stale by the time a
+     *    socket can take it — replaying them was a burst of pings ahead of
+     *    everything else on a just-recovered link;
+     *  - before the FIRST connection, everything else does, as it always
+     *    has (there is no earlier connection it could belong to);
+     *  - once a connection has been LOST, nothing sent for it survives:
+     *    the queue is dropped when the socket is replaced, and sends are
+     *    dropped until the replacement's first inbound frame (`replacing`).
+     *    The server assigns a uuid per socket, so the new connection is a
+     *    NEW peer, in no room until its `connected` edge re-joins them
+     *    (multi_room_communicator.ts joinCurrentRooms). Room traffic from
+     *    the gap could only be refused as a non-member's ("Dropping inputs
+     *    from <peer>: not in this room", rollback_relay.ts) — or, had any
+     *    of it landed after the re-join, be stamped with the new uuid and
+     *    clamped to the relay's current tick: stale inputs applied out of
+     *    time. Nothing in it is needed: the re-entry (#354,
+     *    simulation_bridge_host.ts) resyncs and re-inserts the fleet under
+     *    the new uuid once the new uuid frame arrives.
+     * The one frame a replacement does carry from the old connection is
+     * the reconnect preamble (the token), always at the head.
+     */
     private messageQueue: SocketMessage[] = [];
+    /** What a replacement connection opens with (setReconnectPreamble). */
+    private reconnectPreamble?: () => unknown;
+    /** Set by the first inbound frame: a connection has existed. */
+    private hadConnection = false;
+    /** Between replacing a lost connection's socket and the replacement's
+     * first inbound frame: sends are dropped (see `messageQueue`). */
+    private replacing = false;
     private maxPings: number
     /** How socket messages become frames; the live wire unless a test
      * supplies its own. */
@@ -169,11 +201,36 @@ export class SocketChannelClient implements ChannelClient {
             // everything it sent (#354, #339).
             this.connected.next(false);
         }
-        this.webSocket = this.adopt(this.webSocketFactory());
-        this.webSocket.addEventListener("message", this.messageListener);
+        if (this.hadConnection) {
+            // Everything queued was for the connection that is gone.
+            this.messageQueue.length = 0;
+            this.replacing = true;
+        }
+        const webSocket = this.adopt(this.webSocketFactory());
+        this.webSocket = webSocket;
+        webSocket.addEventListener("message", this.messageListener);
         this.addCloseListener();
+        const preamble = this.hadConnection
+            ? this.reconnectPreamble?.() : undefined;
+        if (preamble !== undefined) {
+            // The new connection's FIRST frame, written the moment the
+            // socket opens: the server honours a reconnect token in that
+            // position only (communicator_server.ts), and it needs nothing
+            // from the server first — the client already holds the token,
+            // and the server sends its uuid frame on connect regardless.
+            this.messageQueue.unshift({ message: preamble });
+            webSocket.addEventListener("open", () => {
+                if (webSocket === this.webSocket) {
+                    this.flush();
+                }
+            }, { once: true });
+        }
         this.resetTimeout();
         this.sendPing();
+    }
+
+    setReconnectPreamble(preamble: () => unknown) {
+        this.reconnectPreamble = preamble;
     }
 
     reconnectIfClosed() {
@@ -231,7 +288,17 @@ export class SocketChannelClient implements ChannelClient {
             return;
         }
         this.reconnectIfClosed();
+        // What may wait for a socket, and why: see `messageQueue`.
+        const probe = message.ping === true || message.pong === true;
+        if (probe ? this.webSocket.readyState !== this.webSocket.OPEN
+            : this.replacing) {
+            return;
+        }
         this.messageQueue.push(message);
+        this.flush();
+    }
+
+    private flush() {
         if (this.webSocket.readyState !== this.webSocket.OPEN) {
             return;
         }
@@ -265,6 +332,9 @@ export class SocketChannelClient implements ChannelClient {
     private async handleMessage(messageEvent: MessageEvent) {
         this.resetTimeout();
         this.pingsSentSinceMessage = 0;
+        // The connection is up: what is sent from here on is for it.
+        this.hadConnection = true;
+        this.replacing = false;
         if (!this.connected.value) {
             this.warn("Connected");
             this.connected.next(true);

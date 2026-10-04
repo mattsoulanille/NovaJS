@@ -1,5 +1,6 @@
 import 'jasmine';
 import * as http from 'http';
+import * as net from 'net';
 import { AddressInfo } from 'net';
 import { v4 } from 'uuid';
 import { Entity } from 'nova_ecs/entity';
@@ -44,6 +45,9 @@ import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';
 import { SocketChannelClient } from './socket_channel_client.js';
 import { SocketChannelServer } from './socket_channel_server.js';
+import { SocketMessage } from './socket_message.js';
+import { decodeWireOrThrow } from './wire_codec.js';
+import { liveWireCodec } from './wire_schemas.js';
 import {
     forwardRoomToWorker, WorkerRoomCommunicator, workerRoomState,
 } from './worker_room_communicator.js';
@@ -104,6 +108,96 @@ class IdentityGate {
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * A TCP proxy between a client and the server that can go HALF-OPEN the
+ * way a real link does (#366): `stall()` silences every connection open at
+ * that moment for good — nothing crosses it either way, and neither end is
+ * ever closed, so the server keeps the old peer until its keepalive gives
+ * up — while connections made during the outage hang mid-handshake (their
+ * bytes held) until `resume()`.
+ */
+class HalfOpenProxy {
+    port = 0;
+    private server?: net.Server;
+    private links: {
+        sides: [net.Socket, net.Socket],
+        dead: boolean,
+        held: [net.Socket, Buffer][],
+    }[] = [];
+    private stalled = false;
+
+    constructor(private readonly target: () => number) { }
+
+    async start() {
+        this.server = net.createServer(client => this.accept(client));
+        await new Promise<void>(resolve =>
+            this.server!.listen(0, '127.0.0.1', () => resolve()));
+        this.port = (this.server.address() as AddressInfo).port;
+    }
+
+    private accept(client: net.Socket) {
+        const upstream = net.connect(this.target(), '127.0.0.1');
+        const link = {
+            sides: [client, upstream] as [net.Socket, net.Socket],
+            dead: false,
+            held: [] as [net.Socket, Buffer][],
+        };
+        this.links.push(link);
+        const pipe = (from: net.Socket, to: net.Socket) => from.on('data', chunk => {
+            if (link.dead) {
+                return;
+            }
+            if (this.stalled) {
+                link.held.push([to, chunk]);
+                return;
+            }
+            to.write(chunk);
+        });
+        pipe(client, upstream);
+        pipe(upstream, client);
+        for (const side of link.sides) {
+            side.on('error', () => undefined);
+            // A dead link's close is not carried either: that is what
+            // makes it half-open.
+            side.on('close', () => {
+                if (!link.dead) {
+                    for (const other of link.sides) {
+                        other.destroy();
+                    }
+                }
+            });
+        }
+    }
+
+    stall() {
+        for (const link of this.links) {
+            link.dead = true;
+        }
+        this.stalled = true;
+    }
+
+    resume() {
+        this.stalled = false;
+        for (const link of this.links) {
+            for (const [to, chunk] of link.held.splice(0)) {
+                if (!link.dead) {
+                    to.write(chunk);
+                }
+            }
+        }
+    }
+
+    async close() {
+        for (const link of this.links) {
+            for (const side of link.sides) {
+                side.destroy();
+            }
+        }
+        await new Promise<void>(resolve => this.server?.close(() => resolve())
+            ?? resolve());
+    }
+}
 
 async function until(condition: () => boolean, what: string, ms = 10_000) {
     const start = Date.now();
@@ -226,16 +320,27 @@ describe('a socket reconnect mid-game (#354)', () => {
     }
 
     async function makePeer(name: string, x: number,
-        { forwardIdentity = true, hostOptions = {} }: {
+        { forwardIdentity = true, hostOptions = {}, via, keepalive = 600_000,
+            onSocket }: {
             forwardIdentity?: boolean | IdentityGate,
             hostOptions?: ConstructorParameters<typeof SimulationBridgeHost>[2],
+            /** Connect through this proxy instead of straight to the server. */
+            via?: HalfOpenProxy,
+            /** The client's keepalive timeout (ms). */
+            keepalive?: number,
+            /** Sees every WebSocket the client creates, as it is created. */
+            onSocket?: (webSocket: WebSocket) => void,
         } = {}): Promise<Peer> {
         const gameData = await getSyntheticGameData();
         const socket = new SocketChannelClient({
-            webSocketFactory: () => new WebSocket(
-                connectUrlWithVersion(`ws://127.0.0.1:${port}`, BUILD)),
+            webSocketFactory: () => {
+                const webSocket = new WebSocket(connectUrlWithVersion(
+                    `ws://127.0.0.1:${via?.port ?? port}`, BUILD));
+                onSocket?.(webSocket);
+                return webSocket;
+            },
             warn: () => undefined,
-            timeout: 600_000,
+            timeout: keepalive,
         });
         sockets.push(socket);
         const communicator = new CommunicatorClient(socket);
@@ -594,6 +699,12 @@ describe('a socket reconnect mid-game (#354)', () => {
         const b = await makePeer('b', -100);
         await step(240);
 
+        const firstFrames = new Map<string, unknown>();
+        channel.message.subscribe(({ source, message }) => {
+            if (!firstFrames.has(source)) {
+                firstFrames.set(source, message);
+            }
+        });
         halfOpen(a);
         const { before, after } = await reconnect(a);
         // The old peer left the room on the token alone — the socket is
@@ -601,6 +712,10 @@ describe('a socket reconnect mid-game (#354)', () => {
         await until(() => !relay['roomPeers']().has(before),
             'the old connection retired', 2_000);
         expect(channel.clients.has(before)).toBeFalse();
+        // On the token, as the new connection's first frame (#366).
+        expect(firstFrames.get(after)).toEqual(CommunicatorMessage.encode({
+            type: MessageType.reconnect, token: jasmine.any(String) as unknown as string,
+        }));
         const retiredAt = relay.tick;
         await step(120);
         await archive.update();
@@ -622,6 +737,125 @@ describe('a socket reconnect mid-game (#354)', () => {
         const removals = relay.inputLog.filter(record => record.inputs.some(
             input => input.kind === 'removePeer' && input.peerId === before));
         expect(removals.length).toBe(1);
+    }, 120_000);
+
+    /**
+     * #366, the browser's shape of the same drop: a link that goes
+     * half-open under a client still playing. The client's own keepalive
+     * gives up on the silent socket; every replacement socket hangs
+     * mid-handshake for the rest of the outage, while the client keeps
+     * pinging and its simulation keeps sending room traffic — all of it
+     * QUEUED by SocketChannelClient, as a browser's CONNECTING socket
+     * forces. The token must still be the new connection's first frame,
+     * or the server ignores it and the old peer stays for the keepalive's
+     * minute.
+     */
+    it('with its token, retires the half-open old connection at once when pings and room traffic queued during the outage', async () => {
+        const proxy = new HalfOpenProxy(() => port);
+        await proxy.start();
+        try {
+            /** What a's client wrote on each socket it created, decoded. */
+            const written: SocketMessage[][] = [];
+            const codec = liveWireCodec();
+            const a = await makePeer('a', 100, {
+                via: proxy, keepalive: 150,
+                onSocket: webSocket => {
+                    const frames: SocketMessage[] = [];
+                    written.push(frames);
+                    const send = webSocket.send.bind(webSocket);
+                    webSocket.send = (data: Parameters<WebSocket['send']>[0]) => {
+                        frames.push(decodeWireOrThrow(codec, SocketMessage,
+                            data as Uint8Array));
+                        send(data);
+                    };
+                },
+            });
+            await addEscort(a, 'escort a', 150);
+            await step(5);
+            const b = await makePeer('b', -100);
+            await step(240);
+            /** The communicator frames the SERVER received, by connection,
+             * in order. */
+            const received = new Map<string, unknown[]>();
+            channel.message.subscribe(({ source, message }) => {
+                received.set(source, [...received.get(source) ?? [], message]);
+            });
+            const lateTokens = spyOn(console, 'warn').and.callThrough();
+            const before = a.communicator.uuid!;
+            const { length: socketsBefore } = written;
+
+            // The outage: a and b keep playing, and a keeps sending.
+            const sentDuringOutage: unknown[] = [];
+            const sending = a.socket.send.bind(a.socket);
+            a.socket.send = (message: unknown) => {
+                if (!a.socket.connected.value) {
+                    sentDuringOutage.push(message);
+                }
+                sending(message);
+            };
+            proxy.stall();
+            const outageEnds = Date.now() + 2_000;
+            while (Date.now() < outageEnds) {
+                await step(1);
+                await sleep(10);
+            }
+            expect(a.socket.connected.value).withContext('a noticed').toBeFalse();
+            expect(written.length).withContext('replacement sockets')
+                .toBeGreaterThan(socketsBefore);
+            expect(sentDuringOutage.length)
+                .withContext('room traffic sent while disconnected')
+                .toBeGreaterThan(0);
+
+            proxy.resume();
+            const resumedAt = Date.now();
+            await until(() => a.communicator.uuid !== before
+                && a.room.peers.current.value.has(a.communicator.uuid!),
+                'a back under a new uuid');
+            const after = a.communicator.uuid!;
+            // The old peer leaves on the token alone, within ~2 s.
+            await until(() => !relay['roomPeers']().has(before),
+                'the old connection retired', 2_000);
+            const retiredIn = Date.now() - resumedAt;
+            expect(retiredIn).toBeLessThan(2_000);
+            expect(channel.clients.has(before)).toBeFalse();
+
+            // The new connection's FIRST communicator frame was the token...
+            const first = CommunicatorMessage.decode(received.get(after)?.[0]);
+            expect(isLeft(first) ? undefined : first.right.type)
+                .withContext('the new connection\'s first frame')
+                .toBe(MessageType.reconnect);
+            // ...and the very first frame the client wrote on that socket,
+            // ahead of any ping: nothing stale was replayed before it.
+            const connected = written.slice(socketsBefore)
+                .filter(frames => frames.length > 0);
+            expect(connected.length).withContext('replacements that connected')
+                .toBe(1);
+            expect(connected[0][0].message === undefined ? undefined
+                : (CommunicatorMessage.decode(connected[0][0].message) as
+                    { right?: { type: MessageType } }).right?.type)
+                .withContext('the first frame written').toBe(MessageType.reconnect);
+            expect(lateTokens.calls.allArgs().some(args =>
+                String(args[0]).includes('presented a reconnect token after')))
+                .toBeFalse();
+
+            const retiredAt = relay.tick;
+            await step(120);
+            await archive.update();
+            const expected = { owner: after, controller: after };
+            expect(stamps(archive.archiveWorld, a.shipUuid)).toEqual(expected);
+            expect(stamps(archive.archiveWorld, 'escort a'))
+                .toEqual({ owner: after, controller: undefined });
+            await step(480);
+            await archive.update();
+            expectInLockstep(a, retiredAt);
+            expectInLockstep(b, retiredAt);
+            expect(stamps(b.world, a.shipUuid)).toEqual(expected);
+            const removals = relay.inputLog.filter(record => record.inputs.some(
+                input => input.kind === 'removePeer' && input.peerId === before));
+            expect(removals.length).toBe(1);
+        } finally {
+            await proxy.close();
+        }
     }, 120_000);
 
     it('removes a departed peer\'s player ship and escorts, and disowns the rest, on every world', async () => {

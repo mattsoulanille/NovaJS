@@ -7,6 +7,9 @@ import { firstValueFrom } from "rxjs";
 import { decodeWireOrThrow } from "./wire_codec.js";
 import { socketCodecFor } from "./wire_schemas.js";
 import { UncarriableMessageError } from "./wire_send_policy.js";
+import { CommunicatorClient } from "./communicator_client.js";
+import { CommunicatorMessage, MessageType } from "./communicator_message.js";
+import { MultiRoom, RoomMessage } from "./multi_room_communicator.js";
 
 /** A schema'd codec over an untyped payload: any shape, binary frames. */
 const codec = socketCodecFor(t.unknown);
@@ -309,5 +312,267 @@ describe("SocketChannelClient", function () {
                 sentMessage(frame as Uint8Array).message))
                 .toEqual([{ first: true }, { third: true }, { fourth: true }, { fifth: true }]);
         });
+    });
+
+    /**
+     * A browser WebSocket, as far as the client can tell: a socket is
+     * CONNECTING until the handshake completes, `send` throws on one that
+     * is not OPEN (so the client must queue), and a half-open socket
+     * stays OPEN while nothing it sends arrives anywhere.
+     */
+    class BrowserLikeSocket {
+        readonly CONNECTING = 0;
+        readonly OPEN = 1;
+        readonly CLOSING = 2;
+        readonly CLOSED = 3;
+        readyState = 0;
+        binaryType = 'blob';
+        /** Every frame written to this socket, decoded, in order. */
+        readonly written: SocketMessage[] = [];
+        private listeners = new Map<string, Set<(event: unknown) => void>>();
+
+        addEventListener(type: string, listener: (event: unknown) => void,
+            options?: { once?: boolean }) {
+            const wrapped = options?.once
+                ? (event: unknown) => {
+                    this.removeEventListener(type, wrapped);
+                    listener(event);
+                }
+                : listener;
+            if (!this.listeners.has(type)) {
+                this.listeners.set(type, new Set());
+            }
+            this.listeners.get(type)!.add(wrapped);
+        }
+        removeEventListener(type: string, listener: (event: unknown) => void) {
+            this.listeners.get(type)?.delete(listener);
+        }
+        private dispatch(type: string, event: unknown) {
+            for (const listener of [...this.listeners.get(type) ?? []]) {
+                listener(event);
+            }
+        }
+        send(frame: unknown) {
+            if (this.readyState !== this.OPEN) {
+                throw new Error('InvalidStateError: the socket is not open');
+            }
+            this.written.push(sentMessage(frame));
+        }
+        close() {
+            this.readyState = this.CLOSED;
+        }
+        /** The handshake completes. */
+        open() {
+            this.readyState = this.OPEN;
+            this.dispatch('open', {});
+        }
+        /** A frame from the server end. */
+        receive(message: SocketMessage) {
+            this.dispatch('message', frameEvent(message));
+        }
+        /** The communicator frames written, decoded. */
+        communicatorFrames(): CommunicatorMessage[] {
+            return this.written.filter(frame => frame.message !== undefined)
+                .map(frame => {
+                    const decoded = CommunicatorMessage.decode(frame.message);
+                    if (decoded._tag === 'Left') {
+                        throw new Error('not a communicator frame');
+                    }
+                    return decoded.right;
+                });
+        }
+    }
+
+    function uuidFrame(uuid: string, token: string): SocketMessage {
+        return {
+            message: CommunicatorMessage.encode({
+                type: MessageType.uuid, uuid, servers: new Set(['server']), token,
+            }),
+        };
+    }
+
+    /** The server's announcement of a room's peer set. */
+    function roomPeersFrame(room: string, peers: string[]): SocketMessage {
+        return {
+            message: CommunicatorMessage.encode({
+                type: MessageType.message, source: 'server',
+                message: RoomMessage.encode({ room, peers: new Set(peers) }),
+            }),
+        };
+    }
+
+    const tokenFrame = (token: string): CommunicatorMessage =>
+        ({ type: MessageType.reconnect, token });
+
+    /** The room payloads among communicator frames (joins excluded). */
+    function roomPayloads(frames: CommunicatorMessage[]): unknown[] {
+        return frames.flatMap(frame => frame.type === MessageType.message
+            && (frame.message as { message?: unknown }).message !== undefined
+            ? [(frame.message as { message: unknown }).message] : []);
+    }
+
+    /**
+     * #366: the reconnect token (#354) must be the new connection's FIRST
+     * communicator frame — the only position the server honours it in
+     * (communicator_server.ts). While the socket is down the client keeps
+     * pinging and the simulation keeps sending room traffic; what the
+     * browser path QUEUED of that went out on the new socket AHEAD of the
+     * token, so the server ignored it ("presented a reconnect token after
+     * its first frame") and the half-open old connection stayed in the
+     * room until the server's keepalive noticed, about a minute later.
+     * The older specs' sockets queued nothing while disconnected, so they
+     * never saw it.
+     */
+    describe("after a lost connection (#366)", () => {
+        const TIMEOUT = 100;
+        let sockets: BrowserLikeSocket[];
+        let client: SocketChannelClient;
+        let communicator: CommunicatorClient;
+        let room: ReturnType<MultiRoom['join']>;
+
+        beforeEach(() => {
+            spyOn(console, 'warn');
+            sockets = [];
+            client = new SocketChannelClient({
+                webSocketFactory: () => {
+                    const socket = new BrowserLikeSocket();
+                    sockets.push(socket);
+                    return socket as unknown as WebSocket;
+                },
+                warn, codec, timeout: TIMEOUT, maxPings: 3,
+            });
+            communicator = new CommunicatorClient(client);
+            room = new MultiRoom(communicator).join('nova:129');
+            // The first connection: up, announced, in the room.
+            sockets[0].open();
+            sockets[0].receive(uuidFrame('first', 'first token'));
+            sockets[0].receive(roomPeersFrame('nova:129', ['server', 'first']));
+            expect(communicator.uuid).toBe('first');
+            room.sendMessage({ before: 'the drop' });
+            expect(roomPayloads(sockets[0].communicatorFrames()))
+                .toEqual([{ before: 'the drop' }]);
+        });
+
+        afterEach(() => {
+            client.disconnect();
+        });
+
+        /** The link goes half-open: the old socket stays OPEN, nothing
+         * arrives either way, and the keepalive gives up on it. Every
+         * replacement socket's handshake then hangs for the rest of the
+         * outage (the keepalive abandons each for another), while the
+         * keepalive keeps pinging and the simulation keeps sending room
+         * traffic. Returns the replacement that finally connects. */
+        function outage(): BrowserLikeSocket {
+            sockets[0].send = () => undefined;
+            for (let i = 0; i < 10 && sockets.length === 1; i++) {
+                room.sendMessage({ during: 'the half-open', i });
+                clock.tick(TIMEOUT + 1);
+            }
+            expect(sockets.length).withContext('the keepalive reconnected')
+                .toBeGreaterThan(1);
+            expect(client.connected.value).toBeFalse();
+            for (let i = 0; i < 4; i++) {
+                room.sendMessage({ during: 'the outage', i });
+                clock.tick(TIMEOUT + 1);
+            }
+            // Abandoned before their handshakes completed: nothing written.
+            for (const abandoned of sockets.slice(1, -1)) {
+                expect(abandoned.written).toEqual([]);
+            }
+            return sockets[sockets.length - 1];
+        }
+
+        it("opens the new connection with the token, ahead of anything queued during the outage", () => {
+            const fresh = outage();
+            fresh.open();
+            fresh.receive(uuidFrame('second', 'second token'));
+
+            // The very first frame on the socket, pings included.
+            expect(fresh.written[0]?.message)
+                .toEqual(CommunicatorMessage.encode(tokenFrame('first token')));
+            // Exactly once on this connection.
+            expect(fresh.communicatorFrames()
+                .filter(frame => frame.type === MessageType.reconnect) as unknown[])
+                .toEqual([tokenFrame('first token')]);
+            // The client now holds the new connection's token.
+            expect(communicator['reconnectToken']).toBe('second token');
+        });
+
+        it("sends the token as soon as the socket opens, before the server's first frame", () => {
+            const fresh = outage();
+            fresh.open();
+            expect(fresh.written.map(frame => frame.message))
+                .toEqual([CommunicatorMessage.encode(tokenFrame('first token'))]);
+        });
+
+        it("drops what was queued for the dead connection: no burst of stale pings, no stale room traffic", () => {
+            const fresh = outage();
+            fresh.open();
+            fresh.receive(uuidFrame('second', 'second token'));
+            room.sendMessage({ after: 'the reconnect' });
+
+            expect(fresh.written.filter(frame => frame.ping).length)
+                .withContext('pings replayed from the outage').toBe(0);
+            // Room traffic from the outage was addressed as a peer (the old
+            // uuid) the new connection is not, to a room it has not joined
+            // yet: dropped. The re-join, and what follows it, go out.
+            const frames = fresh.communicatorFrames();
+            expect(roomPayloads(frames)).toEqual([{ after: 'the reconnect' }]);
+            const joins = frames.filter(frame => frame.type === MessageType.message
+                && (frame.message as { inRoom?: boolean }).inRoom === true);
+            expect(joins.length).withContext('the connected edge re-joins').toBe(1);
+        });
+
+        it("presents the token on whichever replacement socket finally connects", () => {
+            outage();
+            // More abandoned replacements, then one connects.
+            const before = sockets.length;
+            for (let i = 0; i < 10 && sockets.length === before; i++) {
+                clock.tick(TIMEOUT + 1);
+            }
+            expect(sockets.length).toBeGreaterThan(before);
+            const fresh = sockets[sockets.length - 1];
+            fresh.open();
+            fresh.receive(uuidFrame('third', 'third token'));
+            for (const abandoned of sockets.slice(1, -1)) {
+                expect(abandoned.written).toEqual([]);
+            }
+            expect(fresh.communicatorFrames()[0]).toEqual(tokenFrame('first token'));
+        });
+
+        it("presents nothing when the connection it lost never received a token", () => {
+            communicator['reconnectToken'] = undefined;
+            const fresh = outage();
+            fresh.open();
+            fresh.receive(uuidFrame('second', 'second token'));
+            expect(fresh.communicatorFrames()
+                .filter(frame => frame.type === MessageType.reconnect)).toEqual([]);
+        });
+    });
+
+    it("keeps the queue of a FIRST connection: nothing to drop before any connection existed", () => {
+        const created: BrowserLikeSocket[] = [];
+        const client = new SocketChannelClient({
+            webSocketFactory: () => {
+                const socket = new BrowserLikeSocket();
+                created.push(socket);
+                return socket as unknown as WebSocket;
+            },
+            warn, codec, timeout: 100, maxPings: 0,
+        });
+        client.send({ early: 1 });
+        // The first socket never connects; the keepalive replaces it.
+        clock.tick(250);
+        expect(created.length).toBeGreaterThan(1);
+        client.send({ early: 2 });
+        const socket = created[created.length - 1];
+        socket.open();
+        socket.receive({ pong: true });
+        client.send({ late: 3 });
+        expect(socket.written.filter(frame => frame.message !== undefined)
+            .map(frame => frame.message))
+            .toEqual([{ early: 1 }, { early: 2 }, { late: 3 }]);
+        client.disconnect();
     });
 });

@@ -34,6 +34,17 @@ export interface ChannelClient {
     readonly connected: BehaviorSubject<boolean>;
 
     readonly message: Subject<unknown>;
+
+    /**
+     * Sets what a REPLACEMENT connection opens with: each time the
+     * channel replaces a connection it had, it calls `preamble` and, when
+     * that returns a message, sends it as the new connection's very first
+     * frame, ahead of anything else. The reconnect token's slot (#354,
+     * #366; communicator_client.ts): the server honours a token only as a
+     * connection's first frame. A channel that never replaces its
+     * connection may ignore it.
+     */
+    setReconnectPreamble(preamble: () => unknown): void;
 }
 
 
