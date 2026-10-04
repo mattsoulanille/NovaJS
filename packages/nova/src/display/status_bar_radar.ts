@@ -29,21 +29,237 @@ import { MurkOutfitSystem } from "./system_environment_plugin.js";
 import { DrawStatusBarTarget } from "./status_bar_target.js";
 
 
-/** Full on+off period of the blinking system-center radar arrow, in ms. */
-const CENTER_ARROW_BLINK_MS = 700;
 /**
- * The selected target's radar blip flashes white: on for the first half of
- * each period. Same wall-clock cadence family as the centre arrow and the
- * running lights (display-only; never sim time). Tunables — the original's
- * exact rate isn't recorded in the reference notes.
+ * The radar's ONE clock (#358). The original redraws its radar at 4 Hz:
+ * in three 60 fps recordings of it (Windows build, 1432 / 3134 / 1733
+ * frames) the radar's pixels change only every 15.0 frames — mean period
+ * 251.1 / 249.7 / 250.0 ms — blip positions, the centre arrow, the target
+ * blip's flash and the sensor static alike, and nothing on it (the player's
+ * dot included) changes in between. Everything the radar shows therefore
+ * steps on this quantum of the display world's clock (TimeResource), never
+ * per display frame and never Date.now. Maintainer ruling 2026-10-03: "We
+ * can match the 4 per second update frequency."
  */
-export const TARGET_FLASH_MS = 800;
-const TARGET_FLASH_COLOR = 0xffffff;
-const TARGET_FLASH_SIZE = 2;
+export const RADAR_REFRESH_MS = 250;
 
-/** Whether the target blip is in the ON half of its flash at `time`. */
-export function targetFlashOn(time: number): boolean {
-    return (time % TARGET_FLASH_MS) < TARGET_FLASH_MS / 2;
+/** Which radar refresh `time` (display-world ms) falls in. */
+export function radarRefreshIndex(time: number): number {
+    return Math.floor(time / RADAR_REFRESH_MS);
+}
+
+/**
+ * Whether the radar's blinking elements — the system-centre arrow and the
+ * selected target's white flash — are ON in this refresh: one refresh on,
+ * one off. The recordings show exactly that: the arrow is drawn for 15
+ * frames and absent for 15 (250 ms / 250 ms, a 500 ms period, over ~47
+ * blinks), and a targeted blip alternates white / grey on consecutive
+ * refreshes. The two were never recorded together, so their relative phase
+ * is unmeasured; they share this one.
+ */
+export function radarBlinkOn(refresh: number): boolean {
+    return ((refresh % 2) + 2) % 2 === 0;
+}
+
+/** One radar pixel, in radar-local pixel coordinates. */
+export type RadarPixel = readonly [number, number];
+
+/**
+ * The system-centre arrow's geometry, as fractions of the radar's
+ * half-size (min(width, height) / 2), fitted to 22 arrow-visible frames of
+ * the original at bearings from -171° to -125° (radar 176 px, half-size 88;
+ * the recording is at 2x, one radar pixel = 2x2 capture pixels):
+ *  - the shaft is RADIAL — the tail sits on the centre->tip line to within
+ *    a pixel at every bearing — and starts a gap out from the player's dot:
+ *    tail radius 26.97 ± 0.32 px (27 / 88), tip radius 50.96 ± 0.29 px
+ *    (51 / 88);
+ *  - the head is an OPEN chevron: two one-pixel strokes back from the tip,
+ *    each about 5 px long (endpoints 4-6 px out, pixel rounding) at about
+ *    45° either side of the shaft (measured 35-55°);
+ *  - every stroke is one radar pixel wide, in the same grey as the ship
+ *    blips and stellar rings (capture value 118 vs blips 119-120; the
+ *    player's dot reads 249), i.e. the ïntf's dimRadar.
+ * Scaled by the radar's size so a non-stock ïntf radar (#205) keeps the
+ * proportions.
+ */
+export const CENTER_ARROW_TAIL = 27 / 88;
+export const CENTER_ARROW_TIP = 51 / 88;
+export const CENTER_ARROW_HEAD = 5 / 88;
+
+/** The pixels of a one-pixel line between two integer points (Bresenham). */
+export function linePixels(x0: number, y0: number, x1: number,
+    y1: number): RadarPixel[] {
+    const pixels: RadarPixel[] = [];
+    const dx = Math.abs(x1 - x0);
+    const dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    let x = x0;
+    let y = y0;
+    for (;;) {
+        pixels.push([x, y]);
+        if (x === x1 && y === y1) {
+            return pixels;
+        }
+        const e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y += sy;
+        }
+    }
+}
+
+/**
+ * The radar pixel the player's own dot occupies: the radar's centre,
+ * snapped down to a whole pixel (88, 88 on the stock 176 x 176 radar).
+ */
+export function radarCenterPixel(radarSize: readonly [number, number]):
+    RadarPixel {
+    return [Math.floor(radarSize[0] / 2), Math.floor(radarSize[1] / 2)];
+}
+
+/**
+ * The system-centre arrow as whole radar pixels: a radial shaft from
+ * CENTER_ARROW_TAIL to CENTER_ARROW_TIP of the radar's half-size along
+ * (dx, dy) — the direction to the system centre — and an open two-stroke
+ * head. Every endpoint is rounded to a pixel and every stroke rasterised
+ * one pixel wide, so the arrow is crisp at any bearing (no anti-aliased
+ * half-pixel lines). Empty for a zero direction.
+ */
+export function centerArrowPixels(dx: number, dy: number,
+    radarSize: readonly [number, number]): RadarPixel[] {
+    const len = Math.hypot(dx, dy);
+    if (!(len > 0)) {
+        return [];
+    }
+    const ux = dx / len;
+    const uy = dy / len;
+    const [cx, cy] = radarCenterPixel(radarSize);
+    const half = Math.min(radarSize[0], radarSize[1]) / 2;
+    const at = (r: number) => [Math.round(cx + ux * r * half),
+        Math.round(cy + uy * r * half)] as const;
+    const [tailX, tailY] = at(CENTER_ARROW_TAIL);
+    const [tipX, tipY] = at(CENTER_ARROW_TIP);
+    // The head strokes run back from the tip at 45° either side of the
+    // shaft: the backward unit vector (-ux, -uy) rotated by ±45°.
+    const head = CENTER_ARROW_HEAD * half;
+    const s = Math.SQRT1_2;
+    const bx = -ux;
+    const by = -uy;
+    const strokes = [
+        [(bx - by) * s, (bx + by) * s],
+        [(bx + by) * s, (by - bx) * s],
+    ];
+    const seen = new Set<string>();
+    const pixels: RadarPixel[] = [];
+    const add = (line: RadarPixel[]) => {
+        for (const p of line) {
+            const key = `${p[0]},${p[1]}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                pixels.push(p);
+            }
+        }
+    };
+    add(linePixels(tailX, tailY, tipX, tipY));
+    for (const [hx, hy] of strokes) {
+        add(linePixels(tipX, tipY, Math.round(tipX + hx * head),
+            Math.round(tipY + hy * head)));
+    }
+    return pixels;
+}
+
+/**
+ * A ship blip's size in radar pixels. Without a density scanner (oütf
+ * ModType 13 — stock Gravimetric Sensors nova:184, Physical Sense
+ * nova:252) every ship is one pixel. With one, the Bible's shïp Mass
+ * table applies: "1-99 ... small blip on density scanner", "100-199" and
+ * "200 and up ... large blip". The recordings agree: without add-ons every
+ * tracked ship is 1 px; with Gravimetric Sensors most are 2 x 2 and a few
+ * stay 1 px (the two clips show different ships, so the 100-ton threshold
+ * is the Bible's, not fitted).
+ */
+export const DENSITY_SCANNER_LARGE_MASS = 100;
+export function shipBlipSize(mass: number | undefined,
+    densityScanner: boolean): number {
+    return densityScanner && (mass ?? 0) >= DENSITY_SCANNER_LARGE_MASS
+        ? 2 : 1;
+}
+
+/**
+ * How a stellar shows on the radar. The original draws planet-sized
+ * stellars as a hollow ring and small ones (moons, small stations,
+ * destroyed hypergates) as a filled 2 x 2 dot, both centred on the
+ * stellar's radar pixel. Evidence: Kiniké (sprite 112) is a ring and Kolan
+ * (48) a dot on original_macos_screenshots/space/in_space_2.png; Jupiter
+ * (325) and Earth (150) rings, Europa (40) and Mars (48) dots on
+ * in_space.png; and in the two new Windows recordings (a system laid out
+ * like Porto Rillia: a 120 px planet at the centre and a 53 x 60 hypergate
+ * 300, 150 from it) a stationary ring with a stationary 2 x 2 dot exactly
+ * (9-9.5, 4-4.5) px from it — the dot that is the one 2 px blip in the
+ * no-add-ons clip. The size is read off the stellar's collision hull
+ * (≈ its sprite). The cut-off lies somewhere in the unmeasured 61-109 px
+ * band; STELLAR_RING_MIN_SIZE sits in the gap in the stock sprite sizes
+ * (nothing between 56 and 72).
+ */
+export const STELLAR_RING_MIN_SIZE = 64;
+export type StellarRadarShape = 'ring' | 'dot';
+export function stellarRadarShape(size: number | undefined):
+    StellarRadarShape {
+    return size !== undefined && size < STELLAR_RING_MIN_SIZE ? 'dot' : 'ring';
+}
+
+/**
+ * The stellar ring's pixels relative to the stellar's radar pixel: a 5 x 5
+ * square ring with its corners cut, 12 pixels, one pixel thick — the shape
+ * on every unobstructed ring in the Windows recordings (hundreds of
+ * frames). The Mac capture in_space.png draws Jupiter's ring 6 x 6 with 16
+ * pixels instead; the maintainer's recording is the reference here.
+ */
+export const STELLAR_RING_PIXELS: readonly RadarPixel[] = [
+    [-1, -2], [0, -2], [1, -2],
+    [-2, -1], [2, -1],
+    [-2, 0], [2, 0],
+    [-2, 1], [2, 1],
+    [-1, 2], [0, 2], [1, 2],
+];
+
+/** A filled size x size blip's pixels, top-left at the blip's pixel. */
+export function blipPixels(size: number): RadarPixel[] {
+    const pixels: RadarPixel[] = [];
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            pixels.push([x, y]);
+        }
+    }
+    return pixels;
+}
+
+/**
+ * The size of a stellar's sprite for stellarRadarShape: the larger extent
+ * of its collision hull (SpriteSheetData.hulls, frame 0), which tracks the
+ * sprite's own size for every stock stellar. Undefined until the sprite
+ * sheet caches.
+ */
+export function stellarHullSize(hulls: readonly (readonly (readonly
+    [number, number])[])[][] | undefined): number | undefined {
+    const frame = hulls?.[0];
+    if (!frame || frame.length === 0) {
+        return undefined;
+    }
+    let mx = 0;
+    let my = 0;
+    for (const convex of frame) {
+        for (const [x, y] of convex) {
+            mx = Math.max(mx, Math.abs(x));
+            my = Math.max(my, Math.abs(y));
+        }
+    }
+    return 2 * Math.max(mx, my);
 }
 
 /**
@@ -52,10 +268,6 @@ export function targetFlashOn(time: number): boolean {
  */
 export class RadarPane {
     private radarScale = new Vector(6000, 6000);
-    /** Blip graphics; class-owned, so it survives an ïntf reload. */
-    readonly graphics = new PIXI.Graphics();
-    /** How often DrawRadar redraws the blips, in display ms. */
-    period = 200;
 
     /**
      * The system's sensor interference (0-100), from the sÿst resource. Zero
@@ -80,7 +292,13 @@ export class RadarPane {
     /** Per-build: sized to the ïntf's radar area. */
     private staticSprite?: PIXI.TilingSprite;
 
-    constructor(private data: StatusBarData) { }
+    /**
+     * `graphics`: the blip graphics; class-owned, so it survives an ïntf
+     * reload. Injectable only so node specs (no canvas, so no real
+     * PIXI.Graphics) can record what the radar fills.
+     */
+    constructor(private data: StatusBarData,
+        readonly graphics: PIXI.Graphics = new PIXI.Graphics()) { }
 
     /** The effective interference after outfit reductions, clamped 0-100. */
     private get interference(): number {
@@ -134,19 +352,21 @@ export class RadarPane {
         shipColors?: ReadonlyMap<string, number>,
         /**
          * When set, the toroidal-nearest direction from the player to the
-         * system centre. The radar draws a blinking white arrow at its edge
-         * pointing that way — the original's cue that you are so far out no
-         * stellar shows on the radar. The DrawRadar system passes this only
-         * while the arrow should be visible (nothing stellar on radar, and the
-         * blink is in its ON phase); otherwise it is omitted.
+         * system centre. The radar draws its thin grey line arrow
+         * (centerArrowPixels) pointing that way — the original's cue that
+         * you are so far out no stellar shows on the radar. The DrawRadar
+         * system passes this only while the arrow should be visible
+         * (nothing stellar on radar, and the refresh is a blink-ON one);
+         * otherwise it is omitted.
          */
         centerArrow?: { x: number, y: number } | null,
         /**
-         * The uuid of the ship the player has targeted, passed only on the
-         * ON phase of its blink: that ship's blip is drawn white and larger
-         * over its normal colour, so the selected target flashes on the
-         * radar (Matthew's playtest, 2026-08-15 — the original's radar
-         * flashes the selected target white).
+         * The uuid of the ship the player has targeted, passed only on
+         * blink-ON refreshes: that ship's blip is drawn in the bright radar
+         * colour at its normal size, so the selected target flashes on the
+         * radar (Matthew's playtest, 2026-08-15; the recordings show it
+         * white at the blip's own 1 or 2 px, alternating with its grey on
+         * consecutive refreshes).
          */
         flashTarget?: string | null,
         /**
@@ -157,7 +377,18 @@ export class RadarPane {
          * the same rule ship blips follow. Missing entries fall back to the
          * flat colour.
          */
-        planetColors?: ReadonlyMap<string, number>) {
+        planetColors?: ReadonlyMap<string, number>,
+        /**
+         * Per-ship blip size in pixels by uuid (shipBlipSize); missing
+         * entries are 1 px. DrawRadar fills it in only while the player
+         * owns a density scanner.
+         */
+        shipSizes?: ReadonlyMap<string, number>,
+        /**
+         * Per-stellar radar shape by uuid (stellarRadarShape); missing
+         * entries draw the ring.
+         */
+        planetShapes?: ReadonlyMap<string, StellarRadarShape>) {
         this.graphics.clear();
 
         // Interference (0-100) makes sensors unreliable: on each radar tick,
@@ -172,58 +403,64 @@ export class RadarPane {
         this.drawDot(source, this.data.colors.brightRadar, source);
 
         for (const [uuid, { position }] of ships) {
-            const color = shipColors?.get(uuid)
-                ?? this.data.colors.dimRadar;
-            if (uuid === flashTarget) {
-                this.drawDot(position, TARGET_FLASH_COLOR, source,
-                    TARGET_FLASH_SIZE);
-                continue;
-            }
-            this.drawDot(position, color, source);
+            const size = shipSizes?.get(uuid) ?? 1;
+            const color = uuid === flashTarget
+                ? this.data.colors.brightRadar
+                : shipColors?.get(uuid) ?? this.data.colors.dimRadar;
+            this.drawDot(position, color, source, size);
         }
 
         for (const [uuid, { position }] of planets) {
-            this.drawDot(position,
-                planetColors?.get(uuid) ?? PLANET_FLAT_COLOR, source, 2);
+            const color = planetColors?.get(uuid) ?? PLANET_FLAT_COLOR;
+            if (planetShapes?.get(uuid) === 'dot') {
+                this.drawDot(position, color, source, 2);
+            } else {
+                this.drawPixels(this.radarPixelOf(position, source),
+                    STELLAR_RING_PIXELS, color);
+            }
         }
 
         if (centerArrow) {
-            this.drawCenterArrow(centerArrow.x, centerArrow.y);
+            this.drawPixels([0, 0], centerArrowPixels(centerArrow.x,
+                centerArrow.y, this.data.dataAreas.radar.size),
+                this.data.colors.dimRadar);
         }
     }
 
     /**
-     * Draws a white arrowhead at the radar's edge pointing along (dx, dy) —
-     * toward the system centre. Called only when the DrawRadar system has
-     * decided the arrow should show this tick.
+     * The whole radar pixel a world position falls on, relative to the
+     * player at the radar's centre pixel. Uses the toroidal-nearest delta
+     * so an object just across the loop boundary still blips near the
+     * player instead of falling off the far edge; snapped down to a pixel
+     * so every blip is crisp.
      */
-    private drawCenterArrow(dx: number, dy: number) {
-        const radarSize = new Vector(...this.data.dataAreas.radar.size);
-        const len = Math.hypot(dx, dy);
-        if (len === 0) {
-            return;
+    private radarPixelOf(position: Position, source: Position): RadarPixel {
+        const [w, h] = this.data.dataAreas.radar.size;
+        const [cx, cy] = radarCenterPixel([w, h]);
+        return [
+            cx + Math.floor(wrapNearestDelta(position.x - source.x)
+                * w / this.radarScale.x),
+            cy + Math.floor(wrapNearestDelta(position.y - source.y)
+                * h / this.radarScale.y),
+        ];
+    }
+
+    /**
+     * Fills single radar pixels at `origin` + each offset, clipped to the
+     * radar area (a ring at the edge shows only its inside part, as the
+     * original's does).
+     */
+    private drawPixels(origin: RadarPixel, pixels: readonly RadarPixel[],
+        color: number) {
+        const [w, h] = this.data.dataAreas.radar.size;
+        this.graphics.beginFill(color);
+        for (const [dx, dy] of pixels) {
+            const x = origin[0] + dx;
+            const y = origin[1] + dy;
+            if (x >= 0 && y >= 0 && x < w && y < h) {
+                this.graphics.drawRect(x, y, 1, 1);
+            }
         }
-        const nx = dx / len;
-        const ny = dy / len;
-        const cx = radarSize.x / 2;
-        const cy = radarSize.y / 2;
-        // Sit the arrowhead just inside the radar's edge (min half-dimension).
-        const edge = Math.min(radarSize.x, radarSize.y) / 2;
-        const tipR = edge * 0.95;
-        const tipX = cx + nx * tipR;
-        const tipY = cy + ny * tipR;
-        // Arrowhead triangle: a tip along (nx, ny) and a base behind it.
-        const length = 8;
-        const halfWidth = 4;
-        const baseX = cx + nx * (tipR - length);
-        const baseY = cy + ny * (tipR - length);
-        const px = -ny;
-        const py = nx;
-        this.graphics.beginFill(0xFFFFFF);
-        this.graphics.moveTo(tipX, tipY);
-        this.graphics.lineTo(baseX + px * halfWidth, baseY + py * halfWidth);
-        this.graphics.lineTo(baseX - px * halfWidth, baseY - py * halfWidth);
-        this.graphics.lineTo(tipX, tipY);
         this.graphics.endFill();
     }
 
@@ -245,30 +482,19 @@ export class RadarPane {
         return true;
     }
 
-    private drawDot(dotPos: Position, color: number, source = new Position(0, 0), size = 1) {
-        // draws a dot from nova position. The offset from the player uses the
-        // toroidal-nearest delta so an object just across the loop boundary
-        // still blips near the player instead of falling off the far edge.
-        const radarSize = new Vector(...this.data.dataAreas.radar.size);
-        const delta = new Vector(wrapNearestDelta(dotPos.x - source.x),
-            wrapNearestDelta(dotPos.y - source.y));
-        const pixiPos = delta
-            .times(radarSize).div(this.radarScale).add(radarSize.scale(0.5));
-
-        if (pixiPos.x <= radarSize.x && pixiPos.x >= 0 &&
-            pixiPos.y <= radarSize.y && pixiPos.y >= 0) {
-            // TODO: Make this work with any sizes
-            this.graphics.moveTo(pixiPos.x, pixiPos.y);
-            this.graphics.beginFill(color);
-            this.graphics.lineTo(pixiPos.x + size, pixiPos.y);
-            this.graphics.lineTo(pixiPos.x + size, pixiPos.y + size);
-            this.graphics.lineTo(pixiPos.x, pixiPos.y + size);
-            this.graphics.endFill()
-        }
+    /**
+     * A size x size filled blip with its top-left on the position's radar
+     * pixel (a 1 px ship, a 2 x 2 large ship or small stellar).
+     */
+    private drawDot(dotPos: Position, color: number, source: Position,
+        size = 1) {
+        this.drawPixels(this.radarPixelOf(dotPos, source),
+            blipPixels(size), color);
     }
 }
 
-const RadarTime = new Component<{ lastTime: number }>('RadarTime');
+/** The radar refresh (radarRefreshIndex) DrawRadar last drew. */
+const RadarTime = new Component<{ lastRefresh: number }>('RadarTime');
 
 /**
  * Whether a ship's cloak takes it off the radar: actively cloaked with a
@@ -304,10 +530,15 @@ export const DrawRadar = new System({
     step(radarTime, { time }, simTime, statusBar, { position }, ships, planets,
         gameData, entity, playerUuid) {
         if (!radarTime) {
-            radarTime = { lastTime: 0 };
+            radarTime = { lastRefresh: NaN };
             entity.components.set(RadarTime, radarTime);
         }
-        if (time - radarTime.lastTime > statusBar.radar.period) {
+        // One redraw per RADAR_REFRESH_MS quantum of the display clock, on
+        // the quantum boundary: everything below — blip positions, sizes,
+        // the static roll, the arrow's direction and blink, the target
+        // flash — holds still for the whole quantum, as the original's does.
+        const refresh = radarRefreshIndex(time);
+        if (refresh !== radarTime.lastRefresh) {
             // Hide ships that are actively cloaked with a radar-hiding
             // cloak (bit 0x0002 "visible on radar" clear), unless the
             // player has a cloak scanner that reveals cloaked ships on
@@ -407,11 +638,12 @@ export const DrawRadar = new System({
                     planetDisposition(clearance, isLandable), hasIff));
             }
             // System-center arrow: when no stellar object falls within the
-            // radar's range, the original blinks a white arrow at the radar's
-            // edge pointing back toward the system centre (0, 0). Chosen gate:
+            // radar's range, the original blinks a thin grey line arrow out
+            // from the player's dot toward the system centre (0, 0) —
+            // one refresh on, one off (centerArrowPixels). Chosen gate:
             // "no stellar within the radar's range" (radarScale/2 on each
-            // axis) — i.e. nothing stellar is on the radar. Blinks on a
-            // wall-clock cadence, like the running lights.
+            // axis) — i.e. nothing stellar is on the radar. Blinks on the
+            // radar's own refresh clock (radarBlinkOn).
             const range = statusBar.radar.range;
             let stellarOnRadar = false;
             for (const [, { position: planetPos }] of planets) {
@@ -421,21 +653,48 @@ export const DrawRadar = new System({
                     break;
                 }
             }
-            const blinkOn = (time % CENTER_ARROW_BLINK_MS)
-                < CENTER_ARROW_BLINK_MS / 2;
+            const blinkOn = radarBlinkOn(refresh);
             const centerArrow = (!stellarOnRadar && blinkOn)
                 ? {
                     x: wrapNearestDelta(0 - position.x),
                     y: wrapNearestDelta(0 - position.y),
                 }
                 : null;
-            // The selected target flashes white on the radar.
+            // Density scanner (oütf ModType 13): ship blips sized by hull
+            // mass. Derived from the player's delta-synced outfits, like
+            // IFF above; display-only.
+            const densityScanner = playerOutfits
+                ? (sumOutfitField(playerOutfits, gameData,
+                    o => o.densityScanner ? 1 : 0) ?? 0) > 0
+                : false;
+            const shipSizes = new Map<string, number>();
+            if (densityScanner) {
+                for (const [uuid, , shipData] of visibleShips) {
+                    shipSizes.set(uuid,
+                        shipBlipSize(shipData.physics.mass, true));
+                }
+            }
+            // Planet-sized stellars are rings, small ones 2 x 2 dots. The
+            // stellar's sprite sheet (hulls) is needed to tell; until it
+            // caches the stellar draws as a ring, and the fetch is started
+            // so the next refresh knows.
+            const planetShapes = new Map<string, StellarRadarShape>();
+            for (const [uuid, , planetData] of planets) {
+                const spriteId = planetData.animation.images.baseImage.id;
+                const sheet = gameData.data.SpriteSheet.getCached(spriteId);
+                if (!sheet) {
+                    gameData.data.SpriteSheet.get(spriteId).catch(() => { });
+                }
+                planetShapes.set(uuid,
+                    stellarRadarShape(stellarHullSize(sheet?.hulls)));
+            }
+            // The selected target flashes on blink-ON refreshes.
             const targetUuid = entity.components.get(TargetComponent)?.target;
             statusBar.radar.drawRadar(position, visibleShips, planets, shipColors,
                 centerArrow,
-                targetUuid && targetFlashOn(time) ? targetUuid : null,
-                planetColors);
-            radarTime.lastTime = time;
+                targetUuid && blinkOn ? targetUuid : null,
+                planetColors, shipSizes, planetShapes);
+            radarTime.lastRefresh = refresh;
         }
     },
     // #156 pin (shared: OutfitsState, ShipControl, SimulationGameData):
