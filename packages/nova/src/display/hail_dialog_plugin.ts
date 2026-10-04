@@ -21,14 +21,17 @@ import {
     greetingText, HAIL_RESPONSE_TABLE, hashString, hostileResponseText, LANDING_DENIED_INDEX,
     mercyAcceptedText, mercyRefusedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
     NO_NEED_RESPONSE_FALLBACK, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, planetTakesBribes,
-    shipNoResponseText,
+    shipNoResponseText, assistWillingness, assistRefusedText, justAnEscortText,
+    assistForPayText, assistPaidText, rudeGreetingText,
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
     shipDisposition, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { HailAction, PlayerHailMessage } from '../nova_plugin/encounters/index.js';
+import {
+    HailAction, isSomeoneElsesEscort, PlayerHailMessage,
+} from '../nova_plugin/encounters/index.js';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
@@ -209,7 +212,7 @@ export function targetIsFighting(target: Entity): boolean {
 }
 
 /**
- * The three things a hailed ship can say to a Request Assistance press, all
+ * The things a hailed ship can say to a Request Assistance press, all
  * resolved from STR# 3000 when the channel opens (the button's handler is
  * synchronous, so the text cannot be fetched on the press).
  */
@@ -220,6 +223,24 @@ export interface AssistReplies {
     busy: string;
     /** "You're not in any trouble." — the player's ship is fine. */
     noNeed: string;
+    /**
+     * "Sorry sir, I'm just an escort." — SOMEONE ELSE'S ESCORT (ruling
+     * #332). Present only for such a ship, and said to every request,
+     * whatever shape the player is in: an escort does not decide.
+     */
+    escort?: string;
+    /**
+     * "I'd rather not." — an unwilling ship (an unfriendly government that
+     * takes no bribes, or a ship another player owns). Present only for
+     * such a ship.
+     */
+    unwilling?: string;
+    /**
+     * "... but it'll cost you." — an unfriendly government's ship that
+     * takes bribes names its price (ruling #297). Present only for such a
+     * ship; the press moves onto the haggle page.
+     */
+    forPay?: string;
 }
 
 /** The pinned literals, used when the string table cannot be loaded. */
@@ -247,16 +268,29 @@ export const ASSIST_REPLIES_FALLBACK: AssistReplies = {
  * silently does nothing.
  */
 export function assistAnswer(world: World, targetUuid: string | undefined,
-    replies: AssistReplies): { line: string, dispatch: boolean } {
+    replies: AssistReplies):
+    { line: string, dispatch: boolean, haggle: boolean } {
+    // Someone else's escort never takes the request on its own account.
+    if (replies.escort !== undefined) {
+        return { line: replies.escort, dispatch: false, haggle: false };
+    }
     const player = getPlayerShip(world);
     if (!playerNeedsHelp(player)) {
-        return { line: replies.noNeed, dispatch: false };
+        return { line: replies.noNeed, dispatch: false, haggle: false };
     }
     const target = targetUuid ? world.entities.get(targetUuid) : undefined;
     if (target && targetIsFighting(target)) {
-        return { line: replies.busy, dispatch: false };
+        return { line: replies.busy, dispatch: false, haggle: false };
     }
-    return { line: replies.granted, dispatch: true };
+    // The unfriendly government's answer (ruling #297): a refusal, or a
+    // price. A price dispatches NOTHING yet — the haggle page's Pay does.
+    if (replies.unwilling !== undefined) {
+        return { line: replies.unwilling, dispatch: false, haggle: false };
+    }
+    if (replies.forPay !== undefined) {
+        return { line: replies.forPay, dispatch: false, haggle: true };
+    }
+    return { line: replies.granted, dispatch: true, haggle: false };
 }
 
 /**
@@ -331,6 +365,19 @@ export function shipIdentityBlock({ persName, shipClass, govtName, hostile }: {
         lines.push('Status: Hostile');
     }
     return lines.join('\n');
+}
+
+/**
+ * The class name the comm dialog's identity block shows: the shïp CommName
+ * ("Aur Carrier" for an Aurora Carrier — "Let's match the original", ruling
+ * #297; ruling #332's screenshot reads "Class Fed Viper (Federation)"),
+ * falling back to the resource name with its developer-only "; comment"
+ * suffix hidden when a class has no CommName.
+ */
+export function commClassName(ship: Pick<ShipData, 'name' | 'commName'>):
+    string {
+    return ship.commName?.trim() ? ship.commName.trim()
+        : displayName(ship.name);
 }
 
 /**
@@ -439,7 +486,7 @@ export async function computeContext(world: World,
         });
         const heading = shipIdentityBlock({
             persName: identity.named ? identity.name : undefined,
-            shipClass: shipData?.name,
+            shipClass: shipData ? commClassName(shipData) : undefined,
             govtName: govt?.commName,
             // The ship's IFF alone (ruling #297): "A ship of an unfriendly
             // government may show as neutral when hailed".
@@ -468,8 +515,11 @@ export async function computeContext(world: World,
         }
         // A ship ANOTHER player owns (their escort, fighter, mission ship):
         // the simulation refuses every hail action against it (hail_plugin's
-        // hailTargetBelongsToAnotherPlayer), so the channel offers none —
-        // rather than promising help, or a truce, that never comes.
+        // hailTargetBelongsToAnotherPlayer). Its offer button is still drawn
+        // (ruling #297: always visible for a ship that communicates), and
+        // the ship REFUSES in the well — "Sorry sir, I'm just an escort."
+        // for an escort (#332), "I'd rather not." otherwise — rather than
+        // promising help, or a truce, that never comes.
         const escortOf = shipTarget.components.get(PlayerEscortComponent)?.player;
         const owner = shipTarget.components.get(MultiplayerData)?.owner;
         const myOwner = player.entity.components.get(MultiplayerData)?.owner;
@@ -602,6 +652,12 @@ export async function computeContext(world: World,
         const shipStrings =
             await loadStrings(displayAssets, HAIL_RESPONSE_TABLE);
         const shipSeed = hashString(shipTargetUuid);
+        // SOMEONE ELSE'S ESCORT — an NPC flagship's fleet escort, another
+        // player's hired or captured escort — answers every request with
+        // "Sorry sir, I'm just an escort." (ruling #332's screenshot of the
+        // original) and does nothing; applyHail refuses it the same way.
+        const escortLine = isSomeoneElsesEscort(shipTarget, player.uuid)
+            ? justAnEscortText(shipStrings, shipSeed) : undefined;
 
         const response = shipHailResponse(govt, iffHostile, aiType, shipData);
         if (response.kind === 'cantHail') {
@@ -628,10 +684,14 @@ export async function computeContext(world: World,
             // BEG FOR MERCY IS OFFERED TO EVERY IFF-HOSTILE SHIP whose govt
             // has not disabled it (Flags2 0x0001): one that will not be
             // bought answers the plea with a flat refusal (STR# 3000 95-99)
-            // instead of a price, and keeps fighting.
-            const mercyRefused = response.canBeg && !response.canBribe
-                && !othersShip
-                ? mercyRefusedText(shipStrings, shipSeed) : undefined;
+            // instead of a price, and keeps fighting. A ship another player
+            // owns can strike no deal (applyHail refuses it), so it refuses
+            // too — "just an escort" when it is one.
+            const mercyRefused = response.canBeg && (!response.canBribe
+                || othersShip)
+                ? (othersShip ? escortLine : undefined)
+                    ?? mercyRefusedText(shipStrings, shipSeed)
+                : undefined;
             // A hostile ship answers from the GLOBAL hostile group (STR# 3000
             // 10-14, "What is it?" on hail/hail_hostile.png) INSTEAD of the
             // channel-open line a friendly ship opens with — that is what
@@ -663,14 +723,26 @@ export async function computeContext(world: World,
         // uuid so the line is stable per encounter and across peers. A
         // non-talkative govt yields '' and gets no Greetings answer at all,
         // leaving the channel-open line in place.
-        const greeting = greetingText({
-            persCommQuote: pers?.commQuote,
-            govtGreetings: govt?.commGreetings,
-            genericGreetings: genericGreetings(shipStrings),
-            govtCommName: govt?.commName,
-            talkative: response.talkative,
-            seed: shipSeed,
-        }) || undefined;
+        //
+        // RUDE, NOT HOSTILE (ruling #297): a ship whose GOVERNMENT is
+        // unfriendly to the player but which is not IFF-hostile — a pirate
+        // the player has bought off, a warship of a government whose record
+        // the player has ruined that has not opened fire — answers Greetings
+        // with the original's curt group (STR# 3000 10-14, "What do you
+        // want?") instead of its government's friendly greetings, seeded
+        // like every other line. A përs still speaks their own CommQuote, and
+        // a non-talkative govt still says nothing.
+        const rude = disposition === 'hostile' && response.talkative
+            && !pers?.commQuote?.trim();
+        const greeting = (rude ? rudeGreetingText(shipStrings, shipSeed)
+            : greetingText({
+                persCommQuote: pers?.commQuote,
+                govtGreetings: govt?.commGreetings,
+                genericGreetings: genericGreetings(shipStrings),
+                govtCommName: govt?.commName,
+                talkative: response.talkative,
+                seed: shipSeed,
+            })) || undefined;
         // ränk 0x0400 / 0x0800 for the hailed ship's OWN government
         // (rank_logic.ts): always-assist and free repair. Read off the same
         // synced ActiveRanksComponent the simulation reads, so the dialog and
@@ -678,14 +750,21 @@ export async function computeContext(world: World,
         const hailRanks = player.entity.components.get(ActiveRanksComponent);
         const getHailRank = (id: string) =>
             gameData.data.Rank.getCached(id);
-        const assist = !othersShip && canRequestAssistance({
-            disposition, govt, iffHostile, ship: shipData,
-            rankAlwaysAssists: ranksAllowAssistance(
-                hailRanks, getHailRank, govt?.id),
+        const rankAlwaysAssists = ranksAllowAssistance(
+            hailRanks, getHailRank, govt?.id);
+        // THE BUTTON IS ALWAYS THERE for a ship that communicates (ruling
+        // #297: "They just refuse to help you or make you pay") — only a
+        // Flags2 0x0001 govt (the Dechtakar) has none. Whether the ship
+        // HELPS is the answer's business, below.
+        const assist = canRequestAssistance({
+            govt, iffHostile, ship: shipData, rankAlwaysAssists,
         }) ? {
             free: assistIsFree(govt, ranksGiveFreeRepair(
                 hailRanks, getHailRank, govt?.id)),
         } : undefined;
+        const willingness = assistWillingness({
+            disposition, govt, aiType, rankAlwaysAssists,
+        });
         // The OFFER is not withdrawn for a ship that happens to be fighting,
         // nor for a player whose ship is in perfect shape, NOR ONCE IT HAS
         // BEEN USED (hail/request_assistance.png still shows the button after
@@ -693,10 +772,35 @@ export async function computeContext(world: World,
         // the ship answers with a line from the response table ("I'm busy" /
         // "You're not in any trouble." / "All right, I'll help you."). Only
         // the lines are resolved here — the press decides which is used.
-        const replies = resolveAssistReplies(shipStrings, shipSeed);
+        const replies: AssistReplies = {
+            ...resolveAssistReplies(shipStrings, shipSeed),
+            ...(escortLine !== undefined ? { escort: escortLine } : {}),
+            // A ship another player owns can do nothing for us (applyHail
+            // refuses it); an unfriendly government's ship that takes no
+            // bribes will not.
+            ...(othersShip || willingness === 'unwilling'
+                ? { unwilling: assistRefusedText(shipStrings, shipSeed) }
+                : willingness === 'forPay'
+                    ? { forPay: assistForPayText(shipStrings, shipSeed) }
+                    : {}),
+        };
+        // The price of an unfriendly ship's help, on the haggle page its
+        // answer opens: the SAME percentage-of-cash demand a mercy plea
+        // costs (bribeAmount), which applyHail re-derives when Pay arrives.
+        const amount = bribeAmount(credits, !!govt?.flags.largerBribes);
+        const bribe = assist && replies.forPay !== undefined
+            && replies.escort === undefined
+            ? {
+                amount, canAfford: credits >= amount && amount > 0,
+                purpose: 'assist' as const,
+                offer: replies.forPay,
+                accepted: assistPaidText(shipStrings, shipSeed),
+            }
+            : undefined;
         return {
             context: {
                 variant: 'ship', heading, image, body, greeting, assist,
+                ...(bribe ? { bribe } : {}),
             },
             target: shipTargetUuid, isEscort: false, replies,
         };
@@ -844,6 +948,9 @@ export const HailDialogPlugin: Plugin = {
         // used to name the upgrade's target CLASS — every figure is
         // recomputed sim-side (escort_action.ts).
         let currentEscort: EscortManagement | undefined;
+        // What the open channel's haggle page is selling (mercy, landing
+        // clearance or help), so Pay sends the matching record.
+        let currentBribePurpose: 'mercy' | 'landing' | 'assist' | undefined;
         const dialog = new HailDialog(displayAssets, controls, {
             requestAssistance: () => {
                 // ONE call decides and answers: the ship's line comes back
@@ -859,13 +966,19 @@ export const HailDialogPlugin: Plugin = {
                         },
                     });
                 }
-                return answer.line;
+                return { answer: answer.line, haggle: answer.haggle };
             },
             bribe: () => {
-                if (currentTarget) {
-                    world.emit(HailRequestEvent,
-                        { action: { kind: 'bribe', target: currentTarget } });
+                if (!currentTarget) {
+                    return;
                 }
+                // Paying for HELP (an unfriendly ship's price, ruling #297)
+                // is the assistance request itself: applyHail charges it.
+                world.emit(HailRequestEvent, {
+                    action: currentBribePurpose === 'assist'
+                        ? { kind: 'requestAssistance', target: currentTarget }
+                        : { kind: 'bribe', target: currentTarget },
+                });
             },
             // A press in a channel to another PLAYER (#332): the button goes
             // to their status line as a record — the sim notes it on OUR
@@ -1009,6 +1122,7 @@ export const HailDialogPlugin: Plugin = {
                 currentTarget = computed.target;
                 currentReplies = computed.replies;
                 currentEscort = computed.context.escort;
+                currentBribePurpose = computed.context.bribe?.purpose;
                 // Re-add to move above later-added containers (spaceport).
                 stage.addChild(dialog.container);
                 dialog.container.position.set(

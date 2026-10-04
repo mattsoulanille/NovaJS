@@ -20,7 +20,9 @@ import { JumpComponent } from '../travel/index.js';
 import { AssistingComponent, AssistingType, NpcFireControlSystem } from '../npc/index.js';
 import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
+import { escortParent } from '../escorts/index.js';
 import {
+    assistWillingness,
     bribeAmount,
     canRequestAssistance,
     planetTakesBribes,
@@ -181,6 +183,28 @@ export function hailTargetBelongsToAnotherPlayer(world: World,
     const servers = world.resources.get(CommunicatorResource)?.servers.value
         ?? DEFAULT_SERVER_PEERS;
     return !servers.has(owner);
+}
+
+/**
+ * Whether the hailed ship is SOMEONE ELSE'S ESCORT — it flies for a leader
+ * that is not the hailer: a fleet escort of an NPC flagship, a carrier's bay
+ * fighter, another player's hired or captured escort. Read through
+ * escortParent, the one parent-chain rule the escort command system and the
+ * hail dialog's own-escort test already share.
+ *
+ * Such a ship answers a request for help with "Sorry sir, I'm just an
+ * escort." and does nothing else (ruling #332's screenshot of the original:
+ * a hailed Fed Viper escort). The hailer's OWN escorts are not "someone
+ * else's": their channel is the escort-management box.
+ *
+ * Pure over synced state (FormationComponent, OwnerComponent and
+ * PlayerEscortComponent all cross the wire), so the dialog's answer and
+ * applyHail's refusal agree on every peer.
+ */
+export function isSomeoneElsesEscort(target: Entity,
+    hailerUuid: string): boolean {
+    const parent = escortParent(target);
+    return parent !== undefined && parent !== hailerUuid;
 }
 
 /** The server's uuid when a world has no communicator (simulation_input's
@@ -374,19 +398,24 @@ export function applyHail(world: World, peerId: string | undefined,
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
 
     if (action.kind === 'requestAssistance') {
+        // ränk 0x0400: "Player can always request battle assistance from
+        // ships of the affiliated government" (rank_logic.ts).
+        const rankAlwaysAssists = ranksAllowAssistance(
+            player.components.get(ActiveRanksComponent),
+            (id: string) => world.resources
+                .get(SimulationGameDataResource)?.data.Rank.getCached(id),
+            targetGovt?.id);
         if (!canRequestAssistance({
-            disposition,
             govt: targetGovt,
             iffHostile,
             ship: target.components.get(ShipDataComponent),
-            // ränk 0x0400: "Player can always request battle assistance from
-            // ships of the affiliated government" (rank_logic.ts).
-            rankAlwaysAssists: ranksAllowAssistance(
-                player.components.get(ActiveRanksComponent),
-                (id: string) => world.resources
-                    .get(SimulationGameDataResource)?.data.Rank.getCached(id),
-                targetGovt?.id),
+            rankAlwaysAssists,
         })) {
+            return;
+        }
+        // SOMEONE ELSE'S ESCORT: "Sorry sir, I'm just an escort." (ruling
+        // #332, rendered by the dialog) — and nothing else happens to it.
+        if (isSomeoneElsesEscort(target, found.uuid)) {
             return;
         }
         // NO NEED, NO ERRAND. The button is offered to every non-hostile ship
@@ -418,6 +447,38 @@ export function applyHail(world: World, peerId: string | undefined,
             shootsAllWeapons: target.components.has(ShootAllWeaponsComponent),
         })) {
             return;
+        }
+        // AN UNFRIENDLY GOVERNMENT'S SHIP refuses ("I'd rather not.") or
+        // makes the player pay (ruling #297: "They just refuse to help you
+        // or make you pay"). The dialog only sends a request to a 'forPay'
+        // ship from its haggle page's Pay button, so a request that arrives
+        // here IS the payment; the price is re-derived from synced credits,
+        // never taken from the record.
+        const willingness = assistWillingness({
+            disposition, govt: targetGovt,
+            aiType: target.components.get(NpcComponent)?.aiType,
+            rankAlwaysAssists,
+        });
+        if (willingness === 'unwilling') {
+            return;
+        }
+        if (willingness === 'forPay') {
+            // Already on its way to this player: the errand was paid for
+            // once, and a second Pay press must not charge again.
+            if (target.components.get(AssistingComponent)?.client
+                === found.uuid) {
+                return;
+            }
+            const credits = player.components.get(CreditsComponent);
+            if (!credits) {
+                return;
+            }
+            const amount = bribeAmount(credits.credits,
+                !!targetGovt?.flags.largerBribes);
+            if (amount <= 0 || credits.credits < amount) {
+                return;
+            }
+            credits.credits -= amount;
         }
         // The helper breaks off whatever it was doing and comes over. Marking
         // it is enough: NpcDecisionSystem yields to the AssistingComponent

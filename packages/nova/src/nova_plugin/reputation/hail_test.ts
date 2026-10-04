@@ -1,6 +1,15 @@
 import { GovtData, getDefaultGovtData } from 'novadatainterface/govt_data';
 import {
+    assistForPayText,
     assistIsFree,
+    assistPaidText,
+    assistRefusedText,
+    assistWillingness,
+    ASSIST_FOR_PAY_FIRST_INDEX,
+    ASSIST_PAID_FIRST_INDEX,
+    ASSIST_REFUSED_FIRST_INDEX,
+    justAnEscortText,
+    rudeGreetingText,
     bribeAmount,
     busyResponseText,
     BUSY_RESPONSE_COUNT,
@@ -184,8 +193,7 @@ describe('shipAnswersHails', () => {
         + 'channel opens, there is just no Request Assistance', () => {
         const dechtakar = withRawFlags2(0x0027);
         expect(shipAnswersHails(dechtakar)).toBeTrue();
-        expect(canRequestAssistance({ disposition: 'neutral',
-            govt: dechtakar })).toBeFalse();
+        expect(canRequestAssistance({ govt: dechtakar })).toBeFalse();
         expect(shipHailResponse(dechtakar, false, 3))
             .toEqual({ kind: 'greeting', talkative: false });
     });
@@ -199,10 +207,8 @@ describe('shipAnswersHails', () => {
             const nilkemorya = withRawFlags2(0x0003);
             expect(shipAnswersHails(polaris)).toBeTrue();
             expect(shipAnswersHails(nilkemorya)).toBeTrue();
-            expect(canRequestAssistance({ disposition: 'neutral',
-                govt: polaris })).toBeTrue();
-            expect(canRequestAssistance({ disposition: 'neutral',
-                govt: nilkemorya })).toBeFalse();
+            expect(canRequestAssistance({ govt: polaris })).toBeTrue();
+            expect(canRequestAssistance({ govt: nilkemorya })).toBeFalse();
         });
 
     it('answers for an ordinary or govt-less ship', () => {
@@ -219,34 +225,123 @@ describe('canRequestAssistance', () => {
         // reason for you to request it (they usually just tell you that you
         // don't need help)." The offer is about who you are talking to, not
         // about your hull — the ANSWER is where the need is judged.
-        expect(canRequestAssistance({ disposition: 'neutral', govt: govt() }))
-            .toBe(true);
-        expect(canRequestAssistance({ disposition: 'friendly', govt: govt() }))
-            .toBe(true);
+        expect(canRequestAssistance({ govt: govt() })).toBe(true);
+        expect(canRequestAssistance({ govt: undefined })).toBe(true);
     });
-    it('is refused by hostile ships', () => {
-        expect(canRequestAssistance({ disposition: 'hostile', govt: govt() }))
-            .toBe(false);
+    it('is OFFERED by a ship of a government hostile to the player that is '
+        + 'not attacking (ruling #297: "always visible ... They just refuse '
+        + 'to help you or make you pay")', () => {
+        // A pirate govt: xenophobic, so its stance toward everyone is
+        // hostile. Not IFF-hostile (bought off, or not engaging), so the
+        // button is there; whether it helps is assistWillingness's call.
+        expect(canRequestAssistance({
+            govt: withFlags({ xenophobic: true, largerBribes: true }),
+            iffHostile: false,
+        })).toBe(true);
     });
     it('is refused by noAssistOrMercy / cantBeHailed govts', () => {
-        expect(canRequestAssistance({ disposition: 'neutral',
-            govt: withFlags2({ noAssistOrMercy: true }) })).toBe(false);
-        expect(canRequestAssistance({ disposition: 'friendly',
-            govt: withFlags({ cantBeHailed: true }) })).toBe(false);
+        expect(canRequestAssistance({
+            govt: withFlags2({ noAssistOrMercy: true }),
+        })).toBe(false);
+        expect(canRequestAssistance({
+            govt: withFlags({ cantBeHailed: true }),
+        })).toBe(false);
     });
+    it('lets ränk 0x0400 override noAssistOrMercy, but not IFF hostility',
+        () => {
+            const quiet = withFlags2({ noAssistOrMercy: true });
+            expect(canRequestAssistance({
+                govt: quiet, rankAlwaysAssists: true,
+            })).toBe(true);
+            expect(canRequestAssistance({
+                govt: quiet, rankAlwaysAssists: true, iffHostile: true,
+            })).toBe(false);
+        });
     it('is allowed for Roadside Assistance govts', () => {
-        expect(canRequestAssistance({ disposition: 'neutral',
-            govt: withFlags2({ roadsideAssistance: true }) })).toBe(true);
+        expect(canRequestAssistance({ govt: withFlags2({ roadsideAssistance: true }) })).toBe(true);
     });
     it('is refused by a neutral-govt ship attacking the player', () => {
         // The assistance exploit: a neutral warship shooting a disabled player
         // must not also offer to fly over and repair them.
-        expect(canRequestAssistance({ disposition: 'neutral', govt: govt(),
+        expect(canRequestAssistance({ govt: govt(),
             iffHostile: true })).toBe(false);
         // Even a Roadside-Assistance govt refuses while attacking.
-        expect(canRequestAssistance({ disposition: 'neutral',
-            govt: withFlags2({ roadsideAssistance: true }),
+        expect(canRequestAssistance({ govt: withFlags2({ roadsideAssistance: true }),
             iffHostile: true })).toBe(false);
+    });
+});
+
+describe('assistWillingness (ruling #297: "refuse to help you or make you '
+    + 'pay")', () => {
+    it('helps a player its government does not dislike', () => {
+        for (const disposition of ['neutral', 'friendly'] as const) {
+            expect(assistWillingness({
+                disposition, govt: withFlags({ largerBribes: true }),
+                aiType: 3,
+            })).toBe('willing');
+        }
+    });
+    it('makes the player PAY when its unfriendly govt takes bribes from a '
+        + 'ship of its kind', () => {
+        const pirate = withFlags({ xenophobic: true, largerBribes: true });
+        expect(assistWillingness({
+            disposition: 'hostile', govt: pirate, aiType: 3,
+        })).toBe('forPay');
+        // Freighter flag for freighters, warship flag for warships.
+        const traders = withFlags({ freightersTakeBribes: true });
+        expect(assistWillingness({
+            disposition: 'hostile', govt: traders, aiType: 1,
+        })).toBe('forPay');
+        expect(assistWillingness({
+            disposition: 'hostile', govt: traders, aiType: 3,
+        })).toBe('unwilling');
+    });
+    it('REFUSES when its unfriendly govt takes no bribes', () => {
+        expect(assistWillingness({
+            disposition: 'hostile', govt: govt(), aiType: 3,
+        })).toBe('unwilling');
+    });
+    it('always helps under a ränk 0x0400 for its government', () => {
+        expect(assistWillingness({
+            disposition: 'hostile', govt: govt(), aiType: 3,
+            rankAlwaysAssists: true,
+        })).toBe('willing');
+    });
+});
+
+describe('the refusal / price / escort / rude lines (STR# 3000)', () => {
+    const table = Array.from({ length: 190 }, (_, i) => `line ${i}`);
+    it('draws each from its own group, deterministically by seed', () => {
+        for (let seed = 0; seed < 10; seed++) {
+            const pick = (text: string) => Number(text.split(' ')[1]);
+            const refused = pick(assistRefusedText(table, seed));
+            expect(refused).toBeGreaterThanOrEqual(ASSIST_REFUSED_FIRST_INDEX);
+            expect(refused).toBeLessThan(ASSIST_REFUSED_FIRST_INDEX + 5);
+            const forPay = pick(assistForPayText(table, seed));
+            expect(forPay).toBeGreaterThanOrEqual(ASSIST_FOR_PAY_FIRST_INDEX);
+            expect(forPay).toBeLessThan(ASSIST_FOR_PAY_FIRST_INDEX + 5);
+            const paid = pick(assistPaidText(table, seed));
+            expect(paid).toBeGreaterThanOrEqual(ASSIST_PAID_FIRST_INDEX);
+            expect(paid).toBeLessThan(ASSIST_PAID_FIRST_INDEX + 5);
+            // Only the two "just an escort" entries, never 110-112.
+            expect([113, 114]).toContain(pick(justAnEscortText(table, seed)));
+            // The rude greeting is entries 11-15 of the maintainer's
+            // one-indexed viewer: 0-based 10-14.
+            const rude = pick(rudeGreetingText(table, seed));
+            expect(rude).toBeGreaterThanOrEqual(10);
+            expect(rude).toBeLessThan(15);
+            expect(assistRefusedText(table, seed))
+                .toBe(assistRefusedText(table, seed));
+        }
+    });
+    it('falls back to the pinned literals with no table', () => {
+        expect(assistRefusedText(undefined)).toBe("I'd rather not.");
+        expect(justAnEscortText(undefined))
+            .toBe("Sorry sir, I'm just an escort.");
+        expect(assistForPayText(undefined))
+            .toBe("All right, I'll give you some help, but it'll cost you.");
+        expect(assistPaidText(undefined)).toBe("Okay, I'm on my way.");
+        expect(rudeGreetingText(undefined)).toBe('What is it you want?');
     });
 });
 
