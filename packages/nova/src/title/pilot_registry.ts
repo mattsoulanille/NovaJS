@@ -118,6 +118,14 @@ export const PilotRecord = t.intersection([
         settings: t.record(t.string, t.union([t.boolean, t.string])),
         created: t.number,
         updated: t.number,
+        /**
+         * Set while the pilot's save names content the installed game
+         * data does not define (title/pilot_quarantine.ts): the reason,
+         * shown to the player. The save is untouched; the next entry
+         * that validates clears this. ADDITIVE — an older build ignores
+         * it — so the registry version does not move.
+         */
+        quarantine: t.type({ reason: t.string }),
     }),
 ]);
 export type PilotRecord = t.TypeOf<typeof PilotRecord>;
@@ -466,6 +474,40 @@ export function updatePilot(id: string, patch: Partial<PilotRecord>,
     registry.pilots[index] = {
         ...registry.pilots[index], ...patch, updated: Date.now(),
     };
+    saveRegistry(registry, storage);
+}
+
+/**
+ * Quarantines a pilot whose save cannot be flown with the installed game
+ * data: records `reason` on the pilot and nothing else. Unlike an
+ * unreadable save (loadSave parks those at `<saveKey>:quarantine`), the
+ * save here is perfectly readable and becomes loadable again the moment
+ * the missing plug-in is reinstalled, so it stays where it is — moving
+ * it would make the pilot look brand new and its next game would be
+ * written over nothing the player could get back. The pilot stays in
+ * the registry (and exportable, and deletable).
+ */
+export function quarantinePilot(id: string, reason: string,
+    storage?: PrefsStorage): void {
+    const registry = loadRegistry(storage);
+    const index = registry.pilots.findIndex(p => p.id === id);
+    if (index < 0) {
+        return;
+    }
+    registry.pilots[index] = { ...registry.pilots[index], quarantine: { reason } };
+    saveRegistry(registry, storage);
+}
+
+/** Lifts a pilot's quarantine (its save validated). No-op if none. */
+export function releasePilotQuarantine(id: string,
+    storage?: PrefsStorage): void {
+    const registry = loadRegistry(storage);
+    const index = registry.pilots.findIndex(p => p.id === id);
+    if (index < 0 || !registry.pilots[index].quarantine) {
+        return;
+    }
+    const { quarantine: _released, ...rest } = registry.pilots[index];
+    registry.pilots[index] = rest;
     saveRegistry(registry, storage);
 }
 

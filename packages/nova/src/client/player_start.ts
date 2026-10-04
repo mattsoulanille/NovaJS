@@ -33,8 +33,8 @@ import {
     initialRecordsFromGovtStatuses, CombatRatingComponent, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import {
-    loadSave, resetSave, restoreClientSaveState, restorePlayerState,
-    savedFleetArmament,
+    assertSaveContentInstalled, loadSave, resetSave, restoreClientSaveState,
+    restorePlayerState, savedFleetArmament,
 } from '../nova_plugin/pilot/index.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
 import { clearPilotProfile } from '../title/client_prefs.js';
@@ -77,6 +77,14 @@ export async function preparePlayerStart(runtime: ClientRuntime,
     // loadSave and we fall back to defaults.
     const save = loadSave();
     if (save) {
+        // A save naming a ship or outfit the served game data does not
+        // define — a plug-in that was installed when it was written and
+        // is not now — is refused HERE, before any of it is applied. The
+        // fallbacks below would otherwise put the pilot in the chär's
+        // ship and the first save trigger would write that substitute
+        // over the pilot's own. The title flow quarantines the pilot
+        // (title/pilot_quarantine.ts); the save stays exactly as it is.
+        assertSaveContentInstalled(save, ids);
         // Client-local state the save carries but no component holds:
         // the star-system discovery record (discovery_store.ts).
         restoreClientSaveState(save);

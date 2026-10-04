@@ -7,6 +7,7 @@
  * #252 once that wave had merged (a move, nothing else).
  */
 export * from './debug_cheat_plugin.js';
+export * from './save_content.js';
 export * from './save_game.js';
 export * from './save_migrations.js';
 export * from './transition_prep.js';

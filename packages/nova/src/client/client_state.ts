@@ -137,8 +137,13 @@ export interface SystemClaim {
     readonly systemId: string;
 }
 
-/** The title-screen dialogs that take the menu out of play while up. */
-export type TitleDialog = 'newPilot' | 'openPilot' | 'setPrefs' | 'about';
+/**
+ * The title-screen dialogs that take the menu out of play while up.
+ * `notice` is a message the title raises itself — a pilot quarantined
+ * by a failed entry (title/pilot_quarantine.ts).
+ */
+export type TitleDialog =
+    'newPilot' | 'openPilot' | 'setPrefs' | 'about' | 'notice';
 
 export type ClientState =
     | { readonly kind: 'title', readonly dialog?: TitleDialog }
