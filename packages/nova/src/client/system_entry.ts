@@ -24,7 +24,7 @@ import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
-import { filter, firstValueFrom, Subscription, timeout } from 'rxjs';
+import { combineLatest, filter, firstValueFrom, Subscription, timeout } from 'rxjs';
 import { v4 } from 'uuid';
 import {
     applySimulationFrame, movementSyncedSinceStep, stageSimulationFrameGameData,
@@ -356,6 +356,11 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
         room.connected.subscribe(connected => {
             void host.updateRoomState({ connected });
         }),
+        // The server's uuid set arrives in its first frame; a system
+        // entered before that must still learn it.
+        room.servers.subscribe(servers => {
+            void host.updateRoomState({ servers });
+        }),
     ];
 
     await scope.race(host.init(
@@ -408,9 +413,11 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // held in a local. The rxjs timeout drops the subscription and
     // rejects, which lands on the recovery paths like any other failed
     // transition; the session ending settles it sooner still.
-    await scope.race(firstValueFrom(room.peers.current.pipe(
-        filter(peers => peers.has('server')),
-        timeout({ first: SERVER_PEER_TIMEOUT_MS }))));
+    await scope.race(firstValueFrom(
+        combineLatest([room.peers.current, room.servers]).pipe(
+            filter(([peers, servers]) =>
+                [...servers].some(server => peers.has(server))),
+            timeout({ first: SERVER_PEER_TIMEOUT_MS }))));
     // Escorts that followed the player through hyperspace are inserted
     // at formation stations around the arrival point, coasting in at the
     // player's arrival velocity. Instant carry with no warp-in animation

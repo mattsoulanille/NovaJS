@@ -94,7 +94,9 @@ async function makeClient(name) {
     const communicator = new CommunicatorClient(channel);
     const rooms = new MultiRoom(communicator);
     const room = rooms.join(SYSTEM);
-    await firstValueFrom(room.peers.current.pipe(filter(peers => peers.has('server'))));
+    // The server set is the one the server announced, not a constant.
+    await firstValueFrom(room.peers.current.pipe(
+        filter(peers => [...room.servers.value].some(server => peers.has(server)))));
     const gameData = new SimulationGameData(`http://localhost:${PORT}`);
     const world = await makeSystem(SYSTEM, gameData, 'node');
     world.resources.set(CommunicatorResource, room);

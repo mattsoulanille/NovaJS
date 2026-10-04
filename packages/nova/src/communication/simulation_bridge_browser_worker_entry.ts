@@ -32,7 +32,9 @@ import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
 class WorkerRoomCommunicator implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
     readonly peers = new Peers(new BehaviorSubject(new Set<string>()));
-    readonly servers = new BehaviorSubject(new Set<string>(['server']));
+    // The main thread's announced set (communicator_client.ts), relayed
+    // through init and updateRoomState; nobody is a server until then.
+    readonly servers = new BehaviorSubject(new Set<string>());
     readonly connected = new BehaviorSubject(false);
     uuid: string | undefined;
 
