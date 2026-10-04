@@ -1,6 +1,7 @@
 import { PlanetData } from 'novadatainterface/planet_data';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
+import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import * as PIXI from 'pixi.js';
@@ -356,13 +357,13 @@ export class Spaceport extends Menu<Entity> {
             // overlay. The docked entity is out of the display world,
             // so its date, mission marks, control bits (NCB system
             // visibility) and legal records (the Legal Status line) all
-            // ride along to the map (#29).
+            // ride along to the map (#29) — read through the landing's
+            // working copy like every docked reader (playerComponent).
             map: () => void this.openStarmap?.({
-                date: this.input?.components.get(GameDateComponent),
+                date: this.playerComponent(GameDateComponent),
                 missionMarks: this.activeMissionMarks(),
-                playerBits: this.input?.components.get(ControlBitsComponent),
-                legalRecords:
-                    this.input?.components.get(LegalRecordsComponent),
+                playerBits: this.playerComponent(ControlBitsComponent),
+                legalRecords: this.playerComponent(LegalRecordsComponent),
             }),
             properties: () => void this.openPlayerInfo?.(this.input),
             // The planetId enables the dialog's docked-only Abort, which
@@ -435,14 +436,26 @@ export class Spaceport extends Menu<Entity> {
      * plugin can't derive these itself).
      */
     private activeMissionMarks(): MissionMapMark[] {
-        const missions = this.input?.components.get(MissionsComponent);
+        const missions = this.playerComponent(MissionsComponent);
         if (!missions) {
             return [];
         }
-        const bits = this.input?.components.get(ControlBitsComponent);
+        const bits = this.playerComponent(ControlBitsComponent) ?? new Set();
         return missionMapMarks(missions.values(),
             missionId => this.universe.getMission(missionId),
             planetId => this.universe.systemIdOfPlanet(planetId, bits));
+    }
+
+    /**
+     * One of the docked player's components as it stands right now: the
+     * landing transaction's working copy once it is open
+     * (LandedTransaction.playerComponent — what DockedShip.component reads
+     * for the status bar and the starmap plugin), the held hull before.
+     */
+    private playerComponent<T>(component: Component<T>): T | undefined {
+        return this.transaction
+            ? this.transaction.playerComponent(component)
+            : this.input?.components.get(component);
     }
 
     /**
@@ -617,12 +630,18 @@ export class Spaceport extends Menu<Entity> {
         // the return-stellar tags get real values — and since these popups
         // fire at the planet the player just landed on (the mission's
         // return stop), <RST>/<RSY> resolve to "here".
-        const ctx = makeDescTextContext(
-            entity.components.get(ControlBitsComponent) ?? new Set(),
-            playerGender());
+        // The player's data through the landing's working copy, like every
+        // docked reader (playerComponent); the landing pass has just
+        // flushed it, so it is also what the hull holds. The bits name
+        // the copy of a stacked system that is active for this player
+        // (<DSY>/<RSY>, #325).
+        const bits = this.playerComponent(ControlBitsComponent)
+            ?? entity.components.get(ControlBitsComponent) ?? new Set();
+        const ctx = makeDescTextContext(bits, playerGender());
         const identity = await playerIdentitySubs(this.universe,
             entity.components.get(ShipComponent)?.id, undefined,
-            entity.components.get(ActiveRanksComponent));
+            this.playerComponent(ActiveRanksComponent)
+                ?? entity.components.get(ActiveRanksComponent));
         for (const event of events) {
             if (!event.text) {
                 continue;
@@ -643,11 +662,12 @@ export class Spaceport extends Menu<Entity> {
                 const cargoEvent = (event.type === 'cargoLoaded'
                     || event.type === 'cargoDropped')
                     && event.stop !== 'return';
-                const active = entity.components.get(MissionsComponent)
+                const active = (this.playerComponent(MissionsComponent)
+                    ?? entity.components.get(MissionsComponent))
                     ?.get(event.missionId);
                 const here = {
                     stellar: this.universe.planetName(this.id),
-                    system: this.universe.systemNameOfPlanet(this.id),
+                    system: this.universe.systemNameOfPlanet(this.id, bits),
                 };
                 const text = expandMissionText(event.text, {
                     ...identity,
@@ -658,7 +678,7 @@ export class Spaceport extends Menu<Entity> {
                             returnStellar: this.universe.planetName(
                                 active.returnPlanet),
                             returnSystem: this.universe.systemNameOfPlanet(
-                                active.returnPlanet),
+                                active.returnPlanet, bits),
                         } : {}),
                     } : {
                         returnStellar: here.stellar,

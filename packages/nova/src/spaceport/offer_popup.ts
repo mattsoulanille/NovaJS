@@ -8,7 +8,7 @@ import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
-import { offerSubstitutions } from './mission_offers.js';
+import { offerSubstitutions, stillOffered } from './mission_offers.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -503,12 +503,16 @@ export async function presentOffers(popup: OfferPopup,
     const identity = await playerIdentitySubs(universe, session.shipId,
         undefined, session.state.ranks);
     for (const offer of offers) {
-        // A prior accept this visit may have made the mission active.
-        if (session.state.missions.has(offer.data.id)) {
+        // A prior accept (or refuse) in this sequence may have made the
+        // mission active, or falsified its availability — two mutually
+        // exclusive offers must not both be put to the player
+        // (stillOffered, against the working copy).
+        if (!stillOffered(session, offer)) {
             continue;
         }
         const substitutions = {
-            ...offerSubstitutions(universe, session.currentDay, offer),
+            ...offerSubstitutions(universe, session.currentDay, offer,
+                session.state.bits),
             ...identity,
         };
         const ctx = makeDescTextContext(session.state.bits,
@@ -537,6 +541,7 @@ export async function presentOffers(popup: OfferPopup,
             // where stock missions use it.
             const brief = expandMissionText(offer.data.briefText, {
                 ...offerSubstitutions(universe, session.currentDay, offer,
+                    session.state.bits,
                     session.state.missions.get(offer.data.id)),
                 ...identity,
             }, ctx);

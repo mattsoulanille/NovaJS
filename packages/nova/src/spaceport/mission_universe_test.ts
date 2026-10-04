@@ -1,7 +1,10 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
+import { getDefaultMissionData } from 'novadatainterface/mission_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
+import { MissionOffer } from '../nova_plugin/missions/index.js';
+import { offerSubstitutions } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 
 describe('MissionUniverse name lookups', () => {
@@ -20,7 +23,8 @@ describe('MissionUniverse name lookups', () => {
             await universe.load();
 
             expect(universe.planetName('nova:128')).toBe('Earth');
-            expect(universe.systemNameOfPlanet('nova:128')).toBe('Sol');
+            expect(universe.systemNameOfPlanet('nova:128', new Set()))
+                .toBe('Sol');
             // Unknown ids still fall back to the id itself.
             expect(universe.planetName('nova:999')).toBe('nova:999');
         });
@@ -54,14 +58,65 @@ describe('MissionUniverse.systemIdOfPlanet across stacked duplicate systems', ()
                 .toBe('nova:765');
         });
 
-    it('falls back deterministically without bits, and treats the two '
-        + 'copies as the same system', async () => {
+    it('picks deterministically for an empty bit set (bits are required: '
+        + '#325), and treats the two copies as the same system', async () => {
             const u = await universe();
-            expect(u.systemIdOfPlanet('nova:333')).toBe('nova:308');
+            expect(u.systemIdOfPlanet('nova:333', new Set())).toBe('nova:308');
             expect(u.sameSystem('nova:308', 'nova:765')).toBeTrue();
             expect(u.sameSystem('nova:308', 'nova:128')).toBeFalse();
         });
 });
+
+/**
+ * #325 and Matthew's ruling on it: "If it's something specific to the
+ * player, it should probably consider what systems are active for them."
+ * A stellar stacked in NCB-duplicate systems is NAMED by the copy active
+ * for the player, as it is resolved (systemIdOfPlanet): a plug-in that
+ * renames its story copy prints the post-story name in <DSY>/<RSY> once
+ * the story bit is set. `systemNameOfPlanet` used to name the id-sorted
+ * first claimant whatever the bits.
+ */
+describe('MissionUniverse.systemNameOfPlanet across stacked duplicate systems',
+    () => {
+        async function universe() {
+            const gameData = new MockGameData();
+            gameData.data.Planet.map.set('nova:333', {
+                ...getDefaultPlanetData(), id: 'nova:333', name: 'Auroran LP I',
+            });
+            gameData.data.System.map.set('nova:308', {
+                ...getDefaultSystemData(), id: 'nova:308', name: 'SPC-1421',
+                planets: ['nova:333'], visibility: '!b995', position: [10, 20],
+            });
+            // The story copy, renamed by its plug-in.
+            gameData.data.System.map.set('nova:765', {
+                ...getDefaultSystemData(), id: 'nova:765', name: 'Moash Reach',
+                planets: ['nova:333'], visibility: 'b995', position: [10, 20],
+            });
+            const u = new MissionUniverse(gameData);
+            await u.load();
+            return u;
+        }
+
+        it('names the copy the player can see', async () => {
+            const u = await universe();
+            expect(u.systemNameOfPlanet('nova:333', new Set()))
+                .toBe('SPC-1421');
+            expect(u.systemNameOfPlanet('nova:333', new Set([995])))
+                .toBe('Moash Reach');
+        });
+
+        it('fills <DSY>/<RSY> from the player\'s copy', async () => {
+            const u = await universe();
+            const offer: MissionOffer = {
+                data: getDefaultMissionData(), travelPlanet: 'nova:333',
+                returnPlanet: 'nova:333', cargoType: -1, cargoQty: 0,
+                acceptable: true,
+            };
+            const subs = offerSubstitutions(u, 0, offer, new Set([995]));
+            expect(subs.destinationSystem).toBe('Moash Reach');
+            expect(subs.returnSystem).toBe('Moash Reach');
+        });
+    });
 
 /**
  * Review finding #66: `load()` memoised its promise with `??=`, so ONE

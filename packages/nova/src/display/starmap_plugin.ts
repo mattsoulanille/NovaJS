@@ -65,13 +65,17 @@ const persistentRouteStore: RouteStateStore = { state: emptyRouteState() };
 
 /**
  * A component of the player's ship: the in-world PlayerShipSelector
- * entity in flight, or — while DOCKED — the entity the spaceport is
- * holding (DockedShipResource, the same handle the status bar reads).
- * Landing removes the ship from the simulation and hence from this
- * display world, so a scan of `world.entities` alone comes up empty for
- * the whole visit; the docked map was therefore filtered against an EMPTY
- * control-bit set — every bXXX-gated system gone, every !bXXX stacked
- * duplicate back, no Legal Status line (review finding #29).
+ * entity in flight, or — while DOCKED — the docked player's data as it
+ * stands right now (DockedShipResource's `component`, the same handle
+ * the status bar reads). Landing removes the ship from the simulation
+ * and hence from this display world, so a scan of `world.entities` alone
+ * comes up empty for the whole visit; the docked map was therefore
+ * filtered against an EMPTY control-bit set — every bXXX-gated system
+ * gone, every !bXXX stacked duplicate back, no Legal Status line (review
+ * finding #29). And it must be the landing's WORKING copy, not the held
+ * hull: the hull is only written when a venue closes, so a map opened
+ * from the BBS right after an accept read the bits, records and missions
+ * of before the BBS opened (#324).
  */
 export function playerComponent<T>(world: World,
     component: Component<T>): T | undefined {
@@ -84,8 +88,8 @@ export function playerComponent<T>(world: World,
             return value;
         }
     }
-    return world.resources.get(DockedShipResource)?.current?.entity
-        .components.get(component);
+    return world.resources.get(DockedShipResource)?.current
+        ?.component(component);
 }
 
 /**
@@ -218,7 +222,7 @@ export const StarmapPlugin: Plugin = {
         }
         const openStarmap = async (
             options?: OpenStarmapOptions): Promise<string[]> => {
-            const jumpRoute = getPlayerJumpRoute(world);
+            const jumpRoute = playerJumpRoute(world);
             if (starmap.container.visible || opening) {
                 return jumpRoute?.route ?? [];
             }
@@ -305,15 +309,16 @@ export const StarmapPlugin: Plugin = {
     }
 }
 
-function getPlayerJumpRoute(world: World) {
-    for (const entity of world.entities.values()) {
-        if (!entity.components.has(PlayerShipSelector)) {
-            continue;
-        }
-        const jumpRoute = entity.components.get(JumpRouteComponent);
-        if (jumpRoute) {
-            return jumpRoute;
-        }
-    }
-    return undefined;
+/**
+ * The player's jump route: the in-world ship's in flight, the docked
+ * player's while landed (#323) — through {@link playerComponent} like
+ * every other player read, so the docked map reconciles against the
+ * route the ship really holds, and its close edits the route the
+ * landing's transaction writes onto the hull for the lift-off. (The
+ * SetJumpRouteEvent the close also emits is dropped by the simulation
+ * while docked, there being no ship there to apply it to; the lift-off's
+ * insertion record is what carries the route in.)
+ */
+export function playerJumpRoute(world: World) {
+    return playerComponent(world, JumpRouteComponent);
 }

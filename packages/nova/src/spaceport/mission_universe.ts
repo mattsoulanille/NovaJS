@@ -398,11 +398,13 @@ export class MissionUniverse {
      * resolved as systemIdOfStellar(the borrowed stellar), and spöbs are
      * shared between systems (the same rock listed by several sÿsts under
      * mutually-exclusive Visibility bits), so `planetSystem` — a
-     * many-to-one map that keeps the LAST system to claim a spöb — can
-     * map one straight back out to a different system. A stellar that
-     * does not lead home is no use for standing in for home, so those are
-     * skipped. The stock case that caught this: sÿst 1124's spöb 173,
-     * which planetSystem attributes to sÿst 1126.
+     * many-to-one map that keeps the FIRST system, in id order, to claim
+     * a spöb (see load) — can map one straight back out to a different
+     * system. A stellar that does not lead home is no use for standing in
+     * for home, so those are skipped. The stock case: spöb 173 is listed
+     * by all four Procyon copies (sÿst 1124, 1125, 1126 and 147, under
+     * mutually exclusive bits) and planetSystem attributes it to 1124,
+     * the id-sorted first, so the other three skip it.
      *
      * Deterministic: the first match in the system's own spöb order, not
      * a random pick, so two evaluations of the same offer agree.
@@ -462,11 +464,15 @@ export class MissionUniverse {
      * return stellar Auroran LP I sits in both nova:308 "!b995" and
      * nova:765 "b995"); resolving ShipSyst -3/-4 or a map mark to the
      * copy the player cannot enter put the Moash fleet in a system the
-     * player never sees. Without bits, the id-sorted first system with a
-     * blank Visibility, else the first.
+     * player never sees. When no copy is visible, the id-sorted first
+     * system with a blank Visibility, else the first.
+     *
+     * `bits` is REQUIRED (#325): the answer is the player's, and a caller
+     * that forgot them silently got the pre-story copy (#65). A caller
+     * that wants the no-bits pick passes an empty set.
      */
     systemIdOfPlanet(planetId: string,
-        bits?: ReadonlySet<number>): string | undefined {
+        bits: ReadonlySet<number>): string | undefined {
         const all = this.planetSystems.get(planetId);
         if (!all || all.length === 0) {
             return undefined;
@@ -474,12 +480,10 @@ export class MissionUniverse {
         if (all.length === 1) {
             return all[0].id;
         }
-        if (bits) {
-            const visible = all.find(({ visibility }) =>
-                systemVisible(visibility, bits));
-            if (visible) {
-                return visible.id;
-            }
+        const visible = all.find(({ visibility }) =>
+            systemVisible(visibility, bits));
+        if (visible) {
+            return visible.id;
         }
         return (all.find(({ visibility }) => visibility.trim() === '')
             ?? all[0]).id;
@@ -502,11 +506,20 @@ export class MissionUniverse {
         return keyA !== undefined && keyA === keyB;
     }
 
-    systemNameOfPlanet(planetId: string | null): string {
+    /**
+     * The display name of the system a stellar is in — <DSY>/<RSY> and
+     * every other "which system is that" a player reads. The PLAYER'S
+     * system (#325): resolved through {@link systemIdOfPlanet} with their
+     * bits, so a stellar stacked in NCB-duplicate systems is named by the
+     * copy active for them — a plug-in that renames a story copy prints
+     * the post-story name once the story has moved on.
+     */
+    systemNameOfPlanet(planetId: string | null,
+        bits: ReadonlySet<number>): string {
         if (!planetId) {
             return 'nowhere';
         }
-        const systemId = this.planetSystem.get(planetId);
+        const systemId = this.systemIdOfPlanet(planetId, bits);
         if (!systemId) {
             return 'deep space';
         }

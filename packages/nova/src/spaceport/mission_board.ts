@@ -16,6 +16,7 @@ import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import {
     activeAsOffer, offerRollsForSystem, offerSubstitutions, rollOffers,
+    stillOffered,
 } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { OpenStarmapOptions } from './starmap.js';
@@ -232,9 +233,9 @@ export class MissionBoard extends Menu<Entity> {
         const marks: MissionMapMark[] = [];
         const seen = new Set<string>();
         for (const planet of planets) {
-            const systemId = planet
+            const systemId = planet && this.session
                 ? this.universe.systemIdOfPlanet(planet,
-                    this.session?.state.bits) : undefined;
+                    this.session.state.bits) : undefined;
             if (!systemId || seen.has(systemId)) {
                 continue;
             }
@@ -250,11 +251,12 @@ export class MissionBoard extends Menu<Entity> {
         }
         // The docked entity is out of the display world, so the active
         // missions' orange marks ride along with the green viewed ones.
-        const active = this.session
-            ? missionMapMarks(this.session.state.missions.values(),
+        const session = this.session;
+        const active = session
+            ? missionMapMarks(session.state.missions.values(),
                 id => this.universe.getMission(id),
                 planetId => this.universe.systemIdOfPlanet(planetId,
-                    this.session?.state.bits))
+                    session.state.bits))
             : [];
         await this.openStarmap({
             viewedMarks: this.viewedMarks(),
@@ -326,9 +328,12 @@ export class MissionBoard extends Menu<Entity> {
     /** Rebuilds the row list from the frozen offers + active missions. */
     private buildRows() {
         const session = this.session!;
-        // An offer may have become active (accepted) meanwhile.
+        // An offer may have become active (accepted) meanwhile — or no
+        // longer be one the player qualifies for: an accept's OnAccept
+        // can falsify another listing's AvailBits (two mutually exclusive
+        // jobs), and the working copy is what decides (stillOffered).
         this.offers = this.offers.filter(
-            offer => !session.state.missions.has(offer.data.id));
+            offer => stillOffered(session, offer));
         this.rows = this.offers.map(
             offer => ({ kind: 'offer', offer } as Row));
         // Active missions are NOT listed here (Matthew, 2026-08-14): the
@@ -458,7 +463,7 @@ export class MissionBoard extends Menu<Entity> {
         active?: ActiveMission) {
         return {
             ...offerSubstitutions(this.universe, this.session!.currentDay,
-                offer, active),
+                offer, this.session!.state.bits, active),
             ...this.identity,
         };
     }

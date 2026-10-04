@@ -220,10 +220,14 @@ export class MissionInfoDialog {
         this.container.visible = false;
     }
 
-    private descContext() {
-        const bits = this.entity
+    /** The player's control bits: dësc conditionals and <DSY>/<RSY>. */
+    private playerBits(): ReadonlySet<number> {
+        return this.entity
             ?.components.get(ControlBitsComponent) ?? new Set<number>();
-        return makeDescTextContext(bits, playerGender());
+    }
+
+    private descContext() {
+        return makeDescTextContext(this.playerBits(), playerGender());
     }
 
     private missionName(id: string, active: ActiveMission): string {
@@ -234,7 +238,7 @@ export class MissionInfoDialog {
         return expandMissionText(missionDisplayName(offer.data.name),
             {
                 ...offerSubstitutions(this.universe, this.currentDay, offer,
-                    active),
+                    this.playerBits(), active),
                 ...this.identity,
             }, this.descContext());
     }
@@ -318,7 +322,7 @@ export class MissionInfoDialog {
         this.description.text = expandMissionText(brief,
             {
                 ...offerSubstitutions(this.universe, this.currentDay, offer,
-                    active),
+                    this.playerBits(), active),
                 ...this.identity,
             }, this.descContext());
     }

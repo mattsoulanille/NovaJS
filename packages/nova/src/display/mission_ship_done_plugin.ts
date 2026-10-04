@@ -367,13 +367,12 @@ export async function presentShipDoneText(world: World,
     const identity = await playerIdentitySubs(universe,
         player.components.get(ShipComponent)?.id, undefined,
         player.components.get(ActiveRanksComponent));
+    const bits = player.components.get(ControlBitsComponent) ?? new Set();
     const text = expandMissionText(mission.shipDoneText, {
         ...(offer ? offerSubstitutions(universe,
-            date ? dayNumber(date) : 0, offer, active) : {}),
+            date ? dayNumber(date) : 0, offer, bits, active) : {}),
         ...identity,
-    }, makeDescTextContext(
-        player.components.get(ControlBitsComponent) ?? new Set(),
-        playerGender()));
+    }, makeDescTextContext(bits, playerGender()));
 
     // Marked BEFORE the popup is awaited: the player may jump or land
     // with it still up, and the date advance that follows must already

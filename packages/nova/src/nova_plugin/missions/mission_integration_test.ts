@@ -491,7 +491,8 @@ describe('missions against real Nova data', () => {
         // Before the accept there is no name: the offer expands <SN> to
         // the generic fallback.
         expect(expandMissionText(mission.quickBrief,
-            offerSubstitutions(universe, session.currentDay, offer)))
+            offerSubstitutions(universe, session.currentDay, offer,
+                session.state.bits)))
             .toContain('destroy the unknown ship');
 
         acceptOffer(session.machinery, offer, session.outfits);
@@ -502,7 +503,8 @@ describe('missions against real Nova data', () => {
 
         // The briefing/QuickBrief now names the target...
         const brief = expandMissionText(mission.quickBrief,
-            offerSubstitutions(universe, session.currentDay, offer, active));
+            offerSubstitutions(universe, session.currentDay, offer,
+                session.state.bits, active));
         expect(brief).toContain(`destroy the ${active.shipName}`);
         expect(brief).not.toContain('<SN>');
 

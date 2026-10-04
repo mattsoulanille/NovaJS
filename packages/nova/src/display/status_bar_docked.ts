@@ -16,10 +16,13 @@ import { StatusBarResource } from "./status_bar_resource.js";
  * player is docked the ship is out of the display world (held by the spaceport
  * menu), so PlayerShipSelector matches nothing and the per-entity draw systems
  * (status_bar_gauges.ts, status_bar_cargo.ts) go quiet. This runs once per
- * step from the DockedShipResource instead, reading the held entity's
- * components — or, while a venue is open, that venue's live working state
- * (credits/cargo/fuel before it commits) — so the bar keeps tracking trades,
- * outfit buys, refuels, and bar gambling live.
+ * step from the DockedShipResource instead, reading the docked player's
+ * data as it stands right now (DockedShip.component: the landing's
+ * working copy, not the held hull, which is only written when a venue
+ * closes — so a BBS accept's payout or cargo shows at once, #246) — and,
+ * while a venue publishes one, that venue's live status on top (the trade
+ * center's working FLEET cargo) — so the bar keeps tracking trades,
+ * outfit buys, refuels, bar gambling and mission accepts live.
  */
 export const DrawDockedStatus = new System({
     name: 'DrawDockedStatus',
@@ -30,27 +33,26 @@ export const DrawDockedStatus = new System({
         if (!docked) {
             return;
         }
-        const entity = docked.entity;
         const live = docked.liveStatus?.() ?? {};
 
-        // Shield/armor/fuel bars off the held entity; a venue may override fuel.
-        const shield = entity.components.get(ShieldComponent);
-        const armor = entity.components.get(ArmorComponent);
+        // Shield/armor/fuel bars off the held hull; a venue may override fuel.
+        const shield = docked.component(ShieldComponent);
+        const armor = docked.component(ArmorComponent);
         if (shield && armor) {
-            const fuel = live.fuel ?? entity.components.get(FuelComponent);
+            const fuel = live.fuel ?? docked.component(FuelComponent);
             statusBar.gauges.drawStats(shield, armor, fuel ?? undefined);
         }
 
-        // Credits + cargo: the open venue's working values win over the
-        // (not-yet-committed) entity components.
+        // Credits + cargo: the landing's working copy (DockedShip.component),
+        // with the open venue's live values on top.
         const credits = live.credits
-            ?? entity.components.get(CreditsComponent)?.credits ?? 0;
-        const ship = entity.components.get(ShipComponent);
+            ?? docked.component(CreditsComponent)?.credits ?? 0;
+        const ship = docked.component(ShipComponent);
         if (!ship) {
             return;
         }
         const capacity = live.cargoCapacity ?? cargoCapacityOf(
-            ship.id, entity.components.get(OutfitsStateComponent), gameData);
+            ship.id, docked.component(OutfitsStateComponent), gameData);
         if (capacity === undefined) {
             return; // Ship/outfit data not cached yet.
         }
@@ -62,7 +64,7 @@ export const DrawDockedStatus = new System({
         const fleet = live.cargo !== undefined
             ? { cargo: live.cargo, capacity }
             : sumFleetCargo([
-                { cargo: entity.components.get(CargoComponent), capacity },
+                { cargo: docked.component(CargoComponent), capacity },
                 ...fleetCargoMembers(
                     (docked.landedEscorts?.() ?? [])
                         .filter(({ player }) => docked.playerUuid === undefined

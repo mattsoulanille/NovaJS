@@ -176,7 +176,7 @@ export async function shipOfferGates(world: World, target: Entity,
 async function expandOfferText(world: World, universe: MissionUniverse,
     offer: MissionOffer, persName: string, text: string,
     extra: {
-        active?: Parameters<typeof offerSubstitutions>[3],
+        active?: Parameters<typeof offerSubstitutions>[4],
         payment?: number,
         specialShipName?: string,
     } = {}): Promise<string> {
@@ -188,7 +188,7 @@ async function expandOfferText(world: World, universe: MissionUniverse,
         entity?.components.get(ActiveRanksComponent));
     return expandMissionText(text, {
         ...offerSubstitutions(universe,
-            date ? dayNumber(date) : 0, offer, extra.active),
+            date ? dayNumber(date) : 0, offer, bits, extra.active),
         ...identity,
         offeringShipName: persName,
         ...(extra.payment !== undefined ? { payment: extra.payment } : {}),

@@ -116,7 +116,7 @@ export const MISSION_SHIP_NO_DEPART_MS = 1e15;
  * modules never depend on the spaceport). */
 export interface MissionShipUniverse {
     getMission(id: string): MissionData | undefined;
-    systemIdOfPlanet(planetId: string, bits?: ReadonlySet<number>):
+    systemIdOfPlanet(planetId: string, bits: ReadonlySet<number>):
         string | undefined;
     getGovt(id: string): GovtData | undefined;
     getSystemInfo(systemId: string): SystemInfo | undefined;
@@ -157,8 +157,9 @@ interface SpawnContext {
     /** Next free formation slot on the owner. */
     nextSlot: number;
     /** The owner's control bits, for resolving stellars to the VISIBLE
-     * copy of a stacked duplicate system (mission_universe.ts). */
-    bits?: ReadonlySet<number>;
+     * copy of a stacked duplicate system (mission_universe.ts). An owner
+     * with no ControlBitsComponent holds none: the empty set. */
+    bits: ReadonlySet<number>;
 }
 
 /**
@@ -465,7 +466,7 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
     }
     const ctx: SpawnContext = {
         gameData, universe, ownerUuid, random, nextSlot: firstSlot,
-        bits: playerEntity.components.get(ControlBitsComponent),
+        bits: playerEntity.components.get(ControlBitsComponent) ?? new Set(),
     };
     const system = universe.getSystemInfo(systemId);
     const ships: Entity[] = [];
@@ -630,14 +631,15 @@ export async function buildAcceptedMissionShips(missionId: string,
         replace?: ReplacementPlacement,
         firstSlot?: number,
         random?: () => number,
-        /** The player's control bits (visible-copy stellar resolution). */
+        /** The player's control bits (visible-copy stellar resolution);
+         * absent, the player holds none. */
         bits?: ReadonlySet<number>,
     } = {}): Promise<Entity[]> {
     const ctx: SpawnContext = {
         gameData, universe, ownerUuid,
         random: options.random ?? Math.random,
         nextSlot: options.firstSlot ?? 0,
-        bits: options.bits,
+        bits: options.bits ?? new Set(),
     };
     return buildShipsForMission(ctx, missionId, active, systemId,
         universe.getSystemInfo(systemId), options.replace);
