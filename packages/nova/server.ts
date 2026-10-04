@@ -21,7 +21,7 @@ import { SimulationGameDataResource } from './src/nova_plugin/core/index.js';
 import { makeShip } from "./src/nova_plugin/ship/index.js";
 import { SIMULATION_STEP_MS } from "./src/nova_plugin/make_system.js";
 import { MultiRoomResource, NovaPlugin } from './src/nova_plugin/nova_plugin.js';
-import { ServerPlugin } from "./src/nova_plugin/server_plugin.js";
+import { parseRoomSeedSetting, RoomSeedResource, ServerPlugin } from "./src/nova_plugin/server_plugin.js";
 import { NovaRepl } from "./src/server/nova_repl.js";
 import { FilesystemData } from "./src/server/parsing/filesystem_data.js";
 import { GameDataAggregator } from "./src/server/parsing/game_data_aggregator.js";
@@ -167,6 +167,10 @@ async function startGame() {
     // Nothing reads this world's entities; ServerPlugin only needs the
     // resources set here.
     world.resources.set(MultiRoomResource, multiRoom);
+    // Each room instance's seed (#140): fresh per room unless
+    // NOVA_ROOM_SEED pins it ('off' = the fixed system-id genesis).
+    world.resources.set(RoomSeedResource,
+        parseRoomSeedSetting(process.env.NOVA_ROOM_SEED));
     await world.addPlugin(NovaPlugin);
 
     repl.repl.context.world = world;
