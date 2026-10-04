@@ -55,6 +55,7 @@ export const FLET = { raiderWing: 128 } as const;
 export const MISN = {
     courier: 128, gateSurvey: 129, bounty: 130, rescue: 131, salvage: 132,
     tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135, wardenCommission: 136,
+    refugeCharter: 137, charterRetainer: 138,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132 } as const;
@@ -88,6 +89,9 @@ export const BITS = {
     errandAccepted: 103, errandRefused: 104, outfitterErrandOpen: 105,
     /** Gates the Warden Commission (never set by the scenario itself). */
     commissionOffered: 106,
+    /** The Compact's charter is signed: the two charter jobs at
+     * Coldharbour are mutually exclusive on it. */
+    charterSigned: 107,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -1483,6 +1487,54 @@ export const MISNS: MisnDef[] = [
         offerText: "A Concord officer has a Heron Warden that needs a captain.",
         briefText: "The Warden is yours. Your old skiff goes to the yard.",
         compText: "", quickBrief: "Captain the Heron Warden.",
+    },
+    // --- Two MUTUALLY EXCLUSIVE jobs on Coldharbour's mission computer
+    // (the only listings there: the bounty wants a Concord stellar): each
+    // is offered only while `!b107` and sets b107 on accept, so taking
+    // either one withdraws the other in the same sitting. The charter run
+    // becomes an active mission (with a destination in Ossory Shoal, for
+    // the map's marks); the retainer is a one-shot that auto-aborts at
+    // accept and PAYS there (Flags 0x0001 + Flags2 0x0002) — a BBS accept
+    // that moves the player's credits, with an empty OnAbort so its bit
+    // stays set.
+    {
+        id: MISN.refugeCharter, name: "Compact Charter: Refuge Run",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.missionComputer,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: SPOB.refuge, returnStel: -4,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 6000, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: `!b${BITS.charterSigned}`,
+        onAccept: `b${BITS.charterSigned}`,
+        onSuccess: "", onFailure: `!b${BITS.charterSigned}`,
+        onAbort: `!b${BITS.charterSigned}`,
+        dispWeight: 2,
+        offerText: "The Compact charters one captain a season to run its "
+            + "post to Halden Refuge. Sign, and the season is yours.",
+        briefText: "Carry the Compact's post to Halden Refuge and come back.",
+        compText: "The harbourmaster logs the post and pays the charter.",
+        quickBrief: "Run the Compact's post to Halden Refuge, then return.",
+    },
+    {
+        id: MISN.charterRetainer, name: "Compact Charter: Retainer",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.missionComputer,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 1500, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: MISN_FLAGS.autoAbortOnBoard,
+        flags2: MISN_FLAGS2.paysOnAutoAbort,
+        availBits: `!b${BITS.charterSigned}`,
+        onAccept: `b${BITS.charterSigned}`,
+        onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 1,
+        offerText: "Or sign the charter and take the Compact's retainer "
+            + "instead: 1,500 credits now, no run.",
+        briefText: "The harbourmaster counts out your retainer.",
+        compText: "", quickBrief: "",
     },
 ];
 
