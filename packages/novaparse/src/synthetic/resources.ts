@@ -468,7 +468,11 @@ export function buildSyntheticResources(): ResourceSpec[] {
     for (const def of FLETS) add("flët", def.id, def.name, flet(def));
     for (const def of MISNS) {
         add("mïsn", def.id, def.name, misn(def));
-        add("dësc", missionOfferDesc(def.id), `${def.name} offer`, desc(def.offerText));
+        // No offer text means NO offer dësc, as in the real data (ARPIA's
+        // text-less missions have none).
+        if (def.offerText) {
+            add("dësc", missionOfferDesc(def.id), `${def.name} offer`, desc(def.offerText));
+        }
         const briefs = missionBriefDesc(def.id);
         add("dësc", briefs, `${def.name} briefing`, desc(def.briefText));
         add("dësc", briefs + 1, `${def.name} completion`, desc(def.compText));

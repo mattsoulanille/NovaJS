@@ -55,6 +55,7 @@ export const FLET = { raiderWing: 128 } as const;
 export const MISN = {
     courier: 128, gateSurvey: 129, bounty: 130, rescue: 131, salvage: 132,
     tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135, wardenCommission: 136,
+    silentSummons: 137, dockWindfall: 138,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132 } as const;
@@ -88,6 +89,12 @@ export const BITS = {
     errandAccepted: 103, errandRefused: 104, outfitterErrandOpen: 105,
     /** Gates the Warden Commission (never set by the scenario itself). */
     commissionOffered: 106,
+    /** Gates the Silent Summons (never set by the scenario itself). */
+    summonsOpen: 107,
+    /** The Silent Summons' OnAccept sets it. */
+    summonsTaken: 108,
+    /** Gates the Dockside Windfall (never set by the scenario itself). */
+    windfallOpen: 109,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -1300,7 +1307,8 @@ export interface MisnDef {
 
 /** mïsn Flags / Flags2 bits this scenario uses (EVN Bible). */
 export const MISN_FLAGS = {
-    autoAbortOnBoard: 0x0001, takesFuelOnAutoAbort: 0x0008, invisible: 0x0400,
+    autoAbortOnBoard: 0x0001, cantRefuse: 0x0004, takesFuelOnAutoAbort: 0x0008,
+    invisible: 0x0400,
 } as const;
 export const MISN_FLAGS2 = { paysOnAutoAbort: 0x0002 } as const;
 /**
@@ -1309,7 +1317,8 @@ export const MISN_FLAGS2 = { paysOnAutoAbort: 0x0002 } as const;
  * dialog, 5 the shipyard, 6 the OUTFIT dialog).
  */
 export const AVAIL_LOC = {
-    missionComputer: 0, bar: 1, fromShip: 2, tradeCenter: 4, shipyard: 5, outfitter: 6,
+    missionComputer: 0, bar: 1, fromShip: 2, mainSpaceport: 3, tradeCenter: 4,
+    shipyard: 5, outfitter: 6,
 } as const;
 
 /** dësc ids for the mission briefings, from 5000 in threes. */
@@ -1483,6 +1492,55 @@ export const MISNS: MisnDef[] = [
         offerText: "A Concord officer has a Heron Warden that needs a captain.",
         briefText: "The Warden is yours. Your old skiff goes to the yard.",
         compText: "", quickBrief: "Captain the Heron Warden.",
+    },
+    // --- Two missions with NO offer text (no dësc 4000 + n at all), which
+    // are taken on unasked wherever they are offered. Both are gated on a
+    // bit nothing in the scenario sets, so only the specs that set it see
+    // them.
+    {
+        // The shape of ARPIA's "Death" (arpia:1123): offered in the MAIN
+        // SPACEPORT dialog, always available, can't be refused, invisible,
+        // no offer and no briefing text; its AvailBits stay true after the
+        // accept, so only its being ACTIVE keeps it from being taken again.
+        id: MISN.silentSummons, name: "Silent Summons",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.mainSpaceport, availRecord: 0,
+        availRating: -1, availRandom: 100, travelStel: -1,
+        returnStel: SPOB.coldharbour,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 0, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 0,
+        flags: MISN_FLAGS.cantRefuse | MISN_FLAGS.invisible,
+        availBits: `b${BITS.summonsOpen}`,
+        onAccept: `b${BITS.summonsTaken}`,
+        onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "", briefText: "", compText: "", quickBrief: "",
+    },
+    {
+        // The auto-abort that exists to pay (#320's ruling: "a mission
+        // that auto-aborts in order to immediately pay 900M credits"; the
+        // installed shape is Extra Outfits' "Leviathan Income",
+        // extra-outfits:1034): a BAR mission with no offer text, Flags
+        // 0x0001 with no special ships, Flags2 0x0002, PayVal 900,000,000,
+        // and AvailBits it leaves true — the case the auto-accept loop
+        // guard is for. It does have a briefing.
+        id: MISN.dockWindfall, name: "Dockside Windfall",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.bar, availRecord: 0,
+        availRating: -1, availRandom: 100, travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 900_000_000, shipCount: -1, shipSyst: -1, shipDude: -1,
+        shipGoal: -1, shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 0,
+        flags: MISN_FLAGS.autoAbortOnBoard | MISN_FLAGS.cantRefuse
+            | MISN_FLAGS.invisible,
+        flags2: MISN_FLAGS2.paysOnAutoAbort,
+        availBits: `b${BITS.windfallOpen}`,
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "",
+        briefText: "A stranger presses a credit chip into your hand and is gone.",
+        compText: "", quickBrief: "",
     },
 ];
 
