@@ -266,11 +266,13 @@ export class Bar extends Menu<Entity> {
         const session = this.session!;
         // The system visit's rolls (mission_offers.ts OfferRolls): walking
         // out and back in does not reroll a 40% mission.
+        const rolls = offerRollsForSystem(this.universe.systemIdOfPlanet(
+            this.planetId, session.state.bits));
         const offers = rollOffers(session, this.universe, LOCATION_BAR,
-            offerRollsForSystem(this.universe.systemIdOfPlanet(
-                this.planetId, session.state.bits)))
+            rolls)
             .filter(offer => offer.acceptable);
-        await presentOffers(this.offerPopup, session, this.universe, offers);
+        await presentOffers(this.offerPopup, session, this.universe, offers,
+            rolls);
     }
 
     private async showGamble() {

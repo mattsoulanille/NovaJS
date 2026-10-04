@@ -3,12 +3,15 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
     acceptOffer, MissionOffer, refuseOffer, expandMissionText,
+    offerAutoAccepts,
 } from '../nova_plugin/missions/index.js';
 import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
-import { offerSubstitutions } from './mission_offers.js';
+import {
+    autoAcceptOffer, autoAcceptedThisVisit, OfferRolls, offerSubstitutions,
+} from './mission_offers.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -496,25 +499,63 @@ export class OfferPopup {
  * runs OnRefuse (and shows any refuse text). A cantRefuse offer shows only
  * the accept button. Mutations land in the session's working copy; the
  * caller commits.
+ *
+ * An offer with NO offer text (offerAutoAccepts) is not asked at all: it
+ * is accepted on the spot, through the same accept and the same briefing
+ * popup a click would have led to (#319; ARPIA's "Death", arpia:1123, is
+ * the mission that needs it). `rolls` — the system visit's, as the caller
+ * rolled `offers` with — carries the auto-accept loop guard (see
+ * mission_offers.ts autoAcceptedByVisit); without it nothing is
+ * remembered.
  */
 export async function presentOffers(popup: OfferPopup,
     session: MissionSession, universe: MissionUniverse,
-    offers: MissionOffer[]): Promise<void> {
+    offers: MissionOffer[], rolls?: OfferRolls): Promise<void> {
     const identity = await playerIdentitySubs(universe, session.shipId,
         undefined, session.state.ranks);
+    // Built fresh for every text: an accept's set string moves the bits
+    // the next text's conditionals read.
+    const descContext = () =>
+        makeDescTextContext(session.state.bits, playerGender());
+    // The briefing (post-accept) text, in the generic briefing frame with
+    // its own dësc picture when set. Rebuilt against the now-active
+    // mission: <SN> (the special ship name) is only picked at accept, and
+    // the briefing is where stock missions use it.
+    const showBriefing = async (offer: MissionOffer) => {
+        const brief = expandMissionText(offer.data.briefText, {
+            ...offerSubstitutions(universe, session.currentDay, offer,
+                session.state.missions.get(offer.data.id)),
+            ...identity,
+        }, descContext());
+        if (brief) {
+            await popup.show(brief, { accept: 'OK' },
+                { pict: offer.data.briefPict, style: 'briefing' });
+        }
+    };
     for (const offer of offers) {
         // A prior accept this visit may have made the mission active.
         if (session.state.missions.has(offer.data.id)) {
+            continue;
+        }
+        if (offerAutoAccepts(offer.data)) {
+            // Taken on unasked. A refusal (a prior accept filled the hold
+            // or the cap) is silent: the player never saw the offer, so
+            // there is no "you can't" to answer it with.
+            if (!autoAcceptedThisVisit(rolls, offer.data.id)
+                && autoAcceptOffer(session, offer, rolls).accepted) {
+                await showBriefing(offer);
+            }
             continue;
         }
         const substitutions = {
             ...offerSubstitutions(universe, session.currentDay, offer),
             ...identity,
         };
-        const ctx = makeDescTextContext(session.state.bits,
-            playerGender());
+        const ctx = descContext();
         const text = expandMissionText(offer.data.offerText, substitutions, ctx);
         if (!text) {
+            // Authored text that expands to nothing for this player (a
+            // dësc made of conditionals): nothing to ask with.
             continue;
         }
         const choice = await popup.show(text, {
@@ -532,20 +573,7 @@ export async function presentOffers(popup: OfferPopup,
                 await popup.show(result.reason, { accept: 'OK' });
                 continue;
             }
-            // Rebuilt against the now-active mission: <SN> (the special
-            // ship name) is only picked at accept, and the briefing is
-            // where stock missions use it.
-            const brief = expandMissionText(offer.data.briefText, {
-                ...offerSubstitutions(universe, session.currentDay, offer,
-                    session.state.missions.get(offer.data.id)),
-                ...identity,
-            }, ctx);
-            if (brief) {
-                // The briefing (post-accept) text uses the generic
-                // briefing frame, with its own dësc picture when set.
-                await popup.show(brief, { accept: 'OK' },
-                    { pict: offer.data.briefPict, style: 'briefing' });
-            }
+            await showBriefing(offer);
         } else {
             refuseOffer(session.machinery, offer, session.outfits);
             const refuseText = expandMissionText(

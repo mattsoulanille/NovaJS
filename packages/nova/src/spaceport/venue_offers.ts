@@ -42,7 +42,7 @@ export async function presentVenueOffersIn(transaction: LandedTransaction,
     }
     const visit = transaction.savepoint('venue offers');
     try {
-        await presentOffers(popup, session, universe, offers);
+        await presentOffers(popup, session, universe, offers, visitRolls);
     } finally {
         transaction.release(visit);
     }

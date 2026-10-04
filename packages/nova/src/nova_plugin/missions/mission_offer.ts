@@ -33,6 +33,37 @@ export interface MissionOffer {
 }
 
 /**
+ * Whether an offer of `mission` is AUTO-ACCEPTED rather than asked: its
+ * offer text — dësc 4000 + (id - 128), MissionData.offerText — is absent
+ * or blank (#319).
+ *
+ * The Bible is silent on the case; the ruling ("I think they're supposed
+ * to be auto-accepted") rests on how the data uses it. Every text-less
+ * mïsn the stock scenario has is AvailRandom 0 (never offered; reached
+ * only through an Sxxx), so stock never exercises the rule — but ARPIA
+ * builds its death mechanic on it (ARPIA's raw bit numbers): mïsn
+ * arpia:1123 "Death" (AvailLoc 3, AvailRandom 100, Flags cantRefuse |
+ * invisible, AvailBits `b993 & !(b2018 | b2015)`, no offer or briefing
+ * dësc at all) is the landing event that fires once a mission's
+ * OnShipDone `R(b993)` rolls have killed the player: its OnAccept `b993
+ * G485 A946 ... A1043 M800 Q25090` aborts the running story, grants the
+ * outfit, moves the player to system 800 and throws them off the planet
+ * with a message. arpia:1124 is its twin for a death during the Pirate
+ * Strike (AvailBits `b993 & b2015`; OnAccept `s1123 !b2015 ...`). A
+ * mission the player cannot
+ * refuse, cannot see, and is never shown a word of only does anything if
+ * it is taken on unasked — skipping it, as the offer sites used to, made
+ * the whole mechanic dead data.
+ *
+ * Blank is judged on the RAW text: a dësc whose conditional {bxxx ...}
+ * text merely expands to nothing for this player is still an authored
+ * offer, and stays the skip it always was.
+ */
+export function offerAutoAccepts(mission: MissionData): boolean {
+    return mission.offerText.trim() === '';
+}
+
+/**
  * Resolves a travel/return stellar reference to a concrete planet id.
  * Returns undefined when the reference cannot be satisfied (which
  * makes the mission unofferable), null for "no destination".

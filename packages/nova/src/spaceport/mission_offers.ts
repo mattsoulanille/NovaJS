@@ -1,9 +1,12 @@
 import { dateFromDayNumber, formatDate, ActiveMission } from '../nova_plugin/player/index.js';
 import {
+    acceptOffer,
+    AcceptResult,
     cargoName,
     makeMissionOffer,
     MissionOffer,
     missionMatchesLocation,
+    offerAutoAccepts,
 } from '../nova_plugin/missions/index.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -61,6 +64,89 @@ export function resetOfferRolls(): void {
 }
 
 /**
+ * The missions AUTO-ACCEPTED (offerAutoAccepts: no offer text) during a
+ * system visit, keyed by that visit's {@link OfferRolls} so they share its
+ * lifetime: a new system visit is a new rolls map, and a fresh record.
+ *
+ * THE AUTO-ACCEPT LOOP GUARD (#319). A clicked offer is re-shown every
+ * time the player walks back into the bar, and that is harmless — the
+ * player decides each time. An auto-accept decides for them, so a
+ * text-less mission whose availability survives its own accept would
+ * otherwise be taken again on every walk-in, every landing in the system,
+ * every reopening of the BBS. Most of the data guards itself: ARPIA's
+ * "Death" (arpia:1123) stays ACTIVE once taken, and an active mission is
+ * never offered; its Pirate-Strike twin arpia:1124 clears its own b2015
+ * in OnAccept. What is left — an auto-ABORT mission (it never becomes
+ * active) whose AvailBits it leaves true — is taken at most once per
+ * system visit: the same scope the Bible gives AvailRandom ("Mission
+ * randomizing values are recalculated each time you warp into a system"),
+ * so a mission that is on offer for the visit is taken once for it.
+ */
+const autoAcceptedByVisit = new WeakMap<OfferRolls, Set<string>>();
+
+/** Whether `missionId` was auto-accepted already in the `rolls` visit. */
+export function autoAcceptedThisVisit(rolls: OfferRolls | undefined,
+    missionId: string): boolean {
+    return rolls !== undefined
+        && (autoAcceptedByVisit.get(rolls)?.has(missionId) ?? false);
+}
+
+/**
+ * Takes a text-less offer on unasked (offerAutoAccepts), through the ONE
+ * accept path a clicked Accept takes — acceptOffer, so OnAccept, the
+ * start-time PayVal, PickupMode 0 cargo, an immediate auto-abort's
+ * OnAbort/Pay and its special ships all run exactly as they would for a
+ * click — and records it against the visit's rolls (see
+ * autoAcceptedByVisit). A refused accept (a full hold, the 16-mission
+ * cap) is not recorded, so the next opportunity tries again, as a
+ * clicked offer would be shown again.
+ */
+export function autoAcceptOffer(session: MissionSession, offer: MissionOffer,
+    rolls?: OfferRolls): AcceptResult {
+    const result = acceptOffer(session.machinery, offer, session.outfits);
+    if (result.accepted && rolls) {
+        let accepted = autoAcceptedByVisit.get(rolls);
+        if (!accepted) {
+            accepted = new Set();
+            autoAcceptedByVisit.set(rolls, accepted);
+        }
+        accepted.add(offer.data.id);
+    }
+    return result;
+}
+
+/**
+ * Auto-accepts every acceptable text-less offer in `offers`, in order
+ * (see autoAcceptOffer), and returns the offers that remain to be ASKED —
+ * the ones with offer text. The text-less ones are never left to ask:
+ * there is nothing to show. For the BBS, which lists its offers rather
+ * than asking them one popup at a time; the popup sites go through
+ * presentOffers, which interleaves the same accept with its popups.
+ */
+export function autoAcceptOffers(session: MissionSession,
+    offers: readonly MissionOffer[], rolls?: OfferRolls): {
+        accepted: MissionOffer[], remaining: MissionOffer[],
+    } {
+    const accepted: MissionOffer[] = [];
+    const remaining: MissionOffer[] = [];
+    for (const offer of offers) {
+        if (!offerAutoAccepts(offer.data)) {
+            remaining.push(offer);
+            continue;
+        }
+        // An earlier accept's set string may have started it (Sxxx).
+        if (!offer.acceptable
+            || session.state.missions.has(offer.data.id)) {
+            continue;
+        }
+        if (autoAcceptOffer(session, offer, rolls).accepted) {
+            accepted.push(offer);
+        }
+    }
+    return { accepted, remaining };
+}
+
+/**
  * Rolls availability and freezes the offers, sorted by display weight.
  *
  * With `rolls` (the visit's — see OfferRolls) each mission's AvailRandom
@@ -76,6 +162,11 @@ export function rollOffers(session: MissionSession,
     const offers: MissionOffer[] = [];
     for (const mission of universe.missions) {
         if (!missionMatchesLocation(mission, location, ctx)) {
+            continue;
+        }
+        // Already taken on unasked this visit (the auto-accept loop
+        // guard, autoAcceptedByVisit).
+        if (autoAcceptedThisVisit(rolls, mission.id)) {
             continue;
         }
         if (mission.availRandom < 100) {
