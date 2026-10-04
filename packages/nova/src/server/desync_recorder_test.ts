@@ -13,6 +13,22 @@ async function entriesUnder(dir: string): Promise<string[]> {
         .sort();
 }
 
+/** Whether nothing exists at `p`. A regular file standing where a
+ * directory component should be gives ENOTDIR, not ENOENT; both mean
+ * absent, and anything else is a real error. */
+async function absent(p: string): Promise<boolean> {
+    try {
+        await fs.lstat(p);
+        return false;
+    } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+            return true;
+        }
+        throw e;
+    }
+}
+
 describe('DesyncRecorder', () => {
     /**
      * This spec's private temp directory; everything it creates lives
@@ -143,6 +159,40 @@ describe('DesyncRecorder', () => {
                     ]);
             });
 
+        it('never writes through a symlinked incident directory', async () => {
+            const error = spyOn(console, 'error');
+            const outside = path.join(sandbox, 'outside');
+            await fs.mkdir(outside);
+            const recorder = new DesyncRecorder(root);
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            await recorder.flush();
+            // The incident directory is swapped for a link out of the
+            // root: the recorder's own name for it still passes a
+            // lexical check.
+            const [incident] = await fs.readdir(root);
+            await fs.rm(path.join(root, incident!), { recursive: true });
+            await fs.symlink(outside, path.join(root, incident!));
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            expect(await fs.readdir(outside)).toEqual([]);
+            expect(error).toHaveBeenCalled();
+        });
+
+        it('never writes through a symlinked dump file', async () => {
+            const error = spyOn(console, 'error');
+            const target = path.join(sandbox, 'outside.json');
+            const recorder = new DesyncRecorder(root);
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            await recorder.flush();
+            const [incident] = await fs.readdir(root);
+            await fs.symlink(target, path.join(root, incident!,
+                'client_peer-b_tick180.json'));
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            expect(await absent(target)).toBeTrue();
+            expect(error).toHaveBeenCalled();
+        });
+
         it('caps dumps per incident, bytes per dump, and bytes overall',
             async () => {
                 const recorder = new DesyncRecorder(root, 50, 30_000,
@@ -173,6 +223,41 @@ describe('DesyncRecorder', () => {
                         'client_peer-a_tick3.json',
                     ]);
                 expect(warn).toHaveBeenCalledTimes(3);
+            });
+    });
+
+    describe('root layouts', () => {
+        it('records under a root whose parent is a symlink', async () => {
+            // macOS's /tmp -> /private/tmp, or any symlinked data dir:
+            // the containment check must compare resolved paths on
+            // both sides, or every legitimate write is refused.
+            const real = path.join(sandbox, 'real');
+            await fs.mkdir(real);
+            await fs.symlink(real, path.join(sandbox, 'link'));
+            const recorder = new DesyncRecorder(
+                path.join(sandbox, 'link', 'desyncs'));
+            recorder.recordDesync('nova:130', info, { baselines: [], log: [] });
+            recorder.recordClientDump('nova:130', 'peer-b', dump);
+            await recorder.flush();
+            const [incident] = await fs.readdir(path.join(real, 'desyncs'));
+            expect((await fs.readdir(path.join(real, 'desyncs', incident!)))
+                .sort()).toEqual(['baselines.json',
+                    'client_peer-b_tick180.json', 'desync.json', 'log.json']);
+        });
+
+        it('reports, and writes nothing, when a root component is a file',
+            async () => {
+                const error = spyOn(console, 'error');
+                const file = path.join(sandbox, 'file');
+                await fs.writeFile(file, '');
+                const recorder = new DesyncRecorder(path.join(file, 'desyncs'));
+                recorder.recordDesync('nova:130', info,
+                    { baselines: [], log: [] });
+                recorder.recordClientDump('nova:131', 'peer-b', dump);
+                await recorder.flush();
+                expect(error).toHaveBeenCalledTimes(2);
+                expect(await absent(path.join(file, 'desyncs'))).toBeTrue();
+                expect(await entriesUnder(sandbox)).toEqual([file]);
             });
     });
 

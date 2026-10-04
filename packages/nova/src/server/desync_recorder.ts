@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import { constants as fsConstants } from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { WireWorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
@@ -53,6 +54,27 @@ function sanitize(name: string): string {
 }
 
 /**
+ * Create-or-truncate for writing, refusing (ELOOP) when the file itself
+ * is a symlink. O_NOFOLLOW is on Linux and macOS alike; where the
+ * platform lacks it (Windows) the directory check below still holds.
+ */
+const WRITE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT
+    | fsConstants.O_TRUNC | (fsConstants.O_NOFOLLOW ?? 0);
+
+/**
+ * Whether `child` lies strictly inside `parent`. Both must already be
+ * realpath'd: comparing a resolved path against a lexical one fails
+ * whenever a parent is a symlink (macOS /tmp -> /private/tmp), and
+ * comparing two lexical ones misses a symlink that leads outside. The
+ * trailing separator keeps `<root>-other` from passing as inside
+ * `<root>`.
+ */
+function isInside(parent: string, child: string): boolean {
+    const prefix = parent.endsWith(path.sep) ? parent : parent + path.sep;
+    return child.startsWith(prefix);
+}
+
+/**
  * The server's black-box recorder for desyncs: each conviction gets a
  * timestamped directory under `desyncs/` holding everything offline
  * analysis (analyze_desync.mjs) needs to name the diverged entity,
@@ -101,6 +123,25 @@ export class DesyncRecorder {
         });
     }
 
+    /**
+     * Writes `name` into the incident directory `dir`, which must
+     * resolve — through any symlinks — to a directory inside the
+     * recorder's root. The lexical checks at the call sites stop
+     * `..` in peer-supplied names; this stops a directory (or file)
+     * that is itself a symlink out of the tree.
+     */
+    private async writeContained(dir: string, name: string, data: string) {
+        await fs.mkdir(dir, { recursive: true });
+        const [realRoot, realDir] = await Promise.all([
+            fs.realpath(this.root), fs.realpath(dir)]);
+        if (!isInside(realRoot, realDir) || path.basename(name) !== name) {
+            throw new Error(`Refusing to write ${name}: ${dir} resolves `
+                + `to ${realDir}, outside ${realRoot}`);
+        }
+        await fs.writeFile(path.join(realDir, name), data,
+            { flag: WRITE_NO_FOLLOW });
+    }
+
     recordDesync(roomId: string, info: DesyncInfo, context: {
         baselines: ArchiveBaseline[],
         log: readonly InputRecord[],
@@ -144,9 +185,8 @@ export class DesyncRecorder {
             + `${sanitize(roomId)}_tick${info.tick}`);
         this.latestIncident.set(roomId, dir);
         this.enqueue(async () => {
-            await fs.mkdir(dir, { recursive: true });
             for (const [name, data] of files) {
-                await fs.writeFile(path.join(dir, name), data);
+                await this.writeContained(dir, name, data);
             }
             console.log(`Recorded desync incident at ${dir}`);
             await this.prune();
@@ -191,15 +231,16 @@ export class DesyncRecorder {
         //
         // The tick is PEER-SUPPLIED. It is typed as a number, but it
         // arrives as JSON, and path.join normalises `..` segments: a
-        // string here once wrote `<root>/../../../escaped.json`. Only
-        // a safe integer may name the file, and the resolved path is
-        // checked against the directory regardless.
+        // string here once wrote `<root>/../../escaped.json`. Only
+        // a safe integer may name the file, the joined path is checked
+        // against the directory regardless, and the write itself
+        // re-checks the directory's resolved path (writeContained).
         const safeTick = (value: unknown) =>
             Number.isSafeInteger(value) ? value as number : undefined;
         const tick = safeTick(dump.desyncTick) ?? safeTick(dump.tick)
             ?? 'invalid';
-        const file = path.join(dir, `client_${sanitize(peerId)}`
-            + `_tick${tick}.json`);
+        const name = `client_${sanitize(peerId)}_tick${tick}.json`;
+        const file = path.join(dir, name);
         if (!file.startsWith(dir + path.sep)) {
             console.error(`Refusing to write desync dump outside ${dir}: ${file}`);
             return;
@@ -207,8 +248,7 @@ export class DesyncRecorder {
         this.dumpCounts.set(dir, count + 1);
         this.dumpBytes += data.length;
         this.enqueue(async () => {
-            await fs.mkdir(dir!, { recursive: true });
-            await fs.writeFile(file, data);
+            await this.writeContained(dir!, name, data);
             console.log(`Recorded desync dump from ${peerId} at ${file}`);
         });
     }
