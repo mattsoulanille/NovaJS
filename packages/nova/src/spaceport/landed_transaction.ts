@@ -1,9 +1,11 @@
 import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { MissionData } from 'novadatainterface/mission_data';
 import {
-    MissionEvent, MissionWorkingState,
+    MissionEvent, MissionWorkingState, setStringPrefix,
 } from '../nova_plugin/missions/index.js';
+import { ShipChangeMode } from '../nova_plugin/ncb/index.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import { CreditsComponent } from '../nova_plugin/player/index.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
@@ -17,8 +19,9 @@ import {
     advanceEntityDate, drainPendingMissionNotices, MissionSession,
     processLandingOn, replaceMap, replaceSet,
 } from './mission_session.js';
-import { MissionUniverse } from './mission_universe.js';
+import { MissionUniverse, pooledMap } from './mission_universe.js';
 import { commitPendingEscorts } from './pending_escorts.js';
+import { buildChangedShip, changeShipTargets } from './shipyard_rules.js';
 
 /**
  * ============================================================================
@@ -50,6 +53,8 @@ import { commitPendingEscorts } from './pending_escorts.js';
  *      .hired         the pilots hired at the bar this landing
  *      .holds         the escort holds the trade center has checked out
  *      .ship          the hull, swappable (a shipyard purchase, an Hxxx)
+ *      .changeShip()  the Cxxx/Exxx/Hxxx hook of every set string the
+ *                     session runs, whichever venue runs it
  *      .savepoint()   what a venue opens as it starts and releases at Done
  *      .commit()      the lift-off: the working copy lands on the hull, the
  *                     hires on PendingEscortsComponent, the holds on the
@@ -176,6 +181,36 @@ class SavepointRecord implements Savepoint {
     constructor(readonly label: string, readonly snapshot: Snapshot) { }
 }
 
+/** The mïsn set strings, every one of which may carry a change-ship. */
+const MISSION_SET_STRINGS = [
+    'onAccept', 'onRefuse', 'onSuccess', 'onFailure', 'onAbort', 'onShipDone',
+] as const;
+
+/**
+ * {@link missionChangeShipTargets}' answers, per loaded mission list (a
+ * universe that reloads builds a new one), so a landing does not re-parse
+ * every set string in the game.
+ */
+const missionTargetsCache = new WeakMap<readonly MissionData[], string[]>();
+
+/**
+ * Every shïp class a mission's set string could change the player's ship
+ * to, each resolved under that mission's own writer prefix.
+ */
+function missionChangeShipTargets(missions: readonly MissionData[],
+    shipExists: (globalId: string) => boolean): string[] {
+    let targets = missionTargetsCache.get(missions);
+    if (!targets) {
+        targets = changeShipTargets(missions.flatMap(mission =>
+            MISSION_SET_STRINGS.map(field => ({
+                expression: mission[field],
+                prefix: setStringPrefix(mission),
+            }))), shipExists);
+        missionTargetsCache.set(missions, targets);
+    }
+    return targets;
+}
+
 /** A deep copy of a plain-data value (an ActiveMission, a spawn batch). */
 function clone<T>(value: T): T {
     return structuredClone(value);
@@ -209,6 +244,13 @@ export class LandedTransaction {
     /** The savepoint the lease was opened under; undefined = no lease. */
     private leaseOwner?: SavepointRecord;
     private swapListeners: ((ship: Entity) => void)[] = [];
+    private shipChangeListeners: ((ship: Entity) => void)[] = [];
+    /**
+     * Every shïp global id in the game data: the lookup the change-ship
+     * operators resolve their bare number through, stock-first (see
+     * {@link changeShip}). Loaded as the transaction opens.
+     */
+    private shipIds = new Set<string>();
     private closed = false;
 
     private constructor(session: MissionSession,
@@ -230,7 +272,51 @@ export class LandedTransaction {
         Promise<LandedTransaction> {
         const session = await MissionSession.create(entity, gameData,
             universe, planetId);
-        return new LandedTransaction(session, gameData, universe, planetId);
+        const transaction =
+            new LandedTransaction(session, gameData, universe, planetId);
+        await transaction.wireShipChanges();
+        return transaction;
+    }
+
+    /**
+     * Wires the `Cxxx` / `Exxx` / `Hxxx` (change ship) operators of every
+     * set string the landing's session runs — a mission accepted at the
+     * bar, the BBS, a landing or venue-entry popup, its OnSuccess /
+     * OnFailure at the landing, its OnAbort from the mission-info dialog,
+     * an outfit's OnPurchase — to {@link changeShip}. Stock runs five of
+     * them from mïsn OnAccept (nova:197, 320, 361 and 748 are main-spaceport
+     * offers, 709 a shipyard one), and before this only the outfitter wired
+     * the hook, so every one of those warned and left the pilot in the old
+     * hull.
+     *
+     * A set string runs synchronously, so the hull classes a mission could
+     * change to are fetched here, and — when there are any — every outfit
+     * too: the change reads the 0x0020 persistence and the cargo space of
+     * whatever the pilot owns by then, which a Gxxx or a purchase this
+     * visit can make any outfit. A failed warm-up still wires the hook;
+     * the change then says what it is missing when it runs.
+     */
+    private async wireShipChanges(): Promise<void> {
+        try {
+            const ids = await this.gameData.ids;
+            this.shipIds = new Set(ids.Ship);
+            const targets = missionChangeShipTargets(this.universe.missions,
+                id => this.shipIds.has(id));
+            if (targets.length > 0) {
+                const data = this.gameData.data;
+                await Promise.all([
+                    ...targets.map(id => data.Ship.get(id)
+                        .catch(() => undefined)),
+                    pooledMap(ids.Outfit, id => data.Outfit.get(id)
+                        .catch(() => undefined)),
+                ]);
+            }
+        } catch (e) {
+            console.warn('Change-ship data failed to load:', e);
+        }
+        this.session.setChangeShipHook(
+            (id, mode) => this.changeShip(id, mode),
+            id => this.shipIds.has(id));
     }
 
     // ── The working copy ────────────────────────────────────────────────
@@ -666,6 +752,53 @@ export class LandedTransaction {
             [...entity.components.get(OutfitsStateComponent) ?? []]
                 .map(([id, { count }]) => [id, count] as const));
         this.announceSwap(entity);
+    }
+
+    /**
+     * `Cxxx` / `Exxx` / `Hxxx` from any set string the session runs: the
+     * player's ship becomes class `globalId`, right now, mid-visit — the
+     * shipyard's hull swap with no price (shipyard_rules'
+     * buildChangedShip), applied to the WORKING outfits, which are ahead of
+     * the hull's component (an OnPurchase's permit has just been added to
+     * them; a Gxxx earlier in the same string has just granted one). The
+     * new hull is adopted ({@link adoptChangedShip}: the session is
+     * re-pointed and the working outfits become the new hull's, so the
+     * rest of the running set string reads them) and then announced to
+     * {@link onShipChanged}'s listeners: the Spaceport, which publishes it
+     * exactly as it publishes a shipyard purchase, and an open outfitter,
+     * which shops for the new hull.
+     */
+    changeShip(globalId: string, mode: ShipChangeMode): void {
+        if (this.closed) {
+            this.warnAbandoned(`change of ship to ${globalId}`);
+            return;
+        }
+        const newShip = this.gameData.data.Ship.getCached(globalId);
+        if (!newShip) {
+            console.warn(`Change-ship to ${globalId} ignored: `
+                + 'ship data not loaded');
+            return;
+        }
+        const entity = buildChangedShip(this.hull, newShip, this.outfits,
+            id => this.gameData.data.Outfit.getCached(id), mode);
+        this.adoptChangedShip(entity, newShip.id);
+        for (const listener of [...this.shipChangeListeners]) {
+            listener(entity);
+        }
+    }
+
+    /**
+     * Told of every {@link changeShip}, with the new hull. Returns the
+     * unsubscribe, for a listener that lives only as long as a visit.
+     */
+    onShipChanged(listener: (ship: Entity) => void): () => void {
+        this.shipChangeListeners.push(listener);
+        return () => {
+            const index = this.shipChangeListeners.indexOf(listener);
+            if (index >= 0) {
+                this.shipChangeListeners.splice(index, 1);
+            }
+        };
     }
 
     /** Told of every hull swap (adopt*, and a rollback that reverts one). */

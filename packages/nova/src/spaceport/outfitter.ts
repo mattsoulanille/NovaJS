@@ -10,7 +10,7 @@ import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import {
-    NCBParseError, NCBSetOperation, parseNCBSet, ControlBits, makeDescTextContext, playerGender,
+    NCBParseError, ControlBits, makeDescTextContext, playerGender,
     resolveConditionalBlocks, rankContribute,
 } from '../nova_plugin/ncb/index.js';
 import { playerDiscovery, dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
@@ -32,7 +32,7 @@ import { DeployedOutfitCounts } from "./deployed_outfits.js";
 import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, govtsAllied, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
-import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";
+import { changeShipTargets } from "./shipyard_rules.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
 
@@ -277,20 +277,22 @@ export class Outfitter extends Menu<Entity> {
      */
     private ammoSellStrings: AmmoSellStrings = AMMO_SELL_STRINGS;
     /**
-     * Every shïp global id in the game data, so a change-ship operator
-     * (`Cxxx` / `Exxx` / `Hxxx` in an OnPurchase) resolves its number
-     * stock-first like every other numeric reference. Loaded in build().
+     * Every shïp global id in the game data, so the change-ship operators
+     * (`Cxxx` / `Exxx` / `Hxxx` in an OnPurchase) this shop warms resolve
+     * their numbers stock-first like every other numeric reference.
+     * Loaded in build().
      */
     private shipIds = new Set<string>();
     /**
      * Told the moment an OnPurchase set string has CHANGED THE PLAYER'S
-     * SHIP, with the new entity — the outfitter's twin of the shipyard's
-     * `onShipPurchased`, wired by the Spaceport to the same
-     * `adoptPurchasedShip`, and for the same reason: the client's docked
-     * readers follow whichever entity the client holds, so the swap has
-     * to be published at the instant it happens rather than at Done.
+     * SHIP during this visit, with the new entity. The Spaceport does not
+     * need it — it hears every change-ship on the landing's transaction
+     * (LandedTransaction.onShipChanged), whichever venue ran it — so this
+     * is for an outfitter shown on its own.
      */
     onShipChanged?: (ship: Entity) => void;
+    /** Ends this visit's subscription to the transaction's ship changes. */
+    private stopFollowingShipChanges?: () => void;
 
     private text = {
         description: new PIXI.Text("", FONT.normal),
@@ -548,73 +550,41 @@ export class Outfitter extends Menu<Entity> {
      * runs).
      */
     private changeShipTargets(outfits: OutfitData[]): string[] {
-        const targets = new Set<string>();
-        const exists = (id: string) => this.shipIds.has(id);
-        const collect = (operations: NCBSetOperation[], prefix: string) => {
-            for (const operation of operations) {
-                if (operation.type === 'changeShip') {
-                    targets.add(resolveNumberedResource(
-                        operation.id, prefix, exists));
-                } else if (operation.type === 'random') {
-                    collect(operation.choices, prefix);
-                }
-            }
-        };
-        for (const outfit of outfits) {
-            for (const expression of [outfit.onPurchase, outfit.onSell]) {
-                if (!expression) {
-                    continue;
-                }
-                try {
-                    collect(parseNCBSet(expression), setStringPrefix(outfit));
-                } catch (error) {
-                    if (!(error instanceof NCBParseError)) {
-                        throw error;
-                    }
-                }
-            }
-        }
-        return [...targets].sort();
+        return changeShipTargets(outfits.flatMap(outfit =>
+            [outfit.onPurchase, outfit.onSell].map(expression =>
+                ({ expression, prefix: setStringPrefix(outfit) }))),
+            id => this.shipIds.has(id));
     }
 
     /**
-     * `Cxxx` / `Exxx` / `Hxxx` from an OnPurchase / OnSell set string: the
-     * player's ship becomes class `globalId`, right now, mid-visit. Stock
-     * oütf 314 "Chrome Valk Upgrade" (50,000 cr, `H165`) turns a Valkyrie
-     * into a Mod Starbridge this way, and 315-318 are its Rebel/Pirate
-     * siblings.
+     * `Cxxx` / `Exxx` / `Hxxx` from an OnPurchase / OnSell set string has
+     * changed the player's ship, right now, mid-visit. Stock oütf 314
+     * "Chrome Valk Upgrade" (50,000 cr, `H165`) turns a Valkyrie into a Mod
+     * Starbridge this way, and 315-318 are its Rebel/Pirate siblings.
      *
-     * The swap is the shipyard's hull swap with no price
-     * (shipyard_rules' buildChangedShip), applied to the transaction's
-     * WORKING outfits — which are ahead of the entity's component: the
-     * permit whose OnPurchase is running has just been added to them, and
-     * an `H` change drops it along with everything else that is not
-     * 0x0020-persistent. The transaction then adopts the new hull
-     * (adoptChangedShip: the session is re-pointed and the working outfits
-     * become the new hull's, so the rest of the running set string reads
-     * them) and it is published through onShipChanged exactly as a
-     * shipyard purchase is.
+     * The swap itself is the landing transaction's (LandedTransaction's
+     * changeShip, the one hook every landed venue's set strings reach): the
+     * shipyard's hull swap with no price, applied to the WORKING outfits —
+     * which are ahead of the entity's component: the permit whose
+     * OnPurchase is running has just been added to them, and an `H` change
+     * drops it along with everything else that is not 0x0020-persistent.
+     * By the time this runs the transaction has adopted the new hull (the
+     * session is re-pointed and the working outfits are the new hull's, so
+     * the rest of the running set string reads them) and the Spaceport has
+     * published it exactly as it publishes a shipyard purchase. What is
+     * left is this menu's own half: shop for the new hull.
      *
      * Credits are untouched by the change itself: the new entity carries
      * the OLD entity's live balance, and the visit's spend still lands as
      * the transaction's delta when the visit is released.
      */
-    private changeShip(globalId: string, mode: ShipChangeMode) {
-        const transaction = this.transaction;
-        const newShip = this.simulationData.data.Ship.getCached(globalId);
-        if (!transaction || !newShip) {
-            console.warn(`Change-ship to ${globalId} ignored: `
-                + (transaction ? 'ship data not loaded' : 'no transaction'));
-            return;
-        }
-        const entity = buildChangedShip(this.input, newShip,
-            transaction.outfits,
-            id => this.simulationData.data.Outfit.getCached(id), mode);
-        transaction.adoptChangedShip(entity, newShip.id);
+    private followShipChange(entity: Entity) {
         // Swapping this.input is how a ship change is communicated:
         // Menu.done() emits it, exactly as the shipyard's buyShip does.
         this.input = entity;
-        this.shipData = newShip;
+        const shipId = entity.components.get(ShipComponent)?.id;
+        this.shipData = shipId === undefined ? undefined
+            : this.simulationData.data.Ship.getCached(shipId);
         this.onShipChanged?.(entity);
     }
 
@@ -1326,11 +1296,11 @@ export class Outfitter extends Menu<Entity> {
             // nothing was edited yet.
             return input;
         }
-        // The change-ship operators need the docked entity, which only
-        // this menu holds (see changeShip).
-        this.transaction.session.setChangeShipHook(
-            (id, mode) => this.changeShip(id, mode),
-            id => this.shipIds.has(id));
+        // An OnPurchase `Hxxx` changes the ship through the transaction;
+        // this visit follows the new hull (see followShipChange).
+        this.stopFollowingShipChanges?.();
+        this.stopFollowingShipChanges = this.transaction.onShipChanged(
+            ship => this.followShipChange(ship));
         this.visit = this.transaction.savepoint('outfitter');
         return super.show(input);
     }
@@ -1380,6 +1350,8 @@ export class Outfitter extends Menu<Entity> {
      * meanwhile (landed_transaction.ts, credit_commit.ts).
      */
     protected override done() {
+        this.stopFollowingShipChanges?.();
+        this.stopFollowingShipChanges = undefined;
         if (this.transaction && this.visit) {
             this.transaction.release(this.visit);
         }

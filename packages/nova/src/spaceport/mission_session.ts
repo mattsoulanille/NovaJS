@@ -153,10 +153,12 @@ export class MissionSession {
 
     /**
      * Wires the `Cxxx` / `Exxx` / `Hxxx` (change ship) operators to the
-     * venue that can perform them, and the shïp existence lookup they
-     * resolve their number through. Only a venue holding the docked
-     * entity can swap it; it must call {@link retarget} from inside the
-     * hook so the commit lands on the hull the player is now in.
+     * owner that can perform them, and the shïp existence lookup they
+     * resolve their number through. Only an owner holding the docked
+     * entity can swap it — the landing's transaction, which wires this as
+     * it opens (LandedTransaction.changeShip); it must call
+     * {@link retarget} from inside the hook so the commit lands on the
+     * hull the player is now in. The in-flight sessions leave it unwired.
      */
     setChangeShipHook(
         changeShip: NonNullable<MissionMachineryContext['changeShip']>,

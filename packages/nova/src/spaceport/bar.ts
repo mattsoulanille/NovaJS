@@ -296,10 +296,11 @@ export class Bar extends Menu<Entity> {
                 // The landing's working control bits (a mission accepted
                 // this visit already counts) plus the landed entity, which
                 // is where the hire pool reads the player's outfits, ranks
-                // and the game date from — and the world and landed
-                // roster, for the escort cap (HirePlayer's doc).
+                // and the game date from (the transaction's hull: a bar
+                // mission may have changed ships) — and the world and
+                // landed roster, for the escort cap (HirePlayer's doc).
                 {
-                    entity: this.input, bits: transaction.state.bits,
+                    entity: transaction.ship, bits: transaction.state.bits,
                     world: this.world,
                     landedEscorts: this.landedEscorts,
                     playerUuid: this.playerUuid,
@@ -335,6 +336,12 @@ export class Bar extends Menu<Entity> {
     protected override done() {
         if (this.transaction && this.visit) {
             this.transaction.release(this.visit);
+        }
+        if (this.transaction) {
+            // Done hands back the hull the player is in NOW: a bar
+            // mission's `Cxxx`/`Exxx`/`Hxxx` swaps it through the
+            // transaction (LandedTransaction.changeShip).
+            this.input = this.transaction.ship;
         }
         this.visit = undefined;
         if (this.ownsTransaction) {

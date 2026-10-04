@@ -50,8 +50,8 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
         runningMissionPrefix, machinery.systemExists));
 
     // Cxxx/Exxx/Hxxx, when the caller can swap the player's hull (the
-    // outfitter can; see MissionMachineryContext.changeShip). The shïp
-    // number resolves stock-first like every sibling operator.
+    // landing's transaction can; see MissionMachineryContext.changeShip).
+    // The shïp number resolves stock-first like every sibling operator.
     const { changeShip } = machinery;
     if (changeShip) {
         hooks.changeShip = (id, mode) => changeShip(resolveNumberedResource(
