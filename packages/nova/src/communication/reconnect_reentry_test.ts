@@ -535,6 +535,8 @@ describe('a socket reconnect mid-game (#354)', () => {
                 await step(10);
             }
             expect(atA.map(notice => notice.peer)).toEqual([after]);
+            // Well inside the grace, the worker still waiting.
+            await step(60);
             expect(a.host.status().identityRecoveryFailed).toBeUndefined();
 
             // The identity arrives: its change re-enters, the escort the
