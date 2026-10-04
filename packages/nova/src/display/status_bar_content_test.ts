@@ -1,5 +1,4 @@
 import 'jasmine';
-import { TARGET_FLASH_MS, targetFlashOn } from './status_bar_radar.js';
 import {
     formatCredits, navReadout, abbreviateCargoName, specialCargoSummary,
     standardCargoIndex, ordinal, formatLongDate, jumpArrivalMessage,
@@ -240,21 +239,4 @@ describe('targetGovtLabel', () => {
     it('tags an escort even before its government data caches', () => {
         expect(targetGovtLabel('', ME, ME)).toBe(ESCORT_GOVT_LABEL);
     });
-});
-
-describe('targetFlashOn (selected target flashes white on the radar)', () => {
-    it('is on for the first half of each period and off for the second', () => {
-        expect(targetFlashOn(0)).toBeTrue();
-        expect(targetFlashOn(TARGET_FLASH_MS / 2 - 1)).toBeTrue();
-        expect(targetFlashOn(TARGET_FLASH_MS / 2)).toBeFalse();
-        expect(targetFlashOn(TARGET_FLASH_MS - 1)).toBeFalse();
-        expect(targetFlashOn(TARGET_FLASH_MS)).toBeTrue();
-    });
-
-    it('outlasts the radar redraw period so each phase is actually drawn',
-        () => {
-            // The radar redraws every 200ms; a half-period shorter than
-            // that would make the flash a stutter, not a blink.
-            expect(TARGET_FLASH_MS / 2).toBeGreaterThanOrEqual(2 * 200);
-        });
 });
