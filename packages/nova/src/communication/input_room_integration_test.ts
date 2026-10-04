@@ -1121,6 +1121,188 @@ describe('Input-driven rooms', () => {
         expect(hashA.hash).toEqual(hashB.hash);
     }, 240_000);
 
+    it('one peer\'s records sharing a tick apply in seq order on every world, a retimed one included (#359)', async () => {
+        // The intermittent binary_wire_e2e divergence: a peer running
+        // behind the relay's clock over a slow link. Its record N is
+        // retimed to the relay's next tick and echoed back; before the
+        // echo arrives, the peer's NEXT record N+1 is stamped for that
+        // very tick (no retime: the relay's clock had not moved). The
+        // sender had applied N+1 there and appended the echoed N after
+        // it — [N+1, N] — while every other world got them in the
+        // relay's order, [N, N+1]. Records of one peer on one tick
+        // must apply in seq order everywhere: here a control 'start'
+        // and its release, which leave the ship accelerating in one
+        // order and coasting in the other.
+        relay.close();
+        let archive: RoomArchive | undefined;
+        relay = new RollbackRelay(comms.get('server')!, {
+            autoClock: false,
+            baseline: () => archive?.latest,
+            referenceHash: tick => archive?.hashAt(tick),
+        });
+        const makeArchiveWorld = async () => {
+            const gameData = await getSyntheticGameData();
+            const ids = await gameData.ids;
+            return makeSystem([...ids.System].sort()[0]!, gameData, 'node', { npcs: false });
+        };
+        archive = new RoomArchive(relay, makeArchiveWorld,
+            { intervalTicks: 60, autoUpdate: false });
+        const { TimeResource } = await import('nova_ecs/plugins/time_plugin');
+        const frame = (world: World) => world.resources.get(TimeResource)!.frame;
+
+        const peerA = await makePeer('a');
+        const peerB = await makePeer('b');
+        await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+        await peerB.client.addEntity('ship b', await makePeerShip('b', peerB.world));
+        for (let tick = 1; tick <= 20; tick++) {
+            peerA.host.step();
+            peerB.host.step();
+            relay.advanceTicks(1);
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        // A stalls five ticks behind the relay's clock, and the relay's
+        // messages to A are delayed in flight.
+        const tick0 = frame(peerA.world);
+        relay.advanceTicks(tick0 + 5 - relay.tick);
+        const server = comms.get('server')!;
+        const inFlight: { source: string, message: unknown }[] = [];
+        server.mockPeers = new Map(comms);
+        server.mockPeers.set('a', {
+            messages: { next: (message: { source: string, message: unknown }) =>
+                inFlight.push(message) },
+        } as unknown as MockCommunicator);
+        // Record N, stamped tick0 + 1: retimed to tick0 + 6, its echo
+        // delayed.
+        peerA.host.controlEvents([{ action: 'accelerate', state: 'start' }]);
+        peerA.host.step();
+        for (let i = 0; i < 4; i++) {
+            peerA.host.step();
+        }
+        // Record N+1, stamped tick0 + 6 — the relay's next tick, so
+        // not retimed — and applied there by A.
+        peerA.host.controlEvents([{ action: 'accelerate', state: false }]);
+        peerA.host.step();
+        expect(frame(peerA.world)).toBe(tick0 + 6);
+        expect(relay.inputLog.filter(record => record.peerId === 'a'
+            && record.tick === tick0 + 6).map(record => record.seq))
+            .withContext('both records on the relay\'s tick0 + 6, N before N+1')
+            .toEqual([jasmine.any(Number), jasmine.any(Number)]);
+        // The link recovers: the echo of N arrives.
+        server.mockPeers = comms;
+        for (const message of inFlight) {
+            comms.get('a')!.messages.next(message);
+        }
+        for (let tick = 0; tick < 60; tick++) {
+            peerA.host.step();
+            peerB.host.step();
+            relay.advanceTicks(1);
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        while (frame(peerA.world) !== frame(peerB.world)) {
+            (frame(peerA.world) < frame(peerB.world) ? peerA : peerB)
+                .host.step();
+        }
+        relay.advanceTicks(frame(peerA.world) - relay.tick);
+        await archive.update();
+        expect(frame(archive.archiveWorld!)).toBe(frame(peerA.world));
+
+        const hashA = hashWorld(peerA.world, PEER_LOCAL_COMPONENTS);
+        const hashB = hashWorld(peerB.world, PEER_LOCAL_COMPONENTS);
+        const hashArchive = hashWorld(archive.archiveWorld!, PEER_LOCAL_COMPONENTS);
+        const { diffWorldHashes } = await import('nova_ecs/plugins/world_hash');
+        expect(diffWorldHashes(hashA, hashB))
+            .withContext('the sender against the other peer').toEqual([]);
+        expect(diffWorldHashes(hashArchive, hashB))
+            .withContext('the archive against the other peer').toEqual([]);
+        // The release came last everywhere: A's ship coasts, it is not
+        // still accelerating, on its own world too.
+        const { ShipControlStateComponent } = await import('../nova_plugin/player/index.js');
+        for (const [name, world] of [['A', peerA.world], ['B', peerB.world]] as const) {
+            const controls = world.entities.get('ship a')!
+                .components.get(ShipControlStateComponent);
+            expect(controls?.get('accelerate'))
+                .withContext(`ship a's accelerate on ${name}`).toBe(false);
+        }
+    }, 240_000);
+
+    it('per-tick steering survives a one-tick retime: the sender matches the archive (#359)', async () => {
+        // The browser form of the same bug (the hub's mouse-steer
+        // incident): mouse or touch steering sends an analogControl
+        // record EVERY tick, so every retime lands a record on a tick
+        // that already holds the sender's next one. The relay's clock
+        // runs one tick early for a moment: record n, stamped t, is
+        // retimed to t + 1, where n + 1 is stamped (not retimed — the
+        // clock then pauses a tick and is back in step). The sender
+        // held [n+1, n] there and steered by n's heading for that tick;
+        // the archive applied [n, n+1]. Last write wins, so order is
+        // state: a sub-millimetre position fork that never heals.
+        relay.close();
+        let archive: RoomArchive | undefined;
+        relay = new RollbackRelay(comms.get('server')!, {
+            autoClock: false,
+            baseline: () => archive?.latest,
+            referenceHash: tick => archive?.hashAt(tick),
+        });
+        const makeArchiveWorld = async () => {
+            const gameData = await getSyntheticGameData();
+            const ids = await gameData.ids;
+            return makeSystem([...ids.System].sort()[0]!, gameData, 'node', { npcs: false });
+        };
+        archive = new RoomArchive(relay, makeArchiveWorld,
+            { intervalTicks: 60, autoUpdate: false });
+        const { TimeResource } = await import('nova_ecs/plugins/time_plugin');
+        const frame = (world: World) => world.resources.get(TimeResource)!.frame;
+
+        const peerA = await makePeer('a');
+        await peerA.client.addEntity('ship a', await makePeerShip('a', peerA.world));
+        const server = comms.get('server')!;
+        const inFlight: { source: string, message: unknown }[] = [];
+        let retimedAt: number | undefined;
+        for (let i = 1; i <= 90; i++) {
+            // A slowly swinging stick: the ship tracks the heading
+            // exactly, so which of two adjacent headings a tick used
+            // shows up in its position.
+            peerA.host.analogControl({ heading: 1 + i * 0.002, throttle: 1 });
+            if (i === 40) {
+                // The clock runs a tick early: this record is retimed,
+                // and its echo is still in flight when A steps again.
+                relay.advanceTicks(1);
+                retimedAt = frame(peerA.world) + 2;
+                server.mockPeers = new Map(comms);
+                server.mockPeers.set('a', {
+                    messages: { next: (message: { source: string, message: unknown }) =>
+                        inFlight.push(message) },
+                } as unknown as MockCommunicator);
+            }
+            peerA.host.step();
+            if (i === 41) {
+                // n + 1 went out stamped for the retime's tick, not
+                // retimed; now the echo of n lands.
+                server.mockPeers = comms;
+                for (const message of inFlight) {
+                    comms.get('a')!.messages.next(message);
+                }
+            }
+            if (i !== 40) {
+                // (The clock pauses for tick 40's step: back in step.)
+                relay.advanceTicks(1);
+            }
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        const onRetimedTick = relay.inputLog.filter(
+            record => record.peerId === 'a' && record.tick === retimedAt);
+        expect(onRetimedTick.length)
+            .withContext('two of A\'s records share the retime\'s tick').toBe(2);
+        expect(relay.tick).toBe(frame(peerA.world));
+        await archive.update();
+        expect(frame(archive.archiveWorld!)).toBe(frame(peerA.world));
+        const { diffWorldHashes } = await import('nova_ecs/plugins/world_hash');
+        expect(diffWorldHashes(
+            hashWorld(peerA.world, PEER_LOCAL_COMPONENTS),
+            hashWorld(archive.archiveWorld!, PEER_LOCAL_COMPONENTS)))
+            .withContext('the sender against the archive').toEqual([]);
+    }, 240_000);
+
     it('detects a desync and the diverged peer resyncs from the log', async () => {
         // Replace the plain relay with one capturing incident hooks:
         // the conviction report and the diverged peer's uploaded

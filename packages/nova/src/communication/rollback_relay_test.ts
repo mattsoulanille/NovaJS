@@ -80,6 +80,39 @@ describe('RollbackRelay', () => {
         expect(received(peerA)).toEqual([{ kind: 'inputs', record: clamped }]);
     });
 
+    it('a retime never moves a peer\'s record past its later one (#359)', () => {
+        // Retimes may stack several of one peer's records on one tick
+        // (the relay's clock stalls, a burst lands) — the same-tick
+        // order is settled by seq where records apply — but the clamp
+        // is monotonic: records that arrive in seq order with
+        // non-decreasing stamps leave with non-decreasing ticks,
+        // whatever the clock does in between. Here: stamps one apart,
+        // the clock jumping ahead, standing still, and falling behind
+        // the stamps again.
+        const clockSteps = [0, 5, 0, 0, 1, 0, 3, 0, 0, 0, 0, 0, 2, 0, 0];
+        for (const [seq, step] of clockSteps.entries()) {
+            relay.advanceTicks(step);
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'inputs',
+                record: { peerId: 'a', tick: 2 + seq, seq, inputs: CONTROL },
+            }) as never, 'server');
+        }
+        const relayed = relay.inputLog.map(record => [record.seq!, record.tick]);
+        // Some were retimed, some onto a shared tick...
+        expect(relayed.some(([seq, tick]) => tick !== 2 + seq)).toBeTrue();
+        expect(new Set(relayed.map(([, tick]) => tick)).size)
+            .toBeLessThan(relayed.length);
+        // ...and none ever overtook its predecessor.
+        for (let i = 1; i < relayed.length; i++) {
+            expect(relayed[i]![0]).toBe(relayed[i - 1]![0]! + 1);
+            expect(relayed[i]![1]).toBeGreaterThanOrEqual(relayed[i - 1]![1]!);
+        }
+        // B (and the archive, which replays this log) sees the same.
+        const atB = received(peerB).flatMap(message =>
+            message.kind === 'inputs' ? [[message.record.seq, message.record.tick]] : []);
+        expect(atB).toEqual(relayed);
+    });
+
     it('holds hash comparisons until the archive hash exists', () => {
         relay.close();
         let reference: string | undefined = undefined;
