@@ -6,7 +6,7 @@ import { applyPayVal } from './mission_payval.js';
 import { runMissionSetString } from './mission_set_strings.js';
 import { objectiveAllowsCompletion } from '../player/index.js';
 import {
-    abortMission, completeMission, failMission,
+    autoAbortMission, completeMission, failMission,
 } from './mission_transitions.js';
 import { ActiveMission } from '../player/index.js';
 import { decodePayVal } from '../reputation/index.js';
@@ -105,10 +105,13 @@ export function runPendingShipDone(machinery: MissionMachineryContext,
  * That is exactly the split `shipDonePending` already uses, so this runs
  * beside runPendingShipDone at every date advance.
  *
- * Reusing `abortMission` rather than open-coding it is what keeps the
- * deferred case honest: the Bible calls this an ABORT ("the mission will
- * auto-abort after the special ship is boarded"), so it must run OnAbort,
- * apply the abort reputation, and unload mission cargo like any other.
+ * Reusing the abort transition rather than open-coding it is what keeps
+ * the deferred case honest: the Bible calls this an ABORT ("the mission
+ * will auto-abort after the special ship is boarded"), so it must run
+ * OnAbort and unload mission cargo like any other. It is an AUTO-abort,
+ * though, so it goes through `autoAbortMission`, which leaves out the
+ * player-abort CompReward reversal (Flags 0x0040) exactly as the
+ * immediate auto-abort in acceptOffer does (#320; see autoAbortMission).
  * Returns how many ran.
  */
 export function runPendingAutoAborts(machinery: MissionMachineryContext,
@@ -134,7 +137,7 @@ export function runPendingAutoAborts(machinery: MissionMachineryContext,
                 applyPayVal(machinery, mission, pay);
             }
         }
-        abortMission(machinery, active.id, outfits);
+        autoAbortMission(machinery, active.id, outfits);
         ran++;
     }
     return ran;

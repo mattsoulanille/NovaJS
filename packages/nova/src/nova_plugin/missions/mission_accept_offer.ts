@@ -130,9 +130,9 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // missions (nova:614-629, "Avoid Federation Task Force" and kin)
         // set 0x0040 with CompRewards up to 30 — applying a -150 Rebel
         // reversal every time a squad is dispatched cannot be what their
-        // author meant. The DEFERRED auto-abort (runPendingAutoAborts) does
-        // apply it, through abortMission; that asymmetry is deliberate and
-        // recorded here.
+        // author meant. The DEFERRED auto-abort (runPendingAutoAborts)
+        // leaves it out too, through autoAbortMission: one rule for both
+        // (#320, see autoAbortMission).
         runMissionSetString(machinery, mission.onAbort, prefix,
             outfits, depth);
         // mïsn Flags2 0x0002, "Apply mission Pay on auto-abort". The Pay

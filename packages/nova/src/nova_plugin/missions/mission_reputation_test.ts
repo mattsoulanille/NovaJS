@@ -13,6 +13,7 @@ import {
     startMissionById,
     LOCATION_MISSION_COMPUTER,
     processLanding,
+    runPendingAutoAborts,
     stellarRecord,
     StellarInfo,
 } from './index.js';
@@ -399,6 +400,136 @@ describe('PayVal on an immediate auto-abort (mïsn Flags2 0x0002)', () => {
         accept(autoAbortMission({ payVal: -10128 }, false), state);
         expect(state.records!.get('nova:128')).toBe(-40);
     });
+});
+
+/**
+ * ============================================================================
+ * An auto-abort is the mission's own end, not the player's abort (#320)
+ * ============================================================================
+ *
+ * The question: an IMMEDIATE auto-abort (acceptOffer) skipped the mïsn
+ * Flags 0x0040 "-5x CompReward reversal on abort", while a DEFERRED one
+ * (board/rescue goal; runPendingAutoAborts) applied it through
+ * abortMission. The ruling: "An auto-abort can still pay if the mission
+ * says it should. For example, there's a cheat plugin that offers a
+ * mission that auto-aborts in order to immediately pay 900M credits."
+ *
+ * The rule both paths now follow: an auto-abort runs what the Bible ties
+ * to the auto-abort itself — OnAbort (Flags 0x0001), the Pay under Flags2
+ * 0x0002, the fuel under Flags 0x0008 — and NOT the 0x0040 reversal, which
+ * punishes an abort the PLAYER chose (OnAbort is "evaluated when the
+ * mission is aborted by the player"). No installed mission exercises the
+ * deferred case with 0x0040 (the only deferred auto-aborts installed are
+ * the four Refuel Traders, nova:141/650-652, without it), so it is pinned
+ * on a hand-built one.
+ */
+describe('auto-aborts and the CompReward abort reversal (#320)', () => {
+    /** A board-goal auto-abort: deferred to the boarding (see
+     * deferredAutoAbort), with every flag that could cost the player. */
+    function deferredMission(): MissionData {
+        const mission = makeMission({
+            id: 'nova:614', compGovt: 128, compReward: 3, payVal: -10129,
+            shipCount: 1, shipGoal: 2 /* board */, onAbort: 'b7',
+        });
+        mission.flags = {
+            ...mission.flags, autoAbort: true,
+            lose5xCompRewardOnAbort: true, applyPayOnAutoAbort: true,
+        };
+        return mission;
+    }
+
+    it('a DEFERRED auto-abort runs OnAbort and its Pay but no reversal',
+        () => {
+            const mission = deferredMission();
+            const state = makeState({
+                records: new Map([['nova:128', 10], ['nova:129', -40]]),
+            });
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            const active = state.missions.get(mission.id)!;
+            expect(active.autoAbortOnBoard).toBeTrue();
+            // The tick the owner boards the special ship, the sim marks it.
+            active.autoAbortPending = true;
+
+            expect(runPendingAutoAborts(machinery)).toBe(1);
+
+            expect(state.missions.has(mission.id)).toBeFalse();
+            // OnAbort ran (Flags 0x0001: "Any control bits pointed to by
+            // the mission's OnAbort fields will be automatically set")...
+            expect(state.bits.has(7)).toBeTrue();
+            // ...the Pay did (Flags2 0x0002: PayVal -10129 cleans the
+            // Auroran record)...
+            expect(state.records!.get('nova:129')).toBe(0);
+            // ...and the 0x0040 reversal did not: still 10, not 10 - 15.
+            expect(state.records!.get('nova:128')).toBe(10);
+        });
+
+    it('the same mission aborted BY THE PLAYER still costs 5x', () => {
+        // The reversal is not gone, only kept to the abort it is for.
+        const mission = deferredMission();
+        const state = makeState({ records: new Map([['nova:128', 10]]) });
+        const machinery = makeMachinery(state, [mission]);
+        acceptOffer(machinery,
+            makeMissionOffer(mission, machinery.offerContext())!);
+        abortMission(machinery, mission.id);
+        expect(state.records!.get('nova:128')).toBe(10 - 15);
+    });
+
+    it('an immediate auto-abort pays 900M under Flags2 0x0002, whatever its '
+        + 'CompReward flags', () => {
+            // The ruling's example, in the shape Extra Outfits' "Leviathan
+            // Income" (extra-outfits:1034) really has: Flags 0x0001 with
+            // no ships, Flags2 0x0002 — plus a 0x0040 CompReward that must
+            // not come back out of it.
+            const mission = makeMission({
+                id: 'nova:1034', payVal: 900_000_000, compGovt: 128,
+                compReward: 3,
+            });
+            mission.flags = {
+                ...mission.flags, autoAbort: true, applyPayOnAutoAbort: true,
+                lose5xCompRewardOnAbort: true,
+            };
+            const state = makeState({
+                credits: { credits: 0 }, records: new Map([['nova:128', 10]]),
+            });
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            expect(state.missions.size).toBe(0);
+            expect(state.credits.credits).toBe(900_000_000);
+            expect(state.records!.get('nova:128')).toBe(10);
+        });
+
+    it('pins "SuperCash", the 899M cheat: it is NOT an auto-abort, and pays '
+        + 'on the first landing back where it was taken', () => {
+            // The only mission in the whole canonical Nova_Data paying
+            // anything like 900M is mïsn 128 "SuperCash" in the
+            // NOT-installed "Plug-ins 1/SuperCash" (so no data-gated spec
+            // can load it). Its fields, read from the resource fork:
+            // AvailLoc 0 (mission computer), AvailStel -1, AvailRandom 100,
+            // TravelStel -1, ReturnStel -4 (the initial stellar), PayVal
+            // 899,000,000, Flags 0x0000, Flags2 0x0000, no set strings,
+            // briefing "Just take off and land". It pays by COMPLETING.
+            const superCash = makeMission({
+                id: 'nova:128', name: 'SuperCash', availLoc: 0,
+                availStel: -1, availRandom: 100, travelStel: -1,
+                returnStel: -4, returnStelId: null, payVal: 899_000_000,
+                canAbort: true,
+            });
+            const state = makeState({ credits: { credits: 0 } });
+            const machinery = makeMachinery(state, [superCash]);
+            const offer = makeMissionOffer(superCash,
+                machinery.offerContext())!;
+            expect(offer.returnPlanet).toBe('nova:128');
+            acceptOffer(machinery, offer);
+            expect(state.missions.has('nova:128')).toBeTrue();
+            expect(state.credits.credits).toBe(0);
+            // "Just take off and land": the landing back at the stellar.
+            processLanding(machinery, 'nova:128', 1001);
+            expect(state.missions.size).toBe(0);
+            expect(state.credits.credits).toBe(899_000_000);
+        });
 });
 
 /**
