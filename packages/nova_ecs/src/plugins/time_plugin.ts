@@ -42,8 +42,7 @@ export function useFixedTimestep(world: World, delta_ms: number) {
 
 export const TimeSystem = new System({
     name: 'time',
-    // Note: Optional() does not support missing resources (getArg throws
-    // for them), so the fixed timestep is read through the world.
+    // The fixed timestep is optional and read through the world.
     args: [TimeResource, GetWorld, SingletonComponent] as const,
     step: (time, world) => {
         const fixedTimestep = world.resources.get(FixedTimestepResource);

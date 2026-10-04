@@ -662,8 +662,21 @@ export class World {
         } else if (arg === GetArg) {
             // Cast like the branches above: a runtime `arg === X` check
             // cannot narrow the generic T.
-            const getArg: GetArgFunction = <A extends ArgTypes = ArgTypes>(a: A) =>
-                this.getArg<A>(a, entity, event);
+            // A raw getArg reports an absent resource as Left instead of
+            // throwing: this is how modifiers resolve their wrapped args
+            // (Optional(R) yields undefined when R is absent), and such
+            // resources are deliberately outside the query's required
+            // set, so nothing guarantees their presence. A Resource that
+            // is a direct query arg is required (addSystem checks it) and
+            // still throws below when missing.
+            const getArg: GetArgFunction = <A extends ArgTypes = ArgTypes>(a: A) => {
+                const unwrapped = unwrapReadOnly(a);
+                if (unwrapped instanceof Resource
+                    && !this.state.resources.has(unwrapped)) {
+                    return left(undefined);
+                }
+                return this.getArg<A>(a, entity, event);
+            };
             return right(getArg as ArgData<T>);
         } else if (arg instanceof EcsEvent) {
             if (!event) {

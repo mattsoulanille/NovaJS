@@ -47,6 +47,71 @@ describe('world', () => {
           .toThrowError('World(test) is missing Resource(baz) needed for System(foobar)');
     });
 
+    it('Optional(resource) yields undefined when the resource is absent (and after it is deleted)', () => {
+        const OptionalResource = new Resource<{ v: number }>('OptionalResource');
+        const seen: (number | undefined)[] = [];
+        world.addSystem(new System({
+            name: 'ReadsOptionalResource',
+            args: [Optional(OptionalResource), SingletonComponent] as const,
+            step: (maybe) => {
+                seen.push(maybe?.v);
+            },
+        }));
+
+        world.step();
+        world.resources.set(OptionalResource, { v: 1 });
+        world.step();
+        world.resources.set(OptionalResource, { v: 2 });
+        world.step();
+        // The system does not require it, so deleting it is allowed...
+        expect(world.resources.delete(OptionalResource)).toBeTrue();
+        world.step();
+
+        // ...and the cached step result tracks every set and delete.
+        expect(seen).toEqual([undefined, 1, 2, undefined]);
+    });
+
+    it('Optional(resource) inside a nested query yields undefined when absent', () => {
+        const OptionalResource = new Resource<{ v: number }>('OptionalResource');
+        const seen: (number | undefined)[] = [];
+        world.addSystem(new System({
+            name: 'NestedOptionalResource',
+            args: [new Query([FOO_COMPONENT, Optional(OptionalResource)] as const),
+                SingletonComponent] as const,
+            step: (results) => {
+                for (const [, maybe] of results) {
+                    seen.push(maybe?.v);
+                }
+            },
+        }));
+        world.entities.set(v4(), new Entity().addComponent(FOO_COMPONENT, { x: 1 }));
+
+        world.step();
+        world.resources.set(OptionalResource, { v: 7 });
+        world.step();
+        expect(seen).toEqual([undefined, 7]);
+    });
+
+    it('addSystem rejects a system whose nested query needs a missing resource', () => {
+        const NestedResource = new Resource<{ v: number }>('NestedResource');
+        const nestedSystem = new System({
+            name: 'NestedResourceSystem',
+            args: [new Query([FOO_COMPONENT, NestedResource] as const),
+                SingletonComponent] as const,
+            step: () => { },
+        });
+        expect(() => world.addSystem(nestedSystem)).toThrowError(
+            'World(test) is missing Resource(NestedResource) needed for '
+            + 'System(NestedResourceSystem)');
+
+        world.resources.set(NestedResource, { v: 1 });
+        world.addSystem(nestedSystem);
+        // A resource required through a nested query is required like a
+        // direct one: the world refuses to remove it under the system.
+        expect(() => world.resources.delete(NestedResource)).toThrowError(
+            /Cannot remove resource NestedResource because NestedResourceSystem uses it/);
+    });
+
     it('passes components to a system', () => {
         const stepData: [number, string][] = [];
         const testSystem = new System({

@@ -2,6 +2,7 @@ import 'jasmine';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
+import { DamageAttributionComponent } from '../nova_plugin/reputation/index.js';
 import { runShipBuildWorld } from './ship_build_world.js';
 
 // On the synthetic data set: any purchasable hull exercises the scratch
@@ -49,5 +50,23 @@ describe('runShipBuildWorld', () => {
                 process.off('unhandledRejection', onRejection);
             }
             expect(rejections).toEqual([]);
+        });
+
+    it('steps a ship carrying damage attribution without GovtsResource',
+        async () => {
+            // This scratch world never sets GovtsResource, which the
+            // reputation systems read through Optional(GovtsResource).
+            // Optional(<missing resource>) used to THROW (#300), so any
+            // ship with a DamageAttributionComponent made
+            // DisableCreditSystem throw on every step here.
+            const gameData = await getSyntheticGameData();
+            const ids = await gameData.ids;
+            const shipData = await gameData.data.Ship.get(ids.Ship[0]);
+            const ship = makeShip(shipData);
+            ship.components.set(DamageAttributionComponent, {});
+            const displayAssets = {} as DisplayAssetDataInterface;
+
+            await expectAsync(runShipBuildWorld(ship, gameData, displayAssets))
+                .toBeResolved();
         });
 });

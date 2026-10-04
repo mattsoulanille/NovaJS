@@ -66,7 +66,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
             this.maxOrder = entity.insertionOrder;
         }
         this.resources = new Map([...resources].filter(
-            ([resource]) => query.resources.has(resource)));
+            ([resource]) => query.referencedResources.has(resource)));
 
         // Entity and component events are dispatched by the QueryCache,
         // which routes each component event only to the entries whose
@@ -76,12 +76,13 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         queryCache.register(this);
         const resourceSubscription =
             resources.events.setAlways.subscribe(([resource, val]) => {
-                if (!query.resources.has(resource)) {
+                if (!query.referencedResources.has(resource)) {
                     // Don't need to care about or track resources
                     // that the query doesn't use.
                     return;
                 }
-                if (this.resources.get(resource) === val) {
+                if (this.resources.has(resource)
+                    && this.resources.get(resource) === val) {
                     return;
                 }
                 this.resources.set(resource, val);
@@ -89,10 +90,27 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
                 this.entityResults.clear();
                 this.resultValid = false;
             });
+        // Only an optionally-read resource (`Optional(R)`) can be deleted
+        // under a live system (World.removeResource refuses a required
+        // one), and its cached `R` value must not outlive it.
+        const resourceDeleteSubscription =
+            resources.events.delete.subscribe(deleted => {
+                let changed = false;
+                for (const [resource] of deleted) {
+                    if (this.resources.delete(resource)) {
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    this.entityResults.clear();
+                    this.resultValid = false;
+                }
+            });
 
         this.unsubscribe = () => {
             this.queryCache.unregister(this);
             resourceSubscription.unsubscribe();
+            resourceDeleteSubscription.unsubscribe();
         }
     }
 

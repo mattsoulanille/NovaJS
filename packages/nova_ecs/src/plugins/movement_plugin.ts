@@ -78,8 +78,7 @@ export const MovementStateComponent = new Component<MovementState>('MovementStat
  * `enabled: false` skips movement integration entirely (a paused
  * simulation sends no correcting snapshots, so prediction must halt
  * with it). Simulation worlds must NEVER set this resource: it is read
- * through the world (like FixedTimestepResource — Optional() does not
- * support missing resources), and when absent the behavior is exactly
+ * through the world (like FixedTimestepResource), and when absent the behavior is exactly
  * the unclamped original, keeping determinism untouched.
  */
 export interface MovementTimeLimit {

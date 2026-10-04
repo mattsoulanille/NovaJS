@@ -160,15 +160,12 @@ async function startGame() {
 
     world = new World();
     world.resources.set(SimulationGameDataResource, gameData);
-    // NO legacy delta-sync multiplayer plugin on this world. Rollback
+    // No legacy delta-sync multiplayer plugin on this world: rollback
     // rooms (ServerPlugin's per-system RollbackRelay + RoomArchive)
-    // replaced it entirely; the 'main room' it joined had no remaining
-    // gameplay purpose, and its message handler applied `remove` and
-    // `state` from ANY peer with its ownership checks commented out
-    // (nova_ecs/plugins/multiplayer_plugin.ts) — an unauthenticated
-    // way to inject entities into this continuously-stepped world and
-    // delete everyone else's. Nothing reads this world's entities any
-    // more; ServerPlugin only needs the resources set here.
+    // replaced it, and it has since been deleted from nova_ecs (#317;
+    // its message handler applied `remove` and `state` from ANY peer).
+    // Nothing reads this world's entities; ServerPlugin only needs the
+    // resources set here.
     world.resources.set(MultiRoomResource, multiRoom);
     await world.addPlugin(NovaPlugin);
 

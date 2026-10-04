@@ -4,7 +4,7 @@ import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import * as t from 'io-ts';
-import { CommunicatorResource, ExcludedMultiplayerComponentsResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { markerType, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { RandomResource } from "nova_ecs/plugins/random_plugin";
 import { TimeResource, TimeSystem } from "nova_ecs/plugins/time_plugin";
@@ -26,14 +26,12 @@ import { GateArrivalSystem } from "../travel/index.js";
  * LEGACY AI PRIMITIVES — migration status
  * ============================================================================
  *
- * This module predates rollback multiplayer: its components are
- * excluded from the (state-sync era) multiplayer component set and its
- * ChooseRandomTarget behavior was designed to run on the owner's sim
- * only. In the input-driven shared simulation every peer runs these
- * systems on every entity that carries the components, so in practice
- * they already execute deterministically-in-sim; the exclusions remain
- * only so the legacy state-sync path (multiplayer_plugin) doesn't
- * churn on them.
+ * This module predates rollback multiplayer: its ChooseRandomTarget
+ * behavior was designed to run on the owner's sim only (and its
+ * components were excluded from the deleted state-sync plugin's
+ * entity state, #317). In the input-driven shared simulation every
+ * peer runs these systems on every entity that carries the components,
+ * so in practice they already execute deterministically-in-sim.
  *
  * MIGRATION DECISION: real NPCs (dude/fleet traffic) use the new
  * deterministic AI in npc_ai_plugin.ts + npc_spawn_plugin.ts, whose
@@ -183,8 +181,7 @@ export const NpcPlugin: Plugin = {
     name: 'NpcPlugin',
     build(world) {
         // NPC AI components must survive the serializer roundtrip that
-        // entity-insertion inputs go through, but they are excluded
-        // from multiplayer state: only the owner's sim runs the AI.
+        // entity-insertion inputs go through.
         const serializer = world.resources.get(SerializerResource);
         serializer?.addComponent(ChooseRandomTargetComponent, t.intersection([
             t.type({ interval: t.number }),
@@ -193,13 +190,6 @@ export const NpcPlugin: Plugin = {
         serializer?.addComponent(FollowComponent, markerType);
         serializer?.addComponent(ShootAllWeaponsComponent, markerType);
         serializer?.addComponent(DeathAIComponent, markerType);
-        const excluded = world.resources.get(ExcludedMultiplayerComponentsResource)
-            ?? new Set<string>();
-        for (const component of [ChooseRandomTargetComponent, FollowComponent,
-            ShootAllWeaponsComponent, DeathAIComponent]) {
-            excluded.add(component.name);
-        }
-        world.resources.set(ExcludedMultiplayerComponentsResource, excluded);
 
         world.addSystem(ChooseRandomTargetAI);
         world.addSystem(FollowAI);

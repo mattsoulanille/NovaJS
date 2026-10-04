@@ -13,7 +13,7 @@
  */
 import { isLeft } from "fp-ts/lib/Either.js";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
-import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
@@ -28,7 +28,6 @@ import { getIntegrationGameData } from "./simulation_test_fixture.js";
 const npcCount = Number(process.argv[2] ?? 30);
 const iterations = Number(process.argv[3] ?? 240);
 const warmupSteps = Number(process.argv[4] ?? 300);
-const useMultiplayer = process.argv[5] !== 'nomp';
 
 function stats(samples: number[]) {
     const sorted = [...samples].sort((a, b) => a - b);
@@ -58,10 +57,9 @@ async function main() {
     const shipIds = [...ids.Ship].sort().slice(0, 5);
 
     const world = await makeSystem(systemId, gameData);
-    if (useMultiplayer) {
-        const communicator = new MockCommunicator("server");
-        await world.addPlugin(multiplayer(communicator));
-    }
+    // As the worker sets it. (The legacy delta-sync plugin this used to
+    // load, optionally — the old 5th `nomp` argument — is gone, #317.)
+    world.resources.set(CommunicatorResource, new MockCommunicator("server"));
 
     const playerShipData = await gameData.data.Ship.get(shipIds[0]!);
     const player = makeShip(playerShipData);

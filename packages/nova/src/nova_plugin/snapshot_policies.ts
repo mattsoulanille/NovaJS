@@ -1,4 +1,3 @@
-import { Comms } from "nova_ecs/plugins/multiplayer_plugin";
 import { RandomResource } from "nova_ecs/plugins/random_plugin";
 import { SnapshotPolicies, SnapshotPoliciesResource } from "nova_ecs/plugins/snapshot_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
@@ -51,7 +50,7 @@ function passthroughWire<Data = unknown>() {
  * - share: immutable static game data and derived structures that are
  *   recomputed every step before use (hulls).
  * - clone: mutable simulation state that is not serializer-registered.
- * - skip: multiplayer machinery, which is not simulation state.
+ * - skip: state re-derived at restore or recomputed before use.
  */
 export function configureSnapshotPolicies(world: World) {
     const policies = new SnapshotPolicies();
@@ -183,9 +182,6 @@ export function configureSnapshotPolicies(world: World) {
         policy: 'clone',
         clone: data => ({ ...data }),
     });
-
-    // Multiplayer machinery is not simulation state.
-    policies.set(Comms, { policy: 'skip' });
 
     // --- Wire snapshots (server archive, late join, desync resync) ---
     // Serializer-registered components cross the wire through their

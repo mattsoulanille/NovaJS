@@ -163,8 +163,8 @@ export class DeltaMaker {
             entityDelta.removeComponents = removedComponents;
         }
 
-        // Returned unencoded: multiplayer_plugin encodes the whole
-        // per-entity delta map as one message.
+        // Returned unencoded: a caller encodes the whole per-entity delta
+        // map as one message (the deleted legacy multiplayer plugin did).
         if (Object.keys(entityDelta).length > 0) {
             return entityDelta;
         }

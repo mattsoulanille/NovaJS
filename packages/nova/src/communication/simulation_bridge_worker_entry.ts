@@ -1,5 +1,5 @@
 import * as Comlink from "comlink";
-import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
+import { CommunicatorResource } from "nova_ecs/plugins/multiplayer_plugin";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { parentPort, workerData } from "worker_threads";
 import { makeSystem } from "../nova_plugin/make_system.js";
@@ -28,7 +28,9 @@ async function main() {
     const gameData = dataSet === "synthetic"
         ? await getSyntheticGameData() : await getIntegrationGameData();
     const world = await makeSystem(systemId, gameData);
-    await world.addPlugin(multiplayer(new MockCommunicator(communicatorId)));
+    // As the browser worker does: the bridge host reads the
+    // communicator, and no legacy delta-sync plugin runs (#317).
+    world.resources.set(CommunicatorResource, new MockCommunicator(communicatorId));
 
     Comlink.expose(new SimulationBridgeHost(world, gameData), nodeEndpoint(parentPort));
 }
