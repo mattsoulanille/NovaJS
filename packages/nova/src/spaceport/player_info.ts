@@ -18,8 +18,13 @@ import {
     LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import { Button } from './button.js';
-import { frameOrigin, INK_TO_BOX } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
+import {
+    PINFO_PROSE_LINE_HEIGHT, PINFO_PROSE_TOP, PINFO_TABLE_ROW_HEIGHT,
+    PINFO_TABLE_TOP, PINFO_TAB_Y,
+    PINFO_TOP_HEIGHT, PINFO_WHEEL_LINES, PINFO_WIDTH, PlayerInfoLayout,
+    playerInfoLayout, playerInfoPageLines, scrollPlayerInfo,
+} from './player_info_layout.js';
 import {
     computeCargoCapacity, loadPayrollShips, playerPayroll,
 } from './mission_session.js';
@@ -29,8 +34,10 @@ import { RankData } from 'novadatainterface/rank_data';
 import { outfitPrice } from './outfitter_rules.js';
 
 // The player-info dialog composes the three PICTs 8518 (top strip,
-// 413x40, tab row) / 8519 (black content pane, tiled to the content
-// height) / 8520 (bottom strip, 413x40, Done row).
+// 413x40, tab row) / 8519 (black content pane, tiled 1:1 to the content
+// height) / 8520 (bottom strip, 413x40, Done row). The pane's height, and
+// with it where the bottom strip and its buttons land, is per page:
+// player_info_layout.ts (the stock 147 is a floor that prose grows).
 //
 // Everything below was measured on the p_properties/*.png references
 // (1920x1080) by correlating the PICTs themselves against them and by
@@ -38,7 +45,7 @@ import { outfitPrice } from './outfitter_rules.js';
 // 7506/7508 grey):
 //
 //   - 8518 lands at screen (754,427) and 8520 at (754,614) on ALL FIVE
-//     pages, so the dialog is a fixed 413x227 — the content pane is 147
+//     pages, so the stock dialog is 413x227 — the content pane is 147
 //     tall, not the 150 assumed before (227 = round((1080-227)/2) = 427
 //     from the top, i.e. plainly centred).
 //   - The four tabs' sprites start at frame x = 7 / 107 / 207 / 307,
@@ -46,19 +53,14 @@ import { outfitPrice } from './outfitter_rules.js';
 //     TAB_WIDTH is 73, not 66, and the row sits 8px into the strip
 //     rather than 10.5.
 //   - Done's sprite is at frame (293,195), 73 wide; Jettison Cargo's at
-//     (60,195), 124 wide (cargo_with_stuff.png).
+//     (60,195), 124 wide (cargo_with_stuff.png) — 8px into 8520.
 //   - Text rows: labels at frame x=9 (left column) and x=209 (right),
 //     values 75px further right, first row's ink at frame y=45, 16px
 //     pitch (general.png's nine left rows run y=45..173).
-const WIDTH = 413;
-const TOP_HEIGHT = 40;
-const CONTENT_HEIGHT = 147;
-const BOTTOM_HEIGHT = 40;
-const HEIGHT = TOP_HEIGHT + CONTENT_HEIGHT + BOTTOM_HEIGHT;
-// Whole-pixel origin, as the original blits a centred frame — see
-// hail_layout.frameOrigin. 413 and 227 are both odd, so -WIDTH/2 would put
-// the strips on a half pixel and drag every glyph on them a pixel left.
-const { x: ORIGIN_X, y: ORIGIN_Y } = frameOrigin(WIDTH, HEIGHT);
+//
+// All of it is FRAME-LOCAL: the pieces live in one `frame` container whose
+// position is the layout's whole-pixel origin.
+const WIDTH = PINFO_WIDTH;
 
 /** Frame-local left edges of the four tab button SPRITES. */
 const TAB_X = [7, 107, 207, 307];
@@ -67,8 +69,6 @@ const TAB_WIDTH = 73;
  * anchors the 13px left cap to END at 13.2), so a measured sprite-left
  * is placed by taking that fifth of a pixel back off. */
 const BUTTON_CAP_INSET = 0.2;
-const TAB_Y = ORIGIN_Y + 8;
-const BOTTOM_BUTTON_Y = ORIGIN_Y + 195;
 const DONE_X = 293;
 const DONE_WIDTH = 73;
 const JETTISON_X = 60;
@@ -76,11 +76,11 @@ const JETTISON_WIDTH = 124;
 
 /** Text-box origin sits INK_TO_BOX above the ink it renders; the
  * references' first table row inks at frame y=45. */
-const CONTENT_X = ORIGIN_X + 9;
-const CONTENT_TOP = ORIGIN_Y + 45 - INK_TO_BOX;
-const ROW_HEIGHT = 16;
+const CONTENT_X = 9;
+const CONTENT_TOP = PINFO_TABLE_TOP;
+const ROW_HEIGHT = PINFO_TABLE_ROW_HEIGHT;
 const VALUE_OFFSET = 75;
-const RIGHT_COLUMN_X = ORIGIN_X + 209;
+const RIGHT_COLUMN_X = 209;
 
 /** Geneva 9.4 — the same bitmap face the comm dialogs and mission popups
  * use (popup_layout's POPUP_FONT), at this dialog's 16px pitch. Row LABELS
@@ -98,11 +98,10 @@ const LABEL_FONT: Partial<PIXI.ITextStyle> =
  * the same pitch the mission popups use (popup_layout.POPUP_LINE_HEIGHT). The
  * table's 16 is an explicit per-row step, not the font's leading.
  */
-const PROSE_LINE_HEIGHT = 12;
-const PROSE_TOP = ORIGIN_Y + 48 - INK_TO_BOX;
+const PROSE_TOP = PINFO_PROSE_TOP;
 const PROSE_FONT: Partial<PIXI.ITextStyle> = {
     ...INFO_FONT, wordWrap: true, wordWrapWidth: WIDTH - 20,
-    lineHeight: PROSE_LINE_HEIGHT,
+    lineHeight: PINFO_PROSE_LINE_HEIGHT,
 };
 
 type Page = 'general' | 'cargo' | 'extras' | 'honors';
@@ -315,7 +314,23 @@ export class PlayerInfoDialog {
     private closed = new Subject<void>();
     private tabs: { [page in Page]: Button };
     private jettison: Button;
+    private done: Button;
+    /** Every piece of the dialog except the modal shield, frame-local:
+     * positioned at the current layout's origin. */
+    private frame = new PIXI.Container();
+    private middle: PIXI.TilingSprite;
+    private bottom: PIXI.Sprite;
+    /** The page's text. Scrolls (by its y) inside `contentMask`. */
     private content = new PIXI.Container();
+    /** Clips the text to the pane (or, while scrolling, to the text
+     * window), so nothing can ever draw over the bottom strip again. */
+    private contentMask = new PIXI.Graphics();
+    private layout: PlayerInfoLayout = playerInfoLayout(undefined, Infinity);
+    /** Pixels the prose is scrolled by: whole lines, 0..layout.maxScroll. */
+    private scroll = 0;
+    /** Wrapped line count of the current prose page (see addProse);
+     * undefined on the General table. */
+    private proseLines?: number;
     private page: Page = 'general';
     private entity?: Entity;
     private shipData?: ShipData;
@@ -334,7 +349,10 @@ export class PlayerInfoDialog {
         private simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>,
         /** The system the player is currently in (for Legal Status). */
-        private getSystemId?: () => string | undefined) {
+        private getSystemId?: () => string | undefined,
+        /** The UI-logical screen size the dialog is centred in, read on
+         * every page flip: a page too tall for it scrolls. */
+        private getScreenSize?: () => { x: number, y: number }) {
         this.container.name = 'PlayerInfo';
         this.container.visible = false;
 
@@ -347,21 +365,29 @@ export class PlayerInfoDialog {
         shield.interactive = true;
         this.container.addChild(shield);
 
+        this.frame.name = 'PlayerInfoFrame';
+        this.container.addChild(this.frame);
+        // The pane is drawn 1:1 and TILED, never stretched: 8519 is a
+        // 413x215 strip of pure black between a 5px and a 6px metal
+        // border whose grain differs on every one of its 215 rows, so
+        // stretching it would smear the grain into vertical streaks.
+        // Tiled, a pane up to 215 tall is the art itself, and a taller one
+        // repeats it over the black interior (only the thin borders carry
+        // a seam every 215px).
         const top = displayAssets.spriteFromPict('nova:8518');
-        top.position.set(ORIGIN_X, ORIGIN_Y);
-        const middle = new PIXI.TilingSprite(
+        this.middle = new PIXI.TilingSprite(
             displayAssets.textureFromPict('nova:8519'),
-            WIDTH, CONTENT_HEIGHT);
-        middle.position.set(ORIGIN_X, ORIGIN_Y + TOP_HEIGHT);
-        const bottom = displayAssets.spriteFromPict('nova:8520');
-        bottom.position.set(ORIGIN_X, ORIGIN_Y + TOP_HEIGHT + CONTENT_HEIGHT);
-        top.interactive = middle.interactive = bottom.interactive = true;
-        this.container.addChild(top, middle, bottom);
+            WIDTH, this.layout.contentHeight);
+        this.middle.position.set(0, PINFO_TOP_HEIGHT);
+        this.bottom = displayAssets.spriteFromPict('nova:8520');
+        top.interactive = this.middle.interactive
+            = this.bottom.interactive = true;
+        this.frame.addChild(top, this.middle, this.bottom);
 
         const tabButton = (label: string, page: Page, slot: number) => {
             const button = new Button(displayAssets, label, TAB_WIDTH, {
-                x: ORIGIN_X + TAB_X[slot] - BUTTON_CAP_INSET,
-                y: TAB_Y,
+                x: TAB_X[slot] - BUTTON_CAP_INSET,
+                y: PINFO_TAB_Y,
             });
             button.click.subscribe(() => this.showPage(page));
             return button;
@@ -373,31 +399,80 @@ export class PlayerInfoDialog {
             honors: tabButton('Honors', 'honors', 3),
         };
         for (const tab of Object.values(this.tabs)) {
-            this.container.addChild(tab.container);
+            this.frame.addChild(tab.container);
         }
 
         // The reference's Jettison Cargo button (cargo page only).
         // Greyed: jettison isn't modeled yet, and the dialog is
-        // read-only in flight.
+        // read-only in flight. Its y, like Done's, follows the bottom
+        // strip (applyLayout).
         this.jettison = new Button(displayAssets, 'Jettison Cargo',
-            JETTISON_WIDTH,
-            { x: ORIGIN_X + JETTISON_X - BUTTON_CAP_INSET, y: BOTTOM_BUTTON_Y });
+            JETTISON_WIDTH, { x: JETTISON_X - BUTTON_CAP_INSET, y: 0 });
         this.jettison.state = 'grey';
         this.jettison.container.visible = false;
-        this.container.addChild(this.jettison.container);
+        this.frame.addChild(this.jettison.container);
 
-        const done = new Button(displayAssets, 'Done', DONE_WIDTH,
-            { x: ORIGIN_X + DONE_X - BUTTON_CAP_INSET, y: BOTTOM_BUTTON_Y });
-        done.click.subscribe(() => this.closed.next());
-        this.container.addChild(done.container);
+        this.done = new Button(displayAssets, 'Done', DONE_WIDTH,
+            { x: DONE_X - BUTTON_CAP_INSET, y: 0 });
+        this.done.click.subscribe(() => this.closed.next());
+        this.frame.addChild(this.done.container);
 
-        this.container.addChild(this.content);
+        this.content.mask = this.contentMask;
+        this.frame.addChild(this.contentMask, this.content);
+        this.applyLayout(this.layout);
+
+        // The wheel scrolls a page too tall for the screen. Bound on the
+        // whole dialog — the modal shield included, which the events
+        // bubble up from — since the dialog owns the screen while it is up.
+        // PIXI only calls a container's listeners when the container is
+        // itself interactive.
+        this.container.eventMode = 'static';
+        this.container.on('wheel',(event: PIXI.FederatedWheelEvent) => {
+            if (event.deltaY !== 0) {
+                this.scrollBy(Math.sign(event.deltaY) * PINFO_WHEEL_LINES);
+            }
+        });
 
         this.controls = new MenuControls(controlEvents, {
             // 'p' toggles the dialog closed again; 'd' backs out too.
             properties: () => this.closed.next(),
             depart: () => this.closed.next(),
+            // A page taller than the screen scrolls: the arrows a line at
+            // a time, left / right a window at a time — what the rollback
+            // list maps PageUp / PageDown onto, the game's control set
+            // having no page actions of its own.
+            up: () => this.scrollBy(-1),
+            down: () => this.scrollBy(1),
+            left: () => this.scrollBy(-playerInfoPageLines(this.layout)),
+            right: () => this.scrollBy(playerInfoPageLines(this.layout)),
         });
+    }
+
+    /** Places the frame, the pane's height, the bottom strip and its
+     * buttons, and the text clip for one page's layout. */
+    private applyLayout(layout: PlayerInfoLayout) {
+        this.layout = layout;
+        this.frame.position.set(layout.origin.x, layout.origin.y);
+        this.middle.height = layout.contentHeight;
+        this.bottom.position.set(0, layout.bottomY);
+        this.done.container.position.y = layout.buttonY;
+        this.jettison.container.position.y = layout.buttonY;
+        const { x, y, width, height } = layout.clip;
+        this.contentMask.clear().beginFill(0xffffff)
+            .drawRect(x, y, width, height).endFill();
+        this.scrollBy(0);
+    }
+
+    /** Scrolls the prose by whole lines, clamped to the page's range. */
+    private scrollBy(lines: number) {
+        this.scroll = scrollPlayerInfo(this.scroll, lines, this.layout);
+        this.content.position.y = -this.scroll;
+    }
+
+    /** Sizes the frame to the current page (see player_info_layout). */
+    private relayout() {
+        this.applyLayout(playerInfoLayout(this.proseLines,
+            this.getScreenSize?.().y ?? Infinity));
     }
 
     /** Shows the dialog and resolves when the player dismisses it. */
@@ -505,7 +580,13 @@ export class PlayerInfoDialog {
             .find(([, count]) => count > 0);
         this.jettison.container.visible = page === 'cargo' && hasCargo;
         this.content.removeChildren();
+        // A page opens at its top. The prose renderers set the wrapped
+        // line count that sizes the pane; the General table leaves it
+        // undefined and keeps the stock pane.
+        this.scroll = 0;
+        this.proseLines = undefined;
         if (!this.entity) {
+            this.relayout();
             return;
         }
         switch (page) {
@@ -522,6 +603,7 @@ export class PlayerInfoDialog {
                 this.renderHonors();
                 break;
         }
+        this.relayout();
     }
 
     private addRows(rows: InfoRow[], x: number) {
@@ -553,9 +635,15 @@ export class PlayerInfoDialog {
     }
 
     private addProse(lines: string[]) {
-        const text = new PIXI.Text(lines.join('\n\n'), PROSE_FONT);
+        const prose = lines.join('\n\n');
+        const text = new PIXI.Text(prose, PROSE_FONT);
         text.position.set(CONTENT_X, PROSE_TOP);
         this.content.addChild(text);
+        // PIXI's own wrap of exactly this text in exactly this style — the
+        // lines the Text above draws, blank paragraph lines included — so
+        // the pane is sized to what is actually on it.
+        this.proseLines = PIXI.TextMetrics.measureText(prose,
+            new PIXI.TextStyle(PROSE_FONT)).lines.length;
     }
 
     private renderGeneral(entity: Entity) {

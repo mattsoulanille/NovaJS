@@ -61,7 +61,8 @@ export const PlayerInfoPlugin: Plugin = {
         }
 
         const dialog = new PlayerInfoDialog(displayAssets, simulationData,
-            controls, () => world.resources.get(SystemIdResource));
+            controls, () => world.resources.get(SystemIdResource),
+            () => screenSize);
         let opening = false;
         stage.addChild(dialog.container);
         world.resources.set(PlayerInfoResource, dialog);
