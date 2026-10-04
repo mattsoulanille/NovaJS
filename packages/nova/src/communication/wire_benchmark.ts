@@ -20,6 +20,7 @@ import { wireSnapshotWorld } from 'nova_ecs/plugins/snapshot_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import * as t from 'io-ts';
 import { makeDeterminismWorld } from './determinism_harness.js';
+import { getIntegrationGameData } from './simulation_test_fixture.js';
 import { AvroSchema, AvroSchemaNode, deriveAvroSchema, formatDerivationFailures } from './io_ts_to_avro.js';
 import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simulation_frame.js';
 import { applyInputRecords, InputRecord } from './simulation_input.js';
@@ -106,7 +107,7 @@ function benchFamily(family: Family) {
 
 async function main() {
     console.log(`npcs=${npcCount} ticks=${ticks} reps=${reps}`);
-    const world = await makeDeterminismWorld(npcCount);
+    const world = await makeDeterminismWorld(npcCount, 'worker', getIntegrationGameData());
     const serializer = world.resources.get(SerializerResource)!;
 
     // --- Record a session: control inputs from the test peer, frames

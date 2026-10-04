@@ -76,7 +76,7 @@ import { TargetComponent } from '../ship/index.js';
 /** The hailed përs, its hull, and the accept record the player's press
  * would produce — the whole of what the display would have done. */
 async function hailTheTrader(persId = 'nova:225') {
-    const harness = await makeSimulationBridgeHarness();
+    const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
     const { world, shipUuid, systemId } = harness;
     const gameData = await getIntegrationGameData();
     const universe = MissionUniverse.shared(gameData);
@@ -305,7 +305,7 @@ describe('the Derelict Decoy trap, boarded (mïsn 133)', () => {
             // ShipDude 133 ("Pirate") ships, ShipBehav 0 ("always attack
             // the player") and ShipStart 1 ("jump in from hyperspace"),
             // are the entire content.
-            const harness = await makeSimulationBridgeHarness();
+            const harness = await makeSimulationBridgeHarness(getIntegrationGameData());
             const { world, shipUuid, systemId } = harness;
             const gameData = await getIntegrationGameData();
             const universe = MissionUniverse.shared(gameData);
