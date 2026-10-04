@@ -12,6 +12,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
@@ -23,7 +24,7 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
 import { loadShipGameData, primeWeaponEntries } from './entity_data_loader.js';
 import { deriveEntityComponents } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { ArmorComponent, ShieldComponent, shieldFloor } from '../ship/index.js';
 import { IdFactory, IdFactoryResource } from '../core/index.js';
@@ -80,9 +81,12 @@ import { TargetComponent } from '../ship/index.js';
  * room's spawns: the bits of the first player to enter the system while
  * it was empty, latched into the spawner as synced state (spawn_bits.ts
  * has the whole design). flët AppearOn, the shïp AppearOn that gates the
- * ship classes a düde may pick from, and përs ActiveOn all read it. The
- * genesis population, built before anyone has entered, reads the empty
- * set, exactly as every spawn did before the latch existed.
+ * ship classes a düde may pick from, and përs ActiveOn all read it. In a
+ * room the relay seeded (every server room), the genesis population is
+ * replaced by one rolled at the first entrant's tick from the room's
+ * seed, under those bits (applyRoomSeed / populateForEntrant). A world
+ * no seed reaches keeps the genesis population, drawn against the empty
+ * set exactly as every spawn was before the latch existed.
  *
  * përs unique characters ride the same machinery: the Bible's "When
  * ships are created, there is a 5% chance that a specific AI-person
@@ -263,9 +267,21 @@ export const NpcSpawnerType = t.intersection([t.type({
     /**
      * The sÿst AvgShips, kept on a gated table only: a system whose
      * empty-set table spawned nothing at genesis rolls its population
-     * target when the latch admits something (spawn_bits.ts).
+     * target when the latch admits something (spawn_bits.ts). A room
+     * seed (applyRoomSeed) sets it on every table: the population is
+     * then always rolled at the first entrant's tick.
      */
     avgShips: t.number,
+    /**
+     * Set by the room's seed record (applyRoomSeed, spawn_bits.ts): the
+     * genesis population is gone and the system waits, empty, for its
+     * first entrant, whose arrival tick rolls and spawns the initial
+     * population under the entrant's bits. Cleared on that tick. Absent
+     * in a world no room seed reached (offline play, the determinism
+     * harness, specs), which keeps its genesis population as it always
+     * did.
+     */
+    awaitingEntrant: t.boolean,
 })]);
 export type NpcSpawnerType = t.TypeOf<typeof NpcSpawnerType>;
 export const NpcSpawnerComponent = new Component<NpcSpawnerType>('NpcSpawner');
@@ -1163,6 +1179,26 @@ const LiveNpcsQuery = new Query([NpcComponent] as const);
 const EntrantsQuery = new Query(
     [ControlledByComponent, Optional(ControlBitsComponent), UUID] as const);
 
+type Entrant = readonly [unknown, ReadonlySet<number> | undefined, string];
+
+/**
+ * The room's spawn bits as the first entrant gives them: among the
+ * player ships present (all arrived on the same, first tick), the
+ * lowest uuid's bits, restricted to the ones the spawner's tests read
+ * (`read`, sorted). A ship with no ControlBitsComponent has none set.
+ */
+function entrantSpawnBits(entrants: readonly Entrant[],
+    read: readonly number[]): number[] {
+    let first = entrants[0]!;
+    for (const entrant of entrants) {
+        if (entrant[2] < first[2]) {
+            first = entrant;
+        }
+    }
+    const own = first[1];
+    return own ? read.filter(bit => own.has(bit)) : [];
+}
+
 /**
  * Latches the room's spawn bits (spawn_bits.ts) from the first player
  * ship this world contains: on the first tick one is present, keep the
@@ -1174,8 +1210,7 @@ const EntrantsQuery = new Query(
  * at genesis and now has something to spawn.
  */
 export function latchSpawnBits(spawner: NpcSpawnerType,
-    entrants: ReadonlyArray<readonly [unknown, ReadonlySet<number> | undefined, string]>,
-    random: Random) {
+    entrants: readonly Entrant[], random: Random) {
     if (spawner.spawnBits !== undefined || entrants.length === 0) {
         return;
     }
@@ -1183,14 +1218,7 @@ export function latchSpawnBits(spawner: NpcSpawnerType,
     if (read.length === 0) {
         return;
     }
-    let first = entrants[0]!;
-    for (const entrant of entrants) {
-        if (entrant[2] < first[2]) {
-            first = entrant;
-        }
-    }
-    const own = first[1];
-    spawner.spawnBits = own ? read.filter(bit => own.has(bit)) : [];
+    spawner.spawnBits = entrantSpawnBits(entrants, read);
     if (spawner.targetCount === 0 && spawner.avgShips !== undefined
         && effectiveNpcSpawnEntries(spawner.entries,
             latchedSpawnBits(spawner)).length > 0) {
@@ -1199,10 +1227,92 @@ export function latchSpawnBits(spawner: NpcSpawnerType,
 }
 
 /**
+ * The room's seed record (the `roomSeed` input the relay logs when it
+ * opens a room; spawn_bits.ts has the design). Applied before anyone has
+ * entered, it makes this room instance's world its own:
+ *
+ *  - the world's Random is reseeded from `seed`, so every draw from here
+ *    on — the population below, respawns, AI choices, weapon spread,
+ *    asteroid respawns — belongs to this visit, not to the system id;
+ *  - the genesis population, drawn from the system-id seed against the
+ *    empty bit set, is removed (the NPCs nobody owns: a peer's escorts
+ *    and mission ships carry MultiplayerData and are never touched);
+ *  - the spawner waits for the first entrant (`awaitingEntrant`), whose
+ *    arrival tick rolls the population target and spawns the initial
+ *    population under the entrant's bits (populateForEntrant).
+ *
+ * Synchronous and a pure function of synced state and the seed, so it is
+ * idempotent under rollback (a resimulation restores the state before it
+ * and applies it again). The sÿst it reads for AvgShips is staged by
+ * makeSystem itself. A world without NPC traffic only reseeds.
+ */
+export function applyRoomSeed(world: World, seed: number) {
+    const random = world.resources.get(RandomResource);
+    if (random) {
+        random.setState(new Random(seed).getState());
+    }
+    const spawner = world.entities.get('npc spawner')
+        ?.components.get(NpcSpawnerComponent);
+    if (!spawner) {
+        return;
+    }
+    for (const [uuid, entity] of [...world.entities]) {
+        if (entity.components.has(NpcComponent)
+            && !entity.components.has(MultiplayerData)) {
+            world.entities.delete(uuid);
+        }
+    }
+    const systemId = world.resources.get(SystemIdResource);
+    const avgShips = systemId === undefined ? undefined
+        : world.resources.get(SimulationGameDataResource)
+            ?.data.System.getCached(systemId)?.avgShips;
+    spawner.targetCount = 0;
+    spawner.avgShips = avgShips ?? spawner.avgShips ?? 0;
+    delete spawner.spawnBits;
+    spawner.awaitingEntrant = true;
+}
+
+/**
+ * The first entrant's tick in a seeded room (applyRoomSeed): latch the
+ * room's spawn bits as latchSpawnBits does (only on a table some test
+ * gates), roll the population target from AvgShips against the table
+ * those bits admit, and spawn the initial population scattered through
+ * the system exactly as genesis used to — but from the room's seed and
+ * under the entrant's bits, so an admitted story variant is there from
+ * the start and an excluded one never appears.
+ */
+export function populateForEntrant(world: World,
+    gameData: SimulationGameDataInterface, ids: IdFactory, random: Random,
+    spawner: NpcSpawnerType, entrants: readonly Entrant[]) {
+    if (entrants.length === 0) {
+        return;
+    }
+    delete spawner.awaitingEntrant;
+    const read = spawnTableBits(spawner);
+    if (read.length > 0) {
+        spawner.spawnBits = entrantSpawnBits(entrants, read);
+    }
+    const bits = latchedSpawnBits(spawner);
+    const persEntries = spawner.persEntries ?? [];
+    spawner.targetCount =
+        effectiveNpcSpawnEntries(spawner.entries, bits).length === 0 ? 0
+            : rollPopulationTarget(spawner.avgShips ?? 0, random);
+    let population = 0;
+    // The genesis loop, verbatim (fleets may overshoot; see spawnNpcs).
+    for (let guard = 0; population < spawner.targetCount && guard < 100;
+        guard++) {
+        population += spawnNpc(world, gameData, ids, random, spawner.entries,
+            false, persEntries, bits);
+    }
+}
+
+/**
  * Replaces departed/destroyed NPCs one at a time, jumping in at the
  * system edge, until the population is back at target. Mirrors
  * AsteroidRespawnSystem. Also latches the room's spawn bits, first, so
- * a respawn on the entrant's own tick already sees them.
+ * a respawn on the entrant's own tick already sees them — or, in a
+ * seeded room still waiting for its first entrant, spawns nothing until
+ * that entrant's tick, which spawns the initial population instead.
  */
 export const NpcRespawnSystem = new System({
     name: 'NpcRespawnSystem',
@@ -1210,6 +1320,11 @@ export const NpcRespawnSystem = new System({
         GetWorld, RandomResource, IdFactoryResource,
         SimulationGameDataResource] as const,
     step(spawner, liveNpcs, entrants, time, world, random, ids, gameData) {
+        if (spawner.awaitingEntrant) {
+            populateForEntrant(world, gameData, ids, random, spawner,
+                entrants);
+            return;
+        }
         latchSpawnBits(spawner, entrants, random);
         if (time.time < spawner.nextSpawn
             || liveNpcs.length >= spawner.targetCount) {

@@ -48,17 +48,51 @@
  * mean the same under every bit set, so its state, its PRNG draws and its
  * hashes are exactly what they were before the latch existed.
  *
- * GENESIS RUNS BEFORE ANYONE ENTERS, so the initial population cannot see
- * the entrant's bits. It is drawn exactly as before, against the EMPTY
- * set (the same table, the same draws, the same entity ids); the latch
- * then governs every later draw — each respawn's ship and fleet pick and
- * its përs roll. Ships already in the system when the entrant arrives
- * are left alone (removing or re-rolling them would churn ids and draws
- * for every system with a gated table, and a ship the bits exclude simply
- * jumps out in time). A system whose empty-set table is EMPTY (every
- * entry gated) has no genesis population at all, as before, and rolls
- * its population target at the latch tick instead, when the latched
- * table has something to spawn; it then fills by jump-ins.
+ * A FRESH POPULATION PER ROOM INSTANCE (the second ruling, 2026-10-03
+ * 22:00: "randomize it every time a player intends to enter the system
+ * (and the system is not already live). Then, we can use the player's
+ * bits."). Every world builds the same genesis from the system id, and
+ * then the ROOM decides what it is:
+ *
+ *  - WHO PICKS. The relay mints a seed when it opens a room — i.e. when a
+ *    player enters a system nobody is in (server_plugin.ts; the room is
+ *    closed when it empties, so the next entrant gets a new one) — and
+ *    logs it as the room's first record, a server-authored `roomSeed`
+ *    input at tick 1 (rollback_relay.ts). The bits are the first
+ *    entrant's, from its ship, exactly as above.
+ *  - HOW EVERYONE GETS THEM. Through the input log, the one thing every
+ *    world of a room already agrees on: the first entrant's catch-up
+ *    carries the record, the archive applies it from `relay.inputLog`,
+ *    a later joiner replays it from the log or restores a baseline that
+ *    already holds its effect (the reseeded Random is a snapshotted
+ *    resource), and a resync replays it over genesis. No handshake
+ *    field, no new message, no world built with parameters it must first
+ *    ask for.
+ *  - WHAT IT DOES (applyRoomSeed). It reseeds the world's Random from the
+ *    seed — everything drawn from then on is this visit's — removes the
+ *    genesis population (drawn from the system-id seed against the empty
+ *    set, before anyone could see it) and marks the spawner
+ *    `awaitingEntrant`. The system then holds no NPC traffic until the
+ *    first player ship appears; on THAT tick NpcRespawnSystem latches the
+ *    entrant's bits and rolls and spawns the initial population,
+ *    scattered as genesis places it (populateForEntrant). So an admitted
+ *    story variant is there from the start, and an excluded one is never
+ *    in the room at all.
+ *  - TRUST. Only a server-stamped record (or one with no peerId: local
+ *    play) may carry `roomSeed` (simulation_input.ts), so no client can
+ *    choose or re-roll a room's seed; its bits are its own, as above.
+ *
+ * A WORLD NO SEED REACHES — offline play, the determinism harness, every
+ * spec that builds a system without a seeded relay — keeps the fixed
+ * genesis: the system-id seed, and the initial population drawn at world
+ * build against the EMPTY set (the same table, the same draws, the same
+ * entity ids as before the latch existed); the latch then governs every
+ * later draw — each respawn's ship and fleet pick and its përs roll.
+ * Ships already in the system when the entrant arrives are left alone
+ * there. A system whose empty-set table is EMPTY (every entry gated) has
+ * no genesis population, and rolls its population target at the latch
+ * tick instead, when the latched table has something to spawn; it then
+ * fills by jump-ins.
  *
  * The other terms a test can use stay at the shared-spawn defaults the
  * tables always had: `Oxxx` (owns outfit) false, `Exxx` (explored) false
