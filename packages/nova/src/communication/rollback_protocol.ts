@@ -170,6 +170,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    older hail actions encode as before.
 //    (#333's SimulationFrame.resyncFailed rides the worker-to-display
 //    bridge only; it is not on the wire.)
+//    Also under 8, no further bump: a fresh population per room instance
+//    (#140, second ruling; nova_plugin/spawn/spawn_bits.ts). The input
+//    union gained the server-authored `roomSeed` ({ kind: 'roomSeed',
+//    seed }, seed a 32-bit unsigned integer, an Avro long), which the
+//    relay logs as a room's first record (tick 1) when the server opens
+//    the room. Applying it reseeds the world's Random, removes the genesis
+//    population and marks the NpcSpawner with the new optional
+//    `awaitingEntrant`; the first entrant's tick then latches the spawn
+//    bits and spawns the initial population under them (setting
+//    `avgShips` on every seeded spawner, not only gated ones). It is
+//    accepted only from a server uuid or a record with no peerId. The
+//    wire schema fingerprint changes, and so does the desync-hash input
+//    of every seeded room. No message kind, handshake field or persisted
+//    pilot form changes. A world no seed reaches (an unseeded relay,
+//    offline play) is byte-identical to before.
+
 export const PROTOCOL_VERSION = 8;
 
 /**
@@ -229,7 +245,9 @@ export const PROTOCOL_VERSION = 8;
  *     inherit their carrier's owner). removeEntity, and addEntity over
  *     an existing uuid, need ownership of the target; a fresh addEntity
  *     may not declare another peer as controller or owner; removePeer
- *     is accepted only from a server uuid (the announced set of item
+ *     and roomSeed (the room's seed, #140; also from a record with no
+ *     peerId, local play) are accepted only from a server uuid (the
+ *     announced set of item
  *     4; a world with no communicator falls back to the server's fixed
  *     'server', simulation_input.ts DEFAULT_SERVER_PEERS); nothing
  *     peer-authored may name the singleton. A server-stamped record,
