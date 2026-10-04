@@ -34,6 +34,53 @@ describe('hail answer traits against real Nova data (ruling #297)', () => {
             }
         });
 
+    it('silences the Hyperioid (ruling #297, 2026-10-03: "Hyperioid, too"), '
+        + 'and leaves Vell-os ships and shuttles talking', async () => {
+            const gameData = await getIntegrationGameData();
+            // düde 147 flies the Hyperioid (nova:171) under gövt 148, which
+            // carries Flags 0x0400 "Can't hail ships of this govt"; the class
+            // inherits it too, through its attributes govt.
+            const hyperioidGovt = await gameData.data.Govt.get('nova:148');
+            const hyperioid = await gameData.data.Ship.get('nova:171');
+            const dude = await gameData.data.Dude.get('nova:147');
+            expect(dude.govt).toBe('nova:148');
+            expect(dude.ships.map(choice => choice.id))
+                .toContain('nova:171');
+            expect(hyperioidGovt.flags.cantBeHailed).toBeTrue();
+            expect(hyperioid.inheritedCantBeHailed).toBeTrue();
+            expect(shipAnswersHails(hyperioidGovt, hyperioid)).toBeFalse();
+            expect(shipAnswersHails(undefined, hyperioid)).toBeFalse();
+            // Crew 0 is NOT the rule: the Vell-os Dart/Arrow/Javelin fly
+            // crewless under gövt 136/165 (Roadside Assistance) and answer,
+            // with the button.
+            for (const govtId of ['nova:136', 'nova:165']) {
+                const vellos = await gameData.data.Govt.get(govtId);
+                for (const shipId of ['nova:173', 'nova:174', 'nova:175']) {
+                    const ship = await gameData.data.Ship.get(shipId);
+                    expect(ship.crew).toBe(0);
+                    expect(shipAnswersHails(vellos, ship))
+                        .withContext(`${govtId} flying ${shipId}`).toBeTrue();
+                    expect(canRequestAssistance({ govt: vellos, ship }))
+                        .toBeTrue();
+                }
+            }
+            // A Shuttle answers under a trader govt (157) or none at all.
+            const shuttle = await gameData.data.Ship.get('nova:128');
+            const civvies = await gameData.data.Govt.get('nova:157');
+            expect(shipAnswersHails(civvies, shuttle)).toBeTrue();
+            expect(shipAnswersHails(undefined, shuttle)).toBeTrue();
+        });
+
+    it('shows the shïp CommName in the comm box ("Aur Carrier", ruling #297 '
+        + '"Let\'s match the original")', async () => {
+            const gameData = await getIntegrationGameData();
+            const carrier = await gameData.data.Ship.get('nova:153');
+            expect(carrier.name).toBe('Aurora Carrier');
+            expect(carrier.commName).toBe('Aur Carrier');
+            const viper = await gameData.data.Ship.get('nova:144');
+            expect(viper.commName).toBe('Fed Viper');
+        });
+
     it('lets the Wraith (Adult) nova:185 inherit Can\'t-hail from gövt 159',
         async () => {
             const gameData = await getIntegrationGameData();
@@ -43,17 +90,25 @@ describe('hail answer traits against real Nova data (ruling #297)', () => {
             expect(shipAnswersHails(undefined, ship)).toBeFalse();
         });
 
-    it('opens the Dechtakar channel (gövt 142, comm "Dechtakar") without '
+    it('opens the Dechtakar channel (gövt 142/189, comm "Dechtakar") without '
         + 'Request Assistance', async () => {
         const gameData = await getIntegrationGameData();
-        const govt = await gameData.data.Govt.get('nova:142');
-        expect(govt.commName).toBe('Dechtakar');
         // The Aur Carrier of the ruling's screenshot.
         const carrier = await gameData.data.Ship.get('nova:153');
-        expect(shipAnswersHails(govt, carrier)).toBeTrue();
-        expect(canRequestAssistance({
-            disposition: 'neutral', govt, ship: carrier,
-        })).toBeFalse();
+        // Both Rimerta govts: Flags2 0x0027 = 0x0001 (no assist / mercy
+        // button) + 0x0002 + 0x0004 + 0x0020 — no 0x0008, no Flags 0x0400.
+        // So the channel opens and has no button: "not Dechtakar" in the
+        // 2026-10-03 ruling, "some don't have a 'request assistance' button
+        // (Polaris (often) and Dechtakar)" in the first.
+        for (const govtId of ['nova:142', 'nova:189']) {
+            const govt = await gameData.data.Govt.get(govtId);
+            expect(govt.commName).toBe('Dechtakar');
+            expect(govt.flags.cantBeHailed).toBeFalse();
+            expect(govt.flags2.noAssistOrMercy).toBeTrue();
+            expect(govt.flags2.noDistressMessages).toBeFalse();
+            expect(shipAnswersHails(govt, carrier)).toBeTrue();
+            expect(canRequestAssistance({ govt, ship: carrier })).toBeFalse();
+        }
     });
 
     it('gives some "Polaris" no Request Assistance and some the button',
@@ -67,10 +122,10 @@ describe('hail answer traits against real Nova data (ruling #297)', () => {
             expect(polaris.commName).toBe('Polaris');
             expect(shipAnswersHails(nilkemorya)).toBeTrue();
             expect(canRequestAssistance({
-                disposition: 'neutral', govt: nilkemorya,
+                govt: nilkemorya,
             })).toBeFalse();
             expect(canRequestAssistance({
-                disposition: 'neutral', govt: polaris,
+                govt: polaris,
             })).toBeTrue();
         });
 });

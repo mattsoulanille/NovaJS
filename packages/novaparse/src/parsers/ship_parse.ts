@@ -438,6 +438,8 @@ export async function ShipParse(ship: ShipResource,
         escortSellValue: ship.escortSellValue,
         shortName: ship.shortName,
         longName: ship.longName,
+        // shïp CommName: the class name the comm (hail) dialog shows.
+        commName: ship.commName,
         subtitle: ship.subtitle,
         // The hire-escort pilot description parallels the shipyard
         // description range: dësc 14000 + (shïp local id - 128).

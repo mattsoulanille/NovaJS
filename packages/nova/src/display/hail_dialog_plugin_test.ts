@@ -30,9 +30,11 @@ import {
     HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MERCY_REFUSED_FALLBACK,
     MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
+    ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
+    JUST_AN_ESCORT_FALLBACK,
 } from '../nova_plugin/reputation/index.js';
 import {
-    CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress,
+    CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
     hailPress, playerChannelMessage, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
 } from '../spaceport/hail_dialog.js';
 import {
@@ -46,6 +48,8 @@ import {
 } from '../nova_plugin/travel/index.js';
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
     assistAnswer, computeContext, hailIsUnanswerable, shipIdentityBlock,
     targetIsFighting,
@@ -1391,8 +1395,9 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
             expect(await corners(world, gameData)).toBe('neutral');
         });
 
-        it('shows a bought-off pirate NEUTRAL, but it offers no assistance '
-            + '("may show as neutral ... not offer assistance ... at all")',
+        it('shows a bought-off pirate NEUTRAL, with Request Assistance — it '
+            + 'is rude and makes you PAY (ruling #297, 2026-10-03: "always '
+            + 'visible ... They just refuse to help you or make you pay")',
             async () => {
                 const { world, gameData } = iffWorld('test:pirate', target => {
                     target.components.set(NpcComponent, {
@@ -1405,14 +1410,123 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                         xenophobic: true, largerBribes: true,
                     },
                 });
+                const player = world.entities.get(PLAYER)!;
+                player.components.set(CreditsComponent, { credits: 100_000 });
+                player.components.set(DisabledComponent, { repairAt: null });
                 const result = await computeContext(world, gameData);
-                expect(result?.context.heading).not.toContain('Status:');
-                expect(result?.context.assist).toBeUndefined();
-                expect(result?.context.bribe).toBeUndefined();
-                expect(result?.context.mercyRefused).toBeUndefined();
-                expect(commButtonSlots('ship', result!.context))
-                    .toEqual(['greetings', 'close']);
+                const context = result!.context;
+                expect(context.heading).not.toContain('Status:');
+                expect(context.mercyRefused).toBeUndefined();
+                expect(commButtonSlots('ship', context))
+                    .toEqual(['greetings', 'assist', 'close']);
                 expect(await corners(world, gameData)).toBe('neutral');
+                // Rude: Greetings gets the curt group, not a greeting.
+                expect(context.greeting).toBe(HOSTILE_RESPONSE_FALLBACK);
+                // The price of its help: the mercy demand (30% here).
+                expect(context.bribe).toEqual({
+                    amount: 30_000, canAfford: true, purpose: 'assist',
+                    offer: ASSIST_FOR_PAY_FALLBACK,
+                    accepted: ASSIST_PAID_FALLBACK,
+                });
+                // The press names the price and dispatches nothing...
+                const answer = assistAnswer(world, TARGET, result!.replies);
+                expect(answer).toEqual({
+                    line: ASSIST_FOR_PAY_FALLBACK, dispatch: false,
+                    haggle: true,
+                });
+                // ...onto the haggle page, whose Pay brings it back with
+                // the ship's "on my way".
+                const haggle = hailPress({ phase: 'main', context },
+                    { kind: 'assist', answer: answer.line, haggle: true },
+                    context) as HailPage;
+                expect(haggle.phase).toBe('haggle');
+                expect(haggleText(haggle.context.bribe)).toBe(
+                    `${ASSIST_FOR_PAY_FALLBACK}\nThey demand `
+                    + `${(30_000).toLocaleString()} credits to help you.`);
+                expect(hailPress(haggle, { kind: 'pay' }, context)).toEqual({
+                    phase: 'main', context: {
+                        ...haggle.context, body: ASSIST_PAID_FALLBACK,
+                    },
+                });
+                // Beg For Mercy's press cannot reach a price for help.
+                expect(hailPress({ phase: 'main', context }, { kind: 'beg' },
+                    context)).toEqual({ phase: 'main', context });
+            });
+
+        it('REFUSES help from an unfriendly govt that takes no bribes, with '
+            + 'the button still there', async () => {
+                const { world, gameData } = iffWorld('test:hater', target => {
+                    target.components.set(NpcComponent, {
+                        aiType: 3, pacifiedFrom: PLAYER,
+                        pacifiedUntil: NOW + 60_000,
+                    });
+                }, {
+                    flags: {
+                        ...getDefaultGovtData().flags,
+                        alwaysAttacksPlayer: true,
+                    },
+                });
+                world.entities.get(PLAYER)!.components
+                    .set(DisabledComponent, { repairAt: null });
+                const result = await computeContext(world, gameData);
+                expect(commButtonSlots('ship', result!.context))
+                    .toEqual(['greetings', 'assist', 'close']);
+                expect(result!.context.bribe).toBeUndefined();
+                expect(assistAnswer(world, TARGET, result!.replies)).toEqual({
+                    line: ASSIST_REFUSED_FALLBACK, dispatch: false,
+                    haggle: false,
+                });
+                // A healthy player is still told they need nothing first.
+                world.entities.get(PLAYER)!.components
+                    .delete(DisabledComponent);
+                expect(assistAnswer(world, TARGET, result!.replies).line)
+                    .toBe(NO_NEED_RESPONSE_FALLBACK);
+            });
+
+        it('keeps the ordinary greeting for a ship whose govt does not '
+            + 'dislike the player', async () => {
+                const { world, gameData } = iffWorld('test:neutral');
+                const result = await computeContext(world, gameData);
+                expect(result!.context.greeting).not
+                    .toBe(HOSTILE_RESPONSE_FALLBACK);
+                expect(result!.context.greeting).toBeDefined();
+            });
+
+        it('greets RUDELY from STR# 3000 10-14, seeded by the ship', async () => {
+            const { world, gameData } = iffWorld('test:pirate', target => {
+                target.components.set(NpcComponent, {
+                    aiType: 3, pacifiedFrom: PLAYER,
+                    pacifiedUntil: NOW + 60_000,
+                });
+            }, {
+                flags: { ...getDefaultGovtData().flags, xenophobic: true },
+            });
+            const strings = Array.from({ length: 190 },
+                (_, i) => `line ${i}`);
+            const assets = {
+                data: { StringTable: { get: async () => ({ strings }) } },
+            } as unknown as DisplayAssetDataInterface;
+            const first = await computeContext(world, gameData, assets);
+            const again = await computeContext(world, gameData, assets);
+            const index = Number(first!.context.greeting!.split(' ')[1]);
+            expect(index).toBeGreaterThanOrEqual(HOSTILE_RESPONSE_FIRST_INDEX);
+            expect(index).toBeLessThan(HOSTILE_RESPONSE_FIRST_INDEX + 5);
+            expect(again!.context.greeting).toBe(first!.context.greeting);
+        });
+
+        it('classes the ship by its shïp CommName ("Class: Aur Carrier")',
+            async () => {
+                const { world, gameData } = iffWorld('test:neutral', target => {
+                    target.components.set(ShipDataComponent, shipData({
+                        id: 'nova:128', name: 'Aurora Carrier',
+                        commName: 'Aur Carrier',
+                    }));
+                });
+                gameData.data.Govt.map.get('test:neutral')!.commName =
+                    'Dechtakar';
+                const result = await computeContext(world, gameData);
+                expect(result!.context.heading)
+                    .toBe('Class: Aur Carrier\n(Dechtakar)');
             });
 
         it('offers Beg For Mercy to a hostile ship that will NOT be bought, '
@@ -1552,17 +1666,106 @@ describe('computeContext: hailing another PLAYER\'s ship (#332)', () => {
             .toBe(npcPage);
     });
 
-    it('offers nothing against a ship ANOTHER player owns (their escort)',
-        async () => {
+    it('answers "Sorry sir, I\'m just an escort." from ANOTHER player\'s '
+        + 'escort, and dispatches nothing (ruling #332)', async () => {
             const { world, gameData } = makeWorld(target => {
                 target.components.set(PlayerEscortComponent, {
                     player: 'their ship', deal: { kind: 'none' },
                 } as never);
             });
-            const context = (await computeContext(world, gameData))!.context;
+            // Even a player who really needs help.
+            world.entities.get(PLAYER)!.components
+                .set(DisabledComponent, { repairAt: null });
+            const result = await computeContext(world, gameData);
+            const context = result!.context;
             expect(context.playerChannel).toBeUndefined();
-            expect(context.assist).toBeUndefined();
+            expect(context.bribe).toBeUndefined();
             expect(commButtonSlots('ship', context))
-                .toEqual(['greetings', 'close']);
+                .toEqual(['greetings', 'assist', 'close']);
+            expect(assistAnswer(world, TARGET, result!.replies)).toEqual({
+                line: JUST_AN_ESCORT_FALLBACK, dispatch: false, haggle: false,
+            });
+        });
+
+    it('answers the same from an NPC flagship\'s fleet escort (the '
+        + 'original\'s Fed Viper)', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(FormationComponent,
+                    { leader: 'some flagship', slot: 1 });
+            });
+            world.entities.get(PLAYER)!.components
+                .set(DisabledComponent, { repairAt: null });
+            const result = await computeContext(world, gameData);
+            expect(result!.context.variant).toBe('ship');
+            expect(assistAnswer(world, TARGET, result!.replies).line)
+                .toBe(JUST_AN_ESCORT_FALLBACK);
+        });
+
+    it('refuses a plea for mercy from another player\'s IFF-hostile escort '
+        + 'the same way', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(PlayerEscortComponent, {
+                    player: 'their ship', deal: { kind: 'none' },
+                } as never);
+                target.components.set(TargetComponent, { target: PLAYER });
+                target.components.set(EscortCommandComponent,
+                    { command: 'attack', target: PLAYER });
+            });
+            world.resources.set(SimulationTimeResource, {
+                time: 60_000, delta_ms: 16, delta_s: 0.016, frame: 3600,
+            });
+            const context = (await computeContext(world, gameData))!.context;
+            expect(context.heading).toContain('Status: Hostile');
+            expect(context.bribe).toBeUndefined();
+            expect(context.mercyRefused).toBe(JUST_AN_ESCORT_FALLBACK);
+            expect(commButtonSlots('ship', context))
+                .toEqual(['greetings', 'beg', 'close']);
+        });
+});
+
+/**
+ * The 2026-10-03 rulings on #297 through the parser, on the checked-in
+ * synthetic data set: the class line is the shïp CommName, and a Verge
+ * Raider (xenophobic, warships take bribes) the player has bought off is
+ * rude and names a price for help.
+ */
+describe('computeContext on the synthetic data set (ruling #297)', () => {
+    it('classes a bought-off Raider "Class: Corsair", greets rudely and '
+        + 'charges for help', async () => {
+            const gameData = await getSyntheticGameData();
+            const corsair = await gameData.data.Ship.get(SYNTHETIC.ships.corsair);
+            await gameData.data.Govt.get(SYNTHETIC.govts.raiders);
+            expect(corsair.name).toBe('Gannet Corsair');
+            const world = new World();
+            world.resources.set(SimulationTimeResource, {
+                time: 60_000, delta_ms: 16, delta_s: 0.016, frame: 3600,
+            });
+            world.entities.set(PLAYER, new Entity()
+                .addComponent(PlayerShipSelector, undefined)
+                .addComponent(TargetComponent, { target: TARGET })
+                .addComponent(CreditsComponent, { credits: 50_000 })
+                .addComponent(DisabledComponent, { repairAt: null }));
+            world.entities.set(TARGET, new Entity()
+                .addComponent(ShipDataComponent, corsair)
+                .addComponent(GovtComponent, { id: SYNTHETIC.govts.raiders })
+                .addComponent(NpcComponent, {
+                    aiType: 3, pacifiedFrom: PLAYER, pacifiedUntil: 120_000,
+                }));
+            const strings = (await gameData.data.StringTable
+                .get(HAIL_RESPONSE_TABLE)).strings;
+            const assets = {
+                data: { StringTable: { get: async () => ({ strings }) } },
+            } as unknown as DisplayAssetDataInterface;
+            const result = await computeContext(world, gameData, assets);
+            const context = result!.context;
+            expect(context.heading).toBe('Class: Corsair\n(Raiders)');
+            expect(strings.slice(HOSTILE_RESPONSE_FIRST_INDEX,
+                HOSTILE_RESPONSE_FIRST_INDEX + 5)).toContain(context.greeting!);
+            expect(commButtonSlots('ship', context))
+                .toEqual(['greetings', 'assist', 'close']);
+            expect(context.bribe?.purpose).toBe('assist');
+            expect(context.bribe?.amount).toBe(5_000);
+            expect(assistAnswer(world, TARGET, result!.replies).haggle)
+                .toBeTrue();
         });
 });

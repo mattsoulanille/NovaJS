@@ -96,18 +96,30 @@ export interface HailContext {
     /**
      * A bribe offer. Against a hostile SHIP this is the beg-for-mercy price
      * (they let you go); at a STELLAR that is refusing you landing clearance
-     * it is the price of being let in (`purpose: 'landing'`), which is the
-     * only thing that changes about the haggle page.
+     * it is the price of being let in (`purpose: 'landing'`); from a ship of
+     * an UNFRIENDLY GOVERNMENT that takes bribes it is the price of its help
+     * (`purpose: 'assist'`, ruling #297: "They just refuse to help you or
+     * make you pay"), reached through Request Assistance rather than Beg For
+     * Mercy. The purpose is the only thing that changes about the haggle
+     * page ({@link haggleText}).
      */
     bribe?: {
-        amount: number, canAfford: boolean, purpose?: 'mercy' | 'landing',
+        amount: number, canAfford: boolean,
+        purpose?: 'mercy' | 'landing' | 'assist',
         /**
          * What the hailed SHIP says once the demand is paid (STR# 3000
-         * 135-139, "Okay, I'll leave you alone."). Present on a mercy offer
-         * only: paying a PORT closes the channel instead, since the
-         * clearance it just sold has to be re-derived by a fresh hail.
+         * 135-139, "Okay, I'll leave you alone."; 145-149, "Okay, I'm on my
+         * way." for help). Present on a SHIP's offer only: paying a PORT
+         * closes the channel instead, since the clearance it just sold has
+         * to be re-derived by a fresh hail.
          */
         accepted?: string,
+        /**
+         * What the ship says as it names its price (STR# 3000 140-144, "All
+         * right, I'll give you some help, but it'll cost you."), shown at
+         * the head of the haggle page. Help offers only.
+         */
+        offer?: string,
     };
     /**
      * Beg For Mercy offered to an IFF-hostile ship that will NOT be bought
@@ -289,6 +301,18 @@ export function escortReadout(escort: EscortManagement): string {
     return rows.join('\n');
 }
 
+/**
+ * What a Request Assistance press got: the line the ship said, and whether
+ * it is naming a PRICE — an unfriendly ship that takes bribes (ruling #297)
+ * — in which case the press moves onto the haggle page instead of only
+ * answering in the well. Nothing has been dispatched for a priced answer;
+ * the haggle page's Pay does that.
+ */
+export interface AssistPressAnswer {
+    answer: string;
+    haggle: boolean;
+}
+
 /** Callbacks the dialog fires. `requestAssistance`/`bribe` route to the
  * deterministic input path; `playSound` plays a local client UI beep through
  * the display audio path (no simulation involvement). */
@@ -304,7 +328,7 @@ export interface HailCallbacks {
      * "may I?" probe on purpose: probe-then-send would evaluate the ship's
      * state twice, and could dispatch a request the probe had just cleared.
      */
-    requestAssistance(): string;
+    requestAssistance(): AssistPressAnswer;
     bribe(): void;
     /**
      * A press in a channel to another PLAYER's ship (#332): sends `message`
@@ -534,6 +558,23 @@ export function playerChannelMessage(context: HailContext | undefined,
     return channel.hostile ? 'mercy' : 'assistance';
 }
 
+/**
+ * The haggle page's text (PICT 8514's response well): the demand, in
+ * NovaJS's wording since the original haggles instead, and for a price on
+ * HELP the ship's own words first (STR# 3000 140-144). Pure, so it is
+ * pinned by specs rather than by a canvas.
+ */
+export function haggleText(bribe: HailContext['bribe']): string {
+    if (!bribe) {
+        return 'They refuse to negotiate.';
+    }
+    const what = bribe.purpose === 'landing' ? 'let you land'
+        : bribe.purpose === 'assist' ? 'help you' : 'let you go';
+    const demand = `They demand ${bribe.amount.toLocaleString()} credits to `
+        + `${what}.${bribe.canAfford ? '' : ' You cannot afford it.'}`;
+    return bribe.offer ? `${bribe.offer}\n${demand}` : demand;
+}
+
 /** Which page of the comm dialog is showing, and with what contents. */
 export interface HailPage {
     phase: 'main' | 'haggle';
@@ -544,8 +585,11 @@ export interface HailPage {
 export type HailPress =
     /** The top button: ask for a hello. */
     | { kind: 'greetings' }
-    /** The offer slot for a friendly ship, carrying WHAT IT ANSWERED. */
-    | { kind: 'assist', answer: string }
+    /**
+     * The offer slot for a non-hostile ship, carrying WHAT IT ANSWERED, and
+     * whether that answer was a price (onto the haggle page).
+     */
+    | { kind: 'assist', answer: string, haggle?: boolean }
     /** A message to another player went (#332): the well says so. */
     | { kind: 'sent', answer: string }
     /** The offer slot for a hostile ship / a shut port: onto the haggle page. */
@@ -601,13 +645,22 @@ export function hailPress(state: HailPage, press: HailPress,
                 ? state : { phase, context: { ...context, body } };
         }
         case 'assist':
+            if (!context.assist) {
+                return state;
+            }
+            // A PRICE for help (an unfriendly ship that takes bribes): its
+            // terms go in the well behind the haggle page, which offers to
+            // pay or back out — the same page a priced mercy plea opens.
+            if (press.haggle && context.bribe?.purpose === 'assist') {
+                return { phase: 'haggle',
+                    context: { ...context, body: press.answer } };
+            }
             // The answer goes in the well and THE OFFER STAYS — asking again
             // re-asks, and the answer is recomputed from live state.
-            return context.assist
-                ? { phase, context: { ...context, body: press.answer } }
-                : state;
+            return { phase, context: { ...context, body: press.answer } };
         case 'beg':
-            if (context.bribe) {
+            // A price for HELP is reached through Request Assistance only.
+            if (context.bribe && context.bribe.purpose !== 'assist') {
                 return { phase: 'haggle', context };
             }
             // A ship that will not be bought refuses the plea in the well
@@ -848,10 +901,10 @@ export class HailDialog {
         this.beep();
         // ONE call decides and answers (see HailCallbacks.requestAssistance);
         // the sim effect, if any, is already dispatched by the time it
-        // returns, and what comes back is the line to show.
-        this.apply({
-            kind: 'assist', answer: this.callbacks.requestAssistance(),
-        });
+        // returns, and what comes back is the line to show — or a price,
+        // which moves onto the haggle page.
+        const { answer, haggle } = this.callbacks.requestAssistance();
+        this.apply({ kind: 'assist', answer, haggle });
     }
 
     /**
@@ -1188,12 +1241,7 @@ export class HailDialog {
         originY: number) {
         const context = this.context;
         const bribe = context?.bribe;
-        const what = bribe?.purpose === 'landing' ? 'land' : 'go';
-        const demand = bribe
-            ? `They demand ${bribe.amount.toLocaleString()} credits to let you `
-            + `${what}.${bribe.canAfford ? '' : ' You cannot afford it.'}`
-            : 'They refuse to negotiate.';
-        const body = new PIXI.Text(demand, {
+        const body = new PIXI.Text(haggleText(bribe), {
             ...BODY_FONT,
             wordWrapWidth: frame.responseWell.width
                 - (frame.responseText.x - frame.responseWell.x) - 4,

@@ -20,6 +20,12 @@ import {
     mercyRefusedText, MERCY_REFUSED_COUNT, MERCY_REFUSED_FALLBACK,
     MERCY_REFUSED_FIRST_INDEX, shipNoResponseText, SHIP_NO_RESPONSE_COUNT,
     SHIP_NO_RESPONSE_FALLBACK, SHIP_NO_RESPONSE_FIRST_INDEX,
+    assistForPayText, assistPaidText, assistRefusedText, ASSIST_FOR_PAY_COUNT,
+    ASSIST_FOR_PAY_FALLBACK, ASSIST_FOR_PAY_FIRST_INDEX, ASSIST_PAID_COUNT,
+    ASSIST_PAID_FALLBACK, ASSIST_PAID_FIRST_INDEX, ASSIST_REFUSED_COUNT,
+    ASSIST_REFUSED_FALLBACK, ASSIST_REFUSED_FIRST_INDEX, justAnEscortText,
+    JUST_AN_ESCORT_COUNT, JUST_AN_ESCORT_FALLBACK, JUST_AN_ESCORT_FIRST_INDEX,
+    rudeGreetingText,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -234,6 +240,47 @@ describe('StringTable against real Nova data', () => {
                 .toBe('A pleasure doing business with you.');
             for (const seed of [0, 1, 2, 3, 4, 987654]) {
                 expect(group).toContain(mercyRefusedText(table.strings, seed));
+            }
+        });
+
+    it('pins the refusal / price / escort lines a Request Assistance press '
+        + 'gets (STR# 3000 85-89, 113-114, 140-149) and the rude greeting '
+        + '(10-14, the maintainer\'s one-indexed 11-15)', async () => {
+            const gameData = await getIntegrationGameData();
+            const strings = (await gameData.data.StringTable
+                .get(HAIL_RESPONSE_TABLE)).strings;
+            const slice = (first: number, count: number) =>
+                strings.slice(first, first + count);
+            expect(slice(ASSIST_REFUSED_FIRST_INDEX, ASSIST_REFUSED_COUNT))
+                .toEqual(["I'd rather not.", "Sorry, I'd rather not.",
+                    "I don't think so.", 'I think not.',
+                    "I don't think I want to."]);
+            expect(slice(JUST_AN_ESCORT_FIRST_INDEX, JUST_AN_ESCORT_COUNT))
+                .toEqual(["Sorry sir, I'm just an escort.",
+                    "Sorry sir, I'm just an escort."]);
+            // The run's other three are a different refusal.
+            expect(strings[JUST_AN_ESCORT_FIRST_INDEX - 3])
+                .toBe("Sorry sir, I can't help you.");
+            expect(slice(ASSIST_FOR_PAY_FIRST_INDEX, ASSIST_FOR_PAY_COUNT)[0])
+                .toBe(ASSIST_FOR_PAY_FALLBACK);
+            expect(slice(ASSIST_PAID_FIRST_INDEX, ASSIST_PAID_COUNT)[0])
+                .toBe(ASSIST_PAID_FALLBACK);
+            expect(strings[ASSIST_REFUSED_FIRST_INDEX])
+                .toBe(ASSIST_REFUSED_FALLBACK);
+            expect(strings[JUST_AN_ESCORT_FIRST_INDEX])
+                .toBe(JUST_AN_ESCORT_FALLBACK);
+            expect(slice(10, 5)).toEqual(['What is it you want?',
+                'What do you want?', 'What is it?', 'What is it?', 'What?']);
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(slice(10, 5)).toContain(rudeGreetingText(strings, seed));
+                expect(slice(JUST_AN_ESCORT_FIRST_INDEX, 2))
+                    .toContain(justAnEscortText(strings, seed));
+                expect(slice(ASSIST_REFUSED_FIRST_INDEX, 5))
+                    .toContain(assistRefusedText(strings, seed));
+                expect(slice(ASSIST_FOR_PAY_FIRST_INDEX, 5))
+                    .toContain(assistForPayText(strings, seed));
+                expect(slice(ASSIST_PAID_FIRST_INDEX, 5))
+                    .toContain(assistPaidText(strings, seed));
             }
         });
 

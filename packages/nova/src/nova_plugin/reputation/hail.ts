@@ -204,10 +204,25 @@ export function shipHailResponse(govt: GovtData | undefined,
 
 /**
  * Whether the player may ASK a hailed ship for fuel/repair assistance — i.e.
- * whether the comm dialog offers the button at all. It is offered to every
- * ship that would entertain the question: not hostile (politically or
- * behaviorally), not a cantBeHailed govt, and not a Flags2 noAssistOrMercy
- * govt ("the request assistance / beg for mercy button is disabled").
+ * whether the comm dialog offers the button at all. Whether the ship then
+ * HELPS is a separate question ({@link assistWillingness}).
+ *
+ * Matthew's ruling on #297 (2026-10-03): "The request assistance / beg for
+ * mercy button should always be visible for ships that communicate (e.g.,
+ * not Dechtakar / hyperioid). They just refuse to help you or make you
+ * pay." So the button is offered to every ship that answers a hail and is
+ * not IFF-hostile, WHATEVER its government thinks of the player — a ship of
+ * an unfriendly government refuses or names a price when asked; it no
+ * longer hides the button. Two kinds of ship do not "communicate":
+ *
+ *  - a silent ship ({@link shipAnswersHails}: the Hyperioid, the Krypt, the
+ *    Wraith) opens no channel at all;
+ *  - a gövt with Flags2 0x0001 — the Bible: "the request assistance / beg
+ *    for mercy button is disabled and the govt is not talkative". That is
+ *    the Dechtakar (gövt 142/189 Rimerta, Flags2 0x0027) of the ruling's
+ *    example, whose channel the original opens with Greetings and Close
+ *    only ("some don't have a 'request assistance' button (Polaris (often)
+ *    and Dechtakar)", the first ruling on #297).
  *
  * DELIBERATELY NOT gated on whether the player needs help. Matthew: "it
  * should show request assistance even if there's no reason for you to request
@@ -223,15 +238,8 @@ export function shipHailResponse(govt: GovtData | undefined,
  * even if its politics are neutral — otherwise a neutral-govt warship
  * shooting a disabled player would still offer to fly over and fully repair
  * them (the assistance exploit).
- *
- * `disposition` stays the GOVERNMENT stance, and a hostile one still refuses:
- * the ruling's "a ship of an unfriendly government may show as neutral when
- * hailed, but they will likely be rude and not offer assistance for free, or
- * at all" — a pirate the player has bought off reads neutral in the channel
- * but has no help to give.
  */
 export function canRequestAssistance(opts: {
-    disposition: Disposition,
     govt: GovtData | undefined,
     iffHostile?: boolean,
     /** The hailed ship's class, for the inherited no-hail traits. */
@@ -253,13 +261,48 @@ export function canRequestAssistance(opts: {
     if (opts.rankAlwaysAssists) {
         return true;
     }
-    if (opts.disposition === 'hostile') {
-        return false;
+    return !opts.govt?.flags2.noAssistOrMercy;
+}
+
+/**
+ * HOW A SHIP THAT HAS BEEN ASKED FOR HELP RESPONDS, once the request is not
+ * pointless (the player needs help) and the ship is not busy fighting:
+ *
+ *  - 'willing'  it comes over (STR# 3000 75-79, "All right, I'll help
+ *               you.").
+ *  - 'forPay'   it names a price (STR# 3000 140-144, "All right, I'll give
+ *               you some help, but it'll cost you.") on the haggle page, and
+ *               comes once paid.
+ *  - 'unwilling' it refuses (STR# 3000 85-89, "I'd rather not.").
+ *
+ * Matthew's rulings on #297: "A ship of an unfriendly government may show as
+ * neutral when hailed, but they will likely be rude and not offer assistance
+ * for free, or at all", and "They just refuse to help you or make you pay."
+ * So `disposition` — the GOVERNMENT's stance toward the player
+ * (iff_plugin's shipDisposition), not the ship's IFF — decides: a ship whose
+ * government is hostile to the player asks to be paid when that government
+ * takes bribes from a ship of its kind (the same bribe flags Beg For Mercy
+ * reads, {@link shipTakesBribes}) and refuses otherwise. Every other ship is
+ * willing.
+ *
+ * ränk 0x0400 ("Player can always request battle assistance from ships of
+ * the affiliated government") overrides the politics: always willing.
+ *
+ * Pure over synced state, so the dialog's answer and applyHail's outcome
+ * agree on every peer.
+ */
+export type AssistWillingness = 'willing' | 'forPay' | 'unwilling';
+
+export function assistWillingness(opts: {
+    disposition: Disposition,
+    govt: GovtData | undefined,
+    aiType: number | undefined,
+    rankAlwaysAssists?: boolean,
+}): AssistWillingness {
+    if (opts.rankAlwaysAssists || opts.disposition !== 'hostile') {
+        return 'willing';
     }
-    if (opts.govt?.flags.cantBeHailed || opts.govt?.flags2.noAssistOrMercy) {
-        return false;
-    }
-    return true;
+    return shipTakesBribes(opts.govt, opts.aiType) ? 'forPay' : 'unwilling';
 }
 
 /**
@@ -319,9 +362,20 @@ export function shipIsFighting(opts: {
  *   [80-84] busy:     "I'm busy." / "I'm a little busy right now." / "I'm too
  *                     busy to help you." / "I have other business." / "I've
  *                     got other things to do."
+ *   [85-89] unwilling: "I'd rather not." / "Sorry, I'd rather not." / "I
+ *                     don't think so." / "I think not." / "I don't think I
+ *                     want to." — an unfriendly ship refusing to help.
+ *   [113-114] escort: "Sorry sir, I'm just an escort." (twice) — someone
+ *                     else's escort asked for help (ruling #332's
+ *                     screenshot of the original).
  *   [135-139] mercy:  "Okay, I'll leave you alone." / "All right, I'll leave
  *                     you alone." (the group repeats those two) — what a ship
  *                     says once a beg-for-mercy bribe is paid.
+ *   [140-144] for pay: "All right, I'll give you some help, but it'll cost
+ *                     you." / "I'll help you out if you pay me." / ... — an
+ *                     unfriendly ship that takes bribes, asked for help.
+ *   [145-149] paid:   "Okay, I'm on my way." / "Hold on, I'll be right
+ *                     there." / ... — that ship once paid.
  *
  * (Pinned by nova_plugin/ncb/string_table_integration_test.ts against the real
  * data, so a parser regression shows up there rather than as a wrong line in
@@ -377,6 +431,13 @@ export const MERCY_ACCEPTED_FALLBACK = "Okay, I'll leave you alone.";
  * answers from this shared group instead — hail/hail_hostile.png shows a
  * hostile Fed Destroyer answering "What is it?" (index 12/13).
  *
+ * THE SAME GROUP IS THE RUDE GREETING (ruling #297, 2026-10-03): a ship
+ * whose GOVERNMENT is unfriendly to the player but which is not IFF-hostile
+ * answers the Greetings button with one of these — "What is it you want?" /
+ * "What do you want?" / "What is it?" / "What is it?" / "What?", entries
+ * 11-15 of STR# 3000 in the maintainer's one-indexed resource viewer, i.e.
+ * indices 10-14 here ({@link rudeGreetingText}).
+ *
  * The neighbouring group at 15-19 ("Calling to beg for your life?") is the
  * original's TAUNT set, which belongs to a different moment (a mercy plea),
  * not to opening the channel.
@@ -399,6 +460,33 @@ export const ASSIST_GRANTED_FALLBACK = "All right, I'll help you.";
 export const BUSY_RESPONSE_FIRST_INDEX = 80;
 export const BUSY_RESPONSE_COUNT = RESPONSE_GROUP_SIZE;
 export const BUSY_RESPONSE_FALLBACK = "I'm busy.";
+
+/** "I'd rather not." — an 'unwilling' ship ({@link assistWillingness}). */
+export const ASSIST_REFUSED_FIRST_INDEX = 85;
+export const ASSIST_REFUSED_COUNT = RESPONSE_GROUP_SIZE;
+export const ASSIST_REFUSED_FALLBACK = "I'd rather not.";
+
+/**
+ * "Sorry sir, I'm just an escort." — what someone else's escort says to a
+ * request for help. Ruling #332's screenshot of the original: a Fed Viper
+ * escort, hailed, answering Request Assistance with exactly this line. Only
+ * TWO entries (113-114): the rest of the 110-114 run is "Sorry sir, I can't
+ * help you." / "... can't do that." (twice), a different refusal.
+ */
+export const JUST_AN_ESCORT_FIRST_INDEX = 113;
+export const JUST_AN_ESCORT_COUNT = 2;
+export const JUST_AN_ESCORT_FALLBACK = "Sorry sir, I'm just an escort.";
+
+/** "... but it'll cost you." — a 'forPay' ship's price, before paying. */
+export const ASSIST_FOR_PAY_FIRST_INDEX = 140;
+export const ASSIST_FOR_PAY_COUNT = RESPONSE_GROUP_SIZE;
+export const ASSIST_FOR_PAY_FALLBACK =
+    "All right, I'll give you some help, but it'll cost you.";
+
+/** "Okay, I'm on my way." — a 'forPay' ship once paid. */
+export const ASSIST_PAID_FIRST_INDEX = 145;
+export const ASSIST_PAID_COUNT = RESPONSE_GROUP_SIZE;
+export const ASSIST_PAID_FALLBACK = "Okay, I'm on my way.";
 
 /**
  * A SHIP'S NO-RESPONSE GROUP (STR# 3000 indices 5-9): "No response." / "No
@@ -436,9 +524,9 @@ export const MERCY_REFUSED_FALLBACK = 'In your dreams, pal.';
  * group falls back to the pinned literal.
  */
 function responseText(strings: readonly string[] | undefined, first: number,
-    fallback: string, seed: number): string {
+    fallback: string, seed: number, count = RESPONSE_GROUP_SIZE): string {
     const group: string[] = [];
-    for (let i = 0; i < RESPONSE_GROUP_SIZE; i++) {
+    for (let i = 0; i < count; i++) {
         const line = strings?.[first + i];
         if (line && line.trim() !== '') {
             group.push(line);
@@ -506,6 +594,45 @@ export function busyResponseText(strings: readonly string[] | undefined,
     seed = 0): string {
     return responseText(strings, BUSY_RESPONSE_FIRST_INDEX,
         BUSY_RESPONSE_FALLBACK, seed);
+}
+
+/** An unwilling ship's refusal to help (STR# 3000 indices 85-89). */
+export function assistRefusedText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, ASSIST_REFUSED_FIRST_INDEX,
+        ASSIST_REFUSED_FALLBACK, seed, ASSIST_REFUSED_COUNT);
+}
+
+/** Someone else's escort, asked for help (STR# 3000 indices 113-114). */
+export function justAnEscortText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, JUST_AN_ESCORT_FIRST_INDEX,
+        JUST_AN_ESCORT_FALLBACK, seed, JUST_AN_ESCORT_COUNT);
+}
+
+/** A 'forPay' ship naming its terms (STR# 3000 indices 140-144). */
+export function assistForPayText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, ASSIST_FOR_PAY_FIRST_INDEX,
+        ASSIST_FOR_PAY_FALLBACK, seed, ASSIST_FOR_PAY_COUNT);
+}
+
+/** A 'forPay' ship once paid (STR# 3000 indices 145-149). */
+export function assistPaidText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, ASSIST_PAID_FIRST_INDEX,
+        ASSIST_PAID_FALLBACK, seed, ASSIST_PAID_COUNT);
+}
+
+/**
+ * The RUDE greeting (STR# 3000 indices 10-14, "What is it you want?"): what
+ * the Greetings button gets from a ship whose government is unfriendly to
+ * the player but which is not IFF-hostile (ruling #297). The same group a
+ * hostile ship opens its channel with — see HOSTILE_RESPONSE_FIRST_INDEX.
+ */
+export function rudeGreetingText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return hostileResponseText(strings, seed);
 }
 
 /**

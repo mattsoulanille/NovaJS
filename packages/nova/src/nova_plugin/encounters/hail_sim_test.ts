@@ -19,7 +19,11 @@ import { completeEntity } from '../spawn/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { applyHail, BRIBE_PACIFY_MS, SentHailComponent } from './hail_plugin.js';
+import {
+    applyHail, BRIBE_PACIFY_MS, isSomeoneElsesEscort, SentHailComponent,
+} from './hail_plugin.js';
+import { FormationComponent } from '../npc/index.js';
+import { OwnerComponent } from '../combat/index.js';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
@@ -62,6 +66,12 @@ async function makeWorld() {
     armed.id = 'test:armed';
     armed.flags.warshipsTakeBribes = true;
     gameData.data.Govt.map.set('test:armed', armed);
+    // Hostile to the player and takes no bribes (ruling #297's "refuse").
+    const hater = getDefaultGovtData();
+    hater.id = 'test:hater';
+    hater.flags.alwaysAttacksPlayer = true;
+    gameData.data.Govt.map.set('test:hater', hater);
+    await gameData.data.Govt.get('test:hater');
     // Nothing to say and nothing to offer: Flags2 0x0001 + 0x0008, what the
     // stock Krypt (gövt 140, Flags2 0x002b) carries.
     const krypt = getDefaultGovtData();
@@ -800,5 +810,129 @@ describe('applyHail: another player\'s ship (#332)', () => {
                 .turnTo).toEqual(turnTo);
             expect(player(world).components.get(ArmorComponent)!.current)
                 .toBe(1);
+        });
+});
+
+/**
+ * Matthew's rulings of 2026-10-03: "The request assistance / beg for mercy
+ * button should always be visible for ships that communicate ... They just
+ * refuse to help you or make you pay" (#297), and someone's escort answers
+ * "Sorry sir, I'm just an escort." (#332). The simulation half: what a
+ * request DOES, re-derived from synced state.
+ */
+describe('applyHail: an unfriendly ship refuses or charges; an escort '
+    + 'declines (rulings #297/#332)', () => {
+    /** A ship of `govt` that the player has bought off: its government is
+     * hostile to them, but its IFF reads neutral. */
+    function boughtOff(govt: string) {
+        return (ship: ReturnType<typeof makeShip>) => {
+            ship.components.set(GovtComponent, { id: govt });
+            ship.components.set(NpcComponent, {
+                aiType: 3, pacifiedFrom: 'player',
+                pacifiedUntil: BRIBE_PACIFY_MS * 10,
+            });
+        };
+    }
+
+    it('makes the player PAY a bribe-taking unfriendly ship, then comes',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, boughtOff('test:pirate'));
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            // 30% of 100k: the same demand a mercy plea from it costs.
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(70_000);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player' });
+            // A second Pay press while it is on its way charges nothing.
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(70_000);
+        });
+
+    it('refuses, and charges nothing, when the player cannot pay',
+        async () => {
+            // bribeAmount caps the demand at the player's cash, so only an
+            // empty purse cannot pay at all.
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            player(world).components.set(CreditsComponent, { credits: 0 });
+            await addShip('target', 150, 0, boughtOff('test:pirate'));
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(0);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+        });
+
+    it('REFUSES outright when the unfriendly govt takes no bribes',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, boughtOff('test:hater'));
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+        });
+
+    it('lets a friendly ship help for free, as before', async () => {
+        const { world, addShip } = await makeWorld();
+        player(world).components.set(DisabledComponent, { repairAt: null });
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 3 });
+        });
+        applyHail(world, PEER, { kind: 'requestAssistance', target: 'target' });
+        expect(target(world).components.get(AssistingComponent))
+            .toEqual({ client: 'player' });
+        expect(player(world).components.get(CreditsComponent)!.credits)
+            .toBe(100_000);
+    });
+
+    it('leaves an NPC flagship\'s fleet ESCORT alone — "I\'m just an escort"',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('flagship', 400, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+            });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(FormationComponent,
+                    { leader: 'flagship', slot: 0 });
+            });
+            applyHail(world, PEER,
+                { kind: 'requestAssistance', target: 'target' });
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(target(world).components.get(FormationComponent))
+                .toEqual({ leader: 'flagship', slot: 0 });
+        });
+
+    it('isSomeoneElsesEscort: a fleet escort, another player\'s escort and '
+        + 'a bay fighter are; the hailer\'s own escort and a loner are not',
+        () => {
+            const fleet = new Entity().addComponent(FormationComponent,
+                { leader: 'flagship', slot: 0 });
+            const theirs = new Entity().addComponent(PlayerEscortComponent,
+                { player: 'their ship', deal: { kind: 'none' } } as never);
+            const fighter = new Entity().addComponent(OwnerComponent,
+                { owner: 'carrier' });
+            const mine = new Entity().addComponent(FormationComponent,
+                { leader: 'player', slot: 0 });
+            expect(isSomeoneElsesEscort(fleet, 'player')).toBeTrue();
+            expect(isSomeoneElsesEscort(theirs, 'player')).toBeTrue();
+            expect(isSomeoneElsesEscort(fighter, 'player')).toBeTrue();
+            expect(isSomeoneElsesEscort(mine, 'player')).toBeFalse();
+            expect(isSomeoneElsesEscort(new Entity(), 'player')).toBeFalse();
         });
 });
