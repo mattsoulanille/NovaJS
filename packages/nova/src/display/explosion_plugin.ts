@@ -1,6 +1,6 @@
 import { ShipData } from "novadatainterface/ship_data";
 import { ExplosionData } from "novadatainterface/explosion_data";
-import { Emit, EmitFunction, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Emit, EmitFunction, Entities, GetEntity, RunQuery, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
@@ -11,6 +11,7 @@ import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Optional } from "nova_ecs/optional";
+import { Query } from "nova_ecs/query";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
@@ -29,7 +30,9 @@ import {
 import { DeathAISystem } from "../nova_plugin/npc/index.js";
 import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
-import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
+import { SOUND_EXPLOSION_LOOP } from "./ui_sound.js";
+import { LoopDemandResource, loopDemand } from "./looping_sounds.js";
+import { LoopReconcileSystem } from "./sound_plugin.js";
 import { TrailEmissionSystem } from "./particles_plugin.js";
 import { AsyncSystemCleanup } from "nova_ecs/async_system";
 import { AsyncProviderCleanup } from "nova_ecs/provide_async";
@@ -608,41 +611,45 @@ const ShipSecondaryExplosionStaleSystem = new System({
     after: [ExplosionSystem],
 });
 
-// Loops the death sound (snd 371) for the whole duration of the LOCAL
-// player's own explosion sequence. Both events are targeted at the ship
-// that zeroed / died, so the PlayerShipSelector arg fires these only on
-// the local player's ship. ZeroArmorEvent can re-fire while armor stays
-// at zero, but starting a loop already in LoopingSounds is a no-op
-// (playSound), so no debounce is needed; DeathEvent ends the sequence
-// (and respawns), stopping the loop.
-//
-// The armorFullyRestored guard is what keeps that last sentence true: a
-// ZeroArmorEvent replayed after the respawn would restart the loop
-// *after* its stopping DeathEvent, leaving the death sound howling for
-// the rest of the flight.
-const PlayerExplosionSoundStartSystem = new System({
-    name: 'PlayerExplosionSoundStart',
-    events: [ZeroArmorEvent],
-    args: [PlayerShipSelector, Emit, Optional(ArmorComponent)] as const,
-    step(_player, emit, armor) {
-        if (armorFullyRestored(armor)) {
-            return;
-        }
-        emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, loop: true });
-    },
-    // #156 pin (shared: Armor, ShipControl).
-    after: [ShipSecondaryExplosionSystem],
-});
+/** LoopDemandResource owner key of the local player's death loop. */
+export const PLAYER_DEATH_LOOP = 'player-death';
 
-const PlayerExplosionSoundStopSystem = new System({
-    name: 'PlayerExplosionSoundStop',
-    events: [DeathEvent],
-    args: [PlayerShipSelector, Emit] as const,
-    step(_player, emit) {
-        emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, stop: true });
+const PlayerDyingQuery = new Query(
+    [PlayerShipSelector, ShipDyingComponent, Optional(ArmorComponent)] as const,
+    'PlayerDyingQuery');
+
+/**
+ * Loops the death sound (snd 371) for the whole duration of the LOCAL
+ * player's own explosion sequence — derived every frame from the ship's
+ * dying marker, not started and stopped by events (#355; see
+ * looping_sounds.ts). The marker is what this plug-in already keeps
+ * level-correct: set at zero armor, cleared by the death that draws the
+ * final explosion, by the hull's deletion, and — if that DeathEvent never
+ * arrives (a rollback or resync can drop a bridged event) — by
+ * ShipSecondaryExplosionStaleSystem as soon as the mirrored armor is full
+ * again. The edge-triggered stop this replaces had no such backstop, so a
+ * lost DeathEvent left the death sound howling for the rest of the
+ * flight; and armorFullyRestored is checked here too, so not even a frame
+ * of it plays over a respawned ship.
+ */
+const PlayerExplosionSoundSystem = new System({
+    name: 'PlayerExplosionSound',
+    args: [RunQuery, LoopDemandResource, SingletonComponent] as const,
+    step(runQuery, demand) {
+        const dying = runQuery(PlayerDyingQuery)
+            .some(([, , armor]) => !armorFullyRestored(armor));
+        if (dying) {
+            demand.set(PLAYER_DEATH_LOOP, SOUND_EXPLOSION_LOOP);
+        } else {
+            demand.delete(PLAYER_DEATH_LOOP);
+        }
     },
-    // #156 pin (shared: ShipControl).
-    after: [ShipSecondaryExplosionDoneSystem],
+    // #156 pin (shared: entity): reads the marker after every system
+    // that sets or clears it this step, and hands the demand to the
+    // sound plugin's reconciliation in the same frame.
+    after: [ShipDeathSequenceStartSystem, ShipSecondaryExplosionDoneSystem,
+        ShipSecondaryExplosionStaleSystem],
+    before: [LoopReconcileSystem],
 });
 
 /**
@@ -702,8 +709,8 @@ export const ExplosionPlugin: Plugin = {
         world.addSystem(ShipSecondaryExplosionSystem);
         world.addSystem(ShipSecondaryExplosionDoneSystem);
         world.addSystem(ShipSecondaryExplosionStaleSystem);
-        world.addSystem(PlayerExplosionSoundStartSystem);
-        world.addSystem(PlayerExplosionSoundStopSystem);
+        loopDemand(world);
+        world.addSystem(PlayerExplosionSoundSystem);
     },
     remove(world) {
         world.removeSystem(ExplosionSystem);
@@ -715,7 +722,7 @@ export const ExplosionPlugin: Plugin = {
         world.removeSystem(ShipSecondaryExplosionSystem);
         world.removeSystem(ShipSecondaryExplosionDoneSystem);
         world.removeSystem(ShipSecondaryExplosionStaleSystem);
-        world.removeSystem(PlayerExplosionSoundStartSystem);
-        world.removeSystem(PlayerExplosionSoundStopSystem);
+        world.removeSystem(PlayerExplosionSoundSystem);
+        world.resources.get(LoopDemandResource)?.delete(PLAYER_DEATH_LOOP);
     }
 }
