@@ -1,4 +1,5 @@
 import { isLeft } from "fp-ts/lib/Either.js";
+import { Entity } from "nova_ecs/entity";
 import { RollbackSimulation } from "nova_ecs/plugins/rollback_plugin";
 import { restoreWireWorldSnapshot, restoreWorld, snapshotWorld, SnapshotPolicies, SnapshotPoliciesResource, wireSnapshotOfSnapshot, WorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
@@ -21,10 +22,13 @@ import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
-import { relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
+import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
+import { entityStamps, restampEncodedEntity } from "./peer_identity.js";
 import { systemOrderHash } from "./system_order.js";
 import { makeNpc } from "../nova_plugin/npc/index.js";
-import { PEER_LOCAL_COMPONENTS, AnalogControlState } from '../nova_plugin/player/index.js';
+import {
+    PEER_LOCAL_COMPONENTS, AnalogControlState, ControlledByComponent,
+} from '../nova_plugin/player/index.js';
 import { EncodedSimulationBridgeEvent, getRegisteredSimulationBridgeEvents } from "./simulation_bridge_events.js";
 import { SimulationBridgeHostApi, SimulationStatus } from "./simulation_bridge_api.js";
 import { DeltaFrameEncoder, SimulationFrame } from "./simulation_frame.js";
@@ -79,6 +83,25 @@ const FAST_FORWARD_YIELD_TICKS = 120;
  * is actually sent.
  */
 const CHECKPOINT_SNAPSHOT_RETENTION = 32;
+/**
+ * How long a re-entry's re-insertion waits for this peer's OLD copy of an
+ * entity to leave the room (#354): the relay authors removePeer for the
+ * old uuid when the server notices the old socket is gone — at once for a
+ * clean close, within its keepalive (two 30 s timeouts,
+ * socket_channel_server.ts) for a connection that died half-open. 90 s
+ * covers that with margin; past it the entity is given up, loudly.
+ */
+const REINSERTION_HOLD_TICKS = 90 * 60;
+/** Staging attempts for one re-insertion batch before it is given up. */
+const REINSERTION_MAX_ATTEMPTS = 5;
+/**
+ * How many times a refusal notice may send this peer back through a
+ * re-entry (#354, handleRefusal) before it stops and reports the failure.
+ * A re-entry under the right identity is refused zero times; a refusal
+ * that keeps coming back means this peer's identity itself is wrong, and
+ * looping would never end.
+ */
+const MAX_REFUSAL_REENTRIES = 3;
 /** How many rollback-machinery events the black-box ring retains. */
 const ROLLBACK_LOG_CAPACITY = 64;
 
@@ -149,6 +172,43 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     desyncCount = 0;
     private lastJoinSucceeded?: boolean;
     private resyncing = false;
+    /**
+     * ============================================================
+     * Identity (#354): ownership follows the CURRENT connection
+     * ============================================================
+     * The server assigns a peer uuid per socket, so a reconnect hands
+     * this peer a NEW one mid-game (communicator_client.ts identity,
+     * forwarded to a browser worker by worker_room_communicator.ts).
+     * Every entity it owns is still stamped with the old one, and the
+     * room — which stamps every record with the socket it arrived on —
+     * would refuse each of them as somebody else's. So on a change the
+     * host RE-ENTERS (reenter): it captures its own fleet from the
+     * timeline it was on, rebuilds the world from the room (a resync,
+     * under the new id) and re-inserts the fleet, re-stamped, as
+     * ordinary insertion records every peer and the archive apply alike.
+     *
+     * `ownPeerIds` is every id this peer has held: what its entities
+     * may still be stamped with. `actingPeerId` is the one it last
+     * acted under.
+     */
+    private ownPeerIds = new Set<string>();
+    private actingPeerId?: string;
+    /** Own entities waiting to be re-inserted after a re-entry's
+     * rejoin, by uuid, in insertion order (player ships first). */
+    private reinsertions = new Map<string, {
+        entity: EncodedEntity, heldSince?: number, attempts: number,
+    }>();
+    private reinsertionInFlight = false;
+    /** The identity changed while a resync was running: run another once
+     * it ends, so the rejoin happens under the new id. */
+    private resyncAgain = false;
+    /** This peer's fleet as it stood when the last resync began: what an
+     * identity change mid-resync re-inserts (the world being rebuilt
+     * holds nothing worth capturing). */
+    private preResyncFleet?: Map<string, EncodedEntity>;
+    /** Re-entries a refusal notice has caused (handleRefusal). */
+    private refusalReentries = 0;
+    private identityRecoveryFailed = false;
     // protected so failure-path tests can observe whether a resync proceeded
     // (a proceeding resync refreshes this; a cooldown no-op leaves it).
     protected lastResyncTime = -Infinity;
@@ -204,7 +264,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 desync: (tick, hashes, canonical) =>
                     this.handleDesync(tick, hashes, canonical),
                 desyncDumpRequest: () => this.sendDesyncDump(),
+                inputRefused: notice => this.handleRefusal(notice),
             });
+            // The identity this host starts under: no re-entry for it.
+            this.noteIdentity();
         }
         for (const registration of getRegisteredSimulationBridgeEvents()) {
             world.events.get(registration.event).subscribe(({ data, entities }) => {
@@ -308,11 +371,14 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     step(count = 1) {
+        // A reconnect changed this peer's uuid (#354): re-enter under it.
+        this.noteIdentity();
         if (this.resyncing) {
             // Mid-recovery the world is being rebuilt from the input
             // log; stepping it would fork a fresh timeline.
             return;
         }
+        this.scheduleReinsertions();
         this.integrateRemoteInputs();
         for (let i = 0; i < count; i++) {
             if (this.pendingInputs.length > 0) {
@@ -327,11 +393,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 const tick = Math.max(this.rollback.tick + 1,
                     estimated === undefined ? 0 : Math.ceil(estimated) + 1);
                 const communicator = this.world.resources.get(CommunicatorResource);
+                const peerId = communicator?.uuid;
                 const record: InputRecord = {
-                    peerId: communicator?.uuid,
+                    peerId,
                     tick,
                     seq: this.nextSeq++,
-                    inputs: this.pendingInputs,
+                    // An insertion stamped with one of this peer's OLD
+                    // ids (scheduled before a reconnect landed) is
+                    // re-stamped to the id the record goes out under:
+                    // the room applies it under that id, and so must we.
+                    inputs: peerId === undefined ? this.pendingInputs
+                        : this.pendingInputs.map(
+                            input => this.restampInput(input, peerId)),
                 };
                 this.addRecord(tick, record);
                 this.sentRecords.set(record.seq!, tick);
@@ -797,6 +870,9 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             return false;
         }
         this.lastResyncTime = Date.now();
+        // What this peer owns on the timeline being abandoned, should its
+        // identity change before the rebuild lands (reenter).
+        this.preResyncFleet = this.captureOwnFleet();
         this.resyncing = true;
         this.logRollbackEvent('resync');
         try {
@@ -840,7 +916,264 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             }
         } finally {
             this.resyncing = false;
+            this.preResyncFleet = undefined;
+            if (this.resyncAgain) {
+                // The identity changed mid-rebuild: that rebuild may have
+                // joined under the old id. Once more, under the new one.
+                this.resyncAgain = false;
+                void this.resync(true);
+            }
         }
+    }
+
+    /**
+     * Follows this peer's identity (#354). The first id seen is simply
+     * adopted; a CHANGE — a reconnect — re-enters the room under the new
+     * one.
+     */
+    private noteIdentity() {
+        const current = this.world.resources.get(CommunicatorResource)?.uuid;
+        if (current === undefined || current === this.actingPeerId) {
+            return;
+        }
+        const previous = this.actingPeerId;
+        this.actingPeerId = current;
+        this.ownPeerIds.add(current);
+        if (previous === undefined) {
+            return;
+        }
+        this.logRollbackEvent('identityChanged');
+        this.reenter();
+    }
+
+    /** Whether `peerId` is one of this peer's own ids other than `current`. */
+    private isStaleOwnId(peerId: string, current: string): boolean {
+        return peerId !== current && this.ownPeerIds.has(peerId);
+    }
+
+    /**
+     * The re-entry: this peer's fleet captured from the timeline it was on
+     * (or, mid-resync, from the one that resync abandoned), the world
+     * rebuilt from the room under the current identity (a forced resync —
+     * on a restarted server, a room with no memory of this peer at all;
+     * on the same server, a log that may already hold the removePeer for
+     * the old id), then the fleet re-inserted under its own uuids,
+     * re-stamped (scheduleReinsertions). The rebuild is unavoidable either
+     * way: records relayed while the socket was down went to the dead one.
+     */
+    private reenter() {
+        const fleet = this.resyncing ? this.preResyncFleet : this.captureOwnFleet();
+        for (const [uuid, entity] of fleet ?? []) {
+            if (!this.reinsertions.has(uuid)) {
+                this.reinsertions.set(uuid, { entity, attempts: 0 });
+            }
+        }
+        this.logRollbackEvent('reenter', { entities: this.reinsertions.size });
+        if (this.resyncing) {
+            this.resyncAgain = true;
+            return;
+        }
+        void this.resync(true);
+    }
+
+    /**
+     * Every entity in this world stamped with one of this peer's ids, wire
+     * encoded as an insertion record carries it (peer-local markers
+     * stripped). Player ships first — escorts' formations and fighters'
+     * bays name them — then by uuid.
+     */
+    private captureOwnFleet(): Map<string, EncodedEntity> {
+        const fleet = new Map<string, EncodedEntity>();
+        const serializer = this.world.resources.get(SerializerResource);
+        if (!serializer || this.ownPeerIds.size === 0) {
+            return fleet;
+        }
+        const own = [...this.world.entities].filter(([uuid, entity]) =>
+            uuid !== 'singleton'
+            && entityStamps(entity).some(id => this.ownPeerIds.has(id)));
+        const controlled = (entity: Entity) =>
+            entity.components.has(ControlledByComponent) ? 0 : 1;
+        own.sort(([a, entityA], [b, entityB]) =>
+            controlled(entityA) - controlled(entityB)
+            || (a < b ? -1 : a > b ? 1 : 0));
+        for (const [uuid, entity] of own) {
+            const encoded = structuredClone(serializer.encode(entity));
+            fleet.set(uuid, {
+                ...encoded,
+                components: encoded.components.filter(
+                    ([name]) => !PEER_LOCAL_COMPONENTS.has(name)),
+            });
+        }
+        return fleet;
+    }
+
+    /** `input`, with any insertion stamped with a stale own id re-stamped
+     * to `peerId`. The same object when nothing is stale. */
+    private restampInput(input: SimulationInput, peerId: string): SimulationInput {
+        const isStale = (id: string) => this.isStaleOwnId(id, peerId);
+        if (input.kind === 'addEntity') {
+            const entity = restampEncodedEntity(input.entity, isStale, peerId);
+            return entity === input.entity ? input : { ...input, entity };
+        }
+        if (input.kind === 'acceptMission' && input.accepted.ships) {
+            let changed = false;
+            const ships = input.accepted.ships.map(ship => {
+                const entity = restampEncodedEntity(
+                    ship.entity as EncodedEntity, isStale, peerId);
+                changed ||= entity !== ship.entity;
+                return entity === ship.entity ? ship : { ...ship, entity };
+            });
+            return changed
+                ? { ...input, accepted: { ...input.accepted, ships } }
+                : input;
+        }
+        return input;
+    }
+
+    /**
+     * Puts a re-entry's captured fleet back into the room, once the rejoin
+     * has landed. An entity whose uuid the room still holds under one of
+     * this peer's OLD ids — the server has not yet noticed the old socket
+     * is gone, so its removePeer has not landed — waits for it: inserting
+     * over it would be refused (an entity this peer no longer owns), and a
+     * fresh uuid would leave a duplicate. One already back under the
+     * current id is done. One the room holds for somebody else is not this
+     * peer's to replace. The rest go in as ONE batch, staged first, so the
+     * whole fleet lands on one tick.
+     */
+    private scheduleReinsertions() {
+        if (this.reinsertions.size === 0 || this.reinsertionInFlight
+            || this.lastJoinSucceeded !== true) {
+            return;
+        }
+        const current = this.world.resources.get(CommunicatorResource)?.uuid;
+        if (current === undefined) {
+            return;
+        }
+        const batch: [string, EncodedEntity][] = [];
+        for (const [uuid, pending] of [...this.reinsertions]) {
+            const existing = this.world.entities.get(uuid);
+            if (existing) {
+                const stamps = entityStamps(existing);
+                if (stamps.length > 0 && stamps.every(id => id === current)) {
+                    this.reinsertions.delete(uuid);
+                    continue;
+                }
+                if (stamps.some(id => this.isStaleOwnId(id, current))) {
+                    pending.heldSince ??= this.rollback.tick;
+                    if (this.rollback.tick - pending.heldSince
+                        > REINSERTION_HOLD_TICKS) {
+                        console.error(`Giving up re-inserting ${uuid}: the `
+                            + 'room still holds it under this peer\'s old '
+                            + 'identity');
+                        this.reinsertions.delete(uuid);
+                    }
+                    continue;
+                }
+                console.warn(`Not re-inserting ${uuid}: the room holds it `
+                    + 'for another peer');
+                this.reinsertions.delete(uuid);
+                continue;
+            }
+            batch.push([uuid, restampEncodedEntity(pending.entity,
+                id => this.isStaleOwnId(id, current), current)]);
+        }
+        if (batch.length === 0) {
+            return;
+        }
+        this.reinsertionInFlight = true;
+        void this.reinsertBatch(batch).finally(() => {
+            this.reinsertionInFlight = false;
+        });
+    }
+
+    private async reinsertBatch(batch: [string, EncodedEntity][]) {
+        try {
+            // Stage every entity's game data in this world first (a
+            // resync's genesis restore keeps the caches, but a capture
+            // replayed onto a rebuilt world must not assume it), then
+            // schedule the whole batch synchronously: one record.
+            await stageEncodedComponentsGameData(this.simulationGameData,
+                batch.map(([, entity]) => entity.components));
+            for (const [, entity] of batch) {
+                const decoded = this.serializer.decode(entity);
+                if (isLeft(decoded)) {
+                    throw new Error('Failed to decode a re-inserted entity: '
+                        + this.serializer.describeDecodeFailure(
+                            entity, decoded.left));
+                }
+                await loadEntityGameData(this.world, decoded.right);
+            }
+        } catch (error) {
+            for (const [uuid] of batch) {
+                const pending = this.reinsertions.get(uuid);
+                if (pending && ++pending.attempts >= REINSERTION_MAX_ATTEMPTS) {
+                    this.reinsertions.delete(uuid);
+                }
+            }
+            console.error('Failed to stage a re-entry\'s fleet:', error);
+            return;
+        }
+        for (const [uuid, entity] of batch) {
+            // Still wanted (a later re-entry may have re-queued it, and the
+            // world may have changed while staging awaited)?
+            if (!this.reinsertions.has(uuid) || this.world.entities.has(uuid)) {
+                continue;
+            }
+            this.reinsertions.delete(uuid);
+            this.schedule({ kind: 'addEntity', uuid, entity });
+        }
+        this.logRollbackEvent('reinserted', { entities: batch.length });
+    }
+
+    /**
+     * The room refused one of this peer's insertions (#354; the archive
+     * reports every refusal once, rollback_relay.ts reportRefusal). Logged
+     * once per notice. When the refused entity is one this peer holds
+     * under an id other than the one the room stamped the record with —
+     * the identity it inserted under is stale — it re-enters, re-stamped
+     * to its current id, rather than desync at every checkpoint. Bounded:
+     * a re-entry that keeps being refused means the current id is wrong
+     * too, and the failure is reported instead (giveUpIdentityRecovery).
+     * Any other refusal is the room's deterministic verdict; nothing a
+     * re-entry would change.
+     */
+    private handleRefusal(notice: InputRefusedNotice) {
+        console.warn(`The room refused this peer's ${notice.input} of `
+            + `${notice.uuid} (record tick ${notice.tick}): ${notice.reason}`);
+        this.logRollbackEvent('inputRefused', {
+            uuid: notice.uuid, recordTick: notice.tick,
+        });
+        const local = this.world.entities.get(notice.uuid);
+        const insertedStale = local !== undefined && entityStamps(local)
+            .some(id => id !== notice.peer && this.ownPeerIds.has(id));
+        if (!insertedStale || this.identityRecoveryFailed) {
+            return;
+        }
+        if (this.refusalReentries >= MAX_REFUSAL_REENTRIES) {
+            this.giveUpIdentityRecovery();
+            return;
+        }
+        this.refusalReentries++;
+        this.reenter();
+    }
+
+    /**
+     * The room keeps refusing this peer's fleet: stop re-entering.
+     *
+     * HOOK (#333): this is where the resync give-up's terminal path belongs
+     * — save, the in-game desync dialog, the frozen universe and its Reload
+     * button (client/resync_failure.ts and the client's `desynced` state,
+     * on branch fix/resync-giveup-dialog, not merged on this base). Until
+     * then the failure is reported through status().identityRecoveryFailed
+     * and the console only.
+     */
+    private giveUpIdentityRecovery() {
+        this.identityRecoveryFailed = true;
+        console.error('The room keeps refusing this peer\'s fleet under its '
+            + `current identity; giving up after ${MAX_REFUSAL_REENTRIES} `
+            + 're-entries.');
+        this.logRollbackEvent('identityRecoveryFailed');
     }
 
     status(): SimulationStatus {
@@ -848,6 +1181,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             tick: this.rollback.tick,
             desyncCount: this.desyncCount,
             joined: this.lastJoinSucceeded,
+            ...(this.identityRecoveryFailed
+                ? { identityRecoveryFailed: true } : {}),
         };
     }
 

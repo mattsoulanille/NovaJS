@@ -3,6 +3,7 @@ import * as t from 'io-ts';
 import { Entity } from "nova_ecs/entity";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { EncodedEntity, formatIoTsErrors, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { Resource } from "nova_ecs/resource";
 import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
 import {
@@ -176,7 +177,8 @@ export function applyInputRecords(world: World, records: InputRecord[]) {
         return peerA < peerB ? -1 : peerA > peerB ? 1 : 0;
     });
     for (const record of sorted) {
-        applySimulationInputs(world, record.inputs, record.peerId);
+        applySimulationInputs(world, record.inputs, record.peerId,
+            { tick: record.tick, seq: record.seq });
     }
 }
 
@@ -337,28 +339,84 @@ function mayActOn(world: World, peerId: string | undefined,
     return entity !== undefined && ownsEntity(entity, peerId);
 }
 
-/** Whether `peerId` may insert `entity` at `uuid`. */
-function mayInsert(world: World, peerId: string | undefined, uuid: string,
-    entity: Entity): boolean {
+/**
+ * Why `peerId` may NOT insert `entity` at `uuid`, or undefined when it may.
+ * The reason is for the refusal notice (InputRefusalResource below) and
+ * the log; the decision is the same pure function of synced state as
+ * ever.
+ */
+function insertRefusal(world: World, peerId: string | undefined, uuid: string,
+    entity: Entity): string | undefined {
     if (peerId === undefined || isServerPeer(world, peerId)) {
-        return true;
+        return undefined;
     }
     if (uuid === SINGLETON_UUID) {
-        return false;
+        return 'names the singleton';
     }
     const existing = world.entities.get(uuid);
     if (existing && !ownsEntity(existing, peerId)) {
-        return false;
+        return 'the uuid is held by an entity this peer does not own';
     }
     const controller = entity.components.get(ControlledByComponent)?.peerId;
     if (controller !== undefined && controller !== peerId) {
-        return false;
+        return `declares controller ${controller}`;
     }
     const owner = entity.components.get(MultiplayerData)?.owner;
     if (owner !== undefined && owner !== peerId) {
-        return false;
+        return `declares owner ${owner}`;
     }
-    return true;
+    return undefined;
+}
+
+/**
+ * One refused insertion, as {@link InputRefusalResource} hears of it.
+ * `tick`/`seq` name the record when the caller knows it (applyInputRecords
+ * always does).
+ */
+export interface InputRefusal {
+    peerId: string;
+    tick?: number;
+    seq?: number;
+    uuid: string;
+    /** The input kind: 'addEntity', or 'missionShip' for an acceptMission's
+     * special ship. */
+    input: string;
+    reason: string;
+}
+
+/**
+ * Who hears of a refused insertion (#354). Optional, and set on ONE world
+ * only: the server's archive (room_archive.ts), which applies every logged
+ * record exactly once, in log order — so each refusal is reported once,
+ * and the relay tells the sender. A peer's world never sets it: it applies
+ * the same records (and replays them on every rollback), and its drop is
+ * the same deterministic drop. Reporting never changes the decision.
+ */
+export const InputRefusalResource =
+    new Resource<(refusal: InputRefusal) => void>('InputRefusalResource');
+
+/** The record an input came from, for refusal reports. */
+interface InputOrigin {
+    tick?: number;
+    seq?: number;
+}
+
+function reportRefusal(world: World, refusal: Omit<InputRefusal, 'tick' | 'seq'>,
+    origin: InputOrigin | undefined) {
+    const report = world.resources.get(InputRefusalResource);
+    if (!report) {
+        return;
+    }
+    try {
+        report({
+            ...refusal,
+            ...(origin?.tick !== undefined ? { tick: origin.tick } : {}),
+            ...(origin?.seq !== undefined ? { seq: origin.seq } : {}),
+        });
+    } catch (error) {
+        // A reporting failure must never become an input failure.
+        console.warn('Failed to report a refused insertion:', error);
+    }
 }
 
 /**
@@ -366,7 +424,7 @@ function mayInsert(world: World, peerId: string | undefined, uuid: string,
  * (the same rule as addEntity, applied to the record's batch).
  */
 function authorizeMissionShips(world: World, peerId: string | undefined,
-    accepted: AcceptedMission): AcceptedMission {
+    accepted: AcceptedMission, origin?: InputOrigin): AcceptedMission {
     const serializer = world.resources.get(SerializerResource);
     if (!accepted.ships || !serializer) {
         return accepted;
@@ -377,12 +435,18 @@ function authorizeMissionShips(world: World, peerId: string | undefined,
             // applyAcceptMission drops (and reports) undecodable ships.
             return true;
         }
-        if (mayInsert(world, peerId, ship.uuid, decoded.right)) {
+        const refusal = insertRefusal(world, peerId, ship.uuid, decoded.right);
+        if (refusal === undefined) {
             return true;
         }
         warnDrop(peerId, 'missionShip', () =>
             `Dropping mission ship ${ship.uuid} from ${peerId}: `
-            + 'not authorised to insert it');
+            + `not authorised to insert it (${refusal})`);
+        if (peerId !== undefined) {
+            reportRefusal(world, {
+                peerId, uuid: ship.uuid, input: 'missionShip', reason: refusal,
+            }, origin);
+        }
         return false;
     });
     return ships.length === accepted.ships.length
@@ -413,10 +477,10 @@ function warnDrop(peerId: string | undefined, kind: unknown,
  * is deterministic — the same input throws identically everywhere.
  */
 export function applySimulationInputs(world: World, inputs: SimulationInput[],
-    peerId?: string) {
+    peerId?: string, origin?: InputOrigin) {
     for (const input of inputs) {
         try {
-            applySimulationInput(world, input, peerId);
+            applySimulationInput(world, input, peerId, origin);
         } catch (error) {
             const kind = (input as { kind?: unknown })?.kind;
             warnDrop(peerId, kind, () =>
@@ -426,7 +490,7 @@ export function applySimulationInputs(world: World, inputs: SimulationInput[],
 }
 
 function applySimulationInput(world: World, input: SimulationInput,
-    peerId: string | undefined) {
+    peerId: string | undefined, origin: InputOrigin | undefined) {
     switch (input.kind) {
         case 'control': {
             // The same predicate the wire codec enforces on a relayed
@@ -484,10 +548,18 @@ function applySimulationInput(world: World, input: SimulationInput,
                     + serializer.describeDecodeFailure(input.entity, decoded.left));
                 break;
             }
-            if (!mayInsert(world, peerId, input.uuid, decoded.right)) {
+            const refusal = insertRefusal(world, peerId, input.uuid,
+                decoded.right);
+            if (refusal !== undefined) {
                 warnDrop(peerId, input.kind, () =>
                     `Dropping addEntity input for ${input.uuid} `
-                    + `from ${peerId}: not authorised to insert it`);
+                    + `from ${peerId}: not authorised to insert it (${refusal})`);
+                if (peerId !== undefined) {
+                    reportRefusal(world, {
+                        peerId, uuid: input.uuid, input: 'addEntity',
+                        reason: refusal,
+                    }, origin);
+                }
                 break;
             }
             deriveEntityComponents(world, decoded.right);
@@ -496,7 +568,7 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'acceptMission': {
             applyAcceptMission(world, peerId,
-                authorizeMissionShips(world, peerId, input.accepted));
+                authorizeMissionShips(world, peerId, input.accepted, origin));
             break;
         }
         case 'escortAction': {
@@ -524,9 +596,19 @@ function applySimulationInput(world: World, input: SimulationInput,
                     + `from ${peerId}: only the server removes peers`);
                 break;
             }
+            // Everything the departed peer OWNED goes with it: its player
+            // ship (ControlledBy) and everything it inserted
+            // (MultiplayerData.owner: escorts, bay fighters, mission
+            // ships, the NPCs it spawned) — the ownership rule of the
+            // Trust model (rollback_protocol.ts item 5). Controlled-only
+            // removal used to leave a departed peer's escorts in the
+            // room for good, owned by a uuid nobody holds any more; a
+            // client that reconnects under a new uuid re-inserts them
+            // (simulation_bridge_host.ts reenter), which those orphans
+            // would collide with (#354).
             for (const [uuid, entity] of [...world.entities]) {
-                if (entity.components.get(ControlledByComponent)?.peerId
-                    === input.peerId) {
+                if (uuid !== SINGLETON_UUID
+                    && ownsEntity(entity, input.peerId)) {
                     world.entities.delete(uuid);
                 }
             }

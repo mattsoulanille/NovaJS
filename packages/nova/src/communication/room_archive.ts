@@ -5,7 +5,7 @@ import { World } from "nova_ecs/world";
 import { PEER_LOCAL_COMPONENTS } from "../nova_plugin/player/index.js";
 import { ArchiveBaseline, STATE_HASH_INTERVAL } from "./rollback_protocol.js";
 import { RollbackRelay } from "./rollback_relay.js";
-import { applyInputRecords, InputRecord, loadInputRecordsGameData } from "./simulation_input.js";
+import { applyInputRecords, InputRecord, InputRefusalResource, loadInputRecordsGameData } from "./simulation_input.js";
 
 /** How often the archive captures a baseline: 30 seconds at 60Hz. */
 const ARCHIVE_INTERVAL_TICKS = 1800;
@@ -147,7 +147,13 @@ export class RoomArchive {
         this.updating = true;
         try {
             if (!this.world) {
-                this.world = await this.makeWorld();
+                const world = await this.makeWorld();
+                // The archive applies every logged record exactly once, in
+                // log order: the one world whose authorisation drops are
+                // reported, so the relay can tell the sender (#354).
+                world.resources.set(InputRefusalResource,
+                    refusal => this.relay.reportRefusal(refusal));
+                this.world = world;
             }
             const world = this.world;
             const target = this.relay.tick;

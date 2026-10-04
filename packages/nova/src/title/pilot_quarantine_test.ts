@@ -129,7 +129,7 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
 
             let error: unknown;
             await preparePlayerStart(runtime, new URLSearchParams(),
-                'peer-1').then(
+                () => 'peer-1').then(
                     start => fail('entered with a substitute ship: '
                         + start.ship.components.get(ShipComponent)?.id),
                     e => { error = e; });
@@ -150,7 +150,7 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
         pilots({ outfits: [[STOCK_OUTFIT, 1], [MISSING_OUTFIT, 2]] });
         const { runtime } = runtimeFor(gameData());
         await expectAsync(preparePlayerStart(runtime, new URLSearchParams(),
-            'peer-1')).toBeRejectedWithError(MissingSaveContentError,
+            () => 'peer-1')).toBeRejectedWithError(MissingSaveContentError,
                 /plug-in "missing-plugin" \(outfit missing-plugin:130\)/);
     });
 
@@ -164,7 +164,7 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
             const state = new ClientStateSlot();
             state.apply(enterGame);
             const error = await preparePlayerStart(runtime,
-                new URLSearchParams(), 'peer-1').then(() => undefined, e => e);
+                new URLSearchParams(), () => 'peer-1').then(() => undefined, e => e);
             state.apply(enterFailed);
 
             const notice = quarantineOnEntryFailure(error, store);
@@ -194,7 +194,7 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
             expect(canEnterGame(state.state)).toBeTrue();
             expect(selectPilot(other.id, store)?.id).toBe(other.id);
             const start = await preparePlayerStart(runtimeFor(gameData()).runtime,
-                new URLSearchParams(), 'peer-1');
+                new URLSearchParams(), () => 'peer-1');
             expect(start.ship.components.get(ShipComponent)?.id)
                 .toBe(STOCK_SHIP);
             const fresh = createPilot(profile('New Pilot'), store);
@@ -207,13 +207,13 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
             const { stranded } = pilots({ ship: MISSING_SHIP });
             const error = await preparePlayerStart(
                 runtimeFor(gameData()).runtime, new URLSearchParams(),
-                'peer-1').then(() => undefined, e => e);
+                () => 'peer-1').then(() => undefined, e => e);
             quarantineOnEntryFailure(error, store);
             expect(getActivePilot(store)?.quarantine).toBeDefined();
 
             const start = await preparePlayerStart(
                 runtimeFor(gameData([MISSING_SHIP])).runtime,
-                new URLSearchParams(), 'peer-1');
+                new URLSearchParams(), () => 'peer-1');
             expect(start.ship.components.get(ShipComponent)?.id)
                 .toBe(MISSING_SHIP);
             releaseActivePilotQuarantine(store);

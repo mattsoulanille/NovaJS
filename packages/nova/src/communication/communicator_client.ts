@@ -10,6 +10,16 @@ export class CommunicatorClient implements Communicator {
     readonly peers = new Peers(new BehaviorSubject(new Set()));
     readonly connected: BehaviorSubject<boolean>;
     uuid: string | undefined = undefined;
+    /**
+     * `uuid`, as a stream: the server assigns a peer uuid per SOCKET, so
+     * every reconnect (a network drop, a server restart) announces a NEW
+     * one in its uuid frame (#354). Whatever stamped or forwarded the old
+     * id — the simulation worker's copy of it (client/system_entry.ts),
+     * the ownership of the fleet the client holds (client/identity.ts) —
+     * follows the current value from here. Emits on every uuid frame,
+     * after `uuid` and `servers` are updated.
+     */
+    readonly identity = new BehaviorSubject<string | undefined>(undefined);
 
     constructor(private channel: ChannelClient) {
         this.connected = channel.connected;
@@ -54,6 +64,7 @@ export class CommunicatorClient implements Communicator {
                 case MessageType.uuid:
                     this.uuid = communicatorMessage.uuid;
                     this.servers.next(new Set(communicatorMessage.servers));
+                    this.identity.next(communicatorMessage.uuid);
                     break;
             }
         } else {

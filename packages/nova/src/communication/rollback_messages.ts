@@ -24,7 +24,13 @@ export interface RollbackMessageHandlers {
     inputLog(records: InputRecord[]): void;
     desync(tick: number, hashes: [string, string][], canonical?: string): void;
     desyncDumpRequest(): void;
+    /** The room refused one of this peer's insertions (#354). Optional:
+     * a receiver that does not handle it ignores it, as before. */
+    inputRefused?(notice: InputRefusedNotice): void;
 }
+
+export type InputRefusedNotice =
+    Extract<RollbackProtocolMessage, { kind: 'inputRefused' }>;
 
 /**
  * Receives relayed rollback-protocol messages from the room and
@@ -70,6 +76,9 @@ export function subscribeRollbackMessages(
                 // The server wants this peer's state history as a
                 // reference (e.g. its own archive was outvoted).
                 handlers.desyncDumpRequest();
+                break;
+            case 'inputRefused':
+                handlers.inputRefused?.(rollbackMessage);
                 break;
         }
     });

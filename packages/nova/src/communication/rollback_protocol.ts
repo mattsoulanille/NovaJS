@@ -139,6 +139,16 @@ export const STATE_HASH_INTERVAL = 60;
 //      and the desync hash input all change; a v7 peer cannot decode a
 //      v8 marker. The pilot save moved to version 4 alongside
 //      (save_migrations.ts v3 -> v4 rewrites each saved escort's marker).
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the `inputRefused` kind (#354, server -> peer):
+//    the archive reports each insertion the room refused for ownership or
+//    identity, once, to the peer that sent it, which re-stamps its fleet
+//    and re-enters instead of desyncing forever. A new union member, so
+//    the fingerprint changes and the join gate keeps the two builds apart.
+//    In the same change `removePeer` removes everything the departed peer
+//    OWNED (MultiplayerData.owner), not only what it controlled — what
+//    this file's Trust model and the client's comments always said it
+//    did; builds are version-gated, so no mixed room applies both rules.
 //    (#188, the Map codec, changed nothing on the wire: Map entries
 //    already encode byte-identically to an Avro map, and the object form
 //    would lose insertion order — see nova_ecs datatypes/map.ts.)
@@ -303,6 +313,24 @@ export type RollbackProtocolMessage =
      * hash differs from the room's (#155). The peer logs it and joins
      * anyway — the fingerprint gate is the refusal mechanism. */
     | { kind: 'joinWarning', reason: string }
+    /**
+     * The room refused one of this peer's insertions (server -> peer,
+     * #354). Ownership is enforced when a record is APPLIED (Trust model
+     * item 5), deterministically and therefore silently on every world;
+     * the archive — the log's true simulation — reports each refusal it
+     * applies, once, so the sender learns of it instead of desyncing
+     * forever. `peer` is the identity the relay stamped the record with
+     * (this peer's socket uuid at the time); `tick`/`seq` name the
+     * record, `uuid` the refused entity, `input` the input kind
+     * (addEntity, or missionShip for an acceptMission's ship). The peer
+     * logs it and, when the refused entity is one it stamped with a
+     * stale identity, re-stamps and re-enters (simulation_bridge_host.ts
+     * handleRefusal).
+     */
+    | {
+        kind: 'inputRefused', peer: string, tick: number, seq?: number,
+        uuid: string, input: string, reason: string,
+    }
     | {
         kind: 'catchUp', tick: number, records: InputRecord[],
         baseline?: ArchiveBaseline,
@@ -392,6 +420,17 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
         ])),
         t.strict({ kind: t.literal('joinRefused'), reason: t.string }),
         t.strict({ kind: t.literal('joinWarning'), reason: t.string }),
+        t.exact(t.intersection([
+            t.type({
+                kind: t.literal('inputRefused'),
+                peer: t.string,
+                tick: WireTick,
+                uuid: t.string,
+                input: t.string,
+                reason: t.string,
+            }),
+            t.partial({ seq: WireTick }),
+        ])),
         t.exact(t.intersection([
             t.type({
                 kind: t.literal('catchUp'),

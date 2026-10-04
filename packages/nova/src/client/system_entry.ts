@@ -34,6 +34,9 @@ import type { AsyncSimulationBridgeClient } from '../communication/async_simulat
 import {
     makeBrowserSimulationBridgeClient,
 } from '../communication/simulation_bridge_browser_worker.js';
+import {
+    forwardRoomToWorker, workerRoomState,
+} from '../communication/worker_room_communicator.js';
 import { DebugSettings } from '../debug_settings.js';
 import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
@@ -345,33 +348,15 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // subscription after init, every join's reply was dropped and the
     // world silently started at tick 0 in a room with real history (the
     // first desync's resync then papered over it). The worker buffers
-    // anything that arrives before its communicator exists.
-    roomSubscriptions = [
-        room.messages.subscribe(({ source, message }) => {
-            void host.receiveRoomMessage(source, message);
-        }),
-        room.peers.current.subscribe(peers => {
-            void host.updateRoomState({ peers });
-        }),
-        room.connected.subscribe(connected => {
-            void host.updateRoomState({ connected });
-        }),
-        // The server's uuid set arrives in its first frame; a system
-        // entered before that must still learn it.
-        room.servers.subscribe(servers => {
-            void host.updateRoomState({ servers });
-        }),
-    ];
+    // anything that arrives before its communicator exists. The
+    // forwarding includes this peer's IDENTITY: a reconnect assigns a new
+    // uuid mid-game, and the worker must follow it (#354).
+    roomSubscriptions = forwardRoomToWorker(room, host);
 
     await scope.race(host.init(
         {
             systemId: to,
-            roomState: {
-                uuid: room.uuid,
-                peers: room.peers.current.value,
-                connected: room.connected.value,
-                servers: room.servers.value,
-            },
+            roomState: workerRoomState(room),
         },
         Comlink.proxy(async (message, destination) => {
             room.sendMessage(message, destination);

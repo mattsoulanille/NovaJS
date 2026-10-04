@@ -55,7 +55,8 @@ export interface PlayerStart {
  * control-bit context are stashed on the runtime for the session.
  */
 export async function preparePlayerStart(runtime: ClientRuntime,
-    query: URLSearchParams, ownerUuid: string): Promise<PlayerStart> {
+    query: URLSearchParams, ownerUuid: () => string | undefined):
+    Promise<PlayerStart> {
     const { gameData, fleet, saves } = runtime;
     const ids = await gameData.ids;
     // How this server namespaced the plug-ins' control bits: needed to
@@ -162,9 +163,18 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         ship.components.set(OutfitsStateComponent,
             new Map(save.outfits.map(([id, count]) => [id, { count }])));
     }
-    ship.components.set(MultiplayerData, { owner: ownerUuid });
+    // The CURRENT connection's uuid, read now (all the awaits above can
+    // outlive a reconnect, #354). The startup insertion re-stamps it again
+    // with whatever is current then (fleet_insertion.ts), and the held
+    // fleet follows any later change (client/identity.ts).
+    const owner = ownerUuid();
+    if (owner !== undefined) {
+        ship.components.set(MultiplayerData, { owner });
+    }
     ship.components.set(PlayerShipSelector, undefined);
-    ship.components.set(ControlledByComponent, { peerId: ownerUuid });
+    if (owner !== undefined) {
+        ship.components.set(ControlledByComponent, { peerId: owner });
+    }
 
     // Player state: restore it from the save, or start a fresh pilot
     // from the chär (credits, date, OnStart control bits, starting legal
