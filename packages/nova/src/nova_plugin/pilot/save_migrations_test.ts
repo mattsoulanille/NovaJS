@@ -23,8 +23,13 @@ import {
     restorePlayerState, SaveData, SavedEscort, SAVE_VERSION,
 } from './save_game.js';
 import {
-    FIRST_SAVE_VERSION, RawSaveData, SAVE_MIGRATIONS, saveDefaults,
+    FIRST_SAVE_VERSION, PLUGIN_PREFIX_RENAMES, RawSaveData, SAVE_MIGRATIONS,
+    saveDefaults,
 } from './save_migrations.js';
+import { migrateRaw } from '../../common/migrations.js';
+import {
+    describeMissingSaveContent, missingSaveContent,
+} from './save_content.js';
 
 /**
  * ============================================================================
@@ -300,6 +305,42 @@ const HISTORY: HistoricalSave[] = [
         }),
         restored: FRESH_VIEW,
     },
+    {
+        name: 'v4, 2026-10-03: escorts with each queued deal as `deal`',
+        version: 4,
+        data: {
+            ...current(),
+            credits: 1234,
+            ranks: ['nova:147'],
+            cronStates: CRONS,
+            controlBits: pairs([['nova', 342]]),
+            plugins: ['arpia'],
+            escorts: [
+                escortWithMarker('selling', {
+                    player: 'p', parent: 'p', deal: { kind: 'sale' },
+                }),
+            ],
+        },
+        expected: current({
+            credits: 1234,
+            ranks: ['nova:147'],
+            cronStates: CRONS,
+            controlBits: pairs([['nova', 342]]),
+            plugins: ['arpia'],
+            escorts: [
+                escortWithMarker('selling', {
+                    player: 'p', parent: 'p', deal: { kind: 'sale' },
+                }),
+            ],
+        }),
+        restored: {
+            ...FRESH_VIEW,
+            credits: { credits: 1234 },
+            ranks: new Set(['nova:147']),
+            cronStates: new Map(CRONS),
+            controlBits: new Set([342]),
+        },
+    },
 ];
 
 describe('save_migrations list', () => {
@@ -312,7 +353,7 @@ describe('save_migrations list', () => {
             expect(migration.summary.length).toBeGreaterThan(0);
         });
         expect(SAVE_VERSION).toBe(FIRST_SAVE_VERSION + SAVE_MIGRATIONS.length);
-        expect(SAVE_VERSION).toBe(4);
+        expect(SAVE_VERSION).toBe(5);
     });
 
     it('every migration is idempotent on its own output', () => {
@@ -426,6 +467,260 @@ describe('save_migrations list', () => {
     });
 });
 
+/**
+ * ============================================================================
+ * 4 -> 5: the #310 plug-in prefix transition
+ * ============================================================================
+ *
+ * Synthetic: the plug-in names and ids below are made up around the
+ * table's one entry (`HypergatePassv1` -> `HypergatePassv1.0`, keyed
+ * exactly as the maintainer's installed plug-in is) and an ambiguous pair
+ * (`X 1.0` and `X 1.1`, both `X 1` under the old rule). No game data.
+ */
+describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
+    const OLD = 'HypergatePassv1';
+    const NEW = 'HypergatePassv1.0';
+    const toV5 = SAVE_MIGRATIONS[3].migrate;
+
+    /** A saved escort whose blob names the plug-in `prefix`'s content. */
+    function escortNaming(prefix: string): SavedEscort {
+        return {
+            uuid: 'escort-hg',
+            entity: {
+                components: [
+                    ['Ship', { id: `${prefix}:128` }],
+                    ['OutfitsState', [[`${prefix}:447`, { count: 1 }],
+                        ['nova:200', { count: 2 }]]],
+                    ['WeaponsState', { [`${prefix}:130`]: { count: 1 } }],
+                    ['Cargo', [[`junk:${prefix}:12`, 3]]],
+                    ['PlayerEscort', {
+                        player: 'p', parent: 'p', deal: { kind: 'none' },
+                    }],
+                ],
+                name: `${prefix}:447`,
+            },
+        };
+    }
+
+    /** A v4 pilot owning `prefix`'s outfit, ranks, crons and bit b918. */
+    function v4Pilot(prefix: string): Record<string, unknown> {
+        return {
+            ...current(),
+            ship: `${prefix}:128`,
+            outfits: pairs([['nova:200', 1], [`${prefix}:447`, 1]]),
+            missions: [[`${prefix}:200`, {
+                ...MISSION, id: `${prefix}:200`, acceptedAt: `${prefix}:128`,
+            }]],
+            cargo: pairs([['cargo:2', 3], [`junk:${prefix}:12`, 4],
+                [`mission:${prefix}:200`, 10]]),
+            ranks: [`${prefix}:159`, `${prefix}:160`, `${prefix}:161`,
+                `${prefix}:162`, 'nova:147'],
+            cronStates: [[`${prefix}:386`, CRON], [`${prefix}:387`, CRON],
+                [`${prefix}:388`, CRON], ['nova:300', CRON]],
+            reputations: pairs([[`${prefix}:128`, 5], ['nova:128', -15]]),
+            discovery: pairs([[`${prefix}:130`, 2], ['nova:130', 1]]),
+            novaControlBits: pairs([['342', 1], ['10000', 1]]),
+            controlBits: pairs([['nova', 342], [prefix, 918]]),
+            plugins: ['arpia', prefix, 'singularity'],
+            escorts: [escortNaming(prefix)],
+            autoAbortShips: [{
+                ...SQUAD_JSON, missionId: `${prefix}:614`,
+                shipObjective: {
+                    ...SQUAD_JSON.shipObjective, dudeId: `${prefix}:130`,
+                },
+            }],
+        };
+    }
+
+    it('names only prefixes that are unambiguous by construction', () => {
+        // One entry, the one #310 changed among the installed plug-ins:
+        // the old prefix is the new one cut at its first dot.
+        expect([...PLUGIN_PREFIX_RENAMES]).toEqual([[OLD, NEW]]);
+        for (const [old, renamed] of PLUGIN_PREFIX_RENAMES) {
+            expect(old).not.toContain('.');
+            expect(renamed.slice(0, renamed.indexOf('.'))).toBe(old);
+        }
+    });
+
+    it('loads a v4 save owning the renamed plug-in\'s content as v5, every '
+        + 'id and namespace re-keyed, and does not quarantine it', () => {
+            const result = decodeSaveDetailed(JSON.stringify(
+                { version: 4, data: v4Pilot(OLD) }));
+            expect(result.ok).toBeTrue();
+            if (!result.ok) {
+                return;
+            }
+            expect(result.version).toBe(4);
+            // Exactly what this build reads for the same pilot written
+            // under the new prefix.
+            const expected = decodeSaveDetailed(JSON.stringify(
+                { version: SAVE_VERSION, data: v4Pilot(NEW) }));
+            expect(expected.ok).toBeTrue();
+            expect(result.data).toEqual(expected.ok ? expected.data : undefined!);
+            const save = result.data;
+            expect(save.ship).toBe(`${NEW}:128`);
+            expect(save.outfits).toEqual([['nova:200', 1], [`${NEW}:447`, 1]]);
+            expect(save.ranks).toEqual([`${NEW}:159`, `${NEW}:160`,
+                `${NEW}:161`, `${NEW}:162`, 'nova:147']);
+            expect(save.cronStates.map(([id]) => id)).toEqual([`${NEW}:386`,
+                `${NEW}:387`, `${NEW}:388`, 'nova:300']);
+            expect(save.controlBits).toEqual([['nova', 342], [NEW, 918]]);
+            expect(save.plugins).toEqual(['arpia', NEW, 'singularity']);
+            expect(save.cargo).toEqual([['cargo:2', 3], [`junk:${NEW}:12`, 4],
+                [`mission:${NEW}:200`, 10]]);
+            expect(save.missions[0][0]).toBe(`${NEW}:200`);
+            expect(save.missions[0][1].id).toBe(`${NEW}:200`);
+            expect(save.missions[0][1].acceptedAt).toBe(`${NEW}:128`);
+            expect(save.reputations).toEqual(
+                [[`${NEW}:128`, 5], ['nova:128', -15]]);
+            expect(save.discovery).toEqual([[`${NEW}:130`, 2], ['nova:130', 1]]);
+            expect(save.autoAbortShips[0].missionId).toBe(`${NEW}:614`);
+            expect(save.autoAbortShips[0].shipObjective.dudeId)
+                .toBe(`${NEW}:130`);
+            expect(save.escorts).toEqual([escortNaming(NEW)]);
+            // Physical bit numbers carry no prefix.
+            expect(save.novaControlBits).toEqual([['342', 1], ['10000', 1]]);
+            const text = encodeSave(save);
+            expect(text).not.toContain(`"${OLD}:`);
+            expect(text).not.toContain(`"${OLD}"`);
+
+            // The #131 check against a data set serving the NEW prefix.
+            expect(missingSaveContent(save, {
+                Ship: ['nova:128', `${NEW}:128`],
+                Outfit: ['nova:200', `${NEW}:447`],
+            })).toEqual([]);
+        });
+
+    it('re-keys inside a saved escort\'s entity blob, keys included', () => {
+        const migrated = toV5(structuredClone({
+            ...current(), escorts: [escortNaming(OLD)],
+        }));
+        expect(migrated.escorts).toEqual([escortNaming(NEW)]);
+    });
+
+    it('leaves an AMBIGUOUS old prefix alone, so the #131 quarantine names '
+        + 'both candidates', () => {
+            // `X 1` was the old prefix of BOTH "X 1.0" and "X 1.1": no
+            // table entry can say which one a save meant.
+            const result = decodeSaveDetailed(JSON.stringify(
+                { version: 4, data: v4Pilot('X 1') }));
+            const asWritten = decodeSaveDetailed(JSON.stringify(
+                { version: SAVE_VERSION, data: v4Pilot('X 1') }));
+            expect(result.ok).toBeTrue();
+            if (!result.ok || !asWritten.ok) {
+                return;
+            }
+            expect(result.data).toEqual(asWritten.data);
+            expect(result.data.outfits)
+                .toEqual([['nova:200', 1], ['X 1:447', 1]]);
+            expect(result.data.controlBits)
+                .toEqual([['nova', 342], ['X 1', 918]]);
+
+            const missing = missingSaveContent(result.data, {
+                Ship: ['nova:128', 'X 1.0:128', 'X 1.1:129'],
+                Outfit: ['nova:200', 'X 1.0:447', 'X 1.1:447'],
+            });
+            expect(missing).toEqual([
+                { kind: 'ship', id: 'X 1:128', renamedAs: ['X 1.0', 'X 1.1'] },
+                { kind: 'outfit', id: 'X 1:447', renamedAs: ['X 1.0', 'X 1.1'] },
+            ]);
+            expect(describeMissingSaveContent(missing)).toContain(
+                'the plug-in "X 1" (ship X 1:128, outfit X 1:447), which is '
+                + 'probably the installed "X 1.0" or "X 1.1"');
+        });
+
+    it('changes nothing but the version of a save with no affected ids', () => {
+        const data = {
+            ...current(),
+            ranks: ['nova:147'],
+            controlBits: pairs([['nova', 342], ['arpia', 2050]]),
+            plugins: ['arpia', NEW, 'Starbridge Bay'],
+            // Not ids: the bare prefix as a name, a non-numeric suffix,
+            // the old id inside free text, and a trailing extra field.
+            escorts: [{
+                uuid: 'escort-1',
+                entity: {
+                    components: [['Note', {
+                        a: OLD, b: `${OLD}:abc`, c: `see ${OLD}:447`,
+                        d: `${OLD}:447:2`, e: `${NEW}:447`,
+                    }]],
+                },
+            }],
+        };
+        expect(toV5(structuredClone(data))).toEqual(data);
+        expect(decodeSaveDetailed(JSON.stringify({ version: 4, data })))
+            .toEqual({ ok: true, data: data as SaveData, version: 4 });
+    });
+
+    it('keeps the entry already under the new key when the rename collides, '
+        + 'and drops repeats from the set-like lists', () => {
+            const newer: CronState = { phase: 'pre', phaseStart: 9, nextEligible: 10 };
+            const migrated = toV5({
+                ...current(),
+                cronStates: [[`${OLD}:386`, CRON], [`${NEW}:386`, newer]],
+                ranks: [`${OLD}:159`, `${NEW}:159`],
+                controlBits: [[OLD, 918], [NEW, 918], ['nova', 342]],
+                plugins: [OLD, NEW],
+            });
+            expect(migrated.cronStates).toEqual([[`${NEW}:386`, newer]]);
+            expect(migrated.ranks).toEqual([`${NEW}:159`]);
+            expect(migrated.controlBits).toEqual([[NEW, 918], ['nova', 342]]);
+            expect(migrated.plugins).toEqual([NEW]);
+        });
+
+    it('is total on JSON that is not a save', () => {
+        const odd = {
+            outfits: 'x', controlBits: [1, [OLD]], plugins: [7], ranks: [null],
+            cronStates: [[3, CRON], `${OLD}:1`],
+            escorts: { [`${OLD}:1`]: [`${OLD}:2`, null, 3] },
+        };
+        expect(() => toV5(structuredClone({}))).not.toThrow();
+        expect(toV5(structuredClone(odd) as RawSaveData)).toEqual({
+            outfits: 'x', controlBits: [1, [OLD]], plugins: [7], ranks: [null],
+            cronStates: [[3, CRON], `${NEW}:1`],
+            escorts: { [`${NEW}:1`]: [`${NEW}:2`, null, 3] },
+        });
+    });
+
+    it('migrates a v3 save through v4 to v5', () => {
+        const data = {
+            ...current(),
+            outfits: pairs([[`${OLD}:447`, 1]]),
+            controlBits: pairs([[OLD, 918]]),
+            escorts: [escortWithMarker('upgrading',
+                { player: 'p', parent: 'p', pendingUpgrade: `${OLD}:128` })],
+        };
+        const result = decodeSaveDetailed(JSON.stringify({ version: 3, data }));
+        expect(result).toEqual({
+            ok: true, version: 3,
+            data: current({
+                outfits: pairs([[`${NEW}:447`, 1]]),
+                controlBits: pairs([[NEW, 918]]),
+                escorts: [escortWithMarker('upgrading', {
+                    player: 'p', parent: 'p',
+                    deal: { kind: 'upgrade', toShip: `${NEW}:128` },
+                })],
+            }),
+        });
+    });
+
+    it('a v5 save is refused by a v4 build\'s version gate (quarantined, '
+        + 'not misread)', () => {
+            // The previous build is this list without its last entry.
+            const v4Build = SAVE_MIGRATIONS.slice(0, 3);
+            const written = JSON.parse(encodeSave(current({
+                outfits: pairs([[`${NEW}:447`, 1]]),
+            })));
+            expect(written.version).toBe(5);
+            expect(migrateRaw('save', FIRST_SAVE_VERSION, v4Build,
+                written.version, written.data)).toEqual({
+                ok: false,
+                reason: 'The save was written by a newer build (version 5; '
+                    + 'this build reads up to 4).',
+            });
+        });
+});
+
 describe('save_migrations historical fixtures', () => {
     for (const fixture of HISTORY) {
         it(`loads ${fixture.name}`, () => {
@@ -481,15 +776,30 @@ describe('save_migrations real pilot files', () => {
             }
             const before = envelope.data as Partial<SaveData>;
             const after = result.data;
-            // Nothing the file had is changed; only defaults are added.
+            // Nothing the file had is changed but the #310 re-keying (all
+            // four pilots own the Hypergate Pass: oütf 447, ränk 162, crön
+            // 386-388, and b918 under its namespace); only defaults are
+            // added.
+            const v5Id = (id: string) => {
+                const colon = id.lastIndexOf(':');
+                const renamed = PLUGIN_PREFIX_RENAMES.get(id.slice(0, colon));
+                return renamed === undefined ? id : renamed + id.slice(colon);
+            };
             expect(after.ship).toBe(before.ship!);
             expect(after.credits).toBe(before.credits!);
             expect(after.date).toEqual(before.date!);
-            expect(after.outfits).toEqual(before.outfits!);
+            expect(after.outfits).toEqual(before.outfits!
+                .map(([id, count]) => [v5Id(id), count]));
+            expect(after.outfits.map(([id]) => id))
+                .toContain('HypergatePassv1.0:447');
             expect(after.missions.map(([id]) => id))
-                .toEqual(before.missions!.map(([id]) => id));
+                .toEqual(before.missions!.map(([id]) => v5Id(id)));
             expect(after.novaControlBits).toEqual(before.novaControlBits);
-            expect(after.ranks).toEqual(before.ranks!);
+            expect(after.ranks).toEqual(before.ranks!.map(v5Id));
+            expect(after.cronStates.map(([id]) => id))
+                .toEqual(before.cronStates!.map(([id]) => v5Id(id)));
+            expect(encodeSave(after)).not.toContain('"HypergatePassv1:');
+            expect(encodeSave(after)).not.toContain('"HypergatePassv1"');
             expect(after.escorts.length).toBe((before.escorts ?? []).length);
             expect(after.discovery).toEqual(before.discovery ?? []);
             expect(after.autoAbortShips).toEqual([]);

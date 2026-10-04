@@ -83,7 +83,8 @@ import {
  * not reach inside the blobs: a component whose encoding must change
  * incompatibly needs a migration of its own that rewrites every blob's
  * entry for it, appended to save_migrations.ts beside the version bump
- * (v3 -> v4, PlayerEscort's queued deal, is the first that did).
+ * (v3 -> v4, PlayerEscort's queued deal, is the first that did; v4 -> v5,
+ * the #310 plug-in prefix re-keying, rewrites ids inside every blob).
  *
  * WHAT IS NOT SAVED. Only escorts that are WITH the player are: the ones
  * in the player's own system, the landed roster held while docked, and a
