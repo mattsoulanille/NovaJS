@@ -244,12 +244,24 @@ export type RollbackProtocolMessage =
      * since protocol 7: a schema'd relay refuses a join that omits it
      * (rollback_relay.ts, "wire schema fingerprint missing"). Optional
      * in the codec only for the json rollback wire (wire_codec.ts
-     * WIRE_ENCODING), which has no fingerprint on either end. */
-    | { kind: 'joinRequest', fresh?: boolean, protocol?: number, schema?: string }
+     * WIRE_ENCODING), which has no fingerprint on either end.
+     * `systems`: the joiner's system-order hash (system_order.ts
+     * systemOrderHash of its simulation world's systemNames, #155).
+     * Compared, never gated on: the relay remembers the room's first
+     * declaration and WARNS (joinWarning) on a different one. */
+    | {
+        kind: 'joinRequest', fresh?: boolean, protocol?: number, schema?: string,
+        systems?: string,
+    }
     /** The relay will not serve this joiner: its wire schema differs
      * (server -> peer). The peer gives up the join; nothing it sent
      * would have decoded alike on both ends. */
     | { kind: 'joinRefused', reason: string }
+    /** The relay serves this joiner but saw something wrong with its
+     * join (server -> peer, just before the catchUp): its system-order
+     * hash differs from the room's (#155). The peer logs it and joins
+     * anyway — the fingerprint gate is the refusal mechanism. */
+    | { kind: 'joinWarning', reason: string }
     | {
         kind: 'catchUp', tick: number, records: InputRecord[],
         baseline?: ArchiveBaseline,
@@ -332,9 +344,13 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
         t.strict({ kind: t.literal('inputLog'), records: t.array(InputRecordType) }),
         t.exact(t.intersection([
             t.type({ kind: t.literal('joinRequest') }),
-            t.partial({ fresh: t.boolean, protocol: t.number, schema: t.string }),
+            t.partial({
+                fresh: t.boolean, protocol: t.number, schema: t.string,
+                systems: t.string,
+            }),
         ])),
         t.strict({ kind: t.literal('joinRefused'), reason: t.string }),
+        t.strict({ kind: t.literal('joinWarning'), reason: t.string }),
         t.exact(t.intersection([
             t.type({
                 kind: t.literal('catchUp'),

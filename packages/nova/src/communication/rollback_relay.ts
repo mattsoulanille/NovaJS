@@ -19,6 +19,14 @@ export interface DesyncInfo {
      * peers that never sent one (a build predating versioning — the
      * stale-cached-bundle signature). */
     peerProtocols: Record<string, number>;
+    /** The system-order hash (system_order.ts) the room's first joiner
+     * declared: what every later joiner was compared against. Absent
+     * when no member has declared one since the room last emptied. */
+    roomSystemOrder?: string;
+    /** Each reporter's declared system-order hash; a reporter that
+     * declared none is absent. A value differing from roomSystemOrder
+     * means the peers did not run the same system order (#155). */
+    peerSystemOrders: Record<string, string>;
 }
 
 /**
@@ -74,6 +82,15 @@ export class RollbackRelay {
     private mismatchStreaks = new Map<string, number>();
     /** Protocol versions peers declared at join (0 = never declared). */
     private peerProtocols = new Map<string, number>();
+    /** System-order hashes peers declared at join (#155). */
+    private peerSystemOrders = new Map<string, string>();
+    /**
+     * The room's reference system order: the FIRST hash any member
+     * declared since the room last emptied. The relay has no world of
+     * its own to compute one from (the archive builds lazily), so the
+     * first joiner defines it and later joiners are compared to it.
+     */
+    private roomSystemOrder?: string;
     /**
      * Peers whose state history the incident recorder is waiting for:
      * everyone a desync broadcast named as diverged (they push a dump
@@ -146,7 +163,13 @@ export class RollbackRelay {
             // fresh on every reconnect: forget the departed.
             this.mismatchStreaks.delete(peerId);
             this.peerProtocols.delete(peerId);
+            this.peerSystemOrders.delete(peerId);
             this.dumpsExpected.delete(peerId);
+            // An emptied room starts over: the next first joiner (maybe
+            // a newer build) defines the reference.
+            if (this.roomPeers().size === 0) {
+                this.roomSystemOrder = undefined;
+            }
         });
 
         if (autoClock) {
@@ -332,6 +355,12 @@ export class RollbackRelay {
             peerProtocols: Object.fromEntries(allHashes.map(([peerId]) =>
                 [peerId, this.peerProtocols.get(peerId)
                     ?? (peerId === this.room.uuid ? PROTOCOL_VERSION : 0)])),
+            ...(this.roomSystemOrder !== undefined
+                ? { roomSystemOrder: this.roomSystemOrder } : {}),
+            peerSystemOrders: Object.fromEntries(allHashes.flatMap(([peerId]) => {
+                const systems = this.peerSystemOrders.get(peerId);
+                return systems === undefined ? [] : [[peerId, systems]];
+            })),
         });
         this.room.sendMessage(wrapRollbackMessage({
             kind: 'desync', tick, hashes: allHashes, canonical,
@@ -347,6 +376,37 @@ export class RollbackRelay {
                     { kind: 'desyncDumpRequest' }), peerId);
             }
         }
+    }
+
+    /**
+     * #155: a joiner whose simulation world runs its systems in a
+     * different order from the room's WILL desync, and no state hash
+     * says why. Compared against the room's first declaration; on a
+     * mismatch, warn here and tell the joiner (joinWarning) so it logs
+     * it too — but serve the join: the fingerprint gate above is the
+     * refusal mechanism, and the first joiner is not necessarily the
+     * right one. Once per mismatching join (a resync is a join).
+     */
+    private compareSystemOrder(source: string, systems: string | undefined) {
+        if (systems === undefined) {
+            this.peerSystemOrders.delete(source);
+            return;
+        }
+        this.peerSystemOrders.set(source, systems);
+        if (this.roomSystemOrder === undefined) {
+            this.roomSystemOrder = systems;
+            return;
+        }
+        if (systems === this.roomSystemOrder) {
+            return;
+        }
+        const reason = `system order mismatch: peer ${systems}, room `
+            + `${this.roomSystemOrder} (the room's first declaration); `
+            + 'the simulations run their systems in different orders '
+            + 'and will desync';
+        console.warn(`Peer ${source} joined with a ${reason}`);
+        this.room.sendMessage(wrapRollbackMessage(
+            { kind: 'joinWarning', reason }), source);
     }
 
     private handleMessage(source: string, raw: unknown) {
@@ -445,6 +505,7 @@ export class RollbackRelay {
                         + 'stale cached bundle?)'}; server has `
                         + `${PROTOCOL_VERSION}`);
                 }
+                this.compareSystemOrder(source, message.systems);
                 // With an archived baseline, reconstruction starts
                 // there: only the log tail after it is needed. A
                 // fresh request (resync) gets a baseline captured

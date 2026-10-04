@@ -1,7 +1,8 @@
 import 'jasmine';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { resetWarnThrottle } from '../common/log_throttle.js';
-import { RollbackRelay } from './rollback_relay.js';
+import { requestCatchUp } from './rollback_messages.js';
+import { DesyncInfo, RollbackRelay } from './rollback_relay.js';
 import { canonicalDesyncHash, PROTOCOL_VERSION, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationInput } from './simulation_input.js';
 import { liveWireFingerprint } from './wire_schemas.js';
@@ -183,6 +184,103 @@ describe('RollbackRelay', () => {
         expect(received(peerB).some(m => m.kind === 'catchUp')).toBeFalse();
         expect(warn).toHaveBeenCalledWith(jasmine.stringMatching(
             /Refusing join of b: wire schema fingerprint missing/));
+    });
+
+    describe('system order (#155)', () => {
+        const ROOM = '00000000000000aa';
+        const OTHER = '00000000000000bb';
+
+        function join(peer: MockCommunicator, systems: string) {
+            peer.allMessages.length = 0;
+            peer.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest', schema: liveWireFingerprint(), systems,
+            }) as never, 'server');
+            return received(peer);
+        }
+        const mismatchWarnings = (warn: jasmine.Spy) => warn.calls.allArgs()
+            .filter(([text]) => /system order mismatch/.test(String(text)));
+
+        it('the first joiner defines the room\'s order; a matching joiner is not warned', () => {
+            const warn = spyOn(console, 'warn');
+            expect(join(peerA, ROOM).map(m => m.kind)).toEqual(['catchUp']);
+            expect(join(peerB, ROOM).map(m => m.kind)).toEqual(['catchUp']);
+            expect(mismatchWarnings(warn)).toEqual([]);
+        });
+
+        it('warns once per mismatching join, tells the joiner, and still serves it', () => {
+            const warn = spyOn(console, 'warn');
+            join(peerA, ROOM);
+            const atB = join(peerB, OTHER);
+            // Warned, not refused: the catch-up follows the warning.
+            expect(atB.map(m => m.kind)).toEqual(['joinWarning', 'catchUp']);
+            expect(atB[0]!.kind === 'joinWarning' && atB[0].reason).toBe(
+                `system order mismatch: peer ${OTHER}, room ${ROOM} (the room's `
+                + 'first declaration); the simulations run their systems in '
+                + 'different orders and will desync');
+            expect(received(peerA).some(m => m.kind === 'joinWarning')).toBeFalse();
+            expect(mismatchWarnings(warn)).toEqual([[jasmine.stringMatching(
+                new RegExp(`^Peer b joined with a system order mismatch: peer ${OTHER}, room ${ROOM}`))]]);
+            // A resync is another join: one more warning, no more.
+            join(peerB, OTHER);
+            expect(mismatchWarnings(warn).length).toBe(2);
+            // The room's reference is the FIRST declaration, not the
+            // latest: a's rejoin is still clean.
+            expect(join(peerA, ROOM).map(m => m.kind)).toEqual(['catchUp']);
+            expect(mismatchWarnings(warn).length).toBe(2);
+        });
+
+        it('a joining client declares its hash and logs the relay\'s warning', async () => {
+            const warn = spyOn(console, 'warn');
+            join(peerA, ROOM);
+            peerB.allMessages.length = 0;
+            const catchUp = await requestCatchUp(peerB,
+                { timeoutMs: 1000, fresh: false, systems: OTHER }, () => { });
+            // Warned, and joined all the same.
+            expect(catchUp?.kind).toBe('catchUp');
+            expect(warn).toHaveBeenCalledWith(
+                `The relay warned about this join: system order mismatch: `
+                + `peer ${OTHER}, room ${ROOM} (the room's first declaration); `
+                + 'the simulations run their systems in different orders '
+                + 'and will desync');
+        });
+
+        it('stamps the room\'s and each reporter\'s hash into the incident', () => {
+            relay.close();
+            const incidents: DesyncInfo[] = [];
+            relay = new RollbackRelay(server, {
+                autoClock: false, desyncThreshold: 1,
+                onDesync: info => incidents.push(info),
+            });
+            spyOn(console, 'warn');
+            spyOn(console, 'log');
+            join(peerA, ROOM);
+            join(peerB, OTHER);
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: '11111111',
+            }) as never, 'server');
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: '22222222',
+            }) as never, 'server');
+            expect(incidents.length).toBe(1);
+            expect(incidents[0]!.roomSystemOrder).toBe(ROOM);
+            expect(incidents[0]!.peerSystemOrders).toEqual({ a: ROOM, b: OTHER });
+        });
+
+        it('forgets the room\'s order when the room empties, not before', () => {
+            const warn = spyOn(console, 'warn');
+            join(peerA, ROOM);
+            // The first joiner leaving does not reset a live room.
+            server.peers.current.next(new Set(['server', 'b']));
+            join(peerB, OTHER);
+            expect(mismatchWarnings(warn).length).toBe(1);
+            // Empty: the next first joiner defines the order afresh.
+            server.peers.current.next(new Set(['server']));
+            server.peers.current.next(new Set(['server', 'a', 'b']));
+            expect(join(peerB, OTHER).map(m => m.kind)).toEqual(['catchUp']);
+            expect(join(peerA, ROOM).map(m => m.kind))
+                .toEqual(['joinWarning', 'catchUp']);
+            expect(mismatchWarnings(warn).length).toBe(2);
+        });
     });
 
     it('serves the input log from a tick to late joiners', () => {
