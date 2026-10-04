@@ -29,7 +29,9 @@ import { DescriptionData } from "novadatainterface/description_data";
 import { SystemData } from "novadatainterface/system_data";
 import { TargetCornersData } from "novadatainterface/target_corners_data";
 import { WeaponData } from "novadatainterface/weapon_data";
-import { DEFAULT_SUB_PATHS, IDSpaceHandler, NovaSubPaths } from "./id_space_handler.js";
+import {
+    DEFAULT_SUB_PATHS, IDSpaceHandler, isPluginPrefixConflictError, NovaSubPaths,
+} from "./id_space_handler.js";
 import { describeFlagNamespaceReport, FlagNamespaceMap } from "./flag_namespace.js";
 import { ControlBitNamespaceMap, describeControlBitNamespaceReport } from "./ncb_namespace.js";
 import { ControlBitNamespaces } from "novadatainterface/control_bit_namespaces";
@@ -136,6 +138,13 @@ export class NovaParse implements GameDataInterface {
 
     public readonly ids: Promise<NovaIDs>;
     public readonly idSpace: Promise<NovaResources | Error>;
+    // Resolves once the Plug-ins directory's namespace prefixes are known to
+    // be distinct; rejects ONLY with PluginPrefixConflictError (two plug-ins
+    // keyed to one namespace — id_space_handler.ts resolvePluginEntries).
+    // Known before any resource is parsed, so the game server awaits it to
+    // refuse to start on a conflict. Every other load failure is left to
+    // surface through idSpace / ids exactly as before.
+    public readonly pluginPrefixCheck: Promise<void>;
     // The per-plug-in Require/Contribute flag namespacing (flag_namespace.ts).
     // Rejects when the core data failed to load; parsers that need it then
     // fail the same way idSpace consumers do.
@@ -180,6 +189,15 @@ export class NovaParse implements GameDataInterface {
 
 
         this.idSpace.catch((_e: Error) => { });
+
+        this.pluginPrefixCheck = this.idSpaceHandler.getPluginEntries().then(
+            () => undefined,
+            (e: unknown) => {
+                if (isPluginPrefixConflictError(e)) {
+                    throw e;
+                }
+            });
+        this.pluginPrefixCheck.catch((_e: Error) => { });
 
         this.flagMap = this.idSpaceHandler.getFlagMap().then(map => {
             const lines = describeFlagNamespaceReport(map.report);

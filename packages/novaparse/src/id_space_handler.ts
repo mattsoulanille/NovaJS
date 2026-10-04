@@ -67,31 +67,197 @@ export function comparePluginNames(a: string, b: string): number {
 }
 
 /**
- * The namespace prefix for a Plug-ins entry: its name minus extensions,
+ * The file extensions a plug-in FILE's namespace prefix drops: the Nova
+ * data-file and plug-in container extensions (read_nova_file.ts's
+ * data-fork set, .ndat / .npif / .rez, plus the resource-fork .plug),
+ * matched case-insensitively. Only the LAST extension, and only one of
+ * these: "X 1.0.ndat" is "X 1.0", "X 1.0" (a classic Mac plug-in, which
+ * usually has no extension at all) is "X 1.0", and "Music.mp3" stays
+ * "Music.mp3". A plug-in DIRECTORY keeps its whole name.
+ *
+ * (Issue #310: the prefix used to be the text before the FIRST dot, so
+ * "X 1.0" and "X 1.1" shared a namespace — their new ids collided and
+ * their private Require/Contribute and control bits merged.)
+ */
+export const PLUGIN_FILE_EXTENSIONS: ReadonlySet<string> =
+    new Set([".ndat", ".npif", ".plug", ".rez"]);
+
+/**
+ * The base name a Plug-ins entry's namespace is keyed by: a file's name
+ * minus one {@link PLUGIN_FILE_EXTENSIONS} extension, a directory's whole
+ * name.
+ */
+export function pluginBaseName(entryName: string,
+    isDirectory: boolean = false): string {
+    if (isDirectory) {
+        return entryName;
+    }
+    const extension = path.extname(entryName);
+    return PLUGIN_FILE_EXTENSIONS.has(extension.toLowerCase())
+        ? entryName.slice(0, -extension.length)
+        : entryName;
+}
+
+/**
+ * The namespace prefix for a Plug-ins entry: its {@link pluginBaseName},
  * re-keyed away from the reserved names.
  *
  * `claimedPrefixes` holds the prefixes the OTHER entries in the same
  * Plug-ins directory claim outright (their non-reserved base names), so a
  * re-key can never collide with a REAL plug-in that happens to be called
  * e.g. "nova-plugin": the suffix is appended again until the name is
- * neither reserved nor claimed. Deterministic — a pure function of the
- * directory's name list — so every peer of a networked game re-keys
- * identically.
+ * neither reserved nor claimed (compared ignoring case, like the
+ * conflict check in {@link resolvePluginEntries}). Deterministic — a pure
+ * function of the directory's name list — so every peer of a networked
+ * game re-keys identically.
  */
-export function pluginPrefixFor(fileName: string,
-    claimedPrefixes: ReadonlySet<string> = new Set()): string {
-    const prefix = fileName.split(".")[0]; // Cut off extensions
+export function pluginPrefixFor(entryName: string,
+    claimedPrefixes: ReadonlySet<string> = new Set(),
+    { isDirectory = false }: { isDirectory?: boolean } = {}): string {
+    const prefix = pluginBaseName(entryName, isDirectory);
     if (!RESERVED_PLUGIN_PREFIXES.has(prefix)) {
         return prefix;
     }
+    const claimed = new Set([...claimedPrefixes].map(p => p.toLowerCase()));
     let rekeyed = prefix;
     do {
         rekeyed += "-plugin";
     } while (RESERVED_PLUGIN_PREFIXES.has(rekeyed)
-        || claimedPrefixes.has(rekeyed));
-    console.warn(`Plug-in "${fileName}" uses the reserved namespace `
+        || claimed.has(rekeyed.toLowerCase()));
+    console.warn(`Plug-in "${entryName}" uses the reserved namespace `
         + `"${prefix}"; it is loaded as "${rekeyed}".`);
     return rekeyed;
+}
+
+/** One entry of a Plug-ins directory, in load order, with its namespace. */
+export interface PluginEntry {
+    /** The entry's name in the Plug-ins directory. */
+    readonly name: string;
+    readonly path: string;
+    /** Its id / flag / control-bit namespace (see pluginPrefixFor). */
+    readonly prefix: string;
+    readonly isDirectory: boolean;
+    /**
+     * Set when the entry could not even be stat'ed (EACCES, ELOOP, EIO):
+     * it is skipped at load like an unparseable plug-in, but it is still
+     * keyed (as a file) and still takes part in the conflict check,
+     * because a conflict is a property of the directory's NAMES.
+     */
+    readonly statError?: unknown;
+}
+
+/**
+ * Two or more entries of one Plug-ins directory resolve to the same
+ * namespace prefix (compared ignoring case). Their new ids would
+ * overwrite each other and their private flag and control bits would
+ * merge, so this is fatal: the game server refuses to start on it
+ * (nova/src/server/parsing/load_nova_parse.ts) rather than serve a
+ * silently merged data set.
+ */
+export class PluginPrefixConflictError extends Error {
+    constructor(readonly pluginsPath: string,
+        /** Each group of entry names sharing one prefix, in load order. */
+        readonly conflicts: readonly (readonly string[])[]) {
+        super(`Plug-in name conflict in ${pluginsPath}: `
+            + conflicts.map(names => names.map(n => `"${n}"`).join(" and ")
+                + " resolve to the same plug-in namespace").join("; ")
+            + ". A plug-in's namespace is its file name minus the extension"
+            + ` (${[...PLUGIN_FILE_EXTENSIONS].join(", ")}), or a folder's`
+            + " whole name, compared ignoring case. Rename or remove one"
+            + " of them.");
+        this.name = "PluginPrefixConflictError";
+    }
+}
+
+export function isPluginPrefixConflictError(e: unknown):
+    e is PluginPrefixConflictError {
+    return e instanceof PluginPrefixConflictError
+        || (e instanceof Error && e.name === "PluginPrefixConflictError");
+}
+
+/**
+ * Lists a Plug-ins directory in load order and keys every entry's
+ * namespace, rejecting with {@link PluginPrefixConflictError} when two
+ * entries share one. Reads only the directory listing and each entry's
+ * stat, so it runs before any resource is parsed.
+ */
+export async function resolvePluginEntries(pluginsPath: string):
+    Promise<PluginEntry[]> {
+    if (!(await isDirectory(pluginsPath))) {
+        throw new BadDirectoryStructureError("Plug-ins must be a directory. Got " + pluginsPath + " instead");
+    }
+
+    if (!(path.basename(pluginsPath) == "Plug-ins")) {
+        console.warn("Plug-ins parser given a directory called " + path.basename(pluginsPath) + " instead of Plug-ins");
+    }
+
+    // Plug-ins load in NAME ORDER, so a later-named plug-in's override
+    // of an id wins over an earlier-named one's ("Any resources in an
+    // Nova plugin file automatically replace same-numbered resources in
+    // Nova's main files" — EVN Bible, Part II; within the folder, last
+    // loaded wins). That is what the original engine does: its own
+    // pilot-log "Plugins loaded:" list comes out in ascending name
+    // order, and the community naming conventions that rely on it
+    // ("ARPIATweaks.rez" patching "ARPIA2 - Data 1.rez", a
+    // "zzoverride.rez" that must beat everything) only work if the
+    // LAST name wins. Loading in reverse instead silently dropped
+    // Extra Outfits' extra Spica stellar whenever the alphabetically
+    // earlier "arpia" plug-in, which overrides the same sÿst 144, was
+    // installed alongside it.
+    //
+    // The sort is explicit rather than trusting readdir: on macOS
+    // readdir happens to come back sorted, but that is not guaranteed
+    // on every filesystem, and both which override wins and the
+    // allocation of namespaced Require/Contribute flag and control bits
+    // (which follows this order) must be identical on every peer of a
+    // networked game. It is case-insensitive, like the case-insensitive
+    // volumes the original game's data lives on, with the raw name as a
+    // tie-break so the result is still a total, locale-independent
+    // order. It sorts the raw entry NAMES, so how a name is turned into
+    // a prefix never changes the order.
+    const fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
+
+    // The stat is per entry and isolated: isDirectory rejects on anything
+    // but ENOENT (EACCES, ELOOP, EIO), and an unreadable entry must be
+    // skipped like an unparseable one, not take the whole id space
+    // ("core data load failed") with it.
+    const stated = await Promise.all(fileNames.map(async name => {
+        const entryPath = path.join(pluginsPath, name);
+        try {
+            return { name, path: entryPath, isDirectory: await isDirectory(entryPath) };
+        } catch (statError) {
+            return { name, path: entryPath, isDirectory: false, statError };
+        }
+    }));
+
+    // The prefixes claimed outright by entries whose names are NOT
+    // reserved, so pluginPrefixFor can re-key a reserved name without
+    // colliding with a real plug-in called e.g. "nova-plugin".
+    const claimedPrefixes = new Set(stated
+        .map(e => pluginBaseName(e.name, e.isDirectory))
+        .filter(p => !RESERVED_PLUGIN_PREFIXES.has(p)));
+    const entries: PluginEntry[] = stated.map(e => ({
+        ...e,
+        prefix: pluginPrefixFor(e.name, claimedPrefixes,
+            { isDirectory: e.isDirectory }),
+    }));
+
+    // Two entries with one prefix — "Foo.rez" beside "Foo.ndat", a folder
+    // "Foo" beside "Foo.rez", or "foo.rez" beside "Foo.ndat" — are a hard
+    // error (the maintainer's ruling on #310). Compared ignoring case on
+    // every host: the original game's data lives on case-insensitive
+    // volumes, where "Foo" and "foo" ARE one name, and whether a data set
+    // loads must not depend on the filesystem it was copied to.
+    const byPrefix = new Map<string, string[]>();
+    for (const entry of entries) {
+        const key = entry.prefix.toLowerCase();
+        byPrefix.set(key, [...(byPrefix.get(key) ?? []), entry.name]);
+    }
+    const conflicts = [...byPrefix.values()].filter(names => names.length > 1);
+    if (conflicts.length > 0) {
+        throw new PluginPrefixConflictError(pluginsPath, conflicts);
+    }
+    return entries;
 }
 
 class IDSpaceHandler {
@@ -100,6 +266,9 @@ class IDSpaceHandler {
     private novaFilesPath: string;
     // null when plug-in loading is explicitly disabled.
     private novaPluginsPath: string | null;
+    // The Plug-ins directory's entries, in load order, keyed by prefix
+    // (resolvePluginEntries). Rejects on a plug-in prefix conflict.
+    private pluginEntries: Promise<PluginEntry[]>;
     // Plug-in id prefixes in the order they were first loaded. This is the
     // order the Require/Contribute flag namespaces are allocated in (see
     // flag_namespace.ts), so it must be — and is — a pure function of the
@@ -123,6 +292,15 @@ class IDSpaceHandler {
         this.novaPluginsPath = novaPlugins === null
             ? null : path.join(novaPath, novaPlugins);
         this.tmpBuildingResources = getEmptyNovaResources();
+        // A null plug-ins path is an explicit opt-out, not an error: the
+        // caller wants base "Nova Files" data only.
+        this.pluginEntries = this.novaPluginsPath === null
+            ? Promise.resolve([])
+            : resolvePluginEntries(this.novaPluginsPath);
+        // Observed through build() and getPluginEntries(); merely
+        // constructing over a broken Plug-ins directory must not itself
+        // produce an unhandled rejection.
+        this.pluginEntries.catch(() => { });
         this.globalResources = this.build().catch((e: Error) => {
             // Catch all promise rejections. They are instead handled when getting ID spaces.
             return e;
@@ -130,16 +308,15 @@ class IDSpaceHandler {
     }
 
     private async build() {
+        // First, so a plug-in name conflict fails the load before any
+        // resource is parsed.
+        const pluginEntries = await this.pluginEntries;
         await this.addNovaFilesDirectory(this.novaFilesPath);
         // The base set of the flag space is defined by the stock data alone,
         // so it is taken now, before a plug-in can override anything.
         this.baseFlagSet = scanBaseFlagSet(this.tmpBuildingResources);
         this.baseControlBitSet = scanBaseControlBitSet(this.tmpBuildingResources);
-        // A null plug-ins path is an explicit opt-out, not an error: the
-        // caller wants base "Nova Files" data only.
-        if (this.novaPluginsPath !== null) {
-            await this.addNovaPluginsDirectory(this.novaPluginsPath);
-        }
+        await this.addNovaPluginsDirectory(pluginEntries);
         // Allocate every plug-in-private flag bit up front, from the whole
         // loaded data set, so the mapping never depends on the order in
         // which resources later happen to be parsed (which is on demand).
@@ -193,6 +370,17 @@ class IDSpaceHandler {
             throw result;
         }
         return [...this.pluginPrefixOrder];
+    }
+
+    /**
+     * The Plug-ins directory's entries in load order with their prefixes,
+     * known before any resource is parsed. Rejects with
+     * PluginPrefixConflictError when two entries share a prefix (and with
+     * BadDirectoryStructureError when the Plug-ins path is not a
+     * directory); resolves to [] when plug-in loading is disabled.
+     */
+    public getPluginEntries(): Promise<PluginEntry[]> {
+        return this.pluginEntries;
     }
 
     // Returns the IDSpace of namespace 'prefix'
@@ -282,7 +470,9 @@ class IDSpaceHandler {
         });
     }
 
-    // Adds the Nova Plug-ins directory.
+    // Adds the Nova Plug-ins directory, already listed, sorted and keyed
+    // by resolvePluginEntries (which owns the load order and the plug-in
+    // name-conflict check).
     //
     // Failure policy: a single broken third-party plug-in must NOT brick the
     // whole game. Each plug-in is parsed in isolation; if one fails to read or
@@ -292,74 +482,27 @@ class IDSpaceHandler {
     // data, where a file that fails to read is fatal (see
     // addNovaFilesDirectory). In BOTH cases a single malformed resource inside
     // a readable file is dropped on its own, not with the file: see
-    // readNovaFile.
-    async addNovaPluginsDirectory(pluginsPath: string) {
-        if (!(await isDirectory(pluginsPath))) {
-            throw new BadDirectoryStructureError("Plug-ins must be a directory. Got " + pluginsPath + " instead");
-        }
-
-        if (!(path.basename(pluginsPath) == "Plug-ins")) {
-            console.warn("Plug-ins parser given a directory called " + path.basename(pluginsPath) + " instead of Plug-ins");
-        }
-
-        // Plug-ins load in NAME ORDER, so a later-named plug-in's override
-        // of an id wins over an earlier-named one's ("Any resources in an
-        // Nova plugin file automatically replace same-numbered resources in
-        // Nova's main files" — EVN Bible, Part II; within the folder, last
-        // loaded wins). That is what the original engine does: its own
-        // pilot-log "Plugins loaded:" list comes out in ascending name
-        // order, and the community naming conventions that rely on it
-        // ("ARPIATweaks.rez" patching "ARPIA2 - Data 1.rez", a
-        // "zzoverride.rez" that must beat everything) only work if the
-        // LAST name wins. Loading in reverse instead silently dropped
-        // Extra Outfits' extra Spica stellar whenever the alphabetically
-        // earlier "arpia" plug-in, which overrides the same sÿst 144, was
-        // installed alongside it.
-        //
-        // The sort is explicit rather than trusting readdir: on macOS
-        // readdir happens to come back sorted, but that is not guaranteed
-        // on every filesystem, and both which override wins and the
-        // allocation of namespaced Require/Contribute flag and control bits
-        // (which follows this order) must be identical on every peer of a
-        // networked game. It is case-insensitive, like the case-insensitive
-        // volumes the original game's data lives on, with the raw name as a
-        // tie-break so the result is still a total, locale-independent
-        // order.
-        const fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
-        // The prefixes claimed outright by entries whose names are NOT
-        // reserved, so pluginPrefixFor can re-key a reserved name without
-        // colliding with a real plug-in called e.g. "nova-plugin".
-        // (Entries sharing a base name deliberately share one prefix, so
-        // only non-reserved names claim.)
-        const claimedPrefixes = new Set(fileNames
-            .map(n => n.split(".")[0])
-            .filter(p => !RESERVED_PLUGIN_PREFIXES.has(p)));
-        for (const name of fileNames) {
-            const currentPath = path.join(pluginsPath, name);
-            const prefix = pluginPrefixFor(name, claimedPrefixes);
-            if (!this.pluginPrefixOrder.includes(prefix)) {
-                this.pluginPrefixOrder.push(prefix);
+    // readNovaFile. Two plug-ins sharing a prefix are fatal before this
+    // runs (resolvePluginEntries).
+    async addNovaPluginsDirectory(entries: readonly PluginEntry[]) {
+        for (const entry of entries) {
+            if (!this.pluginPrefixOrder.includes(entry.prefix)) {
+                this.pluginPrefixOrder.push(entry.prefix);
             }
 
-
-            // The stat is inside the per-plug-in isolation too: isDirectory
-            // rejects on anything but ENOENT (EACCES, ELOOP, EIO), and an
-            // unreadable entry must be skipped like an unparseable one, not
-            // take the whole id space ("core data load failed") with it.
-            let entryIsDirectory: boolean;
-            try {
-                entryIsDirectory = await isDirectory(currentPath);
-            } catch (e) {
-                reportSkippedPlugin(currentPath, e);
+            // An entry that could not be stat'ed is skipped like an
+            // unparseable one (see PluginEntry.statError).
+            if (entry.statError !== undefined) {
+                reportSkippedPlugin(entry.path, entry.statError);
                 continue;
             }
 
-            if (entryIsDirectory) {
-                log(currentPath + " is a directory");
-                await this.addDirectory(currentPath, prefix, /* fatalOnError */ false);
+            if (entry.isDirectory) {
+                log(entry.path + " is a directory");
+                await this.addDirectory(entry.path, entry.prefix, /* fatalOnError */ false);
             }
             else {
-                await this.addPluginSafe(currentPath, prefix);
+                await this.addPluginSafe(entry.path, entry.prefix);
             }
         }
     }
@@ -461,10 +604,9 @@ class IDSpaceHandler {
 // Files that are expected to carry Nova resources. A zero-resource read from
 // one of these is suspicious (empty/stripped resource fork).
 function likelyHasResources(filePath: string): boolean {
-    const resourceExtensions = new Set([".plug", ".ndat", ".rez", ".npif"]);
     const ext = lowerExtname(filePath);
     // Classic Mac resource-fork plug-ins often have no extension at all.
-    return resourceExtensions.has(ext) || ext === "";
+    return PLUGIN_FILE_EXTENSIONS.has(ext) || ext === "";
 }
 
 // The extension the file-type checks above compare against. Lowercased so a
