@@ -727,7 +727,11 @@ describe('SimulationBridge', () => {
              * resync that gives up is terminal since #333, so one cannot
              * be used to warm it any more). */
             warmCooldown() {
-                this.lastResyncTime = Date.now();
+                // A millisecond in the past, well inside the cooldown: the
+                // forced resync's own stamp (Date.now()) must differ from
+                // it, or `proceeded` would read a proceeding resync as a
+                // no-op when both land in the same millisecond.
+                this.lastResyncTime = Date.now() - 1;
             }
         }
 
