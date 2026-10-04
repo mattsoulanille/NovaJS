@@ -228,6 +228,38 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
         expect(getActivePilot(store)?.quarantine).toBeUndefined();
     });
 
+    // Issue #310: a plug-in's prefix used to stop at the first dot of its
+    // name, so a save written then names "HypergatePassv1.0"'s outfit as
+    // HypergatePassv1:447. The plug-in is still installed, keyed
+    // "HypergatePassv1.0" now; the message must not say it is missing and
+    // must not advise reinstalling it. (No migration: the save is refused
+    // and kept, as for a missing plug-in.)
+    it('names a plug-in installed under its new full-base-name prefix '
+        + 'instead of calling it missing', async () => {
+            const { stranded, bytes } = pilots({
+                outfits: [['HypergatePassv1:447', 1]],
+            });
+            const data = gameData();
+            data.data.Outfit.map.set('HypergatePassv1.0:447',
+                data.data.Outfit.defaultValue!);
+            const error = await preparePlayerStart(runtimeFor(data).runtime,
+                new URLSearchParams(), 'peer-1').then(() => undefined, e => e);
+            expect(isMissingSaveContentError(error)).toBeTrue();
+            expect((error as MissingSaveContentError).missing).toEqual([{
+                kind: 'outfit', id: 'HypergatePassv1:447',
+                renamedAs: ['HypergatePassv1.0'],
+            }]);
+
+            const notice = quarantineOnEntryFailure(error, store)!;
+            expect(notice).toContain('"HypergatePassv1" (outfit '
+                + 'HypergatePassv1:447), which is probably the installed '
+                + '"HypergatePassv1.0" under the name older versions of the '
+                + 'game gave it');
+            expect(notice).not.toContain('reinstall');
+            expect(notice).toContain('open another pilot or create a new one');
+            expect(store.getItem(stranded.saveKey)).toBe(bytes);
+        });
+
     it('says when a stock-prefixed id is what is missing', () => {
         expect(describeMissingSaveContent([
             { kind: 'ship', id: MISSING_SHIP },

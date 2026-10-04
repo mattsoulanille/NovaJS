@@ -16,7 +16,7 @@
  * handling is testable under node.
  */
 import {
-    describeMissingSaveContent, isMissingSaveContentError,
+    describeMissingSaveContent, isMissingSaveContentError, namesRenamedPlugin,
 } from '../nova_plugin/pilot/index.js';
 import type { PrefsStorage } from './client_prefs.js';
 import {
@@ -39,6 +39,13 @@ export function quarantineOnEntryFailure(error: unknown,
     const reason = `${who} ${describeMissingSaveContent(error.missing)}.`;
     if (pilot) {
         quarantinePilot(pilot.id, reason, storage);
+    }
+    // A plug-in that is installed under a new name (issue #310) is not
+    // brought back by reinstalling it, so do not advise that.
+    if (namesRenamedPlugin(error.missing)) {
+        return `${reason} The save has been kept as it is, but this `
+            + 'version of the game cannot read it under the plug-in\'s new '
+            + 'name: open another pilot or create a new one.';
     }
     return `${reason} The save has been kept as it is: reinstall the `
         + `plug-in to fly ${pilot ? pilot.name : 'this pilot'} again, or `

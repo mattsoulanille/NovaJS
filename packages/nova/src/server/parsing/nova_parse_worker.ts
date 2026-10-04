@@ -2,10 +2,11 @@ import * as Comlink from 'comlink';
 import { NovaParse } from "novaparse";
 import { parentPort } from "worker_threads";
 import { nodeEndpoint } from "../../util/comlink_node_endpoint.js";
+import { loadServerNovaParse } from "./load_nova_parse.js";
 
 let novaParse: NovaParse | undefined;
 const api = {
-    init(path: string) {
+    async init(path: string) {
         // NovaParse's load-time diagnostics — skipped plug-ins, malformed
         // resources, and the one-time Require/Contribute and control-bit
         // namespacing reports (cross-plug-in bits separated, a plug-in
@@ -20,7 +21,12 @@ const api = {
         // player-facing surface for any of these diagnostics yet; that
         // would be a feature (a plug-in load report exposed to the
         // client), not a routing fix here.
-        this.novaParse = Comlink.proxy(new NovaParse(path, false));
+        //
+        // The one load problem that is NOT a diagnostic is a plug-in name
+        // conflict (two plug-ins keyed to one namespace): init rejects
+        // with it, Comlink carries the rejection to server.ts, and the
+        // server refuses to start (load_nova_parse.ts).
+        this.novaParse = Comlink.proxy(await loadServerNovaParse(path));
     },
     novaParse,
 }
