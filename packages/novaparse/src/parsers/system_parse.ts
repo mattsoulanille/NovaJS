@@ -1,5 +1,7 @@
 import { SystResource } from "../resource_parsers/syst_resource.js";
-import { SystemData, SystemPersonChance, SystemSpawnChance } from "novadatainterface/system_data";
+import {
+    SystemData, SystemPersonChance, SystemReinforcements, SystemSpawnChance,
+} from "novadatainterface/system_data";
 import { BaseParse } from "./base_parse.js";
 import { BaseData } from "novadatainterface/base_data";
 
@@ -133,6 +135,24 @@ export async function SystemParse(syst: SystResource,
         }
     }
 
+    // The reinforcement fleet (#306; parsed only, no gameplay reads it
+    // yet). ReinfFleet "Set to 0 or -1 if unused"; otherwise a flët id,
+    // soft-referenced like the spawn tables above.
+    let reinforcements: SystemReinforcements | null = null;
+    if (syst.reinforcementFleet >= 128) {
+        const fleet = syst.idSpace.flët[syst.reinforcementFleet];
+        if (fleet) {
+            reinforcements = {
+                fleet: fleet.globalID,
+                delayFrames: syst.reinforcementTime,
+                regenerationDays: syst.reinforcementInterval,
+            };
+        } else {
+            console.warn("Missing flët id " + syst.reinforcementFleet
+                + " for the reinforcement fleet of sÿst " + base.id);
+        }
+    }
+
     return {
         ...base,
         links,
@@ -149,6 +169,7 @@ export async function SystemParse(syst: SystResource,
         persons,
         avgShips: syst.avgShips,
         govt,
+        reinforcements,
     }
 
 }

@@ -30,6 +30,36 @@ export interface SystemPersonChance {
     chance: number;
 }
 
+/**
+ * A system's reinforcement fleet (sÿst ReinfFleet / ReinfTime /
+ * ReinfIntrval, EVN Bible, the sÿst resource; TMPL offsets 406-410): "If
+ * ships allied with the reinforcement fleet's government are under attack
+ * and the combat odds against them exceed the MaxOdds field of the
+ * reinforcement fleet's government, the reinforcement fleet will be called
+ * in." (The oütf ModType 44 "reinforcement inhibitor" —
+ * OutfitData.reinforcementInhibitorClass — suppresses it.)
+ *
+ * PARSED ONLY: nothing in the game calls in reinforcements yet (see the
+ * feature request referenced from tracker issue #306).
+ */
+export interface SystemReinforcements {
+    /** Global flët id of the reinforcement fleet (ReinfFleet 128+). */
+    fleet: string;
+    /**
+     * ReinfTime: "The delay between the time the reinforcement call goes
+     * out and the time the fleet appears", in frames ("A value of 30 = one
+     * second").
+     */
+    delayFrames: number;
+    /**
+     * ReinfIntrval: "The interval, in days, that it takes for the
+     * reinforcement fleet to be regenerated. If you set this to 0, a
+     * reinforcement fleet will be available every day." Passed through as
+     * stored (0 = every day, N = every N days).
+     */
+    regenerationDays: number;
+}
+
 export interface SystemData extends BaseData {
     position: [number, number],
     /**
@@ -114,6 +144,14 @@ export interface SystemData extends BaseData {
 
     /** Global id of the owning government, or null for independent. */
     govt: string | null,
+
+    /**
+     * The system's reinforcement fleet, or null when it has none: ReinfFleet
+     * "Set to 0 or -1 if unused" (any id below 128 reads the same way), or a
+     * flët that does not resolve. PARSED ONLY: no gameplay reads it yet, so
+     * it changes neither the simulation nor the wire.
+     */
+    reinforcements: SystemReinforcements | null,
 }
 
 export function getDefaultSystemData(): SystemData {
@@ -133,5 +171,6 @@ export function getDefaultSystemData(): SystemData {
         persons: [],
         avgShips: 0,
         govt: null,
+        reinforcements: null,
     };
 }
