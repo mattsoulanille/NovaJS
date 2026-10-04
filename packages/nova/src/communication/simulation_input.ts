@@ -10,7 +10,7 @@ import {
     SimulationGameDataResource, stageEncodedComponentsGameData,
 } from '../nova_plugin/core/index.js';
 import {
-    loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
+    applyRoomSeed, loadEntityGameData, loadOutfitsGameData, loadWeaponsGameData,
 } from "../nova_plugin/spawn/index.js";
 import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
 import {
@@ -80,7 +80,15 @@ export type SimulationInput =
     | { kind: 'removeEntity', uuid: string }
     | { kind: 'setJumpRoute', route: string[] }
     /** Server-authored when a peer disconnects. */
-    | { kind: 'removePeer', peerId: string };
+    | { kind: 'removePeer', peerId: string }
+    /**
+     * Server-authored, once, when the relay opens a room (#140,
+     * nova_plugin/spawn/spawn_bits.ts): this room instance's seed. It
+     * reseeds the world's Random and swaps the genesis population for one
+     * rolled at the first entrant's tick under the entrant's bits
+     * (applyRoomSeed).
+     */
+    | { kind: 'roomSeed', seed: number };
 
 /**
  * A peer's inputs for one simulation tick. The steady-state wire
@@ -151,6 +159,8 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('removeEntity'), uuid: t.string }),
     t.strict({ kind: t.literal('setJumpRoute'), route: t.array(t.string) }),
     t.strict({ kind: t.literal('removePeer'), peerId: t.string }),
+    // A 32-bit seed: a non-negative safe integer, an Avro long.
+    t.strict({ kind: t.literal('roomSeed'), seed: WireTick }),
 ]);
 
 export const InputRecordType: t.Type<InputRecord, unknown> = t.exact(t.intersection([
@@ -302,6 +312,8 @@ export async function loadInputRecordsGameData(
  *    takes the first match).
  *  - `removePeer` is server-authored (the relay writes it on
  *    disconnect); only a record stamped with a server's uuid may carry it.
+ *    So is `roomSeed` (the relay writes it when it opens the room), which
+ *    a record with no peerId — local play — may also carry.
  *  - The servers themselves are exempt: the relay's own records are the
  *    room's ground truth.
  *  - A record with NO peerId is local play before any connection exists
@@ -545,6 +557,18 @@ function applySimulationInput(world: World, input: SimulationInput,
                     world.entities.delete(uuid);
                 }
             }
+            break;
+        }
+        case 'roomSeed': {
+            // The room's genesis parameter is the relay's to choose: a
+            // peer that sends one is dropped, identically everywhere.
+            if (peerId !== undefined && !isServerPeer(world, peerId)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping roomSeed input from ${peerId}: only the `
+                    + 'server seeds a room');
+                break;
+            }
+            applyRoomSeed(world, input.seed);
             break;
         }
         case 'setJumpRoute': {

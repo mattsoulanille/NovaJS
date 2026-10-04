@@ -38,6 +38,8 @@ const { BUILD_VERSION } = await import('../dist/src/common/generated_build_versi
 const { liveWireCodec, liveWireFingerprint } = await import('../dist/src/communication/wire_schemas.js');
 const { CommunicatorResource, MultiplayerData } = await import('nova_ecs/plugins/multiplayer_plugin');
 const { SerializerResource } = await import('nova_ecs/plugins/serializer_plugin');
+const { NpcSpawnerComponent } = await import('../dist/src/nova_plugin/spawn/index.js');
+const { NpcComponent } = await import('../dist/src/nova_plugin/npc/index.js');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const log = (...args) => console.error(`[e2e ${((performance.now()) / 1000).toFixed(1)}s]`, ...args);
@@ -111,7 +113,7 @@ async function makeClient(name) {
     ship.components.set(ControlledByComponent, { peerId: room.uuid });
     ship.components.set(MultiplayerData, { owner: room.uuid });
     await host.addEntity(`${name}-ship`, world.resources.get(SerializerResource).encode(ship));
-    return { name, host, room, frames, channel };
+    return { name, host, room, frames, channel, world };
 }
 
 /** Steps a client toward the room clock, like the browser pump. */
@@ -194,12 +196,23 @@ for (const uuid of hashesB.keys()) {
 const bothShips = hashesA.has('A-ship') && hashesA.has('B-ship')
     && hashesB.has('A-ship') && hashesB.has('B-ship');
 const textFrames = a.frames.other + b.frames.other;
+// The room's population (#140): the server seeds every room it opens,
+// so the initial population was rolled at A's entry, not at genesis.
+// Reported, not gated on (NOVA_ROOM_SEED=off runs the fixed genesis).
+const spawner = a.world.entities.get('npc spawner')?.components.get(NpcSpawnerComponent);
+const room = {
+    npcs: [...a.world.entities.values()]
+        .filter(entity => entity.components.has(NpcComponent)).length,
+    targetCount: spawner?.targetCount,
+    spawnBits: spawner?.spawnBits,
+    awaitingEntrant: spawner?.awaitingEntrant ?? false,
+};
 const ok = dumpA.tick === dumpB.tick && differences.length === 0 && bothShips
     && statusA.desyncCount === 0 && statusB.desyncCount === 0 && textFrames === 0;
 console.log(JSON.stringify({
     ok, tick: dumpA.tick, ticksDriven: TICKS, entities: dumpA.entities.length,
     bothShips, desyncs: [statusA.desyncCount, statusB.desyncCount],
-    binaryFrames: [a.frames.binary, b.frames.binary], textFrames,
+    binaryFrames: [a.frames.binary, b.frames.binary], textFrames, room,
     wire: liveWireCodec().encoding, schema: liveWireFingerprint(),
     differences: differences.slice(0, 10),
 }, null, 2));

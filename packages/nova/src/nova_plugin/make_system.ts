@@ -52,7 +52,11 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     world.resources.set(SystemIdResource, systemId);
     // Deterministic randomness and entity id allocation for simulation
     // code. Seeded per system so different systems behave differently
-    // while identical runs stay identical. The id factory is PREFIXED
+    // while identical runs stay identical. This is the GENESIS seed: in
+    // a server room the relay's `roomSeed` record reseeds it at tick 1
+    // for that room instance (spawn/spawn_bits.ts), so every world of
+    // the room builds this same genesis and the log makes it the room's
+    // own; a world no seed reaches keeps it. The id factory is PREFIXED
     // with the system id so no two worlds can mint the same uuid: a
     // uuid carried across a transition (a target, an aggressor) then
     // names nothing in the destination rather than an unrelated ship

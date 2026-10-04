@@ -12,7 +12,7 @@ import { SingletonComponent } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
-import { RollbackRelay } from "../communication/rollback_relay.js";
+import { mintRoomSeed, RollbackRelay } from "../communication/rollback_relay.js";
 import { RoomArchive } from "../communication/room_archive.js";
 import { DesyncRecorder, fingerprintGameData } from "../server/desync_recorder.js";
 import { PEER_LOCAL_COMPONENTS } from "./player/index.js";
@@ -32,6 +32,37 @@ export const PlayerData = t.intersection([
 export type PlayerData = t.TypeOf<typeof PlayerData>;
 
 const RemovedPeerEvent = new EcsEvent<string>('RemovedPeerEvent');
+
+/**
+ * How the server seeds a room it opens (#140, spawn/spawn_bits.ts): by
+ * default a fresh seed per room instance (mintRoomSeed). server.ts sets
+ * it from NOVA_ROOM_SEED (parseRoomSeedSetting) for reproducible runs; a
+ * provider that returns undefined opens UNSEEDED rooms, whose worlds keep
+ * the fixed genesis population exactly as before the room seed existed.
+ */
+export const RoomSeedResource = new Resource<() => number | undefined>('RoomSeed');
+
+/**
+ * NOVA_ROOM_SEED: unset = a fresh seed per room (the game); `off` =
+ * unseeded rooms (the fixed system-id genesis); a non-negative integer =
+ * that seed for every room (the same population on every visit, still
+ * under the entrant's bits).
+ */
+export function parseRoomSeedSetting(setting: string | undefined):
+    () => number | undefined {
+    if (setting === undefined || setting === '') {
+        return mintRoomSeed;
+    }
+    if (setting === 'off') {
+        return () => undefined;
+    }
+    const seed = Number(setting);
+    if (!Number.isSafeInteger(seed) || seed < 0) {
+        throw new Error(`NOVA_ROOM_SEED must be unset, 'off' or a `
+            + `non-negative integer, not '${setting}'`);
+    }
+    return () => seed >>> 0;
+}
 
 export const ManageClientsSystem = new System({
     name: 'ManageClients',
@@ -89,6 +120,7 @@ export const ServerPlugin: Plugin = {
         // world, wire-snapshotted periodically so joiners reconstruct
         // from a recent baseline plus the log tail rather than
         // replaying from genesis.
+        const roomSeed = world.resources.get(RoomSeedResource) ?? mintRoomSeed;
         const relays = new Map<string, RollbackRelay>();
         const archives = new Map<string, RoomArchive>();
         // The black-box recorder: every desync conviction becomes a
@@ -111,6 +143,15 @@ export const ServerPlugin: Plugin = {
                 } else if (!relays.has(systemId)) {
                     console.log(`Starting rollback room ${systemId}`);
                     const relay = new RollbackRelay(systemRoom, {
+                        // A player is entering a system nobody is in:
+                        // this room instance gets its own seed, and its
+                        // population is rolled fresh at the first
+                        // entrant's tick, under the entrant's bits
+                        // (#140, nova_plugin/spawn/spawn_bits.ts). A room
+                        // somebody is in is joined as it is; one that
+                        // empties is closed above, and the next entrant
+                        // gets a new seed.
+                        roomSeed: roomSeed(),
                         baseline: () => archives.get(systemId)?.latest,
                         // Resyncs reconstruct from a baseline captured
                         // now: the log tail shrinks from up-to-30s to

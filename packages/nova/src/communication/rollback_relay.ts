@@ -65,6 +65,16 @@ const DEFAULT_DESYNC_THRESHOLD = 3;
  */
 const TIMELY_REPORT_TICKS = 240;
 
+/**
+ * A fresh room seed (#140, nova_plugin/spawn/spawn_bits.ts): 32 random
+ * bits from the platform's CSPRNG. Server-side only — the relay mints it
+ * when it opens a room and hands it to every world of the room through
+ * the room's input log; no simulation ever calls this.
+ */
+export function mintRoomSeed(): number {
+    return globalThis.crypto.getRandomValues(new Uint32Array(1))[0]!;
+}
+
 export class RollbackRelay {
     tick = 0;
     private log: InputRecord[] = [];
@@ -111,9 +121,20 @@ export class RollbackRelay {
     constructor(private room: Communicator,
         { autoClock = true, stepMs = SIMULATION_STEP_MS, baseline,
             freshBaseline, referenceHash, onArchiveOutvoted, onDesync,
-            onDesyncDump,
+            onDesyncDump, roomSeed,
             desyncThreshold = DEFAULT_DESYNC_THRESHOLD }: {
                 autoClock?: boolean, stepMs?: number,
+                /**
+                 * This room instance's seed (#140; the server passes
+                 * mintRoomSeed()). Logged as the room's first record, a
+                 * server-authored `roomSeed` input at tick 1, so every
+                 * world of the room — the archive, the first entrant,
+                 * every later joiner through the log or a baseline —
+                 * applies the same seed at the same tick. Omitted, the
+                 * room is unseeded: its worlds keep their genesis
+                 * population (the fixed mode specs run in).
+                 */
+                roomSeed?: number,
                 /** The newest archived baseline, when an archive runs. */
                 baseline?: () => ArchiveBaseline | undefined,
                 /** A baseline captured on demand from the archive's
@@ -144,6 +165,16 @@ export class RollbackRelay {
         this.onArchiveOutvoted = onArchiveOutvoted;
         this.onDesync = onDesync;
         this.onDesyncDump = onDesyncDump;
+        if (roomSeed !== undefined) {
+            // Before anyone has joined: the first entrant's catch-up
+            // carries it like any other logged record. Not broadcast —
+            // nobody has a timeline yet.
+            this.log.push({
+                ...(room.uuid !== undefined ? { peerId: room.uuid } : {}),
+                tick: this.tick + 1,
+                inputs: [{ kind: 'roomSeed', seed: roomSeed >>> 0 }],
+            });
+        }
         this.subscription = room.messages.subscribe(({ source, message }) => {
             this.handleMessage(source, message);
         });
