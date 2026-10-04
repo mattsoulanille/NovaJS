@@ -15,7 +15,10 @@ import { LegalRecords } from './reputation.js';
  *
  * Bible citations (packages/nova/EVN_Bible.txt):
  *  - gövt Flags1 0x0400 "Can't hail ships of this govt" (cantBeHailed): the
- *    ship simply does not answer.
+ *    ship simply does not answer — no channel opens (shipAnswersHails, which
+ *    also silences the krypt and the wraith, ruling #297).
+ *  - HOSTILITY in the channel is the ship's IFF, not its govt's stance
+ *    (ruling #297): the caller passes hostility.ts's isIffHostile.
  *  - gövt Flags1 0x0200 "Warships will take bribes" (warshipsTakeBribes),
  *    0x2000 "Freighters will take bribes" (freightersTakeBribes),
  *    0x8000 "Ships taking bribes demand a larger percentage ... and their
@@ -100,42 +103,101 @@ export function bribeAmount(playerCredits: number,
     return Math.min(demand, Math.max(0, Math.floor(playerCredits)));
 }
 
+/**
+ * The two hail traits a ship CLASS inherits from its inherent attributes
+ * govt (ShipData.inheritedCantBeHailed / inheritedNoGreetings — gövt Flags
+ * 0x0400 and Flags2 0x0008 both say "if a ship type has an inherent
+ * attributes govt which includes this flag, all ships of that type will
+ * inherit this property"). A ShipData satisfies this directly.
+ */
+export interface ShipHailTraits {
+    inheritedCantBeHailed?: boolean;
+    inheritedNoGreetings?: boolean;
+}
+
+/**
+ * WHETHER A HAILED SHIP ANSWERS AT ALL. Matthew's ruling on #297: "Some ships
+ * don't respond to hails at all (no hailing channel appears), like the krypt
+ * pod and wraith." No channel opens for such a ship; the hail gets the
+ * original's no-response line on the status line instead.
+ *
+ * Two data readings make a ship silent:
+ *
+ *  1. gövt Flags 0x0400 "Can't hail ships of this govt", on the ship's own
+ *     government or inherited from its class's attributes govt. The Bible's
+ *     explicit switch. In the stock data: Hyperioid (148), the Wraith of
+ *     gövt 159, both Derelicts govts (160, 180) and the Cargo Drone Robots
+ *     (184) — and every Wraith (Adult) nova:185 through its InherentGovt.
+ *  2. A govt with NOTHING TO SAY AND NOTHING TO OFFER: Flags2 0x0001 (the
+ *     request assistance / beg for mercy button is disabled and the govt is
+ *     not talkative) together with Flags2 0x0008 (it doesn't respond with
+ *     greetings when hailed), the latter on the govt or inherited. That is
+ *     what the krypt pod and the wraith actually carry — the stock Krypt
+ *     govts (140, 163) and the other two Wraith govts (138, 139) have
+ *     Flags2 0x002b/0x0029/0x00ab and NO 0x0400 — and in the stock data
+ *     the pair occurs nowhere else that 0x0400 does not already silence.
+ *     0x0001 alone is NOT silence: the Dechtakar (gövt 142 Rimerta, Flags2
+ *     0x0027) open a channel and simply offer no Request Assistance
+ *     (ruling screenshot, "Hailing channel ready." / Greetings / Close).
+ */
+export function shipAnswersHails(govt: GovtData | undefined,
+    ship?: ShipHailTraits): boolean {
+    if (govt?.flags.cantBeHailed || ship?.inheritedCantBeHailed) {
+        return false;
+    }
+    const noGreetings = !!govt?.flags2.noDistressMessages
+        || !!ship?.inheritedNoGreetings;
+    return !(govt?.flags2.noAssistOrMercy && noGreetings);
+}
+
 /** What a hailed ship's answer amounts to, driving the dialog contents. */
 export type ShipHailResponse =
-    /** The ship can't be hailed at all (Flags1 cantBeHailed). */
+    /** The ship does not answer at all ({@link shipAnswersHails}). */
     | { kind: 'cantHail' }
-    /** Hostile: it's attacking / would attack the player. */
-    | { kind: 'hostile', canBribe: boolean }
+    /**
+     * IFF-hostile. `canBeg`: the channel offers Beg For Mercy in the
+     * Request Assistance slot. `canBribe`: a plea is answered with a price
+     * rather than a refusal.
+     */
+    | { kind: 'hostile', canBeg: boolean, canBribe: boolean }
     /** Ordinary answer: a greeting (possibly empty when suppressed). */
     | { kind: 'greeting', talkative: boolean };
 
 /**
- * How a hailed ship responds to the player, from the ship's government and
- * disposition. `disposition` is the same reading the radar/target-corners
- * use (shipDisposition). `aiType` selects the bribe flag; `takesBribes` is
- * exposed so the caller need not re-derive it.
+ * How a hailed ship responds to the player.
  *
- * `attackingPlayer` is BEHAVIORAL hostility — a ship currently attacking the
- * player is hostile regardless of politics (the same rule targetCornerStyle
- * uses in iff_plugin), so a neutral-govt warship the player provoked greets
- * with hostility and a Beg for Mercy / bribe offer, not a friendly hello.
+ * `iffHostile` is THE SHIP'S IFF (hostility.ts's isIffHostile — exactly when
+ * the target corners are red), NOT its government's stance: Matthew's ruling
+ * on #297, "Hostility in the hailing channel should reflect the iff of that
+ * ship, not the government stance ... Any ship that is iff hostile shows up
+ * as hostile with the 'beg for mercy' button instead of 'request
+ * assistance'." `aiType` selects the bribe flag.
+ *
+ * The Bible's mercy semantics (gövt flags):
+ *  - Flags2 0x0001 noAssistOrMercy: "the request assistance / beg for mercy
+ *    button is disabled" — no Beg For Mercy at all.
+ *  - otherwise every IFF-hostile ship offers Beg For Mercy, and whether the
+ *    plea buys anything is the bribe flags' business: 0x0200 warships /
+ *    0x2000 freighters take bribes, 0x8000 (pirates) always do and demand
+ *    more (shipTakesBribes). A ship that won't be bought answers the plea
+ *    with a refusal ({@link mercyRefusedText}) and keeps fighting.
  */
 export function shipHailResponse(govt: GovtData | undefined,
-    disposition: Disposition, aiType: number | undefined,
-    attackingPlayer = false): ShipHailResponse {
-    if (govt?.flags.cantBeHailed) {
+    iffHostile: boolean, aiType: number | undefined,
+    ship?: ShipHailTraits): ShipHailResponse {
+    if (!shipAnswersHails(govt, ship)) {
         return { kind: 'cantHail' };
     }
-    if (attackingPlayer || disposition === 'hostile') {
-        // Beg for mercy / bribe is offered only when the govt bargains and
-        // is not the silent, un-negotiable type (Flags2 noAssistOrMercy).
-        const canBribe = !govt?.flags2.noAssistOrMercy
-            && shipTakesBribes(govt, aiType);
-        return { kind: 'hostile', canBribe };
+    if (iffHostile) {
+        const canBeg = !govt?.flags2.noAssistOrMercy;
+        const canBribe = canBeg && shipTakesBribes(govt, aiType);
+        return { kind: 'hostile', canBeg, canBribe };
     }
-    // noDistressMessages govts answer but don't greet ("not talkative"); the
-    // noAssistOrMercy flag also marks a govt as "not talkative".
+    // noDistressMessages govts (and classes that inherit it) answer but
+    // don't greet ("not talkative"); the noAssistOrMercy flag also marks a
+    // govt as "not talkative".
     const talkative = !(govt?.flags2.noDistressMessages
+        || ship?.inheritedNoGreetings
         || govt?.flags2.noAssistOrMercy);
     return { kind: 'greeting', talkative };
 }
@@ -156,26 +218,36 @@ export function shipHailResponse(govt: GovtData | undefined,
  * (hail_plugin's applyHail, which grants nothing to a healthy player), not in
  * the offer.
  *
- * `attackingPlayer` is behavioral hostility (see shipHailResponse): a ship
- * actively attacking the player refuses assistance even if its politics are
- * neutral — otherwise a neutral-govt warship shooting a disabled player would
- * still offer to fly over and fully repair them (the assistance exploit).
+ * `iffHostile` is the ship's IFF (see shipHailResponse): an IFF-hostile ship
+ * offers Beg For Mercy INSTEAD (ruling #297), so it never offers assistance,
+ * even if its politics are neutral — otherwise a neutral-govt warship
+ * shooting a disabled player would still offer to fly over and fully repair
+ * them (the assistance exploit).
+ *
+ * `disposition` stays the GOVERNMENT stance, and a hostile one still refuses:
+ * the ruling's "a ship of an unfriendly government may show as neutral when
+ * hailed, but they will likely be rude and not offer assistance for free, or
+ * at all" — a pirate the player has bought off reads neutral in the channel
+ * but has no help to give.
  */
 export function canRequestAssistance(opts: {
     disposition: Disposition,
     govt: GovtData | undefined,
-    attackingPlayer?: boolean,
+    iffHostile?: boolean,
+    /** The hailed ship's class, for the inherited no-hail traits. */
+    ship?: ShipHailTraits,
     /**
      * ränk Flags 0x0400: "Player can always request battle assistance from
      * ships of the affiliated government". ALWAYS — so it overrides both the
      * politics and the govt's own noAssistOrMercy switch. It does not
-     * override behavioral hostility: a ship currently shooting at the player
-     * is not going to answer, and letting the rank override that would
-     * reopen the assistance exploit the attackingPlayer test closes.
+     * override IFF hostility: a ship currently shooting at the player is not
+     * going to answer, and letting the rank override that would reopen the
+     * assistance exploit the iffHostile test closes. Nor does it make a
+     * silent ship ({@link shipAnswersHails}) answer.
      */
     rankAlwaysAssists?: boolean,
 }): boolean {
-    if (opts.attackingPlayer) {
+    if (opts.iffHostile || !shipAnswersHails(opts.govt, opts.ship)) {
         return false;
     }
     if (opts.rankAlwaysAssists) {
@@ -329,6 +401,32 @@ export const BUSY_RESPONSE_COUNT = RESPONSE_GROUP_SIZE;
 export const BUSY_RESPONSE_FALLBACK = "I'm busy.";
 
 /**
+ * A SHIP'S NO-RESPONSE GROUP (STR# 3000 indices 5-9): "No response." / "No
+ * response to communication." / "No response detected." / "Sensors are
+ * picking up only static." / "No response on this channel." — the ship-comm
+ * table's own lines for a hail nobody answers, placed between the
+ * channel-open group (0-4) and the hostile one (10-14). Shown on the
+ * bottom-left status line in place of a channel for a ship that does not
+ * answer ({@link shipAnswersHails}), the way STR# 2002's "No response." is
+ * for a dead stellar.
+ */
+export const SHIP_NO_RESPONSE_FIRST_INDEX = 5;
+export const SHIP_NO_RESPONSE_COUNT = RESPONSE_GROUP_SIZE;
+export const SHIP_NO_RESPONSE_FALLBACK = 'No response.';
+
+/**
+ * A plea for mercy REFUSED (STR# 3000 indices 95-99): "In your dreams,
+ * pal." / "Yeah, right!" / "No way." / "You wish." / "Not a chance." — the
+ * answer an IFF-hostile ship whose government does not take bribes gives to
+ * Beg For Mercy. ASSUMPTION: the table does not label its groups; this one
+ * is the flat "no" among them (85-89 is a polite "I'd rather not", and the
+ * 15-19 taunts answer the hail itself rather than a plea).
+ */
+export const MERCY_REFUSED_FIRST_INDEX = 95;
+export const MERCY_REFUSED_COUNT = RESPONSE_GROUP_SIZE;
+export const MERCY_REFUSED_FALLBACK = 'In your dreams, pal.';
+
+/**
  * One line from a five-variant STR# 3000 group. The original rolls a random
  * variant; this picks one by `seed` (a hash of the ship's uuid, exactly as
  * greetingText does) so the line is stable per encounter, identical on every
@@ -387,6 +485,20 @@ export function mercyAcceptedText(strings: readonly string[] | undefined,
     seed = 0): string {
     return responseText(strings, MERCY_ACCEPTED_FIRST_INDEX,
         MERCY_ACCEPTED_FALLBACK, seed);
+}
+
+/** A silent ship's status-line no-response (STR# 3000 indices 5-9). */
+export function shipNoResponseText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, SHIP_NO_RESPONSE_FIRST_INDEX,
+        SHIP_NO_RESPONSE_FALLBACK, seed);
+}
+
+/** A refused plea for mercy (STR# 3000 indices 95-99). */
+export function mercyRefusedText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, MERCY_REFUSED_FIRST_INDEX,
+        MERCY_REFUSED_FALLBACK, seed);
 }
 
 /** The busy refusal line for a hailed ship (STR# 3000 indices 80-84). */

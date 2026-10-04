@@ -6,7 +6,10 @@ import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { OwnerComponent, SourceComponent } from '../nova_plugin/combat/index.js';
+import {
+    AggressionComponent, AGGRESSION_WINDOW_MS, OwnerComponent, SourceComponent,
+    styleForTarget,
+} from '../nova_plugin/combat/index.js';
 import { GovtComponent } from '../nova_plugin/core/index.js';
 import {
     FormationComponent, NpcComponent, ShootAllWeaponsComponent,
@@ -14,6 +17,7 @@ import {
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, PlayerEscortComponent, CreditsComponent,
+    EscortCommandComponent,
 } from '../nova_plugin/player/index.js';
 import {
     ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
@@ -23,7 +27,7 @@ import {
     ASSIST_GRANTED_FALLBACK, ASSIST_GRANTED_FIRST_INDEX, BUSY_RESPONSE_FALLBACK,
     BUSY_RESPONSE_FIRST_INDEX, CHANNEL_OPEN_FALLBACK, CHANNEL_OPEN_FIRST_INDEX,
     GENERIC_GREETING_FIRST_INDEX, HAIL_RESPONSE_TABLE, HOSTILE_RESPONSE_FALLBACK,
-    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX,
+    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MERCY_REFUSED_FALLBACK,
     MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
@@ -1294,3 +1298,195 @@ describe('computeContext: hailing a STELLAR', () => {
         });
     });
 });
+
+/**
+ * #297's ruling: "Hostility in the hailing channel should reflect the iff of
+ * that ship, not the government stance. A ship of an unfriendly government
+ * may show as neutral when hailed, but they will likely be rude and not offer
+ * assistance for free, or at all. Any ship that is iff hostile shows up as
+ * hostile with the 'beg for mercy' button instead of 'request assistance'.
+ * Some ships don't respond to hails at all (no hailing channel appears), like
+ * the krypt pod and wraith, and some don't have a 'request assistance' button
+ * (Polaris (often) and Dechtakar)."
+ *
+ * The channel reads hostility.ts's isIffHostile — the corners' own verdict —
+ * so each case below also checks that the brackets around the same ship say
+ * the same thing.
+ */
+describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
+    () => {
+        const NOW = 60_000;
+
+        function iffWorld(govtId: string,
+            configure: (target: Entity) => void = () => { },
+            govtOverrides: Partial<ReturnType<typeof getDefaultGovtData>> = {}) {
+            const built = makeWorld(target => {
+                target.components.set(GovtComponent, { id: govtId });
+                configure(target);
+            });
+            built.gameData.data.Govt.map.set(govtId, {
+                ...getDefaultGovtData(), id: govtId, ...govtOverrides,
+            });
+            built.world.resources.set(SimulationTimeResource, {
+                time: NOW, delta_ms: 16, delta_s: 0.016, frame: 3600,
+            });
+            return built;
+        }
+
+        /** The corner set the target corners would draw for TARGET. */
+        async function corners(world: World,
+            gameData: Parameters<typeof computeContext>[1]) {
+            // computeContext awaits the govts, which warms getCached.
+            await computeContext(world, gameData);
+            return styleForTarget(TARGET, world.entities.get(TARGET)!, PLAYER,
+                world.entities.get(PLAYER)!, gameData,
+                uuid => world.entities.get(uuid), NOW);
+        }
+
+        it('shows a fleeing RECENT AGGRESSOR as hostile, with Beg For Mercy '
+            + 'and no Request Assistance — exactly as its corners do',
+            async () => {
+                const { world, gameData } = iffWorld('test:neutral', target => {
+                    target.components.set(NpcComponent,
+                        { aiType: 3, mode: 'flee' });
+                });
+                // It shot the player five seconds ago (tier 3b).
+                world.entities.get(PLAYER)!.components.set(AggressionComponent,
+                    new Map([[TARGET,
+                        { at: NOW - 5_000, damage: 80, hostile: true }]]));
+
+                const result = await computeContext(world, gameData);
+                expect(result?.context.heading).toContain('Status: Hostile');
+                expect(result?.context.assist).toBeUndefined();
+                expect(commButtonSlots('ship', result!.context))
+                    .toEqual(['greetings', 'beg', 'close']);
+                expect(await corners(world, gameData)).toBe('hostile');
+            });
+
+        it('treats another player\'s ESCORT engaging us as hostile', async () => {
+            const { world, gameData } = iffWorld('test:neutral', target => {
+                target.components.set(TargetComponent, { target: PLAYER });
+                target.components.set(EscortCommandComponent,
+                    { command: 'defend', target: PLAYER });
+            });
+            const result = await computeContext(world, gameData);
+            expect(result?.context.heading).toContain('Status: Hostile');
+            expect(result?.context.assist).toBeUndefined();
+            expect(await corners(world, gameData)).toBe('hostile');
+        });
+
+        it('shows the same ship NEUTRAL once the aggression window has '
+            + 'passed, and offers assistance again', async () => {
+            const { world, gameData } = iffWorld('test:neutral', target => {
+                target.components.set(NpcComponent,
+                    { aiType: 3, mode: 'flee' });
+            });
+            world.entities.get(PLAYER)!.components.set(AggressionComponent,
+                new Map([[TARGET, {
+                    at: NOW - AGGRESSION_WINDOW_MS, damage: 80, hostile: true,
+                }]]));
+            const result = await computeContext(world, gameData);
+            expect(result?.context.heading).not.toContain('Status:');
+            expect(result?.context.assist).toBeDefined();
+            expect(await corners(world, gameData)).toBe('neutral');
+        });
+
+        it('shows a bought-off pirate NEUTRAL, but it offers no assistance '
+            + '("may show as neutral ... not offer assistance ... at all")',
+            async () => {
+                const { world, gameData } = iffWorld('test:pirate', target => {
+                    target.components.set(NpcComponent, {
+                        aiType: 3, pacifiedFrom: PLAYER,
+                        pacifiedUntil: NOW + 60_000,
+                    });
+                }, {
+                    flags: {
+                        ...getDefaultGovtData().flags,
+                        xenophobic: true, largerBribes: true,
+                    },
+                });
+                const result = await computeContext(world, gameData);
+                expect(result?.context.heading).not.toContain('Status:');
+                expect(result?.context.assist).toBeUndefined();
+                expect(result?.context.bribe).toBeUndefined();
+                expect(result?.context.mercyRefused).toBeUndefined();
+                expect(commButtonSlots('ship', result!.context))
+                    .toEqual(['greetings', 'close']);
+                expect(await corners(world, gameData)).toBe('neutral');
+            });
+
+        it('offers Beg For Mercy to a hostile ship that will NOT be bought, '
+            + 'and the plea is refused in the well (STR# 3000 95-99)',
+            async () => {
+                const { world, gameData } = iffWorld('test:neutral', target => {
+                    target.components.set(NpcComponent,
+                        { aiType: 3, mode: 'attack' });
+                    target.components.set(TargetComponent, { target: PLAYER });
+                });
+                const result = await computeContext(world, gameData);
+                const context = result!.context;
+                expect(context.bribe).toBeUndefined();
+                expect(context.mercyRefused).toBe(MERCY_REFUSED_FALLBACK);
+                expect(commButtonSlots('ship', context))
+                    .toEqual(['greetings', 'beg', 'close']);
+                const page = hailPress({ phase: 'main', context },
+                    { kind: 'beg' }, context);
+                expect(page).toEqual({ phase: 'main', context: {
+                    ...context, body: MERCY_REFUSED_FALLBACK,
+                } });
+            });
+
+        it('gives a hostile Flags2 0x0001 govt no Beg For Mercy at all',
+            async () => {
+                const { world, gameData } = iffWorld('test:silentish', target => {
+                    target.components.set(NpcComponent,
+                        { aiType: 3, mode: 'attack' });
+                    target.components.set(TargetComponent, { target: PLAYER });
+                }, {
+                    flags: {
+                        ...getDefaultGovtData().flags, warshipsTakeBribes: true,
+                    },
+                    flags2: {
+                        ...getDefaultGovtData().flags2, noAssistOrMercy: true,
+                    },
+                });
+                const result = await computeContext(world, gameData);
+                expect(result?.context.heading).toContain('Status: Hostile');
+                expect(commButtonSlots('ship', result!.context))
+                    .toEqual(['greetings', 'close']);
+            });
+
+        it('opens the Dechtakar\'s channel (Flags2 0x0001 only) with no '
+            + 'Request Assistance', async () => {
+            const { world, gameData } = iffWorld('test:dechtakar', () => { }, {
+                flags2: {
+                    ...getDefaultGovtData().flags2, noAssistOrMercy: true,
+                },
+            });
+            const result = await computeContext(world, gameData);
+            expect(result).toBeDefined();
+            expect(commButtonSlots('ship', result!.context))
+                .toEqual(['greetings', 'close']);
+        });
+
+        it('opens NO channel to a Krypt-like ship (Flags2 0x0001 + 0x0008)',
+            async () => {
+                const { world, gameData } = iffWorld('test:krypt', () => { }, {
+                    flags2: {
+                        ...getDefaultGovtData().flags2,
+                        noAssistOrMercy: true, noDistressMessages: true,
+                    },
+                });
+                expect(await computeContext(world, gameData)).toBeUndefined();
+            });
+
+        it('opens NO channel to a class that inherits Can\'t-hail', async () => {
+            const { world, gameData } = iffWorld('test:neutral', target => {
+                target.components.set(ShipDataComponent, shipData({
+                    id: 'nova:128', name: 'Wraith (Adult)',
+                    inheritedCantBeHailed: true,
+                }));
+            });
+            expect(await computeContext(world, gameData)).toBeUndefined();
+        });
+    });

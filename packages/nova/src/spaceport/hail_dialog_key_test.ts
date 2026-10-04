@@ -13,6 +13,12 @@ describe('assistSlotAction (the hail dialog\'s r key)', () => {
                 { bribe: { amount: 500, canAfford: true } })).toBe('beg');
         });
 
+    it('begs a hostile ship that will not be bought too (refused plea)',
+        () => {
+            expect(assistSlotAction('main', { mercyRefused: 'No way.' }))
+                .toBe('beg');
+        });
+
     it('prefers assist if both offers somehow coexist', () => {
         expect(assistSlotAction('main', { assist: {}, bribe: {} }))
             .toBe('assist');

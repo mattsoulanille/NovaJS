@@ -108,6 +108,14 @@ export interface HailContext {
          */
         accepted?: string,
     };
+    /**
+     * Beg For Mercy offered to an IFF-hostile ship that will NOT be bought
+     * (its govt takes no bribes): the line it answers the plea with (STR#
+     * 3000 95-99, "In your dreams, pal."). The plea stays on the main page
+     * and dispatches nothing — there is no deal to strike. Never set beside
+     * `bribe`, which is the plea a ship answers with a price.
+     */
+    mercyRefused?: string;
     /** Escort-management dialog (escort variant only): what this escort
      * costs, what it is worth, and which functions are on offer. */
     escort?: EscortManagement;
@@ -473,7 +481,7 @@ export function frameFor(phase: 'main' | 'haggle',
  * offer buttons are Pay/Leave) or when neither offer exists.
  */
 export function assistSlotAction(phase: 'main' | 'haggle',
-    context?: { assist?: unknown, bribe?: unknown }):
+    context?: { assist?: unknown, bribe?: unknown, mercyRefused?: unknown }):
     'assist' | 'beg' | undefined {
     if (phase !== 'main' || !context) {
         return undefined;
@@ -481,7 +489,7 @@ export function assistSlotAction(phase: 'main' | 'haggle',
     if (context.assist) {
         return 'assist';
     }
-    if (context.bribe) {
+    if (context.bribe || context.mercyRefused !== undefined) {
         return 'beg';
     }
     return undefined;
@@ -558,7 +566,17 @@ export function hailPress(state: HailPage, press: HailPress,
                 ? { phase, context: { ...context, body: press.answer } }
                 : state;
         case 'beg':
-            return context.bribe ? { phase: 'haggle', context } : state;
+            if (context.bribe) {
+                return { phase: 'haggle', context };
+            }
+            // A ship that will not be bought refuses the plea in the well
+            // and THE BUTTON STAYS, like every other answer on this page.
+            if (context.mercyRefused !== undefined) {
+                return context.body === context.mercyRefused ? state
+                    : { phase, context: { ...context,
+                        body: context.mercyRefused } };
+            }
+            return state;
         case 'cancel':
             return { phase: 'main', context };
         case 'pay': {

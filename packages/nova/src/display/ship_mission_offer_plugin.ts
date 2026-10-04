@@ -16,13 +16,14 @@ import {
 import {
     makeDescTextContext, playerGender, ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb/index.js';
-import { DisabledComponent, ShipComponent, TargetComponent } from '../nova_plugin/ship/index.js';
+import { DisabledComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import { shipDisposition, LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
     AcceptedMission, ShipOfferSpentComponent, MissionOffer, buildAcceptedMissionShips,
     expandMissionText,
 } from '../nova_plugin/missions/index.js';
-import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
+import { isAttackingPlayer } from '../nova_plugin/combat/index.js';
+import { SimulationTimeResource } from './simulation_time.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import { offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -118,9 +119,10 @@ function getPlayerShip(world: World) {
  * is adrift or shooting at you.
  *
  *  disabled        DisabledComponent — the derelicts, and any hulk.
- *  attackingPlayer the AI is targeting the player in attack mode (the same
- *                  test hail_dialog_plugin's computeContext uses, including
- *                  the legacy ShootAllWeapons dev-enemy marker).
+ *  attackingPlayer the ship is attacking the player — hostility.ts's
+ *                  isAttackingPlayer (tier 3 of the one hostility rule: the
+ *                  attack posture, another player's escort engaging, or a
+ *                  recent aggressor inside the aggression window).
  *  holdsGrudge     APPROXIMATED by attackingPlayer. përs Flags 0x0001 ("will
  *                  hold a grudge if attacked, and will subsequently attack
  *                  the player wherever the twain shall meet") is carried in
@@ -149,11 +151,14 @@ export async function shipOfferGates(world: World, target: Entity,
         ? await gameData.data.Govt.get(playerGovtId).catch(() => undefined)
         : undefined;
     const records = player?.entity.components.get(LegalRecordsComponent);
-    const targetsPlayer = player !== undefined
-        && target.components.get(TargetComponent)?.target === player.uuid;
-    const attackingPlayer = targetsPlayer
-        && (target.components.get(NpcComponent)?.mode === 'attack'
-            || target.components.has(ShootAllWeaponsComponent));
+    // Tier 3 of the one hostility rule (hostility.ts's isAttackingPlayer),
+    // not a narrower NPC-posture copy of it: recent aggression and another
+    // player's escort engaging count too. Judged on the MIRRORED SIM CLOCK,
+    // which the aggression record is stamped in.
+    // (Entity.uuid is the world key: EntityMap.set assigns it.)
+    const attackingPlayer = player !== undefined
+        && isAttackingPlayer(target.uuid, target, player.uuid, player.entity,
+            world.resources.get(SimulationTimeResource)?.time ?? 0);
     return {
         disabled: target.components.has(DisabledComponent),
         attackingPlayer,

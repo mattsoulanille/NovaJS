@@ -21,8 +21,8 @@ import {
     bribeAmount,
     canRequestAssistance,
     planetTakesBribes,
+    shipHailResponse,
     shipIsFighting,
-    shipTakesBribes,
 } from '../reputation/index.js';
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
@@ -36,7 +36,7 @@ import { shipDisposition } from '../reputation/index.js';
 import {
     isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
-import { AggressionComponent } from '../combat/index.js';
+import { AggressionComponent, isIffHostile } from '../combat/index.js';
 import { ShootAllWeaponsComponent } from '../npc/index.js';
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
@@ -222,22 +222,28 @@ export function applyHail(world: World, peerId: string | undefined,
     const playerRecords = player.components.get(LegalRecordsComponent);
     const disposition = shipDisposition(targetGovt, playerGovt, playerRecords);
 
-    // Behavioral hostility: a ship whose AI is attacking the player (mode
-    // 'attack' with its target pointed at the player) is hostile regardless
-    // of politics — the same rule the target corners use (iff_plugin's
-    // targetCornerStyle), including the legacy dev-enemy ShootAllWeapons
-    // marker. Computed from synced state so it matches the display dialog.
-    const targetsPlayer =
-        target.components.get(TargetComponent)?.target === found.uuid;
+    // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on #297),
+    // not a narrower NPC-posture copy of it: the one predicate the target
+    // corners paint with (hostility.ts's isIffHostile), so a recent
+    // aggressor that has since broken its lock, or another player's escort
+    // holding its perimeter against us, is as hostile here as its red
+    // brackets say. Every input is synced, so the display dialog reaches the
+    // same verdict and every peer applies the same outcome.
+    const now = world.resources.get(TimeResource)?.time ?? 0;
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        return;
+    }
+    const iffHostile = isIffHostile(action.target, target, found.uuid,
+        player, gameData, uuid => world.entities.get(uuid), now);
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
-    const attackingPlayer = targetsPlayer && (targetNpcMode === 'attack'
-        || target.components.has(ShootAllWeaponsComponent));
 
     if (action.kind === 'requestAssistance') {
         if (!canRequestAssistance({
             disposition,
             govt: targetGovt,
-            attackingPlayer,
+            iffHostile,
+            ship: target.components.get(ShipDataComponent),
             // ränk 0x0400: "Player can always request battle assistance from
             // ships of the affiliated government" (rank_logic.ts).
             rankAlwaysAssists: ranksAllowAssistance(
@@ -285,11 +291,12 @@ export function applyHail(world: World, peerId: string | undefined,
         return;
     }
 
-    // Bribe / beg for mercy: only a hostile, bribe-taking ship bargains. A
-    // ship actively attacking the player counts as hostile here even if its
-    // politics are neutral (behavioral hostility), so the player can buy it
-    // off just like a politically hostile one.
-    if (disposition !== 'hostile' && !attackingPlayer) {
+    // Bribe / beg for mercy: only an IFF-HOSTILE, bribe-taking ship
+    // bargains — Beg For Mercy is the hostile channel's button. A ship
+    // attacking the player (or that did, inside the aggression window)
+    // counts even if its politics are neutral, so the player can buy it off
+    // just like a politically hostile one.
+    if (!iffHostile) {
         return;
     }
     // ONE PAYMENT PER REPRIEVE. The comm dialog keeps Beg For Mercy in its
@@ -300,12 +307,17 @@ export function applyHail(world: World, peerId: string | undefined,
     // runs from the payment that bought it, and a player who wants a fresh
     // one waits for this one to lapse (or provokes the ship, which voids it).
     if (isPacifiedToward(target.components.get(NpcComponent), found.uuid,
-        world.resources.get(TimeResource)?.time ?? 0)) {
+        now)) {
         return;
     }
+    // The Bible's mercy semantics, the same pure verdict the dialog draws
+    // its offer from (hail.ts's shipHailResponse): a silent ship answers
+    // nothing, a Flags2 0x0001 govt has no Beg For Mercy, and only the
+    // bribe flags make a plea cost money rather than earn a refusal.
     const aiType = target.components.get(NpcComponent)?.aiType;
-    if (targetGovt?.flags2.noAssistOrMercy
-        || !shipTakesBribes(targetGovt, aiType)) {
+    const response = shipHailResponse(targetGovt, iffHostile, aiType,
+        target.components.get(ShipDataComponent));
+    if (response.kind !== 'hostile' || !response.canBribe) {
         return;
     }
     const credits = player.components.get(CreditsComponent);

@@ -227,12 +227,18 @@ export type CommButton =
  * Close Channel on the reference's third row instead of sliding it up.
  */
 export function commButtonSlots(variant: 'ship' | 'planet' | 'escort',
-    context: { assist?: { free: boolean }, bribe?: unknown }): CommButton[] {
+    context: {
+        assist?: { free: boolean }, bribe?: unknown, mercyRefused?: unknown,
+    }): CommButton[] {
     if (variant === 'planet') {
         return ['greetings', context.bribe ? 'bribe' : 'tribute', 'close'];
     }
+    // Beg For Mercy whether the plea will be priced (`bribe`) or refused
+    // (`mercyRefused`): ruling #297, every IFF-hostile ship shows it in
+    // place of Request Assistance (unless its govt disables it).
     const offer = context.assist ? 'assist' as const
-        : context.bribe ? 'beg' as const : undefined;
+        : context.bribe || context.mercyRefused !== undefined
+            ? 'beg' as const : undefined;
     return offer
         ? ['greetings', offer, 'close']
         : ['greetings', 'close'];
