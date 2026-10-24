@@ -1,4 +1,5 @@
-import { AsyncSystem } from 'nova_ecs/async_system';
+import { System } from 'nova_ecs/system';
+import { GetWorld, UUID } from 'nova_ecs/arg_types';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { GameData } from '../client/gamedata/GameData';
@@ -13,20 +14,20 @@ import { Stage } from './stage_resource';
 
 const StarmapResource = new Resource<Starmap>("Starmap");
 
-const MapSystem = new AsyncSystem({
+const MapSystem = new System({
     name: 'MapSystem',
     events: [EcsControlEvent] as const,
-    exclusive: true,
-    alwaysRunOnEvents: false,
-    skipIfApplyingPatches: true,
     args: [EcsControlEvent, StarmapResource, JumpRouteComponent,
-        ScreenSize, PlayerShipSelector] as const,
-    async step(controlEvent, starmap, jumpRoute, { x, y }) {
-        starmap.container.position.set(x / 2, y / 2);
+        ScreenSize, GetWorld, UUID, PlayerShipSelector] as const,
+    step(controlEvent, starmap, jumpRoute, { x, y }, world, uuid) {
+        starmap.container.position.set(x / 2, (y - ((window as any).novaAssets ? 55 : 0)) / 2);
+        starmap.container.scale.set(Math.min(1,(x-20)/640,(y - ((window as any).novaAssets ? 90 : 20))/540));
         for (const {action, state} of controlEvent) {
             if (action === 'map' && state === 'start' &&
                 !starmap.container.visible) {
-                jumpRoute.route = await starmap.show(jumpRoute.route);
+                starmap.show([...jumpRoute.route]).then(route => {
+                    world.entities.get(uuid)?.components.set(JumpRouteComponent, { route });
+                });
             }
         }
     }

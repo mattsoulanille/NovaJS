@@ -1,0 +1,44 @@
+{
+  "name": "novajs-offline-build",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "express": "4.18.2",
+    "fp-ts": "2.15.0",
+    "hull.js": "1.0.3",
+    "io-ts": "2.2.20",
+    "pixi-layers": "0.3.1",
+    "pixi.js": "7.1.4",
+    "pngjs": "7.0.0",
+    "rxjs": "7.8.1",
+    "supports-color": "9.3.1",
+    "ts-enum-util": "4.0.2",
+    "uuid": "9.0.0",
+    "ws": "8.13.0",
+    "@pixi/filter-color-matrix": "7.2.4",
+    "@pixi/particle-emitter": "5.0.8",
+    "@pixi/sound": "5.1.2",
+    "argparse": "2.0.1",
+    "comlink": "4.4.1",
+    "esbuild": "0.25.0",
+    "immer": "9.0.16",
+    "io-ts-types": "0.5.19",
+    "lamejs": "1.2.0",
+    "p-queue": "7.3.4",
+    "path-browserify": "1.0.1",
+    "peer-lite": "2.0.2",
+    "rbush": "3.0.1",
+    "requirejs": "2.3.6",
+    "sat": "0.9.0",
+    "seedrandom": "3.0.5",
+    "stats.js": "0.17.0",
+    "url-join": "5.0.0"
+  }
+}

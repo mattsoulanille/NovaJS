@@ -111,7 +111,7 @@ export function readRez(dataView: DataView): ResourceMap {
         if (!resources.hasOwnProperty(resType)) {
             resources[resType] = {};
         }
-        resources[resType][id] = new Resource(resType, id, name, resourceData[index - 1]);
+        resources[resType][id] = new Resource(resType, id, name, resourceData[index - 1], 'rez');
     }
 
     return resources;
@@ -232,7 +232,7 @@ function readFile(filePath: string): Promise<ArrayBuffer> {
                 reject(err);
                 return;
             }
-            fulfill(data.buffer);
+            fulfill(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
         });
     });
 }
@@ -263,7 +263,8 @@ class Resource {
     readonly type: string;
     readonly id: number;
     readonly name: string;
-    constructor(resourceType: string, id: number, name: string, data: DataView) {
+    constructor(resourceType: string, id: number, name: string, data: DataView,
+        readonly containerFormat: 'resource-fork' | 'rez' = 'resource-fork') {
         this.type = resourceType;
         this.id = id;
         this.name = name;

@@ -46,7 +46,8 @@ const LandSystem = new System({
         deImmerify(playerShip);
 
         spaceport.container.position.x = x / 2;
-        spaceport.container.position.y = y / 2;
+        spaceport.container.position.y = (y - ((window as any).novaAssets ? 55 : 0)) / 2;
+        spaceport.container.scale.set(Math.min(1,(x-20)/640,(y - ((window as any).novaAssets ? 90 : 20))/540));
         spaceport.show(playerShip).then(newShip => {
             if (communicator?.uuid) {
                 newShip.components.set(MultiplayerData, {
@@ -64,7 +65,8 @@ const SpaceportResizeSystem = new System({
     args: [ResizeEvent, SpaceportComponent] as const,
     step({ x, y }, spaceport) {
         spaceport.container.position.x = x / 2;
-        spaceport.container.position.y = y / 2;
+        spaceport.container.position.y = (y - ((window as any).novaAssets ? 55 : 0)) / 2;
+        spaceport.container.scale.set(Math.min(1,(x-20)/640,(y - ((window as any).novaAssets ? 90 : 20))/540));
     }
 });
 

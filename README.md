@@ -152,3 +152,7 @@ The project is organized as a monorepo and has several subpackages:
 
 
 
+
+## Optional single-file offline build
+
+See [offline/README.md](offline/README.md) for the experimental offline HTML build with touch controls. Supply your own game data locally.

@@ -31,7 +31,9 @@ class SpobResource extends BaseResource {
             d.getInt16(18)
         ];
         this.government = d.getInt16(20);
-        this.landingPictID = d.getUint16(24);
+        // The tested Windows REZ stellar layout has two extra bytes here.
+        // Preserve the original offset for Mac resource forks.
+        this.landingPictID = d.getUint16(resource.containerFormat === "rez" ? 26 : 24);
         this.landingDescID = this.id;
     }
 

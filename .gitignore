@@ -75,3 +75,9 @@ node_modules
 
 # Bazel
 .bazelrc.user
+# Offline outputs contain locally supplied game data.
+build/
+offline-assets/
+raw-pict/
+NovaJS-Offline.html
+*.rez

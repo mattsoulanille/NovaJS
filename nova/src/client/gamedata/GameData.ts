@@ -85,7 +85,7 @@ export class GameData implements GameDataInterface {
     }
 
     private async preload() {
-        const data = await (await fetch('/preloadData.json')).json() as PreloadData;
+        const data = (window as any).novaAssets ? {} as PreloadData : await (await fetch('/preloadData.json')).json() as PreloadData;
         for (const [uncastKey, val] of Object.entries(data)) {
             const key = uncastKey as keyof typeof data;
             this.data[key].gotten = val;
@@ -95,7 +95,23 @@ export class GameData implements GameDataInterface {
 
     private async getUrl(url: string, priority = 0): Promise<unknown> {
         await this.preloadData;
-        return PIXI.Assets.load(url);
+        const assets = (window as any).novaAssets;
+        if (!assets) return PIXI.Assets.load(url);
+        if (url.endsWith('.json')) {
+            const obj = assets[url];
+            if (!obj) throw new Error('Missing bundled data: '+url);
+            if (url.includes('/SpriteSheetFrames/')) {
+                const id=url.split('/').pop()!.slice(0,-5);
+                const image=assets['/gameData/data/SpriteSheetImage/'+id+'.png'];
+                const texture=await PIXI.Assets.load(image);
+                const sheet=new PIXI.Spritesheet(texture.baseTexture,obj);
+                await sheet.parse();
+                return {data:obj};
+            }
+            return obj;
+        }
+        if (!assets[url]) throw new Error('Missing bundled asset: '+url);
+        return PIXI.Assets.load(assets[url]);
     }
 
     private getDataPrefix(dataType: NovaDataType): string {
@@ -140,7 +156,9 @@ export class GameData implements GameDataInterface {
     }
 
     private url(id: string): string {
-        return urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
+        const path = urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
+        const assets = (window as any).novaAssets;
+        return assets ? (assets[path] || assets.defaultPict) : path;
     }
 
     textureFromPict(id: string): PIXI.Texture {
@@ -153,7 +171,8 @@ export class GameData implements GameDataInterface {
 
     async textureFromPictAsync(id: string, priority?: number) {
         const pictPath = this.url(id);
-        await this.data.PictImage.get(id, priority);
+        if ((window as any).novaAssets) await PIXI.Assets.load(pictPath);
+        else await this.data.PictImage.get(id, priority);
         return PIXI.Texture.from(pictPath);
     }
 
@@ -166,7 +185,7 @@ export class GameData implements GameDataInterface {
     async textureFromCicn(id: string): Promise<PIXI.Texture> {
         const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + ".png");
         await this.data.CicnImage.get(id);
-        return PIXI.Texture.from(cicnPath);
+        return PIXI.Texture.from(((window as any).novaAssets?.[cicnPath] ?? cicnPath));
     }
 
     private addSoundGettable() {
@@ -175,7 +194,7 @@ export class GameData implements GameDataInterface {
             const soundPath = urlJoin(dataPrefix, id) + '.mp3';
             return new Promise((fulfill, reject) => {
                 sound.Sound.from({
-                    url: soundPath,
+                    url: ((window as any).novaAssets?.[soundPath] ?? soundPath),
                     preload: true,
                     loaded: (err, sound) => {
                         if (err || !sound) {
@@ -190,7 +209,7 @@ export class GameData implements GameDataInterface {
     }
 
     private async getIds(): Promise<NovaIDs> {
-        return (await fetch(idsPath + ".json")).json() as unknown as NovaIDs;
+        return (window as any).novaAssets?.[idsPath+".json"] ?? (await fetch(idsPath + ".json")).json();
         //const res = await ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;
 
         //return res;
