@@ -8,10 +8,11 @@ import {
     MovementType,
 } from 'nova_ecs/plugins/movement_plugin';
 import {
-    FixedTimestepResource, TimePlugin,
+    FixedTimestepResource, TimePlugin, TimeScaleResource,
 } from 'nova_ecs/plugins/time_plugin';
 import { MovementTimeLimitResource } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
+import { applyDisplaySpeed } from '../client/frame_pump.js';
 import {
     MAX_EXTRAPOLATION_DELTA_MS, MovementExtrapolationPlugin,
     shouldExtrapolate, STALE_SNAPSHOT_MS,
@@ -318,5 +319,51 @@ describe('MovementExtrapolationPlugin', () => {
         const state = explosion.components.get(MovementStateComponent)!;
         expect(state.position.x).toBe(10);
         expect(state.position.y).toBe(20);
+    });
+
+    it('extrapolates at 2x speed and scales its stall clamp when the room runs at 2x (#371 R2)', async () => {
+        jasmine.clock().install();
+        try {
+            jasmine.clock().mockDate(new Date(10_000));
+            const scaledWorld = new World('scaled display');
+            await scaledWorld.addPlugin(TimePlugin);
+            scaledWorld.resources.set(TimeScaleResource, { scale: 1 });
+            await scaledWorld.addPlugin(MovementExtrapolationPlugin);
+
+            const ship = new Entity('ship')
+                .addComponent(MovementStateComponent, makeMovementState({
+                    velocity: new Vector(100, 0),
+                }))
+                .addComponent(MovementPhysicsComponent, {
+                    maxVelocity: 300,
+                    turnRate: 1,
+                    acceleration: 100,
+                    movementType: MovementType.INERTIAL,
+                });
+            scaledWorld.entities.set('ship', ship);
+
+            // At 1x: 20ms wall clock moves 100 * 0.02 = 2 units.
+            applyDisplaySpeed(scaledWorld, 1);
+            jasmine.clock().tick(20);
+            scaledWorld.step();
+            expect(ship.components.get(MovementStateComponent)!.position.x)
+                .toBeCloseTo(2, 5);
+
+            // At 2x: 20ms wall clock moves 100 * 0.04 = 4 units (total 6).
+            applyDisplaySpeed(scaledWorld, 2);
+            jasmine.clock().tick(20);
+            scaledWorld.step();
+            expect(ship.components.get(MovementStateComponent)!.position.x)
+                .toBeCloseTo(6, 5);
+
+            // A 10s wall-clock stall at 2x clamps to MAX_EXTRAPOLATION_DELTA_MS * 2
+            // (200ms scaled = 100ms wall time -> +20 units, total 26).
+            jasmine.clock().tick(10_000);
+            scaledWorld.step();
+            expect(ship.components.get(MovementStateComponent)!.position.x)
+                .toBeCloseTo(6 + 100 * (MAX_EXTRAPOLATION_DELTA_MS * 2 / 1000), 5);
+        } finally {
+            jasmine.clock().uninstall();
+        }
     });
 });

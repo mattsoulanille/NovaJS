@@ -22,7 +22,7 @@
 import * as Comlink from 'comlink';
 import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
-import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
+import { TimePlugin, TimeScaleResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { combineLatest, filter, firstValueFrom, Subscription, timeout } from 'rxjs';
 import { v4 } from 'uuid';
@@ -62,6 +62,7 @@ import {
 } from './client_state.js';
 import { insertPlayerAndFleet } from './fleet_insertion.js';
 import { prepareMissionShips, refundLostFighters } from './fleet_ledger.js';
+import { applyDisplaySpeed } from './frame_pump.js';
 import { ClientRuntime, SERVER_PEER_TIMEOUT_MS } from './runtime.js';
 import { isSessionEnded, TransitionScope } from './session_transitions.js';
 
@@ -154,9 +155,11 @@ async function makeDisplayWorld(runtime: ClientRuntime, systemId: string):
     displayWorld.resources.set(ControlsSubject, runtime.controlsSubject);
     displayWorld.resources.set(CommunicatorResource, runtime.communicator);
     // The display world keeps its own wall-clock time for smooth
-    // rendering. (The simulation runs on fixed, 0-based logical time,
-    // which is not copied into the display world.)
+    // rendering, scaled by the room's active speed (1x or 2x, R2 #371) so
+    // display-only effects, animations and movement extrapolation match the
+    // room's pace. (The simulation runs on fixed, 0-based logical time.)
     await displayWorld.addPlugin(TimePlugin);
+    displayWorld.resources.set(TimeScaleResource, { scale: 1 });
     await displayWorld.addPlugin(Display);
     return displayWorld;
 }
@@ -477,6 +480,8 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     if (speedHolder) {
         speedHolder.status = initialFrame.roomSpeed;
     }
+    applyDisplaySpeed(displayWorld,
+        initialFrame.roomSpeed?.speed ?? initialFrame.pacing?.speed ?? 1);
     // The last thing that can fail is behind us: the session is checked
     // one final time so a world is never published over a title screen.
     scope.check();

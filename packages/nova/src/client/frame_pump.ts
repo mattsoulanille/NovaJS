@@ -19,6 +19,7 @@
  * taken, and the rosters must not be reset underneath it).
  */
 import { MovementTimeLimitResource } from 'nova_ecs/plugins/movement_plugin';
+import { TimeScaleResource } from 'nova_ecs/plugins/time_plugin';
 import type { World } from 'nova_ecs/world';
 import type * as PIXI from 'pixi.js';
 import type Stats from 'stats.js';
@@ -29,8 +30,11 @@ import {
 import {
     SimulationBridgeClosedError,
 } from '../communication/async_simulation_bridge_client.js';
+import type { RoomSpeed } from '../communication/rollback_protocol.js';
 import type { SimulationPacing } from '../communication/simulation_frame.js';
-import { shouldExtrapolate } from '../display/movement_extrapolation_plugin.js';
+import {
+    MAX_EXTRAPOLATION_DELTA_MS, shouldExtrapolate,
+} from '../display/movement_extrapolation_plugin.js';
 import { RoomSpeedResource } from '../display/status_bar_speed.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
@@ -93,6 +97,23 @@ export function advanceSimulationDebt(input: {
             HARD_CATCHUP_STEPS * speed);
     }
     return { steps, timeDebt };
+}
+
+/**
+ * Applies the room's clock multiplier (1x or 2x) to the display world's
+ * scaled wall clock and movement-extrapolation clamp (R2 #371): explosions,
+ * particles, sprite animations, engine glow, bank timing, and movement
+ * extrapolation between snapshots all run at the room's pace.
+ */
+export function applyDisplaySpeed(displayWorld: World, speed: RoomSpeed): void {
+    const timeScale = displayWorld.resources.get(TimeScaleResource);
+    if (timeScale) {
+        timeScale.scale = speed;
+    }
+    const movementLimit = displayWorld.resources.get(MovementTimeLimitResource);
+    if (movementLimit) {
+        movementLimit.maxDeltaMs = MAX_EXTRAPOLATION_DELTA_MS * speed;
+    }
 }
 
 /** The pump the `novaSim` control talks to, while a session is open. */
@@ -294,6 +315,10 @@ export class FramePump {
                 if (movementSyncedSinceStep.size > 0) {
                     this.lastMovementSyncMs = now;
                 }
+                const displaySpeed =
+                    live.world.resources.get(RoomSpeedResource)?.status?.speed
+                    ?? this.pacing?.speed ?? 1;
+                applyDisplaySpeed(live.world, displaySpeed);
                 const movementLimit =
                     live.world.resources.get(MovementTimeLimitResource);
                 if (movementLimit) {

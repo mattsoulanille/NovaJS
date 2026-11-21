@@ -26,6 +26,18 @@ export const FixedTimestepResource =
     new Resource<{ delta_ms: number }>('FixedTimestep');
 
 /**
+ * Optional wall-clock multiplier for display worlds (e.g. 2 when the room
+ * runs at 2x speed, #371 R2). Ignored when FixedTimestepResource is set so
+ * deterministic simulation worlds are never affected.
+ */
+export const TimeScaleResource =
+    new Resource<{ scale: number }>('TimeScale');
+
+/** Tracks the previous real wall-clock sample for scaled display stepping. */
+const WallClockAnchorResource =
+    new Resource<{ lastWallMs: number }>('WallClockAnchor');
+
+/**
  * Puts a world on a fixed timestep with deterministic, 0-based time.
  * Call after TimePlugin has been added.
  */
@@ -42,7 +54,7 @@ export function useFixedTimestep(world: World, delta_ms: number) {
 
 export const TimeSystem = new System({
     name: 'time',
-    // The fixed timestep is optional and read through the world.
+    // The fixed timestep and time scale are optional and read through the world.
     args: [TimeResource, GetWorld, SingletonComponent] as const,
     step: (time, world) => {
         const fixedTimestep = world.resources.get(FixedTimestepResource);
@@ -56,6 +68,25 @@ export const TimeSystem = new System({
         // Wall-clock path (display worlds): epoch ms via Date, which
         // jasmine's mockDate can drive (performance.now cannot be).
         const now = new Date().getTime();
+        const timeScale = world.resources.get(TimeScaleResource);
+        let anchor = world.resources.get(WallClockAnchorResource);
+        if (timeScale) {
+            if (!anchor) {
+                anchor = { lastWallMs: now };
+                world.resources.set(WallClockAnchorResource, anchor);
+            }
+            const rawDeltaMs = Math.max(0, now - anchor.lastWallMs);
+            anchor.lastWallMs = now;
+            const scaledDeltaMs = rawDeltaMs * timeScale.scale;
+            time.delta_ms = scaledDeltaMs;
+            time.delta_s = scaledDeltaMs / 1000;
+            time.time += scaledDeltaMs;
+            time.frame++;
+            return;
+        }
+        if (anchor) {
+            anchor.lastWallMs = now;
+        }
         time.delta_ms = now - time.time;
         time.delta_s = time.delta_ms / 1000;
         time.time = now;
@@ -66,8 +97,10 @@ export const TimeSystem = new System({
 export const TimePlugin: Plugin = {
     name: 'time',
     build: (world) => {
+        const now = new Date().getTime();
         world.resources.set(TimeResource,
-            { delta_ms: 0, delta_s: 0, time: new Date().getTime(), frame: 0 });
+            { delta_ms: 0, delta_s: 0, time: now, frame: 0 });
+        world.resources.set(WallClockAnchorResource, { lastWallMs: now });
         world.addSystem(TimeSystem);
     }
 }

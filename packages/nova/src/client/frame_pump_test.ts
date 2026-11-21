@@ -1,6 +1,10 @@
 import 'jasmine';
+import { MovementTimeLimitResource } from 'nova_ecs/plugins/movement_plugin';
+import { TimePlugin, TimeResource, TimeScaleResource } from 'nova_ecs/plugins/time_plugin';
+import { World } from 'nova_ecs/world';
+import { MAX_EXTRAPOLATION_DELTA_MS } from '../display/movement_extrapolation_plugin.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
-import { advanceSimulationDebt } from './frame_pump.js';
+import { advanceSimulationDebt, applyDisplaySpeed } from './frame_pump.js';
 
 describe('advanceSimulationDebt (#371 R1)', () => {
     it('advances 1 step per frame at 1x and 2 steps per frame at 2x', () => {
@@ -75,5 +79,47 @@ describe('advanceSimulationDebt (#371 R1)', () => {
             pacing: { rate: 2.1, behindTicks: 500, speed: 2 },
         });
         expect(hardSnap2x.steps).toBe(2 + 120);
+    });
+});
+
+describe('applyDisplaySpeed (#371 R2)', () => {
+    it('runs display world TimeResource and movement clamp at 2x when fast', async () => {
+        jasmine.clock().install();
+        try {
+            jasmine.clock().mockDate(new Date(5000));
+            const displayWorld = new World('display speed test');
+            await displayWorld.addPlugin(TimePlugin);
+            displayWorld.resources.set(TimeScaleResource, { scale: 1 });
+            displayWorld.resources.set(MovementTimeLimitResource, {
+                enabled: true,
+                maxDeltaMs: MAX_EXTRAPOLATION_DELTA_MS,
+            });
+
+            // At 2x, 50ms wall time advances display TimeResource by 100ms
+            // (driving explosions, particles, sprite animations, and engine glow at 2x).
+            applyDisplaySpeed(displayWorld, 2);
+            expect(displayWorld.resources.get(MovementTimeLimitResource)!.maxDeltaMs)
+                .toBe(MAX_EXTRAPOLATION_DELTA_MS * 2);
+
+            jasmine.clock().tick(50);
+            displayWorld.step();
+            const timeAt2x = displayWorld.resources.get(TimeResource)!;
+            expect(timeAt2x.delta_ms).toBe(100);
+            expect(timeAt2x.delta_s).toBeCloseTo(0.1, 6);
+            expect(timeAt2x.time).toBe(5100);
+
+            // Returning to 1x restores 1x delta and clamp while keeping time monotonic.
+            applyDisplaySpeed(displayWorld, 1);
+            expect(displayWorld.resources.get(MovementTimeLimitResource)!.maxDeltaMs)
+                .toBe(MAX_EXTRAPOLATION_DELTA_MS);
+
+            jasmine.clock().tick(50);
+            displayWorld.step();
+            const timeBack1x = displayWorld.resources.get(TimeResource)!;
+            expect(timeBack1x.delta_ms).toBe(50);
+            expect(timeBack1x.time).toBe(5150);
+        } finally {
+            jasmine.clock().uninstall();
+        }
     });
 });
