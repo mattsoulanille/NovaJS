@@ -84,6 +84,37 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
         return new PIXI.Sprite(texture);
     }
 
+    /**
+     * Loads a PICT into PIXI's texture cache under the URL spriteFromPict /
+     * textureFromPict read, so a later sprite of it is drawn the frame it
+     * is made — the landed-UI prefetch (client/landed_ui_prefetch.ts) warms
+     * the spaceport's art through this. Resolves once the image is loaded.
+     * A failed load is dropped from the cache again, so a later
+     * spriteFromPict retries instead of inheriting the failure.
+     */
+    prefetchPict(id: string): Promise<void> {
+        const url = this.url(id);
+        const texture = PIXI.Texture.from(url);
+        const base = texture.baseTexture;
+        if (base.valid) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const loaded = () => {
+                base.off('error', failed);
+                resolve();
+            };
+            const failed = (error: unknown) => {
+                base.off('loaded', loaded);
+                PIXI.Texture.removeFromCache(texture);
+                PIXI.BaseTexture.removeFromCache(base);
+                reject(new Error(`PICT ${id} failed to load: ${String(error)}`));
+            };
+            base.once('loaded', loaded);
+            base.once('error', failed);
+        });
+    }
+
     async textureFromCicn(id: string): Promise<PIXI.Texture> {
         const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + '.png');
         await this.data.CicnImage.get(id);

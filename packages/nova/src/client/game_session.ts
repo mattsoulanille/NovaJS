@@ -65,6 +65,7 @@ import {
     localPlayerShipUuid, spawnHiredEscorts,
 } from './fleet_ledger.js';
 import { FramePump } from './frame_pump.js';
+import { LandedUiPrefetch } from './landed_ui_prefetch.js';
 import { followIdentity } from './identity.js';
 import { preparePlayerStart } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
@@ -388,6 +389,13 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     void MissionUniverse.shared(gameData).load().catch(e => {
         console.warn('Failed to preload mission data:', e);
     });
+    // ...and, from now on, whatever landing in the current system will
+    // need: the spaceport's art and data, warmed at low priority while
+    // the player is in space (#369; client/landed_ui_prefetch.ts).
+    const landedUiPrefetch = new LandedUiPrefetch(gameData,
+        runtime.displayAssetData);
+    sessionDisposers.push(landedUiPrefetch.follow(state));
+    window.novaLandedUiPrefetch = landedUiPrefetch;
 
     saves.installSaveTriggers();
 

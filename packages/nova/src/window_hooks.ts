@@ -16,6 +16,7 @@ import type * as PIXI from 'pixi.js';
 import type { Autopilot } from './autopilot.js';
 import type { ClientState } from './client/client_state.js';
 import type { FleetLedger } from './client/fleet_ledger.js';
+import type { LandedUiPrefetch } from './client/landed_ui_prefetch.js';
 import type { SimulationControl } from './client/frame_pump.js';
 import type { DisplayAssetData } from './client/gamedata/display_asset_data.js';
 import type { SimulationGameData } from './client/gamedata/simulation_game_data.js';
@@ -85,6 +86,9 @@ declare global {
         /** Hire escorts onto the player through the bar's spawn path. */
         novaSpawnEscorts?: (shipIds: string[]) => Promise<void>;
         novaEscortRosters?: () => ReturnType<FleetLedger['summary']>;
+        /** The background landed-UI warm-up (client/landed_ui_prefetch.ts):
+         * `await novaLandedUiPrefetch.idle` waits for the current run. */
+        novaLandedUiPrefetch?: LandedUiPrefetch;
         novaEscortAudit?: (expected?: string[]) =>
             ReturnType<FleetLedger['audit']>;
         /** Console-callable save / reset (client/player_save.ts). */
