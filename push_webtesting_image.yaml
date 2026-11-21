@@ -1,9 +1,0 @@
-steps:
-  # Push the image
-  - name: gcr.io/cloud-builders/bazel@sha256:9ec79ef825f52df1684115f71354b7af357c9990db533c0f417ba75062954f3f
-    id: push_container
-    args: ['run', '--google_default_credentials', '//:push_bazel_webtesting_image']
-
-timeout: 900s
-options:
-  machineType: 'E2_HIGHCPU_8'
