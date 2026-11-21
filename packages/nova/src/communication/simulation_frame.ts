@@ -3,6 +3,8 @@ import { EncodedComponentList, EncodedEntity, Serializer } from "nova_ecs/plugin
 import { Time } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { EncodedSimulationBridgeEvent, EncodedSimulationBridgeEventType } from "./simulation_bridge_events.js";
+import { RoomSpeed, RoomSpeedType } from "./rollback_protocol.js";
+import { WireTick } from "./simulation_input.js";
 
 /**
  * The simulation → display frame: the wire shape the bridge host
@@ -26,7 +28,8 @@ export interface EntityDelta {
 export interface SimulationPacing {
     /**
      * Multiply real elapsed time by this before accumulating
-     * simulation steps: a smooth slew toward the room's clock.
+     * simulation steps: the room's clock multiplier (1 or 2) times a
+     * smooth slew toward the room's clock.
      */
     rate: number;
     /**
@@ -35,6 +38,33 @@ export interface SimulationPacing {
      * snaps only when this is beyond slewing (e.g. a hidden tab).
      */
     behindTicks: number;
+    /**
+     * The room clock's base speed multiplier at the local tick (1 or 2).
+     * Optional for older/synthetic frames (defaults to 1).
+     */
+    speed?: RoomSpeed;
+}
+
+/**
+ * Room speed vote status reported from the simulation worker to the
+ * display for the status bar indicator (#371). Display-only metadata;
+ * never part of simulation state.
+ */
+export interface RoomSpeedStatus {
+    /** Active clock speed at the local tick (1 or 2). */
+    speed: RoomSpeed;
+    /** Scheduled clock speed from `atTick` onward (1 or 2). */
+    targetSpeed: RoomSpeed;
+    /** Tick boundary of the latest speed transition. */
+    atTick: number;
+    /** In-space voters currently voting for 2x. */
+    fastVotes: number;
+    /** Total in-space voters in the room (landed players excluded). */
+    totalVoters: number;
+    /** This peer's own Caps Lock vote. */
+    wantFast: boolean;
+    /** Whether this peer is currently in space (eligible to vote). */
+    inSpace: boolean;
 }
 
 /**
@@ -48,6 +78,7 @@ export interface SimulationFrame {
     time?: Time;
     events: EncodedSimulationBridgeEvent[];
     pacing?: SimulationPacing;
+    roomSpeed?: RoomSpeedStatus;
     /**
      * Set on exactly one frame: the first after the host's desync
      * recovery ran out of attempts (#333), or its identity recovery after
@@ -82,9 +113,24 @@ export const EntityDeltaType: t.Type<EntityDelta> = t.intersection([
     t.partial({ name: t.string }),
 ]);
 
-export const SimulationPacingType: t.Type<SimulationPacing> = t.type({
-    rate: t.number,
-    behindTicks: t.number,
+export const SimulationPacingType: t.Type<SimulationPacing> = t.intersection([
+    t.type({
+        rate: t.number,
+        behindTicks: t.number,
+    }),
+    t.partial({
+        speed: RoomSpeedType,
+    }),
+]);
+
+export const RoomSpeedStatusType: t.Type<RoomSpeedStatus> = t.type({
+    speed: RoomSpeedType,
+    targetSpeed: RoomSpeedType,
+    atTick: WireTick,
+    fastVotes: WireTick,
+    totalVoters: WireTick,
+    wantFast: t.boolean,
+    inSpace: t.boolean,
 });
 
 export const SimulationFrameType: t.Type<SimulationFrame> = t.intersection([
@@ -97,6 +143,7 @@ export const SimulationFrameType: t.Type<SimulationFrame> = t.intersection([
     t.partial({
         time: TimeType,
         pacing: SimulationPacingType,
+        roomSpeed: RoomSpeedStatusType,
         resyncFailed: t.boolean,
     }),
 ]);

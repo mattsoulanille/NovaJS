@@ -27,10 +27,16 @@ export interface RollbackMessageHandlers {
     /** The room refused one of this peer's insertions (#354). Optional:
      * a receiver that does not handle it ignores it, as before. */
     inputRefused?(notice: InputRefusedNotice): void;
+    /** The room's clock speed and vote tally (#371). Optional so older
+     * test doubles do not have to implement it. */
+    roomSpeed?(notice: RoomSpeedMessage): void;
 }
 
 export type InputRefusedNotice =
     Extract<RollbackProtocolMessage, { kind: 'inputRefused' }>;
+
+export type RoomSpeedMessage =
+    Extract<RollbackProtocolMessage, { kind: 'roomSpeed' }>;
 
 /**
  * Receives relayed rollback-protocol messages from the room and
@@ -79,6 +85,9 @@ export function subscribeRollbackMessages(
                 break;
             case 'inputRefused':
                 handlers.inputRefused?.(rollbackMessage);
+                break;
+            case 'roomSpeed':
+                handlers.roomSpeed?.(rollbackMessage);
                 break;
         }
     });

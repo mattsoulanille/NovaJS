@@ -226,6 +226,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    join gate keeps the builds apart; every existing kind and field is
 //    unchanged, and an older record (none of the new fields) applies
 //    exactly as before.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): #371's per-room 2x clock speed vote. Two new
+//    non-simulation control message kinds — `speedVote` (peer -> server:
+//    Caps Lock state and whether the peer is in space) and `roomSpeed`
+//    (server -> peers: the room's clock multiplier 1 | 2, the tick
+//    boundary `atTick` at which it takes effect, the relay's current
+//    `tick`, and the in-space voter tallies `fastVotes` / `totalVoters`)
+//    — plus an OPTIONAL `roomSpeed` field on `catchUp` so joiners learn
+//    the room's pace atomically with its tick. Speed lives strictly in
+//    the room clock (`rollback_relay.ts` / `room_clock.ts`), never in
+//    simulation state; no input kind, component codec, desync hash input
+//    or persisted pilot form changes. The derived wire schema fingerprint
+//    changes, and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
@@ -263,7 +276,7 @@ export const PROTOCOL_VERSION = 8;
  *     destination the client named. The relay is the single fan-out.
  *
  *  4. A CLIENT accepts rollback-protocol messages — inputs, inputLog,
- *     tickSync, catchUp, desync, desyncDumpRequest — and room peer
+ *     tickSync, catchUp, roomSpeed, desync, desyncDumpRequest — and room peer
  *     sets only from a source in `communicator.servers`
  *     (rollback_messages.ts, multi_room_communicator.ts). Every
  *     legitimate one is relay-originated, so an input record is only
@@ -369,6 +382,39 @@ export interface DesyncDump {
     rollbackLog: RollbackLogEntry[];
 }
 
+/** A room clock's speed multiplier: normal (1x) or double speed (2x). */
+export type RoomSpeed = 1 | 2;
+
+export const RoomSpeedType = new t.Type<RoomSpeed, RoomSpeed, unknown>(
+    'RoomSpeed',
+    (u): u is RoomSpeed => u === 1 || u === 2,
+    (u, c) => (u === 1 || u === 2 ? t.success(u) : t.failure(u, c)),
+    t.identity,
+);
+
+/**
+ * The room's clock speed and vote tally, announced on `roomSpeed` and
+ * seeded on `catchUp`. Lives strictly in the clock/transport layer, never
+ * in simulation state (#371).
+ */
+export interface RoomSpeedState {
+    /** Speed in effect from `atTick` onward (1 or 2). */
+    speed: RoomSpeed;
+    /** Tick boundary at which `speed` takes (or took) effect. */
+    atTick: number;
+    /** In-space voters currently voting for 2x. */
+    fastVotes: number;
+    /** Total in-space voters currently in the room (landed peers excluded). */
+    totalVoters: number;
+}
+
+export const RoomSpeedStateType: t.Type<RoomSpeedState, unknown> = t.strict({
+    speed: RoomSpeedType,
+    atTick: WireTick,
+    fastVotes: WireTick,
+    totalVoters: WireTick,
+});
+
 /**
  * Rollback protocol messages travel on the same room channel as the
  * legacy multiplayer messages, wrapped in a `rollback` envelope. The
@@ -380,6 +426,18 @@ export type RollbackProtocolMessage =
     | { kind: 'inputs', record: InputRecord }
     /** The server's clock, broadcast periodically. */
     | { kind: 'tickSync', tick: number }
+    /** A peer's Caps Lock 2x speed vote and whether it is in space
+     * (peer -> server, non-simulation control message, #371). Landed
+     * peers (`inSpace: false`) do not vote. */
+    | { kind: 'speedVote', wantFast: boolean, inSpace: boolean }
+    /** The room's clock speed and vote tally (server -> peers, #371).
+     * `tick` is the relay's current tick when sent; `speed` takes effect
+     * at the `atTick` boundary so every client's RoomClock switches pace
+     * at the same tick. */
+    | {
+        kind: 'roomSpeed', tick: number, speed: RoomSpeed, atTick: number,
+        fastVotes: number, totalVoters: number,
+    }
     /**
      * Ask the server for the input log from a tick; answered with an
      * `inputLog`, which the bridge integrates record by record. DORMANT
@@ -449,6 +507,7 @@ export type RollbackProtocolMessage =
     | {
         kind: 'catchUp', tick: number, records: InputRecord[],
         baseline?: ArchiveBaseline, timeline?: string,
+        roomSpeed?: RoomSpeedState,
     }
     /** A peer's world hash for a settled tick (peer -> server). */
     | { kind: 'stateHash', tick: number, hash: string }
@@ -524,6 +583,19 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
     t.union([
         t.strict({ kind: t.literal('inputs'), record: InputRecordType }),
         t.strict({ kind: t.literal('tickSync'), tick: WireTick }),
+        t.strict({
+            kind: t.literal('speedVote'),
+            wantFast: t.boolean,
+            inSpace: t.boolean,
+        }),
+        t.strict({
+            kind: t.literal('roomSpeed'),
+            tick: WireTick,
+            speed: RoomSpeedType,
+            atTick: WireTick,
+            fastVotes: WireTick,
+            totalVoters: WireTick,
+        }),
         t.strict({ kind: t.literal('inputLogRequest'), fromTick: WireTick }),
         t.strict({ kind: t.literal('inputLog'), records: t.array(InputRecordType) }),
         t.exact(t.intersection([
@@ -552,7 +624,11 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
                 tick: WireTick,
                 records: t.array(InputRecordType),
             }),
-            t.partial({ baseline: ArchiveBaselineType, timeline: t.string }),
+            t.partial({
+                baseline: ArchiveBaselineType,
+                timeline: t.string,
+                roomSpeed: RoomSpeedStateType,
+            }),
         ])),
         t.strict({ kind: t.literal('stateHash'), tick: WireTick, hash: t.string }),
         t.exact(t.intersection([

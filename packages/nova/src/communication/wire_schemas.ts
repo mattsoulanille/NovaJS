@@ -7,7 +7,7 @@ import { ActiveMissionType } from '../nova_plugin/player/index.js';
 import { CommunicatorMessage, communicatorMessageType, MessageType } from './communicator_message.js';
 import { CodecHook, CodecHooks, Derivation, deriveAvroSchema } from './io_ts_to_avro.js';
 import { RoomMessage, roomMessageType } from './multi_room_communicator.js';
-import { RollbackProtocolMessageType } from './rollback_protocol.js';
+import { RollbackProtocolMessageType, RoomSpeedType } from './rollback_protocol.js';
 import { SimulationFrameType } from './simulation_frame.js';
 import { SimulationInput, WireTick } from './simulation_input.js';
 import { SocketMessage, socketMessageType } from './socket_message.js';
@@ -29,6 +29,8 @@ export function novaCodecHooks(): CodecHooks {
         // A non-negative safe integer: an Avro long (zig-zag varint, so
         // a tick costs 1-4 bytes rather than a double's 8).
         [WireTick, 'long'],
+        // Room clock speed multiplier (1 | 2): 1-byte Avro long.
+        [RoomSpeedType, 'long'],
         [stat, {
             type: 'record', name: 'Stat', fields: [
                 { name: 'current', type: 'double' },

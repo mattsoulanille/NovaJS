@@ -498,11 +498,25 @@ describe('io-ts to Avro derivation', () => {
                 },
                 { rollback: { kind: 'inputs', record: { tick: 0, inputs: [] } } },
                 { rollback: { kind: 'tickSync', tick: 100 } },
+                { rollback: { kind: 'speedVote', wantFast: true, inSpace: true } },
+                { rollback: { kind: 'speedVote', wantFast: false, inSpace: false } },
+                {
+                    rollback: {
+                        kind: 'roomSpeed', tick: 100, speed: 2, atTick: 101,
+                        fastVotes: 2, totalVoters: 2,
+                    },
+                },
                 { rollback: { kind: 'inputLogRequest', fromTick: 5 } },
                 { rollback: { kind: 'inputLog', records: [{ tick: 1, inputs: [] }, { peerId: 'x', tick: 2, seq: 0, inputs: [] }] } },
                 { rollback: { kind: 'joinRequest' } },
                 { rollback: { kind: 'joinRequest', fresh: true, protocol: 5 } },
                 { rollback: { kind: 'catchUp', tick: 30, records: [] } },
+                {
+                    rollback: {
+                        kind: 'catchUp', tick: 30, records: [],
+                        roomSpeed: { speed: 2, atTick: 10, fastVotes: 1, totalVoters: 1 },
+                    },
+                },
                 {
                     rollback: {
                         kind: 'catchUp', tick: 30, records: [], baseline: {
