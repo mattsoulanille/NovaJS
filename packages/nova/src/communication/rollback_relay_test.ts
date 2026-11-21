@@ -1,6 +1,7 @@
 import 'jasmine';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { resetWarnThrottle } from '../common/log_throttle.js';
+import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import { requestCatchUp } from './rollback_messages.js';
 import { DesyncInfo, RollbackRelay } from './rollback_relay.js';
 import { canonicalDesyncHash, PROTOCOL_VERSION, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
@@ -608,6 +609,177 @@ describe('RollbackRelay', () => {
         server.sendMessage(wrapRollbackMessage({ kind: 'tickSync', tick: relay.tick }) as never);
         const atA = received(peerA);
         expect(atA).toEqual([{ kind: 'tickSync', tick: 42 }]);
+    });
+
+    describe('unanimous 2x room speed vote (#371)', () => {
+        const vote = (peer: MockCommunicator, wantFast: boolean, inSpace = true) =>
+            peer.sendMessage(wrapRollbackMessage({
+                kind: 'speedVote', wantFast, inSpace,
+            }) as never, 'server');
+
+        const speedNotices = (peer: MockCommunicator) =>
+            received(peer).filter(
+                (m): m is Extract<RollbackProtocolMessage, { kind: 'roomSpeed' }> =>
+                    m.kind === 'roomSpeed');
+
+        it('advances 2 ticks/step only when all in-space voters want it', () => {
+            // Default 1x: 10 steps -> 10 ticks.
+            expect(relay.stepClock(SIMULATION_STEP_MS * 10)).toBe(10);
+            expect(relay.tick).toBe(10);
+            expect(relay.speed).toBe(1);
+
+            // Only peer A votes yes: room stays at 1x, broadcasts tally.
+            vote(peerA, true, true);
+            expect(relay.speedState).toEqual({
+                speed: 1, atTick: 0, fastVotes: 1, totalVoters: 2,
+            });
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: 10, speed: 1, atTick: 0,
+                fastVotes: 1, totalVoters: 2,
+            }]);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 5)).toBe(5);
+            expect(relay.tick).toBe(15);
+
+            // Peer B also votes yes: switches to 2x at the next tick boundary (16).
+            peerA.allMessages.length = 0;
+            peerB.allMessages.length = 0;
+            vote(peerB, true, true);
+            const expected = {
+                kind: 'roomSpeed' as const, tick: 15, speed: 2 as const,
+                atTick: 16, fastVotes: 2, totalVoters: 2,
+            };
+            expect(speedNotices(peerA)).toEqual([expected]);
+            expect(speedNotices(peerB)).toEqual([expected]);
+
+            // First step crosses boundary 15 -> 16 at 1x, activating 2x.
+            expect(relay.stepClock(SIMULATION_STEP_MS)).toBe(1);
+            expect(relay.tick).toBe(16);
+            expect(relay.speed).toBe(2);
+
+            // Subsequent steps advance 2 ticks per stepMs.
+            expect(relay.stepClock(SIMULATION_STEP_MS * 10)).toBe(20);
+            expect(relay.tick).toBe(36);
+
+            // One "no" drops back to 1x at the next tick boundary (37).
+            peerA.allMessages.length = 0;
+            vote(peerA, false, true);
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: 36, speed: 1, atTick: 37,
+                fastVotes: 1, totalVoters: 2,
+            }]);
+            // Cross boundary 36 -> 37 (0.5 stepMs at 2x), leaving 0.5 stepMs debt;
+            // then 10 more stepMs at 1x -> 10 ticks (total 11 ticks across 11 stepMs).
+            expect(relay.stepClock(SIMULATION_STEP_MS)).toBe(1);
+            expect(relay.tick).toBe(37);
+            expect(relay.speed).toBe(1);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 10)).toBe(10);
+            expect(relay.tick).toBe(47);
+        });
+
+        it('gives a solo player in space 2x immediately on Caps Lock', () => {
+            // Peer B leaves, leaving peer A alone in space.
+            server.peers.current.next(new Set(['server', 'a']));
+            peerA.allMessages.length = 0;
+            vote(peerA, true, true);
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: 0, speed: 2, atTick: 1,
+                fastVotes: 1, totalVoters: 1,
+            }]);
+            relay.stepClock(SIMULATION_STEP_MS); // 0 -> 1 (activates 2x)
+            expect(relay.speed).toBe(2);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 5)).toBe(10);
+        });
+
+        it('ignores a landed player\'s vote and returns to 1x when nobody is in space', () => {
+            // Peer A wants 2x in space; peer B is landed without Caps Lock -> unanimous 2x!
+            vote(peerA, true, true);
+            vote(peerB, false, false);
+            expect(relay.speedState).toEqual({
+                speed: 2, atTick: 1, fastVotes: 1, totalVoters: 1,
+            });
+            relay.stepClock(SIMULATION_STEP_MS); // activate 2x at tick 1
+            expect(relay.speed).toBe(2);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 4)).toBe(8);
+
+            // Landed peer B toggling Caps Lock changes nothing.
+            peerA.allMessages.length = 0;
+            vote(peerB, true, false);
+            vote(peerB, false, false);
+            expect(speedNotices(peerA)).toEqual([]);
+            expect(relay.speed).toBe(2);
+
+            // Peer A also lands -> nobody in space -> default returns room to 1x.
+            vote(peerA, true, false);
+            expect(relay.speedState).toEqual({
+                speed: 1, atTick: 10, fastVotes: 0, totalVoters: 0,
+            });
+            relay.stepClock(SIMULATION_STEP_MS); // crosses tick 10 -> 1x
+            expect(relay.speed).toBe(1);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 5)).toBe(5);
+        });
+
+        it('drops a 2x room back to 1x at the next tick boundary when a newcomer joins without Caps Lock', () => {
+            vote(peerA, true, true);
+            vote(peerB, true, true);
+            relay.stepClock(SIMULATION_STEP_MS * 2); // tick 3, active 2x
+            expect(relay.speed).toBe(2);
+            const beforeJoin = relay.tick;
+            peerA.allMessages.length = 0;
+
+            // Peer C joins the room without sending a Caps Lock vote.
+            const peerC = new MockCommunicator('c');
+            const mockPeers = new Map([
+                ['server', server], ['a', peerA], ['b', peerB], ['c', peerC],
+            ]);
+            for (const peer of mockPeers.values()) {
+                peer.mockPeers = mockPeers;
+            }
+            server.peers.current.next(new Set(['server', 'a', 'b', 'c']));
+
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: beforeJoin, speed: 1,
+                atTick: beforeJoin + 1, fastVotes: 2, totalVoters: 3,
+            }]);
+            relay.stepClock(SIMULATION_STEP_MS); // crosses boundary -> 1x
+            expect(relay.speed).toBe(1);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 6)).toBe(6);
+
+            // A joiner's catchUp carries the room's current speed state.
+            peerC.allMessages.length = 0;
+            peerC.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest', schema: liveWireFingerprint(),
+            }) as never, 'server');
+            const catchUp = received(peerC).find(m => m.kind === 'catchUp');
+            expect(catchUp?.kind === 'catchUp' && catchUp.roomSpeed).toEqual({
+                speed: 1, atTick: beforeJoin + 1, fastVotes: 2, totalVoters: 3,
+            });
+        });
+
+        it('switches to 2x when the sole holdout leaves the room', () => {
+            vote(peerA, true, true);
+            expect(relay.speedState.speed).toBe(1);
+            peerA.allMessages.length = 0;
+
+            server.peers.current.next(new Set(['server', 'a']));
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: 0, speed: 2, atTick: 1,
+                fastVotes: 1, totalVoters: 1,
+            }]);
+        });
+
+        it('drops malformed speedVote messages and votes from non-members', () => {
+            resetWarnThrottle();
+            const outsider = new MockCommunicator('outsider');
+            outsider.mockPeers = server.mockPeers;
+            outsider.sendMessage(wrapRollbackMessage({
+                kind: 'speedVote', wantFast: true, inSpace: true,
+            }) as never, 'server');
+            peerA.sendMessage({
+                rollback: { kind: 'speedVote', wantFast: 'yes', inSpace: true },
+            } as never, 'server');
+            expect(relay.speedState.fastVotes).toBe(0);
+            expect(relay.speedState.speed).toBe(1);
+        });
     });
 });
 

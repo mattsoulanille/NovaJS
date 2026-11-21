@@ -3,7 +3,7 @@ import { Subscription } from "rxjs";
 import { v4 } from "uuid";
 import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
-import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, RoomSpeed, RoomSpeedState, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { liveWireFingerprint } from "./wire_schemas.js";
 import type { InputRefusal } from "./simulation_input.js";
 
@@ -129,7 +129,23 @@ export class RollbackRelay {
     private syncInterval?: ReturnType<typeof setInterval>;
     private lastClockTime?: number;
     private clockDebt = 0;
+    private readonly stepMs: number;
+    /**
+     * Per-peer speed vote (#371). Absent peers default to `{ wantFast: false,
+     * inSpace: true }` so a newcomer without Caps Lock counts as an in-space
+     * voter and drops a 2x room back to 1x at the next tick boundary.
+     */
+    private speedVotes = new Map<string, { wantFast: boolean, inSpace: boolean }>();
+    /** Clock multiplier currently active at `this.tick` (1 or 2). */
+    private activeSpeed: RoomSpeed = 1;
+    /** Scheduled speed change, activating once `this.tick >= atTick`. */
+    private pendingSpeed?: { speed: RoomSpeed, atTick: number };
+    /** Tick boundary at which the current or scheduled speed takes effect. */
+    private speedAtTick = 0;
+    private fastVotes = 0;
+    private totalVoters = 0;
 
+    private joinSubscription: Subscription;
     private leaveSubscription: Subscription;
 
     constructor(private room: Communicator,
@@ -172,6 +188,7 @@ export class RollbackRelay {
                  * own conviction, or a desyncDumpRequest). */
                 onDesyncDump?: (peerId: string, dump: DesyncDump) => void,
             } = {}) {
+        this.stepMs = stepMs;
         this.getBaseline = baseline;
         this.getFreshBaseline = freshBaseline;
         this.getReferenceHash = referenceHash;
@@ -179,6 +196,7 @@ export class RollbackRelay {
         this.onArchiveOutvoted = onArchiveOutvoted;
         this.onDesync = onDesync;
         this.onDesyncDump = onDesyncDump;
+        this.totalVoters = this.roomPeers().size;
         if (roomSeed !== undefined) {
             // Before anyone has joined: the first entrant's catch-up
             // carries it like any other logged record. Not broadcast —
@@ -191,6 +209,15 @@ export class RollbackRelay {
         }
         this.subscription = room.messages.subscribe(({ source, message }) => {
             this.handleMessage(source, message);
+        });
+        // A newcomer defaults to `{ wantFast: false, inSpace: true }`:
+        // entering a 2x room without Caps Lock drops it to 1x at the next
+        // tick boundary (#371).
+        this.joinSubscription = room.peers.join.subscribe(peerId => {
+            if (peerId === this.room.uuid) {
+                return;
+            }
+            this.recomputeSpeed();
         });
         // A disconnect is an input: the server authors a removePeer
         // record so every peer (and the log) deterministically removes
@@ -210,6 +237,8 @@ export class RollbackRelay {
             this.peerProtocols.delete(peerId);
             this.peerSystemOrders.delete(peerId);
             this.dumpsExpected.delete(peerId);
+            this.speedVotes.delete(peerId);
+            this.recomputeSpeed();
             // An emptied room starts over: the next first joiner (maybe
             // a newer build) defines the reference.
             if (this.roomPeers().size === 0) {
@@ -221,15 +250,12 @@ export class RollbackRelay {
             this.lastClockTime = performance.now();
             this.clockInterval = setInterval(() => {
                 const now = performance.now();
-                this.clockDebt = Math.min(
-                    this.clockDebt + (now - this.lastClockTime!), stepMs * 600);
+                const elapsed = now - this.lastClockTime!;
                 this.lastClockTime = now;
-                const ticks = Math.floor(this.clockDebt / stepMs);
-                this.clockDebt -= ticks * stepMs;
-                this.advanceTicks(ticks);
+                this.stepClock(elapsed);
             }, stepMs);
-            // (Stale and held hash reports are swept by advanceTicks,
-            // which the clock drives.)
+            // (Stale and held hash reports are swept by stepClock /
+            // advanceTicks, which the clock drives.)
             this.syncInterval = setInterval(() => {
                 this.room.sendMessage(
                     wrapRollbackMessage({ kind: 'tickSync', tick: this.tick }));
@@ -237,13 +263,133 @@ export class RollbackRelay {
         }
     }
 
+    /** The clock speed currently active at `this.tick` (1 or 2). */
+    get speed(): RoomSpeed {
+        return this.activeSpeed;
+    }
+
+    /** The room's current (or scheduled) speed state and vote tally. */
+    get speedState(): RoomSpeedState {
+        return {
+            speed: this.pendingSpeed?.speed ?? this.activeSpeed,
+            atTick: this.speedAtTick,
+            fastVotes: this.fastVotes,
+            totalVoters: this.totalVoters,
+        };
+    }
+
+    /**
+     * Advances the room's clock from `elapsedMs` of wall time: at 1x one
+     * tick consumes `stepMs`, at 2x one tick consumes `stepMs / 2` (two
+     * ticks per `stepMs`). A pending speed change activates at its exact
+     * `atTick` boundary so the relay and every peer's RoomClock switch
+     * pace on the same tick.
+     */
+    stepClock(elapsedMs: number): number {
+        if (elapsedMs < 0) {
+            return 0;
+        }
+        this.clockDebt = Math.min(this.clockDebt + elapsedMs, this.stepMs * 600);
+        let advanced = 0;
+        while (true) {
+            const tickCost = this.stepMs / this.activeSpeed;
+            if (this.clockDebt + 1e-9 < tickCost) {
+                break;
+            }
+            this.clockDebt = Math.max(0, this.clockDebt - tickCost);
+            advanced++;
+            this.tick++;
+            if (this.pendingSpeed && this.tick >= this.pendingSpeed.atTick) {
+                this.activeSpeed = this.pendingSpeed.speed;
+                this.pendingSpeed = undefined;
+            }
+        }
+        if (advanced > 0) {
+            this.sweepStateHashes();
+        }
+        return advanced;
+    }
+
     advanceTicks(ticks: number) {
         this.tick += ticks;
+        if (this.pendingSpeed && this.tick >= this.pendingSpeed.atTick) {
+            this.activeSpeed = this.pendingSpeed.speed;
+            this.pendingSpeed = undefined;
+        }
+        this.sweepStateHashes();
+    }
+
+    private sweepStateHashes() {
         // Retry comparisons held for a trailing archive hash, and
         // force ones whose stragglers never reported.
         for (const tick of [...this.stateHashes.keys()]) {
             this.compareStateHashes(tick,
                 tick < this.tick - STATE_HASH_SWEEP_TICKS);
+        }
+    }
+
+    /**
+     * Re-evaluates the room's unanimous speed vote across all in-space
+     * members (#371).
+     *
+     * - Landed players (`inSpace: false`) do not vote.
+     * - Members who have not yet voted default to `{ wantFast: false,
+     *   inSpace: true }`, so a newcomer without Caps Lock drops the room
+     *   back to 1x at the next tick boundary (`this.tick + 1`).
+     * - Default when NO player in the room is in space (`totalVoters === 0`):
+     *   return to 1x, so a room whose occupants are all docked in spaceport
+     *   menus does not burn 2x CPU on the relay and archive for nobody.
+     */
+    private recomputeSpeed() {
+        let fastVotes = 0;
+        let totalVoters = 0;
+        for (const peerId of this.roomPeers()) {
+            const vote = this.speedVotes.get(peerId)
+                ?? { wantFast: false, inSpace: true };
+            if (!vote.inSpace) {
+                continue;
+            }
+            totalVoters++;
+            if (vote.wantFast) {
+                fastVotes++;
+            }
+        }
+        const targetSpeed: RoomSpeed =
+            totalVoters > 0 && fastVotes === totalVoters ? 2 : 1;
+
+        const prevScheduled = this.pendingSpeed?.speed ?? this.activeSpeed;
+        const prevFastVotes = this.fastVotes;
+        const prevTotalVoters = this.totalVoters;
+        const speedChanged = targetSpeed !== prevScheduled;
+        const votesChanged = fastVotes !== prevFastVotes
+            || totalVoters !== prevTotalVoters;
+
+        this.fastVotes = fastVotes;
+        this.totalVoters = totalVoters;
+
+        if (speedChanged) {
+            if (targetSpeed === this.activeSpeed) {
+                // Reverted before the pending tick boundary was reached.
+                this.pendingSpeed = undefined;
+                this.speedAtTick = this.tick;
+            } else {
+                const atTick = this.tick + 1;
+                this.pendingSpeed = { speed: targetSpeed, atTick };
+                this.speedAtTick = atTick;
+            }
+        }
+
+        // Broadcast on a speed flip, or when vote counts changed while
+        // someone wants (or just stopped wanting) 2x. Stay silent when
+        // everyone is at 1x with zero votes so idle joins/leaves add no
+        // traffic.
+        if (speedChanged
+            || (votesChanged && (fastVotes > 0 || prevFastVotes > 0))) {
+            this.room.sendMessage(wrapRollbackMessage({
+                kind: 'roomSpeed',
+                tick: this.tick,
+                ...this.speedState,
+            }));
         }
     }
 
@@ -592,11 +738,20 @@ export class RollbackRelay {
                     kind: 'catchUp',
                     tick: this.tick,
                     timeline: this.timeline,
+                    roomSpeed: this.speedState,
                     records: baseline
                         ? this.log.filter(record => record.tick > baseline.tick)
                         : [...this.log],
                     ...(baseline ? { baseline } : {}),
                 }), source);
+                break;
+            }
+            case 'speedVote': {
+                this.speedVotes.set(source, {
+                    wantFast: message.wantFast,
+                    inSpace: message.inSpace,
+                });
+                this.recomputeSpeed();
                 break;
             }
             case 'stateHash': {
@@ -650,6 +805,7 @@ export class RollbackRelay {
 
     close() {
         this.subscription.unsubscribe();
+        this.joinSubscription.unsubscribe();
         this.leaveSubscription.unsubscribe();
         if (this.clockInterval !== undefined) {
             clearInterval(this.clockInterval);
