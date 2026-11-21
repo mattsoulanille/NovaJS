@@ -69,11 +69,18 @@ export class SimulationGameData implements SimulationGameDataInterface {
      * local re-parse can genuinely differ for plugin content, which
      * poisons replay-based forensics. Browsers pass nothing: their
      * fetches are same-origin relative.
+     *
+     * `fetchImpl` replaces the global fetch for every request this
+     * instance makes (the JSON routes and the batched data POSTs);
+     * the round-trip meter (round_trip_meter.ts) injects latency and
+     * counts sequential round trips through it.
      */
     private readonly batchFetcher: BatchDataFetcher;
 
-    constructor(private baseUrl = '') {
-        this.batchFetcher = new BatchDataFetcher(baseUrl);
+    constructor(private baseUrl = '',
+        private readonly fetchImpl: typeof fetch =
+            (...args: Parameters<typeof fetch>) => fetch(...args)) {
+        this.batchFetcher = new BatchDataFetcher(baseUrl, 0, fetchImpl);
         this.data = {
             Ship: this.addGettable<ShipData>(NovaDataType.Ship),
             Outfit: this.addGettable<OutfitData>(NovaDataType.Outfit),
@@ -124,7 +131,7 @@ export class SimulationGameData implements SimulationGameDataInterface {
     }
 
     private async getJson(url: string): Promise<unknown> {
-        const response = await fetch(
+        const response = await this.fetchImpl(
             this.baseUrl ? urlJoin(this.baseUrl, url) : url);
         if (!response.ok) {
             throw new Error(`${url}: HTTP ${response.status}`);
