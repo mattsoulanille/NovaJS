@@ -144,7 +144,17 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
 
     private addFramesGettable<T>(dataType: NovaDataType): Gettable<T> {
         const dataPrefix = this.getDataPrefix(dataType);
+        const imagePrefix = this.getDataPrefix(NovaDataType.SpriteSheetImage);
         return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
+            // The sheet's JSON names its image (meta.image, which resolves
+            // to this same URL), and PIXI's spritesheet parser only asks
+            // for the image once the JSON is in: two round trips in a
+            // row. Asking for the image alongside the JSON lets the
+            // parser's request join this one in PIXI's loader cache
+            // (keyed by the absolute URL), so a sheet costs one round
+            // trip (#369). A failure here is the parser's to report.
+            this.getUrl(urlJoin(imagePrefix, id) + '.png', priority)
+                .catch(() => undefined);
             return (await this.getUrl(urlJoin(dataPrefix, id + '.json'), priority) as { data: unknown }).data as T;
         });
     }
