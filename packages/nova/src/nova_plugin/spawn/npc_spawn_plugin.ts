@@ -407,7 +407,6 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     if (!gameData) {
         throw new Error('Expected SimulationGameDataResource to exist');
     }
-    const entries: NpcSpawnEntry[] = [];
 
     // LOAD FAILURES FAIL CONSTRUCTION (#60). This table is genesis state
     // that every world in a room must compute identically, and a world
@@ -466,34 +465,40 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     // capital ship) spawns until they do. A düde none of whose classes the
     // room's bits admit is dropped from the effective table — data, not
     // a load failure: its weight goes to the rest of the table.
-    for (const { id, weight } of systemData.dudes) {
-        const dude = await loadWithRetries(
-            () => gameData.data.Dude.get(id), `düde ${id}`);
-        const ships: Array<{ id: string, weight: number, appearOn?: string }> = [];
-        for (const ship of dude.ships) {
-            const shipData = await loadWithRetries(
-                () => gameData.data.Ship.get(ship.id),
-                `NPC ship ${ship.id}`);
-            const gated = gate(shipData.appearOn, `ship ${shipData.id}`);
-            if (!gated) {
-                continue;
-            }
-            await stageShip(world, ship.id, dude.govt);
-            ships.push({ id: ship.id, weight: ship.weight, ...gated });
-        }
-        if (ships.length > 0) {
-            entries.push({
+    //
+    // CONCURRENT, ORDER-PRESERVING (#368): the three sections below, and
+    // every load inside them, are requested together — over a ~100 ms
+    // round trip, awaiting each düde, flët and ship class in turn made
+    // this table alone cost hundreds of sequential round trips. Each
+    // section maps its input in input order and the entries are
+    // assembled from those arrays, so the table is the one the
+    // sequential build produced, whatever order the loads complete in.
+    const defined = <T>(value: T | undefined): value is T => value !== undefined;
+
+    const dudeEntries = Promise.all(systemData.dudes.map(
+        async ({ id, weight }): Promise<NpcSpawnEntry | undefined> => {
+            const dude = await loadWithRetries(
+                () => gameData.data.Dude.get(id), `düde ${id}`);
+            const ships = (await Promise.all(dude.ships.map(async ship => {
+                const shipData = await loadWithRetries(
+                    () => gameData.data.Ship.get(ship.id),
+                    `NPC ship ${ship.id}`);
+                const gated = gate(shipData.appearOn, `ship ${shipData.id}`);
+                if (!gated) {
+                    return undefined;
+                }
+                await stageShip(world, ship.id, dude.govt);
+                return { id: ship.id, weight: ship.weight, ...gated };
+            }))).filter(defined);
+            return ships.length > 0 ? {
                 weight,
                 dude: { aiType: dude.aiType, govt: dude.govt, ships },
-            });
-        }
-    }
+            } : undefined;
+        }));
 
     const stageFleet = async (fleet: FleetData) => {
-        await stageShip(world, fleet.leadShip, fleet.govt);
-        for (const escort of fleet.escorts) {
-            await stageShip(world, escort.id, fleet.govt);
-        }
+        await Promise.all([fleet.leadShip, ...fleet.escorts.map(({ id }) => id)]
+            .map(shipId => stageShip(world, shipId, fleet.govt)));
         return {
             leadShip: fleet.leadShip,
             escorts: fleet.escorts.map(({ id, min, max }) =>
@@ -503,78 +508,68 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     };
 
     // Fleets referenced directly by the sÿst DudeTypes table.
-    for (const { id, weight } of systemData.fleets) {
-        const fleet = await loadWithRetries(
-            () => gameData.data.Fleet.get(id), `flët ${id}`);
-        const gated = gate(fleet.appearOn, `fleet ${fleet.id}`);
-        if (!gated) {
-            continue;
-        }
-        entries.push({ weight, fleet: await stageFleet(fleet), ...gated });
-    }
+    const directFleetEntries = Promise.all(systemData.fleets.map(
+        async ({ id, weight }): Promise<NpcSpawnEntry | undefined> => {
+            const fleet = await loadWithRetries(
+                () => gameData.data.Fleet.get(id), `flët ${id}`);
+            const gated = gate(fleet.appearOn, `fleet ${fleet.id}`);
+            if (!gated) {
+                return undefined;
+            }
+            return { weight, fleet: await stageFleet(fleet), ...gated };
+        }));
 
     // Roaming fleets: scan every flët's LinkSyst against this system.
     // Sorted ids so the table is identical on every world. The govt
     // loads used to swallow failures into `undefined`, which silently
     // flips fleetAllowedInSystem's ally/enemy answers on that world
     // alone — the same fork as a dropped entry (#60).
-    const systemGovtData = systemData.govt
-        ? await loadWithRetries(() => gameData.data.Govt.get(systemData.govt!),
-            `system govt ${systemData.govt}`)
-        : undefined;
-    const roaming: Array<{ fleet: FleetData, gated: { appearOn?: string } }> = [];
-    const fleetIds = [...(await gameData.ids).Fleet].sort();
-    for (const fleetId of fleetIds) {
-        const fleet = await loadWithRetries(
-            () => gameData.data.Fleet.get(fleetId), `flët ${fleetId}`);
-        const link = fleet.linkSyst;
-        const linkGovtData =
-            (link.type === 'allySystems' || link.type === 'enemySystems')
-                ? await loadWithRetries(() => gameData.data.Govt.get(link.govt),
-                    `flët ${fleetId} link govt ${link.govt}`)
+    const roamingEntries = (async (): Promise<NpcSpawnEntry[]> => {
+        const [systemGovtData, allIds] = await Promise.all([
+            systemData.govt
+                ? loadWithRetries(() => gameData.data.Govt.get(systemData.govt!),
+                    `system govt ${systemData.govt}`)
+                : undefined,
+            gameData.ids,
+        ]);
+        const fleetIds = [...allIds.Fleet].sort();
+        const roaming = (await Promise.all(fleetIds.map(async fleetId => {
+            const fleet = await loadWithRetries(
+                () => gameData.data.Fleet.get(fleetId), `flët ${fleetId}`);
+            const link = fleet.linkSyst;
+            const linkGovtData =
+                (link.type === 'allySystems' || link.type === 'enemySystems')
+                    ? await loadWithRetries(() => gameData.data.Govt.get(link.govt),
+                        `flët ${fleetId} link govt ${link.govt}`)
+                    : undefined;
+            const allowed = fleetAllowedInSystem(link, systemId,
+                systemData.govt, systemGovtData, linkGovtData);
+            const gated = allowed ? gate(fleet.appearOn, `fleet ${fleet.id}`)
                 : undefined;
-        const allowed = fleetAllowedInSystem(link, systemId,
-            systemData.govt, systemGovtData, linkGovtData);
-        const gated = allowed ? gate(fleet.appearOn, `fleet ${fleet.id}`)
-            : undefined;
-        if (gated) {
-            roaming.push({ fleet, gated });
-        }
-    }
-    // The roaming fleets share ROAMING_FLEET_WEIGHT evenly. When some
-    // of them are gated, HOW MANY share it is the room's bits' call, so
-    // each entry carries the whole weight and is marked to be divided
-    // by the admitted count (spawn_bits.ts effectiveNpcSpawnEntries) —
-    // the same division as here, so the empty set's weights are these.
-    const roamingShare = roaming.some(({ gated }) => gated.appearOn !== undefined);
-    for (const { fleet, gated } of roaming) {
-        entries.push({
+            return gated ? { fleet, gated } : undefined;
+        }))).filter(defined);
+        // The roaming fleets share ROAMING_FLEET_WEIGHT evenly. When some
+        // of them are gated, HOW MANY share it is the room's bits' call, so
+        // each entry carries the whole weight and is marked to be divided
+        // by the admitted count (spawn_bits.ts effectiveNpcSpawnEntries) —
+        // the same division as here, so the empty set's weights are these.
+        const roamingShare = roaming.some(({ gated }) => gated.appearOn !== undefined);
+        return Promise.all(roaming.map(async ({ fleet, gated }) => ({
             weight: roamingShare ? ROAMING_FLEET_WEIGHT
                 : ROAMING_FLEET_WEIGHT / roaming.length,
             fleet: await stageFleet(fleet),
             ...gated,
             ...(roamingShare ? { roamingShare: true } : {}),
-        });
-    }
+        })));
+    })();
 
-    return entries;
-}
-
-/** Maps over `items` with at most `concurrency` calls in flight,
- * preserving order (genesis-time cache warming; see buildPersSpawnTable). */
-async function pooledMap<T, R>(items: readonly T[],
-    map: (item: T) => Promise<R>, concurrency = 8): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let next = 0;
-    async function worker() {
-        while (next < items.length) {
-            const index = next++;
-            results[index] = await map(items[index]);
-        }
-    }
-    await Promise.all(Array.from(
-        { length: Math.min(concurrency, items.length) }, worker));
-    return results;
+    const [dudes, directFleets, roamingFleets] = await Promise.all(
+        [dudeEntries, directFleetEntries, roamingEntries]);
+    return [
+        ...dudes.filter(defined),
+        ...directFleets.filter(defined),
+        ...roamingFleets,
+    ];
 }
 
 /**
@@ -585,9 +580,13 @@ async function pooledMap<T, R>(items: readonly T[],
  * reads no control bit, kept for the room's spawn bits when it does —
  * spawn_bits.ts), and every ship class and govt the table can ever
  * spawn is staged. Resource order (and sorted ids, and order-
- * preserving pooled loads) so the table is identical on every world;
- * the bounded concurrency and per-ship-class dedup keep the fallback
- * scan of several hundred përs resources off the genesis critical path.
+ * preserving loads) so the table is identical on every world.
+ *
+ * Every load at one level is requested at once (#368): the client's
+ * BatchDataFetcher coalesces them into a single round trip, so the
+ * fallback scan of several hundred përs resources costs one round trip
+ * rather than hundreds/8 (the old 8-wide pool predates batching, when
+ * each get was its own HTTP request).
  */
 export async function buildPersSpawnTable(world: World, systemId: string,
     systemData: SystemData): Promise<PersSpawnEntry[]> {
@@ -627,22 +626,25 @@ export async function buildPersSpawnTable(world: World, systemId: string,
     if (systemData.persons.length > 0) {
         // The authored cast. LinkSyst is deliberately not consulted
         // (see the module comment: 160 of 228 stock entries would die).
-        eligible = (await pooledMap(systemData.persons,
+        eligible = (await Promise.all(systemData.persons.map(
             async ({ id, chance }) => {
                 const pers = await loadWithRetries(
                     () => gameData.data.Pers.get(id),
                     `përs ${id} listed by ${systemId}`);
                 const gated = active(pers);
                 return gated ? { pers, chance, ...gated } : undefined;
-            })).filter((entry): entry is Eligible => entry !== undefined);
+            }))).filter((entry): entry is Eligible => entry !== undefined);
     } else {
-        const systemGovtData = systemData.govt
-            ? await loadWithRetries(
-                () => gameData.data.Govt.get(systemData.govt!),
-                `system govt ${systemData.govt}`)
-            : undefined;
-        const persIds = [...(await gameData.ids).Pers].sort();
-        const pool = (await pooledMap(persIds, async persId => {
+        const [systemGovtData, allIds] = await Promise.all([
+            systemData.govt
+                ? loadWithRetries(
+                    () => gameData.data.Govt.get(systemData.govt!),
+                    `system govt ${systemData.govt}`)
+                : undefined,
+            gameData.ids,
+        ]);
+        const persIds = [...allIds.Pers].sort();
+        const pool = (await Promise.all(persIds.map(async persId => {
             const pers = await loadWithRetries(
                 () => gameData.data.Pers.get(persId), `përs ${persId}`);
             const link = pers.linkSyst;
@@ -658,7 +660,7 @@ export async function buildPersSpawnTable(world: World, systemId: string,
             }
             const gated = active(pers);
             return gated ? { pers, ...gated } : undefined;
-        })).filter((entry): entry is { pers: PersData, activeOn?: string } =>
+        }))).filter((entry): entry is { pers: PersData, activeOn?: string } =>
             entry !== undefined);
         // Evenly over the whole 5% window: the Bible's flat rate. With a
         // gated member, how many share it is the room's bits' call, so
@@ -682,18 +684,19 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         }
         return promise;
     };
-    await pooledMap(eligible, ({ pers }) => stageOnce(pers.ship, pers.govt));
+    const staging = Promise.all(eligible.map(
+        ({ pers }) => stageOnce(pers.ship, pers.govt)));
 
     // "Does this person's LinkMission ask to be rescued?" — resolved
     // HERE, where mïsn resources can be awaited, so the spawner never
     // has to consult mission game data (see PersSpawnEntry's
     // holdsForOffer). Deduped per mission id: 63 stock përs share the
-    // four Refuel Trader missions.
+    // four Refuel Trader missions. Loaded alongside the ship staging.
     const missionIds = [...new Set(eligible
         .map(({ pers }) => pers.linkMission)
         .filter((id): id is string => !!id))].sort();
     const rescueMissions = new Set<string>();
-    await pooledMap(missionIds, async missionId => {
+    await Promise.all([staging, ...missionIds.map(async missionId => {
         // A mïsn that fails to LOAD fails construction like everything
         // else here: `holdsForOffer` is synced genesis state, and a
         // world that could not read the mission would hold nobody
@@ -703,7 +706,7 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         if (mission.shipGoal === GOAL_RESCUE) {
             rescueMissions.add(missionId);
         }
-    });
+    })]);
 
     return eligible.map(({ pers, chance, activeOn }) => ({
             id: pers.id,
@@ -1128,14 +1131,39 @@ export function spawnNpc(world: World,
     return spawned;
 }
 
+/** A system's candidate NPC and përs spawn tables, staged. */
+export interface NpcSpawnTables {
+    entries: NpcSpawnEntry[];
+    persEntries: PersSpawnEntry[];
+}
+
+/**
+ * Builds (and stages everything in) both of a system's spawn tables,
+ * concurrently. Touches no Random and no entity — only the game-data
+ * caches and the world's WeaponEntries — so makeSystem can start it
+ * alongside the rest of genesis staging (#368) and hand the result to
+ * spawnNpcs, whose draws then run in their usual place.
+ */
+export async function buildNpcSpawnTables(world: World, systemId: string,
+    systemData: SystemData): Promise<NpcSpawnTables> {
+    const [entries, persEntries] = await Promise.all([
+        buildNpcSpawnTable(world, systemId, systemData),
+        buildPersSpawnTable(world, systemId, systemData),
+    ]);
+    return { entries, persEntries };
+}
+
 /**
  * Genesis entry point: rolls the population target, builds and stages
  * the spawn table, spawns the initial population scattered through the
  * system, and installs the spawner entity that keeps it topped up.
- * Call from makeSystem before the world steps.
+ * Call from makeSystem before the world steps. `tables`, when given, is
+ * buildNpcSpawnTables for this same world and system, already started.
  */
 export async function spawnNpcs(world: World, systemId: string,
-    systemData: SystemData) {
+    systemData: SystemData,
+    tables: Promise<NpcSpawnTables> = buildNpcSpawnTables(world, systemId,
+        systemData)) {
     const gameData = world.resources.get(SimulationGameDataResource);
     const random = world.resources.get(RandomResource);
     const ids = world.resources.get(IdFactoryResource);
@@ -1146,8 +1174,7 @@ export async function spawnNpcs(world: World, systemId: string,
     // The CANDIDATE tables (spawn_bits.ts): genesis runs before anyone
     // has entered, so the initial population sees them under the empty
     // bit set — the very tables, weights and draws of the empty-set rule.
-    const entries = await buildNpcSpawnTable(world, systemId, systemData);
-    const persEntries = await buildPersSpawnTable(world, systemId, systemData);
+    const { entries, persEntries } = await tables;
     const targetCount =
         effectiveNpcSpawnEntries(entries, NO_SPAWN_BITS).length === 0 ? 0
             : rollPopulationTarget(systemData.avgShips, random);

@@ -5,15 +5,15 @@ import { Random, RandomResource } from "nova_ecs/plugins/random_plugin";
 import { useFixedTimestep } from "nova_ecs/plugins/time_plugin";
 import { fnv1a } from "nova_ecs/plugins/world_hash";
 import { World } from "nova_ecs/world";
-import { completeEntity } from "./spawn/index.js";
+import { buildNpcSpawnTables, loadEntityGameData } from "./spawn/index.js";
 import { configureSnapshotPolicies } from "./snapshot_policies.js";
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from "./combat/index.js";
 import { SystemInterferenceResource } from "./combat/index.js";
 import { IdFactory, IdFactoryResource, StagedWeaponIds } from "./core/index.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { spawnAsteroids } from "./combat/index.js";
+import { loadAsteroidGameData, spawnAsteroids } from "./combat/index.js";
 import { spawnNpcs } from "./spawn/index.js";
-import { SimulationGameDataResource } from "./core/index.js";
+import { deriveEntityComponents, SimulationGameDataResource } from "./core/index.js";
 import { makePlanet } from "./travel/index.js";
 import { Platform, PlatformResource } from "./core/index.js";
 import { GovtsResource } from "./reputation/index.js";
@@ -95,16 +95,28 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // Load the system's planets before the world ever steps: the
     // simulation must not resolve data asynchronously mid-simulation,
     // so all entities are fully loaded before they are inserted.
-    const systemData = await gameData.data.System.get(systemId);
+    //
+    // ONE STAGING PHASE, THEN THE ORDERED BUILD (#368). Everything below
+    // up to the Promise.all is REQUESTED TOGETHER: the client batches
+    // every get issued in one tick into one round trip, so the cost of
+    // genesis is the depth of the deepest dependency chain (sÿst ->
+    // düde -> shïp -> oütf -> wëap -> its sub/bay ship ...), not the
+    // number of things staged. Awaiting the stellars, the asteroid
+    // types, the düdes, the flëts and the përs one after another cost
+    // hundreds of sequential round trips — about a minute per system
+    // entry on the deployed server. The staging touches only caches
+    // (and the world's WeaponEntries, keyed by id), never the Random,
+    // the id factory or the entity map; the entities are then built in
+    // their fixed order, from staged data, exactly as before.
+    const [systemData, allIds] = await Promise.all([
+        gameData.data.System.get(systemId), gameData.ids]);
     // Stage EVERY gövt (they are tiny) and publish them as a resource
     // in sorted-id order: reputation record propagation and criminal-
     // hostility checks consult arbitrary govts synchronously, and the
     // sorted order makes record-map materialization deterministic on
     // every peer regardless of the data source's id ordering.
-    const allIds = await gameData.ids;
-    const govtEntries = await Promise.all([...allIds.Govt].sort().map(
+    const govtEntries = Promise.all([...allIds.Govt].sort().map(
         async id => [id, await gameData.data.Govt.get(id)] as const));
-    world.resources.set(GovtsResource, new Map(govtEntries));
     // Stage EVERY ränk, for exactly the govts' reason: they are tiny (31
     // in stock data) and the SIMULATION reads them synchronously through
     // `getCached`.
@@ -142,26 +154,49 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // ship offer's OnAccept `Kxxx`) reaches other peers as a state delta
     // that carries no game data with it, so per-entity staging would warm
     // the granting peer's cache and nobody else's.
-    await Promise.all([...allIds.Rank].sort().map(
+    const ranks = Promise.all([...allIds.Rank].sort().map(
         id => gameData.data.Rank.get(id)));
     // Stage the linked systems' metadata too: starting a hyperspace
     // jump reads the destination's map position synchronously
     // (getCached) to compute the travel heading, and every peer builds
     // its world through here, so the cache is warm on all of them.
-    await Promise.all(systemData.links.map(link =>
+    const links = Promise.all(systemData.links.map(link =>
         gameData.data.System.get(link)));
+    // The stellars, made in sÿst order and staged together.
+    const planets = (async () => {
+        const planetDatas = await Promise.all(systemData.planets.map(
+            planetId => gameData.data.Planet.get(planetId)));
+        const entities = planetDatas.map(planetData => {
+            const planet = makePlanet(planetData);
+            planet.components.set(MultiplayerData, { owner: 'server' });
+            return planet;
+        });
+        await Promise.all(entities.map(
+            planet => loadEntityGameData(world, planet)));
+        return entities;
+    })();
+    // The asteroid types' closures (spawnAsteroids re-reads them from
+    // the cache) and the NPC/përs spawn tables (handed to spawnNpcs).
+    const asteroidTypes = Promise.all(systemData.asteroids > 0
+        ? systemData.asteroidTypes.map(typeId =>
+            loadAsteroidGameData(gameData, typeId))
+        : []);
+    const npcTables = options.npcs !== false
+        ? buildNpcSpawnTables(world, systemId, systemData) : undefined;
+    const [govts, , , planetEntities] = await Promise.all(
+        [govtEntries, ranks, links, planets, asteroidTypes, npcTables]);
+
+    world.resources.set(GovtsResource, new Map(govts));
     // The system's inherent sensor interference degrades radar-guided missiles
     // (see jamming_plugin.ts). Set deterministically here, before the world
     // steps, so it is identical for every peer in a room.
     world.resources.set(SystemInterferenceResource,
         { interference: systemData.interference });
-    for (const planetId of systemData.planets) {
-        const planetData = await gameData.data.Planet.get(planetId);
-        const planet = makePlanet(planetData);
-        planet.components.set(MultiplayerData, { owner: 'server' });
-        await completeEntity(world, planet);
+    systemData.planets.forEach((planetId, index) => {
+        const planet = planetEntities[index]!;
+        deriveEntityComponents(world, planet);
         world.entities.set(`planet ${planetId}`, planet);
-    }
+    });
 
     // Spawn the system's asteroid field. Deterministic: every peer
     // draws the same positions from the same per-system Random and
@@ -172,8 +207,8 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // spawn table and initial population come from the per-system
     // seeded Random, with all game data staged before the world
     // steps).
-    if (options.npcs !== false) {
-        await spawnNpcs(world, systemId, systemData);
+    if (npcTables) {
+        await spawnNpcs(world, systemId, systemData, npcTables);
     }
 
     return world;
