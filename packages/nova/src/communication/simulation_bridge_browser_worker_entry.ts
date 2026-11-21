@@ -41,6 +41,7 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
     async init(args: {
         systemId: string;
         roomState: BrowserWorkerRoomState;
+        initialSpeedVote?: { wantFast: boolean, inSpace: boolean };
     },
         sendMessage: (message: unknown, destination?: string | Set<string>) => void | Promise<void>,
     ) {
@@ -65,6 +66,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
             communicator.receiveMessage(source, message);
         }
         this.pendingRoomMessages = [];
+        if (args.initialSpeedVote) {
+            this.bridge.setSpeedVote(
+                args.initialSpeedVote.wantFast, args.initialSpeedVote.inSpace);
+        }
         // Join the room's shared timeline by replaying its input log.
         await this.bridge.joinRoom();
     }
@@ -139,6 +144,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
     async setPlayerJumpRoute(route: string[]) {
         this.requireBridge().setPlayerJumpRoute(route);
+    }
+
+    async setSpeedVote(wantFast: boolean, inSpace: boolean) {
+        this.requireBridge().setSpeedVote(wantFast, inSpace);
     }
 
     async spawnNpc(shipId: string) {

@@ -29,6 +29,8 @@ export interface SimulationBridgeHostApi {
     addEntity(uuid: string, entity: EncodedEntity): void | Promise<void>;
     removeEntity(uuid: string): void;
     setPlayerJumpRoute(route: string[]): void;
+    /** Non-simulation control: publish this peer's Caps Lock 2x speed vote (#371). */
+    setSpeedVote(wantFast: boolean, inSpace: boolean): void;
     spawnNpc(shipId: string): void | Promise<void>;
     /** Debug/netcode: roll back `ticks` and resimulate. */
     rewind(ticks: number): boolean;
@@ -76,6 +78,7 @@ export interface AsyncSimulationBridgeHostApi {
     addEntity(uuid: string, entity: EncodedEntity): Promise<void>;
     removeEntity(uuid: string): Promise<void>;
     setPlayerJumpRoute(route: string[]): Promise<void>;
+    setSpeedVote(wantFast: boolean, inSpace: boolean): Promise<void>;
     spawnNpc(shipId: string): Promise<void>;
     rewind(ticks: number): Promise<boolean>;
     resync(): Promise<boolean>;

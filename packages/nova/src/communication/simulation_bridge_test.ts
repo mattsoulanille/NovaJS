@@ -601,6 +601,43 @@ describe('SimulationBridge', () => {
                     expect(host.snapshot().pacing).toBeUndefined();
                 });
 
+                it('ignores a forged roomSpeed from another peer and deduplicates speedVote', () => {
+                    const { host, communicator } = makePacedHost();
+                    communicator.messages.next({
+                        source: 'attacker',
+                        message: wrapRollbackMessage({
+                            kind: 'roomSpeed', tick: 10, speed: 2, atTick: 11,
+                            fastVotes: 1, totalVoters: 1,
+                        }),
+                    });
+                    expect(host.snapshot().roomSpeed).toBeUndefined();
+
+                    // Server roomSpeed is accepted.
+                    communicator.messages.next({
+                        source: 'server',
+                        message: wrapRollbackMessage({
+                            kind: 'roomSpeed', tick: 10, speed: 2, atTick: 11,
+                            fastVotes: 1, totalVoters: 1,
+                        }),
+                    });
+                    expect(host.snapshot().roomSpeed?.targetSpeed).toBe(2);
+
+                    // setSpeedVote publishes only when (wantFast, inSpace) changes.
+                    const sent: unknown[] = [];
+                    const origSend = communicator.sendMessage.bind(communicator);
+                    communicator.sendMessage = (msg, dest) => {
+                        sent.push(msg);
+                        origSend(msg, dest);
+                    };
+                    host.setSpeedVote(true, true);
+                    host.setSpeedVote(true, true);
+                    host.setSpeedVote(true, false);
+                    expect(sent).toEqual([
+                        wrapRollbackMessage({ kind: 'speedVote', wantFast: true, inSpace: true }),
+                        wrapRollbackMessage({ kind: 'speedVote', wantFast: true, inSpace: false }),
+                    ]);
+                });
+
                 it('ignores a desync and an inputLog from another peer', async () => {
                     const { host, communicator } = makePacedHost();
                     const entity = new Entity('foo')

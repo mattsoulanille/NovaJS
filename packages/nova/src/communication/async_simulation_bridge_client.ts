@@ -120,6 +120,10 @@ export class AsyncSimulationBridgeClient {
         await this.guard(() => this.host.setPlayerJumpRoute(route));
     }
 
+    async setSpeedVote(wantFast: boolean, inSpace: boolean) {
+        await this.guard(() => this.host.setSpeedVote(wantFast, inSpace));
+    }
+
     async spawnNpc(shipId: string) {
         await this.guard(() => this.host.spawnNpc(shipId));
     }

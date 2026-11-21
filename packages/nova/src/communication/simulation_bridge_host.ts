@@ -166,6 +166,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * tickSync, and when it arrived — extrapolated between syncs.
      */
     private roomClock = new RoomClock();
+    /** This peer's latest Caps Lock / in-space speed vote (#371). */
+    private localSpeedVote?: { wantFast: boolean, inSpace: boolean };
+    /** Which socket uuid last published `localSpeedVote` (re-sent on reconnect). */
+    private speedVoteSentForPeer?: string;
     /**
      * The pre-join genesis state. Desync recovery restores it and
      * resimulates the relay's input log — the late-join reconstruction,
@@ -353,6 +357,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     this.handleDesync(tick, hashes, canonical),
                 desyncDumpRequest: () => this.sendDesyncDump(),
                 inputRefused: notice => this.handleRefusal(notice),
+                roomSpeed: notice => this.roomClock.setSpeed({
+                    speed: notice.speed,
+                    atTick: notice.atTick,
+                    fastVotes: notice.fastVotes,
+                    totalVoters: notice.totalVoters,
+                }, notice.tick),
             });
             // The identity this host starts under: no re-entry for it.
             this.noteIdentity();
@@ -576,6 +586,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (!communicator?.uuid) {
             return false;
         }
+        // Re-send this peer's Caps Lock vote before requesting catchUp so
+        // a joiner with Caps Lock already on (or a reconnecting peer) votes
+        // yes from the start and receives the updated speed in catchUp (#371).
+        if (this.localSpeedVote) {
+            this.publishSpeedVote();
+        }
         const catchUp = await requestCatchUp(communicator, {
             timeoutMs, fresh,
             // #155: lets the relay notice a peer whose world runs its
@@ -603,7 +619,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // but the sender, and the sender's own ship
                 // diverges until a resync rebuilds it from the
                 // log.
-                this.roomClock.sync(reply.tick);
+                if (reply.roomSpeed) {
+                    this.roomClock.setSpeed(reply.roomSpeed, reply.tick);
+                } else {
+                    this.roomClock.sync(reply.tick);
+                }
             });
         if (!catchUp) {
             console.warn('No rollback relay responded; starting at tick 0');
@@ -1166,6 +1186,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             this.disconnectFleet = this.resyncing
                 ? this.preResyncFleet : this.captureOwnFleet();
             this.diedSinceDisconnect.clear();
+        } else if (connected && this.localSpeedVote) {
+            const uuid = this.world.resources.get(CommunicatorResource)?.uuid;
+            if (uuid !== undefined && this.speedVoteSentForPeer !== uuid) {
+                this.publishSpeedVote();
+            }
         }
         this.wasConnected = connected;
     }
@@ -1651,6 +1676,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         const { added, changed, removed } =
             this.frameEncoder.encode(this.world, this.serializer);
 
+        const speedState = this.roomClock.speedState;
+        const roomSpeed = speedState ? {
+            speed: this.roomClock.speedAt(this.rollback.tick),
+            targetSpeed: speedState.speed,
+            atTick: speedState.atTick,
+            fastVotes: speedState.fastVotes,
+            totalVoters: speedState.totalVoters,
+            wantFast: this.localSpeedVote?.wantFast ?? false,
+            inSpace: this.localSpeedVote?.inSpace ?? true,
+        } : undefined;
+
         return {
             added,
             changed,
@@ -1658,6 +1694,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             time: this.world.resources.get(TimeResource),
             events,
             pacing: this.roomClock.pacing(this.rollback.tick),
+            ...(roomSpeed ? { roomSpeed } : {}),
         };
     }
 
@@ -1706,6 +1743,40 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
 
     setPlayerJumpRoute(route: string[]) {
         this.schedule({ kind: 'setJumpRoute', route });
+    }
+
+    /**
+     * Non-simulation control: publishes this peer's Caps Lock 2x speed vote
+     * and whether it is in space to the relay when changed (#371). Never
+     * enters the simulation input log.
+     */
+    setSpeedVote(wantFast: boolean, inSpace: boolean) {
+        const communicator = this.world.resources.get(CommunicatorResource);
+        const changed = this.localSpeedVote?.wantFast !== wantFast
+            || this.localSpeedVote?.inSpace !== inSpace
+            || (communicator?.uuid !== undefined
+                && this.speedVoteSentForPeer !== communicator.uuid);
+        this.localSpeedVote = { wantFast, inSpace };
+        if (changed) {
+            this.publishSpeedVote();
+        }
+    }
+
+    private publishSpeedVote() {
+        if (!this.localSpeedVote) {
+            return;
+        }
+        const communicator = this.world.resources.get(CommunicatorResource);
+        const server = relayServer(communicator);
+        if (!communicator || !server) {
+            return;
+        }
+        this.speedVoteSentForPeer = communicator.uuid;
+        communicator.sendMessage(wrapRollbackMessage({
+            kind: 'speedVote',
+            wantFast: this.localSpeedVote.wantFast,
+            inSpace: this.localSpeedVote.inSpace,
+        }), server);
     }
 
     async spawnNpc(shipId: string) {

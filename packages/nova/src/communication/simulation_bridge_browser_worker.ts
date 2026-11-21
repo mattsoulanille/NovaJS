@@ -13,6 +13,7 @@ export interface BrowserSimulationBridgeWorkerApi extends AsyncSimulationBridgeH
         args: {
             systemId: string,
             roomState: BrowserWorkerRoomState,
+            initialSpeedVote?: { wantFast: boolean, inSpace: boolean },
         },
         sendMessage: (message: unknown, destination?: string | Set<string>) => void | Promise<void>,
     ): Promise<void>;

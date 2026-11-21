@@ -86,6 +86,10 @@ export class SimulationBridgeClient {
         this.host.setPlayerJumpRoute(structuredClone(route));
     }
 
+    setSpeedVote(wantFast: boolean, inSpace: boolean) {
+        this.host.setSpeedVote(wantFast, inSpace);
+    }
+
     rewind(ticks: number) {
         return this.host.rewind(ticks);
     }
