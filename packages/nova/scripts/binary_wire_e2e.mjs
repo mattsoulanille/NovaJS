@@ -7,8 +7,10 @@
 // alike on both peers (and at the relay's own archive, which convicts
 // a diverged peer with a desync broadcast neither must have seen).
 //
-//   node scripts/binary_wire_e2e.mjs [systemId] [ticks] [port]
+//   node scripts/binary_wire_e2e.mjs [systemId] [ticks] [port] [1x|2x]
 //     (run from packages/nova after a build; needs Nova_Data)
+//     Passing `2x` (or NOVA_E2E_SPEED=2x) makes both clients vote for 2x
+//     room speed partway through and verifies determinism + 2x rollback depth.
 //
 // Exit status 0 on a deterministic run, 1 otherwise.
 import { spawn } from 'child_process';
@@ -23,7 +25,10 @@ process.chdir(packageRoot);
 const SYSTEM = process.argv[2] ?? 'nova:129';
 const TICKS = Number(process.argv[3] ?? 300);
 const PORT = Number(process.argv[4] ?? 18342);
+const SPEED_ARG = (process.argv[5] ?? process.env.NOVA_E2E_SPEED ?? '1x').toLowerCase();
+const VOTE_FAST = SPEED_ARG === '2x' || SPEED_ARG === '2';
 const SHIP = 'nova:128';
+const STEP_MS = 1000 / 60;
 
 const { SocketChannelClient } = await import('../dist/src/communication/socket_channel_client.js');
 const { CommunicatorClient } = await import('../dist/src/communication/communicator_client.js');
@@ -113,29 +118,66 @@ async function makeClient(name) {
     ship.components.set(ControlledByComponent, { peerId: room.uuid });
     ship.components.set(MultiplayerData, { owner: room.uuid });
     await host.addEntity(`${name}-ship`, world.resources.get(SerializerResource).encode(ship));
-    return { name, host, room, frames, channel, world };
+    return {
+        name, host, room, frames, channel, world,
+        timeDebt: 0, lastPumpMs: undefined, pacing: undefined, saw2x: false,
+    };
 }
 
-/** Steps a client toward the room clock, like the browser pump. */
-function pump(client, start) {
-    const behindMs = (performance.now() - start) - client.host.status().tick * (1000 / 60);
-    const steps = Math.max(1, Math.min(30, Math.floor(behindMs / (1000 / 60))));
-    client.host.step(steps);
+/** Steps a client using its live RoomClock pacing (1x or 2x), like FramePump. */
+function pump(client) {
+    const now = performance.now();
+    const elapsedMs = client.lastPumpMs !== undefined ? now - client.lastPumpMs : STEP_MS;
+    client.lastPumpMs = now;
+    const rate = client.pacing?.rate ?? 1;
+    const speed = client.pacing?.speed ?? 1;
+    client.timeDebt = Math.min(client.timeDebt + elapsedMs * rate, STEP_MS * 6 * speed);
+    let steps = Math.floor(client.timeDebt / STEP_MS);
+    client.timeDebt -= steps * STEP_MS;
+    if (client.pacing && client.pacing.behindTicks > 30 * speed) {
+        steps += Math.min(Math.floor(client.pacing.behindTicks), 60 * speed);
+    }
+    if (steps > 0) {
+        client.host.step(steps);
+    }
+    const frame = client.host.snapshot();
+    if (frame.pacing) {
+        client.pacing = frame.pacing;
+    }
+    if (frame.roomSpeed?.speed === 2 && frame.pacing?.speed === 2) {
+        client.saw2x = true;
+    }
 }
 
 const a = await makeClient('A');
 const b = await makeClient('B');
-const start = performance.now() - Math.max(a.host.status().tick, b.host.status().tick) * (1000 / 60);
+const startTick = Math.max(a.host.status().tick, b.host.status().tick);
+const driveStartMs = performance.now();
 
 // --- Drive both ships with inputs that cross the wire, for `TICKS`.
-log(`driving both ships for ${TICKS} ticks`);
-const untilTick = Math.max(a.host.status().tick, b.host.status().tick) + TICKS;
+const speedMode = VOTE_FAST ? '2x' : '1x';
+log(`driving both ships for ${TICKS} ticks (mode=${speedMode})`);
+const untilTick = startTick + TICKS;
+const voteFastAtTick = startTick + Math.floor(TICKS / 3);
+let votedFast = false;
+let fastStartMs;
+let fastStartTick;
 let phase = 0;
 while (a.host.status().tick < untilTick || b.host.status().tick < untilTick) {
     for (const client of [a, b]) {
-        pump(client, start);
+        pump(client);
     }
     const tick = a.host.status().tick;
+    if (VOTE_FAST && !votedFast && tick >= voteFastAtTick) {
+        votedFast = true;
+        log(`voting 2x fast on both clients at tick ${tick}`);
+        a.host.setSpeedVote(true, true);
+        b.host.setSpeedVote(true, true);
+    }
+    if (VOTE_FAST && fastStartMs === undefined && a.saw2x && b.saw2x) {
+        fastStartMs = performance.now();
+        fastStartTick = Math.min(a.host.status().tick, b.host.status().tick);
+    }
     if (tick > phase * 40) {
         phase++;
         // (A control's state is 'start' | 'repeat' | false. An invalid
@@ -152,6 +194,13 @@ while (a.host.status().tick < untilTick || b.host.status().tick < untilTick) {
     }
     await sleep(16);
 }
+const driveElapsedS = (performance.now() - driveStartMs) / 1000;
+const fastElapsedS = fastStartMs !== undefined
+    ? (performance.now() - fastStartMs) / 1000 : undefined;
+const fastTicksPerSec = fastElapsedS && fastElapsedS > 0 && fastStartTick !== undefined
+    ? Number(((Math.min(a.host.status().tick, b.host.status().tick) - fastStartTick)
+        / fastElapsedS).toFixed(1))
+    : undefined;
 
 // --- Park both on one checkpoint tick past the last input, with the
 // relay's records settled, and compare.
@@ -207,10 +256,17 @@ const room = {
     spawnBits: spawner?.spawnBits,
     awaitingEntrant: spawner?.awaitingEntrant ?? false,
 };
+const rollbackStats = [a.host.rollbackStats(), b.host.rollbackStats()];
+const observed2x = [a.saw2x, b.saw2x];
 const ok = dumpA.tick === dumpB.tick && differences.length === 0 && bothShips
-    && statusA.desyncCount === 0 && statusB.desyncCount === 0 && textFrames === 0;
+    && statusA.desyncCount === 0 && statusB.desyncCount === 0 && textFrames === 0
+    && (!VOTE_FAST || (a.saw2x && b.saw2x));
 console.log(JSON.stringify({
-    ok, tick: dumpA.tick, ticksDriven: TICKS, entities: dumpA.entities.length,
+    ok, speedMode, observed2x,
+    ticksPerSec: Number((TICKS / driveElapsedS).toFixed(1)),
+    ...(fastTicksPerSec !== undefined ? { fastTicksPerSec } : {}),
+    rollbackStats,
+    tick: dumpA.tick, ticksDriven: TICKS, entities: dumpA.entities.length,
     bothShips, desyncs: [statusA.desyncCount, statusB.desyncCount],
     binaryFrames: [a.frames.binary, b.frames.binary], textFrames, room,
     wire: liveWireCodec().encoding, schema: liveWireFingerprint(),
