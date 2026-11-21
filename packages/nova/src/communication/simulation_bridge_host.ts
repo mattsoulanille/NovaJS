@@ -1324,15 +1324,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             // schedule the whole batch synchronously: one record.
             await stageEncodedComponentsGameData(this.simulationGameData,
                 batch.map(([, entity]) => entity.components));
-            for (const [, entity] of batch) {
+            const entities = batch.map(([, entity]) => {
                 const decoded = this.serializer.decode(entity);
                 if (isLeft(decoded)) {
                     throw new Error('Failed to decode a re-inserted entity: '
                         + this.serializer.describeDecodeFailure(
                             entity, decoded.left));
                 }
-                await loadEntityGameData(this.world, decoded.right);
-            }
+                return decoded.right;
+            });
+            // Their closures load together (#368).
+            await Promise.all(entities.map(
+                entity => loadEntityGameData(this.world, entity)));
         } catch (error) {
             for (const [uuid] of batch) {
                 const pending = this.reinsertions.get(uuid);
@@ -1578,15 +1581,18 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // (core/game_data_ref.ts): stage them first.
         await stageEncodedComponentsGameData(this.simulationGameData,
             (accepted.ships ?? []).map(ship => (ship.entity as EncodedEntity).components));
-        for (const ship of accepted.ships ?? []) {
+        const ships = (accepted.ships ?? []).map(ship => {
             const decoded = this.serializer.decode(ship.entity);
             if (isLeft(decoded)) {
                 throw new Error('Failed to decode mission ship: '
                     + this.serializer.describeDecodeFailure(
                         ship.entity, decoded.left));
             }
-            await loadEntityGameData(this.world, decoded.right);
-        }
+            return decoded.right;
+        });
+        // Their closures load together (#368).
+        await Promise.all(ships.map(
+            ship => loadEntityGameData(this.world, ship)));
         // The outfits the accept GRANTS are staged like the ships: this
         // worker's cache is its own (the display side warming its
         // cache does not warm it), and applying the grant rebuilds the

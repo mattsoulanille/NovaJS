@@ -460,16 +460,15 @@ export async function loadAsteroidGameData(
     const data: AsteroidData = await loadWithRetries(
         () => gameData.data.Asteroid.get(asteroidId),
         `asteroid ${asteroidId}`);
-    try {
-        await loadWithRetries(() => gameData.data.SpriteSheet.get(
+    // The sprite sheet and the fragments load together (#368).
+    await Promise.all([
+        loadWithRetries(() => gameData.data.SpriteSheet.get(
             data.animation.images.baseImage.id),
-            `asteroid ${asteroidId} sprite sheet`, 2);
-    } catch (e) {
-        console.warn(String(e));
-    }
-    for (const fragment of data.fragments) {
-        await loadAsteroidGameData(gameData, fragment, seen);
-    }
+            `asteroid ${asteroidId} sprite sheet`, 2)
+            .catch(e => console.warn(String(e))),
+        ...data.fragments.map(fragment =>
+            loadAsteroidGameData(gameData, fragment, seen)),
+    ]);
 }
 
 /**
@@ -490,9 +489,8 @@ export async function spawnAsteroids(world: World,
         throw new Error('Expected game data, random, and id factory resources');
     }
 
-    for (const typeId of systemData.asteroidTypes) {
-        await loadAsteroidGameData(gameData, typeId);
-    }
+    await Promise.all(systemData.asteroidTypes.map(
+        typeId => loadAsteroidGameData(gameData, typeId)));
 
     const fieldScreens = (2 * ASTEROID_FIELD_HALF_SIZE) ** 2
         / REFERENCE_SCREEN_AREA;

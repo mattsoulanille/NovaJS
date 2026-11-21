@@ -67,17 +67,23 @@ export async function loadShipGameData(gameData: SimulationGameDataInterface,
     seenShips.add(shipId);
 
     const ship = await gameData.data.Ship.get(shipId);
-    await loadAnimationGameData(gameData, ship.animation);
-    for (const outfitId of Object.keys(ship.outfits)) {
-        const outfit = await loadIfDefined(
-            () => gameData.data.Outfit.get(outfitId), `outfit ${outfitId} of ship ${shipId}`);
-        if (!outfit?.weapons) {
-            continue;
-        }
-        for (const weaponId of Object.keys(outfit.weapons)) {
-            await loadWeaponGameData(gameData, weaponId, weaponIds, seenShips);
-        }
-    }
+    // Every child is requested together, never one awaited before the
+    // next is asked for (#368): over a ~100 ms round trip a for-await
+    // here cost one round trip per outfit and per weapon. The closure
+    // staged is the same; only the order its members land in the cache
+    // varies, and nothing reads that order (primeWeaponEntries sorts
+    // the weapon ids it is handed).
+    await Promise.all([
+        loadAnimationGameData(gameData, ship.animation),
+        ...Object.keys(ship.outfits).map(async outfitId => {
+            const outfit = await loadIfDefined(
+                () => gameData.data.Outfit.get(outfitId),
+                `outfit ${outfitId} of ship ${shipId}`);
+            await Promise.all(Object.keys(outfit?.weapons ?? {}).map(
+                weaponId => loadWeaponGameData(gameData, weaponId,
+                    weaponIds, seenShips)));
+        }),
+    ]);
     return weaponIds;
 }
 
@@ -94,18 +100,23 @@ export async function loadWeaponGameData(gameData: SimulationGameDataInterface,
     if (!weapon) {
         return weaponIds;
     }
+    // A weapon's children load together (see loadShipGameData).
+    const children: Promise<unknown>[] = [];
     if ('animation' in weapon && weapon.animation) {
         // Projectile hurtboxes are built from the sprite sheet.
-        await loadAnimationGameData(gameData, weapon.animation);
+        children.push(loadAnimationGameData(gameData, weapon.animation));
     }
     if ('submunitions' in weapon) {
         for (const sub of weapon.submunitions) {
-            await loadWeaponGameData(gameData, sub.id, weaponIds, seenShips);
+            children.push(loadWeaponGameData(gameData, sub.id, weaponIds,
+                seenShips));
         }
     }
     if (weapon.type === 'BayWeaponData') {
-        await loadShipGameData(gameData, weapon.shipID, weaponIds, seenShips);
+        children.push(loadShipGameData(gameData, weapon.shipID, weaponIds,
+            seenShips));
     }
+    await Promise.all(children);
     return weaponIds;
 }
 
@@ -142,9 +153,11 @@ export async function loadEntityGameData(world: World, entity: Entity) {
         throw new Error('Expected SimulationGameDataResource to exist');
     }
 
+    // The parts below are independent, so they load together (#368).
     const weaponIds = new Set<string>();
+    const loads: Promise<unknown>[] = [];
     if (ship) {
-        await loadShipGameData(gameData, ship.id, weaponIds);
+        loads.push(loadShipGameData(gameData, ship.id, weaponIds));
     }
     // The ship class's stock loadout is not the entity's loadout: a
     // player ship carries purchased outfits, and their weapons (and
@@ -155,14 +168,14 @@ export async function loadEntityGameData(world: World, entity: Entity) {
     // second real recorded desync.
     const outfits = entity.components.get(OutfitsStateComponent);
     if (outfits) {
-        await loadOutfitWeaponsGameData(gameData, outfits.keys(), weaponIds);
+        loads.push(loadOutfitWeaponsGameData(gameData, outfits.keys(), weaponIds));
     }
     if (planet) {
-        await gameData.data.Planet.get(planet.id);
+        loads.push(gameData.data.Planet.get(planet.id));
     }
     if (asteroid) {
         // Includes the fragment closure, so breakup stays synchronous.
-        await loadAsteroidGameData(gameData, asteroid.id);
+        loads.push(loadAsteroidGameData(gameData, asteroid.id));
     }
 
     // A ship's government (if any) contributes inherent jamming to the
@@ -171,8 +184,10 @@ export async function loadEntityGameData(world: World, entity: Entity) {
     const govt = entity.components.get(GovtComponent);
     if (govt) {
         // Undefined in the cache reads as "no inherent jamming".
-        await loadIfDefined(() => gameData.data.Govt.get(govt.id), `govt ${govt.id}`);
+        loads.push(loadIfDefined(() => gameData.data.Govt.get(govt.id),
+            `govt ${govt.id}`));
     }
+    await Promise.all(loads);
 
     await primeWeaponEntries(world, weaponIds);
 }
@@ -189,19 +204,19 @@ export async function loadEntityGameData(world: World, entity: Entity) {
  */
 async function loadOutfitWeaponsGameData(gameData: SimulationGameDataInterface,
     outfitIds: Iterable<string>, weaponIds: Set<string>) {
-    for (const outfitId of outfitIds) {
+    // Every outfit at once, then each one's weapons (#368).
+    await Promise.all([...outfitIds].map(async outfitId => {
         let outfit;
         try {
             outfit = await loadIfDefined(
                 () => gameData.data.Outfit.get(outfitId), `owned outfit ${outfitId}`);
         } catch (e) {
             console.warn(`Outfit ${outfitId} could not be staged: ${String(e)}`);
-            continue;
+            return;
         }
-        for (const weaponId of Object.keys(outfit?.weapons ?? {})) {
-            await loadWeaponGameData(gameData, weaponId, weaponIds);
-        }
-    }
+        await Promise.all(Object.keys(outfit?.weapons ?? {}).map(
+            weaponId => loadWeaponGameData(gameData, weaponId, weaponIds)));
+    }));
 }
 
 /**
@@ -215,15 +230,21 @@ export async function primeWeaponEntries(world: World,
     weaponIds: Set<string>) {
     // Record BEFORE priming: the priming get is itself an entry build,
     // and it must see these ids as already staged.
+    //
+    // SORTED: the closure walks that fill `weaponIds` load concurrently,
+    // so the set's insertion order follows load COMPLETION order — a
+    // property of this world's cache warmth and the network, not of the
+    // data — and nothing downstream may see that order.
+    const sorted = [...weaponIds].sort();
     const staged = world.resources.get(StagedWeaponIds);
     if (staged) {
-        for (const id of weaponIds) {
+        for (const id of sorted) {
             staged.add(id);
         }
     }
     const weaponEntries = world.resources.get(WeaponEntries);
     if (weaponEntries) {
-        await Promise.all([...weaponIds].map(id => weaponEntries.get(id)));
+        await Promise.all(sorted.map(id => weaponEntries.get(id)));
     }
 }
 
@@ -302,7 +323,7 @@ export async function loadWeaponsGameData(world: World,
         throw new Error('Expected SimulationGameDataResource to exist');
     }
     const staged = new Set<string>();
-    for (const weaponId of weaponIds) {
+    await Promise.all([...weaponIds].map(async weaponId => {
         // Like loadOutfitWeaponsGameData: a weapon the data set lacks is
         // reported and skipped, never a rejection that drops the rest.
         try {
@@ -310,7 +331,7 @@ export async function loadWeaponsGameData(world: World,
         } catch (e) {
             console.warn(`Weapon ${weaponId} could not be staged: ${String(e)}`);
         }
-    }
+    }));
     await primeWeaponEntries(world, staged);
 }
 
@@ -339,7 +360,8 @@ export async function loadWireSnapshotGameData(
     }
     await stageEncodedComponentsGameData(gameData,
         snapshot.entities.map(entity => entity.components));
-    for (const wireEntity of snapshot.entities) {
-        await loadEntityGameData(world, decodeWireEntity(world, wireEntity));
-    }
+    // Decoded in snapshot order; their closures load together (#368).
+    const entities = snapshot.entities.map(
+        wireEntity => decodeWireEntity(world, wireEntity));
+    await Promise.all(entities.map(entity => loadEntityGameData(world, entity)));
 }

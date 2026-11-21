@@ -239,10 +239,13 @@ export function grantedOutfitIds(effects: SetStringEffects): string[] {
  */
 export async function loadSetStringEffectsGameData(world: World,
     effects: SetStringEffects): Promise<void> {
-    await loadOutfitsGameData(world, grantedOutfitIds(effects));
-    if (effects.shipChange) {
-        await loadShipClassGameData(world, effects.shipChange.shipId);
-    }
+    // Independent closures: requested together (#368).
+    await Promise.all([
+        loadOutfitsGameData(world, grantedOutfitIds(effects)),
+        effects.shipChange
+            ? loadShipClassGameData(world, effects.shipChange.shipId)
+            : undefined,
+    ]);
 }
 
 /** Whether an input names game data that must be staged before it
@@ -265,69 +268,75 @@ export async function loadInputRecordsGameData(
     if (!serializer) {
         return;
     }
-    for (const record of records) {
-        for (const input of record.inputs) {
-            // (An escortAction stages NOTHING. Queueing an upgrade records
-            // the target class's id on the escort's ownership marker and
-            // builds no ship; the class is loaded by the client that
-            // settles the deal at lift-off — spaceport/escort_deals.ts.)
-            //
-            // Every input that carries an ENTITY must stage it, or a peer
-            // that did not originate the record derives against unloaded
-            // game data and diverges. acceptMission carries a BATCH of
-            // them (a mission's special/aux ships), so it is staged here
-            // exactly like addEntity's single one.
-            const entities: EncodedEntity[] =
-                input.kind === 'addEntity' ? [input.entity]
-                    : input.kind === 'acceptMission'
-                        ? (input.accepted.ships ?? []).map(
-                            ship => ship.entity as EncodedEntity)
-                        : [];
-            // The entity's game-data REFERENCES (ShipData & co., see
-            // core/game_data_ref.ts) resolve during the decode itself,
-            // so they are staged before it; the decoded entity's
-            // closure follows, as genesis stages it.
-            const gameData = world.resources.get(SimulationGameDataResource);
+    // Every input stages independently of every other — staging only
+    // warms this world's caches, and the records are APPLIED later, in
+    // log order, by the caller — so a whole log stages together (#368):
+    // a late joiner replaying a room's history used to pay each input's
+    // closure, one after another, in sequential round trips.
+    const gameData = world.resources.get(SimulationGameDataResource);
+    await Promise.all(records.flatMap(record => record.inputs).map(async input => {
+        // (An escortAction stages NOTHING. Queueing an upgrade records
+        // the target class's id on the escort's ownership marker and
+        // builds no ship; the class is loaded by the client that
+        // settles the deal at lift-off — spaceport/escort_deals.ts.)
+        //
+        // Every input that carries an ENTITY must stage it, or a peer
+        // that did not originate the record derives against unloaded
+        // game data and diverges. acceptMission carries a BATCH of
+        // them (a mission's special/aux ships), so it is staged here
+        // exactly like addEntity's single one.
+        const entities: EncodedEntity[] =
+            input.kind === 'addEntity' ? [input.entity]
+                : input.kind === 'acceptMission'
+                    ? (input.accepted.ships ?? []).map(
+                        ship => ship.entity as EncodedEntity)
+                    : [];
+        // The entity's game-data REFERENCES (ShipData & co., see
+        // core/game_data_ref.ts) resolve during the decode itself,
+        // so they are staged before it; the decoded entity's
+        // closure follows, as genesis stages it.
+        const stageEntities = async () => {
             if (gameData && entities.length > 0) {
                 await stageEncodedComponentsGameData(gameData,
                     entities.map(encoded => encoded.components));
             }
-            for (const encoded of entities) {
-                const decoded = serializer.decode(encoded);
-                if (!isLeft(decoded)) {
-                    await loadEntityGameData(world, decoded.right);
-                }
-            }
-            // Every input that carries a GAME-DATA ID the sim will derive
-            // from must stage that too. An acceptance's OnAccept Gxxx
-            // grants put NEW outfit ids into the player's OutfitsState,
-            // and applying it drops WeaponsState/ShipPhysics for the
-            // providers to rebuild from `Outfit.getCached` /
-            // `Weapon.getCached` — which miss on every world that never
-            // staged those ids, re-attaching at a load-timing-dependent
-            // tick that differs per peer (the "purchased outfits never
-            // staged" desync class, docs/rollback_multiplayer.md (11),
-            // in its third costume).
-            // The same goes for the class an in-flight `Cxxx` / `Exxx` /
-            // `Hxxx` changes the player to: applying it reads the ShipData
-            // with getCached and the new hull's providers derive from it.
-            if (input.kind === 'acceptMission') {
-                await loadSetStringEffectsGameData(world, input.accepted);
-            }
-            if (input.kind === 'refuseMission') {
-                await loadSetStringEffectsGameData(world, input.refused);
-            }
-            // A refund's ceiling reads the bay wëap from the cache
-            // (refundFighterToBay: MaxAmmo times the bays mounted). The
-            // carrier's own staging warmed it on every world that holds
-            // the carrier, but a world that never staged the bay would
-            // read the ceiling as UNCAPPED and diverge — so the record
-            // stages it itself, like every input that names an id.
-            if (input.kind === 'refundFighter') {
-                await loadWeaponsGameData(world, [input.refund.bayWeaponId]);
-            }
-        }
-    }
+            const decoded = entities.map(encoded => serializer.decode(encoded));
+            await Promise.all(decoded.map(entity => isLeft(entity)
+                ? undefined : loadEntityGameData(world, entity.right)));
+        };
+        // Every input that carries a GAME-DATA ID the sim will derive
+        // from must stage that too. An acceptance's OnAccept Gxxx
+        // grants put NEW outfit ids into the player's OutfitsState,
+        // and applying it drops WeaponsState/ShipPhysics for the
+        // providers to rebuild from `Outfit.getCached` /
+        // `Weapon.getCached` — which miss on every world that never
+        // staged those ids, re-attaching at a load-timing-dependent
+        // tick that differs per peer (the "purchased outfits never
+        // staged" desync class, docs/rollback_multiplayer.md (11),
+        // in its third costume).
+        // The same goes for the class an in-flight `Cxxx` / `Exxx` /
+        // `Hxxx` changes the player to: applying it reads the ShipData
+        // with getCached and the new hull's providers derive from it.
+        //
+        // A refund's ceiling reads the bay wëap from the cache
+        // (refundFighterToBay: MaxAmmo times the bays mounted). The
+        // carrier's own staging warmed it on every world that holds
+        // the carrier, but a world that never staged the bay would
+        // read the ceiling as UNCAPPED and diverge — so the record
+        // stages it itself, like every input that names an id.
+        await Promise.all([
+            stageEntities(),
+            input.kind === 'acceptMission'
+                ? loadSetStringEffectsGameData(world, input.accepted)
+                : undefined,
+            input.kind === 'refuseMission'
+                ? loadSetStringEffectsGameData(world, input.refused)
+                : undefined,
+            input.kind === 'refundFighter'
+                ? loadWeaponsGameData(world, [input.refund.bayWeaponId])
+                : undefined,
+        ]);
+    }));
 }
 
 /**
