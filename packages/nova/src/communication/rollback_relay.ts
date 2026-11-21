@@ -44,10 +44,26 @@ export interface DesyncInfo {
  * - Archive: retains the input log and serves it to late joiners.
  */
 /**
- * How long (in ticks) an incomplete set of state-hash reports waits
- * for stragglers before being compared as-is and dropped.
+ * How long (in 1x ticks; scaled by `activeSpeed` so wall time stays ~10s at
+ * 2x, R1 #371) an incomplete set of state-hash reports waits for stragglers
+ * before being compared as-is and dropped.
  */
 const STATE_HASH_SWEEP_TICKS = 600;
+
+/**
+ * Maximum ticks `stepClock` may advance in a single catch-up burst (10s at
+ * 1x, 5s at 2x). Capped in ticks rather than raw wall ms so a server stall
+ * at 2x cannot trigger a 1200-tick catch-up burst (#371).
+ */
+const MAX_CLOCK_CATCHUP_TICKS = 600;
+
+/**
+ * Per-peer speedVote token bucket (#371): allows a short burst of 3 toggles
+ * (instant for normal human Caps Lock taps or landing right after a toggle)
+ * and coalesces any rapid flood to at most 4 updates/second (last one wins).
+ */
+const SPEED_VOTE_BURST = 3;
+const DEFAULT_SPEED_VOTE_REFILL_MS = 250;
 
 /**
  * A peer is convicted of desync only after this many *consecutive*
@@ -59,7 +75,8 @@ const STATE_HASH_SWEEP_TICKS = 600;
 const DEFAULT_DESYNC_THRESHOLD = 3;
 
 /**
- * A checkpoint report arriving more than this many ticks after its
+ * A checkpoint report arriving more than this many 1x ticks (scaled by
+ * `activeSpeed` so wall time stays ~4s at 2x, R1 #371) after its
  * checkpoint comes from a client running well behind the room's
  * clock (a throttled tab, an overloaded machine). Such reports are
  * still compared — a stale client can be convicted — but they get no
@@ -94,7 +111,7 @@ export class RollbackRelay {
     readonly timeline = v4();
     /** Peers' state-hash reports awaiting comparison, by tick. */
     private stateHashes =
-        new Map<number, Map<string, { hash: string, arrivedAt: number }>>();
+        new Map<number, Map<string, { hash: string, arrivedAt: number, timelyTicks: number }>>();
     private getBaseline?: () => ArchiveBaseline | undefined;
     private getFreshBaseline?: () => ArchiveBaseline | undefined;
     private getReferenceHash?: (tick: number) => string | undefined;
@@ -136,6 +153,15 @@ export class RollbackRelay {
      * voter and drops a 2x room back to 1x at the next tick boundary.
      */
     private speedVotes = new Map<string, { wantFast: boolean, inSpace: boolean }>();
+    /** Per-peer speedVote token bucket + trailing-edge coalescer (#371). */
+    private speedVoteLimits = new Map<string, {
+        tokens: number,
+        lastRefillMs: number,
+        pending?: { wantFast: boolean, inSpace: boolean },
+        timer?: ReturnType<typeof setTimeout>,
+    }>();
+    private readonly speedVoteRefillMs: number;
+    private readonly now: () => number;
     /** Clock multiplier currently active at `this.tick` (1 or 2). */
     private activeSpeed: RoomSpeed = 1;
     /** Scheduled speed change, activating once `this.tick >= atTick`. */
@@ -152,7 +178,9 @@ export class RollbackRelay {
         { autoClock = true, stepMs = SIMULATION_STEP_MS, baseline,
             freshBaseline, referenceHash, onArchiveOutvoted, onDesync,
             onDesyncDump, roomSeed,
-            desyncThreshold = DEFAULT_DESYNC_THRESHOLD }: {
+            desyncThreshold = DEFAULT_DESYNC_THRESHOLD,
+            speedVoteRefillMs = DEFAULT_SPEED_VOTE_REFILL_MS,
+            now = () => performance.now() }: {
                 autoClock?: boolean, stepMs?: number,
                 /**
                  * This room instance's seed (#140; the server passes
@@ -178,6 +206,11 @@ export class RollbackRelay {
                 /** Consecutive mismatched checkpoints before a desync
                  * broadcast (1 = convict immediately). */
                 desyncThreshold?: number,
+                /** Token refill interval (ms) for per-peer speedVote rate
+                 * limiting (0 disables rate limiting). */
+                speedVoteRefillMs?: number,
+                /** Injectable wall clock (ms) for deterministic rate-limit specs. */
+                now?: () => number,
                 /** Called when unanimous peers outvote the archive:
                  * the hook for dumping archive-side diagnostics. */
                 onArchiveOutvoted?: (tick: number) => void,
@@ -189,6 +222,8 @@ export class RollbackRelay {
                 onDesyncDump?: (peerId: string, dump: DesyncDump) => void,
             } = {}) {
         this.stepMs = stepMs;
+        this.speedVoteRefillMs = speedVoteRefillMs;
+        this.now = now;
         this.getBaseline = baseline;
         this.getFreshBaseline = freshBaseline;
         this.getReferenceHash = referenceHash;
@@ -238,6 +273,7 @@ export class RollbackRelay {
             this.peerSystemOrders.delete(peerId);
             this.dumpsExpected.delete(peerId);
             this.speedVotes.delete(peerId);
+            this.clearSpeedVoteLimit(peerId);
             this.recomputeSpeed();
             // An emptied room starts over: the next first joiner (maybe
             // a newer build) defines the reference.
@@ -289,9 +325,12 @@ export class RollbackRelay {
         if (elapsedMs < 0) {
             return 0;
         }
-        this.clockDebt = Math.min(this.clockDebt + elapsedMs, this.stepMs * 600);
+        // Cap debt so a stall cannot trigger more than MAX_CLOCK_CATCHUP_TICKS
+        // in one catch-up burst (600 ticks at both 1x and 2x, never 1200).
+        const maxDebt = (this.stepMs / this.activeSpeed) * MAX_CLOCK_CATCHUP_TICKS;
+        this.clockDebt = Math.min(this.clockDebt + elapsedMs, maxDebt);
         let advanced = 0;
-        while (true) {
+        while (advanced < MAX_CLOCK_CATCHUP_TICKS) {
             const tickCost = this.stepMs / this.activeSpeed;
             if (this.clockDebt + 1e-9 < tickCost) {
                 break;
@@ -299,10 +338,10 @@ export class RollbackRelay {
             this.clockDebt = Math.max(0, this.clockDebt - tickCost);
             advanced++;
             this.tick++;
-            if (this.pendingSpeed && this.tick >= this.pendingSpeed.atTick) {
-                this.activeSpeed = this.pendingSpeed.speed;
-                this.pendingSpeed = undefined;
-            }
+            this.activatePendingSpeed();
+        }
+        if (advanced >= MAX_CLOCK_CATCHUP_TICKS) {
+            this.clockDebt = 0;
         }
         if (advanced > 0) {
             this.sweepStateHashes();
@@ -312,20 +351,112 @@ export class RollbackRelay {
 
     advanceTicks(ticks: number) {
         this.tick += ticks;
+        this.activatePendingSpeed();
+        this.sweepStateHashes();
+    }
+
+    private activatePendingSpeed() {
         if (this.pendingSpeed && this.tick >= this.pendingSpeed.atTick) {
             this.activeSpeed = this.pendingSpeed.speed;
             this.pendingSpeed = undefined;
         }
-        this.sweepStateHashes();
     }
 
     private sweepStateHashes() {
         // Retry comparisons held for a trailing archive hash, and
-        // force ones whose stragglers never reported.
+        // force ones whose stragglers never reported. Scale the sweep
+        // horizon by activeSpeed so the ~10s wall-clock window is preserved
+        // at 2x (R1 #371).
+        const sweepTicks = STATE_HASH_SWEEP_TICKS * this.activeSpeed;
         for (const tick of [...this.stateHashes.keys()]) {
             this.compareStateHashes(tick,
-                tick < this.tick - STATE_HASH_SWEEP_TICKS);
+                tick < this.tick - sweepTicks);
         }
+    }
+
+    private clearSpeedVoteLimit(peerId: string) {
+        const entry = this.speedVoteLimits.get(peerId);
+        if (entry?.timer !== undefined) {
+            clearTimeout(entry.timer);
+        }
+        this.speedVoteLimits.delete(peerId);
+    }
+
+    /**
+     * Applies a peer's `speedVote` under a per-peer token bucket with
+     * trailing-edge coalescing (last one wins): normal taps apply at once,
+     * while a buggy peer flooding toggles is limited to at most a few
+     * roomSpeed rebroadcasts per second (#371).
+     */
+    private submitSpeedVote(peerId: string,
+        vote: { wantFast: boolean, inSpace: boolean }) {
+        const current = this.speedVotes.get(peerId);
+        const existing = this.speedVoteLimits.get(peerId);
+        if (current && current.wantFast === vote.wantFast
+            && current.inSpace === vote.inSpace
+            && !existing?.pending) {
+            return;
+        }
+        const now = this.now();
+        let entry = existing;
+        if (!entry) {
+            entry = { tokens: SPEED_VOTE_BURST, lastRefillMs: now };
+            this.speedVoteLimits.set(peerId, entry);
+        } else if (this.speedVoteRefillMs > 0) {
+            const elapsed = Math.max(0, now - entry.lastRefillMs);
+            entry.tokens = Math.min(SPEED_VOTE_BURST,
+                entry.tokens + elapsed / this.speedVoteRefillMs);
+            entry.lastRefillMs = now;
+        } else {
+            entry.tokens = SPEED_VOTE_BURST;
+            entry.lastRefillMs = now;
+        }
+
+        if (entry.tokens >= 1) {
+            entry.tokens -= 1;
+            if (entry.timer !== undefined) {
+                clearTimeout(entry.timer);
+                entry.timer = undefined;
+            }
+            entry.pending = undefined;
+            this.speedVotes.set(peerId, vote);
+            this.recomputeSpeed();
+            return;
+        }
+
+        // Bucket exhausted: coalesce (last one wins) and flush once a token
+        // refills.
+        entry.pending = vote;
+        if (entry.timer === undefined) {
+            const delayMs = Math.max(1,
+                Math.ceil((1 - entry.tokens) * this.speedVoteRefillMs));
+            entry.timer = setTimeout(() => this.flushSpeedVote(peerId), delayMs);
+        }
+    }
+
+    private flushSpeedVote(peerId: string) {
+        const entry = this.speedVoteLimits.get(peerId);
+        if (!entry) {
+            return;
+        }
+        entry.timer = undefined;
+        const pending = entry.pending;
+        entry.pending = undefined;
+        if (!pending || !this.roomPeers().has(peerId)) {
+            return;
+        }
+        const now = this.now();
+        if (this.speedVoteRefillMs > 0) {
+            const elapsed = Math.max(0, now - entry.lastRefillMs);
+            entry.tokens = Math.min(SPEED_VOTE_BURST,
+                entry.tokens + elapsed / this.speedVoteRefillMs);
+        } else {
+            entry.tokens = SPEED_VOTE_BURST;
+        }
+        entry.lastRefillMs = now;
+        entry.tokens = Math.max(0, entry.tokens - 1);
+        this.speedVotes.set(peerId, pending);
+        this.recomputeSpeed();
     }
 
     /**
@@ -466,7 +597,7 @@ export class RollbackRelay {
         // and it convicts a lone diverged peer whose roommates report
         // nothing at all.
         const voters: [string, string][] = [...reports]
-            .filter(([, report]) => report.arrivedAt - tick <= TIMELY_REPORT_TICKS)
+            .filter(([, report]) => report.arrivedAt - tick <= report.timelyTicks)
             .map(([peerId, report]) => [peerId, report.hash]);
         const allHashes: [string, string][] = [...reports]
             .map(([peerId, report]) => [peerId, report.hash]);
@@ -747,11 +878,10 @@ export class RollbackRelay {
                 break;
             }
             case 'speedVote': {
-                this.speedVotes.set(source, {
+                this.submitSpeedVote(source, {
                     wantFast: message.wantFast,
                     inSpace: message.inSpace,
                 });
-                this.recomputeSpeed();
                 break;
             }
             case 'stateHash': {
@@ -761,12 +891,13 @@ export class RollbackRelay {
                 // the future that the sweep is ages away — was a
                 // permanent Map entry per distinct value. Peers hash
                 // only checkpoint ticks they have already SETTLED (30
-                // ticks behind their own clock, which leads the relay's
-                // by ~4), so a legitimate report is always at or behind
-                // the relay clock; the margin only spares a joiner's
-                // replayed checkpoints and clock jitter.
+                // ticks at 1x / 60 at 2x behind their own clock, which
+                // leads the relay's by ~4*speed), so a legitimate report
+                // is always at or behind the relay clock; the margin only
+                // spares a joiner's replayed checkpoints and clock jitter.
+                const sweepTicks = STATE_HASH_SWEEP_TICKS * this.activeSpeed;
                 if (message.tick % STATE_HASH_INTERVAL !== 0
-                    || message.tick > this.tick + STATE_HASH_SWEEP_TICKS) {
+                    || message.tick > this.tick + sweepTicks) {
                     warnThrottled(`relay-statehash:${source}`, () =>
                         `Dropping stateHash for tick ${message.tick} from `
                         + `${source}: not a reachable checkpoint (relay `
@@ -778,8 +909,11 @@ export class RollbackRelay {
                     reports = new Map();
                     this.stateHashes.set(message.tick, reports);
                 }
-                reports.set(source,
-                    { hash: message.hash, arrivedAt: this.tick });
+                reports.set(source, {
+                    hash: message.hash,
+                    arrivedAt: this.tick,
+                    timelyTicks: TIMELY_REPORT_TICKS * this.activeSpeed,
+                });
                 this.compareStateHashes(message.tick);
                 break;
             }
@@ -813,5 +947,11 @@ export class RollbackRelay {
         if (this.syncInterval !== undefined) {
             clearInterval(this.syncInterval);
         }
+        for (const entry of this.speedVoteLimits.values()) {
+            if (entry.timer !== undefined) {
+                clearTimeout(entry.timer);
+            }
+        }
+        this.speedVoteLimits.clear();
     }
 }

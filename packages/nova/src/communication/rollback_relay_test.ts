@@ -780,6 +780,102 @@ describe('RollbackRelay', () => {
             expect(relay.speedState.fastVotes).toBe(0);
             expect(relay.speedState.speed).toBe(1);
         });
+
+        it('scales TIMELY_REPORT_TICKS and STATE_HASH_SWEEP_TICKS at 2x (R1)', () => {
+            relay.close();
+            relay = new RollbackRelay(server, {
+                autoClock: false,
+                desyncThreshold: 1,
+            });
+            // Switch room to 2x.
+            vote(peerA, true, true);
+            vote(peerB, true, true);
+            relay.stepClock(SIMULATION_STEP_MS); // tick 1, active 2x
+            expect(relay.speed).toBe(2);
+
+            // At 2x, 300 ticks is 2.5s wall time (< 4s timely window = 480
+            // ticks at 2x), so peer B's report arriving 300 ticks after tick
+            // 60 is STILL timely and votes (unlike at 1x where > 240 is stale).
+            // With both A and B timely, tie-break picks lower peerId ('a')
+            // when A disagrees with B; test the reverse by having B report
+            // early and A report 300 ticks late: if A is timely, A wins tie-break!
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: 'bbbbbbbb',
+            }) as never, 'server');
+            relay.advanceTicks(360); // relay.tick = 361 (301 ticks past 60)
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: 'aaaaaaaa',
+            }) as never, 'server');
+            const desyncs = received(peerB).filter(m => m.kind === 'desync');
+            expect(desyncs.length).toBe(1);
+            // Because A was still timely at 2x (301 <= 480), A voted and won
+            // the tie-break over B; at 1x A would have been stale (> 240) and
+            // B would have won alone.
+            expect(desyncs[0]!.kind === 'desync' && desyncs[0].canonical)
+                .toBe('aaaaaaaa');
+
+            // Sweep window at 2x is 1200 ticks (10s wall time), not 600.
+            // Report an incomplete bucket for tick 420 (only peerA reports).
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 420, hash: 'cccccccc',
+            }) as never, 'server');
+            expect(relay.pendingStateHashTicks).toBe(1);
+            // 700 ticks past 420 (tick 1120): swept at 1x, still held at 2x.
+            relay.advanceTicks(1120 - relay.tick);
+            expect(relay.pendingStateHashTicks).toBe(1);
+            // 1201 ticks past 420 (tick 1621): swept at 2x.
+            relay.advanceTicks(1621 - relay.tick);
+            expect(relay.pendingStateHashTicks).toBe(0);
+        });
+
+        it('caps a single stepClock catch-up burst to 600 ticks at 2x (never 1200)', () => {
+            vote(peerA, true, true);
+            vote(peerB, true, true);
+            relay.stepClock(SIMULATION_STEP_MS); // tick 1, active 2x
+            expect(relay.speed).toBe(2);
+
+            // Simulate a 30-second server stall at 2x.
+            const advanced = relay.stepClock(30_000);
+            expect(advanced).toBe(600);
+            expect(relay.tick).toBe(601);
+        });
+
+        it('rate-limits and coalesces rapid speedVote floods per peer (last one wins)', () => {
+            jasmine.clock().install();
+            try {
+                let fakeNow = 1000;
+                relay.close();
+                relay = new RollbackRelay(server, {
+                    autoClock: false,
+                    speedVoteRefillMs: 250,
+                    now: () => fakeNow,
+                });
+                // Peer A stays "yes" so every peer B toggle flips the room.
+                vote(peerA, true, true);
+                peerA.allMessages.length = 0;
+
+                // Peer B floods 10 alternating votes at the same instant:
+                // burst (3) applies immediately, votes 4..10 coalesce to the
+                // final value (false) and apply once after refill.
+                for (let i = 0; i < 10; i++) {
+                    vote(peerB, i % 2 === 0, true);
+                }
+                const immediate = speedNotices(peerA);
+                expect(immediate.length).toBe(3);
+                expect(immediate.map(n => n.speed)).toEqual([2, 1, 2]);
+                expect(relay.speedState.speed).toBe(2);
+
+                // After 250ms, the coalesced trailing vote (i=9 -> false) lands.
+                peerA.allMessages.length = 0;
+                fakeNow += 250;
+                jasmine.clock().tick(250);
+                expect(speedNotices(peerA).length).toBe(1);
+                expect(relay.speedState.speed).toBe(1);
+                expect(relay.speedState.fastVotes).toBe(1);
+            } finally {
+                jasmine.clock().uninstall();
+            }
+        });
     });
 });
 

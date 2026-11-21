@@ -911,4 +911,65 @@ describe('SimulationBridge', () => {
             expect(host.status().tick).toBe(tick);
         });
     });
+
+    describe('2x real-time window scaling (#371 R1)', () => {
+        function makeTimedHost() {
+            const communicator = new MockCommunicator('client');
+            world.resources.set(CommunicatorResource, communicator);
+            const policies = new SnapshotPolicies();
+            const time = world.resources.get(TimeResource)!;
+            policies.addResource({
+                name: 'time',
+                save: () => ({ ...time }),
+                restore: saved => Object.assign(time, saved as object),
+            });
+            world.resources.set(SnapshotPoliciesResource, policies);
+            const host = new SimulationBridgeHost(
+                world, makeFakeSimulationData());
+            return { host, communicator };
+        }
+
+        it('retains 240 ticks of rollback history (2 full seconds at 2x)', () => {
+            const { host } = makeTimedHost();
+            host.step(220);
+            // Deeper than the old 120-tick ring, still within the 240-tick ring.
+            expect(host.rewind(180)).toBeTrue();
+            expect(host.status().tick).toBe(40);
+        });
+
+        it('doubles STATE_HASH_SETTLE_TICKS to 60 at 2x so the 500ms settle window holds', () => {
+            const { host, communicator } = makeTimedHost();
+            const stateHashes: number[] = [];
+            const origSend = communicator.sendMessage.bind(communicator);
+            communicator.sendMessage = (msg, dest) => {
+                const rollback = (msg as { rollback?: { kind?: string, tick?: number } })?.rollback;
+                if (rollback?.kind === 'stateHash' && rollback.tick !== undefined) {
+                    stateHashes.push(rollback.tick);
+                }
+                origSend(msg, dest);
+            };
+
+            // Room switches to 2x from tick 1 onward.
+            communicator.messages.next({
+                source: 'server',
+                message: wrapRollbackMessage({
+                    kind: 'roomSpeed', tick: 0, speed: 2, atTick: 1,
+                    fastVotes: 1, totalVoters: 1,
+                }),
+            });
+
+            // Step to tick 90 (30 ticks past checkpoint 60): at 1x tick 60
+            // would already publish here, but at 2x it must wait 60 ticks.
+            host.step(90);
+            expect(stateHashes).toEqual([]);
+
+            // Step to tick 119 (59 ticks past checkpoint 60): still unsettled.
+            host.step(29);
+            expect(stateHashes).toEqual([]);
+
+            // Step to tick 120 (60 ticks past checkpoint 60): now settled!
+            host.step(1);
+            expect(stateHashes).toEqual([60]);
+        });
+    });
 });

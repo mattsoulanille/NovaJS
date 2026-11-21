@@ -42,12 +42,19 @@ import { inputThroughWire } from "./wire_schemas.js";
 
 
 /**
- * ...and publish a checkpoint's hash once it is this many ticks old:
- * past any realistic rollback depth, so the hashed state is settled.
- * (Rollbacks that do cross a pending checkpoint recompute its hash
- * during resimulation.)
+ * ...and publish a checkpoint's hash once it is this many 1x ticks old
+ * (scaled by the room's active speed so the ~500 ms wall-clock settle
+ * window stays the same at 2x, R1 #371): past any realistic rollback
+ * depth, so the hashed state is settled. (Rollbacks that do cross a
+ * pending checkpoint recompute its hash during resimulation.)
  */
 const STATE_HASH_SETTLE_TICKS = 30;
+/**
+ * Rollback snapshot ring capacity: 2 seconds at the fastest room speed
+ * (2x = 120 ticks/s -> 240 ticks; 4 seconds at 1x), keeping the real-time
+ * rollback horizon intact when the room speeds up (R1 #371).
+ */
+const ROLLBACK_HISTORY_CAPACITY = 240;
 /** Minimum time between automatic desync recoveries. */
 const RESYNC_COOLDOWN_MS = 10_000;
 /**
@@ -187,6 +194,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private checkpointSnapshots = new Map<number, WorldSnapshot>();
     /** Recent rollback-machinery events, for desync dumps. */
     private rollbackLog: RollbackLogEntry[] = [];
+    /** Cumulative rollback depth counters (diagnostics / E2E measurements). */
+    private rollbackCount = 0;
+    private rollbackDepthSum = 0;
+    private rollbackMaxDepth = 0;
     /** Sequence numbers for published records, so a relay echo of a
      * retimed record can name which local application to move. */
     private nextSeq = 0;
@@ -415,9 +426,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             // alike, before the tick's inputs are applied, so input-
             // application emissions are stamped too).
             beforeStep: tick => { this.steppingTick = tick; },
-            // Two seconds of history: enough for netcode rollback
+            // Two seconds of history at the fastest room speed (2x -> 240
+            // ticks; 4 seconds at 1x, R1 #371): enough for netcode rollback
             // margins and short novaSim.rewind time travel.
-            capacity: 120,
+            capacity: ROLLBACK_HISTORY_CAPACITY,
             // Fires on resimulated ticks too, so a rollback across a
             // pending checkpoint recomputes its hash from the
             // corrected state.
@@ -856,6 +868,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (earliestCorrection !== undefined) {
             const toTick = earliestCorrection - 1;
             const depth = this.rollback.tick - toTick;
+            this.rollbackCount++;
+            this.rollbackDepthSum += depth;
+            if (depth > this.rollbackMaxDepth) {
+                this.rollbackMaxDepth = depth;
+            }
             this.logRollbackEvent('rollback', {
                 toTick,
                 depth,
@@ -913,8 +930,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private publishStateHashes() {
         const communicator = this.world.resources.get(CommunicatorResource);
         const server = relayServer(communicator);
+        // Scale the settle window by the room's active speed so the ~500 ms
+        // real-time settle margin holds at 2x as well (R1 #371).
+        const settleTicks = STATE_HASH_SETTLE_TICKS
+            * this.roomClock.speedAt(this.rollback.tick);
         for (const [tick, hash] of this.checkpointHashes) {
-            if (tick <= this.rollback.tick - STATE_HASH_SETTLE_TICKS) {
+            if (tick <= this.rollback.tick - settleTicks) {
                 this.checkpointHashes.delete(tick);
                 if (communicator && server) {
                     communicator.sendMessage(wrapRollbackMessage(
@@ -1497,6 +1518,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             ...(this.resyncFailed ? { resyncFailed: true } : {}),
             ...(this.identityRecoveryFailed
                 ? { identityRecoveryFailed: true } : {}),
+        };
+    }
+
+    /** Cumulative rollback depth statistics for E2E / diagnostics (#371). */
+    rollbackStats(): { count: number, maxDepth: number, meanDepth: number } {
+        return {
+            count: this.rollbackCount,
+            maxDepth: this.rollbackMaxDepth,
+            meanDepth: this.rollbackCount > 0
+                ? this.rollbackDepthSum / this.rollbackCount : 0,
         };
     }
 

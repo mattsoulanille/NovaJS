@@ -181,7 +181,10 @@ export class RoomArchive {
                         this.recentEntityHashes.set(this.tick,
                             [...hashed.entities]);
                         for (const tick of this.recentHashes.keys()) {
-                            if (tick < this.tick - STATE_HASH_INTERVAL * 20) {
+                            // 40 checkpoints = 2400 ticks (~40s at 1x, ~20s at
+                            // 2x), well past the relay's 10s wall-time sweep
+                            // window at either speed (#371 R1).
+                            if (tick < this.tick - STATE_HASH_INTERVAL * 40) {
                                 this.recentHashes.delete(tick);
                                 this.recentEntityHashes.delete(tick);
                             }

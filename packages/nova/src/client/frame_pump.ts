@@ -49,10 +49,51 @@ const MAX_CATCHUP_STEPS = 6;
  * Tick pacing against the room's clock (from the last frame). Small
  * drift is corrected by the rate factor — time runs imperceptibly fast
  * or slow. Only drift beyond SNAP_BEHIND_TICKS (a hidden tab, a long
- * stall) is snapped, bounded per frame by HARD_CATCHUP_STEPS.
+ * stall) is snapped, bounded per frame by HARD_CATCHUP_STEPS. All three
+ * tick limits scale with the room's speed (R1 #371) so they keep their
+ * real-time meaning at 2x.
  */
 const SNAP_BEHIND_TICKS = 30;
 const HARD_CATCHUP_STEPS = 60;
+
+/**
+ * Pure fixed-timestep accumulator step for the frame pump: converts real
+ * elapsed ms into a whole number of simulation steps while keeping
+ * catch-up caps scaled to real time at both 1x and 2x (#371 R1).
+ */
+export function advanceSimulationDebt(input: {
+    timeDebt: number;
+    elapsedMs: number;
+    paused: boolean;
+    pendingSteps: number;
+    pacing?: SimulationPacing;
+}): { steps: number; timeDebt: number } {
+    let timeDebt = input.timeDebt;
+    if (!input.paused && input.elapsedMs > 0) {
+        // Slew toward the room's clock: elapsed time counts slightly fast
+        // or slow rather than ticks being skipped or doubled.
+        timeDebt += input.elapsedMs * (input.pacing?.rate ?? 1);
+    }
+    // If we fall behind (heavy load, background tab), run at most a few
+    // catch-up steps rather than spiraling (scaled by room speed so the
+    // wall-clock cap stays ~100ms at 2x as well).
+    const speed = input.pacing?.speed ?? 1;
+    timeDebt = Math.min(timeDebt,
+        SIMULATION_STEP_MS * MAX_CATCHUP_STEPS * speed);
+    let steps = Math.floor(timeDebt / SIMULATION_STEP_MS);
+    timeDebt -= steps * SIMULATION_STEP_MS;
+    if (input.paused) {
+        steps = input.pendingSteps;
+        timeDebt = 0;
+    } else if (input.pacing
+        && input.pacing.behindTicks > SNAP_BEHIND_TICKS * speed) {
+        // Too far behind the room to slew: snap by stepping the backlog,
+        // bounded per frame (also scaled by speed to keep real-time cap).
+        steps += Math.min(Math.floor(input.pacing.behindTicks),
+            HARD_CATCHUP_STEPS * speed);
+    }
+    return { steps, timeDebt };
+}
 
 /** The pump the `novaSim` control talks to, while a session is open. */
 let activePump: FramePump | undefined;
@@ -331,33 +372,23 @@ export class FramePump {
             // carry the remainder. Render rate and simulation rate are
             // independent.
             const now = performance.now();
-            if (this.lastPumpTime !== undefined && !simulationControl.paused) {
-                // Slew toward the room's clock: elapsed time counts
-                // slightly fast or slow rather than ticks being skipped
-                // or doubled.
-                this.timeDebt +=
-                    (now - this.lastPumpTime) * (this.pacing?.rate ?? 1);
-            }
+            const elapsedMs = this.lastPumpTime !== undefined
+                ? now - this.lastPumpTime : 0;
             this.lastPumpTime = now;
-            // If we fall behind (heavy load, background tab), run at most
-            // a few catch-up steps rather than spiraling (scaled by room
-            // speed so the wall-clock cap stays ~100ms at 2x as well).
-            const speed = this.pacing?.speed ?? 1;
-            this.timeDebt = Math.min(this.timeDebt,
-                SIMULATION_STEP_MS * MAX_CATCHUP_STEPS * speed);
-            let steps = Math.floor(this.timeDebt / SIMULATION_STEP_MS);
-            this.timeDebt -= steps * SIMULATION_STEP_MS;
+            const pendingSteps = simulationControl.paused
+                ? simulationControl.pendingSteps : 0;
             if (simulationControl.paused) {
-                steps = simulationControl.pendingSteps;
                 simulationControl.pendingSteps = 0;
-                this.timeDebt = 0;
-            } else if (this.pacing
-                && this.pacing.behindTicks > SNAP_BEHIND_TICKS) {
-                // Too far behind the room to slew: snap by stepping the
-                // backlog, bounded per frame.
-                steps += Math.min(Math.floor(this.pacing.behindTicks),
-                    HARD_CATCHUP_STEPS);
             }
+            const next = advanceSimulationDebt({
+                timeDebt: this.timeDebt,
+                elapsedMs,
+                paused: simulationControl.paused,
+                pendingSteps,
+                pacing: this.pacing,
+            });
+            this.timeDebt = next.timeDebt;
+            const steps = next.steps;
 
             if (steps > 0) {
                 await bridge.step(steps);
