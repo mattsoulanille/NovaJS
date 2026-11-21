@@ -31,6 +31,7 @@ import {
 } from '../communication/async_simulation_bridge_client.js';
 import type { SimulationPacing } from '../communication/simulation_frame.js';
 import { shouldExtrapolate } from '../display/movement_extrapolation_plugin.js';
+import { RoomSpeedResource } from '../display/status_bar_speed.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
@@ -339,9 +340,11 @@ export class FramePump {
             }
             this.lastPumpTime = now;
             // If we fall behind (heavy load, background tab), run at most
-            // a few catch-up steps rather than spiraling.
+            // a few catch-up steps rather than spiraling (scaled by room
+            // speed so the wall-clock cap stays ~100ms at 2x as well).
+            const speed = this.pacing?.speed ?? 1;
             this.timeDebt = Math.min(this.timeDebt,
-                SIMULATION_STEP_MS * MAX_CATCHUP_STEPS);
+                SIMULATION_STEP_MS * MAX_CATCHUP_STEPS * speed);
             let steps = Math.floor(this.timeDebt / SIMULATION_STEP_MS);
             this.timeDebt -= steps * SIMULATION_STEP_MS;
             if (simulationControl.paused) {
@@ -398,6 +401,10 @@ export class FramePump {
                     runtime.fleet.escortReturned(uuid);
                 }
                 this.pacing = frame.pacing;
+                const speedHolder = displayWorld.resources.get(RoomSpeedResource);
+                if (speedHolder) {
+                    speedHolder.status = frame.roomSpeed;
+                }
                 this.syncedPlayerJumpRoute =
                     getDisplayPlayerJumpRoute(displayWorld)?.slice();
                 this.prefetchJumpDestination(displayWorld);

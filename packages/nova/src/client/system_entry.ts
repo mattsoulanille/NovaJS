@@ -41,6 +41,7 @@ import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
 import { PixiAppResource } from '../display/pixi_app_resource.js';
 import { DisplayRoot } from '../display/stage_resource.js';
+import { RoomSpeedResource } from '../display/status_bar_speed.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
 } from '../nova_plugin/core/index.js';
@@ -356,6 +357,10 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
         {
             systemId: to,
             roomState: workerRoomState(room),
+            initialSpeedVote: {
+                wantFast: runtime.capsLock.active,
+                inSpace: true,
+            },
         },
         Comlink.proxy(async (message, destination) => {
             room.sendMessage(message, destination);
@@ -468,6 +473,10 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // display's own caches: stage them before applying.
     await scope.race(stageSimulationFrameGameData(gameData, initialFrame));
     applySimulationFrame(initialFrame, serializer, displayWorld);
+    const speedHolder = displayWorld.resources.get(RoomSpeedResource);
+    if (speedHolder) {
+        speedHolder.status = initialFrame.roomSpeed;
+    }
     // The last thing that can fail is behind us: the session is checked
     // one final time so a world is never published over a title screen.
     scope.check();

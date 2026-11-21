@@ -549,6 +549,21 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         });
     }
 
+    // Publish this peer's Caps Lock 2x speed vote and whether it is in space
+    // whenever either changes (#371). Landed/docked players do not vote.
+    const publishSpeedVote = () => {
+        const live = liveSystem(state.state);
+        if (!live) {
+            return;
+        }
+        sendToBridge(live.bridge.setSpeedVote(
+            runtime.capsLock.active, state.state.kind === 'inSpace'),
+            'Speed vote');
+    };
+    sessionDisposers.push(runtime.capsLock.subscribe(() => publishSpeedVote()));
+    sessionDisposers.push(state.subscribe(() => publishSpeedVote()));
+    publishSpeedVote();
+
     sessionDisposers.push(pump.install(app));
 
     // The teardown returned to the title orchestrator: reverse everything

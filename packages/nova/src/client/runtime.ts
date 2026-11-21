@@ -24,6 +24,7 @@ import type {
 } from '../nova_plugin/travel/index.js';
 import type { DisplayAssetData } from './gamedata/display_asset_data.js';
 import type { SimulationGameData } from './gamedata/simulation_game_data.js';
+import type { CapsLockTracker } from './caps_lock.js';
 import type { ClientStateSlot } from './client_state.js';
 import type { FleetLedger } from './fleet_ledger.js';
 import type { PlayerPersistence } from './player_save.js';
@@ -46,6 +47,8 @@ export interface ClientRuntime {
     readonly fleet: FleetLedger;
     /** Saves and pilot-history checkpoints. */
     readonly saves: PlayerPersistence;
+    /** Page-lifetime Caps Lock state tracker for the room 2x speed vote (#371). */
+    readonly capsLock: CapsLockTracker;
     /**
      * Pushes the current display scale into a freshly built display
      * world (or the live one when called with nothing): the UI layer's

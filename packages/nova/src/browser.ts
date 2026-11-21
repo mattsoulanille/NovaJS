@@ -25,6 +25,7 @@ import { isLeft } from "fp-ts/lib/Either.js";
 import { World } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
 import { Subject } from "rxjs";
+import { CapsLockTracker } from "./client/caps_lock.js";
 import { ClientStateSlot } from "./client/client_state.js";
 import { FleetLedger } from "./client/fleet_ledger.js";
 import { simulationControl } from "./client/frame_pump.js";
@@ -297,12 +298,15 @@ window.communicator = communicator;
 const multiRoom = new MultiRoom(communicator);
 window.multiRoom = multiRoom;
 
+const capsLock = new CapsLockTracker();
+capsLock.install(window, document);
+
 const runtime: ClientRuntime = {
     app, gameData: simulationGameData, displayAssetData, communicator,
     multiRoom, gateDestinations: gateDestinationResolver,
     controlsSubject: new Subject<ControlEvent>(),
     transitions: new SessionTransitions(),
-    state, fleet, saves,
+    state, fleet, saves, capsLock,
     applyDisplayScale,
     autopilot: undefined,
 };
