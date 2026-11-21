@@ -233,12 +233,15 @@ export const STATE_HASH_INTERVAL = 60;
 //    (server -> peers: the room's clock multiplier 1 | 2, the tick
 //    boundary `atTick` at which it takes effect, the relay's current
 //    `tick`, and the in-space voter tallies `fastVotes` / `totalVoters`)
-//    — plus an OPTIONAL `roomSpeed` field on `catchUp` so joiners learn
-//    the room's pace atomically with its tick. Speed lives strictly in
-//    the room clock (`rollback_relay.ts` / `room_clock.ts`), never in
-//    simulation state; no input kind, component codec, desync hash input
-//    or persisted pilot form changes. The derived wire schema fingerprint
-//    changes, and the join gate keeps older and newer builds apart.
+//    — plus an OPTIONAL `speedVote` field on `joinRequest` (so a joiner
+//    with Caps Lock already on votes yes atomically with its join and
+//    never momentarily drops a 2x room to 1x) and an OPTIONAL `roomSpeed`
+//    field on `catchUp` (so joiners learn the room's pace atomically with
+//    its tick). Speed lives strictly in the room clock (`rollback_relay.ts`
+//    / `room_clock.ts`), never in simulation state; no input kind,
+//    component codec, desync hash input or persisted pilot form changes.
+//    The derived wire schema fingerprint changes, and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
@@ -392,6 +395,17 @@ export const RoomSpeedType = new t.Type<RoomSpeed, RoomSpeed, unknown>(
     t.identity,
 );
 
+/** A peer's Caps Lock 2x speed vote and whether it is in space (#371). */
+export interface SpeedVote {
+    wantFast: boolean;
+    inSpace: boolean;
+}
+
+export const SpeedVoteType: t.Type<SpeedVote, unknown> = t.strict({
+    wantFast: t.boolean,
+    inSpace: t.boolean,
+});
+
 /**
  * The room's clock speed and vote tally, announced on `roomSpeed` and
  * seeded on `catchUp`. Lives strictly in the clock/transport layer, never
@@ -471,7 +485,7 @@ export type RollbackProtocolMessage =
      * declaration and WARNS (joinWarning) on a different one. */
     | {
         kind: 'joinRequest', fresh?: boolean, protocol?: number, schema?: string,
-        systems?: string,
+        systems?: string, speedVote?: SpeedVote,
     }
     /** The relay will not serve this joiner: its wire schema differs
      * (server -> peer). The peer gives up the join; nothing it sent
@@ -602,7 +616,7 @@ export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknow
             t.type({ kind: t.literal('joinRequest') }),
             t.partial({
                 fresh: t.boolean, protocol: t.number, schema: t.string,
-                systems: t.string,
+                systems: t.string, speedVote: SpeedVoteType,
             }),
         ])),
         t.strict({ kind: t.literal('joinRefused'), reason: t.string }),

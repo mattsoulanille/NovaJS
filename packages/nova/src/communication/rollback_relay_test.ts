@@ -726,7 +726,8 @@ describe('RollbackRelay', () => {
             const beforeJoin = relay.tick;
             peerA.allMessages.length = 0;
 
-            // Peer C joins the room without sending a Caps Lock vote.
+            // Peer C enters the room channel (pendingJoinPeers) and then sends
+            // joinRequest without Caps Lock (no speedVote / wantFast: false).
             const peerC = new MockCommunicator('c');
             const mockPeers = new Map([
                 ['server', server], ['a', peerA], ['b', peerB], ['c', peerC],
@@ -735,23 +736,68 @@ describe('RollbackRelay', () => {
                 peer.mockPeers = mockPeers;
             }
             server.peers.current.next(new Set(['server', 'a', 'b', 'c']));
+            // While C is still loading (before joinRequest), the room stays 2x.
+            expect(speedNotices(peerA)).toEqual([]);
+            expect(relay.speed).toBe(2);
+
+            peerC.allMessages.length = 0;
+            peerC.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest', schema: liveWireFingerprint(),
+            }) as never, 'server');
 
             expect(speedNotices(peerA)).toEqual([{
                 kind: 'roomSpeed', tick: beforeJoin, speed: 1,
                 atTick: beforeJoin + 1, fastVotes: 2, totalVoters: 3,
             }]);
-            relay.stepClock(SIMULATION_STEP_MS); // crosses boundary -> 1x
-            expect(relay.speed).toBe(1);
-            expect(relay.stepClock(SIMULATION_STEP_MS * 6)).toBe(6);
-
-            // A joiner's catchUp carries the room's current speed state.
-            peerC.allMessages.length = 0;
-            peerC.sendMessage(wrapRollbackMessage({
-                kind: 'joinRequest', schema: liveWireFingerprint(),
-            }) as never, 'server');
+            // A joiner's catchUp carries the room's updated speed state.
             const catchUp = received(peerC).find(m => m.kind === 'catchUp');
             expect(catchUp?.kind === 'catchUp' && catchUp.roomSpeed).toEqual({
                 speed: 1, atTick: beforeJoin + 1, fastVotes: 2, totalVoters: 3,
+            });
+            relay.stepClock(SIMULATION_STEP_MS); // crosses boundary -> 1x
+            expect(relay.speed).toBe(1);
+            expect(relay.stepClock(SIMULATION_STEP_MS * 6)).toBe(6);
+        });
+
+        it('never flips a 2x room to 1x when a joiner arrives with Caps Lock already on', () => {
+            vote(peerA, true, true);
+            vote(peerB, true, true);
+            relay.stepClock(SIMULATION_STEP_MS * 2); // tick 3, active 2x
+            expect(relay.speed).toBe(2);
+            peerA.allMessages.length = 0;
+
+            // Peer C joins the room channel, spends 150ms loading makeSystem,
+            // then sends joinRequest carrying speedVote { wantFast: true, inSpace: true }.
+            const peerC = new MockCommunicator('c');
+            const mockPeers = new Map([
+                ['server', server], ['a', peerA], ['b', peerB], ['c', peerC],
+            ]);
+            for (const peer of mockPeers.values()) {
+                peer.mockPeers = mockPeers;
+            }
+            server.peers.current.next(new Set(['server', 'a', 'b', 'c']));
+            // Simulated 150ms loading window before joinRequest: still 2x!
+            expect(relay.stepClock(SIMULATION_STEP_MS * 9)).toBe(18);
+            expect(relay.speed).toBe(2);
+            expect(speedNotices(peerA)).toEqual([]);
+
+            peerC.allMessages.length = 0;
+            peerC.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest',
+                schema: liveWireFingerprint(),
+                speedVote: { wantFast: true, inSpace: true },
+            }) as never, 'server');
+
+            // Room stayed at 2x the entire time (zero speed: 1 broadcasts).
+            expect(relay.speed).toBe(2);
+            expect(speedNotices(peerA).some(n => n.speed === 1)).toBeFalse();
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: relay.tick, speed: 2,
+                atTick: 1, fastVotes: 3, totalVoters: 3,
+            }]);
+            const catchUp = received(peerC).find(m => m.kind === 'catchUp');
+            expect(catchUp?.kind === 'catchUp' && catchUp.roomSpeed).toEqual({
+                speed: 2, atTick: 1, fastVotes: 3, totalVoters: 3,
             });
         });
 

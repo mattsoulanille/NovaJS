@@ -510,6 +510,14 @@ describe('io-ts to Avro derivation', () => {
                 { rollback: { kind: 'inputLog', records: [{ tick: 1, inputs: [] }, { peerId: 'x', tick: 2, seq: 0, inputs: [] }] } },
                 { rollback: { kind: 'joinRequest' } },
                 { rollback: { kind: 'joinRequest', fresh: true, protocol: 5 } },
+                {
+                    rollback: {
+                        kind: 'joinRequest',
+                        fresh: true,
+                        protocol: 8,
+                        speedVote: { wantFast: true, inSpace: true },
+                    },
+                },
                 { rollback: { kind: 'catchUp', tick: 30, records: [] } },
                 {
                     rollback: {

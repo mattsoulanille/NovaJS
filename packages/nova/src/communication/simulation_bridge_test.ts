@@ -30,6 +30,7 @@ import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
 import { wrapRollbackMessage } from './rollback_protocol.js';
+import { RollbackRelay } from './rollback_relay.js';
 import { ShipControlStateComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
 import { resetWarnThrottle } from '../common/log_throttle.js';
 
@@ -970,6 +971,191 @@ describe('SimulationBridge', () => {
             // Step to tick 120 (60 ticks past checkpoint 60): now settled!
             host.step(1);
             expect(stateHashes).toEqual([60]);
+        });
+    });
+
+    describe('room speed join, reconnect, and #333 terminal path (#371)', () => {
+        function makeRoomWorld(communicator: MockCommunicator) {
+            const w = new World('speed bridge test');
+            w.addPlugin(SerializerPlugin);
+            w.addPlugin(TimePlugin);
+            const policies = new SnapshotPolicies();
+            const time = w.resources.get(TimeResource)!;
+            policies.addResource({
+                name: 'time',
+                save: () => ({ ...time }),
+                restore: saved => Object.assign(time, saved as object),
+            });
+            w.resources.set(SnapshotPoliciesResource, policies);
+            w.resources.set(CommunicatorResource, communicator);
+            return w;
+        }
+
+        it('adopts catchUp.roomSpeed on a mid-2x join and carries initialSpeedVote in joinRequest', async () => {
+            const server = new MockCommunicator('server');
+            const peerA = new MockCommunicator('a');
+            const peers = new Map([['server', server], ['a', peerA]]);
+            for (const p of peers.values()) {
+                p.mockPeers = peers;
+                p.peers.current.next(new Set(peers.keys()));
+            }
+            const relay = new RollbackRelay(server, { autoClock: false });
+            try {
+                // Peer A alone puts the room into 2x at tick 20.
+                const hostA = new SimulationBridgeHost(
+                    makeRoomWorld(peerA), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                    });
+                expect(await hostA.joinRoom(1000)).toBeTrue();
+                relay.advanceTicks(20);
+                expect(relay.speed).toBe(2);
+                peerA.allMessages.length = 0;
+
+                // Peer B joins mid-2x with Caps Lock already on.
+                const peerB = new MockCommunicator('b');
+                peers.set('b', peerB);
+                peerB.mockPeers = peers;
+                for (const p of peers.values()) {
+                    p.peers.current.next(new Set(peers.keys()));
+                }
+                const hostB = new SimulationBridgeHost(
+                    makeRoomWorld(peerB), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                    });
+                expect(await hostB.joinRoom(1000)).toBeTrue();
+
+                // Room never flipped to 1x, and peer B adopted 2x straight from
+                // catchUp.roomSpeed (no speed flip broadcast occurred).
+                expect(relay.speed).toBe(2);
+                expect(relay.speedState).toEqual({
+                    speed: 2, atTick: 1, fastVotes: 2, totalVoters: 2,
+                });
+                const snapB = hostB.snapshot();
+                expect(snapB.pacing?.speed).toBe(2);
+                expect(snapB.pacing!.rate).toBeGreaterThan(1.8);
+                expect(snapB.roomSpeed?.speed).toBe(2);
+                expect(snapB.roomSpeed?.fastVotes).toBe(2);
+                expect(snapB.roomSpeed?.totalVoters).toBe(2);
+            } finally {
+                relay.close();
+            }
+        });
+
+        it('re-sends speedVote via joinRequest on reconnect without a spurious pre-membership warning', async () => {
+            resetWarnThrottle();
+            const warn = spyOn(console, 'warn').and.callThrough();
+            const server = new MockCommunicator('server');
+            const peerA = new MockCommunicator('a');
+            const peerB = new MockCommunicator('b1');
+            const peers = new Map([
+                ['server', server], ['a', peerA], ['b1', peerB],
+            ]);
+            for (const p of peers.values()) {
+                p.mockPeers = peers;
+                p.peers.current.next(new Set(peers.keys()));
+            }
+            const relay = new RollbackRelay(server, { autoClock: false });
+            try {
+                const hostA = new SimulationBridgeHost(
+                    makeRoomWorld(peerA), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                    });
+                const hostB = new SimulationBridgeHost(
+                    makeRoomWorld(peerB), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                        resyncCooldownMs: 0,
+                        resyncJoinTimeoutMs: 1000,
+                    });
+                expect(await hostA.joinRoom(1000)).toBeTrue();
+                expect(await hostB.joinRoom(1000)).toBeTrue();
+                relay.advanceTicks(10);
+                expect(relay.speed).toBe(2);
+
+                // Disconnect B (old uuid b1 leaves room), then reconnect with
+                // a new uuid b2 BEFORE room membership is back.
+                peerB.connected.next(false);
+                peers.delete('b1');
+                server.peers.current.next(new Set(['server', 'a']));
+                peerB.uuid = 'b2';
+                peers.set('b2', peerB);
+                // Reconnected edge fires BEFORE b2 is in the room's peer set:
+                // must NOT publish a spurious speedVote that the relay drops.
+                peerB.connected.next(true);
+                const nonMemberWarnings = warn.calls.allArgs().filter(([msg]) =>
+                    String(msg).includes('not in this room'));
+                expect(nonMemberWarnings).toEqual([]);
+
+                // Now room membership arrives for b2, and stepping triggers
+                // noteIdentity() -> reenter() -> reconstructFromRoom() whose
+                // joinRequest carries b2's speedVote.
+                server.peers.current.next(new Set(['server', 'a', 'b2']));
+                peerB.peers.current.next(new Set(['server', 'a', 'b2']));
+                hostB.step(1);
+                // Let the async re-entry resync finish.
+                for (let i = 0; i < 30 && relay.speedState.totalVoters < 2; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 5));
+                }
+                expect(relay.speed).toBe(2);
+                expect(relay.speedState.fastVotes).toBe(2);
+                expect(relay.speedState.totalVoters).toBe(2);
+            } finally {
+                relay.close();
+            }
+        });
+
+        it('withdraws its speed vote on terminal #333 resync failure so it cannot pin the room at 1x', async () => {
+            const server = new MockCommunicator('server');
+            const peerA = new MockCommunicator('a');
+            const peerB = new MockCommunicator('b');
+            const peers = new Map([
+                ['server', server], ['a', peerA], ['b', peerB],
+            ]);
+            for (const p of peers.values()) {
+                p.mockPeers = peers;
+                p.peers.current.next(new Set(peers.keys()));
+            }
+            const relay = new RollbackRelay(server, { autoClock: false });
+            try {
+                // Peer A votes yes; Peer B does not (default "no" pins room at 1x).
+                const hostA = new SimulationBridgeHost(
+                    makeRoomWorld(peerA), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                    });
+                expect(await hostA.joinRoom(1000)).toBeTrue();
+                // Subclass peer B so resync fails immediately after 1 attempt
+                // while still connected to the relay.
+                class TerminalResyncHost extends SimulationBridgeHost {
+                    protected override async reconstructFromRoom(): Promise<boolean> {
+                        return false;
+                    }
+                }
+                const hostB = new TerminalResyncHost(
+                    makeRoomWorld(peerB), makeFakeSimulationData(), {
+                        resyncMaxAttempts: 1,
+                        resyncRetryMs: 0,
+                        resyncJoinTimeoutMs: 10,
+                    });
+                // Peer B is in space voting "no", pinning the room at 1x.
+                hostB.setSpeedVote(false, true);
+                expect(relay.speedState).toEqual({
+                    speed: 1, atTick: 0, fastVotes: 1, totalVoters: 2,
+                });
+
+                // Peer B hits terminal #333 resync failure -> withdraws its vote!
+                spyOn(console, 'error');
+                expect(await hostB.resync(true)).toBeFalse();
+                expect(hostB.status().resyncFailed).toBeTrue();
+                expect(relay.speedState).toEqual({
+                    speed: 2, atTick: 1, fastVotes: 1, totalVoters: 1,
+                });
+
+                // Subsequent setSpeedVote calls on the frozen host are ignored.
+                hostB.setSpeedVote(false, true);
+                expect(relay.speedState.totalVoters).toBe(1);
+                expect(relay.speedState.speed).toBe(2);
+            } finally {
+                relay.close();
+            }
         });
     });
 });

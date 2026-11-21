@@ -1,7 +1,7 @@
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { Subscription } from "rxjs";
 import { warnThrottled } from "../common/log_throttle.js";
-import { InputRecord, PROTOCOL_VERSION, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { InputRecord, PROTOCOL_VERSION, RollbackProtocolMessage, SpeedVote, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { liveWireFingerprint } from "./wire_schemas.js";
 
 /**
@@ -109,8 +109,8 @@ export type CatchUpMessage = Extract<RollbackProtocolMessage, { kind: 'catchUp' 
  */
 export function requestCatchUp(
     communicator: Communicator,
-    { timeoutMs, fresh, systems }:
-        { timeoutMs: number, fresh: boolean, systems?: string },
+    { timeoutMs, fresh, systems, speedVote }:
+        { timeoutMs: number, fresh: boolean, systems?: string, speedVote?: SpeedVote },
     onCatchUp: (catchUp: CatchUpMessage) => void,
 ): Promise<CatchUpMessage | undefined> {
     return new Promise<CatchUpMessage | undefined>(resolve => {
@@ -151,6 +151,7 @@ export function requestCatchUp(
                     ...(fresh ? { fresh } : {}),
                     ...(schema !== undefined ? { schema } : {}),
                     ...(systems !== undefined ? { systems } : {}),
+                    ...(speedVote !== undefined ? { speedVote } : {}),
                 }), server);
             }
         };

@@ -148,11 +148,17 @@ export class RollbackRelay {
     private clockDebt = 0;
     private readonly stepMs: number;
     /**
-     * Per-peer speed vote (#371). Absent peers default to `{ wantFast: false,
-     * inSpace: true }` so a newcomer without Caps Lock counts as an in-space
-     * voter and drops a 2x room back to 1x at the next tick boundary.
+     * Per-peer speed vote (#371). Peers that join the room channel
+     * (`peers.join`) wait in `pendingJoinPeers` until their `joinRequest`
+     * (which carries their initial `speedVote`) or a `speedVote` arrives —
+     * that way a newcomer with Caps Lock already on never momentarily drops
+     * a 2x room to 1x during the 100-200ms `makeSystem` startup window.
+     * Any other member without an explicit vote defaults to
+     * `{ wantFast: false, inSpace: true }`.
      */
     private speedVotes = new Map<string, { wantFast: boolean, inSpace: boolean }>();
+    /** Newcomers that sent `inRoom: true` but have not yet sent `joinRequest` or `speedVote`. */
+    private pendingJoinPeers = new Set<string>();
     /** Per-peer speedVote token bucket + trailing-edge coalescer (#371). */
     private speedVoteLimits = new Map<string, {
         tokens: number,
@@ -245,14 +251,17 @@ export class RollbackRelay {
         this.subscription = room.messages.subscribe(({ source, message }) => {
             this.handleMessage(source, message);
         });
-        // A newcomer defaults to `{ wantFast: false, inSpace: true }`:
-        // entering a 2x room without Caps Lock drops it to 1x at the next
-        // tick boundary (#371).
+        // Newcomers enter the room channel before their worker finishes
+        // makeSystem and sends joinRequest. Hold them in pendingJoinPeers
+        // until joinRequest (carrying their initial speedVote) arrives, so a
+        // yes-voter never flips a 2x room down to 1x mid-load (#371).
         this.joinSubscription = room.peers.join.subscribe(peerId => {
             if (peerId === this.room.uuid) {
                 return;
             }
-            this.recomputeSpeed();
+            if (!this.speedVotes.has(peerId)) {
+                this.pendingJoinPeers.add(peerId);
+            }
         });
         // A disconnect is an input: the server authors a removePeer
         // record so every peer (and the log) deterministically removes
@@ -272,6 +281,7 @@ export class RollbackRelay {
             this.peerProtocols.delete(peerId);
             this.peerSystemOrders.delete(peerId);
             this.dumpsExpected.delete(peerId);
+            this.pendingJoinPeers.delete(peerId);
             this.speedVotes.delete(peerId);
             this.clearSpeedVoteLimit(peerId);
             this.recomputeSpeed();
@@ -475,6 +485,9 @@ export class RollbackRelay {
         let fastVotes = 0;
         let totalVoters = 0;
         for (const peerId of this.roomPeers()) {
+            if (this.pendingJoinPeers.has(peerId)) {
+                continue;
+            }
             const vote = this.speedVotes.get(peerId)
                 ?? { wantFast: false, inSpace: true };
             if (!vote.inSpace) {
@@ -858,6 +871,27 @@ export class RollbackRelay {
                         + `${PROTOCOL_VERSION}`);
                 }
                 this.compareSystemOrder(source, message.systems);
+                // Count the joiner's speed vote BEFORE building catchUp so a
+                // joiner with Caps Lock already on never flips a 2x room to
+                // 1x, and a joiner without Caps Lock drops it immediately
+                // with catchUp.roomSpeed carrying the updated state (#371).
+                const wasPending = this.pendingJoinPeers.delete(source);
+                if (!this.speedVotes.has(source)) {
+                    this.speedVotes.set(source, message.speedVote
+                        ? {
+                            wantFast: message.speedVote.wantFast,
+                            inSpace: message.speedVote.inSpace,
+                        }
+                        : { wantFast: false, inSpace: true });
+                    this.recomputeSpeed();
+                } else if (message.speedVote) {
+                    this.submitSpeedVote(source, {
+                        wantFast: message.speedVote.wantFast,
+                        inSpace: message.speedVote.inSpace,
+                    });
+                } else if (wasPending) {
+                    this.recomputeSpeed();
+                }
                 // With an archived baseline, reconstruction starts
                 // there: only the log tail after it is needed. A
                 // fresh request (resync) gets a baseline captured
@@ -878,6 +912,7 @@ export class RollbackRelay {
                 break;
             }
             case 'speedVote': {
+                this.pendingJoinPeers.delete(source);
                 this.submitSpeedVote(source, {
                     wantFast: message.wantFast,
                     inSpace: message.inSpace,

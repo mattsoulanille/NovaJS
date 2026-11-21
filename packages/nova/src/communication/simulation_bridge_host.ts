@@ -24,7 +24,7 @@ import { warnThrottled } from "../common/log_throttle.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
-import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
+import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, SpeedVote, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
 import { encodedEntityStamps, entityStamps, restampEncodedEntity } from "./peer_identity.js";
 import { classifyPeerDeparture } from "./peer_departure.js";
@@ -329,7 +329,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             resyncMaxAttempts = RESYNC_MAX_ATTEMPTS,
             stagingMaxAttempts = STAGING_MAX_ATTEMPTS,
             stagingRetryMs = STAGING_RETRY_MS,
-            identityGraceMs = IDENTITY_GRACE_MS }: {
+            identityGraceMs = IDENTITY_GRACE_MS,
+            initialSpeedVote }: {
                 resyncCooldownMs?: number,
                 resyncJoinTimeoutMs?: number,
                 resyncRetryMs?: number,
@@ -337,6 +338,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 stagingMaxAttempts?: number,
                 stagingRetryMs?: number,
                 identityGraceMs?: number,
+                initialSpeedVote?: SpeedVote,
             } = {},
     ) {
         this.identityGraceMs = identityGraceMs;
@@ -346,6 +348,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.resyncMaxAttempts = resyncMaxAttempts;
         this.stagingMaxAttempts = stagingMaxAttempts;
         this.stagingRetryMs = stagingRetryMs;
+        if (initialSpeedVote) {
+            this.localSpeedVote = {
+                wantFast: initialSpeedVote.wantFast,
+                inSpace: initialSpeedVote.inSpace,
+            };
+        }
         // Bare test worlds may not have snapshot policies configured.
         if (!world.resources.has(SnapshotPoliciesResource)) {
             world.resources.set(SnapshotPoliciesResource, new SnapshotPolicies());
@@ -598,19 +606,22 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (!communicator?.uuid) {
             return false;
         }
-        // Re-send this peer's Caps Lock vote before requesting catchUp so
-        // a joiner with Caps Lock already on (or a reconnecting peer) votes
-        // yes from the start and receives the updated speed in catchUp (#371).
-        if (this.localSpeedVote) {
-            this.publishSpeedVote();
-        }
+        // Carry this peer's Caps Lock vote inside joinRequest so a joiner
+        // with Caps Lock already on (or a reconnecting peer) votes yes
+        // atomically with its join without ever flipping a 2x room to 1x (#371).
+        const sentSpeedVote = this.localSpeedVote
+            ? { ...this.localSpeedVote } : undefined;
         const catchUp = await requestCatchUp(communicator, {
             timeoutMs, fresh,
             // #155: lets the relay notice a peer whose world runs its
             // systems in a different order from the room's.
             systems: systemOrderHash(this.world.systemNames),
+            ...(sentSpeedVote ? { speedVote: sentSpeedVote } : {}),
         },
             reply => {
+                if (sentSpeedVote) {
+                    this.speedVoteSentForPeer = communicator.uuid;
+                }
                 // Records relayed to us before this reply were
                 // logged by the relay before it built the reply
                 // (messages are ordered), so they are already in
@@ -1207,11 +1218,6 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             this.disconnectFleet = this.resyncing
                 ? this.preResyncFleet : this.captureOwnFleet();
             this.diedSinceDisconnect.clear();
-        } else if (connected && this.localSpeedVote) {
-            const uuid = this.world.resources.get(CommunicatorResource)?.uuid;
-            if (uuid !== undefined && this.speedVoteSentForPeer !== uuid) {
-                this.publishSpeedVote();
-            }
         }
         this.wasConnected = connected;
     }
@@ -1508,6 +1514,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.queuedEvents = [];
         this.reinsertions.clear();
         this.logRollbackEvent('resyncFailed', detail);
+        // Terminal (#333 / #371): this peer is frozen until reload and must
+        // stop counting in the room's speed vote so a frozen "no" cannot pin
+        // the room at 1x.
+        this.localSpeedVote = { wantFast: false, inSpace: false };
+        this.publishSpeedVote();
     }
 
     status(): SimulationStatus {
@@ -1782,6 +1793,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * enters the simulation input log.
      */
     setSpeedVote(wantFast: boolean, inSpace: boolean) {
+        if (this.resyncFailed) {
+            // Frozen for good (#333): failTerminally already withdrew this
+            // peer's vote; do not re-enter the voter pool before reload.
+            return;
+        }
         const communicator = this.world.resources.get(CommunicatorResource);
         const changed = this.localSpeedVote?.wantFast !== wantFast
             || this.localSpeedVote?.inSpace !== inSpace

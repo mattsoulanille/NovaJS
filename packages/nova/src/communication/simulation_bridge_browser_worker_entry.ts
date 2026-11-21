@@ -55,7 +55,9 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
         this.world = world;
         this.communicator = communicator;
-        this.bridge = new SimulationBridgeHost(world, simulationGameData);
+        this.bridge = new SimulationBridgeHost(world, simulationGameData, {
+            initialSpeedVote: args.initialSpeedVote,
+        });
         // Replay buffered traffic now that the bridge is subscribed —
         // the catch-up reply joinRoom waits for may already be here.
         for (const state of this.pendingRoomState) {
@@ -66,11 +68,9 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
             communicator.receiveMessage(source, message);
         }
         this.pendingRoomMessages = [];
-        if (args.initialSpeedVote) {
-            this.bridge.setSpeedVote(
-                args.initialSpeedVote.wantFast, args.initialSpeedVote.inSpace);
-        }
         // Join the room's shared timeline by replaying its input log.
+        // joinRequest carries initialSpeedVote atomically so a joiner with
+        // Caps Lock already on never momentarily drops a 2x room to 1x (#371).
         await this.bridge.joinRoom();
     }
 

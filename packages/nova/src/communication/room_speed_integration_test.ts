@@ -9,6 +9,7 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { makeSystem, SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
+import { advanceSimulationDebt } from '../client/frame_pump.js';
 import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/player/index.js';
 import { makeShip } from '../nova_plugin/ship/index.js';
 import { completeEntity } from '../nova_plugin/spawn/index.js';
@@ -139,6 +140,8 @@ describe('Room speed vote integration (#371)', () => {
         for (const comm of comms.values()) {
             comm.peers.current.next(new Set(comms.keys()));
         }
+        const peerC = await makePeer('c');
+        expect(await peerC.host.joinRoom()).toBeTrue();
         const switchDownTick = relay.speedState.atTick;
         expect(switchDownTick).toBe(32);
 
@@ -161,7 +164,7 @@ describe('Room speed vote integration (#371)', () => {
         expect(relay.inputLog.length).toBe(0);
     });
 
-    it('preserves bit-identical simulation determinism across 1x -> 2x -> 1x speed changes', async () => {
+    it('preserves bit-identical simulation determinism across a real pacing-driven 1x -> 2x -> 1x run', async () => {
         const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
@@ -179,75 +182,114 @@ describe('Room speed vote integration (#371)', () => {
             await peerA.client.addEntity('ship-a', await makePeerShip('a', peerA.world));
             await peerB.client.addEntity('ship-b', await makePeerShip('b', peerB.world));
 
-            // Drive 30 steps at 1x, 60 steps at 2x (120 ticks), then 30 steps at 1x.
-            const stepBothToRelay = async () => {
-                while (peerA.host.status().tick < relay.tick) {
-                    peerA.host.step(1);
-                }
-                while (peerB.host.status().tick < relay.tick) {
-                    peerB.host.step(1);
+            // Drive BOTH clients independently via advanceSimulationDebt using
+            // ONLY their own snapshot().pacing (never cheating by reading
+            // relay.tick). Slight frame stagger between A and B exercises real
+            // rollback corrections across the 2x run.
+            const pumpState = {
+                a: { timeDebt: 0, pacing: peerA.host.snapshot().pacing },
+                b: { timeDebt: 0, pacing: peerB.host.snapshot().pacing },
+            };
+            const driveFrame = async (elapsedMs: number, stepBFirst: boolean) => {
+                relay.stepClock(elapsedMs);
+                const order = stepBFirst
+                    ? ([['b', peerB], ['a', peerA]] as const)
+                    : ([['a', peerA], ['b', peerB]] as const);
+                for (const [key, peer] of order) {
+                    const st = pumpState[key];
+                    const next = advanceSimulationDebt({
+                        timeDebt: st.timeDebt,
+                        elapsedMs,
+                        paused: false,
+                        pendingSteps: 0,
+                        pacing: st.pacing,
+                    });
+                    st.timeDebt = next.timeDebt;
+                    if (next.steps > 0) {
+                        peer.host.step(next.steps);
+                    }
+                    st.pacing = peer.host.snapshot().pacing;
                 }
                 await new Promise(resolve => setImmediate(resolve));
             };
 
-            // Phase 1: 1x (30 steps -> 30 ticks)
-            for (let s = 0; s < 30; s++) {
-                if (s === 5) {
+            // Phase 1: 30 frames at 1x (~30 ticks on each client via pacing).
+            const tickA0 = peerA.host.status().tick;
+            for (let f = 0; f < 30; f++) {
+                if (f === 5) {
                     peerA.host.controlEvents([{ action: 'accelerate', state: 'start' }]);
                 }
-                if (s === 15) {
+                if (f === 15) {
                     peerB.host.controlEvents([
                         { action: 'turnLeft', state: 'start' },
                         { action: 'firePrimary', state: 'start' },
                     ]);
                 }
-                relay.stepClock(SIMULATION_STEP_MS);
-                await stepBothToRelay();
+                await driveFrame(SIMULATION_STEP_MS, f % 2 === 1);
             }
-            expect(relay.tick).toBe(30);
+            const ticksPhase1A = peerA.host.status().tick - tickA0;
+            expect(ticksPhase1A).toBeGreaterThanOrEqual(25);
+            expect(ticksPhase1A).toBeLessThanOrEqual(40);
+            expect(relay.speed).toBe(1);
 
             // Switch unanimously to 2x.
             peerA.host.setSpeedVote(true, true);
             peerB.host.setSpeedVote(true, true);
 
-            // Phase 2: 2x (1 transition step + 50 steps at 2x = 101 ticks -> tick 131)
-            for (let s = 0; s < 51; s++) {
-                if (s === 10) {
+            // Phase 2: 60 frames at 2x (~120 ticks on each client driven purely
+            // by their own 2x pacing — fails if 2x pacing is stubbed out!).
+            const tickA1 = peerA.host.status().tick;
+            const tickB1 = peerB.host.status().tick;
+            for (let f = 0; f < 60; f++) {
+                if (f === 10) {
                     peerA.host.controlEvents([{ action: 'firePrimary', state: 'start' }]);
                 }
-                if (s === 25) {
+                if (f === 25) {
                     peerB.host.controlEvents([{ action: 'turnLeft', state: false }]);
                     peerB.host.controlEvents([{ action: 'accelerate', state: 'start' }]);
                 }
-                relay.stepClock(SIMULATION_STEP_MS);
-                await stepBothToRelay();
+                await driveFrame(SIMULATION_STEP_MS, f % 3 === 0);
             }
+            const ticksPhase2A = peerA.host.status().tick - tickA1;
+            const ticksPhase2B = peerB.host.status().tick - tickB1;
             expect(relay.speed).toBe(2);
-            expect(relay.tick).toBe(131);
+            expect(ticksPhase2A).toBeGreaterThanOrEqual(105);
+            expect(ticksPhase2B).toBeGreaterThanOrEqual(105);
+            expect(pumpState.a.pacing?.speed).toBe(2);
+            expect(pumpState.b.pacing?.speed).toBe(2);
 
             // Drop back to 1x mid-flight.
             peerB.host.setSpeedVote(false, true);
 
-            // Phase 3: 1x (1 transition step + 30 steps = 31 ticks -> tick 162)
-            for (let s = 0; s < 31; s++) {
-                if (s === 10) {
+            // Phase 3: 30 frames at 1x (~30 ticks on each client).
+            const tickA2 = peerA.host.status().tick;
+            for (let f = 0; f < 30; f++) {
+                if (f === 10) {
                     peerA.host.controlEvents([{ action: 'accelerate', state: false }]);
                 }
-                relay.stepClock(SIMULATION_STEP_MS);
-                await stepBothToRelay();
+                await driveFrame(SIMULATION_STEP_MS, f % 2 === 0);
             }
+            const ticksPhase3A = peerA.host.status().tick - tickA2;
             expect(relay.speed).toBe(1);
-            expect(relay.tick).toBe(162);
+            expect(ticksPhase3A).toBeGreaterThanOrEqual(25);
+            expect(ticksPhase3A).toBeLessThanOrEqual(45);
+            expect(pumpState.a.pacing?.speed).toBe(1);
+            expect(pumpState.b.pacing?.speed).toBe(1);
 
-            // Settle final relayed records and step archive to the exact same tick.
+            // Park A, B, and the archive on the same tick past all inputs.
+            const parkTick = Math.max(
+                relay.tick, peerA.host.status().tick, peerB.host.status().tick) + 20;
+            relay.advanceTicks(parkTick - relay.tick);
+            peerA.host.step(parkTick - peerA.host.status().tick);
+            peerB.host.step(parkTick - peerB.host.status().tick);
             await new Promise(resolve => setImmediate(resolve));
             peerA.host.step(0);
             peerB.host.step(0);
             await archive.update();
 
-            expect(peerA.host.status().tick).toBe(relay.tick);
-            expect(peerB.host.status().tick).toBe(relay.tick);
-            expect(archive.tick).toBe(relay.tick);
+            expect(peerA.host.status().tick).toBe(parkTick);
+            expect(peerB.host.status().tick).toBe(parkTick);
+            expect(archive.tick).toBe(parkTick);
 
             const hashA = hashWorld(peerA.world, PEER_LOCAL_COMPONENTS).hash;
             const hashB = hashWorld(peerB.world, PEER_LOCAL_COMPONENTS).hash;
