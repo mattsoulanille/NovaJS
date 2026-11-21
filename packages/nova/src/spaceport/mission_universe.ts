@@ -189,13 +189,19 @@ export class MissionUniverse {
         const ids = await this.gameData.ids;
         const data = this.gameData.data;
 
-        // Bounded concurrency: firing thousands of parallel fetches
-        // makes Chrome throw ERR_INSUFFICIENT_RESOURCES.
+        // Every id at once (#368). This used to be a 12-wide pool,
+        // because firing thousands of parallel fetches made Chrome throw
+        // ERR_INSUFFICIENT_RESOURCES — but the client's gets now coalesce
+        // in BatchDataFetcher (everything issued in one tick is ONE
+        // POST), so the pool no longer guarded anything and instead made
+        // the universe cost ~ids/12 sequential round trips: about a
+        // hundred on stock data, and the system entry awaits it
+        // (prepareMissionShips).
         let skipped = 0;
         const each = async <T>(kind: string, list: readonly string[],
             load: (id: string) => Promise<T>): Promise<T[]> => {
-            const loaded = await pooledMap(list, id =>
-                loadOrSkip('Mission universe', kind, id, load));
+            const loaded = await Promise.all(list.map(id =>
+                loadOrSkip('Mission universe', kind, id, load)));
             const kept = loaded.filter((item): item is Awaited<T> =>
                 item !== undefined);
             skipped += loaded.length - kept.length;
