@@ -41,7 +41,7 @@ import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
 import { PixiAppResource } from '../display/pixi_app_resource.js';
 import { DisplayRoot } from '../display/stage_resource.js';
-import { RoomSpeedResource } from '../display/status_bar_speed.js';
+import { RoomSpeedResource } from '../display/speed_indicator_plugin.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
 } from '../nova_plugin/core/index.js';

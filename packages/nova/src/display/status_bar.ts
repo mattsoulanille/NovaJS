@@ -26,7 +26,6 @@ import {
 } from "./status_bar_navigation.js";
 import { DrawRadar, DrawStatusBarInterference, RadarPane } from "./status_bar_radar.js";
 import { StatusBarResource } from "./status_bar_resource.js";
-import { DrawStatusBarSpeed, RoomSpeedResource, SpeedPane } from "./status_bar_speed.js";
 import { DrawStatusBarTarget, TargetPane } from "./status_bar_target.js";
 import { DrawStatusBarSecondaryWeapon, WeaponPane } from "./status_bar_weapon.js";
 
@@ -49,7 +48,6 @@ export class StatusBar {
     readonly navigation = new NavigationPane();
     readonly weapon = new WeaponPane();
     readonly cargo = new CargoPane();
-    readonly speed = new SpeedPane();
 
     private addEnemyButton: Button;
     private giveCreditsButton: Button;
@@ -109,7 +107,6 @@ export class StatusBar {
         this.weapon.build(this.container, this.statusBarData, fonts);
         this.target.build(this.container, this.statusBarData, fonts);
         this.cargo.build(this.container, this.statusBarData, fonts);
-        this.speed.build(this.container, this.statusBarData, fonts);
 
         this.container.addChild(this.addEnemyButton.container);
         this.container.addChild(this.giveCreditsButton.container);
@@ -143,7 +140,6 @@ export class StatusBar {
         this.navigation.reset();
         this.weapon.reset();
         this.cargo.reset();
-        this.speed.reset();
         // Everything else build() made for the old ïntf goes too — the
         // background sprite, the radar's static TilingSprite, the readout
         // panes' containers — or every interface swap would orphan them
@@ -183,7 +179,6 @@ export class StatusBar {
         this.navigation.destroy();
         this.weapon.destroy();
         this.cargo.destroy();
-        this.speed.destroy();
     }
 }
 
@@ -276,9 +271,6 @@ export const StatusBarPlugin: Plugin = {
         if (!world.resources.get(DockedShipResource)) {
             world.resources.set(DockedShipResource, {});
         }
-        if (!world.resources.get(RoomSpeedResource)) {
-            world.resources.set(RoomSpeedResource, {});
-        }
 
         // DrawRadar judges bribe expiries against the mirrored sim clock;
         // seed it so the radar can draw before the first frame arrives.
@@ -296,7 +288,6 @@ export const StatusBarPlugin: Plugin = {
         world.addSystem(DrawStatusBarNavigation);
         world.addSystem(DrawStatusBarCargo);
         world.addSystem(DrawDockedStatus);
-        world.addSystem(DrawStatusBarSpeed);
     },
     remove(world) {
         world.removeSystem(DrawRadar);
@@ -309,8 +300,6 @@ export const StatusBarPlugin: Plugin = {
         world.removeSystem(DrawStatusBarNavigation);
         world.removeSystem(DrawStatusBarCargo);
         world.removeSystem(DrawDockedStatus);
-        world.removeSystem(DrawStatusBarSpeed);
-        world.resources.delete(RoomSpeedResource);
 
         const stage = world.resources.get(Stage);
         const statusBar = world.resources.get(StatusBarResource);

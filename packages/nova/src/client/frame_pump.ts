@@ -35,7 +35,7 @@ import type { SimulationPacing } from '../communication/simulation_frame.js';
 import {
     MAX_EXTRAPOLATION_DELTA_MS, shouldExtrapolate,
 } from '../display/movement_extrapolation_plugin.js';
-import { RoomSpeedResource } from '../display/status_bar_speed.js';
+import { RoomSpeedResource } from '../display/speed_indicator_plugin.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
