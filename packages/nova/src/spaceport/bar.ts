@@ -31,6 +31,12 @@ const DESC_FONT: Partial<PIXI.ITextStyle> = {
     lineHeight: LINE_HEIGHT,
 };
 
+/** The plain bar frame (PICT 8503). */
+export const BAR_PICT = 'nova:8503';
+/** The taller "bar + picture" frame (PICT 8504), for a stellar whose bar
+ * dësc names a Graphic. */
+export const BAR_GRAPHIC_FRAME_PICT = 'nova:8504';
+
 const FALLBACK_DESC = 'The bar is quiet tonight. A tired bartender '
     + 'polishes glasses and keeps one eye on the door.';
 
@@ -94,7 +100,7 @@ export class Bar extends Menu<Entity> {
         controlEvents: Observable<ControlEvent>,
         private universe: MissionUniverse,
         private planetId: string) {
-        super(displayAssets, simulationData, 'nova:8503', controlEvents);
+        super(displayAssets, simulationData, BAR_PICT, controlEvents);
         this.container.name = 'Bar';
 
         // Behind the buttons/description (added below), above the 8503
@@ -231,7 +237,7 @@ export class Bar extends Menu<Entity> {
         this.barPictLayer.visible = true;
         // The 8504 frame (266x306) is taller than the plain bar and
         // opaque, so it covers the 8503 background when centered.
-        const frame = this.displayAssets.spriteFromPict('nova:8504');
+        const frame = this.displayAssets.spriteFromPict(BAR_GRAPHIC_FRAME_PICT);
         frame.anchor.set(0.5);
         this.barPictLayer.addChild(frame);
         // The picture sits in the frame's upper area, above the

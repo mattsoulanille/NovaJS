@@ -60,6 +60,10 @@ const POPUP_FRAMES: Record<PopupStyle, [string, string, string]> = {
 
 const PICT_FRAME = 'nova:8527';
 
+/** Every frame PICT a landing / venue popup can draw. */
+export const OFFER_POPUP_PICTS: readonly string[] = [
+    ...POPUP_FRAMES.offer, ...POPUP_FRAMES.briefing, PICT_FRAME];
+
 // The original draws mission text in Geneva 9, a bitmap font whose advance
 // widths our (outline) Geneva matches most closely a shade above 9px: at
 // 9.4px every line of the sigma mission texts fits the original's line

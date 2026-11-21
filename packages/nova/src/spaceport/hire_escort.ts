@@ -42,6 +42,8 @@ export const NO_SHIPS_FOR_HIRE = 'There are no ships available for hire.';
 
 /** The STR# table and index the hire message comes from. */
 export const NO_SHIPS_FOR_HIRE_TABLE = 'nova:2002';
+/** The hire-escort dialog's frame (PICT 8501). */
+export const HIRE_DIALOG_PICT = 'nova:8501';
 export const NO_SHIPS_FOR_HIRE_INDEX = 223;
 
 /**
@@ -217,7 +219,7 @@ export class HireEscortDialog {
         this.container.name = 'HireEscortDialog';
         this.container.visible = false;
 
-        const background = displayAssets.spriteFromPict('nova:8501');
+        const background = displayAssets.spriteFromPict(HIRE_DIALOG_PICT);
         background.anchor.set(0.5);
         background.interactive = true;
         this.container.addChild(background);

@@ -13,6 +13,9 @@ import { MenuControls } from './menu_controls.js';
 // a Standard Weapons list run underneath, with Done at the bottom right.
 // Measured against the shipyard/*_info.png reference screenshots
 // (1920x1080).
+/** The ship-info dialog's frame (PICT 8507). */
+export const SHIP_INFO_PICT = 'nova:8507';
+
 const WIDTH = 614;
 const HEIGHT = 537;
 const ORIGIN_X = -WIDTH / 2;
@@ -137,7 +140,7 @@ export class ShipInfoDialog {
         shield.interactive = true;
         this.container.addChild(shield);
 
-        const background = this.displayAssets.spriteFromPict('nova:8507');
+        const background = this.displayAssets.spriteFromPict(SHIP_INFO_PICT);
         background.anchor.set(0.5);
         background.interactive = true;
         this.container.addChild(background);

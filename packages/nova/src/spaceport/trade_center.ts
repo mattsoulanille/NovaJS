@@ -48,6 +48,9 @@ const RIGHT_FONT: Partial<PIXI.ITextStyle> =
  * (quantityColumnHeader / freeSpaceLines) beside the model that decides
  * which applies.
  */
+/** The trade center's frame (PICT 8510). */
+export const TRADE_CENTER_PICT = 'nova:8510';
+
 const HEADER_COMMODITY = 'Commodity:';
 const HEADER_PRICE = 'Price:';
 
@@ -185,7 +188,7 @@ export class TradeCenter extends Menu<Entity> {
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>,
         private planetId: string) {
-        super(displayAssets, simulationData, 'nova:8510', controlEvents);
+        super(displayAssets, simulationData, TRADE_CENTER_PICT, controlEvents);
         this.container.name = 'TradeCenter';
 
         this.buttons = {

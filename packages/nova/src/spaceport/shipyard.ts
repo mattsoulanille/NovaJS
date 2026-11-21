@@ -45,6 +45,10 @@ import {
     visibleShips,
 } from './shipyard_stock_rules.js';
 
+/** The shop frame the shipyard draws in (PICT 8502, shared with the
+ * outfitter). */
+export const SHIPYARD_PICT = 'nova:8502';
+
 export class Shipyard extends Menu<Entity> {
     private pictContainer = new PIXI.Container();
     itemGrid?: ItemGrid<ShipData>;
@@ -122,7 +126,7 @@ export class Shipyard extends Menu<Entity> {
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>) {
-        super(displayAssets, simulationData, "nova:8502", controlEvents);
+        super(displayAssets, simulationData, SHIPYARD_PICT, controlEvents);
         this.container.name = 'Shipyard';
         // Captions, widths and positions measured against the original
         // (shipyard_content.ts). The middle pill says "Buy Ship" and is

@@ -36,6 +36,10 @@ import { changeShipTargets } from "./shipyard_rules.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
 
+/** The shop frame the outfitter draws in (PICT 8502, shared with the
+ * shipyard). */
+export const OUTFITTER_PICT = 'nova:8502';
+
 const descWidth = 190;
 
 /**
@@ -321,7 +325,7 @@ export class Outfitter extends Menu<Entity> {
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
         controlEvents: Observable<ControlEvent>) {
-        super(displayAssets, simulationData, "nova:8502", controlEvents);
+        super(displayAssets, simulationData, OUTFITTER_PICT, controlEvents);
         this.container.name = 'Outfitter';
 
         // Sphere centres, measured on outfitter/earth_outfitter.png: the

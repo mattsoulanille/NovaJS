@@ -28,6 +28,10 @@ const BUTTON_IDS = new Map<ButtonState, {
     }],
 ]);
 
+/** Every button PICT (caps and middles, all three states). */
+export const BUTTON_PICTS: readonly string[] = [...BUTTON_IDS.values()]
+    .flatMap(({ left, middle, right }) => [left, middle, right]);
+
 // The cap sprites' inset. Tracker issue: derive this and the button
 // height below from the cap textures instead of constants (mirrored
 // as shipyard_content.ts BUTTON_CAP_WIDTH).

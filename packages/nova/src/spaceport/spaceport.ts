@@ -60,6 +60,10 @@ import { TradeCenter } from './trade_center.js';
 // With the frame centered on x=960 these offsets land our pills on the same
 // rectangles (the left column was previously 10px too far right).
 const LEFT_BUTTON_X = -306;
+/** The spaceport frame (PICT 8500). */
+export const SPACEPORT_PICT = 'nova:8500';
+/** The Mission BBS frame (PICT 8505). */
+export const MISSION_BBS_PICT = 'nova:8505';
 const RIGHT_BUTTON_X = 162;
 const BUTTON_TOP = 75;
 const BUTTON_SPACING = 41;
@@ -163,7 +167,7 @@ export class Spaceport extends Menu<Entity> {
          * with it the landing's transaction, which its Abort edits. */
         private openMissionInfo?: (entity: Entity, planetId?: string,
             transaction?: LandedTransaction) => Promise<unknown>) {
-        super(displayAssets, simulationData, "nova:8500", controlEvents);
+        super(displayAssets, simulationData, SPACEPORT_PICT, controlEvents);
         this.container.name = 'Spaceport';
 
         const buttonY = (slot: number) =>
@@ -248,7 +252,7 @@ export class Spaceport extends Menu<Entity> {
         this.popupBlocker = new MenuControls(controlEvents);
         this.missionComputer = new MissionBoard(displayAssets, simulationData,
             controlEvents, this.universe, id, LOCATION_MISSION_COMPUTER,
-            "nova:8505", "Mission BBS", this.openStarmap);
+            MISSION_BBS_PICT, "Mission BBS", this.openStarmap);
         const showMissionComputer = async () => {
             if (!this.enterVenue()) {
                 return;

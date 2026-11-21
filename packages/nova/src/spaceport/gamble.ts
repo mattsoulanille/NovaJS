@@ -18,6 +18,11 @@ const BUTTON_Y = GAMBLE.button.y;
 
 /** The four racer PICTs (8530-8533), one per selection box. */
 const RACER_PICTS = ['nova:8530', 'nova:8531', 'nova:8532', 'nova:8533'];
+/** The gamble dialog's background (PICT 8529). */
+const GAMBLE_BACKGROUND_PICT = 'nova:8529';
+/** Every PICT the gamble dialog draws. */
+export const GAMBLE_PICTS: readonly string[] =
+    [GAMBLE_BACKGROUND_PICT, ...RACER_PICTS];
 
 const STATUS_FONT: Partial<PIXI.ITextStyle> = {
     fontFamily: 'Geneva', fontSize: 12, fill: 0xffffff,
@@ -66,7 +71,7 @@ export class GambleDialog {
         this.container.name = 'GambleDialog';
         this.container.visible = false;
 
-        const background = displayAssets.spriteFromPict('nova:8529');
+        const background = displayAssets.spriteFromPict(GAMBLE_BACKGROUND_PICT);
         background.anchor.set(0.5);
         background.interactive = true;
         this.container.addChild(background);

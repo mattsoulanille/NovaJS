@@ -290,6 +290,8 @@ interface Item {
 }
 
 const BOX_COUNT = [4, 5];
+/** Tiles on one page of the grid. */
+export const ITEM_GRID_PAGE_SIZE = BOX_COUNT[0] * BOX_COUNT[1];
 
 /** The parts of a PIXI container raiseToTop needs. */
 export interface LayerContainer<C> {
