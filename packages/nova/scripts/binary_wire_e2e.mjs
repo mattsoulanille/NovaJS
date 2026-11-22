@@ -34,6 +34,7 @@ const { SocketChannelClient } = await import('../dist/src/communication/socket_c
 const { CommunicatorClient } = await import('../dist/src/communication/communicator_client.js');
 const { MultiRoom } = await import('../dist/src/communication/multi_room_communicator.js');
 const { SimulationBridgeHost } = await import('../dist/src/communication/simulation_bridge_host.js');
+const { advanceSimulationDebt } = await import('../dist/src/client/frame_pump.js');
 const { makeSystem } = await import('../dist/src/nova_plugin/make_system.js');
 const { SimulationGameData } = await import('../dist/src/client/gamedata/simulation_game_data.js');
 const { makeShip } = await import('../dist/src/nova_plugin/ship/index.js');
@@ -124,21 +125,21 @@ async function makeClient(name) {
     };
 }
 
-/** Steps a client using its live RoomClock pacing (1x or 2x), like FramePump. */
+/** Steps a client using its live RoomClock pacing (1x or 2x), via FramePump's shipped advanceSimulationDebt. */
 function pump(client) {
     const now = performance.now();
     const elapsedMs = client.lastPumpMs !== undefined ? now - client.lastPumpMs : STEP_MS;
     client.lastPumpMs = now;
-    const rate = client.pacing?.rate ?? 1;
-    const speed = client.pacing?.speed ?? 1;
-    client.timeDebt = Math.min(client.timeDebt + elapsedMs * rate, STEP_MS * 6 * speed);
-    let steps = Math.floor(client.timeDebt / STEP_MS);
-    client.timeDebt -= steps * STEP_MS;
-    if (client.pacing && client.pacing.behindTicks > 30 * speed) {
-        steps += Math.min(Math.floor(client.pacing.behindTicks), 60 * speed);
-    }
-    if (steps > 0) {
-        client.host.step(steps);
+    const next = advanceSimulationDebt({
+        timeDebt: client.timeDebt,
+        elapsedMs,
+        paused: false,
+        pendingSteps: 0,
+        pacing: client.pacing,
+    });
+    client.timeDebt = next.timeDebt;
+    if (next.steps > 0) {
+        client.host.step(next.steps);
     }
     const frame = client.host.snapshot();
     if (frame.pacing) {
