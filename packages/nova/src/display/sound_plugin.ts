@@ -56,22 +56,39 @@ function uiLoopOwner(id: string) {
 }
 
 /**
+ * Whether @pixi/sound's context is auto-paused (window blurred). Nothing
+ * may START while it is: see startPixiLoop and playOneShot.
+ */
+function audioPaused(sound: Sound): boolean {
+    return Boolean(sound.context?.paused);
+}
+
+/**
  * Starts `sound` as a loop and wraps the instance as a LoopVoice.
  *
- * Stopping is the subtle part. @pixi/sound pauses every instance when the
- * window blurs (its WebAudioContext autoPause) by dropping the instance's
- * source node, and `stop()` on an instance without one is a no-op — the
- * instance would then resume, still looping, on focus. So `stop` first
- * un-pauses the instance (if the context runs, that gives it a source
- * again, and the stop in the same task means nothing is heard), and if it
- * is STILL there pins it paused at the instance level, where a global
- * resume cannot wake it, and reports failure so LoopPlayback retries.
+ * ORPHANED SOURCES. A @pixi/sound WebAudioInstance re-plays itself
+ * whenever its pause state "changes" (refreshPaused), and play() replaces
+ * the instance's source node WITHOUT stopping the old one. A FRESH
+ * instance (none free in Sound's shared pool — a busy mix, or the queue of
+ * sounds a blurred, suspended context has piled up) starts with its last
+ * pause state undefined, so the first refreshPaused that reports "not
+ * paused" re-plays it: the original looping source keeps playing with
+ * nothing left holding it, and no stop() can ever reach it again. That is
+ * the loop that "keeps looping forever" (the death klaxon over the title
+ * screen, a weapon after a defocus). Two things trigger that first
+ * refreshPaused, and both are avoided here:
+ *  - setting `paused` on an instance that is playing — so `stop` below
+ *    only touches `paused` on an instance with no source left;
+ *  - the context's own resume on window focus, for an instance started
+ *    while it was paused — so no loop is started while it is (the
+ *    reconciliation simply starts it on the first frame after focus).
  */
 function startPixiLoop(sound: Sound, volume: number): LoopVoice | undefined {
-    if (!sound.isLoaded) {
+    if (!sound.isLoaded || audioPaused(sound)) {
         // play() on an unloaded Sound returns a promise and starts a loop
         // later that nothing tracks. getCached only hands out loaded
-        // sounds, so this is a guard, not a path.
+        // sounds, so that half is a guard, not a path. Paused: not yet
+        // (above); undefined means "try again next frame".
         return undefined;
     }
     sound.volume = volume;
@@ -85,7 +102,20 @@ function startPixiLoop(sound: Sound, volume: number): LoopVoice | undefined {
         // `loop` too: a stopped instance goes back to @pixi/sound's pool
         // and may be handed out again for a one-shot of the same sound.
         alive: () => present() && instance.loop,
+        // A playing instance has a source, and stop() ends it outright.
+        // One still there after that has none: the context's auto-pause
+        // (window blur) dropped it, and stop() on it is a no-op — it would
+        // resume, still looping, on focus. Un-pausing it gives it a source
+        // again if the context runs (stopped in the same task, so nothing
+        // is heard); if it is STILL there, pin it paused at the instance
+        // level, where a global resume cannot wake it, and report failure
+        // so LoopPlayback retries. Never un-pause first: on a playing
+        // fresh instance that re-plays it and orphans its source (above).
         stop: () => {
+            if (!present()) {
+                return true;
+            }
+            instance.stop();
             if (!present()) {
                 return true;
             }
@@ -100,10 +130,18 @@ function startPixiLoop(sound: Sound, volume: number): LoopVoice | undefined {
     };
 }
 
+/**
+ * Plays `id` once. Not while the context is auto-paused (window blurred):
+ * nothing would be heard, every such play would hold an instance on the
+ * suspended context — draining the pool that keeps loops off fresh
+ * instances (startPixiLoop) — and the whole backlog would burst out at
+ * once on focus.
+ */
 function playOneShot(id: string, displayAssets: DisplayAssetDataInterface,
     volume: number, limiter: SoundStartLimiter, frame: number) {
     const maybeSound = displayAssets.data.Sound.getCached(id);
-    if (maybeSound && limiter.allow(id, frame)) {
+    if (maybeSound && !audioPaused(maybeSound)
+        && limiter.allow(id, frame)) {
         maybeSound.volume = volume;
         maybeSound.play();
     }
