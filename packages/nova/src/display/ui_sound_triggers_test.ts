@@ -46,6 +46,9 @@ function makeSpyAssets(played: string[], stopped: string[]) {
                         const instance = {
                             loop: Boolean(options?.loop),
                             paused: false,
+                            // The sound plugin listens for end/stop; this
+                            // spy's instances never end on their own.
+                            once() { return instance; },
                             stop() {
                                 instances.splice(instances.indexOf(instance), 1);
                                 stopped.push(id);

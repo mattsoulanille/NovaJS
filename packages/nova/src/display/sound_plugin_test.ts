@@ -13,7 +13,7 @@ import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { WeaponsState, WeaponsStateComponent } from "../nova_plugin/ship/index.js";
 import { loopDemand } from "./looping_sounds.js";
 import { SimulationTimeResource } from "./simulation_time.js";
-import { restartLoops, SoundPlugin } from "./sound_plugin.js";
+import { LoopingSounds, restartLoops, SoundPlugin } from "./sound_plugin.js";
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
 
 const PLAYER_UUID = 'player ship';
@@ -29,11 +29,16 @@ interface PlayCall {
 /**
  * One AudioBufferSourceNode: what is actually heard. `playing` until
  * something calls stop() on it, which nothing ever does for an ORPHANED
- * one (its instance moved on to a new source without stopping it).
+ * one (its instance moved on to a new source without stopping it), or
+ * until it reaches the end of an iteration with `loop` off.
  */
 interface FakeSource {
     id: string;
     playing: boolean;
+    /** AudioBufferSourceNode.loop, which instance.refresh() keeps in sync. */
+    loop: boolean;
+    /** The instance that started it (whether or not it still holds it). */
+    owner: FakeInstance;
 }
 
 /**
@@ -41,7 +46,10 @@ interface FakeSource {
  * faithful in the parts that decide whether a sound ever stops (see
  * node_modules/@pixi/sound/lib/webaudio/WebAudioInstance.mjs):
  *  - play() makes a NEW source and drops the old one without stopping it;
- *  - stop() acts only on an instance that has a source;
+ *  - stop() acts only on an instance that has a source, and emits `stop`;
+ *  - the `loop` setter (refresh()) copies the flag onto the live source;
+ *  - a source whose iteration ends with `loop` off ends by itself
+ *    (onended -> _onComplete): the instance drops it and emits `end`;
  *  - refreshPaused() compares `_paused || context.paused` with the last
  *    state it saw (`_pausedReal`: undefined on a FRESH instance, false on
  *    a pooled one, whose destroy() reset it) and on a change either drops
@@ -49,7 +57,8 @@ interface FakeSource {
  *  - the context's blur/focus handlers set its `paused` and refreshPaused()
  *    every instance;
  *  - Sound.play takes an instance from the shared pool if there is one;
- *    an instance goes back to the pool when it stops.
+ *    an instance goes back to the pool (destroy(): listeners cleared)
+ *    when it stops or ends.
  */
 const fakeContext = {
     paused: false,
@@ -73,6 +82,28 @@ const fakeContext = {
             instance.refreshPaused();
         }
     },
+    /**
+     * Audio time passes to the next iteration boundary of every playing
+     * source of `id`: a looping one starts its next iteration, any other
+     * ends (and fires onended if its instance still holds it). A paused
+     * (suspended) context does not advance.
+     */
+    endIteration(id: string) {
+        if (this.paused) {
+            return;
+        }
+        for (const source of [...this.sources]) {
+            if (source.id === id && source.playing && !source.loop) {
+                source.playing = false;
+                source.owner.onEnded(source);
+            }
+        }
+    },
+    /** Playing sources no instance holds any more: they never stop. */
+    orphans() {
+        return this.sources.filter(source => source.playing
+            && !source.owner.holds(source)).length;
+    },
     reset() {
         this.paused = false;
         this.instances.clear();
@@ -82,26 +113,36 @@ const fakeContext = {
 };
 
 class FakeInstance {
-    loop = false;
+    private loopFlag = false;
     private pausedFlag = false;
     private pausedReal: boolean | undefined = undefined;
     private source: FakeSource | undefined;
-    /** Sound.play's `once('stop')`: leave the Sound, back to the pool. */
-    onStop: () => void = () => { };
+    private listeners = new Map<string, (() => void)[]>();
 
     constructor(public id: string) { }
 
     play(loop: boolean) {
         this.pausedFlag = false;
-        this.loop = loop;
-        this.source = { id: this.id, playing: true };
+        this.loopFlag = loop;
+        this.source = { id: this.id, playing: true, loop, owner: this };
         fakeContext.sources.push(this.source);
     }
 
     stop() {
         if (this.source) {
             this.internalStop();
-            this.onStop();
+            this.emit('stop');
+        }
+    }
+
+    get loop() {
+        return this.loopFlag;
+    }
+
+    set loop(loop: boolean) {
+        this.loopFlag = loop;
+        if (this.source) {
+            this.source.loop = loop;
         }
     }
 
@@ -121,18 +162,47 @@ class FakeInstance {
             if (pausedReal) {
                 this.internalStop();
             } else {
-                this.play(this.loop);
+                this.play(this.loopFlag);
             }
         }
     }
 
-    /** destroy() then init(): an instance handed back out by the pool. */
-    recycle(id: string) {
+    /** EventEmitter.once (all of Sound.play's and ours are once). */
+    once(event: string, fn: () => void) {
+        const list = this.listeners.get(event) ?? [];
+        list.push(fn);
+        this.listeners.set(event, list);
+        return this;
+    }
+
+    holds(source: FakeSource) {
+        return this.source === source;
+    }
+
+    /** The source's onended: _onComplete. */
+    onEnded(source: FakeSource) {
+        if (this.source === source) {
+            this.source = undefined;
+            this.emit('end');
+        }
+    }
+
+    /** _poolInstance's destroy(): back to a pristine pooled instance. */
+    destroy() {
         this.internalStop();
-        this.id = id;
-        this.loop = false;
+        this.listeners.clear();
+        this.loopFlag = false;
         this.pausedFlag = false;
         this.pausedReal = false;
+    }
+
+    /** eventemitter3: one emit runs a snapshot of its listeners. */
+    private emit(event: string) {
+        const list = this.listeners.get(event) ?? [];
+        this.listeners.delete(event);
+        for (const fn of list) {
+            fn();
+        }
     }
 
     private internalStop() {
@@ -178,21 +248,27 @@ async function makeSoundWorld(
                 played.push(id);
                 plays.push({ id, arg });
                 const pooled = fakeContext.pool.pop();
-                pooled?.recycle(id);
+                if (pooled) {
+                    pooled.id = id;
+                }
                 const instance = pooled ?? new FakeInstance(id);
                 fakeContext.instances.add(instance);
-                instance.onStop = () => {
+                // Sound._onComplete: leave the Sound, back to the pool.
+                const complete = (wasStop: boolean) => {
                     const index = list.indexOf(instance);
                     if (index >= 0) {
                         list.splice(index, 1);
-                        if (!stoppingAll) {
+                        if (wasStop && !stoppingAll) {
                             stopped.push(id);
                         }
                     }
                     fakeContext.instances.delete(instance);
+                    instance.destroy();
                     fakeContext.pool.push(instance);
                 };
                 list.push(instance);
+                instance.once('end', () => complete(false));
+                instance.once('stop', () => complete(true));
                 instance.play(Boolean(arg?.loop));
                 return instance;
             },
@@ -247,6 +323,10 @@ async function makeSoundWorld(
         .filter(source => source.id === id && source.playing).length;
     /** Every instance of `id`, pinned or not. */
     const all = (id: string) => (instances.get(id) ?? []).length;
+    /** Sources of `id` that will start another iteration (loop on). */
+    const looping = (id: string) => fakeContext.sources
+        .filter(source => source.id === id && source.playing
+            && source.loop).length;
     /** Sets the mirrored simulation clock, as applySimulationFrame does. */
     const setSimTime = (time: number) => world.resources.set(
         SimulationTimeResource,
@@ -260,8 +340,8 @@ async function makeSoundWorld(
         entity.components.set(WeaponsStateComponent, state);
     };
     return {
-        world, played, stopped, plays, instances, live, all, player, sounds,
-        setSimTime, arm,
+        world, played, stopped, plays, instances, live, all, looping, player,
+        sounds, setSimTime, arm,
     };
 }
 
@@ -432,10 +512,13 @@ describe('display weapon-fire loops', () => {
             expect(env.plays[0].arg)
                 .toEqual(jasmine.objectContaining({ loop: true }));
 
-            // Released: only the mirrored state changes.
+            // Released: only the mirrored state changes. Nothing loops on;
+            // the iteration in progress plays out, then nothing is left.
             env.setSimTime(1020);
             env.arm(env.player, false, 1000);
             env.world.step();
+            expect(env.looping(PULSE_SOUND)).toEqual(0);
+            fakeContext.endIteration(PULSE_SOUND);
             expect(env.live(PULSE_SOUND)).toEqual(0);
         });
 
@@ -456,6 +539,8 @@ describe('display weapon-fire loops', () => {
             fireFrame(env, 1000);
             env.setSimTime(2000);
             env.world.step();
+            expect(env.looping(PULSE_SOUND)).toEqual(0);
+            fakeContext.endIteration(PULSE_SOUND);
             expect(env.live(PULSE_SOUND)).toEqual(0);
         });
 
@@ -482,6 +567,9 @@ describe('display weapon-fire loops', () => {
         expect(env.live('nova:232')).toEqual(1);
         env.world.entities.delete('beam');
         env.world.step();
+        // A beam is a weapon: its last iteration plays out.
+        expect(env.looping('nova:232')).toEqual(0);
+        fakeContext.endIteration('nova:232');
         expect(env.live('nova:232')).toEqual(0);
     });
 
@@ -598,8 +686,12 @@ describe('display weapon-fire loops', () => {
         env.setSimTime(1020);
         env.arm(env.player, false, 1000);
         env.world.step();
+        // Let go: it finishes the iteration it is in, and nothing more.
+        expect(fakeContext.orphans()).toEqual(0);
+        fakeContext.endIteration(PULSE_SOUND);
         expect(env.live(PULSE_SOUND)).toEqual(0);
         expect(env.all(PULSE_SOUND)).toEqual(0);
+        expect(fakeContext.orphans()).toEqual(0);
     });
 
     /**
@@ -620,7 +712,9 @@ describe('display weapon-fire loops', () => {
             env.setSimTime(1040);
             env.arm(env.player, false, 1020);
             env.world.step();
+            fakeContext.endIteration(PULSE_SOUND);
             expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(fakeContext.orphans()).toEqual(0);
         });
 
     it('plays no one-shot while the context is paused', async () => {
@@ -635,6 +729,185 @@ describe('display weapon-fire loops', () => {
         env.world.emit(SoundEvent, { id: 'nova:200' });
         env.world.step();
         expect(env.played).toEqual(['nova:200']);
+    });
+});
+
+/**
+ * The maintainer's ruling: "Weapons that fire with audio on a loop need to
+ * play in full loops of their audio. We can't cut it early in the loop
+ * even if they stop firing." A weapon loop that is let go finishes the
+ * iteration it is in and then ends; a teardown or a focus change still
+ * cuts it at once (the stuck-klaxon rules above), and no source is ever
+ * orphaned on the way.
+ */
+describe('display weapon loops finishing their iteration', () => {
+    beforeEach(() => fakeContext.reset());
+
+    type Env = Awaited<ReturnType<typeof makeSoundWorld>>;
+    function fire(env: Env, time: number) {
+        env.setSimTime(time);
+        env.arm(env.player, true, time);
+        env.world.emit(SoundEvent, { id: PULSE_SOUND, loop: true });
+        env.world.step();
+    }
+    function letGo(env: Env, time: number, lastFired: number) {
+        env.setSimTime(time);
+        env.arm(env.player, false, lastFired);
+        env.world.step();
+    }
+
+    it('plays a stopped weapon loop to the end of its iteration, then ends',
+        async () => {
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            const source = fakeContext.sources[0];
+            letGo(env, 1020, 1000);
+            // Not cut: the same source plays on, but will not loop again.
+            expect(source.playing).toBeTrue();
+            expect(source.loop).toBeFalse();
+            expect(env.stopped).toEqual([]);
+            for (let t = 1040; t < 1200; t += 20) {
+                env.setSimTime(t);
+                env.world.step();
+            }
+            expect(source.playing).toBeTrue();
+            expect(env.played).toEqual([PULSE_SOUND]);
+
+            fakeContext.endIteration(PULSE_SOUND);
+            expect(source.playing).toBeFalse();
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            env.world.step();
+            expect(env.world.resources.get(LoopingSounds)!.finishing.size)
+                .toEqual(0);
+            expect(env.played).toEqual([PULSE_SOUND]);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('re-arms the same instance when the weapon refires in its last '
+        + 'iteration', async () => {
+        const env = await makeSoundWorld();
+        fire(env, 1000);
+        const source = fakeContext.sources[0];
+        letGo(env, 1020, 1000);
+        fire(env, 1040);
+        // No second copy, no restart: the one source loops on.
+        expect(env.played).toEqual([PULSE_SOUND]);
+        expect(fakeContext.sources).toEqual([source]);
+        expect(source.playing).toBeTrue();
+        expect(source.loop).toBeTrue();
+        expect(env.all(PULSE_SOUND)).toEqual(1);
+        fakeContext.endIteration(PULSE_SOUND);
+        expect(env.live(PULSE_SOUND)).toEqual(1);
+        expect(fakeContext.orphans()).toEqual(0);
+
+        // Let go again: it still ends cleanly.
+        letGo(env, 1060, 1040);
+        fakeContext.endIteration(PULSE_SOUND);
+        expect(env.live(PULSE_SOUND)).toEqual(0);
+        expect(env.all(PULSE_SOUND)).toEqual(0);
+        expect(fakeContext.orphans()).toEqual(0);
+    });
+
+    it('stops a finishing loop at once when the session is torn down',
+        async () => {
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            letGo(env, 1020, 1000);
+            expect(env.live(PULSE_SOUND)).toEqual(1);
+            await env.world.removePlugin(SoundPlugin);
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('stops a finishing loop at once on a focus or visibility change',
+        async () => {
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            letGo(env, 1020, 1000);
+            expect(env.live(PULSE_SOUND)).toEqual(1);
+            restartLoops(env.world);
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            env.world.step();
+            expect(env.played).toEqual([PULSE_SOUND]);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('never loops a finishing loop on after a blur, and cuts it on focus',
+        async () => {
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            letGo(env, 1020, 1000);
+            fakeContext.blur();
+            env.world.step();
+            // @pixi/sound's own resume re-plays the remainder, unlooped...
+            fakeContext.focus();
+            expect(env.looping(PULSE_SOUND)).toEqual(0);
+            // ...and the focus listener (restartLoops) cuts it.
+            restartLoops(env.world);
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('stops a weapon loop let go while the window is blurred outright',
+        async () => {
+            // Nothing is heard, and release cannot touch a paused instance
+            // safely: the existing pinned stop takes it.
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            fakeContext.blur();
+            letGo(env, 1020, 1000);
+            fakeContext.focus();
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            env.world.step();
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('finishes the iteration of a ship that is removed, never looping on',
+        async () => {
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            env.world.entities.delete(PLAYER_UUID);
+            env.setSimTime(1020);
+            env.world.step();
+            expect(env.live(PULSE_SOUND)).toEqual(1);
+            expect(env.looping(PULSE_SOUND)).toEqual(0);
+            fakeContext.endIteration(PULSE_SOUND);
+            expect(env.live(PULSE_SOUND)).toEqual(0);
+            expect(env.all(PULSE_SOUND)).toEqual(0);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('starts afresh after a finished loop whose instance a one-shot took',
+        async () => {
+            // The ended instance went back to @pixi/sound's shared pool; a
+            // one-shot of the same sound takes it. It is not ours any more:
+            // never re-armed into a loop.
+            const env = await makeSoundWorld();
+            fire(env, 1000);
+            letGo(env, 1020, 1000);
+            fakeContext.endIteration(PULSE_SOUND);
+            env.world.emit(SoundEvent, { id: PULSE_SOUND });
+            fire(env, 2000);
+            expect(env.played)
+                .toEqual([PULSE_SOUND, PULSE_SOUND, PULSE_SOUND]);
+            expect(env.all(PULSE_SOUND)).toEqual(2);
+            expect(env.looping(PULSE_SOUND)).toEqual(1);
+            expect(fakeContext.orphans()).toEqual(0);
+        });
+
+    it('still stops the death loop at once', async () => {
+        const env = await makeSoundWorld();
+        loopDemand(env.world).set('player-death', SOUND_EXPLOSION_LOOP);
+        env.world.step();
+        loopDemand(env.world).delete('player-death');
+        env.world.step();
+        expect(env.live(SOUND_EXPLOSION_LOOP)).toEqual(0);
+        expect(fakeContext.orphans()).toEqual(0);
     });
 });
 

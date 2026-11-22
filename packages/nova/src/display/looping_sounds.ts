@@ -19,7 +19,8 @@
  * from state it already has, and reconciles what is playing against that
  * answer (`reconcileLoops`). A missed edge — a dropped event, a rollback,
  * a resync, a hidden tab — cannot strand a loop: the next frame's answer
- * no longer contains it, and it is stopped. One-shot sounds stay events.
+ * no longer contains it, and it is stopped (a weapon loop at the end of
+ * the iteration it is in: see LoopPlayback). One-shot sounds stay events.
  *
  * The sources of "wanted", all level-triggered:
  *  - weapon fire: `wantedWeaponLoops` below, from the mirrored
@@ -79,9 +80,10 @@ export type LoopingBeam = Pick<WeaponData, 'sound' | 'loopSound'>;
  *    duration after the trigger is released; its sound keeps looping as
  *    long as it is drawn).
  *
- * Releasing the trigger therefore ends the loop on the next frame, and a
- * weapon that stops shooting for any other reason ends it within one
- * reload. Pure: the display system feeds it the mirrored state.
+ * Releasing the trigger therefore lets the loop go on the next frame, and
+ * a weapon that stops shooting for any other reason lets it go within one
+ * reload — "lets go": it finishes the iteration it is in (LoopPlayback).
+ * Pure: the display system feeds it the mirrored state.
  */
 export function wantedWeaponLoops(
     ships: Iterable<WeaponsState>,
@@ -144,61 +146,133 @@ export function reconcileLoops(wanted: ReadonlySet<string>,
  * be retried once the context runs again.
  */
 export interface LoopVoice {
-    /** Still playing (nothing else stopped it). */
+    /** Still playing (nothing else stopped it, it has not ended). */
     alive(): boolean;
-    /** Stop it; true once it is gone for good. */
+    /** Stop it now; true once it is gone for good. */
     stop(): boolean;
+    /**
+     * Stop LOOPING: play the current iteration to its end, then end by
+     * itself. False when it cannot (the caller then stops it outright).
+     * Optional: a voice without it is always stopped outright.
+     */
+    release?(): boolean;
+    /**
+     * Undo a release while the last iteration is still playing: loop
+     * again from where it is, with no restart and no second copy. False
+     * when it cannot.
+     */
+    rearm?(): boolean;
 }
 
 /**
  * The loops this display world is playing, and the reconciliation that
  * keeps them equal to the wanted set: exactly one voice per sound id.
  *
+ * WEAPON LOOPS PLAY WHOLE ITERATIONS. The maintainer's ruling: "Weapons
+ * that fire with audio on a loop need to play in full loops of their
+ * audio. We can't cut it early in the loop even if they stop firing."
+ * So an id passed in `reconcile`'s `finish` set is, when it stops being
+ * wanted, RELEASED rather than stopped — it plays to the end of the
+ * iteration it is in and then ends by itself — and held in `finishing`
+ * until it has. Wanted again before then, it is re-armed (loops on from
+ * where it is): never restarted, never doubled. Everything else, and
+ * every stopAll (teardown, focus/visibility change), stops at once.
+ *
  * `startVoice` returns undefined when the sound is not loaded yet; the id
  * simply stays unplayed and is tried again next frame.
  */
 export class LoopPlayback {
     readonly playing = new Map<string, LoopVoice>();
+    /** Released loops playing out their last iteration, by sound id. */
+    readonly finishing = new Map<string, LoopVoice>();
+    /** Playing ids that finish their iteration when no longer wanted. */
+    private readonly finishOnRelease = new Set<string>();
     /** Voices whose stop did not take yet (see LoopVoice.stop). */
     private readonly stopping = new Set<LoopVoice>();
 
     constructor(private readonly startVoice:
         (id: string) => LoopVoice | undefined) { }
 
-    reconcile(wanted: ReadonlySet<string>) {
+    /**
+     * @param finish The wanted ids that, once no longer wanted, finish
+     * their current iteration instead of stopping (weapon loops). Read
+     * every frame, so an id's last wanted frame decides.
+     */
+    reconcile(wanted: ReadonlySet<string>,
+        finish: ReadonlySet<string> = new Set()) {
         this.retryStops();
         // A loop something else silenced (a `{ stop: true }` for the same
         // sound id, which @pixi/sound applies to every instance) is no
         // longer playing, whatever this map remembers: forget it, and the
-        // plan below restarts it if it is still wanted.
+        // plan below restarts it if it is still wanted. A finishing loop
+        // that reached its end is done.
         for (const [id, voice] of this.playing) {
             if (!voice.alive()) {
                 this.playing.delete(id);
             }
         }
+        for (const [id, voice] of this.finishing) {
+            if (!voice.alive()) {
+                this.finishing.delete(id);
+            }
+        }
+        for (const id of wanted) {
+            if (finish.has(id)) {
+                this.finishOnRelease.add(id);
+            } else {
+                this.finishOnRelease.delete(id);
+            }
+        }
         const plan = reconcileLoops(wanted, this.playing);
         for (const id of plan.stop) {
-            this.stopVoice(this.playing.get(id)!);
+            const voice = this.playing.get(id)!;
             this.playing.delete(id);
+            if (this.finishOnRelease.delete(id) && voice.release?.()) {
+                this.finishing.set(id, voice);
+            } else {
+                this.stopVoice(voice);
+            }
         }
         for (const id of plan.start) {
+            const tail = this.finishing.get(id);
+            if (tail) {
+                if (tail.rearm?.()) {
+                    this.finishing.delete(id);
+                    this.playing.set(id, tail);
+                }
+                // Could not re-arm it (the context is paused): let it
+                // finish, and start afresh once it has — never a second
+                // copy over it.
+                continue;
+            }
             const voice = this.startVoice(id);
             if (voice) {
                 this.playing.set(id, voice);
+            }
+        }
+        for (const id of this.finishOnRelease) {
+            if (!this.playing.has(id)) {
+                this.finishOnRelease.delete(id);
             }
         }
         return plan;
     }
 
     /**
-     * Stop every loop. The next reconcile starts afresh whatever is still
-     * wanted — what a visibility change and a teardown both need.
+     * Stop every loop at once, finishing ones included. The next
+     * reconcile starts afresh whatever is still wanted — what a
+     * visibility change and a teardown both need.
      */
     stopAll() {
         for (const voice of this.playing.values()) {
             this.stopVoice(voice);
         }
+        for (const voice of this.finishing.values()) {
+            this.stopVoice(voice);
+        }
         this.playing.clear();
+        this.finishing.clear();
+        this.finishOnRelease.clear();
         this.retryStops();
     }
 

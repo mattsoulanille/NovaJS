@@ -217,6 +217,94 @@ describe('LoopPlayback', () => {
         expect(voices.every(v => !v.live)).toBeTrue();
     });
 
+    describe('finishing (weapon) loops', () => {
+        /** A voice that can be let go to finish its iteration. */
+        class FinishingVoice extends FakeVoice {
+            looping = true;
+            release() {
+                if (FakeVoice.contextPaused) {
+                    return false;
+                }
+                this.looping = false;
+                return true;
+            }
+            rearm() {
+                if (FakeVoice.contextPaused || !this.live) {
+                    return false;
+                }
+                this.looping = true;
+                return true;
+            }
+            /** The iteration boundary. */
+            boundary() {
+                if (!this.looping) {
+                    this.live = false;
+                }
+            }
+        }
+        function makeFinishing() {
+            const voices: FinishingVoice[] = [];
+            const playback = new LoopPlayback(id => {
+                const voice = new FinishingVoice(id);
+                voices.push(voice);
+                return voice;
+            });
+            return { playback, voices };
+        }
+
+        it('lets go of a loop in the finish set instead of stopping it',
+            () => {
+                const { playback, voices } = makeFinishing();
+                playback.reconcile(new Set(['a']), new Set(['a']));
+                playback.reconcile(new Set());
+                expect(voices[0].live).toBeTrue();
+                expect(voices[0].looping).toBeFalse();
+                expect(playback.finishing.size).toEqual(1);
+                voices[0].boundary();
+                playback.reconcile(new Set());
+                expect(playback.finishing.size).toEqual(0);
+            });
+
+        it('stops a loop outside the finish set at once', () => {
+            const { playback, voices } = makeFinishing();
+            playback.reconcile(new Set(['a']));
+            playback.reconcile(new Set());
+            expect(voices[0].live).toBeFalse();
+            expect(playback.finishing.size).toEqual(0);
+        });
+
+        it('re-arms a finishing loop wanted again, never a second copy',
+            () => {
+                const { playback, voices } = makeFinishing();
+                playback.reconcile(new Set(['a']), new Set(['a']));
+                playback.reconcile(new Set());
+                playback.reconcile(new Set(['a']), new Set(['a']));
+                expect(voices.length).toEqual(1);
+                expect(voices[0].looping).toBeTrue();
+                expect(playback.playing.get('a')).toBe(voices[0]);
+
+                // One it cannot re-arm is left to finish, not doubled...
+                playback.reconcile(new Set());
+                FakeVoice.contextPaused = true;
+                playback.reconcile(new Set(['a']), new Set(['a']));
+                expect(voices.length).toEqual(1);
+                // ...and the loop starts afresh once it has ended.
+                FakeVoice.contextPaused = false;
+                voices[0].boundary();
+                playback.reconcile(new Set(['a']), new Set(['a']));
+                expect(voices.length).toEqual(2);
+            });
+
+        it('stops finishing loops at once in stopAll', () => {
+            const { playback, voices } = makeFinishing();
+            playback.reconcile(new Set(['a']), new Set(['a']));
+            playback.reconcile(new Set());
+            playback.stopAll();
+            expect(voices[0].live).toBeFalse();
+            expect(playback.finishing.size).toEqual(0);
+        });
+    });
+
     it('leaves an unloaded sound unplayed and tries it again', () => {
         let loaded = false;
         const started: string[] = [];

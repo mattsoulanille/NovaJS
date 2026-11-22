@@ -82,6 +82,17 @@ function audioPaused(sound: Sound): boolean {
  *  - the context's own resume on window focus, for an instance started
  *    while it was paused — so no loop is started while it is (the
  *    reconciliation simply starts it on the first frame after focus).
+ *
+ * RELEASE (a weapon loop finishing its iteration, see LoopPlayback) and
+ * REARM touch only `instance.loop`, whose setter is refresh(): it copies
+ * the flag onto the live source's `loop` and never calls play() or
+ * refreshPaused(), so no source is replaced. With `loop` off the
+ * AudioBufferSourceNode plays to the end of its buffer — the end of the
+ * iteration it is in — and ends by itself: its onended makes the instance
+ * emit `end`, and Sound returns it to the pool. A released source can
+ * only ever END; it cannot loop on with nothing holding it. Neither is
+ * done while the context is paused: release then falls back to `stop`
+ * (above), and rearm declines (nothing starts while paused).
  */
 function startPixiLoop(sound: Sound, volume: number): LoopVoice | undefined {
     if (!sound.isLoaded || audioPaused(sound)) {
@@ -97,11 +108,33 @@ function startPixiLoop(sound: Sound, volume: number): LoopVoice | undefined {
     // the Sound's own `loop` is consulted only for the sprite overload).
     // The option is per instance, so the shared cached Sound is untouched.
     const instance = sound.play({ loop: true }) as IMediaInstance;
-    const present = () => sound.instances.includes(instance);
+    // Gone once it stops or ends. Sound.play's own `end`/`stop` handlers
+    // (registered first) send it back to @pixi/sound's shared pool, from
+    // which a one-shot of the same sound may take it again: from then on
+    // it is in `sound.instances` but no longer ours. (eventemitter3 runs
+    // the listeners of one emit from a snapshot, so the pool's
+    // removeAllListeners does not skip these.)
+    let gone = false;
+    const done = () => { gone = true; };
+    instance.once('end', done);
+    instance.once('stop', done);
+    const present = () => !gone && sound.instances.includes(instance);
     return {
-        // `loop` too: a stopped instance goes back to @pixi/sound's pool
-        // and may be handed out again for a one-shot of the same sound.
-        alive: () => present() && instance.loop,
+        alive: present,
+        release: () => {
+            if (!present() || audioPaused(sound)) {
+                return false;
+            }
+            instance.loop = false;
+            return true;
+        },
+        rearm: () => {
+            if (!present() || audioPaused(sound)) {
+                return false;
+            }
+            instance.loop = true;
+            return true;
+        },
         // A playing instance has a source, and stop() ends it outright.
         // One still there after that has none: the context's auto-pause
         // (window blur) dropped it, and stop() on it is a no-op — it would
@@ -252,8 +285,13 @@ export const LoopReconcileSystem = new System({
             runQuery(BeamsQuery).map(([beam]) => beam),
             simTime.time,
             id => gameData?.data.Weapon.getCached(id));
+        // Weapon loops finish their iteration when let go; a display-local
+        // demand (the death klaxon, the spaceport ambient) stops at once,
+        // and wins if it shares a sound id with a weapon.
+        const finish = new Set(wanted);
         for (const id of demand.values()) {
             wanted.add(id);
+            finish.delete(id);
         }
         for (const id of wanted) {
             // Not loaded yet: start loading, so the loop starts a few
@@ -262,7 +300,7 @@ export const LoopReconcileSystem = new System({
                 displayAssets.data.Sound.get(id).catch(() => { });
             }
         }
-        playback.reconcile(wanted);
+        playback.reconcile(wanted, finish);
 
         for (const id of loopEvents) {
             if (!wanted.has(id)) {
