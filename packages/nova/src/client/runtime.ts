@@ -27,6 +27,7 @@ import type { SimulationGameData } from './gamedata/simulation_game_data.js';
 import type { CapsLockTracker } from './caps_lock.js';
 import type { ClientStateSlot } from './client_state.js';
 import type { FleetLedger } from './fleet_ledger.js';
+import type { NextHopPrefetch } from './next_hop_prefetch.js';
 import type { PlayerPersistence } from './player_save.js';
 import type { SessionTransitions } from './session_transitions.js';
 
@@ -57,6 +58,12 @@ export interface ClientRuntime {
     applyDisplayScale(world?: World): void;
     /** The session's autopilot, while a game session is open. */
     autopilot?: Autopilot;
+    /**
+     * The session's one-jump-ahead warm-up (client/next_hop_prefetch.ts):
+     * the frame pump reports the player's next hop to it, and a system
+     * entry asks it for the sim worker's seed.
+     */
+    nextHopPrefetch?: NextHopPrefetch;
 }
 
 /**

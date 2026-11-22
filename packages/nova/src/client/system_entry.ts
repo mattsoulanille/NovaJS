@@ -356,6 +356,13 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // uuid mid-game, and the worker must follow it (#354).
     roomSubscriptions = forwardRoomToWorker(room, host);
 
+    // The worker's cache is fresh: hand it the destination's genesis data
+    // from the main thread's (the serializer world above just staged it),
+    // when the one-jump-ahead warm-up has the destination's list (#370).
+    // Only when the values are cached changes, never what they are.
+    const gameDataSeed = await runtime.nextHopPrefetch?.seedFor(to)
+        .catch(() => undefined);
+    scope.check();
     await scope.race(host.init(
         {
             systemId: to,
@@ -364,6 +371,7 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
                 wantFast: runtime.capsLock.active,
                 inSpace: true,
             },
+            gameDataSeed,
         },
         Comlink.proxy(async (message, destination) => {
             room.sendMessage(message, destination);

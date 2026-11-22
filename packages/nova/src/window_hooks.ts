@@ -17,6 +17,7 @@ import type { Autopilot } from './autopilot.js';
 import type { ClientState } from './client/client_state.js';
 import type { FleetLedger } from './client/fleet_ledger.js';
 import type { LandedUiPrefetch } from './client/landed_ui_prefetch.js';
+import type { NextHopPrefetch } from './client/next_hop_prefetch.js';
 import type { SimulationControl } from './client/frame_pump.js';
 import type { DisplayAssetData } from './client/gamedata/display_asset_data.js';
 import type { SimulationGameData } from './client/gamedata/simulation_game_data.js';
@@ -89,6 +90,10 @@ declare global {
         /** The background landed-UI warm-up (client/landed_ui_prefetch.ts):
          * `await novaLandedUiPrefetch.idle` waits for the current run. */
         novaLandedUiPrefetch?: LandedUiPrefetch;
+        /** The one-jump-ahead warm-up (client/next_hop_prefetch.ts):
+         * `await novaNextHopPrefetch.idle` waits for the current run;
+         * `.disabled = true` turns it (and the worker seed) off. */
+        novaNextHopPrefetch?: NextHopPrefetch;
         novaEscortAudit?: (expected?: string[]) =>
             ReturnType<FleetLedger['audit']>;
         /** Console-callable save / reset (client/player_save.ts). */

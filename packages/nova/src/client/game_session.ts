@@ -67,7 +67,9 @@ import {
 } from './fleet_ledger.js';
 import { FpsMeterToggle } from './fps_meter.js';
 import { FramePump } from './frame_pump.js';
+import { PrefetchBudget } from './background_prefetch.js';
 import { LandedUiPrefetch } from './landed_ui_prefetch.js';
+import { fetchSystemResources, NextHopPrefetch } from './next_hop_prefetch.js';
 import { followIdentity } from './identity.js';
 import { preparePlayerStart } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
@@ -401,10 +403,28 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     // ...and, from now on, whatever landing in the current system will
     // need: the spaceport's art and data, warmed at low priority while
     // the player is in space (#369; client/landed_ui_prefetch.ts).
+    // Both background warm-ups share one small budget of requests in
+    // flight (client/background_prefetch.ts).
+    const prefetchBudget = new PrefetchBudget();
     const landedUiPrefetch = new LandedUiPrefetch(gameData,
-        runtime.displayAssetData);
+        runtime.displayAssetData, { budget: prefetchBudget });
     sessionDisposers.push(landedUiPrefetch.follow(state));
     window.novaLandedUiPrefetch = landedUiPrefetch;
+    // ...and what the NEXT system on the player's route will need, one
+    // jump ahead (#370; client/next_hop_prefetch.ts). The pump reports
+    // the hop; the next entry seeds the sim worker from it.
+    const nextHopPrefetch = new NextHopPrefetch(gameData,
+        runtime.displayAssetData, fetchSystemResources(),
+        { budget: prefetchBudget });
+    const stopNextHop = nextHopPrefetch.follow(state);
+    runtime.nextHopPrefetch = nextHopPrefetch;
+    sessionDisposers.push(() => {
+        stopNextHop();
+        if (runtime.nextHopPrefetch === nextHopPrefetch) {
+            runtime.nextHopPrefetch = undefined;
+        }
+    });
+    window.novaNextHopPrefetch = nextHopPrefetch;
 
     saves.installSaveTriggers();
 

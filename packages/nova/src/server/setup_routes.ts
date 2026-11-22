@@ -4,7 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ClientConfig, injectClientConfig } from "../common/client_config.js";
 import { getDefaultControlBitNamespaces } from "novadatainterface/control_bit_namespaces";
-import { idsPath, dataPath, batchPath, settingsPrefix, controlBitNamespacesPath } from "../common/game_data_paths.js";
+import {
+    idsPath, dataPath, batchPath, settingsPrefix, controlBitNamespacesPath,
+    systemResourcesPath,
+} from "../common/game_data_paths.js";
+import { SystemResourceCache } from "./system_resources.js";
 import { GameDataInterface } from "novadatainterface/game_data_interface";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
 import { isNovaIDNotFoundError } from "novadatainterface/nova_id_not_found_error";
@@ -162,6 +166,8 @@ export function setupRoutes(
 
 // This is a helper class used by `setupRoutes`
 class GameDataServer {
+    private readonly systemResources: SystemResourceCache;
+
     constructor(
         private readonly gameData: GameDataInterface,
         private readonly app: Express,
@@ -172,6 +178,7 @@ class GameDataServer {
         private readonly simulationWorkerBundleMapPath: string,
         private readonly settingsDir: string,
         private readonly clientConfig: ClientConfig) {
+        this.systemResources = new SystemResourceCache(gameData);
         this.setupRoutes();
     }
 
@@ -195,6 +202,8 @@ class GameDataServer {
         this.app.get(path.join(dataPath, ":name/:item.wav"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
+        this.app.get(path.join(systemResourcesPath, ":system.json"),
+            this.systemResourcesFulfiller.bind(this));
         this.app.get(controlBitNamespacesPath + ".json",
             this.controlBitNamespacesFulfiller.bind(this));
 
@@ -353,6 +362,33 @@ class GameDataServer {
         } catch (e) {
             if (!res.headersSent) {
                 res.status(500).send("Failed to get control bit namespaces");
+            }
+        }
+    }
+
+    /**
+     * A system's resource list (#370; server/system_resources.ts): the
+     * DATA its genesis stages and the ASSETS its display draws, computed
+     * on first request and cached. 400 for a malformed id, 404 for an id
+     * that names no system.
+     */
+    private async systemResourcesFulfiller(req: express.Request,
+        res: express.Response): Promise<void> {
+        const systemId: string = req.params.system;
+        if (!isValidResourceId(systemId)) {
+            res.status(400).send("Invalid id");
+            return;
+        }
+        // Express 4 does not catch async rejections; see requestFulfiller.
+        try {
+            if (!await this.systemResources.has(systemId)) {
+                res.status(404).send("No System with id " + systemId);
+                return;
+            }
+            res.send(await this.systemResources.get(systemId));
+        } catch (e) {
+            if (!res.headersSent) {
+                res.status(500).send("Failed to get resources of " + systemId);
             }
         }
     }

@@ -3,9 +3,14 @@ import path from 'path';
 import { GameDataInterface } from 'novadatainterface/game_data_interface';
 import {
     batchPath, controlBitNamespacesPath, idsPath, settingsPrefix,
+    systemResourcesPath,
 } from '../common/game_data_paths.js';
 import { SYNTHETIC_DATA_ROOT } from '../communication/simulation_test_fixture.js';
 import { BatchRequest, resolveBatch } from '../server/setup_routes.js';
+import { SystemResourceCache } from '../server/system_resources.js';
+
+/** Each data set's lists, computed once (they cost a makeSystem each). */
+const systemResourceCaches = new WeakMap<GameDataInterface, SystemResourceCache>();
 
 /**
  * A `fetch` that answers the game-data routes a SimulationGameData asks
@@ -21,6 +26,19 @@ export function serveInProcess(gameData: GameDataInterface): typeof fetch {
         if (url === batchPath) {
             return json(await resolveBatch(gameData,
                 JSON.parse(String(init?.body)) as BatchRequest));
+        }
+        if (url.startsWith(systemResourcesPath + '/')) {
+            const systemId = decodeURIComponent(url.slice(
+                systemResourcesPath.length + 1).replace(/\.json$/, ''));
+            let cache = systemResourceCaches.get(gameData);
+            if (!cache) {
+                cache = new SystemResourceCache(gameData);
+                systemResourceCaches.set(gameData, cache);
+            }
+            if (!await cache.has(systemId)) {
+                return new Response('not found', { status: 404 });
+            }
+            return json(await cache.get(systemId));
         }
         if (url === idsPath + '.json') {
             return json(await gameData.ids);

@@ -171,6 +171,26 @@ function getDisplayPlayerJumpRoute(displayWorld: World): string[] | undefined {
     return undefined;
 }
 
+/**
+ * The local player's next system as the display sees it: the destination
+ * of a jump under way (whose start already shifted the route on to the
+ * hop after it), else the selected route's first hop. A vanishing jump
+ * names no system.
+ */
+export function displayPlayerNextHop(displayWorld: World): string | undefined {
+    for (const entity of displayWorld.entities.values()) {
+        if (!entity.components.has(PlayerShipSelector)) {
+            continue;
+        }
+        const jump = entity.components.get(JumpComponent);
+        if (jump && jump.stage !== 'arriving') {
+            return jump.vanish ? undefined : jump.to || undefined;
+        }
+        return entity.components.get(JumpRouteComponent)?.route[0];
+    }
+    return undefined;
+}
+
 function routesEqual(a?: string[], b?: string[]): boolean {
     if (a === b) {
         return true;
@@ -555,6 +575,9 @@ export class FramePump {
                 await bridge.setPlayerJumpRoute(displayedJumpRoute ?? []);
                 this.syncedPlayerJumpRoute = displayedJumpRoute?.slice() ?? [];
             }
+            // The one-jump-ahead warm-up follows the hop (#370).
+            runtime.nextHopPrefetch?.noteNextHop(live.systemId,
+                displayPlayerNextHop(displayWorld));
         } catch (e) {
             // A system transition closes the bridge this frame captured;
             // its in-flight calls settle with SimulationBridgeClosedError.

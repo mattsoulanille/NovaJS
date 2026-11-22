@@ -53,6 +53,64 @@ export interface SimulationGameDataInterface {
     readonly controlBitNamespaces?: Promise<ControlBitNamespaces>;
     readonly loaded?: Promise<void>;
     getSettings?(file: string): Promise<unknown>;
+    /** The settings files read so far (SimulationGameData). */
+    readonly settingsRead?: { readonly [file: string]: unknown };
+}
+
+/**
+ * Game data a fresh SimulationGameData starts with instead of fetching
+ * it: the sim worker's, on a system entry, from the main thread's caches
+ * (client/next_hop_prefetch.ts). `data` is { type: { id: value } } of
+ * values exactly as the server serves them; `ids` the id catalog;
+ * `settings` the settings files already read (controls.json: every
+ * simulating world's ControlsPlugin reads it before staging starts).
+ *
+ * DETERMINISM: a seed only changes WHEN a value is in the cache, never
+ * what it is, and it is merged under the fetches (never replacing an
+ * entry; see preload()). It must hold no more than the staging that
+ * follows would have loaded anyway — the system resource list is what
+ * genesis stages, by construction — because simulation code may never
+ * branch on cache warmth (Gettable.getCached).
+ */
+export interface GameDataSeed {
+    ids?: NovaIDs;
+    settings?: { [file: string]: unknown };
+    data: { [type: string]: { [id: string]: unknown } };
+}
+
+export interface SimulationGameDataOptions {
+    seed?: GameDataSeed;
+}
+
+/**
+ * The cached values of `types` (a system resource list's data) that
+ * `gameData` holds right now, as a seed's `data`. Starts no loads.
+ */
+export function cachedSeedData(gameData: SimulationGameDataInterface,
+    types: { [type: string]: readonly string[] | undefined }):
+    GameDataSeed['data'] {
+    const seed: GameDataSeed['data'] = {};
+    for (const [type, ids] of Object.entries(types)) {
+        const gettable = Object.hasOwn(gameData.data, type)
+            ? gameData.data[type as keyof SimulationGameDataResources]
+            : undefined;
+        if (!gettable || !ids) {
+            continue;
+        }
+        const gotten = gettable.gotten as Record<string, unknown>;
+        const table: { [id: string]: unknown } = {};
+        let any = false;
+        for (const id of ids) {
+            if (id in gotten) {
+                table[id] = gotten[id];
+                any = true;
+            }
+        }
+        if (any) {
+            seed[type] = table;
+        }
+    }
+    return seed;
 }
 
 export class SimulationGameData implements SimulationGameDataInterface {
@@ -79,7 +137,8 @@ export class SimulationGameData implements SimulationGameDataInterface {
 
     constructor(private baseUrl = '',
         private readonly fetchImpl: typeof fetch =
-            (...args: Parameters<typeof fetch>) => fetch(...args)) {
+            (...args: Parameters<typeof fetch>) => fetch(...args),
+        options: SimulationGameDataOptions = {}) {
         this.batchFetcher = new BatchDataFetcher(baseUrl, 0, fetchImpl);
         this.data = {
             Ship: this.addGettable<ShipData>(NovaDataType.Ship),
@@ -101,14 +160,64 @@ export class SimulationGameData implements SimulationGameDataInterface {
             Rank: this.addGettable<RankData>(NovaDataType.Rank),
         };
 
+        if (options.seed) {
+            this.seed(options.seed.data);
+            for (const [file, value] of Object.entries(
+                options.seed.settings ?? {})) {
+                this.settingsRead[file] = value;
+                this.settings.set(file, Promise.resolve(value));
+            }
+        }
         this.preloadData = this.preload();
         this.loaded = this.preloadData.then(() => { });
-        this.ids = this.getIds();
+        this.ids = options.seed?.ids
+            ? Promise.resolve(options.seed.ids) : this.getIds();
         this.controlBitNamespaces = this.getControlBitNamespaces();
     }
 
-    getSettings(file: string): Promise<unknown> {
-        return this.getJson(urlJoin('/settings', file));
+    private readonly settings = new Map<string, Promise<unknown>>();
+    /** The settings files read so far, by file (a seed's `settings`). */
+    readonly settingsRead: { [file: string]: unknown } = {};
+
+    /**
+     * A settings file (controls.json), read once per instance: the files
+     * are static for the server's lifetime, and every simulating world
+     * built on this cache reads controls.json before its staging starts.
+     * Each caller gets its own copy.
+     */
+    async getSettings(file: string): Promise<unknown> {
+        let read = this.settings.get(file);
+        if (!read) {
+            read = this.getJson(urlJoin('/settings', file)).then(value => {
+                this.settingsRead[file] = value;
+                return value;
+            });
+            this.settings.set(file, read);
+            read.catch(() => this.settings.delete(file));
+        }
+        return structuredClone(await read);
+    }
+
+    /**
+     * Merges `tables` ({ type: { id: value } }) into the caches: an id
+     * already cached keeps its value (MERGE, never replace — see
+     * preload()). See GameDataSeed for when this is sound.
+     */
+    seed(tables: GameDataSeed['data']): void {
+        for (const [type, values] of Object.entries(tables)) {
+            const resource = Object.hasOwn(this.data, type)
+                ? this.data[type as keyof SimulationGameDataResources]
+                : undefined;
+            if (!resource) {
+                continue;
+            }
+            const gotten = resource.gotten as Record<string, unknown>;
+            for (const [id, value] of Object.entries(values)) {
+                if (!(id in gotten)) {
+                    gotten[id] = value;
+                }
+            }
+        }
     }
 
     private async preload() {

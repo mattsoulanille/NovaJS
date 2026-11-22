@@ -15,7 +15,9 @@ for (const level of ['log', 'warn', 'error'] as const) {
     };
 }
 import { CommunicatorResource } from "nova_ecs/plugins/multiplayer_plugin";
-import { SimulationGameData } from "../client/gamedata/simulation_game_data.js";
+import {
+    GameDataSeed, SimulationGameData,
+} from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
@@ -42,10 +44,15 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
         systemId: string;
         roomState: BrowserWorkerRoomState;
         initialSpeedVote?: { wantFast: boolean, inSpace: boolean };
+        gameDataSeed?: GameDataSeed;
     },
         sendMessage: (message: unknown, destination?: string | Set<string>) => void | Promise<void>,
     ) {
-        const simulationGameData = new SimulationGameData();
+        // A fresh cache per system entry; the main thread may hand it the
+        // destination's genesis data so makeSystem below finds it warm
+        // (#370). Only the timing of the cache changes, never its values.
+        const simulationGameData = new SimulationGameData('', undefined,
+            { seed: args.gameDataSeed });
         const world = await makeSystem(args.systemId, simulationGameData, 'worker');
         const communicator = new WorkerRoomCommunicator(sendMessage, args.roomState);
         // Pure input-driven multiplayer: no delta-sync plugin. The world

@@ -319,6 +319,18 @@ describe('GameDataServer request routes', () => {
         expect(resp.status).toBe(500);
     });
 
+    it('400s a traversal system id on the system resources route', async () => {
+        const resp = await fetch(
+            `${baseUrl}/gameData/systemResources/..%2F..%2Fpackage.json`);
+        expect(resp.status).toBe(400);
+        expect(await resp.text()).not.toContain('"dependencies"');
+    });
+
+    it('500s the system resources route when the ids promise rejects', async () => {
+        const resp = await fetch(`${baseUrl}/gameData/systemResources/nova%3A128.json`);
+        expect(resp.status).toBe(500);
+    });
+
     it('survives the error requests above and keeps serving', async () => {
         // Every error case in this suite ran before this spec touches
         // the server again; a still-working response proves no handler
