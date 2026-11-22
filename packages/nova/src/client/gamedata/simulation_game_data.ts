@@ -120,7 +120,18 @@ export class SimulationGameData implements SimulationGameDataInterface {
                 const key = uncastKey as keyof typeof data;
                 const resource = this.data[key as keyof SimulationGameDataResources];
                 if (resource) {
-                    resource.gotten = val as typeof resource.gotten;
+                    // MERGE, never replace: the bundle can land after
+                    // makeSystem has staged ids it does not hold (the
+                    // synthetic built-in ammo/weapon outfits). Replacing
+                    // the cache dropped them, so a later getCached
+                    // missed on that peer alone and its NPCs fired a
+                    // tick late: a desync under CPU load.
+                    const gotten = resource.gotten as Record<string, unknown>;
+                    for (const [id, value] of Object.entries(val as object)) {
+                        if (!(id in gotten)) {
+                            gotten[id] = value;
+                        }
+                    }
                 }
             }
             return data;
