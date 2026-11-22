@@ -29,7 +29,7 @@ import { SoundEvent, SoundEventType } from '../nova_plugin/core/index.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
-import { wrapRollbackMessage } from './rollback_protocol.js';
+import { unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { RollbackRelay } from './rollback_relay.js';
 import { ShipControlStateComponent, ControlledByComponent } from '../nova_plugin/player/index.js';
 import { resetWarnThrottle } from '../common/log_throttle.js';
@@ -1153,6 +1153,66 @@ describe('SimulationBridge', () => {
                 hostB.setSpeedVote(false, true);
                 expect(relay.speedState.totalVoters).toBe(1);
                 expect(relay.speedState.speed).toBe(2);
+            } finally {
+                relay.close();
+            }
+        });
+
+        it('paces at 2x from its first tick using catchUp.roomSpeed when joining a 2x room (#371)', async () => {
+            const server = new MockCommunicator('server');
+            const peerA = new MockCommunicator('a');
+            const peers = new Map<string, MockCommunicator>([
+                ['server', server], ['a', peerA],
+            ]);
+            for (const p of peers.values()) {
+                p.mockPeers = peers;
+                p.peers.current.next(new Set(peers.keys()));
+            }
+            const relay = new RollbackRelay(server, { autoClock: false });
+            try {
+                // Peer A joins with Caps Lock on and activates 2x on the relay.
+                const hostA = new SimulationBridgeHost(
+                    makeRoomWorld(peerA), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: true, inSpace: true },
+                    });
+                expect(await hostA.joinRoom(1000)).toBeTrue();
+                relay.advanceTicks(10);
+                expect(relay.speed).toBe(2);
+
+                // Peer B joins landed (inSpace: false), so neither speed nor
+                // voter tallies change and the relay sends NO roomSpeed
+                // broadcast — catchUp.roomSpeed is the ONLY way B learns the
+                // room is running at 2x.
+                const peerB = new MockCommunicator('b');
+                peers.set('b', peerB);
+                for (const p of peers.values()) {
+                    p.mockPeers = peers;
+                    p.peers.current.next(new Set(peers.keys()));
+                }
+                const roomSpeedBroadcasts: unknown[] = [];
+                peerB.messages.subscribe(({ message }) => {
+                    const m = unwrapRollbackMessage(message);
+                    if (m?.kind === 'roomSpeed') {
+                        roomSpeedBroadcasts.push(m);
+                    }
+                });
+                const hostB = new SimulationBridgeHost(
+                    makeRoomWorld(peerB), makeFakeSimulationData(), {
+                        initialSpeedVote: { wantFast: false, inSpace: false },
+                    });
+                expect(await hostB.joinRoom(1000)).toBeTrue();
+                expect(roomSpeedBroadcasts).toEqual([]);
+
+                // From its very first snapshot/tick after joinRoom, B must pace
+                // at 2x (~2x rate) rather than 1x.
+                const firstSnap = hostB.snapshot();
+                expect(firstSnap.pacing?.speed).toBe(2);
+                expect(firstSnap.pacing!.rate).toBeGreaterThan(1.8);
+                expect(firstSnap.roomSpeed).toEqual({
+                    speed: 2, targetSpeed: 2, atTick: 1,
+                    fastVotes: 1, totalVoters: 1,
+                    wantFast: false, inSpace: false,
+                });
             } finally {
                 relay.close();
             }

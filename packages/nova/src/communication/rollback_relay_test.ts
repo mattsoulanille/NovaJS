@@ -801,6 +801,49 @@ describe('RollbackRelay', () => {
             });
         });
 
+        it('excludes pendingJoinPeers when another peer\'s vote triggers recomputeSpeed (#371)', () => {
+            // Peer A votes yes; peer B has not voted yes yet -> 1x (1 of 2).
+            vote(peerA, true, true);
+            expect(relay.speedState).toEqual({
+                speed: 1, atTick: 0, fastVotes: 1, totalVoters: 2,
+            });
+
+            // Peer C enters the room channel (pendingJoinPeers) and has not
+            // sent joinRequest yet.
+            const peerC = new MockCommunicator('c');
+            const mockPeers = new Map([
+                ['server', server], ['a', peerA], ['b', peerB], ['c', peerC],
+            ]);
+            for (const peer of mockPeers.values()) {
+                peer.mockPeers = mockPeers;
+            }
+            server.peers.current.next(new Set(['server', 'a', 'b', 'c']));
+
+            // While C is still pending its join, peer B votes yes -> triggers
+            // recomputeSpeed(). Pending C must be excluded so A+B reach 2 of 2
+            // and schedule 2x instead of being stalled at 2 of 3.
+            peerA.allMessages.length = 0;
+            vote(peerB, true, true);
+            expect(relay.speedState).toEqual({
+                speed: 2, atTick: 1, fastVotes: 2, totalVoters: 2,
+            });
+            expect(speedNotices(peerA)).toEqual([{
+                kind: 'roomSpeed', tick: 0, speed: 2, atTick: 1,
+                fastVotes: 2, totalVoters: 2,
+            }]);
+
+            // Once C sends joinRequest without Caps Lock, C leaves
+            // pendingJoinPeers and drops the room back to 1x (2 of 3).
+            relay.stepClock(SIMULATION_STEP_MS); // tick 1, active 2x
+            expect(relay.speed).toBe(2);
+            peerC.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest', schema: liveWireFingerprint(),
+            }) as never, 'server');
+            expect(relay.speedState).toEqual({
+                speed: 1, atTick: 2, fastVotes: 2, totalVoters: 3,
+            });
+        });
+
         it('switches to 2x when the sole holdout leaves the room', () => {
             vote(peerA, true, true);
             expect(relay.speedState.speed).toBe(1);

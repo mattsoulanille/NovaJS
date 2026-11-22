@@ -577,15 +577,12 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     }
 
     // Publish this peer's Caps Lock 2x speed vote and whether it is in space
-    // whenever either changes (#371). Landed/docked players do not vote, and
-    // a peer frozen in the terminal `desynced` state (#333) withdraws its vote.
+    // whenever either changes (#371). Landed/docked players do not vote; a
+    // peer frozen in the terminal `desynced` state (#333) already withdrew
+    // its vote inside SimulationBridgeHost.failTerminally().
     const publishSpeedVote = () => {
         const live = liveSystem(state.state);
         if (!live) {
-            if (state.state.kind === 'desynced') {
-                sendToBridge(state.state.frozen.bridge.setSpeedVote(false, false),
-                    'Speed vote');
-            }
             return;
         }
         sendToBridge(live.bridge.setSpeedVote(
