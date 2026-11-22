@@ -307,12 +307,21 @@ export function isDockedForExit(state: ClientState): boolean {
 
 /**
  * Whether an exit to the title may start now: a game session is open
- * (which excludes the title, and `entering` — the startup transition is
- * not interruptible, exactly as the title's `entering` flag had it), no
- * teardown is already running, and the player is not docked.
+ * (which excludes the title), the startup entry is over, no teardown is
+ * already running, and the player is not docked.
+ *
+ * THE STARTUP ENTRY IS NOT INTERRUPTIBLE, exactly as the title's
+ * `entering` flag had it before the state machine: that flag stayed up
+ * for the whole of `startGame`. Here the entry is `entering` AND the
+ * `transit` whose plan is the 'startup' one — the state moves to the
+ * latter as soon as the player is prepared, long before the world is up.
+ * Admitting the startup transit let an Escape a moment after Enter Ship
+ * re-show the title while the entry, which has no teardown to hand back
+ * until it resolves, went on to mount the space view over it.
  */
 export function canExitToTitle(state: ClientState): boolean {
     return isInGame(state) && state.kind !== 'entering'
+        && !(state.kind === 'transit' && state.transit.kind === 'startup')
         && state.kind !== 'tearingDown' && state.kind !== 'desynced'
         && !isDockedForExit(state);
 }

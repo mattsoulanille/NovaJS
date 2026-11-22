@@ -263,6 +263,35 @@ describe('client state machine', () => {
             expect(canExitToTitle({ kind: 'tearingDown' })).toBeFalse();
         });
 
+        it('is refused through the WHOLE startup entry, its transit '
+            + 'included, and allowed once the player is in space', () => {
+            // Escape a moment after Enter Ship: the entry is already in
+            // its startup transit (world build, worker, room join), and
+            // startGame has no teardown to hand back yet. Admitting the
+            // exit there showed the title while the entry went on to
+            // mount the space view over it.
+            const slot = new ClientStateSlot();
+            slot.apply(enterGame);
+            expect(canExitToTitle(slot.state)).toBeFalse();
+            slot.apply(s => beginTransit(s, plan(undefined, 'A', 'startup')));
+            expect(canExitToTitle(slot.state)).toBeFalse();
+            slot.apply(s => claimSystem(s, { systemId: 'A' }));
+            expect(canExitToTitle(slot.state)).toBeFalse();
+            slot.apply(s => arrive(s, system('A')));
+            expect(canExitToTitle(slot.state)).toBeTrue();
+            // Every LATER transit stays interruptible (issue #30): the
+            // session's teardown exists by then and ends it cleanly.
+            for (const kind of ['hyper', 'gate', 'move'] as const) {
+                const away = beginTransit(slot.state, plan('A', 'B', kind));
+                expect(canExitToTitle(away)).withContext(kind).toBeTrue();
+                expect(canExitToTitle(claimSystem(away, { systemId: 'B' })))
+                    .withContext(`${kind}, claimed`).toBeTrue();
+            }
+            const failed = beginTransit(slot.state, plan('A', 'B'));
+            expect(canExitToTitle(beginTransit(failed,
+                plan(undefined, 'A', 'reenter')))).toBeTrue();
+        });
+
         it('tears down from any in-game state, once, and ends at the title',
             () => {
                 for (const from of [

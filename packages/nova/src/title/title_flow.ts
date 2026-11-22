@@ -456,7 +456,10 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
     // session down, and re-show the title. Re-entry (Enter Ship) then
     // works again.
     const exitToTitle = async () => {
-        if (!canExitToTitle(state.state)) {
+        // No teardown yet means startGame has not resolved: the entry is
+        // still in flight and owns the session. Showing the title now
+        // would leave it to mount the space view over the title art.
+        if (!canExitToTitle(state.state) || teardownGame === undefined) {
             return;
         }
         try {
@@ -474,7 +477,8 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
     // spaceport dock; starmap/gate map/player info/hail/boarding set
     // MenuControls.focused; text inputs are caught by isTextEntryActive.
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape' || !canExitToTitle(state.state)) {
+        if (event.key !== 'Escape' || !canExitToTitle(state.state)
+            || teardownGame === undefined) {
             return;
         }
         if (MenuControls.focused || isTextEntryActive()) {

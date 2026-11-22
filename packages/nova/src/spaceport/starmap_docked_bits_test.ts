@@ -180,4 +180,17 @@ describe('the docked starmap\'s control bits', () => {
             starmap.dismiss();
             await shown;
         });
+
+    it('finishes its background build quietly when its world is torn down '
+        + 'mid-build', async () => {
+        // An exit to the title (or a jump) within a second of arriving:
+        // StarmapPlugin.remove destroys the map's container while build()
+        // is still awaiting its loads. The build used to carry on and
+        // throw from addChildAt as an unhandled rejection.
+        const starmap = new Starmap(displayAssets(),
+            gameData() as unknown as SimulationGameDataInterface, KANIA,
+            new Subject<ControlEvent>(), () => new Set());
+        starmap.container.destroy({ children: true });
+        await expectAsync(starmap.buildPromise).toBeResolved();
+    });
 });

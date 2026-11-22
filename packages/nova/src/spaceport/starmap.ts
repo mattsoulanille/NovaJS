@@ -213,6 +213,15 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             this.displayAssets.textureFromCicn(MISSION_MARK_VIEWED_CICN),
         ]);
         this.missionMarkTextures = { active, viewed };
+        // The map is built in the background with its display world, and
+        // that world can be torn down while the loads above are in
+        // flight — an exit to the title, or a jump, within a second of
+        // arriving. StarmapPlugin.remove destroys the container then, and
+        // drawing into it would throw (addChildAt into an emptied
+        // container) as an unhandled rejection of buildPromise.
+        if (!this.alive) {
+            return;
+        }
         this.rebuildGraph(this.getPlayerBits());
 
         this.propContainer.position.set(0, 0);
