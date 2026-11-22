@@ -1,5 +1,7 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
+import * as fs from 'fs';
 import 'jasmine';
+import * as path from 'path';
 import { Controls, getActions, SavedControls } from './controls.js';
 
 describe('SavedControls', () => {
@@ -198,5 +200,32 @@ describe('getActions', () => {
 
     it('returns nothing for unbound keys', () => {
         expect(getActions(controls, keyEvent('KeyQ', []))).toEqual([]);
+    });
+
+    it('default controls.json binds Alt+F (macOS Option+F) to toggleFpsMeter without firing attack (#371 R4)', () => {
+        const raw = JSON.parse(fs.readFileSync(
+            path.resolve(process.cwd(), 'settings/controls.json'), 'utf8'));
+        const decoded = SavedControls.pipe(Controls).decode(raw);
+        if (isLeft(decoded)) {
+            throw new Error('Failed to decode settings/controls.json');
+        }
+        const liveControls = decoded.right;
+
+        // Plain F fires escort attack only.
+        const plainF = {
+            code: 'KeyF',
+            key: 'f',
+            getModifierState: () => false,
+        } as unknown as KeyboardEvent;
+        expect(getActions(liveControls, plainF)).toEqual(['attack']);
+
+        // Option+F on macOS has key === 'ƒ' and code === 'KeyF' with Alt active:
+        // must match on code, fire toggleFpsMeter, and NOT also fire attack.
+        const optionF = {
+            code: 'KeyF',
+            key: 'ƒ',
+            getModifierState: (modifier: string) => modifier === 'Alt',
+        } as unknown as KeyboardEvent;
+        expect(getActions(liveControls, optionF)).toEqual(['toggleFpsMeter']);
     });
 });

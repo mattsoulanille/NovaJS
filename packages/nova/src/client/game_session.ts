@@ -64,6 +64,7 @@ import { onLand, onLeaveSpaceport } from './docking.js';
 import {
     localPlayerShipUuid, spawnHiredEscorts,
 } from './fleet_ledger.js';
+import { FpsMeterToggle } from './fps_meter.js';
 import { FramePump } from './frame_pump.js';
 import { LandedUiPrefetch } from './landed_ui_prefetch.js';
 import { followIdentity } from './identity.js';
@@ -346,6 +347,7 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     sessionDisposers.push(() => identitySubscription.unsubscribe());
 
     const stats = new Stats();
+    const fpsMeter = new FpsMeterToggle(stats.dom);
     document.body.appendChild(stats.dom);
     sessionDisposers.push(() => stats.dom.remove());
 
@@ -353,15 +355,27 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         if (controlEvents.length === 0) {
             return;
         }
+        // Client-local presentation actions (FPS meter, display scale) are
+        // handled here and filtered before reaching the simulation bridge so
+        // they can never enter the input log or alter simulation state.
+        const simEvents: ControlEvent[] = [];
         for (const controlEvent of controlEvents) {
-            host.applyScaleControl(controlEvent);
+            if (fpsMeter.handleControlEvent(controlEvent)) {
+                continue;
+            }
+            if (!host.applyScaleControl(controlEvent)) {
+                simEvents.push(controlEvent);
+            }
+        }
+        if (simEvents.length === 0) {
+            return;
         }
         const live = liveSystem(state.state);
-        live?.world.emit(EcsControlEvent, controlEvents);
-        for (const controlEvent of controlEvents) {
+        live?.world.emit(EcsControlEvent, simEvents);
+        for (const controlEvent of simEvents) {
             runtime.controlsSubject.next(controlEvent);
         }
-        sendToBridge(live?.bridge.controlEvents(controlEvents),
+        sendToBridge(live?.bridge.controlEvents(simEvents),
             'Control events');
     }
 
@@ -470,6 +484,22 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
             state: event.type === 'keyup' ? false
                 : event.repeat ? 'repeat' : 'start',
         }));
+        // Consume the client-local FPS meter toggle before menu routing so
+        // Option+F works everywhere (in space and over menus) without ever
+        // leaking into menus or simulation inputs (#371 R4).
+        const remainingEvents: ControlEvent[] = [];
+        for (const controlEvent of controlEvents) {
+            if (fpsMeter.handleControlEvent(controlEvent)) {
+                if (event.type !== 'keyup') {
+                    event.preventDefault();
+                }
+                continue;
+            }
+            remainingEvents.push(controlEvent);
+        }
+        if (remainingEvents.length === 0) {
+            return;
+        }
         // A modal overlay (starmap, gate map, player info, spaceport
         // menus) owns the keyboard while it holds focus: its own control
         // bindings still fire (via controlsSubject), but the same keys
@@ -483,19 +513,16 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         // control held down when the overlay opened (e.g. accelerate)
         // doesn't stay stuck on after the overlay closes.
         if (MenuControls.focused && event.type !== 'keyup') {
-            if (controlEvents.length === 0) {
-                return;
-            }
-            liveSystem(state.state)?.world.emit(EcsControlEvent, controlEvents);
-            for (const controlEvent of controlEvents) {
+            liveSystem(state.state)?.world.emit(EcsControlEvent, remainingEvents);
+            for (const controlEvent of remainingEvents) {
                 runtime.controlsSubject.next(controlEvent);
             }
             return;
         }
-        if (actions.some(action => movementActions.has(action))) {
+        if (remainingEvents.some(({ action }) => movementActions.has(action))) {
             autopilot.cancel();
         }
-        emitControlEvents(controlEvents);
+        emitControlEvents(remainingEvents);
     }
     document.addEventListener('keydown', handleControlEvent);
     document.addEventListener('keyup', handleControlEvent);

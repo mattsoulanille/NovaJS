@@ -11,12 +11,12 @@
 
 import {
     bindControl, ControlsOverride, DisplaySettings, GameSettingsOverride,
-    PilotProfile, primaryBinding,
+    PilotProfile, primaryControlBinding,
 } from './client_prefs.js';
 import {
     formatScale, MAX_SCALE, MIN_SCALE, SCALE_STEP,
 } from '../display/display_scale.js';
-import { keyLabel } from './key_labels.js';
+import { bindingLabel } from './key_labels.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/ncb/index.js';
 import {
@@ -613,7 +613,7 @@ const CONTROL_TABS: { name: string, rows: ControlRow[] }[] = [
             { label: 'Galaxy Map', action: 'map' },
             { label: 'Player Info', action: 'properties' },
             { label: 'Mission Info', action: 'missions' },
-            { label: 'Show Framerate', action: undefined },
+            { label: 'Show Framerate', action: 'toggleFpsMeter' },
         ],
     },
 ];
@@ -972,7 +972,7 @@ function buildControlTab(tab: { name: string, rows: ControlRow[] },
         const action = row.action;
         const render = () => {
             capture.textContent =
-                keyLabel(primaryBinding(action, baseControls, override))
+                bindingLabel(primaryControlBinding(action, baseControls, override))
                 || '·';
         };
         renderers.push(render);

@@ -1,5 +1,5 @@
 import 'jasmine';
-import { keyLabel } from './key_labels.js';
+import { bindingLabel, keyLabel } from './key_labels.js';
 
 describe('keyLabel', () => {
     it('maps arrow keys to glyphs', () => {
@@ -36,5 +36,15 @@ describe('keyLabel', () => {
 
     it('falls back to the raw code for unknown values', () => {
         expect(keyLabel('MediaPlayPause')).toBe('MediaPlayPause');
+    });
+});
+
+describe('bindingLabel', () => {
+    it('prepends modifier glyphs ahead of the key label', () => {
+        expect(bindingLabel({ key: 'KeyF', modifiers: ['Alt'] })).toBe('⌥F');
+        expect(bindingLabel({ key: 'Minus', modifiers: ['Alt', 'Shift'] }))
+            .toBe('⌥⇧-');
+        expect(bindingLabel({ key: 'ArrowUp', modifiers: [] })).toBe('↑');
+        expect(bindingLabel(undefined)).toBe('');
     });
 });

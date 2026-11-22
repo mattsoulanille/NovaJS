@@ -314,6 +314,17 @@ export function bindControl(base: Record<string, unknown>,
 }
 
 /**
+ * The first binding (`key` + `modifiers`) an action currently owns: its
+ * override if it has one (empty/undefined when explicitly unbound), else
+ * its served default.
+ */
+export function primaryControlBinding(action: string,
+    base: Record<string, unknown>,
+    override: ControlsOverride): { key: string; modifiers: string[] } | undefined {
+    return bindingsFor(action, base, override)[0];
+}
+
+/**
  * The event.code an action is currently bound to: the override if it has
  * one (including '' for explicitly unbound), else the served default.
  * Multi-key actions report their FIRST key — this is the editor's display
@@ -321,7 +332,7 @@ export function bindControl(base: Record<string, unknown>,
  */
 export function primaryBinding(action: string, base: Record<string, unknown>,
     override: ControlsOverride): string {
-    return bindingsFor(action, base, override)[0]?.key ?? '';
+    return primaryControlBinding(action, base, override)?.key ?? '';
 }
 
 /** A pilot's identity, entered in the "New Pilot" dialog. */

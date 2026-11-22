@@ -88,5 +88,11 @@
   "uiScaleDown": "BracketLeft",
   "globalScaleUp": "Equal",
   "globalScaleDown": "Minus",
-  "resetScale": "Backslash"
+  "resetScale": "Backslash",
+  "toggleFpsMeter": {
+    "key": "KeyF",
+    "modifiers": [
+      "Alt"
+    ]
+  }
 }

@@ -39,6 +39,13 @@ const SPECIAL_LABELS: Record<string, string> = {
     CapsLock: '⇪',
 };
 
+const MODIFIER_LABELS: Record<string, string> = {
+    Control: '⌃',
+    Alt: '⌥',
+    Shift: '⇧',
+    Meta: '⌘',
+};
+
 /** The short label for a stored event.code binding (empty for none). */
 export function keyLabel(code: string | undefined): string {
     if (!code) {
@@ -65,4 +72,16 @@ export function keyLabel(code: string | undefined): string {
         return `Num ${numpad[1]}`;
     }
     return code;
+}
+
+/** The short label for a binding including any required modifier glyphs (e.g. "⌥F"). */
+export function bindingLabel(
+    binding: { key: string; modifiers?: readonly string[] } | undefined): string {
+    if (!binding?.key) {
+        return '';
+    }
+    const mods = (binding.modifiers ?? [])
+        .map(modifier => MODIFIER_LABELS[modifier] ?? `${modifier}+`)
+        .join('');
+    return `${mods}${keyLabel(binding.key)}`;
 }

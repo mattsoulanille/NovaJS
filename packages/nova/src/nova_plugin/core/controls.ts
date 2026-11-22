@@ -120,6 +120,10 @@ const SavedControlsPartialObject = t.partial({
     'globalScaleUp': ControlInputs,
     'globalScaleDown': ControlInputs,
     'resetScale': ControlInputs,
+    // Stats.js FPS overlay toggle (client/fps_meter.ts, #371 R4). Client-local
+    // like 'fullscreen' and the scale actions: hidden by default, never reaches
+    // the simulation, and peers stay in lockstep.
+    'toggleFpsMeter': ControlInputs,
 });
 
 export const ControlAction = t.keyof(SavedControlsPartialObject.props);

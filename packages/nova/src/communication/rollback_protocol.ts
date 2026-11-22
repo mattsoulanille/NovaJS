@@ -239,7 +239,10 @@ export const STATE_HASH_INTERVAL = 60;
 //    field on `catchUp` (so joiners learn the room's pace atomically with
 //    its tick). Speed lives strictly in the room clock (`rollback_relay.ts`
 //    / `room_clock.ts`), never in simulation state; no input kind,
-//    component codec, desync hash input or persisted pilot form changes.
+//    component codec, desync hash input or persisted pilot form changes
+//    (the client-local `toggleFpsMeter` control action added for R4 also
+//    extends the `ControlAction` enum derived into `ControlEventType`,
+//    moving the schema fingerprint while never crossing the wire).
 //    The derived wire schema fingerprint changes, and the join gate keeps
 //    older and newer builds apart.
 
