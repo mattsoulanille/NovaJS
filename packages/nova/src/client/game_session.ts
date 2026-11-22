@@ -60,6 +60,7 @@ import { installTouchControls, wantsTouchControls } from '../touch_controls.js';
 import {
     beginTeardown, dockedShip, enterFailed, enterGame, liveSystem, tornDown,
 } from './client_state.js';
+import { ControlRouter } from './control_routing.js';
 import { onLand, onLeaveSpaceport } from './docking.js';
 import {
     localPlayerShipUuid, spawnHiredEscorts,
@@ -351,6 +352,7 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     document.body.appendChild(stats.dom);
     sessionDisposers.push(() => stats.dom.remove());
 
+    const controlRouter = new ControlRouter();
     function emitControlEvents(controlEvents: ControlEvent[]) {
         if (controlEvents.length === 0) {
             return;
@@ -358,25 +360,18 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         // Client-local presentation actions (FPS meter, display scale) are
         // handled here and filtered before reaching the simulation bridge so
         // they can never enter the input log or alter simulation state.
-        const simEvents: ControlEvent[] = [];
-        for (const controlEvent of controlEvents) {
-            if (fpsMeter.handleControlEvent(controlEvent)) {
-                continue;
-            }
-            if (!host.applyScaleControl(controlEvent)) {
-                simEvents.push(controlEvent);
-            }
-        }
-        if (simEvents.length === 0) {
-            return;
-        }
+        // Key auto-repeat reaches the UI but not the bridge (see
+        // ControlRouter).
         const live = liveSystem(state.state);
-        live?.world.emit(EcsControlEvent, simEvents);
-        for (const controlEvent of simEvents) {
-            runtime.controlsSubject.next(controlEvent);
-        }
-        sendToBridge(live?.bridge.controlEvents(simEvents),
-            'Control events');
+        controlRouter.route(controlEvents, {
+            consumeLocal: controlEvent =>
+                fpsMeter.handleControlEvent(controlEvent)
+                || host.applyScaleControl(controlEvent),
+            displayWorld: live?.world,
+            controlsSubject: runtime.controlsSubject,
+            bridge: live?.bridge,
+            send: call => sendToBridge(call, 'Control events'),
+        });
     }
 
     const controlSinks: ControlSinks = {
@@ -512,6 +507,10 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         // Key RELEASES are the exception: they still reach the sim, so a
         // control held down when the overlay opened (e.g. accelerate)
         // doesn't stay stuck on after the overlay closes.
+        //
+        // This branch never calls the bridge (the display world's
+        // EcsControlEvent stays on the main thread), so its key repeats —
+        // which the menus need for list scrolling — record no inputs.
         if (MenuControls.focused && event.type !== 'keyup') {
             liveSystem(state.state)?.world.emit(EcsControlEvent, remainingEvents);
             for (const controlEvent of remainingEvents) {
