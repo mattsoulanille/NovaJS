@@ -263,6 +263,61 @@ describe('Movement Plugin', () => {
         expect(state.rotation.angle).toBe(0);
     });
 
+    // A display world's freshly-synced entities (skipUuids) are drawn where
+    // their snapshot put them — advanced only by the snapshot's staleness
+    // (syncedLeadMs), never by the frame's own wall-clock delta.
+    it('advances skipped entities by syncedLeadMs instead of the frame delta', () => {
+        const limit: { enabled: boolean, maxDeltaMs: number,
+            skipUuids?: Set<string>, syncedLeadMs?: number } = {
+            enabled: true, maxDeltaMs: 100,
+        };
+        world.resources.set(MovementTimeLimitResource, limit);
+        const synced = v4();
+        const unsynced = v4();
+        for (const uuid of [synced, unsynced]) {
+            world.entities.set(uuid, new Entity()
+                .addComponent(MovementStateComponent, {
+                    position: new Position(0, 0),
+                    accelerating: 0,
+                    rotation: new Angle(0),
+                    turnBack: false,
+                    turning: 0,
+                    velocity: new Vector(10, 0),
+                })
+                .addComponent(MovementPhysicsComponent, {
+                    acceleration: 100,
+                    maxVelocity: 500,
+                    turnRate: 50,
+                    movementType: MovementType.INERTIAL,
+                }));
+        }
+        const x = (uuid: string) => world.entities.get(uuid)!
+            .components.get(MovementStateComponent)!.position.x;
+
+        world.step();
+        limit.skipUuids = new Set([synced]);
+        // On time: the plain skip.
+        limit.syncedLeadMs = 0;
+        clock.tick(40);
+        world.step();
+        expect(x(synced)).toBe(0);
+        expect(x(unsynced)).toBeCloseTo(10 * 0.04, 5);
+
+        // Stale by 25 ms: the synced entity catches up by exactly that,
+        // whatever the frame's own delta was.
+        limit.syncedLeadMs = 25;
+        clock.tick(40);
+        world.step();
+        expect(x(synced)).toBeCloseTo(10 * 0.025, 5);
+        expect(x(unsynced)).toBeCloseTo(10 * 0.08, 5);
+
+        // ...and still within maxDeltaMs.
+        limit.syncedLeadMs = 10_000;
+        clock.tick(16);
+        world.step();
+        expect(x(synced)).toBeCloseTo(10 * (0.025 + 0.1), 5);
+    });
+
     it('approachVec approaches a target vector', () => {
         // 3,4,5 triangle for nice numbers
         const current = new Vector(1, 1);

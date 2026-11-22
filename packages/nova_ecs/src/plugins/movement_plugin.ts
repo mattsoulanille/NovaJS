@@ -111,6 +111,18 @@ export interface MovementTimeLimit {
      * behaviour. Simulation worlds never set the resource at all.
      */
     skipUuids?: ReadonlySet<string>;
+    /**
+     * How far (in this world's scaled time, ms) to advance the entities in
+     * `skipUuids` instead of leaving them where the snapshot put them: the
+     * snapshot's STALENESS. A snapshot normally lands the frame after the
+     * pump that requested it and represents that frame (0 here: the rule
+     * above, untouched). One that lands late — the worker round trip took
+     * several frames, or the pump stepped fewer ticks than the frame was
+     * worth (the 1-of-3 step split at 2x) — represents an EARLIER instant
+     * than the display has already shown, and drawing it as-is moved every
+     * synced entity backward. Absent or 0 keeps the plain skip.
+     */
+    syncedLeadMs?: number;
 }
 export const MovementTimeLimitResource =
     new Resource<MovementTimeLimit>('MovementTimeLimit');
@@ -126,8 +138,13 @@ export const MovementSystem = new System({
                 return;
             }
             if (limit.skipUuids?.has(uuid)) {
-                // Synced this frame: render it where the simulation put it.
-                return;
+                // Synced this frame: render it where the simulation put
+                // it, advanced only by how stale that snapshot is.
+                const lead = limit.syncedLeadMs ?? 0;
+                if (!(lead > 0)) {
+                    return;
+                }
+                time = { ...time, delta_ms: lead, delta_s: lead / 1000 };
             }
             if (time.delta_ms > limit.maxDeltaMs) {
                 time = {
