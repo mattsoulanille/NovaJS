@@ -36,7 +36,15 @@ import {
  * time across snapshot arrivals (simPos(N+1) = simPos(N) + v*dt is
  * exactly what extrapolation predicted), so a 165Hz display sub-steps
  * a 60Hz simulation without jitter; only acceleration and turning
- * contribute (bounded, one-frame) correction error. Display-only
+ * contribute (bounded, one-frame) correction error. That continuity
+ * holds only if each snapshot is drawn at the instant it represents: one
+ * that lands late (a round trip that overran frames) or carries fewer
+ * ticks than its frame was worth (1 of a 1-then-3 split at 2x) is OLDER
+ * than what the display already showed, and drawing it as-is snapped
+ * every synced entity backward. The frame pump's presentation clock
+ * (advanceDisplayClock below) advances such a snapshot to the display's
+ * time; an on-time one is still drawn exactly as the simulation left it.
+ * Display-only
  * entities (explosions, debris sparks) carry MovementState but no
  * MovementPhysicsComponent, so the system leaves them alone.
  *
@@ -99,6 +107,92 @@ export function shouldExtrapolate(options: {
         return false;
     }
     return options.now - options.lastMovementSyncMs < STALE_SNAPSHOT_MS;
+}
+
+/**
+ * A snapshot that landed since the last display frame, with the pump's
+ * accounting for when it was requested.
+ */
+export interface LandedSnapshot {
+    /** The simulation time the snapshot represents (frame.time). */
+    simTimeMs: number;
+    /**
+     * How far the display may draw it AHEAD of `simTimeMs`: the simulation
+     * time the pump had accrued but not yet stepped when it asked for the
+     * snapshot, plus the frames the round trip overran. See
+     * {@link snapshotMaxLeadMs}.
+     */
+    maxLeadMs: number;
+}
+
+/**
+ * The most a snapshot may be drawn ahead of the simulation time it carries.
+ *
+ * The pump requests it at frame timestamp `pumpFrameMs`, having stepped
+ * every whole tick its time debt covered and carried `debtMs` (simulation
+ * ms) over. So the simulation's ideal clock at that frame was the
+ * snapshot's time plus `debtMs`, and every further frame the round trip
+ * spent in flight before the PREVIOUS display frame (the one it should have
+ * landed for) adds that frame's worth at `rate`. The display never draws
+ * past that ideal clock, so a simulation that has truly fallen behind (the
+ * catch-up cap, a stall) is shown where it is rather than predicted away.
+ */
+export function snapshotMaxLeadMs(options: {
+    debtMs: number,
+    pumpFrameMs: number,
+    previousFrameMs: number,
+    rate: number,
+}): number {
+    return Math.max(0, options.debtMs)
+        + Math.max(0, options.previousFrameMs - options.pumpFrameMs)
+        * options.rate;
+}
+
+/**
+ * The display's presentation clock: which simulation time this display
+ * frame shows, and how far to draw the freshly-synced entities ahead of
+ * their snapshot to show it.
+ *
+ * Between snapshots the clock runs at the simulation's rate (the room speed
+ * times the pacing slew), exactly as wall-clock extrapolation moves the
+ * unsynced entities. When a snapshot lands:
+ *
+ * - on time (it carries the clock's own time, or a later one — a catch-up):
+ *   the clock takes the snapshot's time and the synced entities are drawn
+ *   exactly where the simulation put them (lead 0). This is the ordinary
+ *   frame, and the rule that a just-spawned projectile is drawn AT the
+ *   muzzle holds;
+ * - stale (it carries an EARLIER time than the clock has already shown):
+ *   the synced entities are advanced by the difference, up to
+ *   `maxLeadMs`, so nothing moves backward. Before this, a stale snapshot
+ *   was drawn as if it were current: every round trip that overran a frame
+ *   (the worker busy resimulating a rollback, a GC) became a backward snap
+ *   of the frames it overran followed by a forward catch-up, and at 2x a
+ *   pump that stepped 1 tick where the frame was worth 2 (the next one
+ *   stepping 3) drew the half-frame / one-and-a-half-frame stutter.
+ *
+ * `previousSimTimeMs` undefined (first frame, after a pause, a new system)
+ * adopts the snapshot's time. Pure, so the handoff can be pinned without a
+ * browser.
+ */
+export function advanceDisplayClock(options: {
+    previousSimTimeMs: number | undefined,
+    frameDeltaMs: number,
+    rate: number,
+    snapshot?: LandedSnapshot,
+}): { simTimeMs: number | undefined, syncedLeadMs: number } {
+    const { previousSimTimeMs, snapshot } = options;
+    const predicted = previousSimTimeMs === undefined ? undefined
+        : previousSimTimeMs + Math.max(0, options.frameDeltaMs) * options.rate;
+    if (!snapshot) {
+        return { simTimeMs: predicted, syncedLeadMs: 0 };
+    }
+    if (predicted === undefined || predicted <= snapshot.simTimeMs) {
+        return { simTimeMs: snapshot.simTimeMs, syncedLeadMs: 0 };
+    }
+    const lead = Math.min(predicted - snapshot.simTimeMs,
+        Math.max(0, snapshot.maxLeadMs));
+    return { simTimeMs: snapshot.simTimeMs + lead, syncedLeadMs: lead };
 }
 
 export const MovementExtrapolationPlugin: Plugin = {

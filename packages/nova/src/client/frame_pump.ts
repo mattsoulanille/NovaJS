@@ -33,7 +33,8 @@ import {
 import type { RoomSpeed } from '../communication/rollback_protocol.js';
 import type { SimulationPacing } from '../communication/simulation_frame.js';
 import {
-    MAX_EXTRAPOLATION_DELTA_MS, shouldExtrapolate,
+    advanceDisplayClock, MAX_EXTRAPOLATION_DELTA_MS,
+    shouldExtrapolate, snapshotMaxLeadMs,
 } from '../display/movement_extrapolation_plugin.js';
 import { RoomSpeedResource } from '../display/speed_indicator_plugin.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
@@ -187,6 +188,25 @@ export class FramePump {
     private timeDebt = 0;
     private lastPumpTime: number | undefined;
     /**
+     * The display's presentation clock (advanceDisplayClock): the
+     * simulation time the last display frame showed, the frame timestamp
+     * it showed it at, and the snapshot that landed since, if any. Reset
+     * with each live system (a fresh delta stream).
+     */
+    private displaySimTime: number | undefined;
+    private lastFrameTime: number | undefined;
+    private landedSnapshot: {
+        /** The simulation time it carries (frame.time). */
+        simTimeMs: number,
+        /** The frame timestamp of the pump that requested it. */
+        pumpFrameMs: number,
+        /** Simulation ms that pump accrued but did not step. */
+        debtMs: number,
+        /** The simulation rate (simulation ms per real ms) it stepped at. */
+        rate: number,
+    } | undefined;
+    private clockFor: LiveSystem | undefined;
+    /**
      * The route this client last sent the simulation, so a change made
      * on the display side (the starmap) is pushed exactly once. Seeded
      * from each new live system's initial frame.
@@ -236,7 +256,7 @@ export class FramePump {
      */
     install(app: PIXI.Application): () => void {
         activePump = this;
-        const pumpTick = () => this.tick();
+        const pumpTick = () => this.tick(performance.now());
         app.ticker.add(pumpTick);
 
         // A fully backgrounded (or occluded) window gets zero rAF, so the
@@ -280,7 +300,14 @@ export class FramePump {
         };
     }
 
-    private tick(): void {
+    /**
+     * `frameTime` is read once, synchronously, at the top of the frame: the
+     * display's presentation clock and the simulation pump's step debt both
+     * run on it, on the same footing as the display world's wall clock. (The
+     * pump used to read performance.now() after its own awaits, a reading
+     * that wandered by however long they took.)
+     */
+    private tick(frameTime: number): void {
         // Step the display world every ticker frame, decoupled from the
         // asynchronous simulation round trip below. The 2026-08-31 Linux
         // playtest trace showed roughly one rAF in ten getting no fresh
@@ -311,9 +338,15 @@ export class FramePump {
                 // WHICH entities it may run on: not the ones a snapshot
                 // has already placed since the last step. See
                 // movementSyncedSinceStep.
-                const now = performance.now();
+                const now = frameTime;
                 if (movementSyncedSinceStep.size > 0) {
                     this.lastMovementSyncMs = now;
+                }
+                if (this.clockFor !== live) {
+                    this.clockFor = live;
+                    this.displaySimTime = undefined;
+                    this.lastFrameTime = undefined;
+                    this.landedSnapshot = undefined;
                 }
                 const displaySpeed =
                     live.world.resources.get(RoomSpeedResource)?.status?.speed
@@ -327,6 +360,9 @@ export class FramePump {
                         lastMovementSyncMs: this.lastMovementSyncMs,
                     });
                     movementLimit.skipUuids = movementSyncedSinceStep;
+                    movementLimit.syncedLeadMs =
+                        this.advanceDisplayClock(frameTime, movementLimit.enabled,
+                            displaySpeed);
                 }
                 live.world.step();
             } catch (e) {
@@ -340,11 +376,46 @@ export class FramePump {
             movementSyncedSinceStep.clear();
         }
         if (!this.tickInFlight) {
-            this.frameInFlight = this.pumpSimulationFrame();
+            this.frameInFlight = this.pumpSimulationFrame(frameTime);
         }
     }
 
-    private async pumpSimulationFrame(): Promise<void> {
+    /**
+     * Moves the presentation clock to this frame and returns how far the
+     * entities synced since the last step are to be drawn ahead of their
+     * snapshot (see advanceDisplayClock). Frozen prediction (paused, a
+     * resync hold) drops the clock: it re-anchors on the next snapshot.
+     */
+    private advanceDisplayClock(frameTime: number, predicting: boolean,
+        displaySpeed: number): number {
+        const previousFrame = this.lastFrameTime;
+        this.lastFrameTime = frameTime;
+        const landed = this.landedSnapshot;
+        this.landedSnapshot = undefined;
+        if (!predicting) {
+            this.displaySimTime = undefined;
+            return 0;
+        }
+        const clock = advanceDisplayClock({
+            previousSimTimeMs: this.displaySimTime,
+            frameDeltaMs: previousFrame === undefined ? 0
+                : frameTime - previousFrame,
+            rate: this.pacing?.rate ?? displaySpeed,
+            snapshot: landed && {
+                simTimeMs: landed.simTimeMs,
+                maxLeadMs: snapshotMaxLeadMs({
+                    debtMs: landed.debtMs,
+                    pumpFrameMs: landed.pumpFrameMs,
+                    previousFrameMs: previousFrame ?? frameTime,
+                    rate: landed.rate,
+                }),
+            },
+        });
+        this.displaySimTime = clock.simTimeMs;
+        return clock.syncedLeadMs;
+    }
+
+    private async pumpSimulationFrame(frameTime: number): Promise<void> {
         if (this.tickInFlight) {
             return;
         }
@@ -396,10 +467,13 @@ export class FramePump {
             // elapsed time into a whole number of simulation steps and
             // carry the remainder. Render rate and simulation rate are
             // independent.
-            const now = performance.now();
+            // Real time as of the top of this frame (see tick), not
+            // performance.now() after the awaits above.
+            const now = frameTime;
             const elapsedMs = this.lastPumpTime !== undefined
                 ? now - this.lastPumpTime : 0;
             this.lastPumpTime = now;
+            const stepRate = this.pacing?.rate ?? 1;
             const pendingSteps = simulationControl.paused
                 ? simulationControl.pendingSteps : 0;
             if (simulationControl.paused) {
@@ -453,6 +527,14 @@ export class FramePump {
                     onRemove: (uuid, entity) => runtime.fleet.noteRemoved(
                         uuid, entity, localPlayer, serializer),
                 });
+                // For the presentation clock: what instant this snapshot
+                // represents, and what the pump knew about it.
+                this.landedSnapshot = frame.time ? {
+                    simTimeMs: frame.time.time,
+                    pumpFrameMs: frameTime,
+                    debtMs: this.timeDebt,
+                    rate: stepRate,
+                } : undefined;
                 for (const [uuid] of frame.added) {
                     runtime.fleet.escortReturned(uuid);
                 }
