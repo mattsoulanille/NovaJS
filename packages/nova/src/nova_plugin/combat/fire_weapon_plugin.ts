@@ -478,7 +478,21 @@ export abstract class WeaponEntry {
         });
     }
 
-    fireFromEntity(source: string, inaccuracy = true): Entity | undefined {
+    /**
+     * `weaponTarget` is the target the firing AI chose for THIS weapon
+     * (its synced WeaponState.target), when it chose one. It takes
+     * precedence over the ship's own TargetComponent lock for aiming:
+     * the two only differ for an escort flying formation, whose
+     * front-quadrant turrets each pick their own victim
+     * (escort_command_plugin's formation rule) while the ship holds no
+     * lock at all. Aiming off the empty lock is what sent those shots
+     * straight out of the nose ("fires straight ahead if no target",
+     * EVN Bible wëap Guidance 7) instead of at the chosen hostile.
+     * WeaponsSystem passes it for AI ships only; a pilot aims with the
+     * ship's lock, which is what they selected.
+     */
+    fireFromEntity(source: string, inaccuracy = true,
+        weaponTarget?: string): Entity | undefined {
         // A per-entity runQuery is answered from nova_ecs's query cache
         // (QueryCacheEntry.getResultForEntity), so this is cheap per shot.
         const results = this.runQuery(FireFromEntityQuery, source);
@@ -490,7 +504,7 @@ export abstract class WeaponEntry {
         if (!owner) {
             owner = {owner: uuid};
         }
-        let target = targetVal?.target;
+        let target = weaponTarget ?? targetVal?.target;
         if (!weapons) {
             weapons = new DefaultMap(() => ({
                 lastFired: 0,

@@ -809,6 +809,10 @@ export const EscortCommandBehaviorSystem = new System({
                 }
             }
             const chosen = chooseNearest(inReach);
+            // What the turret AIMS at: the escort holds no ship-level
+            // lock in formation, so WeaponsSystem hands this per-weapon
+            // pick to fireFromEntity (an AI ship's weapon target wins
+            // over its TargetComponent while the trigger is held).
             weapon.target = chosen ?? weapon.target;
             weapon.firing = chosen !== undefined;
         }

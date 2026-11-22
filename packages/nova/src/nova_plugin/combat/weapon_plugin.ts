@@ -414,13 +414,27 @@ export const WeaponsSystem = new System({
                 && weapon.data.oneAmmoPerBurst)
                 || localState.burstCount === 0;
 
+            // What the AI chose for THIS weapon, aimed at in preference
+            // to the ship's own lock (see fireFromEntity) — the lock is
+            // empty on a formation escort whose front-quadrant turret
+            // picked its own victim. Read only while the trigger is
+            // held: every AI that latches `firing` writes the target in
+            // the same breath, so it is fresh then, but nothing clears it
+            // on cease-fire, and point defense fires with the trigger up
+            // (choosing its own prey, but picking a closest-to-target
+            // exit point first). A pilot's weapons aim at the ship's lock
+            // alone: it is what they selected.
+            const weaponTarget = isAi && state.firing
+                ? state.target : undefined;
+
             let fired: Entity | undefined = undefined;
             if (weapon.data.fireSimultaneously) {
                 for (let i = 0; i < state.count; i++) {
                     if (usesAmmo && !hasAmmo(ammoType, outfits, fuel, gameData)) {
                         break;
                     }
-                    const shot = weapon.fireFromEntity(uuid);
+                    const shot = weapon.fireFromEntity(uuid, true,
+                        weaponTarget);
                     if (shot && usesAmmo) {
                         consumeAmmo(ammoType, outfits, fuel, gameData);
                     }
@@ -430,7 +444,8 @@ export const WeaponsSystem = new System({
                 if (usesAmmo && !hasAmmo(ammoType, outfits, fuel, gameData)) {
                     continue;
                 }
-                fired = weapon.fireFromEntity(uuid);
+                fired = weapon.fireFromEntity(uuid, true,
+                    weaponTarget);
                 if (fired && usesAmmo) {
                     consumeAmmo(ammoType, outfits, fuel, gameData);
                 }

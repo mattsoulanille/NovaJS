@@ -149,6 +149,48 @@ function setPlayerTarget(world: World, target: string | undefined) {
         .set(TargetComponent, { target });
 }
 
+/** The unsigned angle between two vectors, in degrees. */
+function degreesBetween(a: Vector, b: Vector) {
+    return Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y))
+        * 180 / Math.PI;
+}
+
+/**
+ * Holds each ship in `placements` 400px from `shooter` at the given
+ * bearing off its CURRENT nose (re-placed every tick, so formation
+ * turning can't carry it out of the quadrant) until the shooter's first
+ * shots appear. Returns a function giving, for a ship, how far (degrees)
+ * the best-aimed of those shots' tracks misses the line to it. The ships
+ * stand still, so a shot aimed at one flies along the line from its own
+ * position to it.
+ */
+function fireOffAxis(world: World,
+    placements: Array<readonly [string, number]>, shooter = 'escort') {
+    const movementOf = (uuid: string) => world.entities.get(uuid)!
+        .components.get(MovementStateComponent)!;
+    for (let i = 0; i < 60; i++) {
+        const source = movementOf(shooter);
+        for (const [uuid, bearing] of placements) {
+            const ship = movementOf(uuid);
+            ship.position = source.position.add(source.rotation.add(bearing)
+                .getUnitVector().scale(400)) as Position;
+            ship.velocity = new Vector(0, 0);
+        }
+        world.step();
+        const tracks = [...world.entities]
+            .filter(([, entity]) =>
+                entity.components.get(SourceComponent) === shooter)
+            .map(([, entity]) =>
+                entity.components.get(MovementStateComponent)!);
+        if (tracks.length > 0) {
+            return (uuid: string) => Math.min(...tracks.map(track =>
+                degreesBetween(track.velocity,
+                    movementOf(uuid).position.subtract(track.position))));
+        }
+    }
+    throw new Error(`${shooter} never fired`);
+}
+
 describe('escort commands', () => {
     it('attack: fights the player target until it is destroyed, then ' +
         'returns to formation', async () => {
@@ -393,6 +435,67 @@ describe('escort commands', () => {
                 world.step();
             }
             expect(weapons.get(FQ_WEAPON)!.firing).toBeFalse();
+        });
+
+    // Matthew's report: "Front quadrant turrets of escorts in formation
+    // currently fire straight forward instead of at the enemy ship as
+    // they should." The formation rule CHOSE the victim (weapon.target,
+    // pinned above) but the shot was aimed off the escort's own ship-level
+    // TargetComponent, which a formation escort does not set — and a
+    // front-quadrant turret with no target "fires straight ahead if no
+    // target" (EVN Bible, wëap Guidance 7). Placed 30° off the nose, a
+    // straight-ahead shot misses by 30°.
+    for (const npc of [false, true]) {
+        it('a formation escort\'s front-quadrant turret aims its shots at '
+            + `the hostile it chose, not straight ahead${npc
+                ? ' (NPC-brained escort)' : ''}`, async () => {
+                const { world, addShip } = await makeWorld();
+                if (npc) {
+                    makeNpcEscort(world);
+                }
+                await addShip('pirate', 400, 400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                });
+                const error = fireOffAxis(world, [['pirate', Math.PI / 6]]);
+                expect(error('pirate')).toBeLessThan(2);
+            });
+    }
+
+    it('under the restrict-turrets order the formation turret aims at '
+        + "the player's target among several hostiles", async () => {
+            const { world, addShip } = await makeWorld();
+            for (const uuid of ['pirateA', 'pirateB']) {
+                await addShip(uuid, 400, 400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                });
+            }
+            press(world, 'escortRestrictFire');
+            setPlayerTarget(world, 'pirateB');
+            const error = fireOffAxis(world,
+                [['pirateA', -Math.PI / 8], ['pirateB', Math.PI / 8]]);
+            expect(error('pirateB')).toBeLessThan(2);
+        });
+
+    // The flip side of the fix: only an AI aims with its weapon's own
+    // target. A pilot's front-quadrant turret tracks the ship THEY
+    // locked, whatever a weapon state carries over from an AI past.
+    it("a pilot's front-quadrant turret aims at the ship's own lock, not "
+        + 'a leftover weapon-state target', async () => {
+            const { world, addShip } = await makeWorld();
+            for (const uuid of ['pirate', 'decoy']) {
+                await addShip(uuid, -400, -400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                });
+            }
+            setPlayerTarget(world, 'pirate');
+            world.entities.get('player')!.components
+                .get(WeaponsStateComponent)!.get(FQ_WEAPON)!.target = 'decoy';
+            applyControlEvents(world, PEER,
+                [{ action: 'firePrimary', state: 'start' }]);
+            const error = fireOffAxis(world,
+                [['pirate', Math.PI / 6], ['decoy', -Math.PI / 6]], 'player');
+            expect(error('pirate')).toBeLessThan(2);
+            expect(error('decoy')).toBeGreaterThan(20);
         });
 
     it('front-quadrant turrets ignore non-hostile ships', async () => {
