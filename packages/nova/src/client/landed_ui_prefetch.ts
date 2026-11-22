@@ -51,6 +51,9 @@ import type { DisplayAssetDataResources } from './gamedata/display_asset_data.js
 import type { SimulationGameDataInterface } from './gamedata/simulation_game_data.js';
 import type { ClientState, ClientStateSlot } from './client_state.js';
 import {
+    BackgroundPrefetch, BackgroundPrefetchOptions, Cancelled, PrefetchRun,
+} from './background_prefetch.js';
+import {
     matchesStellarRef, setStringPrefix, stellarInfoOf,
 } from '../nova_plugin/missions/index.js';
 import { BAR_GRAPHIC_FRAME_PICT, BAR_PICT } from '../spaceport/bar.js';
@@ -82,43 +85,10 @@ export interface LandedUiAssets {
     prefetchPict(id: string): Promise<void>;
 }
 
-/** Defers a task to when the page is idle. */
-export type IdleScheduler = (task: () => void) => void;
-
-/**
- * requestIdleCallback where the platform has it (with a timeout, so a
- * busy page still gets through the list), else a macrotask.
- */
-export const browserIdle: IdleScheduler = task => {
-    const idle = (globalThis as {
-        requestIdleCallback?: (cb: () => void, options?: { timeout: number })
-            => number,
-    }).requestIdleCallback;
-    if (idle) {
-        idle(task, { timeout: 1000 });
-    } else {
-        setTimeout(task, 0);
-    }
-};
-
-export interface LandedUiPrefetchOptions {
-    /** Where each item's start is deferred to (default: browserIdle). */
-    schedule?: IdleScheduler;
-    /** Items in flight at once (default 4). */
-    concurrency?: number;
-    /** The one debug line a run with failures logs (default console.debug). */
-    debug?: (message: string) => void;
-}
-
-/** Thrown into a cancelled run's pending steps; never logged. */
-class Cancelled extends Error { }
-
-interface Run {
-    readonly systemId: string;
-    cancelled: boolean;
-    done: boolean;
-    readonly promise: Promise<void>;
-}
+export { browserIdle } from './background_prefetch.js';
+export type { IdleScheduler } from './background_prefetch.js';
+export type LandedUiPrefetchOptions = BackgroundPrefetchOptions;
+type Run = PrefetchRun;
 
 /** What a run warms for one system, before the item art and missions. */
 export interface LandedUiPlan {
@@ -200,20 +170,11 @@ function firstPagesOf<T extends { pict: string, displayWeight: number, id: strin
         .map(item => item.pict);
 }
 
-export class LandedUiPrefetch {
-    private current?: Run;
-    private inFlight = 0;
-    private readonly waiting: (() => void)[] = [];
-    private readonly schedule: IdleScheduler;
-    private readonly concurrency: number;
-    private readonly debug: (message: string) => void;
-
+export class LandedUiPrefetch extends BackgroundPrefetch {
     constructor(private readonly gameData: SimulationGameDataInterface,
         private readonly assets: LandedUiAssets,
         options: LandedUiPrefetchOptions = {}) {
-        this.schedule = options.schedule ?? browserIdle;
-        this.concurrency = Math.max(1, options.concurrency ?? 4);
-        this.debug = options.debug ?? (message => console.debug(message));
+        super(options);
     }
 
     /**
@@ -235,114 +196,20 @@ export class LandedUiPrefetch {
             this.cancel();
             return;
         }
-        const systemId = state.system.systemId;
-        const run = this.current;
-        if (run && run.systemId === systemId && !run.cancelled) {
-            return;
-        }
-        if (run && run.systemId === systemId && run.done) {
-            // Finished before it was paused: everything is warm.
-            return;
-        }
-        this.cancel();
-        this.current = this.start(systemId);
-    }
-
-    /** Stops the current run issuing anything new. */
-    cancel(): void {
-        if (this.current && !this.current.done) {
-            this.current.cancelled = true;
-        }
-        // Waiters re-check their run when woken, and bow out.
-        for (const wake of this.waiting.splice(0)) {
-            wake();
-        }
-    }
-
-    /** The current run's settlement (resolves; never rejects). */
-    get idle(): Promise<void> {
-        return this.current?.promise ?? Promise.resolve();
+        this.ensureRun(state.system.systemId, 'Landed-UI',
+            (run, failures) => this.warm(run, failures));
     }
 
     /** The system the current (or last) run warms. */
     get systemId(): string | undefined {
-        return this.current?.systemId;
-    }
-
-    /** Whether the current run finished every item. */
-    get done(): boolean {
-        return this.current?.done ?? false;
-    }
-
-    private start(systemId: string): Run {
-        const failures: unknown[] = [];
-        const run: { -readonly [K in keyof Run]: Run[K] } = {
-            systemId, cancelled: false, done: false,
-            promise: Promise.resolve(),
-        };
-        run.promise = this.warm(run, failures).then(() => {
-            if (!run.cancelled) {
-                run.done = true;
-            }
-        }, e => {
-            if (!(e instanceof Cancelled)) {
-                failures.push(e);
-            }
-        }).then(() => {
-            if (failures.length > 0) {
-                this.debug(`Landed-UI prefetch for ${systemId}: `
-                    + `${failures.length} item(s) failed (first: `
-                    + `${String(failures[0])})`);
-            }
-        });
-        return run;
-    }
-
-    /**
-     * Runs `work` in a concurrency slot, started from an idle callback,
-     * unless the run is cancelled first (then it throws Cancelled and
-     * `work` never starts).
-     */
-    private async step<T>(run: Run, work: () => Promise<T>): Promise<T> {
-        while (this.inFlight >= this.concurrency) {
-            await new Promise<void>(resolve => this.waiting.push(resolve));
-            if (run.cancelled) {
-                throw new Cancelled();
-            }
-        }
-        if (run.cancelled) {
-            throw new Cancelled();
-        }
-        this.inFlight++;
-        try {
-            await new Promise<void>(resolve => this.schedule(resolve));
-            if (run.cancelled) {
-                throw new Cancelled();
-            }
-            return await work();
-        } finally {
-            this.inFlight--;
-            this.waiting.shift()?.();
-        }
-    }
-
-    /** Every item, each failure recorded rather than thrown. */
-    private async each(run: Run, failures: unknown[],
-        items: Iterable<() => Promise<unknown>>): Promise<void> {
-        await Promise.all([...items].map(item =>
-            this.step(run, item).catch(e => {
-                if (e instanceof Cancelled) {
-                    throw e;
-                }
-                failures.push(e);
-            })));
+        return this.current?.key;
     }
 
     private async warm(run: Run, failures: unknown[]): Promise<void> {
         const { data } = this.gameData;
         const ids = await this.gameData.ids;
         const system = await this.step(run,
-            () => data.System.get(run.systemId));
+            () => data.System.get(run.key));
         const planets = await this.step(run, () => Promise.all(
             system.planets.map(id => data.Planet.get(id).catch(e => {
                 failures.push(e);
