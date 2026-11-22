@@ -16,7 +16,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { SimulationGameDataResource, GovtComponent, landable } from '../nova_plugin/core/index.js';
 import {
-    deriveIff, planetBlipColor, planetDisposition, PLANET_FLAT_COLOR, shipBlipColor,
+    deriveIff, planetBlipColor, planetDisposition, shipBlipColor,
     shipDisposition, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import { ActiveRanksComponent } from "../nova_plugin/ncb/index.js";
@@ -370,12 +370,12 @@ export class RadarPane {
          */
         flashTarget?: string | null,
         /**
-         * Per-stellar blip colour by uuid. Stellars are yellow
-         * (PLANET_FLAT_COLOR, measured off the original captures) until the
-         * player owns an IFF outfit, at which point DrawRadar fills this in
-         * with the landing-clearance palette (iff_plugin's planetBlipColor) —
-         * the same rule ship blips follow. Missing entries fall back to the
-         * flat colour.
+         * Per-stellar blip colour by uuid. Missing entries fall back to the
+         * flat dimRadar grey, the same rule ship blips follow. DrawRadar
+         * fills it in (iff_plugin's planetBlipColor) for an unlandable
+         * stellar (always grey) and, once the player owns an IFF outfit,
+         * with the landing-clearance palette; without IFF every landable
+         * stellar, inhabited or not, stays grey (Matthew, 2026-11-21).
          */
         planetColors?: ReadonlyMap<string, number>,
         /**
@@ -411,7 +411,8 @@ export class RadarPane {
         }
 
         for (const [uuid, { position }] of planets) {
-            const color = planetColors?.get(uuid) ?? PLANET_FLAT_COLOR;
+            const color = planetColors?.get(uuid)
+                ?? this.data.colors.dimRadar;
             if (planetShapes?.get(uuid) === 'dot') {
                 this.drawDot(position, color, source, 2);
             } else {
@@ -611,7 +612,9 @@ export const DrawRadar = new System({
             // the ONE clearance predicate the landing gate and the comm
             // dialog use (stellar_clearance.ts), so a blip can never promise
             // a landing the gate refuses — under the same IFF gate as ships
-            // (without IFF every landable stellar stays the flat yellow).
+            // (without IFF every landable stellar, inhabited or not, stays
+            // the flat dimRadar grey: Matthew, "Inhabited planets should
+            // still show up grey until the player has an iff sensor").
             // UNLANDABLE stellars (Jupiter, scenery worlds, dead gates —
             // landable.ts) are GREY with or without IFF: that is a fact
             // about the stellar, not about the pilot.
@@ -634,8 +637,11 @@ export const DrawRadar = new System({
                         planetId: planet.id, now: simTime.time,
                     })
                     : { cleared: true } as const;
-                planetColors.set(uuid, planetBlipColor(
-                    planetDisposition(clearance, isLandable), hasIff));
+                const color = planetBlipColor(
+                    planetDisposition(clearance, isLandable), hasIff);
+                if (color !== undefined) {
+                    planetColors.set(uuid, color);
+                }
             }
             // System-center arrow: when no stellar object falls within the
             // radar's range, the original blinks a thin grey line arrow out

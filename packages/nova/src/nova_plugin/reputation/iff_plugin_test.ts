@@ -9,7 +9,6 @@ import {
     IFF_NEUTRAL_COLOR,
     planetBlipColor,
     planetDisposition,
-    PLANET_FLAT_COLOR,
     PLANET_FORBIDDEN_COLOR,
     PLANET_HOSTILE_COLOR,
     PLANET_NEUTRAL_COLOR,
@@ -227,13 +226,13 @@ describe('planetDisposition', () => {
 });
 
 describe('planetBlipColor', () => {
-    it('draws every stellar the measured flat yellow without an IFF outfit',
-        () => {
-            // Sampled off the original-hardware captures: the stationary
-            // stellar blip on space/in_space*.png is pure #FFFF00.
-            expect(PLANET_FLAT_COLOR).toBe(0xffff00);
+    it('leaves every landable stellar, inhabited or not, the flat dimRadar '
+        + 'grey without an IFF outfit', () => {
+            // Matthew, 2026-11-21: "Inhabited planets should still show up
+            // grey until the player has an iff sensor." undefined is the
+            // "use the status bar's dimRadar" contract shipBlipColor uses.
             for (const d of ['neutral', 'forbidden', 'hostile'] as const) {
-                expect(planetBlipColor(d, false)).toBe(PLANET_FLAT_COLOR);
+                expect(planetBlipColor(d, false)).toBeUndefined();
             }
         });
 
@@ -245,11 +244,9 @@ describe('planetBlipColor', () => {
 
     it('uses the palette Matthew specified: yellow / orange / red / grey',
         () => {
-            // Neutral is the SAME yellow the references show, so a landable
-            // neutral port looks identical with and without IFF (Matthew's
-            // correction, 2026-08-15).
+            // Neutral is the yellow the (IFF-equipped) reference captures
+            // show (Matthew's palette, 2026-08-15).
             expect(PLANET_NEUTRAL_COLOR).toBe(0xffff00);
-            expect(PLANET_NEUTRAL_COLOR).toBe(PLANET_FLAT_COLOR);
             expect(PLANET_FORBIDDEN_COLOR).toBe(0xff7f00);
             expect(PLANET_HOSTILE_COLOR).toBe(0xff0000);
             expect(PLANET_UNLANDABLE_COLOR).toBe(0x808080);

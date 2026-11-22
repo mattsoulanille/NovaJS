@@ -210,46 +210,49 @@ export function planetDisposition(clearance: StellarClearance,
 /**
  * Stellar blip colours.
  *
- * WITHOUT an IFF outfit the radar draws every stellar the one flat colour, in
- * the same way ship blips fall back to the flat dimRadar colour — the Bible
- * says an IFF outfit "colorizes" the radar and "overrides" its colours, so
- * with no IFF there is nothing to colorize. {@link PLANET_FLAT_COLOR} is
- * MEASURED, not chosen: the stellar blips on the original-hardware captures
- * (ui_screenshots/original_macos_screenshots/space/in_space*.png, statusbar
- * radar) are pure #FFFF00 — the stationary 2x2 blip that holds still across
- * two captures taken seconds apart while every ship blip moves.
+ * WITHOUT an IFF outfit the radar draws every landable stellar — inhabited
+ * or not — in the status bar's flat dimRadar grey, exactly as ship blips
+ * fall back to it: the Bible says an IFF outfit "colorizes" the radar and
+ * "overrides" its colours (ïntf DimRadar: "having an IFF outfit will
+ * override these colors"), so with no IFF there is nothing to colorize.
+ * Matthew's ruling (2026-11-21): "Inhabited planets should still show up
+ * grey until the player has an iff sensor." That grey is ïntf data the
+ * status bar owns (stock #808080 on all nine stock/Arpia ïntfs), so
+ * {@link planetBlipColor} returns undefined for it rather than naming it.
+ * The Windows no-add-ons radar recordings (#358) agree: stellar rings,
+ * ship blips and the centre arrow are one grey there.
  *
- * The palette (Matthew's corrected spec, 2026-08-15): NEUTRAL stellars are
- * YELLOW — the same #FFFF00 the references show, so with or without IFF a
- * landable neutral port looks identical; FORBIDDEN orange; HOSTILE red;
- * and UNLANDABLE (Jupiter, scenery worlds, dead gates — the spöb can-land
- * bit) GREY, which applies regardless of IFF because it is a fact about the
- * stellar, not about allegiance. The cölr resource does NOT carry these —
- * its colour fields are menu/button/list/progress-bar chrome only (EVN
- * Bible, "The cölr resource") — and the ïntf resource carries only
- * brightRadar/dimRadar (StatusBarColors); the non-yellow hexes are
- * tunables (orange and grey were not sampled — no reference capture shows a
- * forbidden or an unlandable stellar's blip; hostile red matches the IFF
- * hostile family).
+ * WITH IFF the palette is Matthew's (2026-08-15): NEUTRAL (you may land)
+ * YELLOW, FORBIDDEN orange, HOSTILE red. The yellow is the #FFFF00 of the
+ * original-hardware captures (ui_screenshots/original_macos_screenshots/
+ * space/*.png); those pilots carry IFF — their ship blips are colourised
+ * green / blue / yellow / red — so the captures show the IFF palette, not
+ * the no-IFF one. UNLANDABLE (Jupiter, scenery worlds, dead gates — the
+ * spöb can-land bit) is GREY with or without IFF, a fact about the stellar
+ * rather than about allegiance; the captures' unlandable ring is #808080.
+ * The cölr resource does NOT carry these — its colour fields are
+ * menu/button/list/progress-bar chrome only (EVN Bible, "The cölr
+ * resource"); orange was not sampled (no capture shows a forbidden blip).
  */
-export const PLANET_FLAT_COLOR = 0xffff00;
-export const PLANET_NEUTRAL_COLOR = PLANET_FLAT_COLOR;
+export const PLANET_NEUTRAL_COLOR = 0xffff00;
 export const PLANET_FORBIDDEN_COLOR = 0xff7f00;
 export const PLANET_HOSTILE_COLOR = 0xff0000;
 export const PLANET_UNLANDABLE_COLOR = 0x808080;
 
 /**
- * A stellar's radar blip colour. Unlandable is grey with or without IFF;
- * otherwise, without IFF every stellar is the flat yellow, mirroring the
- * ship rule (an IFF outfit "colorizes" the radar).
+ * A stellar's radar blip colour, or undefined when the status bar's flat
+ * dimRadar grey should be used — the same contract as
+ * {@link shipBlipColor}. Unlandable is grey with or without IFF; otherwise,
+ * without IFF every stellar is the flat grey (an IFF outfit "colorizes" the
+ * radar), and with one it takes its landing-clearance colour.
  */
 export function planetBlipColor(disposition: PlanetDisposition,
-    hasIff: boolean): number {
+    hasIff: boolean): number | undefined {
     if (disposition === 'unlandable') {
         return PLANET_UNLANDABLE_COLOR;
     }
     if (!hasIff) {
-        return PLANET_FLAT_COLOR;
+        return undefined;
     }
     switch (disposition) {
         case 'hostile': return PLANET_HOSTILE_COLOR;

@@ -1,4 +1,5 @@
 import 'jasmine';
+import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultStatusBarData } from 'novadatainterface/status_bar_data';
 import { Entity } from 'nova_ecs/entity';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -10,6 +11,9 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { TargetComponent } from '../nova_plugin/ship/index.js';
+import {
+    PlanetComponent, PlanetDataComponent,
+} from '../nova_plugin/travel/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { StatusBar } from './status_bar.js';
 import {
@@ -262,6 +266,21 @@ describe('RadarPane.drawRadar', () => {
             .toEqual(['88,105', '88,106', '88,88', '89,105', '89,106']);
     });
 
+    it('draws an uncoloured stellar in the flat dimRadar grey, not yellow',
+        () => {
+            // No IFF: DrawRadar leaves landable stellars out of planetColors,
+            // and the ring must read the same grey as an uncoloured ship.
+            const pane = recordingPane(data);
+            const planets = [['inhabited', state(-1200, 0)]] as unknown as
+                Parameters<RadarPane['drawRadar']>[2];
+            pane.drawRadar(here, [], planets);
+            const rects = drawnRects(pane);
+            expect([...rects.get(data.colors.dimRadar) ?? []].sort()).toEqual(
+                STELLAR_RING_PIXELS.map(([x, y]) => key([52 + x, 88 + y]))
+                    .sort());
+            expect(rects.has(0xffff00)).toBeFalse();
+        });
+
     it('rings large stellars and dots small ones', () => {
         const pane = recordingPane(data);
         const planets = [
@@ -313,7 +332,7 @@ describe('DrawRadar cadence', () => {
             time.time = ms;
             world.step();
         };
-        return { drawRadar, stepAt };
+        return { drawRadar, stepAt, world };
     }
 
     it('redraws once per 250 ms refresh, on the boundary, from the display '
@@ -349,4 +368,25 @@ describe('DrawRadar cadence', () => {
             // Pointing from the player back to (0, 0).
             expect(arrows[0]).toEqual({ x: 9000, y: -2000 });
         });
+
+    it('leaves an inhabited, landable stellar uncoloured (dimRadar grey) '
+        + 'while the player has no IFF', () => {
+        // Matthew: "Inhabited planets should still show up grey until the
+        // player has an iff sensor." The player here owns no outfits.
+        const { drawRadar, stepAt, world } = radarWorld();
+        const planet = new Entity('earth');
+        planet.components.set(MovementStateComponent,
+            { position: new Position(-9000, 2100) } as MovementState);
+        const planetData = getDefaultPlanetData();
+        expect(planetData.flags.canLand).toBeTrue();
+        expect(planetData.flags.uninhabited).toBeFalse();
+        planet.components.set(PlanetDataComponent, planetData);
+        planet.components.set(PlanetComponent, { id: 'nova:128' });
+        world.entities.set('earth', planet);
+        stepAt(0);
+        expect(drawRadar).toHaveBeenCalledTimes(1);
+        const planetColors = drawRadar.calls.mostRecent().args[6] as
+            ReadonlyMap<string, number> | undefined;
+        expect(planetColors?.get('earth')).toBeUndefined();
+    });
 });
