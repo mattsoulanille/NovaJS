@@ -1,6 +1,7 @@
 import { AnimationImage } from "novadatainterface/animation";
 import * as PIXI from "pixi.js";
 import { AnimationImageIndex } from "novadatainterface/animation";
+import { SpriteSheetFramesData } from "novadatainterface/sprite_sheet_data";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { texturesFromFrames } from "./textures_from_frames.js";
 import { mod } from "../util/mod.js";
@@ -28,19 +29,39 @@ export class SpriteSheetSprite {
         this.wrappedRotation = 0;
         this.pixiSprite.blendMode = image.blendMode;
 
-        const loadTextures = async () => {
-            const framesData = await this.displayAssets.data
-                .SpriteSheetFrames.get(this.image.id);
+        const useFrames = (framesData: SpriteSheetFramesData) => {
             this.textures = texturesFromFrames(framesData.frames);
             this.size.x = Math.max(0, ...this.textures.map(t => t.width));
             this.size.y = Math.max(0, ...this.textures.map(t => t.height));
             this.frames = this.textures.length;
             return this;
-        }
+        };
 
         this.pixiSprite.anchor.x = 0.5;
         this.pixiSprite.anchor.y = 0.5;
-        this.buildPromise = loadTextures();
+        // A sheet whose frame list is already loaded is set up NOW, so a
+        // graphic built from it can be drawn on the display step it was
+        // made (see SpriteSheetSprite.isReady / AnimationGraphicSyncLoader).
+        const cached = this.displayAssets.data.SpriteSheetFrames
+            .gotten?.[this.image.id];
+        this.buildPromise = cached
+            ? Promise.resolve(useFrames(cached))
+            : this.displayAssets.data.SpriteSheetFrames
+                .get(this.image.id).then(useFrames);
+    }
+
+    /**
+     * Whether a sprite of `image` would be fully set up the moment it is
+     * constructed: its sheet's frame list is already loaded.
+     */
+    static isReady(displayAssets: DisplayAssetDataInterface,
+        image: AnimationImage): boolean {
+        return Boolean(displayAssets.data.SpriteSheetFrames.gotten?.[image.id]);
+    }
+
+    /** Textures are set up (synchronously or by a finished load). */
+    get loaded(): boolean {
+        return this.textures !== undefined;
     }
 
     setFramesToUse(frames: string) {

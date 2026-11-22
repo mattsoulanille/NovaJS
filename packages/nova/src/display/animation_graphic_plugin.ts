@@ -4,7 +4,9 @@ import { AddEvent, DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Provide } from "nova_ecs/provide";
-import { originalIfDraft, ProvideAsync } from "nova_ecs/provide_async";
+import { AsyncProviderResource, originalIfDraft, ProvideAsync } from "nova_ecs/provide_async";
+import { Optional } from "nova_ecs/optional";
+import { Entity } from "nova_ecs/entity";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import {
@@ -47,39 +49,87 @@ const AnimationGraphicLoader = ProvideAsync({
             });
             await graphic.buildPromise;
         }
-
-        // Move the graphic to the entity's position before it becomes
-        // visible so a reused graphic does not flash at the position where
-        // its previous entity died.
-        const movement = entity.components.get(MovementStateComponent);
-        if (movement) {
-            graphic.container.position.x = movement.position.x;
-            graphic.container.position.y = movement.position.y;
-            graphic.rotation = movement.rotation.angle;
-        }
-
-        // Order sprites. Projectiles are checked FIRST: a shot draws
-        // above every ship, the firer's own included, so it is not
-        // swallowed by the hull it leaves from (see ZIndex).
-        if (entity.components.has(ProjectileComponent)) {
-            graphic.container.zIndex = ZIndex.PROJECTILE;
-        } else if (entity.components.has(PlayerShipSelector)) {
-            graphic.container.zIndex = ZIndex.PLAYER_SHIP;
-        } else if (entity.components.has(ShipComponent)) {
-            graphic.container.zIndex = ZIndex.SHIP;
-        } else if (entity.components.has(AsteroidComponent)) {
-            graphic.container.zIndex = ZIndex.ASTEROID;
-        } else if (entity.components.has(DebrisComponent)) {
-            graphic.container.zIndex = ZIndex.DEBRIS;
-        } else if (entity.components.has(PlanetComponent)) {
-            graphic.container.zIndex = ZIndex.PLANET;
-        }
-
-        return graphic;
+        return prepareGraphic(graphic, entity);
     },
     // #156 pin (shared: entity): AnimationGraphicPlugin registers after the
     // core AnimationPlugin.
     after: [ExplosionAnimationProvider],
+});
+
+/**
+ * Readies a graphic for the entity it was just handed to: at the entity's
+ * position (so a reused graphic does not flash where its previous entity
+ * died) and in the entity's draw layer.
+ */
+function prepareGraphic(graphic: AnimationGraphic, entity: Entity) {
+    const movement = entity.components.get(MovementStateComponent);
+    if (movement) {
+        graphic.container.position.x = movement.position.x;
+        graphic.container.position.y = movement.position.y;
+        graphic.rotation = movement.rotation.angle;
+    }
+
+    // Order sprites. Projectiles are checked FIRST: a shot draws
+    // above every ship, the firer's own included, so it is not
+    // swallowed by the hull it leaves from (see ZIndex).
+    if (entity.components.has(ProjectileComponent)) {
+        graphic.container.zIndex = ZIndex.PROJECTILE;
+    } else if (entity.components.has(PlayerShipSelector)) {
+        graphic.container.zIndex = ZIndex.PLAYER_SHIP;
+    } else if (entity.components.has(ShipComponent)) {
+        graphic.container.zIndex = ZIndex.SHIP;
+    } else if (entity.components.has(AsteroidComponent)) {
+        graphic.container.zIndex = ZIndex.ASTEROID;
+    } else if (entity.components.has(DebrisComponent)) {
+        graphic.container.zIndex = ZIndex.DEBRIS;
+    } else if (entity.components.has(PlanetComponent)) {
+        graphic.container.zIndex = ZIndex.PLANET;
+    }
+    return graphic;
+}
+
+/**
+ * Hands an entity its graphic on the display step it arrives, whenever
+ * that needs no waiting: a pooled graphic of its animation, or a new one
+ * whose sprite sheets are already loaded (AnimationGraphic.isReady).
+ *
+ * AnimationGraphicLoader is a ProvideAsync, and a ProvideAsync applies its
+ * result a microtask AFTER the step that ran it, so on its own every new
+ * entity was invisible for its first display frame and first drawn on the
+ * next: a projectile one frame of flight clear of the muzzle (measured in
+ * the browser: every shot; maintainer's ruling: a shot appears AT the
+ * muzzle). What this cannot provide (a sheet never loaded yet) falls
+ * through to the loader, as before.
+ */
+export const AnimationGraphicSyncLoader = new System({
+    name: 'AnimationGraphicSyncLoader',
+    args: [AnimationComponent, Optional(AnimationGraphicLoadedComponent),
+        DisplayAssetDataResource, AnimationGraphicPoolResource,
+        AsyncProviderResource, GetEntity, UUID] as const,
+    step(animation, loaded, displayAssets, pool, asyncProviders, entity,
+        uuid) {
+        if (loaded || asyncProviders.get(AnimationGraphicLoader.name)
+            ?.get(uuid)) {
+            // Already provided, or a build is in flight for it.
+            return;
+        }
+        let graphic = pool.acquire(animation);
+        if (graphic) {
+            graphic.reset();
+        } else if (AnimationGraphic.isReady(displayAssets, animation)) {
+            graphic = new AnimationGraphic({ displayAssets, animation });
+            if (!graphic.built) {
+                // isReady promised otherwise; the loader takes it.
+                return;
+            }
+        } else {
+            return;
+        }
+        entity.components.set(AnimationGraphicLoadedComponent,
+            prepareGraphic(graphic, entity));
+    },
+    after: [ExplosionAnimationProvider],
+    before: [AnimationGraphicLoader],
 });
 
 // Attaches a graphic to the space container and makes it visible. Pooled
@@ -202,28 +252,40 @@ export const AnimationGraphicCleanup = new System({
 });
 
 /**
- * A SHIP whose animation changed under its graphic gets a new graphic.
+ * An entity whose animation changed under its graphic gets a new graphic.
  *
  * AnimationGraphicLoader builds a graphic once per entity (it has no
  * `update:` list) and the graphic captures its sprites at construction, so
- * an entity that keeps its uuid but changes hull — an in-flight `Cxxx` /
- * `Exxx` / `Hxxx` (nova_plugin/missions/mission_ship_change.ts) replaces the
- * player's ship at the same uuid, and the display entity is updated in
- * place — would go on drawing the old hull. This hands the old graphic
- * back exactly as AnimationGraphicCleanup does when an entity is deleted,
- * and drops the graphic components so the loader builds one for the
- * animation the entity carries now.
+ * an entity that keeps its uuid but changes what it draws would go on
+ * drawing the old one:
  *
- * Ships only: what a ship draws is its hull's animation, and nothing else
- * reassigns a ship's AnimationComponent. Compared by animation id — two
- * hulls sharing a shän draw the same sprites, and the decoded component
- * of an unchanged hull is a fresh object every frame.
+ * - a SHIP that changes hull: an in-flight `Cxxx` / `Exxx` / `Hxxx`
+ *   (nova_plugin/missions/mission_ship_change.ts) replaces the player's
+ *   ship at the same uuid, and the display entity is updated in place;
+ * - a PROJECTILE whose uuid a rollback re-mints for another weapon.
+ *   Projectile uuids come from the system's IdFactory
+ *   (`nova:184:projectile:143`), whose counter is simulation state that a
+ *   rollback restores, so the resimulation can hand the same uuid to a
+ *   different shot (an NPC's missile where the prediction had the
+ *   player's blaster). The display diffs by uuid: it sees the old entity
+ *   with a new AnimationComponent, and the shot flew with the other
+ *   weapon's sprite for its whole life.
+ *
+ * This hands the old graphic back exactly as AnimationGraphicCleanup does
+ * when an entity is deleted (filed under what it was BUILT from, so the
+ * pool stays clean), and drops the graphic components so the entity gets
+ * one for the animation it carries now, on this same step when
+ * AnimationGraphicSyncLoader can provide it.
+ *
+ * Compared by animation id: two hulls sharing a shän draw the same
+ * sprites, and the decoded component of an unchanged entity is a fresh
+ * object every frame.
  */
-export const AnimationGraphicHullChangeSystem = new System({
-    name: 'AnimationGraphicHullChange',
-    args: [ShipComponent, AnimationComponent, AnimationGraphicComponent,
+export const AnimationGraphicAnimationChangeSystem = new System({
+    name: 'AnimationGraphicAnimationChange',
+    args: [AnimationComponent, AnimationGraphicComponent,
         AnimationGraphicPoolResource, Space, GetEntity] as const,
-    step(_ship, animation, graphic, poolResource, space, entity) {
+    step(animation, graphic, poolResource, space, entity) {
         const current = currentIfDraft(animation);
         const graphicNow = originalIfDraft(graphic);
         const built = graphicNow.builtAnimation;
@@ -239,7 +301,7 @@ export const AnimationGraphicHullChangeSystem = new System({
         entity.components.delete(AnimationGraphicComponent);
         entity.components.delete(AnimationGraphicLoadedComponent);
     },
-    before: [AnimationGraphicLoader],
+    before: [AnimationGraphicSyncLoader, AnimationGraphicLoader],
 });
 
 export const AnimationGraphicInsert = new System({
@@ -257,21 +319,23 @@ export const AnimationGraphicPlugin: Plugin = {
         world.resources.set(AnimationGraphicPoolResource,
             new AnimationGraphicPool());
         world.addSystem(AnimationGraphicLoader);
+        world.addSystem(AnimationGraphicSyncLoader);
         world.addSystem(AnimationGraphicProvider);
         world.addSystem(ObjectDrawSystem);
         world.addSystem(TumbleDrawSystem);
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(AnimationGraphicInsert);
-        world.addSystem(AnimationGraphicHullChangeSystem);
+        world.addSystem(AnimationGraphicAnimationChangeSystem);
     },
     remove(world) {
         world.removeSystem(AnimationGraphicLoader);
+        world.removeSystem(AnimationGraphicSyncLoader);
         world.removeSystem(AnimationGraphicProvider);
         world.removeSystem(ObjectDrawSystem);
         world.removeSystem(TumbleDrawSystem);
         world.removeSystem(AnimationGraphicCleanup);
         world.removeSystem(AnimationGraphicInsert);
-        world.removeSystem(AnimationGraphicHullChangeSystem);
+        world.removeSystem(AnimationGraphicAnimationChangeSystem);
         world.resources.delete(AnimationGraphicPoolResource);
     }
 }

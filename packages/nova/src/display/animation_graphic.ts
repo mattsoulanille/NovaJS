@@ -56,7 +56,6 @@ export class AnimationGraphic {
      * graphic is reused, so a new ship never inherits a bank or a glow.
      */
     motionDisplay?: ShipMotionDisplayState;
-    private animation: Animation | Promise<Animation>;
     /**
      * The animation this graphic's sprites were actually BUILT from,
      * resolved once `build()` gets past awaiting `animation`.
@@ -88,21 +87,40 @@ export class AnimationGraphic {
     weapDecay = 0;
 
     constructor({ displayAssets, animation }: { displayAssets: DisplayAssetDataInterface, animation: Animation | Promise<Animation> }) {
-        this.animation = animation;
         this.displayAssets = displayAssets;
         this.rotation = 0;
-        this.buildPromise = this.build();
+        this.buildPromise = animation instanceof Promise
+            ? animation.then(resolved => this.build(resolved))
+            : this.build(animation);
     }
 
-    private async build(): Promise<AnimationGraphic> {
-        var promises: Promise<unknown>[] = [];
+    /**
+     * Whether a graphic of `animation` would be BUILT the moment it is
+     * constructed (`built` true, no await): every sprite sheet it draws
+     * has its frame list loaded already. AnimationGraphicSyncLoader uses
+     * this to draw a new projectile on the display step it arrives.
+     */
+    static isReady(displayAssets: DisplayAssetDataInterface,
+        animation: Animation): boolean {
+        return Object.values(animation.images).every(image =>
+            !image || SpriteSheetSprite.isReady(displayAssets, image));
+    }
+
+    /**
+     * Synchronous whenever every sheet is already loaded (`built` is then
+     * true by the time the constructor returns); otherwise finishes when
+     * the last sheet loads.
+     */
+    private build(animation: Animation): Promise<AnimationGraphic> {
+        const promises: Promise<unknown>[] = [];
         // Record what we are building from BEFORE any sprite is made, so the
         // graphic's identity always matches the sheets it actually holds.
-        this.builtAnimation = await this.animation;
-        this.blink = (await this.animation).blink;
-        this.weapDecay = (await this.animation).weapDecay;
-        for (const imageName in (await this.animation).images) {
-            const image = (await this.animation).images[imageName];
+        this.builtAnimation = animation;
+        this.blink = animation.blink;
+        this.weapDecay = animation.weapDecay;
+        let allLoaded = true;
+        for (const imageName in animation.images) {
+            const image = animation.images[imageName];
             if (!image) {
                 // A sprite layer the shän does not define (most ships
                 // have no weapImage / altImage / shieldImage). Draw
@@ -117,8 +135,15 @@ export class AnimationGraphic {
             this.sprites.set(imageName, sprite);
             this.container.addChild(sprite.pixiSprite);
             promises.push(sprite.buildPromise);
+            allLoaded &&= sprite.loaded;
         }
-        await Promise.all(promises);
+        if (allLoaded) {
+            return Promise.resolve(this.finishBuild());
+        }
+        return Promise.all(promises).then(() => this.finishBuild());
+    }
+
+    private finishBuild(): AnimationGraphic {
         this.size.x = Math.max(0, ...[...this.sprites.values()].map(s => s.size.x));
         this.size.y = Math.max(0, ...[...this.sprites.values()].map(s => s.size.y));
         this.rotation = this.rotation;

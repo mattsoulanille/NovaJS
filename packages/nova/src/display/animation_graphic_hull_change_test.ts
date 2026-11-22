@@ -7,7 +7,7 @@ import { AnimationComponent } from '../nova_plugin/core/index.js';
 import { ShipComponent } from '../nova_plugin/ship/index.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import {
-    AnimationGraphicComponent, AnimationGraphicHullChangeSystem,
+    AnimationGraphicComponent, AnimationGraphicAnimationChangeSystem,
 } from './animation_graphic_plugin.js';
 import { AnimationGraphicPool, AnimationGraphicPoolResource } from './animation_graphic_pool.js';
 import { Space } from './space_resource.js';
@@ -17,7 +17,7 @@ import { Space } from './space_resource.js';
  * SAME uuid (nova_plugin/missions/mission_ship_change.ts), so the display
  * entity is updated in place with the new hull's AnimationComponent — and
  * AnimationGraphicLoader, which builds a graphic once per entity, would go
- * on drawing the old hull. AnimationGraphicHullChangeSystem hands the old
+ * on drawing the old hull. AnimationGraphicAnimationChangeSystem hands the old
  * graphic back and drops it so the loader builds the new one.
  *
  * Headless: only PIXI.Container is touched, no renderer.
@@ -33,7 +33,7 @@ describe('a ship whose hull changed under its graphic', () => {
         const space = new PIXI.Container();
         world.resources.set(AnimationGraphicPoolResource, pool);
         world.resources.set(Space, space);
-        world.addSystem(AnimationGraphicHullChangeSystem);
+        world.addSystem(AnimationGraphicAnimationChangeSystem);
         return { world, pool, space };
     }
 
