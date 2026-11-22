@@ -514,33 +514,6 @@ export function frameFor(phase: 'main' | 'haggle',
 }
 
 /**
- * Which offer the 'r' key ("recharge", the original's request-assistance
- * key) activates in the hail dialog: the assist button slot's occupant —
- * Request Assistance when eligible, or Beg for Mercy against a hostile
- * ship (the slot's replacement). Nothing on the haggle page (where the
- * offer buttons are Pay/Leave) or when neither offer exists.
- */
-export function assistSlotAction(phase: 'main' | 'haggle',
-    context?: {
-        assist?: unknown, bribe?: unknown, mercyRefused?: unknown,
-        playerChannel?: { hostile: boolean },
-    }): 'assist' | 'beg' | undefined {
-    if (phase !== 'main' || !context) {
-        return undefined;
-    }
-    if (context.playerChannel) {
-        return context.playerChannel.hostile ? 'beg' : 'assist';
-    }
-    if (context.assist) {
-        return 'assist';
-    }
-    if (context.bribe || context.mercyRefused !== undefined) {
-        return 'beg';
-    }
-    return undefined;
-}
-
-/**
  * WHICH MESSAGE a press in a channel to another player's ship sends (#332),
  * or undefined when the channel is not to a player. Greetings sends a
  * greeting; the offer slot sends what its caption says — Beg For Mercy to
@@ -757,6 +730,14 @@ export class HailDialog {
     private context?: HailContext;
     /** The context the channel opened with, so Greetings can restore it. */
     private opening?: HailContext;
+    /**
+     * The buttons the letter keys press, as the current page drew them:
+     * 'g' the Greetings row, 'r' the offer slot under it (Request
+     * Assistance / Beg For Mercy on a ship, Offer Bribe / Demand Tribute
+     * at a stellar). Empty on the haggle page and in the escort box, which
+     * have neither row, so the keys do nothing there.
+     */
+    private keyedButtons: { greetings?: Button, offer?: Button } = {};
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private controlEvents: Observable<ControlEvent>,
@@ -777,9 +758,14 @@ export class HailDialog {
             // 'y' toggles the dialog closed again; 'd'/Escape backs out.
             hail: () => this.closed.next(),
             depart: () => this.close(),
-            // 'r': the assist slot — Request Assistance, or Beg for
-            // Mercy when hostile (the slot's replacement).
-            recharge: () => this.pressAssistSlot(),
+            // The comm column's letter keys (Matthew's ruling): 'g' (the
+            // 'gamble' action, KeyG) presses Greetings and 'r' ('recharge',
+            // KeyR) presses the offer slot — Request Assistance, or Beg
+            // For Mercy when the ship is hostile. Each presses the BUTTON
+            // AS DRAWN (see keyedButtons), so a key can never do what its
+            // button would not, and a greyed button ignores its key.
+            gamble: () => this.keyedButtons.greetings?.activate(),
+            recharge: () => this.keyedButtons.offer?.activate(),
         });
     }
 
@@ -907,22 +893,6 @@ export class HailDialog {
         this.apply({ kind: 'assist', answer, haggle });
     }
 
-    /**
-     * The 'r' key ("recharge", the original's request-assistance key):
-     * presses whatever occupies the assist button slot on the main page —
-     * see {@link assistSlotAction}.
-     */
-    private pressAssistSlot() {
-        switch (assistSlotAction(this.phase, this.context)) {
-            case 'assist':
-                this.pressAssist();
-                break;
-            case 'beg':
-                this.pressBeg();
-                break;
-        }
-    }
-
     private close() {
         this.closed.next();
     }
@@ -952,6 +922,7 @@ export class HailDialog {
     /** Rebuilds the scene graph for the current phase/context. */
     private async render() {
         this.content.removeChildren().forEach(child => child.destroy());
+        this.keyedButtons = {};
         const context = this.context;
         if (!context) {
             return;
@@ -1148,6 +1119,11 @@ export class HailDialog {
                 button.click.subscribe(onPress);
             } else {
                 button.state = 'grey';
+            }
+            if (slot === 'greetings') {
+                this.keyedButtons.greetings = button;
+            } else if (slot !== 'close') {
+                this.keyedButtons.offer = button;
             }
             this.content.addChild(button.container);
         });

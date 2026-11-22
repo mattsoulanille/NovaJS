@@ -227,6 +227,21 @@ export class Button {
     }
 
     /**
+     * A keyboard shortcut's press: fires `click` exactly as a pointer click
+     * on the button does, so the key runs the button's own handler rather
+     * than a parallel copy of it. A GREYED button ignores it, the same way
+     * {@link pressTransition} ignores a pointer press on one. Returns
+     * whether the click fired.
+     */
+    activate(): boolean {
+        if (this.wrappedState === 'grey') {
+            return false;
+        }
+        this.click.next({ option: false, shift: false });
+        return true;
+    }
+
+    /**
      * Replaces the button caption (e.g. a mïsn's custom accept/refuse
      * label). The button keeps its constructed width.
      */
