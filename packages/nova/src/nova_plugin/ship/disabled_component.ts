@@ -61,11 +61,12 @@ export const DisabledComponent = new Component<DisabledState>('DisabledComponent
 /**
  * How hard a disabled ship brakes toward rest, in px/s^2 (velocity-space
  * units of MovementState). TUNABLE: the Bible doesn't give a rate; stock
- * ship speeds land around 75-120 px/s after ShipSpeedConversionFactor, so
- * 30 px/s^2 coasts a full-speed ship to a stop over ~3-4 s — visibly
- * "drifting to a halt" rather than parking instantly.
+ * ship speeds land around 110-180 px/s after ShipSpeedConversionFactor, so
+ * 45 px/s^2 coasts a full-speed ship to a stop over ~3-4 s — visibly
+ * "drifting to a halt" rather than parking instantly. (Raised from 30 with
+ * #316's 1.5x ship speeds, to keep that 3-4 s.)
  */
-export const DISABLED_DECELERATION = 30;
+export const DISABLED_DECELERATION = 45;
 
 /**
  * Repair margin: a self-repair brings armor to (threshold + this fraction

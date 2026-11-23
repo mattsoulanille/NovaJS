@@ -41,13 +41,13 @@ const ATTACK_STANDOFF = 250;
 // --- Steering ---
 
 /**
- * Point-and-thrust arrival: turn toward the goal and burn while far;
+ * Point-and-thrust arrival: steer toward the goal and burn while far;
  * inside the slow radius, turn retrograde and brake until slow.
  * Built from the same movement primitives the jump sequence's
  * 'stopping' stage uses. Returns true once arrived.
  */
 export function steerArrive(movement: MovementState, physics: {
-    acceleration: number, turnRate: number,
+    acceleration: number, turnRate: number, speed: number,
 }, goal: Position, arriveRadius: number, arriveSpeed: number): boolean {
     const toGoal = goal.subtract(movement.position);
     const distance = toGoal.length;
@@ -77,11 +77,20 @@ export function steerArrive(movement: MovementState, physics: {
         }
         return false;
     }
-    // Cruise: point at the goal, thrust when roughly aligned.
+    // Cruise: thrust along (top speed straight at the goal) minus (the
+    // current velocity), when roughly aligned. Pointing the nose at the
+    // goal itself never burns off velocity ACROSS the line to it, and a
+    // hull with a lot of top speed for its acceleration then orbits the
+    // goal outside the braking radius forever (#316: the stock Cargo
+    // Drone, Speed 400 / Accel 200, takes 5 s to reach top speed and did
+    // exactly that). Burning along the velocity error cancels the drift
+    // and reduces to "point at the goal" when there is none.
     movement.turnBack = false;
-    const goalAngle = toGoal.angle;
-    movement.turnTo = goalAngle;
-    const misalignment = movement.rotation.distanceTo(goalAngle).angle;
+    const burn = toGoal.normalize(physics.speed)
+        .subtract(Vector.fromVectorLike(movement.velocity));
+    const heading = burn.length > 1e-9 ? burn.angle : toGoal.angle;
+    movement.turnTo = heading;
+    const misalignment = movement.rotation.distanceTo(heading).angle;
     movement.accelerating = Math.abs(misalignment) < 0.6 ? 1 : 0;
     return false;
 }

@@ -22,8 +22,13 @@ export const FORMATION_ROW_SPACING = 60;
  * the first-cut 110.) */
 export const FORMATION_LATERAL_SPACING = 55;
 /** How far ahead (seconds) followers lead the slot by the leader's
- * velocity, so they fly toward where the slot is going. */
-const FORMATION_LOOKAHEAD_S = 0.4;
+ * velocity, so they fly toward where the slot is going. With the leader's
+ * velocity also fed forward, this is where a follower settles: this many
+ * seconds of the leader's travel ahead of its slot. It was 0.4 s; #316
+ * made ship speeds 1.5x, so it is 0.4 / 1.5 to keep each hull's offset in
+ * pixels where it was tuned (at 0.4 s a Speed-334 leader at full speed
+ * would have pulled its slot-0 escort, 60 px astern, level with itself). */
+export const FORMATION_LOOKAHEAD_S = 0.4 / 1.5;
 /** Position error is converted to closing velocity at this rate (1/s):
  * the proportional term of the follower controller. */
 const FORMATION_POSITION_GAIN = 1.2;

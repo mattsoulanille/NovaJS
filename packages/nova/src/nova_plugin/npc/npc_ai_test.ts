@@ -4,16 +4,17 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementState } from 'nova_ecs/plugins/movement_plugin';
+import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation/index.js';
 import {
     chaserBlocksJump, chooseNearest, Formation, formationOffset,
     formationSlotPosition, FLEE_JUMP_BLOCK_RANGE,
-    FORMATION_LATERAL_SPACING, FORMATION_ROW_SPACING,
+    FORMATION_LATERAL_SPACING, FORMATION_LOOKAHEAD_S, FORMATION_ROW_SPACING,
     landingDestinations, nextFormationSlot, npcBoardArrived,
     npcPlunderEligible, npcPlundersHulks, NPC_BOARD_RADIUS, NPC_BOARD_SPEED,
     NPC_PLUNDER_TAKES_FROM_PLAYERS, PlanetEntry,
     RCS_ACCEL_FRACTION, RCS_DISENGAGE_SPEED, RCS_ENGAGE_SPEED,
-    steerFormation,
+    steerArrive, steerFormation,
 } from './npc_ai_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 
@@ -393,11 +394,12 @@ describe('steerFormation', () => {
             });
             const state = formation();
             // The controller's station point: the slot, led by the
-            // leader's velocity (FORMATION_LOOKAHEAD_S = 0.4).
+            // leader's velocity (FORMATION_LOOKAHEAD_S).
             const error = () => formationSlotPosition(
                 Position.fromVectorLike(leader.position),
                 Angle.fromAngleLike(leader.rotation), 0)
-                .add(Vector.fromVectorLike(leader.velocity).scale(0.4))
+                .add(Vector.fromVectorLike(leader.velocity)
+                    .scale(FORMATION_LOOKAHEAD_S))
                 .subtract(follower.position).length;
             const initialError = error();
             for (let i = 0; i < 600; i++) {
@@ -661,4 +663,61 @@ describe('npcBoardArrived', () => {
         expect(npcBoardArrived(at(0, 0), at(50, NPC_BOARD_SPEED + 10)))
             .toBeFalse();
     });
+});
+
+describe('steerArrive', () => {
+    it('arrives with a hull that takes seconds to reach top speed, '
+        + 'instead of orbiting the goal (#316)', () => {
+            // The stock Cargo Drone (shïp nova:130): Speed 400, Accel 200,
+            // 60°/s of turn — 180 px/s on 36 px/s^2. Flying past the goal
+            // at top speed, the old cruise (nose at the goal, burn) never
+            // removed the sideways velocity and circled it ~600 px out,
+            // outside the braking radius, for good.
+            const physics = {
+                speed: 400 * ShipSpeedConversionFactor,
+                acceleration: 200 * ShipAccelerationConversionFactor,
+                turnRate: Math.PI / 3,
+            };
+            const delta_s = 1 / 60;
+            const goal = new Position(0, 0);
+            const movement: MovementState = {
+                accelerating: 0,
+                position: new Position(-1500, 0),
+                rotation: new Angle(0),
+                turnBack: false,
+                turning: 0,
+                velocity: new Vector(0, -physics.speed),
+            };
+            let arrivedAt: number | undefined;
+            for (let i = 0; i < 60 * 90; i++) {
+                if (steerArrive(movement, physics, goal, 90, 50)) {
+                    arrivedAt = i / 60;
+                    break;
+                }
+                // An inertial ship's MovementSystem step, finite turn rate.
+                const heading = movement.turnTo instanceof Angle
+                    ? movement.turnTo
+                    : movement.turnBack && movement.velocity.length > 0
+                        ? movement.velocity.angle.add(Math.PI) : undefined;
+                if (heading) {
+                    const error = movement.rotation.distanceTo(heading).angle;
+                    movement.rotation =
+                        Math.abs(error) <= physics.turnRate * delta_s
+                            ? heading
+                            : movement.rotation.add(
+                                Math.sign(error) * physics.turnRate * delta_s);
+                }
+                if (movement.accelerating > 0) {
+                    movement.velocity = movement.velocity.add(movement
+                        .rotation.getUnitVector().scale(
+                            physics.acceleration * delta_s));
+                }
+                movement.velocity =
+                    movement.velocity.shortenToLength(physics.speed);
+                movement.position = Position.fromVectorLike(
+                    movement.position.add(movement.velocity.scale(delta_s)));
+            }
+            expect(arrivedAt).toBeDefined();
+            expect(arrivedAt!).toBeLessThan(60);
+        });
 });

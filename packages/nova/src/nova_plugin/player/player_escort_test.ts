@@ -3,6 +3,7 @@ import { isRight } from 'fp-ts/lib/Either.js';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -34,7 +35,7 @@ import {
 import {
     escortFollows, EscortJump, EscortJumpEvent, EscortLanded,
     EscortLandedEvent, escortsOnPayroll, ESCORT_LAND_DISTANCE_SQUARED,
-    sweepableEscorts, playerEscortLink, steerToStellar,
+    ESCORT_LAND_SPEED_SQUARED, sweepableEscorts, playerEscortLink, steerToStellar,
 } from '../escorts/index.js';
 import { ControlledByComponent } from './ship_control.js';
 import { prepareCarriedEscort } from '../../spaceport/landed_escorts.js';
@@ -985,6 +986,62 @@ describe('steerToStellar', () => {
             .toBeLessThan(50);
         expect(movement.velocity.length).toBeLessThan(20);
     });
+
+    it('lands a hull with little acceleration for its top speed (#316)',
+        () => {
+            // The stock Cargo Drone (shïp nova:130): Speed 400, Accel 200,
+            // 60°/s of turn — 180 px/s on 36 px/s^2, five seconds from
+            // rest to top speed. On the bare gain profile it asked for
+            // 1.2 x 180 px/s^2 of braking, overshot by hundreds of px and
+            // swung back and forth through the stellar forever.
+            const speed = 400 * ShipSpeedConversionFactor;
+            const acceleration = 200 * ShipAccelerationConversionFactor;
+            const turnRate = Math.PI / 3;
+            const delta_s = 1 / 60;
+            const target = new Position(0, 0);
+            // Flying past at top speed, 1500 px out.
+            const movement: MovementState = {
+                accelerating: 0,
+                position: new Position(-1500, 0),
+                rotation: new Angle(0),
+                turnBack: false,
+                turning: 0,
+                velocity: new Vector(0, -speed),
+            };
+            let landedAt: number | undefined;
+            for (let i = 0; i < 60 * 60 && landedAt === undefined; i++) {
+                const offset = target.subtract(movement.position);
+                if (offset.lengthSquared < ESCORT_LAND_DISTANCE_SQUARED
+                    && movement.velocity.lengthSquared
+                    < ESCORT_LAND_SPEED_SQUARED) {
+                    landedAt = i / 60;
+                    break;
+                }
+                steerToStellar(movement, target, acceleration, speed,
+                    delta_s);
+                // Kinematics with a FINITE turn rate (the turn is what a
+                // low-acceleration hull cannot hide), as MovementSystem
+                // integrates an inertial ship.
+                if (movement.turnTo instanceof Angle) {
+                    const error = movement.rotation
+                        .distanceTo(movement.turnTo).angle;
+                    movement.rotation = Math.abs(error) <= turnRate * delta_s
+                        ? movement.turnTo
+                        : movement.rotation.add(
+                            Math.sign(error) * turnRate * delta_s);
+                }
+                if (movement.accelerating > 0) {
+                    movement.velocity = movement.velocity.add(movement
+                        .rotation.getUnitVector().scale(
+                            acceleration * delta_s));
+                }
+                movement.velocity = movement.velocity.shortenToLength(speed);
+                movement.position = Position.fromVectorLike(
+                    movement.position.add(movement.velocity.scale(delta_s)));
+            }
+            expect(landedAt).toBeDefined();
+            expect(landedAt!).toBeLessThan(40);
+        });
 });
 
 /**

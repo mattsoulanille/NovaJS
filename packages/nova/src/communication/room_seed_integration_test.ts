@@ -154,7 +154,8 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             //
             // The two stepped columns (hash and Random state after 300
             // steps) were re-pinned for #316, which made shïp Speed 1.5x
-            // and Accel 0.6x what they were: the genesis hashes did not
+            // and Accel 0.6x what they were and retuned the NPC arrival
+            // and formation steering to match: the genesis hashes did not
             // move, but the NPCs fly different paths, so the world after
             // 300 steps differs and the AI's arrival-triggered rolls
             // (new waypoints, dwell ends) draw Random a different number
@@ -162,9 +163,9 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // seed reaches the world, and the genesis is the old one.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '8d6c6c3f', 'f0f98b64',
+                [THESSALY, '8d6c6c3f', 'f1bb7aa9',
                     [540372827, 2359486158, 3964262456, 396451155]],
-                [SYNTHETIC.systems.kestrel, 'a90af946', '9bb5246e',
+                [SYNTHETIC.systems.kestrel, 'a90af946', '5c186af8',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

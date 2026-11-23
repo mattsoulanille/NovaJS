@@ -205,6 +205,17 @@ export const ESCORT_LAND_SPEED_SQUARED = 10_000;
 export const ESCORT_APPROACH_GAIN = 1.2;
 
 /**
+ * The approach speed is also capped at what the escort can actually brake
+ * from: sqrt(2 * this fraction * acceleration * remaining distance). The
+ * gain profile alone asks for ESCORT_APPROACH_GAIN * speed of
+ * deceleration, which a hull with a lot of top speed for its acceleration
+ * cannot deliver; it overshoots, turns round and overshoots again (#316:
+ * the stock Cargo Drone, 180 px/s on 36 px/s^2, never landed). Half the
+ * acceleration leaves the other half for the turn to retrograde.
+ */
+export const ESCORT_APPROACH_BRAKE_FRACTION = 0.5;
+
+/**
  * Correction magnitude (px/s) below which the landing controller switches
  * from turn-and-burn to a direct RCS-style velocity nudge, exactly like
  * formation station-keeping (steerFormation): the last few px/s of an
@@ -474,7 +485,9 @@ export function sweepableEscorts(entities: EscortSweepEntities,
 
 /**
  * Steers a ship to come to rest at `target` (a stellar's position).
- * Proportional arrival profile plus the same two-regime hysteresis-free
+ * Proportional arrival profile (capped at a speed the ship can brake
+ * from, ESCORT_APPROACH_BRAKE_FRACTION) plus the same two-regime
+ * hysteresis-free
  * split formation keeping uses: turn-and-burn while the velocity
  * correction is large, a budgeted RCS nudge once it is small. Pure, so
  * convergence is unit-testable.
@@ -485,7 +498,9 @@ export function steerToStellar(movement: MovementState, target: Position,
     const error = target.subtract(movement.position);
     const distance = error.length;
     const desiredSpeed = Math.min(maxVelocity,
-        distance * ESCORT_APPROACH_GAIN);
+        distance * ESCORT_APPROACH_GAIN,
+        Math.sqrt(2 * ESCORT_APPROACH_BRAKE_FRACTION * acceleration
+            * distance));
     const desired = distance > 1e-9
         ? error.normalize(desiredSpeed) : new Vector(0, 0);
     const correction = desired.subtract(
