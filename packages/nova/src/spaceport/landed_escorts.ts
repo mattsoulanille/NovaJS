@@ -13,12 +13,12 @@ import {
 import {
     OwnerComponent, SourceComponent,
 } from '../nova_plugin/combat/index.js';
-import { FiringGroupComponent, TargetComponent } from '../nova_plugin/ship/index.js';
+import { FiringGroupComponent, ShipDataComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import {
     GateArrivalComponent, JumpComponent, MultiJumpContinueComponent,
 } from '../nova_plugin/travel/index.js';
 import {
-    FormationComponent, formationSlotPosition, NpcComponent,
+    FormationComponent, formationSlotPosition, formationSpacing, NpcComponent,
 } from '../nova_plugin/npc/index.js';
 
 /**
@@ -364,6 +364,8 @@ interface Station {
     position: Position;
     rotation: Angle;
     velocity: Vector;
+    /** The leader's sprite frame width (ShipData.spriteFrameWidth). */
+    frameWidth: number;
 }
 
 function stationOf(entity: Entity): Station | undefined {
@@ -375,6 +377,8 @@ function stationOf(entity: Entity): Station | undefined {
         position: Position.fromVectorLike(movement.position),
         rotation: Angle.fromAngleLike(movement.rotation),
         velocity: Vector.fromVectorLike(movement.velocity),
+        frameWidth: entity.components.get(ShipDataComponent)
+            ?.spriteFrameWidth ?? 0,
     };
 }
 
@@ -425,8 +429,13 @@ function placeCarriedEscort(escort: CarriedEscort, player: string,
     }
     escort.entity.components.set(MovementStateComponent, {
         ...movement,
+        // At the spacing of the leader and this hull; FormationSystem
+        // settles the formation on its group spacing (the largest frame
+        // among the leader and all its escorts) from the first tick.
         position: formationSlotPosition(station.position, station.rotation,
-            slot),
+            slot, formationSpacing(Math.max(station.frameWidth,
+                escort.entity.components.get(ShipDataComponent)
+                    ?.spriteFrameWidth ?? 0))),
         rotation: station.rotation,
         velocity: station.velocity,
         accelerating: 0,

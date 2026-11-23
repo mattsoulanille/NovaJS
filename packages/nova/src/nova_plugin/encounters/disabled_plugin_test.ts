@@ -33,7 +33,7 @@ import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import {
-    FormationComponent, formationSlotPosition,
+    FormationComponent, formationSlotPosition, formationSpacing,
 } from '../npc/index.js';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
 import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
@@ -673,7 +673,7 @@ describe('ship disabling in a live world', () => {
             // correction that station-keeping uses the RCS nudge (the only
             // regime that survives the disabled sweep).
             const slot = formationSlotPosition(new Position(0, 0),
-                new Angle(0), 0, 1);
+                new Angle(0), 0, formationSpacing(shipData.spriteFrameWidth));
             const start = new Position(slot.x + 20, slot.y);
             const followerMovement =
                 follower.components.get(MovementStateComponent)!;
@@ -715,7 +715,7 @@ describe('ship disabling in a live world', () => {
             follower.components.set(FormationComponent,
                 { leader: SHIP, slot: 0, rcs: true });
             const slot = formationSlotPosition(new Position(0, 0),
-                new Angle(0), 0, 1);
+                new Angle(0), 0, formationSpacing(shipData.spriteFrameWidth));
             const followerMovement =
                 follower.components.get(MovementStateComponent)!;
             followerMovement.position = new Position(slot.x + 20, slot.y);

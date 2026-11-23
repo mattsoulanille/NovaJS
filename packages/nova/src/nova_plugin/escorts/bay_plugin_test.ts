@@ -14,7 +14,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import { SoundEvent } from '../core/index.js';
 import { EscortCommandComponent, NO_DEAL } from '../player/index.js';
-import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { FormationComponent, NpcComponent, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import {
     applyRefundFighter, BayFighterComponent, EXIT_KICK, FighterDockedEvent,
     startReturnHome,
@@ -31,8 +31,8 @@ import {
 } from '../player/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
-import { makeShip } from '../ship/index.js';
-import { makeSystem } from '../make_system.js';
+import { makeShip, ShipPhysicsComponent } from '../ship/index.js';
+import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { canSellOutfit } from '../../spaceport/outfitter_rules.js';
 import { WeaponsStateComponent } from '../ship/index.js';
@@ -382,9 +382,15 @@ describe('bay weapons', () => {
             // its carrier flew off at speed.
             expect(launched.length).toBeGreaterThan(1);
             // The carrier's motion is inherited, and the leftover is the
-            // exit kick alone.
+            // exit kick — give or take the RCS station-keeping nudges
+            // FormationSystem may have made in the (at most two) ticks since
+            // launch: a fighter leaves the bay close beside its slot (a
+            // few tens of px), near enough to be on RCS at once.
             const kick = launched.subtract(carrierVelocity);
-            expect(kick.length).toBeCloseTo(EXIT_KICK, 4);
+            const rcsPerTick = fighter.components.get(ShipPhysicsComponent)!
+                .acceleration * RCS_ACCEL_FRACTION * SIMULATION_STEP_MS / 1000;
+            expect(Math.abs(kick.length - EXIT_KICK))
+                .toBeLessThanOrEqual(2 * rcsPerTick + 1e-9);
         });
 
     it('re-derives the carrier\'s return_escorts vulnerability after the '

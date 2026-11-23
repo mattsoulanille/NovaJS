@@ -349,6 +349,18 @@ export interface ShipData extends SpaceObjectData {
     disableArmorFraction: number;
     /** Hull length in metres (shïp Length), shown in the ship info dialog. */
     length: number;
+    /**
+     * The width in px of one frame of the ship's BASE sprite: the rlëD
+     * frame size (header width) of its shän base image — the whole frame,
+     * not the visible pixels, and neither shïp Length nor the shän's own
+     * frame-size fields. 0 when the ship has no shän/base rlëD.
+     *
+     * Simulation data: escort formation spacing scales with the largest
+     * frame in the formation (npc_formation.ts, reference F1b). Read at
+     * parse time from the rlëD header, so it never depends on loading the
+     * sprite sheet itself.
+     */
+    spriteFrameWidth: number;
     /** Standard crew complement (shïp Crew), shown in the ship info dialog. */
     crew: number;
     /**
@@ -417,6 +429,7 @@ export function getDefaultShipData(): ShipData {
         pilotDesc: "",
         disableArmorFraction: 0.33,
         length: 0,
+        spriteFrameWidth: 0,
         crew: 0,
         freeSpace: 0,
         turretBlindSpots: getDefaultTurretBlindSpots(),

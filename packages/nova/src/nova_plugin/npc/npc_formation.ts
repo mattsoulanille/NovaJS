@@ -14,24 +14,54 @@ import { MovementState } from 'nova_ecs/plugins/movement_plugin';
  */
 
 // --- Formation tuning ---
+//
+// Measured on the original EV Nova (docs/reference_experiments.md, F1 and
+// F1b): escorts fly a 45° V TRAILING the leader. Row r (1, 2, ...) sits
+// r * a px astern and r * a px out to the side, where the step `a` scales
+// with the LARGEST sprite frame in the formation (formationSpacing). The
+// slots are the SAME at rest and at full speed (±2 px; no speed-
+// proportional lead or lag).
 
-/** Longitudinal spacing between formation rows, px. (Halved from the
- * first-cut 120 after Matthew's playtest: tighter wedge.) */
-export const FORMATION_ROW_SPACING = 60;
-/** Lateral spacing between adjacent cells of a row, px. (Halved from
- * the first-cut 110.) */
-export const FORMATION_LATERAL_SPACING = 55;
-/** How far ahead (seconds) followers lead the slot by the leader's
- * velocity, so they fly toward where the slot is going. With the leader's
- * velocity also fed forward, this is where a follower settles: this many
- * seconds of the leader's travel ahead of its slot. It was 0.4 s; #316
- * made ship speeds 1.5x, so it is 0.4 / 1.5 to keep each hull's offset in
- * pixels where it was tuned (at 0.4 s a Speed-334 leader at full speed
- * would have pulled its slot-0 escort, 60 px astern, level with itself). */
-export const FORMATION_LOOKAHEAD_S = 0.4 / 1.5;
+/** The step `a` per px of sprite frame width (F1b: a = 0.59 x S). */
+export const FORMATION_SPACING_PER_FRAME_PX = 0.59;
+/** `a` never drops below this, px (F1b: frames up to ~40 px all space
+ * like a 40 px one; 24 px discs measured -25/±24 at F1). */
+export const FORMATION_MIN_SPACING = 23.5;
+/** ...nor rises above this, px (F1b: 128 px and larger frames). */
+export const FORMATION_MAX_SPACING = 59.5;
+
+/**
+ * The formation step `a` (px per row, astern and out) for a formation whose
+ * largest sprite FRAME width is `frameWidth` (reference F1b, ±1 px):
+ * clamp(0.59 x S, 23.5, 59.5).
+ *
+ * S is the rlëD frame size (ShipData.spriteFrameWidth): a small disc drawn
+ * inside a 96 px frame spaces like a 96 px ship. Not the visible pixels,
+ * not shïp Length, not the shän frame-size fields. Only square frames were
+ * measured; the frame WIDTH is used (max(width, height) is the untested
+ * alternative for a non-square frame).
+ */
+export function formationSpacing(frameWidth: number): number {
+    return Math.min(FORMATION_MAX_SPACING, Math.max(FORMATION_MIN_SPACING,
+        FORMATION_SPACING_PER_FRAME_PX * frameWidth));
+}
+
 /** Position error is converted to closing velocity at this rate (1/s):
  * the proportional term of the follower controller. */
 const FORMATION_POSITION_GAIN = 1.2;
+/** The closing speed is also capped at what the follower can brake from,
+ * sqrt(2 * this fraction * acceleration * distance) — the same cap and
+ * fraction as the escort landing controller (player_escort_plugin's
+ * ESCORT_APPROACH_BRAKE_FRACTION, #316). Without it the gain asks a hull
+ * with a lot of top speed for its acceleration (the stock Cargo Drone, 180
+ * px/s on 36 px/s^2; the Aurora Carriers; the Leviathans) to brake harder
+ * than it can, and it overshoots its slot back and forth. */
+export const FORMATION_BRAKE_FRACTION = 0.5;
+/** ...and at this fraction of (turn rate x distance): a hull that turns
+ * slowly for its speed (the stock Escape Pod, 30°/s) otherwise settles into
+ * a circular orbit of its slot exactly one turning radius out, chasing a
+ * correction that swings round as fast as it can turn. */
+export const FORMATION_TURN_CLOSING_FRACTION = 0.5;
 
 // --- RCS (reaction control) tuning ---
 //
@@ -125,108 +155,46 @@ export function* formationsIn(entities: EntityMap): Iterable<Formation> {
 }
 
 /**
- * Formation slot geometry: the LEADER is the apex of the triangle, and
- * escort rows widen behind it — row r sits r * FORMATION_ROW_SPACING
- * astern and is (r + 1) cells wide (2, 3, 4, ... cells), each row
- * centered on the leader's axis with adjacent cells
- * FORMATION_LATERAL_SPACING apart. No escort ever occupies the apex
- * (that's the player's ship — Matthew's spec); the first escort row is
- * the flanking pair. RANKS are laid out so that EVERY escort count
- * flies a formation symmetric about the leader's axis. Counts 1-7 use
- * an explicit table (diagrams below — Matthew gets to veto specifics);
- * larger counts fill the widening rows with each row's occupants
- * arranged center-out, which keeps any occupancy symmetric.
+ * Formation slot geometry: the original EV Nova's 45° echelon V (reference
+ * F1/F1b, docs/reference_experiments.md). Escorts alternate sides, LEFT of
+ * the leader's heading first, each pair one row further astern and out by
+ * the same step `spacing` (formationSpacing — the group's `a`):
  *
- *  count 1        count 2        count 3        count 4
- *     L              L              L              L
- *     1            1   2          1   2          1   2
- *                                   3          3       4
+ *              L
+ *           0     1          rank 0: (-a,  left a)  rank 1: (-a,  right a)
+ *        2           3       rank 2: (-2a, left 2a) rank 3: (-2a, right 2a)
+ *     4                 5    rank 4: (-3a, left 3a) ... (extrapolated)
  *
- *  count 5        count 6          count 7
- *     L              L                L
- *   1   2          1   2            1   2
- *  3  4  5       3       4        3   4   5
- *                  5   6            6   7
+ * Rows 1-2 (ranks 0-3) are measured; rank 4 and up EXTRAPOLATE linearly
+ * (row floor(rank / 2) + 1, r x a astern and out), so the V just grows
+ * longer arms. Measured on player-led escorts; NPC fleet (flët) escorts use
+ * the same table unmeasured.
  *
- *  - Count 1's lone escort sits centered one row back (a two-ship
- *    column; with one escort there is no triangle to have a top).
- *  - Count 3 is the leader-apex diamond: pair, then one centered in
- *    the 3-wide row. Count 5 fills that row (pair + full triple);
- *    count 7 adds a centered pair in the 4-wide row.
- *  - Counts 2 and 4 fly center-free flanking pairs — count 4 is the
- *    widening V from Paul's fork (escortPosition's hand-tuned 4-case).
- *  - Count 6 is the fork's other special case: three PAIRS with the
- *    middle column EMPTY (a hexagon). Filling the rows instead would
- *    park the sixth ship alone off-axis in the 4-wide row; the middle
- *    of the 3-wide row is skipped and the last pair tucks in behind.
- *  (Fork provenance: paul-npcs-era `escortPosition` special-cases 4
- *  and 6 exactly this way, and its base `triangleRaster` also starts
- *  rows at two cells — the leader-apex shape matches the fork's; the
- *  odd-count centered layouts here are new.)
+ * `back` is px astern of the leader; `lateral` is px to the leader's RIGHT
+ * (formationSlotPosition's perpendicular), so left-side slots are negative.
  *
- * The layout is a function of (rank, count), NOT the persistent slot
- * number: slot ASSIGNMENT (hire order, continuation numbering) is
- * unchanged, but the formation-keeping systems convert a ship's slot
- * to its RANK among the live same-leader slots and pass the live
- * count. An escort joining or leaving therefore re-flows everyone to
- * the new count's layout — pure geometry, deterministic on every peer
- * (ranks come from sorting the synced slot numbers), and the RCS
- * controller slides ships the short hop to their new stations.
+ * The layout is a function of RANK, not the persistent slot number: slot
+ * ASSIGNMENT (hire order, continuation numbering) is unchanged, but the
+ * formation-keeping systems convert a ship's slot to its rank among the
+ * live same-leader slots, so when an escort leaves the ones behind it move
+ * up and the V never has holes. Deterministic on every peer (ranks come
+ * from sorting the synced slot numbers).
  */
 export function formationOffset(rank: number,
-    count?: number): { back: number, lateral: number } {
-    // [row, lateral] in row/cell units, per rank, for counts 1-7.
-    const SMALL_FORMATIONS: ReadonlyArray<
-        ReadonlyArray<readonly [number, number]>> = [
-            [],
-            [[1, 0]],
-            [[1, 0.5], [1, -0.5]],
-            [[1, 0.5], [1, -0.5], [2, 0]],
-            [[1, 0.5], [1, -0.5], [2, 1], [2, -1]],
-            [[1, 0.5], [1, -0.5], [2, -1], [2, 0], [2, 1]],
-            [[1, 0.5], [1, -0.5], [2, 1], [2, -1], [3, 0.5], [3, -0.5]],
-            [[1, 0.5], [1, -0.5], [2, -1], [2, 0], [2, 1],
-                [3, 0.5], [3, -0.5]],
-        ];
-    if (count !== undefined && count >= 1 && count <= 7 && rank < count) {
-        const [row, lateralUnits] = SMALL_FORMATIONS[count][rank];
-        return {
-            back: row * FORMATION_ROW_SPACING,
-            lateral: lateralUnits * FORMATION_LATERAL_SPACING,
-        };
-    }
-    // General leader-apex triangle: row r (1-based) is (r + 1) cells
-    // wide and holds ranks C(r-1) .. C(r)-1, where C(r) = r(r+3)/2 is
-    // the cumulative capacity of rows 1..r.
-    const row = Math.ceil((Math.sqrt(8 * rank + 17) - 3) / 2);
-    const capacityBefore = ((row - 1) * (row + 2)) / 2;
-    const indexInRow = rank - capacityBefore;
-    // This row's occupancy: full (r + 1 cells) unless it is the
-    // deepest, partially filled row of the formation.
-    const occupancy = count === undefined ? row + 1
-        : Math.min(row + 1, count - capacityBefore);
-    // Occupants arranged center-out and symmetric for ANY occupancy:
-    // odd k sits at 0, -1, +1, -2, +2, ...; even k at -0.5, +0.5,
-    // -1.5, +1.5, ... (cell units).
-    const oddRow = occupancy % 2 === 1;
-    const pairIndex = oddRow
-        ? Math.floor((indexInRow + 1) / 2) : Math.floor(indexInRow / 2) + 0.5;
-    const side = (oddRow ? indexInRow : indexInRow + 1) % 2 === 1 ? -1 : 1;
-    const lateralUnits = oddRow && indexInRow === 0 ? 0 : side * pairIndex;
-    return {
-        back: row * FORMATION_ROW_SPACING,
-        lateral: lateralUnits * FORMATION_LATERAL_SPACING,
-    };
+    spacing: number): { back: number, lateral: number } {
+    const row = Math.floor(rank / 2) + 1;
+    const side = rank % 2 === 0 ? -1 : 1;
+    return { back: row * spacing, lateral: side * row * spacing };
 }
 
 /**
  * The world-space position of a leader's formation station for the
- * escort of the given RANK (see formationOffset) — pass the live
- * formation count for the per-count symmetric layouts.
+ * escort of the given RANK, in a formation of step `spacing` (see
+ * formationOffset, formationSpacing).
  */
 export function formationSlotPosition(leaderPosition: Position,
-    leaderRotation: Angle, rank: number, count?: number): Position {
-    const { back, lateral } = formationOffset(rank, count);
+    leaderRotation: Angle, rank: number, spacing: number): Position {
+    const { back, lateral } = formationOffset(rank, spacing);
     const u = leaderRotation.getUnitVector();
     // Perpendicular (rotate u by +90°).
     const p = new Vector(-u.y, u.x);
@@ -249,23 +217,35 @@ export function formationSlotPosition(leaderPosition: Position,
  *    directly with NO rotation and NO `accelerating` (so no engine
  *    flare); the ship holds its heading on the leader's.
  *
- * The correction is the desired velocity (leader's, plus a
- * proportional pull toward the slot) minus the follower's. Pure so
- * tests can check convergence and that RCS never turns the ship.
+ * The correction is the desired velocity (leader's, plus a pull toward the
+ * slot — proportional to the distance, capped at a speed the follower can
+ * brake from and turn onto: FORMATION_BRAKE_FRACTION,
+ * FORMATION_TURN_CLOSING_FRACTION) minus the follower's. The target is
+ * the slot ITSELF: the original holds escorts on the same slots at rest
+ * and at full speed (reference F1), so there is no lead ahead of it; the
+ * leader's velocity is fed forward so a follower can hold the slot of a
+ * moving leader with zero position error. Pure so tests can check
+ * convergence and that RCS never turns the ship.
  */
 export function steerFormation(movement: MovementState, leader: MovementState,
     formation: Formation, acceleration: number, delta_s: number,
-    rank = formation.slot, count?: number): void {
+    rank = formation.slot, turnRate = Infinity,
+    spacing = FORMATION_MIN_SPACING): void {
     const slotPosition = formationSlotPosition(
         Position.fromVectorLike(leader.position),
-        Angle.fromAngleLike(leader.rotation), rank, count);
-    const lead = Vector.fromVectorLike(leader.velocity)
-        .scale(FORMATION_LOOKAHEAD_S);
-    const error = slotPosition.add(lead).subtract(movement.position);
-    // Desired velocity: the leader's, plus a correction proportional
-    // to the position error.
-    const desired = Vector.fromVectorLike(leader.velocity)
-        .add(error.scale(FORMATION_POSITION_GAIN));
+        Angle.fromAngleLike(leader.rotation), rank, spacing);
+    const error = slotPosition.subtract(movement.position);
+    // Desired velocity: the leader's, plus a closing velocity toward the
+    // slot, proportional to the distance but no faster than the follower
+    // can brake from or turn onto.
+    const distance = error.length;
+    const closing = Math.min(distance * FORMATION_POSITION_GAIN,
+        Math.sqrt(2 * FORMATION_BRAKE_FRACTION * acceleration * distance),
+        FORMATION_TURN_CLOSING_FRACTION * turnRate * distance);
+    const desired = distance > 1e-9
+        ? Vector.fromVectorLike(leader.velocity)
+            .add(error.normalize(closing))
+        : Vector.fromVectorLike(leader.velocity);
     const correction = desired.subtract(movement.velocity);
 
     // Hysteresis: engage RCS below the low threshold, drop it above

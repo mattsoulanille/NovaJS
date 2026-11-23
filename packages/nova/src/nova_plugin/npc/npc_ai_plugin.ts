@@ -112,8 +112,8 @@ export {
     PlayerPlunderedEvent, PlayerPlunderedEventType, NpcPlunderBoardSystem,
 } from './npc_plunder_board.js';
 export {
-    FORMATION_ROW_SPACING, FORMATION_LATERAL_SPACING, FORMATION_LOOKAHEAD_S,
-    RCS_ACCEL_FRACTION,
+    FORMATION_SPACING_PER_FRAME_PX, FORMATION_MIN_SPACING,
+    FORMATION_MAX_SPACING, formationSpacing, RCS_ACCEL_FRACTION,
     RCS_ENGAGE_SPEED, RCS_DISENGAGE_SPEED, Formation, FormationComponent,
     nextFormationSlot, formationsIn, formationOffset, formationSlotPosition,
     steerFormation,

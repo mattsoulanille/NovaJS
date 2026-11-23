@@ -9,16 +9,19 @@ import { EscortCommandComponent } from '../player/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
-import { FormationComponent, steerFormation } from './npc_formation.js';
+import { FormationComponent, formationSpacing, steerFormation } from './npc_formation.js';
 import { EscortLandingComponent } from '../player/index.js';
-import { ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 
 /**
  * Station-keeping for ships holding a formation slot (the geometry and the
  * follower controller are in npc_formation.ts).
  */
 
-export const AllFormationsQuery = new Query([FormationComponent] as const);
+/** Every formation member, with its hull's data for the group spacing
+ * (ShipData.spriteFrameWidth). */
+export const AllFormationsQuery = new Query(
+    [FormationComponent, Optional(ShipDataComponent)] as const);
 
 export const FormationSystem = new System({
     name: 'FormationSystem',
@@ -72,8 +75,8 @@ export const FormationSystem = new System({
                 && escortCommand.target === undefined))) {
             return;
         }
-        const leader = entities.get(formation.leader)?.components
-            .get(MovementStateComponent);
+        const leaderEntity = entities.get(formation.leader);
+        const leader = leaderEntity?.components.get(MovementStateComponent);
         if (!leader) {
             // Leader gone: escorts revert to their own AI (the
             // decision system re-plans since mode stays whatever it
@@ -82,22 +85,32 @@ export const FormationSystem = new System({
             entity.components.delete(FormationComponent);
             return;
         }
-        // Rank + live count drive the per-count symmetric layouts:
-        // the ship's persistent slot number is only an ORDER; its
+        // The ship's persistent slot number is only an ORDER; its
         // station comes from its rank among the live same-leader
         // slots. Deterministic (sorting synced slot numbers) and
-        // cheap (formations are tiny); an escort joining or leaving
-        // re-flows the rest to the new count's layout.
-        const siblingSlots = allFormations
-            .filter(([other]) => other.leader === formation.leader)
-            .map(([other]) => other.slot)
+        // cheap (formations are tiny); an escort leaving moves the
+        // ones behind it up the V.
+        const siblings = allFormations
+            .filter(([other]) => other.leader === formation.leader);
+        const siblingSlots = siblings.map(([other]) => other.slot)
             .sort((a, b) => a - b);
         const rank = siblingSlots.indexOf(formation.slot);
-        // Base acceleration (not the per-tick effective physics):
-        // afterburners must not boost the RCS budget.
+        // The step of the V scales with the LARGEST sprite frame among
+        // the leader and every ship in its formation (reference F1b), so
+        // it is recomputed from the live group: an escort joining or
+        // leaving re-spaces everyone. Max over synced hull ids, so order
+        // independent and the same on every peer.
+        let frameWidth = leaderEntity?.components.get(ShipDataComponent)
+            ?.spriteFrameWidth ?? 0;
+        for (const [, shipData] of siblings) {
+            frameWidth = Math.max(frameWidth, shipData?.spriteFrameWidth ?? 0);
+        }
+        // Base acceleration and turn rate (not the per-tick effective
+        // physics): afterburners must not boost the RCS budget.
         steerFormation(movement, leader, formation,
             physics.acceleration, time.delta_s,
-            rank < 0 ? formation.slot : rank, siblingSlots.length);
+            rank < 0 ? formation.slot : rank, physics.turnRate,
+            formationSpacing(frameWidth));
     },
     after: [TimeSystem, NpcDecisionSystem],
     before: [MovementSystem],

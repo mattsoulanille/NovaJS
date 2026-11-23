@@ -302,11 +302,41 @@ heading the leader then thrust along.
     that is 54 px ahead.
   - Its rows are 60 px astern with ±27.5 px lateral cells (lines 18-23)
     and a different shape.
-- **Proposed fix (not applied).** Drop the lookahead. Hold escorts exactly
-  on their slots, and use the original's 45° echelon slot table.
-  - Whether the original's spacing scales with hull size is untested: all
-    discs are 24 px.
-  - NPC fleet (flët) escorts are untested.
+- **Follow-up F1b (hub, reference Mac; evidence
+  `~/.local/share/novaref/evidence/20261123-f1b/`; high confidence, ±1 px).**
+  The spacing scales with sprite size. Rank k sits in row
+  r = floor(k/2)+1, r·a astern and r·a out (a 45° V). Even ranks go left,
+  odd ranks right.
+  - The step is a = clamp(0.59 × S, 23.5, 59.5) px.
+  - S is the LARGEST sprite frame width among the leader and all its
+    escorts. A 24 px leader with 96/24/96/24 px escorts puts all four at the
+    96 px step.
+  - S is the rlëD FRAME size, not the visible pixels: a small disc drawn
+    inside a 96 px frame spaces like a 96 px ship. shïp Length and the
+    shän frame-size fields play no part.
+  - Only square frames were tested. Rows beyond 2 are unmeasured.
+- **Fix (applied).**
+  - The lookahead is gone. Escorts are held exactly on their slots, with
+    the leader's velocity still fed forward.
+  - The slots follow the F1b rule (`formationOffset`, `formationSpacing`).
+  - `ShipData.spriteFrameWidth` carries the base rlëD's frame width. It is
+    read at parse time from the rlëD header.
+  - FormationSystem recomputes S from the live group every tick, so an
+    escort joining or leaving re-spaces everyone.
+  - Spawn placement uses the leader and that escort: hired, carried and
+    restored escorts. FormationSystem then settles the group step. Fleet
+    escorts are placed on the whole fleet's step.
+  - Ranks 4 and up extrapolate linearly (r·a). The frame WIDTH is used;
+    max(width, height) is the untested alternative.
+  - The per-count symmetric layouts are gone. Ranks still re-flow when an
+    escort leaves, so the V has no holes.
+  - The closing speed is now capped at what the hull can brake from and turn
+    onto. A sweep found that the old controller left 23 stock hulls unable
+    to settle within 300 s, including the Cargo Drone, the Aurora Carriers
+    and the Leviathans. With the caps none fail, at each hull's own step and
+    at the maximum 59.5 px. The sweep ran every stock inertial hull with the
+    leader at rest, cruising, accelerating and reversing.
+  - NPC fleet (flët) escorts are untested. They use the same rule.
 
 Confidence: high for the rest/cruise slots; medium for the transient
 lead while accelerating.

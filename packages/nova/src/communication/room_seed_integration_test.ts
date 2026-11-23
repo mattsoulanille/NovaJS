@@ -161,11 +161,19 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // (new waypoints, dwell ends) draw Random a different number
             // of times. The fixed-mode property itself is unchanged: no
             // seed reaches the world, and the genesis is the old one.
+            //
+            // All three columns were re-pinned for reference F1, which moved
+            // the formation slots to the original's 45° echelon V (rows a px
+            // astern and out, a scaling with the fleet's largest sprite frame)
+            // and dropped the speed lookahead: fleet escorts MATERIALIZE in
+            // their slots (npc_spawn_plugin), so the genesis positions moved
+            // with them, and the escorts fly different paths after.
+            // Kestrel's 300-step Random state did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '8d6c6c3f', 'f1bb7aa9',
-                    [540372827, 2359486158, 3964262456, 396451155]],
-                [SYNTHETIC.systems.kestrel, 'a90af946', '5c186af8',
+                [THESSALY, 'b2f5c0fa', '1e555970',
+                    [4067860223, 4085362547, 3073653351, 396451243]],
+                [SYNTHETIC.systems.kestrel, 'cc8bd060', '71a631e3',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

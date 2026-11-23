@@ -34,7 +34,7 @@ import { ControlBitsComponent } from '../ncb/index.js';
 import { ControlledByComponent, GOAL_RESCUE } from '../player/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
-import { FormationComponent, NpcComponent, formationSlotPosition } from '../npc/index.js';
+import { FormationComponent, NpcComponent, formationSlotPosition, formationSpacing } from '../npc/index.js';
 import { PersComponent } from './pers_plugin.js';
 import {
     classifySpawnTest, effectiveNpcSpawnEntries, effectivePersEntries,
@@ -1103,17 +1103,31 @@ export function spawnNpc(world: World,
     insert(leadUuid, leadShip);
     let spawned = spawnedPers + 1;
     let slot = 0;
+    // Every escort count is drawn first (the same draws, in the same order,
+    // as when they were drawn inside the placement loop), so the formation
+    // step can come from the WHOLE fleet: it scales with the largest sprite
+    // frame among the leader and its escorts (reference F1b).
+    const groups: Array<readonly [ShipData, number]> = [];
     for (const escort of fleet.escorts) {
         const count = escort.min
             + random.below(Math.max(1, escort.max - escort.min + 1));
         const escortData = gameData.data.Ship.getCached(escort.id);
-        if (!escortData) {
-            continue;
+        if (escortData) {
+            groups.push([escortData, count] as const);
         }
+    }
+    let frameWidth = leadData.spriteFrameWidth;
+    for (const [escortData, count] of groups) {
+        if (count > 0) {
+            frameWidth = Math.max(frameWidth, escortData.spriteFrameWidth);
+        }
+    }
+    const spacing = formationSpacing(frameWidth);
+    for (const [escortData, count] of groups) {
         for (let i = 0; i < count; i++) {
             // Escorts materialize already sitting in their slots.
             const slotPosition = formationSlotPosition(
-                leadState.position, leadState.rotation, slot);
+                leadState.position, leadState.rotation, slot, spacing);
             const escortEntity = makeNpcShip(escortData, 0, fleet.govt,
                 slotPosition, leadState.rotation,
                 Vector.fromVectorLike(leadState.velocity));

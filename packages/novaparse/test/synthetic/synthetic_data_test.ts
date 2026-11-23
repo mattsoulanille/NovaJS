@@ -228,6 +228,11 @@ describe("the synthetic Nova data set", () => {
             expect(corsair.outfits[SYNTHETIC.outfits.blaster]).toEqual(2);
             expect(corsair.outfits[SYNTHETIC.outfits.launcher]).toEqual(1);
             expect(corsair.outfits[SYNTHETIC.outfits.missileAmmo]).toEqual(8);
+            // The base rlëD's FRAME width (the formation spacing input,
+            // reference F1b) — the generated sprites' 24/32/40 px frames.
+            expect(skiff.spriteFrameWidth).toEqual(24);
+            expect(corsair.spriteFrameWidth).toEqual(32);
+            expect(warden.spriteFrameWidth).toEqual(40);
         });
 
         it("has a blaster, a missile with ammo, a beam, a turret, a point "

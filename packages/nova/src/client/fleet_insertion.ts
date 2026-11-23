@@ -7,9 +7,9 @@ import {
     EscortCommandComponent, PlayerEscortComponent, ControlledByComponent,
     NO_DEAL,
 } from '../nova_plugin/player/index.js';
-import { FiringGroupComponent } from '../nova_plugin/ship/index.js';
+import { FiringGroupComponent, ShipDataComponent } from '../nova_plugin/ship/index.js';
 import {
-    FormationComponent, formationSlotPosition,
+    FormationComponent, formationSlotPosition, formationSpacing,
 } from '../nova_plugin/npc/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
@@ -131,8 +131,14 @@ export function buildHiredEscort(shipData: ShipData, leaderUuid: string,
     if (!movement) {
         return undefined;
     }
+    // Placed at the spacing of the leader and this hull; FormationSystem
+    // settles the whole formation on its group spacing (the largest
+    // sprite frame among the leader and all its escorts) from the first
+    // tick.
     const position = formationSlotPosition(
-        movement.position, movement.rotation, slot);
+        movement.position, movement.rotation, slot,
+        formationSpacing(Math.max(shipData.spriteFrameWidth,
+            leader.components.get(ShipDataComponent)?.spriteFrameWidth ?? 0)));
     const escort = makeNpcShip(shipData, 0, null, position,
         movement.rotation, new Vector(0, 0));
     escort.components.set(FormationComponent, { leader: leaderUuid, slot });

@@ -24,7 +24,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import {
-    formationSlotPosition, FormationComponent,
+    formationSlotPosition, FormationComponent, FORMATION_MIN_SPACING,
 } from '../nova_plugin/npc/index.js';
 import { deriveEntityComponents, Stat, CollisionEvent } from '../nova_plugin/core/index.js';
 import {
@@ -218,8 +218,11 @@ describe('carried escort round trip', () => {
                 .toBeFalse();
             const restoredMovement =
                 restored!.components.get(MovementStateComponent)!;
+            // Neither bare test entity carries ShipData (frame width 0),
+            // so the placement uses the smallest formation step.
             expect(restoredMovement.position).toEqual(formationSlotPosition(
-                new Position(100, 200), new Angle(0), 3));
+                new Position(100, 200), new Angle(0), 3,
+                FORMATION_MIN_SPACING));
 
             // Re-insertion re-derives the capability components, so the
             // escort flies again with its physics intact.

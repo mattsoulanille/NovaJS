@@ -158,6 +158,13 @@ export async function ShipParse(ship: ShipResource,
 
     var shanResource = ship.idSpace.shän[ship.id];
     var animation: Animation;
+    // The base sprite's rlëD FRAME width (header, not visible pixels): the
+    // escort-formation spacing reads it (ShipData.spriteFrameWidth). The
+    // same rlëD lookup ShanParse makes for the base image.
+    const spriteFrameWidth = shanResource
+        ? (shanResource.idSpace.rlëD[shanResource.images.baseImage.ID]
+            ?.size[0] ?? 0)
+        : 0;
     if (shanResource) {
         animation = await ShanParse(shanResource, notFoundFunction);
     }
@@ -448,6 +455,7 @@ export async function ShipParse(ship: ShipResource,
         // instead of 33%".
         disableArmorFraction: (ship.flagsN & 0x0010) ? 0.10 : 0.33,
         length: ship.length,
+        spriteFrameWidth,
         crew: ship.crew,
         freeSpace: ship.freeSpace,
         // EVN Bible shïp Flags 0x1000/0x2000/0x4000: "Ship's turrets

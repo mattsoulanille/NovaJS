@@ -9,7 +9,7 @@ import { govtDisposition, effectiveStrength, oddsFavorable } from '../reputation
 import {
     chaserBlocksJump, chooseNearest, Formation, formationOffset,
     formationSlotPosition, FLEE_JUMP_BLOCK_RANGE,
-    FORMATION_LATERAL_SPACING, FORMATION_LOOKAHEAD_S, FORMATION_ROW_SPACING,
+    FORMATION_MIN_SPACING, formationSpacing,
     landingDestinations, nextFormationSlot, npcBoardArrived,
     npcPlunderEligible, npcPlundersHulks, NPC_BOARD_RADIUS, NPC_BOARD_SPEED,
     NPC_PLUNDER_TAKES_FROM_PLAYERS, PlanetEntry,
@@ -156,126 +156,65 @@ describe('nextFormationSlot', () => {
     });
 });
 
-describe('formation geometry (per-count symmetric layouts)', () => {
-    const ROW = FORMATION_ROW_SPACING;
-    const LAT = FORMATION_LATERAL_SPACING;
-
-    function layout(count: number) {
-        const out: Array<{ back: number, lateral: number }> = [];
-        for (let rank = 0; rank < count; rank++) {
-            out.push(formationOffset(rank, count));
-        }
-        return out;
-    }
-
-    it('counts 1-7 match the diagrammed layouts', () => {
-        expect(layout(1)).toEqual([{ back: ROW, lateral: 0 }]);
-        expect(layout(2)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT }]);
-        // Count 3: the leader-apex diamond (no escort at the apex).
-        expect(layout(3)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT },
-            { back: 2 * ROW, lateral: 0 }]);
-        // Count 4: the widening V from Paul's fork.
-        expect(layout(4)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT },
-            { back: 2 * ROW, lateral: LAT },
-            { back: 2 * ROW, lateral: -LAT }]);
-        // Count 5: pair, then the full 3-wide row.
-        expect(layout(5)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT },
-            { back: 2 * ROW, lateral: -LAT },
-            { back: 2 * ROW, lateral: 0 },
-            { back: 2 * ROW, lateral: LAT }]);
-        // Count 6: the fork's center-free hexagon of pairs.
-        expect(layout(6)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT },
-            { back: 2 * ROW, lateral: LAT },
-            { back: 2 * ROW, lateral: -LAT },
-            { back: 3 * ROW, lateral: 0.5 * LAT },
-            { back: 3 * ROW, lateral: -0.5 * LAT }]);
-        // Count 7: pair, full triple, centered pair in the 4-wide row.
-        expect(layout(7)).toEqual([
-            { back: ROW, lateral: 0.5 * LAT },
-            { back: ROW, lateral: -0.5 * LAT },
-            { back: 2 * ROW, lateral: -LAT },
-            { back: 2 * ROW, lateral: 0 },
-            { back: 2 * ROW, lateral: LAT },
-            { back: 3 * ROW, lateral: 0.5 * LAT },
-            { back: 3 * ROW, lateral: -0.5 * LAT }]);
-    });
-
-    it('no escort ever occupies the leader\'s apex position', () => {
-        for (let count = 1; count <= 12; count++) {
-            for (const cell of layout(count)) {
-                expect(cell.back).toBeGreaterThan(0);
-            }
-        }
-    });
-
-    it('every count 1-12 is symmetric about the leader axis', () => {
-        for (let count = 1; count <= 12; count++) {
-            // Symmetric = the multiset of (back, lateral) equals the
-            // multiset of (back, -lateral).
-            const key = (o: { back: number, lateral: number }) =>
-                `${o.back}:${o.lateral}`;
-            const mirrored = (o: { back: number, lateral: number }) =>
-                `${o.back}:${-o.lateral || 0}`;
-            const cells = layout(count);
-            expect(cells.map(key).sort())
-                .toEqual(cells.map(mirrored).sort());
-        }
-    });
-
-    it('exactly six escorts leave the middle column empty', () => {
-        for (const { lateral } of layout(6)) {
-            expect(lateral).not.toBe(0);
-        }
-    });
-
-    it('counts beyond the table fill widening rows center-out', () => {
-        // Count 8: full 2-wide and 3-wide rows (5 ships), then three of
-        // the 4-wide row arranged center-out (odd occupancy: 0, -1, +1).
-        const cells = layout(8);
-        expect(cells[5]).toEqual({ back: 3 * ROW, lateral: 0 });
-        expect(cells[6]).toEqual({ back: 3 * ROW, lateral: -LAT });
-        expect(cells[7]).toEqual({ back: 3 * ROW, lateral: LAT });
-        // Full 3-wide row (ranks 2-4) in a larger formation: center,
-        // then a pair.
-        expect(formationOffset(2, 10)).toEqual(
-            { back: 2 * ROW, lateral: 0 });
-        expect(formationOffset(3, 10)).toEqual(
-            { back: 2 * ROW, lateral: -LAT });
-        expect(formationOffset(4, 10)).toEqual(
-            { back: 2 * ROW, lateral: LAT });
-        // A lone overflow ship centers in its fresh row.
-        expect(formationOffset(9, 10)).toEqual(
-            { back: 4 * ROW, lateral: 0 });
-    });
-
-    it('places the lone escort dead astern of a leader facing "up" ' +
-        '(angle 0)', () => {
-            // Angle 0 is clock-up: unit vector (0, -1). Behind is +y.
-            const slot = formationSlotPosition(
-                new Position(0, 0), new Angle(0), 0, 1);
-            expect(slot.y).toBeCloseTo(FORMATION_ROW_SPACING);
-            expect(slot.x).toBeCloseTo(0);
+describe('formation geometry (the original\'s 45° echelon V, '
+    + 'reference F1/F1b)', () => {
+        it('steps by a = clamp(0.59 x frame width, 23.5, 59.5) px', () => {
+            const a = (width: number) =>
+                Math.round(formationSpacing(width) * 10) / 10;
+            expect([12, 24, 48, 64, 96, 128, 200].map(a))
+                .toEqual([23.5, 23.5, 28.3, 37.8, 56.6, 59.5, 59.5]);
         });
 
-    it('rotates slot positions with the leader', () => {
-        const up = formationSlotPosition(new Position(0, 0), new Angle(0), 3);
-        const right = formationSlotPosition(
-            new Position(0, 0), new Angle(Math.PI / 2), 3);
-        // Rotating the leader 90° rotates the slot 90°.
-        expect(right.x).toBeCloseTo(-up.y);
-        expect(right.y).toBeCloseTo(up.x);
+        it('pins the four measured slots: (-a, ±a) then (-2a, ±2a), '
+            + 'left of the heading first', () => {
+                // `lateral` is + to the leader's RIGHT; the original's first
+                // escort flies LEFT of travel, the second right, the third
+                // left-outer, the fourth right-outer.
+                for (const a of [23.5, 56.6]) {
+                    expect([0, 1, 2, 3].map(rank => formationOffset(rank, a)))
+                        .toEqual([
+                            { back: a, lateral: -a },
+                            { back: a, lateral: a },
+                            { back: 2 * a, lateral: -2 * a },
+                            { back: 2 * a, lateral: 2 * a },
+                        ]);
+                }
+            });
+
+        it('extrapolates the V linearly: each further pair one row astern '
+            + 'and out', () => {
+                const a = 40;
+                expect(formationOffset(4, a)).toEqual({ back: 120, lateral: -120 });
+                expect(formationOffset(5, a)).toEqual({ back: 120, lateral: 120 });
+                expect(formationOffset(9, a)).toEqual({ back: 200, lateral: 200 });
+                for (let rank = 0; rank < 16; rank++) {
+                    const { back, lateral } = formationOffset(rank, a);
+                    // On the 45° arms, never on the leader's axis or ahead.
+                    expect(back).toBeGreaterThan(0);
+                    expect(Math.abs(lateral)).toBe(back);
+                }
+            });
+
+        it('places slot 0 astern and to the left of a leader facing "up" '
+            + '(angle 0)', () => {
+                // Angle 0 is clock-up: unit vector (0, -1). Behind is +y and
+                // left of travel is -x.
+                const slot = formationSlotPosition(
+                    new Position(0, 0), new Angle(0), 0, FORMATION_MIN_SPACING);
+                expect(slot.y).toBeCloseTo(FORMATION_MIN_SPACING);
+                expect(slot.x).toBeCloseTo(-FORMATION_MIN_SPACING);
+            });
+
+        it('rotates slot positions with the leader', () => {
+            const up = formationSlotPosition(new Position(0, 0),
+                new Angle(0), 3, 30);
+            const right = formationSlotPosition(
+                new Position(0, 0), new Angle(Math.PI / 2), 3, 30);
+            // Rotating the leader 90° rotates the slot 90°.
+            expect(right.x).toBeCloseTo(-up.y);
+            expect(right.y).toBeCloseTo(up.x);
+        });
     });
-});
 
 describe('steerFormation', () => {
     const ACCEL = 200;
@@ -317,7 +256,7 @@ describe('steerFormation', () => {
             });
             const follower = movement({
                 position: formationSlotPosition(
-                    new Position(0, 0), new Angle(1), 2),
+                    new Position(0, 0), new Angle(1), 2, FORMATION_MIN_SPACING),
                 velocity: new Vector(0, 0),
             });
             const state = formation({ slot: 2 });
@@ -336,7 +275,7 @@ describe('steerFormation', () => {
             });
             const follower = movement({
                 position: formationSlotPosition(
-                    new Position(0, 0), new Angle(Math.PI / 2), 0),
+                    new Position(0, 0), new Angle(Math.PI / 2), 0, FORMATION_MIN_SPACING),
                 velocity: new Vector(0, 0),
                 rotation: new Angle(Math.PI / 2),
             });
@@ -354,12 +293,11 @@ describe('steerFormation', () => {
             velocity: new Vector(30, 0),
             rotation: new Angle(0.5),
         });
-        // Exactly in the (lookahead-led) slot but 30 px/s slow: the
-        // correction is purely velocity, under RCS_ENGAGE_SPEED.
+        // Exactly in the slot but 30 px/s slow: the correction is purely
+        // velocity, under RCS_ENGAGE_SPEED.
         const follower = movement({
             position: formationSlotPosition(
-                new Position(0, 0), new Angle(0.5), 0)
-                .add(new Vector(30 * 0.4, 0)) as Position,
+                new Position(0, 0), new Angle(0.5), 0, FORMATION_MIN_SPACING),
             velocity: new Vector(0, 0),
             rotation: new Angle(2),
         });
@@ -384,7 +322,7 @@ describe('steerFormation', () => {
                 rotation: new Angle(Math.PI / 2),
             });
             const slot = formationSlotPosition(
-                new Position(0, 0), new Angle(Math.PI / 2), 0);
+                new Position(0, 0), new Angle(Math.PI / 2), 0, FORMATION_MIN_SPACING);
             // Slightly off station and slow — a correction well under
             // the RCS engage threshold.
             const follower = movement({
@@ -393,13 +331,10 @@ describe('steerFormation', () => {
                 rotation: new Angle(Math.PI / 2),
             });
             const state = formation();
-            // The controller's station point: the slot, led by the
-            // leader's velocity (FORMATION_LOOKAHEAD_S).
+            // The controller's station point is the slot itself.
             const error = () => formationSlotPosition(
                 Position.fromVectorLike(leader.position),
-                Angle.fromAngleLike(leader.rotation), 0)
-                .add(Vector.fromVectorLike(leader.velocity)
-                    .scale(FORMATION_LOOKAHEAD_S))
+                Angle.fromAngleLike(leader.rotation), 0, FORMATION_MIN_SPACING)
                 .subtract(follower.position).length;
             const initialError = error();
             for (let i = 0; i < 600; i++) {
@@ -427,7 +362,7 @@ describe('steerFormation', () => {
         // In slot with a pure velocity mismatch of exactly `midpoint`.
         const follower = () => movement({
             position: formationSlotPosition(
-                new Position(0, 0), new Angle(0), 0),
+                new Position(0, 0), new Angle(0), 0, FORMATION_MIN_SPACING),
             velocity: new Vector(-midpoint, 0),
             rotation: new Angle(0),
         });
@@ -444,7 +379,7 @@ describe('steerFormation', () => {
             const leader = movement({ rotation: new Angle(0) });
             const withMismatch = (speed: number) => movement({
                 position: formationSlotPosition(
-                    new Position(0, 0), new Angle(0), 0),
+                    new Position(0, 0), new Angle(0), 0, FORMATION_MIN_SPACING),
                 velocity: new Vector(-speed, 0),
                 rotation: new Angle(0),
             });
@@ -455,6 +390,169 @@ describe('steerFormation', () => {
             steerFormation(withMismatch(RCS_ENGAGE_SPEED - 10),
                 leader, state, ACCEL, DT);
             expect(state.rcs).toBeTrue();
+        });
+});
+
+describe('steerFormation flying a real hull (finite turn rate, 60 Hz)', () => {
+    const DT = 1 / 60;
+    interface Hull { speed: number, acceleration: number, turnRate: number }
+    /** The F1 reference's escort discs: Speed/Accel 600 (twice the
+     * leader's), here at 180°/s. */
+    const TYPICAL: Hull = {
+        speed: 600 * ShipSpeedConversionFactor,
+        acceleration: 600 * ShipAccelerationConversionFactor,
+        turnRate: Math.PI,
+    };
+    /** The stock Cargo Drone (shïp nova:130): Speed 400, Accel 200, 60°/s
+     * of turn — 180 px/s on 36 px/s^2 (#316's extreme hull). */
+    const CARGO_DRONE: Hull = {
+        speed: 400 * ShipSpeedConversionFactor,
+        acceleration: 200 * ShipAccelerationConversionFactor,
+        turnRate: Math.PI / 3,
+    };
+
+    /**
+     * Flies `follower` on `rank` of a leader moving at a constant
+     * `leaderVelocity` (heading along it, or "up" at rest) for `seconds`,
+     * stepping the way the sim does: FormationSystem steers, then
+     * MovementSystem's inertial step moves everyone. Returns the follower's
+     * offset from the leader in the leader's frame (along: + ahead; across:
+     * + LEFT of the heading, the reference's convention) and the largest
+     * slot error over the last `holdSeconds`.
+     */
+    function fly(hull: Hull, rank: number, leaderVelocity: Vector,
+        follower: MovementState, seconds: number, holdSeconds = 10,
+        spacing = FORMATION_MIN_SPACING) {
+        const rotation = leaderVelocity.length > 0
+            ? leaderVelocity.angle : new Angle(0);
+        let leaderPosition = new Position(0, 0);
+        const formation: Formation = { leader: 'leader', slot: rank };
+        const steps = Math.round(seconds / DT);
+        let holdMax = 0;
+        for (let i = 0; i < steps; i++) {
+            const leader: MovementState = {
+                accelerating: 0, position: leaderPosition, rotation,
+                turnBack: false, turning: 0, velocity: leaderVelocity,
+            };
+            steerFormation(follower, leader, formation, hull.acceleration,
+                DT, rank, hull.turnRate, spacing);
+            // MovementSystem's inertial step.
+            if (follower.turnTo instanceof Angle) {
+                const error = follower.rotation.distanceTo(follower.turnTo)
+                    .angle;
+                follower.rotation =
+                    Math.abs(error) <= hull.turnRate * DT
+                        ? follower.turnTo
+                        : follower.rotation.add(
+                            Math.sign(error) * hull.turnRate * DT);
+            }
+            if (follower.accelerating > 0) {
+                follower.velocity = follower.velocity.add(follower.rotation
+                    .getUnitVector().scale(hull.acceleration * DT));
+            }
+            follower.velocity = follower.velocity.shortenToLength(hull.speed);
+            follower.position = Position.fromVectorLike(
+                follower.position.add(follower.velocity.scale(DT)));
+            leaderPosition = Position.fromVectorLike(
+                leaderPosition.add(leaderVelocity.scale(DT)));
+            if (i >= steps - holdSeconds / DT) {
+                holdMax = Math.max(holdMax, formationSlotPosition(
+                    leaderPosition, rotation, rank, spacing)
+                    .subtract(follower.position).length);
+            }
+        }
+        const u = rotation.getUnitVector();
+        const d = follower.position.subtract(leaderPosition);
+        // Left of travel, screen y down: (u.y, -u.x).
+        return {
+            along: d.x * u.x + d.y * u.y,
+            across: d.x * u.y - d.y * u.x,
+            holdMax,
+        };
+    }
+
+    function at(x: number, y: number, vx = 0, vy = 0,
+        rotation = 0): MovementState {
+        return {
+            accelerating: 0, position: new Position(x, y),
+            rotation: new Angle(rotation), turnBack: false, turning: 0,
+            velocity: new Vector(vx, vy),
+        };
+    }
+
+    /** The reference F1 cruise speed: 4.49 px/frame at 30 Hz. */
+    const CRUISE = 135;
+    /** (along, across + left) of ranks 0-3 in units of the step `a`. */
+    const MEASURED: Array<[number, number]> =
+        [[-1, 1], [-1, -1], [-2, 2], [-2, -2]];
+    /** 24 px discs (a = 23.5) and 96 px frames (a = 56.6). */
+    const SPACINGS = [formationSpacing(24), formationSpacing(96)];
+
+    it('holds the four measured slots at rest (reference F1/F1b)', () => {
+        for (const a of SPACINGS) {
+            MEASURED.forEach(([along, across], rank) => {
+                const result = fly(TYPICAL, rank, new Vector(0, 0),
+                    at(60, 40), 40, 10, a);
+                expect(result.along).withContext(`a ${a} rank ${rank}`)
+                    .toBeCloseTo(along * a, 0);
+                expect(result.across).withContext(`a ${a} rank ${rank}`)
+                    .toBeCloseTo(across * a, 0);
+                expect(result.holdMax).toBeLessThan(1);
+            });
+        }
+    });
+
+    it('holds the SAME slots at full speed: no lead ahead of them '
+        + '(reference F1: within 2 px of the rest slots at 135 px/s)', () => {
+            for (const a of SPACINGS) {
+                for (const heading of [0, Math.PI / 2, 2.4]) {
+                    const velocity = new Angle(heading).getUnitVector()
+                        .scale(CRUISE);
+                    MEASURED.forEach(([along, across], rank) => {
+                        const result = fly(TYPICAL, rank, velocity,
+                            at(-80, 30, velocity.x, velocity.y), 40, 10, a);
+                        const context = `a ${a} heading ${heading} rank ${rank}`;
+                        expect(result.along).withContext(context)
+                            .toBeCloseTo(along * a, 0);
+                        expect(result.across).withContext(context)
+                            .toBeCloseTo(across * a, 0);
+                        expect(result.holdMax).toBeLessThan(1);
+                    });
+                }
+            }
+        });
+
+    it('brings the Cargo Drone in from far off and holds it there '
+        + 'without overshooting back and forth (#316 hull)', () => {
+            // 600 px out, flying away from the slot at top speed: on the
+            // bare gain profile it asked for far more braking than its
+            // 36 px/s^2 and swung back and forth through the slot.
+            for (const leaderVelocity of [new Vector(0, 0),
+                new Vector(CARGO_DRONE.speed * 0.8, 0)]) {
+                const result = fly(CARGO_DRONE, 1, leaderVelocity,
+                    at(0, 600, 0, CARGO_DRONE.speed), 90, 15);
+                expect(result.holdMax).withContext(
+                    `leader at ${leaderVelocity.x} px/s`).toBeLessThan(3);
+            }
+        });
+
+    it('does not orbit its slot on a hull that turns slowly for its speed',
+        () => {
+            // The stock Escape Pod (nova:895): Speed 2000, Accel 400, 30°/s.
+            // The all-hulls sweep found it circling its slot one turning
+            // radius (94 px/s / 0.52 rad/s = 180 px) out, for good; this
+            // is a state on that orbit, taken from the sweep.
+            const pod: Hull = {
+                speed: 2000 * ShipSpeedConversionFactor,
+                acceleration: 400 * ShipAccelerationConversionFactor,
+                turnRate: Math.PI / 6,
+            };
+            const slot = formationSlotPosition(new Position(0, 0),
+                new Angle(0), 0, FORMATION_MIN_SPACING);
+            const result = fly(pod, 0, new Vector(0, 0),
+                at(slot.x + 57.5, slot.y + 170, 89.2, -29.4, -0.315), 150,
+                15);
+            expect(result.holdMax).toBeLessThan(3);
         });
 });
 

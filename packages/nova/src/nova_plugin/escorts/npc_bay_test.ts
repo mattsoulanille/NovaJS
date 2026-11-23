@@ -357,8 +357,11 @@ describe('player-launched fighters (regression)', () => {
             expect(command(fighter)).toEqual({ command: 'formation' });
             expect(fighter.components.get(TargetComponent)!.target)
                 .toBeUndefined();
+            // (`rcs` is the controller's regime state: a fighter launched
+            // beside its carrier is close enough to its slot to be on RCS
+            // within a few ticks.)
             expect(fighter.components.get(FormationComponent))
-                .toEqual({ leader: CARRIER, slot: 0 });
+                .toEqual(jasmine.objectContaining({ leader: CARRIER, slot: 0 }));
             // No govt to inherit from a player ship.
             expect(fighter.components.has(GovtComponent)).toBeFalse();
         });
