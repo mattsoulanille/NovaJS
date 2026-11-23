@@ -12,7 +12,7 @@ import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { BayFighterComponent, OrphanedBayFighterSystem, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { BayFighterComponent, OrphanedBayFighterSystem, ReturnComponent, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
 import { ChooseTargetSystem } from '../combat/index.js';
 import { AggressionComponent, isRecentAggressor } from '../combat/index.js';
 import { blindSpotBlocksFiring, getQuadrant } from '../combat/index.js';
@@ -274,13 +274,24 @@ const EscortCommandPropagationSystem = new System({
  *  - re-engage: a fighter that killed its victim is reverted to
  *    'formation' by EscortCommandBehaviorSystem, and is re-ordered here
  *    on the next tick while the carrier is still fighting;
- *  - recall to station: when the carrier stops attacking (victim dead,
- *    fled, or the NPC AI dropped it), the mirror writes 'formation' and
- *    the wings fall back into their slots.
+ *  - between victims (the carrier still in 'attack', its next victim
+ *    not yet picked), the mirror writes 'formation' and the wings fall
+ *    back into their slots;
+ *  - recovery: once the carrier stops fighting altogether (any mode but
+ *    'attack': patrol, travel, flee, depart...; a carrier whose brain
+ *    has not chosen a mode yet counts as between victims), the mirror
+ *    writes
+ *    'returnToBay' and the wings fly home and dock, each refunding its
+ *    round to the bay (bay_plugin's CollectableEscortAI), so a carrier
+ *    that fights again later launches them again. A recall is final:
+ *    a wing already flying home is left alone even if the carrier turns
+ *    back to the fight. (Unmeasured on the original, which the
+ *    reference saw launch but not recover; docking is what NovaJS's
+ *    bays already do for the player's fighters.)
  *
- * (The fourth, carrier death, is OrphanedBayFighterSystem in
- * bay_plugin: this system stops running the moment the carrier entity
- * is gone.)
+ * (The last case, carrier death or a carrier that jumps out before its
+ * wings dock, is OrphanedBayFighterSystem in bay_plugin: this system
+ * stops running the moment the carrier entity is gone.)
  *
  * DETERMINISM: the value written depends only on the carrier's own
  * synced state, never on iteration order, and the write is idempotent
@@ -308,12 +319,18 @@ const NpcWingCommandSystem = new System({
             return;
         }
         // Only a live victim counts: a stale uuid would leave the wings
-        // chasing a ship that no longer exists.
+        // chasing a ship that no longer exists. Between victims (still in
+        // 'attack', the next one not yet picked) the wings hold formation;
+        // once the carrier has moved on to something else (patrol,
+        // travel, flee, depart...) they go home to the hangar. A carrier
+        // with no mode yet (its brain has not thought) recalls nobody.
         const victim = npc.mode === 'attack' && target.target !== undefined
             && entities.has(target.target) ? target.target : undefined;
         const desired: EscortCommandState = victim !== undefined
             ? { command: 'attack', target: victim }
-            : { command: 'formation' };
+            : npc.mode === undefined || npc.mode === 'attack'
+                ? { command: 'formation' }
+                : { command: 'returnToBay' };
 
         for (const [otherUuid, other] of entities) {
             if (otherUuid === uuid) {
@@ -327,6 +344,14 @@ const NpcWingCommandSystem = new System({
                 || !other.components.has(BayFighterComponent)
                 || other.components.has(PlayerEscortComponent)
                 || escortParent(other) !== uuid) {
+                continue;
+            }
+            if (other.components.has(ReturnComponent)) {
+                // Already flying home to dock: a recall is final. If the
+                // carrier turns back to the fight, it launches again
+                // (one per reload) rather than turning a docking fighter
+                // around, which would leave ReturnAI and the attack
+                // steering fighting over one ship.
                 continue;
             }
             if (otherCommand.command !== desired.command

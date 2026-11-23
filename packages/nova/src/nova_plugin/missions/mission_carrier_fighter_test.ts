@@ -30,6 +30,7 @@ import { ActiveMission, MissionsComponent } from '../player/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
+import { WeaponEntries } from '../combat/index.js';
 
 /**
  * ============================================================================
@@ -224,10 +225,32 @@ async function makeWorld({ mission }: { mission: boolean }) {
     // The carrier's first think ran with an empty sky; force the next one.
     carrier.components.get(NpcComponent)!.nextDecision = 0;
     await stepWorld(world, 6);
-    return { world, player, carrier, gameData };
+    // What the AI launched on its own: the hired carrier's wing. A mission
+    // carrier protecting the player keeps its hangar shut (reference Q4,
+    // NpcFireControlSystem), so for the specs below, which pin what
+    // happens to such a wing once it exists, its two fighters are launched
+    // through the bay itself, exactly as the AI would have.
+    const aiLaunched = fighters(world).length;
+    if (mission) {
+        const bay = world.resources.get(WeaponEntries)!.getCached(BAY_ID)!;
+        for (let i = 0; i < 2; i++) {
+            bay.fireFromEntity(CARRIER, false);
+        }
+        await stepWorld(world, 2);
+    }
+    return { world, player, carrier, gameData, aiLaunched };
 }
 
 describe('a mission carrier\'s bay fighters', () => {
+    it('are never launched by the carrier itself (reference Q4)',
+        async () => {
+            const { carrier, aiLaunched } = await makeWorld({ mission: true });
+            // It is fighting (the xenophobe's enemy is in range)...
+            expect(carrier.components.get(NpcComponent)!.mode).toBe('attack');
+            // ...with its hangar shut.
+            expect(aiLaunched).toBe(0);
+        });
+
     it('launches them as its OWN wing, chained through the carrier',
         async () => {
             const { world } = await makeWorld({ mission: true });

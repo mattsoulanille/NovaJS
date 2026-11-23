@@ -266,8 +266,18 @@ describe('splash damage inside a flock', () => {
     describe('an NPC carrier and its bay fighter', () => {
         it('the fighter\'s splash hurts the carrier, which does not turn',
             async () => {
+                // A brain that has not thought yet: an idle carrier that
+                // HAS (patrol) recalls its wing at once (NpcWingCommand-
+                // System), and this fighter, launched beside it, would dock
+                // before it could fire.
                 const carrier = await addShip('carrier', WARDEN, 1000, 1000,
-                    npc);
+                    ship => {
+                        npc(ship);
+                        ship.components.set(NpcComponent, {
+                            ...ship.components.get(NpcComponent)!,
+                            nextDecision: Number.MAX_SAFE_INTEGER,
+                        });
+                    });
                 await settle();
                 const [fighterUuid, fighter] = await launchFighter('carrier');
                 expect(fighter.components.get(FiringGroupComponent)?.group

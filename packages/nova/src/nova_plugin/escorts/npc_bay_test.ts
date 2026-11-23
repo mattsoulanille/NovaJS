@@ -10,7 +10,9 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { BayFighterComponent } from './bay_plugin.js';
+import { BayFighterComponent, ReturnComponent } from './bay_plugin.js';
+import { CollisionEvent } from '../core/index.js';
+import { MissionShipComponent } from '../player/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { EscortCommandComponent } from '../player/index.js';
 import { GovtComponent } from '../core/index.js';
@@ -272,23 +274,126 @@ describe('NPC carriers launching fighters', () => {
             .toEqual({ command: 'attack', target: 'enemy2' });
     });
 
-    it('recalls the wing to formation when the carrier stops fighting',
-        async () => {
-            const { world, carrier, addEnemy } = await makeWorld();
-            await addEnemy('enemy');
-            thinkNow(carrier);
-            await stepWorld(world, 4);
-            const [, fighter] = fighters(world)[0];
-            expect(command(fighter)!.command).toBe('attack');
+    it('holds the wing in formation between victims', async () => {
+        const { world, carrier, addEnemy } = await makeWorld();
+        await addEnemy('enemy');
+        thinkNow(carrier);
+        await stepWorld(world, 4);
+        const [, fighter] = fighters(world)[0];
+        expect(command(fighter)!.command).toBe('attack');
 
-            // The victim is gone and nothing replaces it.
-            world.entities.delete('enemy');
+        // The victim is gone; the carrier has not thought again yet, so
+        // it is still in 'attack' with no live victim.
+        world.entities.delete('enemy');
+        await stepWorld(world, 1);
+
+        expect(carrier.components.get(NpcComponent)!.mode).toBe('attack');
+        expect(command(fighter)).toEqual({ command: 'formation' });
+        expect(fighter.components.has(ReturnComponent)).toBeFalse();
+    });
+
+    /** Launches one fighter at 'enemy', then ends the fight: the enemy
+     * is gone and the carrier has thought about it. */
+    async function fightThenStop() {
+        const made = await makeWorld();
+        await made.addEnemy('enemy');
+        thinkNow(made.carrier);
+        await stepWorld(made.world, 4);
+        const [fighterUuid, fighter] = fighters(made.world)[0];
+        expect(command(fighter)!.command).toBe('attack');
+        expect(outfitCount(made.carrier, FIGHTER_OUTFIT)).toBe(0);
+        // Out on its sortie, well clear of the carrier, so the specs
+        // below see it flying home rather than docking at once (the mock
+        // hulls DO collide: a fighter still alongside docks on contact).
+        fighter.components.set(MovementStateComponent, {
+            ...fighter.components.get(MovementStateComponent)!,
+            position: new Position(3000, 3000),
+            velocity: new Vector(0, 0),
+        });
+
+        made.world.entities.delete('enemy');
+        thinkNow(made.carrier);
+        await stepWorld(made.world, 3);
+        expect(made.carrier.components.get(NpcComponent)!.mode)
+            .not.toBe('attack');
+        return { ...made, fighterUuid, fighter };
+    }
+
+    it('recovers the wing when the carrier stops fighting: it flies home '
+        + 'and docks, refunding its round', async () => {
+            const { world, carrier, fighterUuid, fighter } =
+                await fightThenStop();
+
+            expect(command(fighter)).toEqual({ command: 'returnToBay' });
+            expect(fighter.components.has(ReturnComponent)).toBeTrue();
+            expect(fighter.components.has(FormationComponent)).toBeFalse();
+
+            // Contact with its own carrier docks it (the mock hulls have
+            // no collision shapes, so the contact is emitted by hand, as
+            // bay_plugin_test does).
+            world.emit(CollisionEvent, { other: CARRIER, initiator: true },
+                [fighterUuid]);
+            await stepWorld(world, 1);
+            expect(world.entities.has(fighterUuid)).toBeFalse();
+            expect(outfitCount(carrier, FIGHTER_OUTFIT)).toBe(1);
+        });
+
+    it('a recall is final: a wing flying home is not turned around when '
+        + 'the carrier fights again', async () => {
+            const { world, carrier, addEnemy, fighter } =
+                await fightThenStop();
+            expect(command(fighter)).toEqual({ command: 'returnToBay' });
+
+            await addEnemy('enemy2', -400, 0);
             thinkNow(carrier);
             await stepWorld(world, 3);
 
-            expect(carrier.components.get(NpcComponent)!.mode)
-                .not.toBe('attack');
-            expect(command(fighter)).toEqual({ command: 'formation' });
+            expect(carrier.components.get(NpcComponent)!.mode).toBe('attack');
+            expect(command(fighter)).toEqual({ command: 'returnToBay' });
+            expect(fighter.components.has(ReturnComponent)).toBeTrue();
+        });
+
+    it('a wing flying home when its carrier vanishes departs instead',
+        async () => {
+            const { world, fighter, fighterUuid } = await fightThenStop();
+            expect(fighter.components.has(ReturnComponent)).toBeTrue();
+
+            world.entities.delete(CARRIER);
+            await stepWorld(world, 2);
+            expect(world.entities.has(fighterUuid)).toBeTrue();
+
+            expect(fighter.components.get(NpcComponent))
+                .toEqual({ aiType: 3, mode: 'depart' });
+            expect(fighter.components.has(ReturnComponent)).toBeFalse();
+            expect(fighter.components.has(EscortCommandComponent)).toBeFalse();
+        });
+
+    it('a mission carrier protecting the player never launches '
+        + '(reference Q4)', async () => {
+            const { world, carrier, addEnemy } = await makeWorld();
+            // The player it protects: mission_ship_spawn puts a ShipBehav
+            // 1 ship in formation on its owner.
+            const player = await addEnemy('player', 0, 300);
+            player.components.delete(GovtComponent);
+            player.components.set(ControlledByComponent,
+                { peerId: 'test peer' });
+            carrier.components.set(FormationComponent,
+                { leader: 'player', slot: 0 });
+            carrier.components.set(MissionShipComponent,
+                { mission: 'test:mission', owner: 'player' });
+            await addEnemy('enemy');
+            thinkNow(carrier);
+            await stepWorld(world, 10);
+
+            // It fights (the xenophobe's enemy is the protectee's too)...
+            expect(carrier.components.get(NpcComponent)!.mode).toBe('attack');
+            expect(carrier.components.get(TargetComponent)!.target)
+                .toBe('enemy');
+            // ...but its hangar stays shut.
+            expect(carrier.components.get(WeaponsStateComponent)!
+                .get(BAY_ID)!.firing).toBeFalse();
+            expect(fighters(world).length).toBe(0);
+            expect(outfitCount(carrier, FIGHTER_OUTFIT)).toBe(1);
         });
 
     it('flies its carrier\'s flag, so a xenophobic carrier does not '

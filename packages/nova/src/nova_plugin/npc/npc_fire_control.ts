@@ -1,10 +1,11 @@
-import { Entities } from 'nova_ecs/arg_types';
+import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { System } from 'nova_ecs/system';
-import { EscortCommandComponent } from '../player/index.js';
+import { EscortCommandComponent, MissionShipComponent } from '../player/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
+import { flockPlayer } from './allegiance.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
 import { NpcPlunderBoardSystem } from './npc_plunder_board.js';
@@ -30,7 +31,21 @@ const NPC_FIRE_RANGE = 1200;
  * `inRange` is already false unless the NPC is in attack mode with a
  * LIVE target entity, so an idle carrier never opens its hangar.
  * Launched fighters are pointed at the carrier's victim by
- * NpcWingCommandSystem (escort_command_plugin).
+ * NpcWingCommandSystem (escort_command_plugin). On the original a stock
+ * Fed Carrier in ordinary traffic launched its Vipers and Anacondas at
+ * the player it was attacking (reference_experiments "B NPC carrier
+ * wave 5").
+ *
+ * EXCEPT A MISSION SHIP PROTECTING A PLAYER. A mïsn ShipBehav 1 carrier
+ * (a kit carrier and the stock Fed Carrier alike) fought raiders
+ * attacking the player for 70 s with its own guns and NEVER launched
+ * (reference "Q4"). Here that is a mission ship (MissionShipComponent) in
+ * a player's flock (allegiance.ts's flockPlayer): ShipBehav 1 ships and
+ * escort-goal ships, which mission_ship_spawn puts in formation on their
+ * owner. Its bays hold; its other weapons fire as usual. Ships in the
+ * flock that ARE the player's (hired or captured escorts) are not
+ * covered: what they do was not measured, and the ones on the escort
+ * command never reach this system anyway.
  *
  * A SHIP IN A JUMP SEQUENCE HOLDS ITS FIRE. NpcDecisionSystem bails on a
  * jumping ship so it cannot talk itself back into a fight, but bailing
@@ -68,9 +83,10 @@ export const NpcFireControlSystem = new System({
     args: [NpcComponent, WeaponsStateComponent, TargetComponent,
         MovementStateComponent, Optional(JumpComponent), Entities,
         SimulationGameDataResource,
-        Optional(EscortCommandComponent)] as const,
+        Optional(EscortCommandComponent), UUID,
+        Optional(MissionShipComponent)] as const,
     step(npc, weapons, target, movement, jump, entities, gameData,
-        escortCommand) {
+        escortCommand, uuid, missionShip) {
         if (escortCommand) {
             // A player-commanded escort: the escort command framework
             // (escort_command_plugin) owns its TRIGGERS as well as its
@@ -141,6 +157,10 @@ export const NpcFireControlSystem = new System({
         const distanceSquared = other === undefined ? Infinity
             : other.position.subtract(movement.position).lengthSquared;
         const inRange = distanceSquared <= NPC_FIRE_RANGE * NPC_FIRE_RANGE;
+        // Walked only when there is something to shoot at; it reads the
+        // synced flock links alone, so every peer agrees.
+        const protector = inRange && missionShip !== undefined
+            && flockPlayer(uuid, id => entities.get(id)) !== undefined;
         for (const [id, weapon] of weapons) {
             if (!inRange) {
                 weapon.firing = false;
@@ -148,6 +168,12 @@ export const NpcFireControlSystem = new System({
             }
             const weaponData = gameData.data.Weapon.getCached(id);
             if (weaponData == null) {
+                continue;
+            }
+            if (protector && weaponData.type === 'BayWeaponData') {
+                // Reference Q4: a carrier protecting the player keeps its
+                // fighters in the hangar.
+                weapon.firing = false;
                 continue;
             }
             // Turret blind spots are NOT filtered here, on purpose. This

@@ -522,6 +522,11 @@ export const OrphanedBayFighterSystem = new System({
         }
         entity.components.delete(EscortCommandComponent);
         entity.components.delete(FormationComponent);
+        // A wing that was flying home to dock (NpcWingCommandSystem's
+        // recovery) has no hangar left: drop the return flow, or ReturnAI
+        // would keep steering it at a carrier that is gone.
+        entity.components.delete(ReturnComponent);
+        entity.components.delete(CollectableEscortComponent);
         entity.components.set(NpcComponent, { aiType: 3, mode: 'depart' });
     },
     before: [NpcSteeringSystem],
