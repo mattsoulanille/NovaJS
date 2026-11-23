@@ -569,6 +569,28 @@ describe("the synthetic Nova data set", () => {
                 expect(ghostBay.type === "BayWeaponData" && ghostBay.shipID)
                     .toEqual(SYNTHETIC.ships.ghost);
 
+                // The splash weapons: the 0x0100 bit is all that tells the
+                // Flashpoint and its tethered twin apart.
+                const rocket = await novaParse.data.Weapon.get(SYNTHETIC.weapons.scatterRocket);
+                const flash = await novaParse.data.Weapon.get(SYNTHETIC.weapons.flashpoint);
+                const tethered = await novaParse.data.Weapon.get(
+                    SYNTHETIC.weapons.tetheredFlashpoint);
+                if (rocket.type === "ProjectileWeaponData"
+                    && flash.type === "ProjectileWeaponData"
+                    && tethered.type === "ProjectileWeaponData") {
+                    expect(rocket.blastRadius).toEqual(60);
+                    expect(rocket.blastHurtsFiringShip).toBeTrue();
+                    expect(rocket.detonateWhenShotExpires).toBeFalse();
+                    expect(flash.blastRadius).toEqual(400);
+                    expect(flash.blastHurtsFiringShip).toBeTrue();
+                    expect(flash.detonateWhenShotExpires).toBeTrue();
+                    expect(tethered.blastHurtsFiringShip).toBeFalse();
+                    expect(tethered.detonateWhenShotExpires).toBeTrue();
+                    expect(tethered.shotDuration).toEqual(flash.shotDuration);
+                } else {
+                    fail("the splash weapons are projectiles");
+                }
+
                 const veil = await novaParse.data.Outfit.get(SYNTHETIC.outfits.veil);
                 expect(veil.cloak.rawModVal).toEqual(VEIL_MODVAL);
                 expect(veil.cloak.hidesFromRadar).toBeFalse();

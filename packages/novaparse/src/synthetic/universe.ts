@@ -40,6 +40,7 @@ export const WEAP = {
     blaster: 128, missile: 129, beam: 130, turret: 131, pointDefense: 132,
     skiffBay: 133, arcTurret: 134, needleBeam: 135, wideLance: 136, bowChaser: 137,
     flankTurret: 138, narrowTurret: 139, stubGun: 140, ghostBay: 141,
+    scatterRocket: 142, flashpoint: 143, tetheredFlashpoint: 144,
 } as const;
 export const OUTF = {
     blaster: 128, launcher: 129, missileAmmo: 130, beam: 131, turret: 132,
@@ -572,6 +573,8 @@ export const WEAP_FLAGS = {
     secondary: 0x0002, notVulnerableToPD: 0x0080, missesFiringShip: 0x0100,
     /** Turret blind spots (ignored on a fixed mount). */
     blindSides: 0x2000, blindRear: 0x4000,
+    /** "Shot detonates at the end of its lifespan" (flak). */
+    detonatesAtExpiry: 0x8000,
 } as const;
 /** wëap Guidance values (EVN Bible). */
 export const GUIDANCE = {
@@ -699,6 +702,39 @@ export const WEAPS: WeapDef[] = [
         ammoType: SHIP.ghost, graphic: -1, accuracy: 0, impact: 0, explosion: -1,
         proxRadius: 0, blastRadius: 0, flags: WEAP_FLAGS.secondary, exitType: -1,
         turnRate: 0, maxAmmo: 2, durability: 0,
+    },
+    // --- The splash weapons: blasts whose radius reaches the firer's own
+    // flock (friendly-fire specs). Like the rule weapons, no hull carries
+    // them; a spec fires them on purpose.
+    {
+        // An unguided rocket with a 60px blast that does NOT set 0x0100,
+        // so its blast "hurts the firing ship" (the common case).
+        id: WEAP.scatterRocket, name: "Scatter Rocket", reload: 30, duration: 60,
+        armorDamage: 15, shieldDamage: 15, guidance: GUIDANCE.unguided, speed: 1500,
+        ammoType: -1, graphic: 1, accuracy: 0, impact: 0, explosion: 0,
+        proxRadius: 0, blastRadius: 60, flags: WEAP_FLAGS.secondary, exitType: 0,
+        turnRate: 0, maxAmmo: -1, durability: 0,
+    },
+    {
+        // A ONE-FRAME shot with a 400px blast that detonates as it
+        // expires: whatever fires it splashes everything around it at
+        // once. No 0x0100, so the blast hurts the firing ship too.
+        id: WEAP.flashpoint, name: "Flashpoint Charge", reload: 30, duration: 1,
+        armorDamage: 20, shieldDamage: 20, guidance: GUIDANCE.unguided, speed: 100,
+        ammoType: -1, graphic: 0, accuracy: 0, impact: 0, explosion: 0,
+        proxRadius: 0, blastRadius: 400,
+        flags: WEAP_FLAGS.secondary | WEAP_FLAGS.detonatesAtExpiry, exitType: 0,
+        turnRate: 0, maxAmmo: -1, durability: 0,
+    },
+    {
+        // The Flashpoint with 0x0100 set: its blast spares the firer.
+        id: WEAP.tetheredFlashpoint, name: "Tethered Flashpoint", reload: 30, duration: 1,
+        armorDamage: 20, shieldDamage: 20, guidance: GUIDANCE.unguided, speed: 100,
+        ammoType: -1, graphic: 0, accuracy: 0, impact: 0, explosion: 0,
+        proxRadius: 0, blastRadius: 400,
+        flags: WEAP_FLAGS.secondary | WEAP_FLAGS.detonatesAtExpiry
+            | WEAP_FLAGS.missesFiringShip,
+        exitType: 0, turnRate: 0, maxAmmo: -1, durability: 0,
     },
 ];
 
