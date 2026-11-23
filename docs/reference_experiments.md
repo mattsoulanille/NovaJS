@@ -1198,8 +1198,8 @@ plus:
 | v50, 2 × 25 or 4 × 25 | 50 | "50" / "100" stacked | 4 (w2 1, w3 3) | 0 / 196 | **0%** |
 | v100, ONE +100 jammer | 100 | 100 | 1 | 48 / 49 | **98%** |
 | v50, ONE +100 jammer | 50 | 100 | 1 | 49 / 49 | **100%** |
-| v50, ONE +75 jammer | 50 | 75 | SINGLE75_V50_RUNS | SINGLE75_V50_LOST | **SINGLE75_V50_PCT** |
-| v100, ONE +75 jammer | 100 | 75 | SINGLE75_V100_RUNS | SINGLE75_V100_LOST | **SINGLE75_V100_PCT** |
+| v50, ONE +75 jammer | 50 | 75 | 2 | 48 / 99 | **48%** (45, 51) |
+| v100, ONE +75 jammer | 100 | 75 | 1 | 35 / 49 | **72%** |
 | v100 vs InhJam1 100 (AI 1, AI 3 target) | 100 | govt 100 | 2 | 0 / 99 | **0%** |
 | v50 vs InhJam1 100 (AI 3 target) | 50 | govt 100 | 1 | 0 / 50 | 0% |
 
@@ -1223,8 +1223,8 @@ plus:
    missile's JamVuln (same type), every cell fits
        P(jammed) = clamp((J - (100 - V)) / V, 0, 1)
    i.e. a missile resists with 100 - V plus a random share of V, and is
-   jammed when J beats that: V 100 gives P = J (25 → 21-23%, 100 → 98%);
-   V 50 gives 0 for J ≤ 50, 50% at J 75 (SINGLE75_V50_PCT measured) and
+   jammed when J beats that: V 100 gives P = J (25 → 21-23%, 75 → 72%, 100 → 98%);
+   V 50 gives 0 for J ≤ 50, 50% at J 75 (48% measured) and
    100% at J 100. A plain product V·J would give 12.5% at V 50 / J 25 (0
    of 196 seen) and 50% at V 50 / J 100 (49 of 49 lost).
 3. **Jammer outfits on a hull do not add up.** One, two, three or four
@@ -1373,7 +1373,8 @@ and `escorts/recall2/*/` (`hostility-{blue,red}.json` in each).
 | AI 2 tank | Closed in and fought. Its shield read 85, 64, 46, 28, 13% and then "Shields Down" for the rest of the run. It **never fled**: it kept making attack passes (closest 8 px) for the whole 134 s, including the 42 s after the player stopped firing. |
 | AI 3 tank | The same: 88, 46, 10%, "Shields Down", and it kept attacking to the end of the run. |
 | AI 3 tank, gövt 383 (retreat at 25%), take 1 | Not measured: it moved off at once and the escort gun never reached it (shield 100% in every shot). |
-| AI 3 tank, gövt 383, take 2 (player also has the long-reach Kit Tickler, so the tank is provoked into range) | Closed in and fought: shield 81, 62, 47, **25%** (23.4 s, still making passes at 101 px), **9%** (27.6 s). By 28 s it was heading away (247 px), off screen from 30 s, and **gone from the system** ("No Target") by 44.5 s. It never came back. The AI 3 control without the flag fought on with shields down for the whole run. |
+| AI 3 tank, gövt 383, take 2 (player also has the long-reach Kit Tickler, so the tank is provoked into range), run 1 | Closed in and fought: shield 81, 62, 47, **25%** (23.4 s, still making passes at 101 px), **9%** (27.6 s). By 28 s it was heading away (247 px), off screen from 30 s, and **gone from the system** ("No Target") by 44.5 s. It never came back. |
+| the same, run 2 | Shield 99, 74, 53, **34%** (23.8 s), **18%** (28.2 s), "Shields Down" from 32 s, and it **kept attacking for the whole run** (passes down to 19 px until 134 s), exactly like the AI 3 control. |
 | AI 3 subject, one tickle | Attacked from about 6 s after the tickle (the shield bar starts dropping) and **kept attacking for the rest of the run: 130 s after one 1-damage shot**. |
 | AI 2 subject, one tickle | The same, 130 s. |
 | AI 1 subject, never fired on | It left without ever coming on screen: targeted until 30.4 s into the recording, "No Target" from 37.1 s, i.e. about 35-40 s after it appeared. Wave 2's tickled AI 1 was gone about 15 s after its tickle (about 24 s into its recording), so leaving is what AI 1 does anyway; being shot at most hurries it a little. |
@@ -1383,16 +1384,18 @@ and `escorts/recall2/*/` (`hostility-{blue,red}.json` in each).
   least two minutes after the player stops: no forgiveness within the
   window measured.
 - Without the gövt 0x0010 flag, neither AI 2 nor AI 3 runs away at any
-  shield level, even with shields gone. With it, the warship broke off
-  within about 4 s of passing 25% shield (between the 25% and 9% shots)
-  and left the system about 15 s later, as the Bible says. The Bible's AI 2 "runs away when
+  shield level, even with shields gone. With it, one run broke off within
+  about 4 s of passing 25% shield and left the system about 15 s later (as
+  the Bible says), and the other never retreated. So the flag's effect is
+  not deterministic, or the first run left for another reason. Open. The Bible's AI 2 "runs away when
   his attacker is out of range" was not exercised (the player never left).
 
 **NovaJS (e8d0e116).** `N/nova_plugin/npc/npc_decision.ts`:
 - AI 2 (line 409) fights while `oddsFavorable(maxOdds, ...)` holds, else
   flees. With MaxOdds 1000 the odds held here, so no mismatch is shown.
-- AI 3 retreats only with `warshipsRetreatAt25` (line 479), when
-  shield < 25%: consistent with both the control and the flagged run.
+- AI 3 retreats only with `warshipsRetreatAt25` (line 479), always and
+  at once when shield < 25%. Consistent with the control; the flagged
+  runs split 1-1, so whether the original's retreat is certain is open.
 - `npc.aggressor` is only forgotten when the aggressor despawns, is in the
   ship's own flock, or bribes (lines 242-306), so retaliation is
   permanent: **consistent** with "at least 130 s".
@@ -1476,29 +1479,94 @@ NovaJS's inertialess physics keep `targetSpeed` when no thrust is applied
 and brake only on reverse (`nova_ecs/src/plugins/movement_plugin.ts:159`
 and `N/nova_plugin/travel/ship_controller_plugin.ts:53-58`): **matches**.
 
-Because of this, the wave-3 U9 runs were mostly spoiled:
-- **Landing distance gate** (`u9_dist`): never stopped near the planet,
-  so there is no distance. A take 2 that brakes with Down after every
-  thrust is queued below.
-- **Landing while moving** (`u9_pass`): Crawler 200 (87 px/s) landed at
-  the first `l` after thrust started, about 5 frames in, while still on top
-  of the planet; Crawler 100 (44 px/s) did not land on any of 25 presses
-  from the same start ("You're too far away to land on this planet." from
-  the third). The two starts differ (the first `l` answered "you're cleared
-  to land. Welcome to Kit Port." for one and "Commence final approach." for
-  the other), so this says nothing about a speed gate yet. **Inconclusive.**
-- **Boarding** (`u9_board`): the Kit Prize (armor 300) was disabled by
-  8 hits of the Kit Escort Gun and stayed "Disabled"; every `b` while the
-  Crawler drifted past at full speed answered **"You're moving too fast to
-  board this ship."** So boarding has a speed check with exactly the
-  string NovaJS uses (`N/display/status_bar_content.ts:298`). The distance
-  and speed limits are still unmeasured.
+Because of this the first U9 runs were spoiled. Down **does** brake an
+inertialess hull to a stop (take 2 runs below), so the take-2 scenarios
+brake after every thrust.
 
-**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/u9/{dist-c200,pass-c200,pass-c100,board}/*/`
+- **Landing distance gate** (`u9_dist2`, Kit Crawler 200, Kit Port: a
+  planet sprite 140 px wide with its ring). After `l` (request), the ship
+  flew out, braked, and stepped back about 40 px at a time, stopping and
+  pressing `l` each time. Planet-centre distances from the frame before each
+  `l` (`analysis/blob_offset.mjs`, bbox centre; the clipped bboxes
+  corrected for the 140 px width):
+
+  | `l` at | distance | answer |
+  |---|---|---|
+  | after flying out | 331 px | "You're too far away to land on this planet." |
+  | step 0 | about 319 px | too far |
+  | step 1 | about 277 px | "Kit Port traffic control reads you. Begin initial approach." (no landing) |
+  | (step 2 stop, before `l`) | 235 px | **"u9c200, you're cleared to land. Welcome to Kit Port."** appeared by itself 7 frames before the `l` |
+  | step 2 `l` | 235 px | **landed** (spaceport 5 frames later) |
+
+  So the landing range of this planet is **between about 235 and 277 px
+  from its centre**, and once a request is pending the game announces
+  "cleared to land" by itself on entering that range. NovaJS lands within
+  **100 px** (`N/nova_plugin/travel/planet_plugin.ts:161`
+  `LAND_DISTANCE_SQUARED = 10_000`): a **mismatch**, about 2.5× too
+  strict for this sprite. Whether the original's range scales with the
+  planet's sprite size is untested (one planet).
+- **Landing while moving** (`u9_pass`, no braking): Crawler 200 (87 px/s)
+  landed at the first `l` after thrust started, about 5 frames in, still
+  on top of the planet; Crawler 100 (44 px/s) did not land on any of 25
+  presses from the same start ("too far" from the third). The starts
+  differ, so this says nothing about a speed gate yet. **Inconclusive.**
+  NovaJS requires < 54.8 px/s (`LAND_SPEED_SQUARED = 3_000`, line 162).
+- **Boarding** (`u9_board` without braking, `u9_board2` with). The Kit
+  Prize (armor 300) was disabled by 8 hits of the Kit Escort Gun.
+  - Drifting past at full speed (87 px/s): every `b` answered **"You're
+    moving too fast to board this ship."**
+  - Stopped, stepping in: "You're not close enough to board this ship."
+    down to about 46-80 px (the prize's own sprite was located in only one
+    shot, so these distances are rough).
+  - The next `b`, at roughly 36 px, answered **"You can't board this
+    ship."**, and so did every later `b` even 300 px away. That generic
+    refusal (STR# 2002 index 129) seems to stick once given. A likely cause
+    is that the prize is a mïsn special ship (ShipGoal -1), which may not
+    be boardable at all; wave 2's mission derelict gave no answer either.
+  - All three strings match NovaJS's
+    (`N/display/status_bar_content.ts:285-303`). NovaJS boards within
+    150 px (`N/nova_plugin/ship/boarding_component.ts:227`), the original
+    said "not close enough" at about 46 px: likely a **mismatch**, low
+    confidence until a non-mission disabled ship is used.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/u9/{dist-c200,dist2-c200,pass-c200,pass-c100,board,board2}/*/`
 and `escorts/recall/*/` (the first recall run is invalid for the same
 reason: the player never stopped, so the escorts at 270 px/s could not
 catch a 360 px/s ship; that is also why wave 2's escorts were "still off
 screen 8 s after `c`").
+
+### M5 leftover: which systems radiate borders (2026-11-23, wave 3)
+
+**Setup.** Three unlinked systems of Map Major Blue (gövt 380), 100 map
+units apart (`kits/testkit.mjs` wave 3, sÿst 2154-2156), with pilot
+`w3_map` (2155 and 2156 explored, 2154 not). `scenarios/map_borders2.json`
+opens the map, shows borders and zooms out once so they are in view.
+
+| system | explored | stellar | dot | border |
+|---|---|---|---|---|
+| 2154 Map B Inhab | no | landable, inhabited (flags 0x43) | **not drawn at all** (unexplored and unlinked) | **none** |
+| 2155 Map B Empty | yes | none | light grey ring (#c6c6c6) | **none** |
+| 2156 Map B Unland | yes | inhabited but NOT landable (flags 0x02: no 0x01, no 0x20) | light grey ring (#c6c6c6) | **radiates** (full blue disc) |
+
+**Finding.** A system radiates territory when it is explored and has an
+INHABITED stellar (spöb flag 0x0020 clear), **whether or not it can be
+landed on**; a system without a stellar radiates nothing. The dot, though,
+is grey for the unlandable one: the dot asks "is there a port?", the
+border asks "is it inhabited?".
+
+**NovaJS:** `N/spaceport/starmap_borders.ts:9-31` radiates from "explored,
+INHABITED systems — systems with a port" (landable AND not 0x0020), and
+`N/spaceport/starmap_draw.ts:136-138` notes the inhabited-but-unlandable
+corner as unwitnessed. The dot rule matches; the border rule is a
+**mismatch** for that corner (the four stock Wraith systems sÿst
+510/521/582/593). **Proposed (not applied):** territory sites = explored
+systems with at least one stellar whose 0x0020 is clear; keep `isPort` for
+the dot colour.
+
+Confidence: high for the three cells (one clean screenshot each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/map/borders2/*/02-zoom-out-1.png`
+(and `map/borders/*/` for the unzoomed first try).
 
 ### Date strings: where "Nov. 27th" and "June 23rd" come from (2026-11-23, wave 3)
 
@@ -1595,13 +1663,13 @@ Evidence: `~/.local/share/novaref/evidence/20261123-w3-dates/`
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Partly.** Wave 2: there is no landing auto-approach, and "too far" matches NovaJS. `b` beside a derelict did nothing. The exact gates are unmeasured (see "F1n and U9"). |
+| U9 | Landing and boarding speed/distance gates | **Partly (wave 3).** Landing range for Kit Port is 235-277 px from its centre (NovaJS 100). Boarding: "too fast", "not close enough" (about 46 px) and a sticky "You can't board this ship." Still open: the landing speed gate, whether the range scales with planet size, and boarding with a NON-mission disabled ship (the mission prize was refused). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
-| F1 NPC fleets | Do flët escorts use the same slots? | **Open.** Three tries spawned no flët (see "F1n and U9"). |
-| M2/M5 leftovers | Does the minimap show itself during a real jump? Do unexplored or uninhabited systems radiate borders? | One factor per system next time. |
-| E-view leftovers | What do Attack and Defend do in a fight? How fast does Formation recall held escorts? | Needs hostiles that actually show up (mïsn 961 raiders didn't in esc_view2). |
-| J (jamming) leftovers | More trials per cell; jam types 2-4, InhJam, Interference, ion, cloak; a weak parent for 0x8000 | First pass answered (J-series). |
-| A (AI states) leftovers | Flee thresholds (AI 2, gövt 0x0010), how long retaliation lasts, an idle control for AI 1 | First pass answered (A-series). Needs a shield-stripping weapon. |
+| J leftovers | Jam types 2-4, what InhJam actually does, Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | The jamming model is answered (J-series wave 3). No free wëap ids are left for type 2-4 missiles: retire old kit weapons first. |
+| A leftovers | gövt 0x0010 retreat (1 of 2 runs retreated below 25%: more runs); AI 2 "runs away when the attacker is out of range"; AI 4 provoked; how AI 1 leaves (lands or jumps) | No retreat without the flag and retaliation of 130 s+ answered (A-series wave 3). |
+| E leftovers | Do escorts with FIXED guns leave formation to shoot? Rear-quadrant turrets? Recall overshoot vs NovaJS frame by frame | Orders in a fight and recall answered (E-fight). |
+| F1n leftovers | Mixed sprite sizes in a fleet; rank order with repeated escort types | Geometry answered (F1n wave 3: same V as player escorts). |
+| R8 leftover | Fullscreen 1920x1080 capture of shops, trade and BBS | Not started (wave 3 ran out of time). |
 
 ## Catalogue
 
@@ -1625,7 +1693,7 @@ cosmetic or rare.
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
-| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | VID | L |
+| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **partly (wave 3)**: Kit Port lands from 235-277 px of its centre. **Mismatch** (NovaJS 100). Speed gate open | L |
 | U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship | L |
 
 ### NPC AI and state transitions (Matthew's category)
@@ -1681,12 +1749,12 @@ cosmetic or rare.
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
 | U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | Approach at known speeds with the inertialess Lancer, VID | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **partly (wave 3)**, see "U9 and the inertialess hulls" | M |
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
 | M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | **answered (wave 2)**: D-U-U-D routes; an unroutable shift-click is ignored | M |
-| M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | CPg map region with known govt colours | M |
+| M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. **Mismatch** for the unlandable corner | M |
 | M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
 | M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
 | K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/reputation/iff_plugin.ts:101-112` | **answered (wave 2)**: AI 1 traders are yellow, warships red. **Mismatch** | M |
