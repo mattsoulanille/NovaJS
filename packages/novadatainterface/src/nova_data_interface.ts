@@ -8,6 +8,7 @@ import { DudeData } from "./dude_data.js";
 import { FleetData } from "./fleet_data.js";
 import { Gettable } from "./gettable.js";
 import { GovtData } from "./govt_data.js";
+import { InterfaceColorsData } from "./interface_colors_data.js";
 import { JunkData } from "./junk_data.js";
 import { MissionData } from "./mission_data.js";
 import { OopsData } from "./oops_data.js";
@@ -60,6 +61,7 @@ enum NovaDataType {
     SoundFile = "SoundFile",
     StringTable = "StringTable",
     Description = "Description",
+    InterfaceColors = "InterfaceColors",
 };
 
 // index: NovaDataType
@@ -94,6 +96,7 @@ type NovaDataInterface = {
     SoundFile: Gettable<SoundFile>,
     StringTable: Gettable<StringTableData>,
     Description: Gettable<DescriptionData>,
+    InterfaceColors: Gettable<InterfaceColorsData>,
 }
 
 // Re-exported from its own module so that gettable.ts (which this file

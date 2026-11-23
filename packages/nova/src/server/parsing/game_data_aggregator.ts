@@ -34,6 +34,7 @@ import { SoundFile } from "novadatainterface/sound_file";
 import { RankData } from "novadatainterface/rank_data";
 import { StringTableData } from "novadatainterface/string_table_data";
 import { DescriptionData } from "novadatainterface/description_data";
+import { InterfaceColorsData } from "novadatainterface/interface_colors_data";
 import {
     ControlBitNamespaces, getDefaultControlBitNamespaces,
 } from "novadatainterface/control_bit_namespaces";
@@ -108,6 +109,7 @@ class GameDataAggregator implements GameDataInterface {
             Rank: this.makeAggregator<RankData>(NovaDataType.Rank),
             StringTable: this.makeAggregator<StringTableData>(NovaDataType.StringTable),
             Description: this.makeAggregator<DescriptionData>(NovaDataType.Description),
+            InterfaceColors: this.makeAggregator<InterfaceColorsData>(NovaDataType.InterfaceColors),
         };
 
         this.ids = this.getAllIDs();

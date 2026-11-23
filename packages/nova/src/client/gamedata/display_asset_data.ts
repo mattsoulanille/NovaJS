@@ -11,6 +11,7 @@ import { SpriteSheetFramesData, SpriteSheetImageData } from 'novadatainterface/s
 import { StatusBarData } from 'novadatainterface/status_bar_data';
 import { StringTableData } from 'novadatainterface/string_table_data';
 import { DescriptionData } from 'novadatainterface/description_data';
+import { InterfaceColorsData } from 'novadatainterface/interface_colors_data';
 import { TargetCornersData } from 'novadatainterface/target_corners_data';
 import * as PIXI from 'pixi.js';
 import * as sound from '@pixi/sound';
@@ -28,7 +29,7 @@ export type DisplayAssetDataResources = Pick<NovaDataInterface,
     'Pict' | 'PictImage' | 'Cicn' | 'CicnImage' | 'PpatImage' |
     'TargetCorners' | 'SpriteSheetImage' | 'SpriteSheetFrames' |
     'StatusBar' | 'Explosion' | 'SoundFile' |
-    'StringTable' | 'Description'
+    'StringTable' | 'Description' | 'InterfaceColors'
 > & {
     Sound: Gettable<sound.Sound>,
 };
@@ -61,6 +62,7 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
             SoundFile: this.addBinaryGettable<SoundFile>(NovaDataType.SoundFile, SOUND_EXTENSION),
             StringTable: this.addStructuredGettable<StringTableData>(NovaDataType.StringTable),
             Description: this.addStructuredGettable<DescriptionData>(NovaDataType.Description),
+            InterfaceColors: this.addStructuredGettable<InterfaceColorsData>(NovaDataType.InterfaceColors),
             Sound: this.addSoundGettable(),
         };
     }

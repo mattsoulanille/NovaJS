@@ -36,5 +36,6 @@ export function getDefaultNovaIDs(): NovaIDs {
         SoundFile: [],
         StringTable: [],
         Description: [],
+        InterfaceColors: [],
     }
 }

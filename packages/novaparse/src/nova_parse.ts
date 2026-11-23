@@ -78,6 +78,9 @@ import { JunkResource } from "./resource_parsers/junk_resource.js";
 import { OopsResource } from "./resource_parsers/oops_resource.js";
 import { GovtResource } from "./resource_parsers/govt_resource.js";
 import { IntfResource } from "./resource_parsers/intf_resource.js";
+import { ColrResource } from "./resource_parsers/colr_resource.js";
+import { InterfaceColorsParse } from "./parsers/interface_colors_parse.js";
+import { InterfaceColorsData } from "novadatainterface/interface_colors_data";
 import { MisnResource } from "./resource_parsers/misn_resource.js";
 import { OutfResource } from "./resource_parsers/outf_resource.js";
 import { PersResource } from "./resource_parsers/pers_resource.js";
@@ -326,6 +329,7 @@ export class NovaParse implements GameDataInterface {
             SoundFile: this.buildIDsForResource(idSpace["snd "]),
             StringTable: this.buildIDsForResource(idSpace["STR#"]),
             Description: this.buildIDsForResource(idSpace.dësc),
+            InterfaceColors: this.buildIDsForResource(idSpace.cölr),
         }
     }
 
@@ -369,6 +373,7 @@ export class NovaParse implements GameDataInterface {
             SoundFile: this.makeGettable<SndResource, SoundFile>(NovaResourceType.snd, SoundFileParse),
             StringTable: this.makeGettable<StrNResource, StringTableData>(NovaResourceType.STRH, StringTableParse),
             Description: this.makeGettable<DescResource, DescriptionData>(NovaResourceType.dësc, DescriptionParse),
+            InterfaceColors: this.makeGettable<ColrResource, InterfaceColorsData>(NovaResourceType.cölr, InterfaceColorsParse),
         }
 
         return data;

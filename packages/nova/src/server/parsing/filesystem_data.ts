@@ -25,6 +25,7 @@ import { StatusBarData } from "novadatainterface/status_bar_data";
 import { RankData } from "novadatainterface/rank_data";
 import { StringTableData } from "novadatainterface/string_table_data";
 import { DescriptionData } from "novadatainterface/description_data";
+import { InterfaceColorsData } from "novadatainterface/interface_colors_data";
 import { SystemData } from "novadatainterface/system_data";
 import { GovtData } from "novadatainterface/govt_data";
 import { DudeData } from "novadatainterface/dude_data";
@@ -72,6 +73,7 @@ const Paths = {
     Rank: { path: "Rank", extension: "json" } as PathInfo,
     StringTable: { path: "StringTable", extension: "json" } as PathInfo,
     Description: { path: "Description", extension: "json" } as PathInfo,
+    InterfaceColors: { path: "InterfaceColors", extension: "json" } as PathInfo,
 };
 
 class FilesystemData implements GameDataInterface {
@@ -110,6 +112,7 @@ class FilesystemData implements GameDataInterface {
             Rank: this.getFunction<RankData>(Paths.Rank),
             StringTable: this.getFunction<StringTableData>(Paths.StringTable),
             Description: this.getFunction<DescriptionData>(Paths.Description),
+            InterfaceColors: this.getFunction<InterfaceColorsData>(Paths.InterfaceColors),
         }
         this.ids = this.buildIDs();
     }
@@ -189,6 +192,7 @@ class FilesystemData implements GameDataInterface {
             Rank: await this.buildIDsForPath(Paths.Rank),
             StringTable: await this.buildIDsForPath(Paths.StringTable),
             Description: await this.buildIDsForPath(Paths.Description),
+            InterfaceColors: await this.buildIDsForPath(Paths.InterfaceColors),
         }
     }
 

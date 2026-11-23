@@ -22,6 +22,7 @@ import { getDefaultShipData } from "./ship_data.js";
 import { getDefaultSoundFile } from "./sound_file.js";
 import { getDefaultSpriteSheetData, getDefaultSpriteSheetFrames } from "./sprite_sheet_data.js";
 import { getDefaultStatusBarData } from "./status_bar_data.js";
+import { getDefaultInterfaceColorsData } from "./interface_colors_data.js";
 import { getDefaultRankData } from "./rank_data.js";
 import { getDefaultStringTableData } from "./string_table_data.js";
 import { getDefaultSystemData } from "./system_data.js";
@@ -95,6 +96,7 @@ export class MockGameData implements GameDataInterface {
         SoundFile: new MockGettable(getDefaultSoundFile()),
         StringTable: new MockGettable(getDefaultStringTableData()),
         Description: new MockGettable(getDefaultDescriptionData()),
+        InterfaceColors: new MockGettable(getDefaultInterfaceColorsData()),
     };
     get ids(): Promise<NovaIDs> {
         const ids: NovaIDs = {} as NovaIDs;
