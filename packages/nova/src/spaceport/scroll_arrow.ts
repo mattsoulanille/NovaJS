@@ -36,14 +36,20 @@ export const SCROLL_ARROW = {
 } as const;
 
 /**
- * A round scroll-arrow button for an item grid (the outfitter and the
- * shipyard each have an up/down pair at the grid's bottom-left). It is
- * ALWAYS shown, greyed at either end of the list — the shipyard capture
- * shows both arrows disabled over a list that fits on one page.
+ * A round scroll-arrow button: the outfitter, shipyard and hire-escort
+ * grids each have an up/down pair at their bottom-left, and a mission-text
+ * popup too long for its frame has one right of its buttons. A grid's
+ * pair is ALWAYS shown, greyed at either end of the list — the shipyard
+ * capture shows both arrows disabled over a list that fits on one page.
  */
 export class ScrollArrow {
     container = new PIXI.Container();
+    /** Fires on release over an enabled arrow (one page / one step). */
     readonly click = new Subject<void>();
+    /** Fires on press-down over an enabled arrow, for owners that scroll
+     * while the arrow is HELD (the mission-text popup). A greyed arrow
+     * ignores the press entirely. */
+    readonly press = new Subject<void>();
     private socket = new PIXI.Graphics();
     private sphere = new PIXI.Graphics();
     private glyph = new PIXI.Graphics();
@@ -60,6 +66,11 @@ export class ScrollArrow {
         this.container.on('pointerup', () => {
             if (this.wrappedEnabled) {
                 this.click.next();
+            }
+        });
+        this.container.on('pointerdown', () => {
+            if (this.wrappedEnabled) {
+                this.press.next();
             }
         });
         this.drawSocket();

@@ -82,6 +82,13 @@ export const PICT_BUTTON_BOTTOM_GAP = 30;
  * frame at 740). They share the button row's vertical centre.
  */
 export const POPUP_SCROLL_X = { up: 351, down: 384 };
+/**
+ * The scroll arrows' centre below the button sprite's top: their spheres
+ * span rows 674..686 on the R8 wave-5 bar capture (11-bar.png), whose
+ * No / Yes pills' red faces run 672..684 (a pill face starts 5px below
+ * its sprite's top).
+ */
+export const POPUP_SCROLL_DY = 12.5;
 
 /** How far one click of a scroll arrow moves the text: a single line. */
 export const POPUP_SCROLL_STEP = POPUP_LINE_HEIGHT;

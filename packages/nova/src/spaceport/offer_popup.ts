@@ -9,6 +9,7 @@ import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
+import { ScrollArrow } from './scroll_arrow.js';
 import {
     autoAcceptOffer, autoAcceptedThisVisit, OfferRolls, offerSubstitutions,
     stillOffered,
@@ -25,13 +26,13 @@ import {
     PICT_TEXT_TOP,
     PICT_TEXT_WELL,
     POPUP_BUTTON_BOTTOM_GAP,
-    POPUP_BUTTON_CAP_WIDTH,
     POPUP_BUTTON_WIDTH,
     POPUP_BUTTON_X,
     POPUP_LINE_HEIGHT,
     POPUP_SCROLL_HOLD_DELAY,
     POPUP_SCROLL_HOLD_SPEED,
     POPUP_SCROLL_STEP,
+    POPUP_SCROLL_DY,
     POPUP_SCROLL_X,
     POPUP_TEXT_MARGIN,
     POPUP_TEXT_TOP,
@@ -119,8 +120,8 @@ export class OfferPopup {
         top: number,
         maxOffset: number,
         offset: number,
-        up: Button,
-        down: Button,
+        up: ScrollArrow,
+        down: ScrollArrow,
     };
     /** The arrow being held down, and how long it has been held. */
     private hold?: {
@@ -291,20 +292,23 @@ export class OfferPopup {
     }
 
     /**
-     * The up/down scroll arrows, sitting at the right of the button row
-     * (the original's round chevrons — we have no art for those, so they
-     * are narrow pills). Greyed at each end of the scroll range. A click
-     * steps one line; holding one glides the text continuously.
+     * The up/down scroll arrows, sitting at the right of the button row:
+     * the same round chevron buttons as the shops' grids (scroll_arrow.ts;
+     * the R8 wave-5 bar capture 11-bar.png shows the long Charengo offer
+     * with a dark up sphere and a red down one at x1091 / x1125, centred
+     * on the No / Yes pills' row). Greyed at each end of the scroll range.
+     * A press steps one line; holding one glides the text continuously.
      */
     private addScrollButtons(text: PIXI.Text, top: number,
         maxOffset: number, originX: number, buttonY: number) {
-        // Width 0 leaves just the two end caps: the narrowest pill the
-        // button art makes, closest to the original's round buttons.
-        const arrow = (label: string, x: number) => new Button(
-            this.displayAssets, label, 0,
-            { x: originX + x - POPUP_BUTTON_CAP_WIDTH, y: buttonY });
-        const up = arrow('▲', POPUP_SCROLL_X.up);
-        const down = arrow('▼', POPUP_SCROLL_X.down);
+        const arrow = (direction: 'up' | 'down', x: number) => {
+            const a = new ScrollArrow(direction);
+            a.container.position.set(originX + x,
+                buttonY + POPUP_SCROLL_DY);
+            return a;
+        };
+        const up = arrow('up', POPUP_SCROLL_X.up);
+        const down = arrow('down', POPUP_SCROLL_X.down);
         this.scroll = { text, top, maxOffset, offset: 0, up, down };
         this.bindScrollButton(up, -1);
         this.bindScrollButton(down, 1);
@@ -317,11 +321,9 @@ export class OfferPopup {
      * holding past POPUP_SCROLL_HOLD_DELAY glides on at
      * POPUP_SCROLL_HOLD_SPEED px/s until the pointer is released.
      */
-    private bindScrollButton(button: Button, direction: number) {
-        // Through the Button's own press state machine (button.ts
-        // pressTransition), NOT a raw pointerdown: a GREYED arrow — at the
-        // top or bottom of the text — must ignore the press entirely (no
-        // pressed flash, no scroll), which the raw handler bypassed.
+    private bindScrollButton(button: ScrollArrow, direction: number) {
+        // The arrow's own press, which a GREYED arrow — at the top or
+        // bottom of the text — never fires (no scroll, no hold).
         button.press.subscribe(() => {
             this.scrollBy(direction * POPUP_SCROLL_STEP);
             this.beginHold(direction);
@@ -386,9 +388,9 @@ export class OfferPopup {
         if (!this.scroll) {
             return;
         }
-        this.scroll.up.state = this.scroll.offset > 0 ? 'normal' : 'grey';
-        this.scroll.down.state =
-            this.scroll.offset < this.scroll.maxOffset ? 'normal' : 'grey';
+        this.scroll.up.enabled = this.scroll.offset > 0;
+        this.scroll.down.enabled =
+            this.scroll.offset < this.scroll.maxOffset;
     }
 
     /** Three-part frame (offer 8521-3 or briefing 8524-6), middle tiled

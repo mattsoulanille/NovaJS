@@ -17,6 +17,7 @@ import { PendingEscortsComponent } from './pending_escorts.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
+import { ScrollArrow } from './scroll_arrow.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
@@ -211,6 +212,11 @@ export class HireEscortDialog {
         status: new PIXI.Text('', FONT.normal),
     };
     private buttons: { hire: Button, done: Button };
+    /** The grid's scroll arrows, where the shipyard has its own: the
+     * hire frame's sockets sit at exactly the shipyard's spheres'
+     * centres on bar/hire_escort/select_escort.png. */
+    private scrollUpArrow = new ScrollArrow('up');
+    private scrollDownArrow = new ScrollArrow('down');
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private simulationData: SimulationGameDataInterface,
@@ -256,15 +262,27 @@ export class HireEscortDialog {
             HIRE.valueX, HIRE.label.y + HIRE.labelPitch);
         this.text.status.position.set(-170, 118);
         this.container.addChild(this.gridContainer, this.pictContainer);
+        this.scrollUpArrow.container.position.set(-229, 138.5);
+        this.scrollDownArrow.container.position.set(-199, 138.5);
+        this.scrollUpArrow.click.subscribe(() => {
+            this.itemGrid?.scrollUp();
+            this.updateArrows();
+        });
+        this.scrollDownArrow.click.subscribe(() => {
+            this.itemGrid?.scrollDown();
+            this.updateArrows();
+        });
+        this.container.addChild(this.scrollUpArrow.container,
+            this.scrollDownArrow.container);
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
 
         this.controls = new MenuControls(controlEvents, {
-            left: () => this.itemGrid?.left(),
-            right: () => this.itemGrid?.right(),
-            up: () => this.itemGrid?.up(),
-            down: () => this.itemGrid?.down(),
+            left: () => { this.itemGrid?.left(); this.updateArrows(); },
+            right: () => { this.itemGrid?.right(); this.updateArrows(); },
+            up: () => { this.itemGrid?.up(); this.updateArrows(); },
+            down: () => { this.itemGrid?.down(); this.updateArrows(); },
             buy: this.hire.bind(this),
             hire: this.hire.bind(this),
             depart: () => this.closed.next(),
@@ -392,6 +410,12 @@ export class HireEscortDialog {
         });
     }
 
+    /** Greys each scroll arrow when the page is already at that end. */
+    private updateArrows() {
+        this.scrollUpArrow.enabled = this.itemGrid?.canScrollUp ?? false;
+        this.scrollDownArrow.enabled = this.itemGrid?.canScrollDown ?? false;
+    }
+
     private refreshButtons() {
         this.text.count.text = `${this.credits.credits.toLocaleString()} cr`;
         const ship = this.itemGrid?.selection;
@@ -468,6 +492,7 @@ export class HireEscortDialog {
         this.gridContainer.addChild(this.itemGrid.container);
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
         this.itemGrid.drawGrid();
+        this.updateArrows();
 
         this.text.status.text = '';
         this.setShipSelected(undefined);

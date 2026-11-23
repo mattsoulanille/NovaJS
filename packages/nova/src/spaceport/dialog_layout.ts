@@ -213,8 +213,17 @@ export const BAR = {
     pane: { x: -124, y: -87, width: 246, height: 114 },
     /** Its text's ink starts at x845 with the first cap at y461. */
     text: { x: -115, y: -82 },
-    /** Lines never pass x1080 (wrap width 235). */
-    wrapWidth: 235,
+    /**
+     * The wrap limit, pinned by the two bar captures' own line breaks.
+     * Wrapping both texts in our 9.4px Geneva: Port Kane's fifth line
+     * ("which can not be mentioned to anyone below the") is 225px and
+     * stays whole on bar/bar_port_kane.png, while Earth's first line plus
+     * "Lubritorium" is 231px and breaks on bar/bar_earth.png. So the
+     * limit is in 225..231; at 235 ours ran "Kane's Lubritorium" and
+     * "Federation for" together and wrapped Earth's text a word late on
+     * every line.
+     */
+    wrapWidth: 228,
     /**
      * The 2x2 button grid is NOT symmetric: the left column's pills are
      * 135px of red face (x840..974) against the right column's 88

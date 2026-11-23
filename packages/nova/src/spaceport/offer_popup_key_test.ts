@@ -17,6 +17,9 @@ describe('popupDepartChoice', () => {
 
     it('leaves a two-button offer alone', () => {
         // Accept-or-refuse is a real decision; Escape must not pick one.
+        // The original agrees (catalogue K2, R8 wave 5 in
+        // docs/reference_experiments.md): Escape pressed on Earth's bar
+        // offer (No / Yes) left it up, unchanged 2s later.
         expect(popupDepartChoice(true)).toBeUndefined();
     });
 });
