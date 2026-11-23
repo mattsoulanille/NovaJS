@@ -243,7 +243,8 @@ const TargetRemovedSystem = new System({
 // lock. Gated on ShipComponent: projectiles keep their TargetComponent,
 // so a homing missile's lock is SUSPENDED while its target is cloaked
 // (it stops homing in ProjectileGuidanceSystem) and resumes on decloak,
-// per observed original-game behavior.
+// per observed original-game behavior — unless its parent's own scanner
+// can target cloaked ships, which keeps the missile homing.
 const CloakedTargetQuery = new Query([UUID, CloakActiveComponent] as const);
 export const DropCloakedTargetSystem = new System({
     name: 'DropCloakedTarget',

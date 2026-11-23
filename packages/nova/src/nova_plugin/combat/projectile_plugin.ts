@@ -16,7 +16,7 @@ import SAT from "sat";
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { AnimationComponent } from '../core/index.js';
 import { AsteroidComponent } from './asteroid_plugin.js';
-import { CloakActiveComponent, isCloaked } from '../ship/index.js';
+import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../ship/index.js';
 import { IdFactoryResource } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin.js';
@@ -287,9 +287,10 @@ export const ProjectileGuidanceSystem = new System({
     after: [MissileJammingSystem],
     args: [MovementStateComponent, TargetComponent,
         Entities, ProjectileDataComponent, MissileGuidanceResource,
-        Optional(JamDecisionComponent)] as const,
+        Optional(JamDecisionComponent), Optional(OwnerComponent),
+        Optional(SourceComponent)] as const,
     step(movementState, { target }, entities, projectileData, guidanceMode,
-        jamDecision) {
+        jamDecision, owner, source) {
         const jamSteer = jamDecision?.steer;
         // A jammed plain missile flies dead straight for the rest of its
         // life, along the heading it had at the decision (its launch
@@ -300,8 +301,9 @@ export const ProjectileGuidanceSystem = new System({
             return;
         }
         // A missile confused by sensor interference (Seeker 0x0008) turns
-        // at its full turn rate in one direction for the rest of its life,
-        // flying in circles, whatever its target does.
+        // at CONFUSED_TURN_RATE_FACTOR_FITTED (1.8) x its turn rate in one
+        // direction for the rest of its life, flying in tight circles,
+        // whatever its target does.
         const confused = confusedTurning(jamSteer);
         if (confused !== undefined) {
             movementState.turnTo = null;
@@ -318,18 +320,31 @@ export const ProjectileGuidanceSystem = new System({
             return;
         }
 
-        // Missile lock vs cloak (rule from observed original-game
-        // behavior): a homing missile LOSES its lock while its target is
-        // cloaked — it stops homing and flies straight — but REGAINS the
-        // lock if that same target decloaks while the missile is still
-        // alive. The lock is suspended, not cleared: TargetComponent
-        // keeps the target uuid (DropCloakedTargetSystem is ship-only),
-        // so homing resumes here the moment the target decloaks.
-        // Notably, a cloak scanner on the missile's PARENT ship does NOT
-        // keep its missiles tracking: scanners let the ship target
-        // cloaked ships, but missiles still lose lock — "odd behavior,
-        // but it's what the original game does".
-        if (isCloaked(targetEntity?.components.get(CloakActiveComponent))) {
+        // Missile lock vs cloak: a homing missile LOSES its lock while its
+        // target is cloaked — it stops homing and flies straight — but
+        // REGAINS the lock if that same target decloaks while the missile
+        // is still alive. The lock is suspended, not cleared:
+        // TargetComponent keeps the target uuid (DropCloakedTargetSystem is
+        // ship-only), so homing resumes here the moment the target
+        // decloaks.
+        //
+        // UNLESS the missile's parent can target cloaked ships: a cloak
+        // scanner with ModVal 0x0008 ("allow targeting of cloaked ships",
+        // isTargetable) on the parent keeps its missiles homing on a
+        // cloaked target. Measured on the original
+        // (docs/reference_experiments.md, "J wave 6: Seeker 0x0020 under
+        // ion fire, and missiles at cloaked targets"): with a 0x000C
+        // scanner keeping the Wraith-cloaked target selected, 49 of about
+        // 49 missiles homed and hit in two geometries; without one the
+        // target dropped to "No Target" and later missiles flew straight.
+        // The parent is the ship whose side the missile is on (its
+        // OwnerComponent, which fire() sets to the firer when it has no
+        // owner of its own), else the entity it was fired from.
+        const parentUuid = owner?.owner ?? source;
+        const parentScanner = parentUuid === undefined ? undefined
+            : entities.get(parentUuid)?.components.get(CloakScannerComponent);
+        if (!isTargetable(targetEntity?.components.get(CloakActiveComponent),
+            parentScanner)) {
             movementState.turnTo = null;
             return;
         }
