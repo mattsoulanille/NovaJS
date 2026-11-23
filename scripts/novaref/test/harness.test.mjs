@@ -11,6 +11,7 @@ import { frameAt, parseFfmpegStart, stepEntersShip, syncEvents } from "../frame_
 import { acquireLock, lockStatus, lockVerdict } from "../lock.mjs";
 import { changeFrames, frameDiffs } from "../analysis/panel_hits.mjs";
 import { largestBlob } from "../analysis/blob_offset.mjs";
+import { blobs, leadFrame } from "../analysis/fleet_groups.mjs";
 import { checkIdLimit } from "../plugin_make.mjs";
 
 const tmpLock = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "novaref-lock-")), "lock");
@@ -118,6 +119,24 @@ test("blob_offset: largestBlob picks the biggest 4-connected component", () => {
     // Diagonal neighbours are not connected.
     assert.equal(largestBlob(Uint8Array.from([1, 0, 0, 1]), 2, 2).n, 1);
     assert.equal(largestBlob(new Uint8Array(4), 2, 2), null);
+});
+
+test("fleet_groups: blobs and the lead's frame", () => {
+    // Two 2x2 blobs of colour 1 and a stray pixel (below min).
+    const w = 6, h = 3;
+    const L = Int8Array.from([
+        1, 1, -1, -1, 1, 1,
+        1, 1, -1, -1, 1, 1,
+        -1, -1, -1, 1, -1, -1,
+    ]);
+    const b = blobs(L, w, h, 1, 2);
+    assert.deepEqual(b.map(([x, y, n]) => [x, y, n]), [[0.5, 0.5, 4], [4.2, 0.8, 5]]);
+    // Lead moving right (+x): a point behind and above it on screen is astern and LEFT of travel.
+    assert.deepEqual(leadFrame([90, 90], [100, 100], 3, 0), { along: -10, across: 10 });
+    // Moving down the screen (+y): screen +x is to the left of travel.
+    const f = leadFrame([110, 100], [100, 100], 0, 2);
+    assert.equal(f.along, 0);
+    assert.equal(f.across, 10);
 });
 
 test("plugin-make refuses ids the game can't load", () => {

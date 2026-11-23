@@ -38,11 +38,23 @@ if (!file || !isColour) {
     process.exit(2);
 }
 
-const raw = spawnSync("ffmpeg", ["-v", "error", "-i", file, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-    { maxBuffer: 2 ** 32 }).stdout;
-const N = Math.floor(raw.length / (W * H * 3));
 const pts = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "frame=pts_time", "-of", "csv=p=0", file],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout.trim().split("\n").map((l) => parseFloat(l));
+const N = pts.length;
+// Decode in chunks: a whole 832x604 rgb24 recording passes Node's 4 GB
+// buffer limit after about 95 s at 30 fps (spawnSync then silently returns
+// a truncated buffer, so the last minute of a long run went missing).
+const CHUNK = 1500, FRAME_BYTES = W * H * 3;
+let raw = null, chunkStart = -1;
+function frameOffset(i) {
+    if (raw === null || i < chunkStart || i >= chunkStart + CHUNK) {
+        chunkStart = i - (i % CHUNK);
+        raw = spawnSync("ffmpeg", ["-v", "error", "-i", file, "-vf", `select='between(n\\,${chunkStart}\\,${chunkStart + CHUNK - 1})'`,
+            "-vsync", "0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: CHUNK * FRAME_BYTES + 1024 }).stdout;
+    }
+    const o = (i - chunkStart) * FRAME_BYTES;
+    return o + FRAME_BYTES <= raw.length ? o : null;
+}
 
 function barPx(o, y, test) {
     let n = 0;
@@ -100,7 +112,8 @@ let shield0 = null, armor0 = null, firstDrop = null, near = 0, closest = Infinit
 let last = null;
 for (let i = 0; i < N; i++) {
     if (pts[i] < FROM) continue;
-    const o = i * W * H * 3;
+    const o = frameOffset(i);
+    if (o === null) continue;
     const sh = barPx(o, 201, shieldFill), ar = barPx(o, 218, armorFill);
     // The map or a dialog covers the status bar: skip frames whose bars
     // vanish entirely (a real empty shield still has armor).
