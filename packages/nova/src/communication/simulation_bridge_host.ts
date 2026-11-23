@@ -164,12 +164,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private pendingInputs: SimulationInput[] = [];
     /**
      * The tick of this peer's latest record on the current timeline.
-     * Each record goes on a later tick than the one before it: what
-     * takeTickInputs held back from a record must reach the room on a
-     * tick of its own even while catching up, when the room clock that
-     * stamps records stands still for a whole burst of steps.
+     * Records never go on an earlier tick than the one before them
+     * (authored order), and what takeTickInputs held back from a record
+     * goes on a LATER tick than that record — even while catching up,
+     * when the room clock that stamps records stands still for a whole
+     * burst of steps. Only a held-back remainder is bumped, so the bump
+     * cannot become a lasting lead over the clock: see step().
      */
     private lastRecordTick = -Infinity;
+    /** Whether the last takeTickInputs held inputs back: the next record
+     * carries what it held back. */
+    private holdingBack = false;
     /**
      * Remote peers' input records, relayed by the server. Buffered
      * here until per-peer input application lands (Phase 3 step 3).
@@ -534,8 +539,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             // One tick's share of the queue: a press and its release
             // (a quick tap) never share a record, nor do two presses of
             // one key (tick_inputs.ts); the rest waits for the next tick.
+            const carriesHeldBack = this.holdingBack;
             const { now: inputs, later } = takeTickInputs(this.pendingInputs);
             this.pendingInputs = later;
+            this.holdingBack = later.length > 0;
             if (inputs.length > 0) {
                 // Never stamp inputs behind the room's clock: the
                 // relay would retime them for everyone but us — a
@@ -545,9 +552,19 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // steady state the local tick leads the clock and
                 // this is a no-op.
                 const estimated = this.roomClock.estimatedServerTick();
-                const tick = Math.max(this.rollback.tick + 1,
-                    estimated === undefined ? 0 : Math.ceil(estimated) + 1,
-                    this.lastRecordTick + 1);
+                const base = Math.max(this.rollback.tick + 1,
+                    estimated === undefined ? 0 : Math.ceil(estimated) + 1);
+                // Never before this peer's previous record, and a held-
+                // back remainder strictly after the record it was held
+                // back from (a tap's release after its press). The lead
+                // this can build over `base` is one tick per remainder
+                // in a chain stamped while `base` stands still; a record
+                // that carries nothing held back adds none, so the lead
+                // is gone once `base` (local tick or room clock) moves
+                // past it — a steady per-tick input stream after a
+                // catch-up is stamped at `base` again, not carried ahead.
+                const tick = Math.max(base, carriesHeldBack
+                    ? this.lastRecordTick + 1 : this.lastRecordTick);
                 this.lastRecordTick = tick;
                 const communicator = this.world.resources.get(CommunicatorResource);
                 const peerId = communicator?.uuid;

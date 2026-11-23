@@ -21,6 +21,8 @@ import { unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { InputRecord, SimulationInput } from './simulation_input.js';
 import { takeTickInputs } from './tick_inputs.js';
+import { RoomClock } from './room_clock.js';
+import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
 
 /**
  * Quick key taps (LOST_KEY_TAPS): a key pressed AND released between two
@@ -350,11 +352,138 @@ describe('quick key taps', () => {
                 [51, [{ kind: 'control', events: [press('nearestTarget')] }]],
                 [52, [{ kind: 'control', events: [release('nearestTarget')] }]],
             ]);
-            // And the next batch after the burst, still under the same
-            // clock reading, goes after both.
+            // The next batch, still under the same clock reading, is not
+            // stamped before them (authored order) — and not pushed past
+            // them either: only a held-back remainder is bumped.
             h.send(press('cloak'));
             h.host.step();
-            expect(records[2]?.tick).toBe(53);
+            expect(records[2]?.tick).toBe(52);
+        });
+
+        /** A host in a room whose clock reads `tick` at `now` (mocked). */
+        function roomHarness(tick: number) {
+            const communicator = new MockCommunicator('me');
+            const h = makeHarness(communicator);
+            const records = published(communicator);
+            let now = 1000;
+            spyOn(performance, 'now').and.callFake(() => now);
+            communicator.messages.next({
+                source: 'server',
+                message: wrapRollbackMessage({ kind: 'tickSync', tick }),
+            });
+            // The host's own estimate, by the host's own arithmetic.
+            const clock = new RoomClock();
+            clock.sync(tick, 1000);
+            const clockNext = () =>
+                Math.ceil(clock.estimatedServerTick(now)!) + 1;
+            return {
+                h, records, clockNext,
+                /** One wall-clock tick passes. */
+                advance() { now += SIMULATION_STEP_MS; },
+                /** The latest record's lead over the clock's next tick. */
+                lead() { return records.at(-1)!.tick - clockNext(); },
+            };
+        }
+
+        const steer = (heading: number) => ({ heading, throttle: 1 });
+
+        it('a catch-up burst with a record every step leaves no lasting lead over the clock', () => {
+            // Hub review: a per-tick input stream (the autopilot's and the
+            // touch stick's analogControl, one per frame) through a
+            // catch-up — the room clock estimate standing still while the
+            // local tick races behind it. Each record must not be bumped
+            // past its predecessor, or the burst's length would become a
+            // permanent lead (input latency) for as long as the stream
+            // runs.
+            const r = roomHarness(50);
+            for (let i = 0; i < 10; i++) {
+                r.h.host.analogControl(steer(i / 10));
+                r.h.host.step();
+            }
+            // The burst: all at the clock's next tick, as before this
+            // change (a record per step from one peer stacks; seq orders
+            // them where they apply, #359).
+            expect(r.records.map(x => x.tick)).toEqual(Array(10).fill(51));
+            // The clock runs again with the stream still going: every
+            // record is stamped at the clock's next tick, no lead.
+            const leads: number[] = [];
+            for (let i = 0; i < 20; i++) {
+                r.advance();
+                r.h.host.analogControl(steer(1 + i / 10));
+                r.h.host.step();
+                leads.push(r.lead());
+            }
+            expect(leads).toEqual(Array(20).fill(0));
+        });
+
+        it('a tap inside a catch-up burst leads the clock by one tick at most, then none', () => {
+            const r = roomHarness(50);
+            const ticks: number[] = [];
+            for (let i = 0; i < 6; i++) {
+                r.h.host.analogControl(steer(i / 10));
+                if (i === 2) {
+                    r.h.send(press('nearestTarget'), release('nearestTarget'));
+                }
+                r.h.host.step();
+                ticks.push(r.records.at(-1)!.tick);
+            }
+            // The press went out with step 2's record at 51; its release
+            // was held back and went on 52 with step 3's; what follows
+            // keeps authored order (not before 52) without a further bump.
+            const pressRecord = r.records.find(x => x.inputs.some(input =>
+                input.kind === 'control' && input.events[0]!.state === 'start'))!;
+            const releaseRecord = r.records.find(x => x.inputs.some(input =>
+                input.kind === 'control' && input.events[0]!.state === false))!;
+            expect([pressRecord.tick, releaseRecord.tick]).toEqual([51, 52]);
+            expect(ticks).toEqual([51, 51, 51, 52, 52, 52]);
+            expect(Math.max(...ticks) - r.clockNext()).toBeLessThanOrEqual(1);
+            // As soon as the clock moves, the stream is back at its next
+            // tick.
+            const leads: number[] = [];
+            for (let i = 0; i < 5; i++) {
+                r.advance();
+                r.h.host.analogControl(steer(1));
+                r.h.host.step();
+                leads.push(r.lead());
+            }
+            expect(leads).toEqual([0, 0, 0, 0, 0]);
+        });
+
+        it('a tap every step through a catch-up: the lead is bounded and decays', () => {
+            // The worst case for the bump: every step holds a release
+            // back, so every record carries a remainder. While the clock
+            // stands still each remainder adds a tick; once the clock
+            // runs, the lead cannot grow and is gone a few ticks after
+            // the taps stop.
+            const r = roomHarness(50);
+            for (let i = 0; i < 4; i++) {
+                r.h.send(press('nextTarget'), release('nextTarget'));
+                r.h.host.step();
+            }
+            // Frozen clock: 51 (press), then each step's record carries the
+            // previous release and its own press: 52, 53, 54.
+            expect(r.records.map(x => x.tick)).toEqual([51, 52, 53, 54]);
+            const leads: number[] = [];
+            for (let i = 0; i < 24; i++) {
+                r.advance();
+                if (i < 4) {
+                    r.h.send(press('nextTarget'), release('nextTarget'));
+                }
+                r.h.host.analogControl(steer(i));
+                r.h.host.step();
+                leads.push(r.lead());
+            }
+            // Never more than the frozen burst built, never growing...
+            expect(Math.max(...leads)).toBeLessThanOrEqual(3);
+            for (let i = 1; i < leads.length; i++) {
+                expect(leads[i]!).toBeLessThanOrEqual(leads[i - 1]!);
+            }
+            // ...and gone once the taps have drained.
+            expect(leads.slice(-8)).toEqual(Array(8).fill(0));
+            // Every tap still reached its own tick: 8 presses, 8 edges.
+            r.h.host.step(120);
+            expect(r.h.edges.filter(([, actions]) =>
+                actions.includes('nextTarget')).length).toBe(8);
         });
     });
 });
