@@ -1071,6 +1071,21 @@ async function openPilot(name) {
         ...(verified ? {} : { error: "Last Pilot does not name the requested pilot" }) };
 }
 
+/**
+ * `defaults write` argument strings for a scenario's "prefs" object:
+ * numbers -> -int, booleans -> -bool, strings -> -string. Keys must be
+ * plain identifiers (they go into a remote shell command).
+ */
+export function prefsWrites(prefs) {
+    return Object.entries(prefs).map(([k, v]) => {
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(k)) throw new NovarefError(`bad prefs key ${JSON.stringify(k)}`);
+        if (typeof v === "boolean") return `${k} -bool ${v ? "YES" : "NO"}`;
+        if (typeof v === "number" && Number.isInteger(v)) return `${k} -int ${v}`;
+        if (typeof v === "string") return `${k} -string ${shq(v)}`;
+        throw new NovarefError(`unsupported prefs value for ${k}: ${JSON.stringify(v)}`);
+    });
+}
+
 async function runStep(step, ctx) {
     if (step.keys !== undefined) return cmdKeys([...(step.hold ? ["--hold", String(step.hold)] : []), step.keys]);
     if (step.wait !== undefined) { await sleep(step.wait); return { ok: true, cmd: "wait", ms: step.wait }; }
@@ -1223,6 +1238,15 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
     const snapshot = backupPilots(`run-${name}`);
     record({ phase: "snapshot", backup: snapshot });
     try {
+        // Game prefs for this run only (e.g. {"RunInAWindow": 0} for a
+        // fullscreen capture). Written AFTER the snapshot, so the usual
+        // post-quit prefs check finds the difference and imports the
+        // snapshot back ("prefs-restored").
+        if (sc.prefs) {
+            const writes = prefsWrites(sc.prefs);
+            ssh(writes.map((w) => `defaults write ${shq(cfg.bundleId)} ${w}`).join(" && "));
+            record({ phase: "prefs-override", prefs: sc.prefs });
+        }
         if (sc.pilot?.push) {
             const pushPath = path.resolve(path.dirname(file), expandHome(sc.pilot.push));
             const r = await cmdPilotsPush([pushPath, ...(sc.pilot.as ? ["as", sc.pilot.as] : [])]);

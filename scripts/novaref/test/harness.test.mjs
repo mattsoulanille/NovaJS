@@ -178,6 +178,14 @@ test("expandSteps unrolls repeat blocks and numbers labels", async () => {
     assert.deepEqual(expandSteps(undefined), []);
 });
 
+test("prefsWrites builds typed defaults-write arguments", async () => {
+    const { prefsWrites } = await import("../novaref.mjs");
+    assert.deepEqual(prefsWrites({ RunInAWindow: 0, IntroMusic: false, Name: "a b" }),
+        ["RunInAWindow -int 0", "IntroMusic -bool NO", "Name -string 'a b'"]);
+    assert.throws(() => prefsWrites({ "x; rm -rf ~": 1 }), /bad prefs key/);
+    assert.throws(() => prefsWrites({ Ratio: 0.5 }), /unsupported/);
+});
+
 test("stepEntersShip spots a bare e key", () => {
     assert.equal(stepEntersShip({ keys: "e wait 4000" }), true);
     assert.equal(stepEntersShip({ keys: "Tab e@200" }), true);
