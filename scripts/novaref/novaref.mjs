@@ -30,6 +30,12 @@ const DEFAULT_CONFIG = {
     app: "/Applications/EV Nova.app",
     bundleId: "com.AmbrosiaSW.EV_Nova",
     pilotsDir: "Library/Application Support/EV Nova/Pilots",
+    pluginsDir: "Library/Application Support/EV Nova/Plug-ins",
+    // Other app bundles `launch --app <name>` / a scenario's "app" can start.
+    // Paths are relative to the remote $HOME unless absolute. "minimal" is a
+    // COPY of the game whose Nova Files hold only AbsoluteMinimum
+    // (`novaref app setup-minimal`); the real bundle is never modified.
+    apps: { minimal: "novaref/apps/EV Nova Minimal.app" },
     python: "/usr/bin/python",
     ffmpeg: "novaref/bin/ffmpeg",
     // Default per-key hold and inter-step gap for `keys`, in ms.
@@ -50,7 +56,8 @@ function loadConfig() {
         fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n");
     }
-    const cfg = { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) };
+    const user = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    const cfg = { ...DEFAULT_CONFIG, ...user, apps: { ...DEFAULT_CONFIG.apps, ...(user.apps ?? {}) } };
     cfg.identityFile = expandHome(cfg.identityFile);
     return cfg;
 }
@@ -175,8 +182,19 @@ function helper(args, { front = null } = {}) {
     const pre = front ? ["--front", front] : [];
     const cmd = [cfg.python, `${rq(cfg.remoteDir)}/novaref_helper.py`,
         ...[...pre, ...args].map(shq)].join(" ");
-    const res = ssh(cmd, { allowFail: true });
-    const out = parseJsonLine(res.stdout + "\n");
+    // The old Mac's display sleeps after 10 idle minutes (energy-saver
+    // setting, left alone) and the WindowServer then reports loginwindow as
+    // frontmost. A user-activity assertion (`caffeinate -u`) wakes it
+    // without touching any setting; no password is involved.
+    const wakePrefix = front ? "(caffeinate -u -t 2 >/dev/null 2>&1 &); " : "";
+    let res = ssh(wakePrefix + cmd, { allowFail: true });
+    let out = parseJsonLine(res.stdout + "\n");
+    if (!out.ok && front && /frontmost: loginwindow/.test(out.error ?? "")) {
+        // Display was asleep: give the wake a moment, then try once more.
+        ssh("caffeinate -u -t 2 >/dev/null 2>&1");
+        res = ssh(wakePrefix + cmd, { allowFail: true });
+        out = parseJsonLine(res.stdout + "\n");
+    }
     if (!out.ok) throw new NovarefError(out.error || "helper failed", { helper: out });
     return out;
 }
@@ -263,9 +281,18 @@ function takeOpt(args, name) {
 
 // ---------------------------------------------------------------- commands
 
+/** PIDs of any EV Nova copy (the real app or one under ~/novaref/apps). */
 function novaPids() {
-    const out = ssh(`pgrep -f ${shq(cfg.app + "/Contents/MacOS/")} || true`).stdout.trim();
+    const out = ssh(`pgrep -f ${shq("EV Nova[^/]*\\.app/Contents/MacOS/")} || true`).stdout.trim();
     return out ? out.split("\n").map(Number) : [];
+}
+
+/** Remote path of the app to launch: the real one, or a named copy. */
+function appPath(name) {
+    if (!name || name === "stock") return cfg.app;
+    const p = cfg.apps[name];
+    if (!p) throw new NovarefError(`unknown app ${JSON.stringify(name)} (known: stock, ${Object.keys(cfg.apps).join(", ")})`);
+    return p; // relative to the remote $HOME; quote with rq()
 }
 
 function info() {
@@ -394,21 +421,55 @@ async function waitForWindow(timeoutMs) {
     return null;
 }
 
-async function cmdLaunch() {
+/**
+ * The pilot the title screen will auto-load: the names in the "Last
+ * Pilot" alias, or null when there is no alias (title screen loads none).
+ */
+function lastPilotNames() {
+    const r = ssh(`f=${rq(cfg.pilotsDir + "/Last Pilot")}; [ -e "$f" ] && strings "$f/..namedfork/rsrc" || echo __NONE__`,
+        { allowFail: true }).stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+    return r[0] === "__NONE__" ? null : r;
+}
+
+/**
+ * Safety rule: with any test plug-in installed, the game may only start
+ * when the title screen will load nothing or an experiment pilot (one
+ * novaref manages) -- never Matthew's real pilot, which a landing would
+ * save with the test universe baked in.
+ */
+function assertSafeToLaunch(appName) {
+    const installed = listPluginFiles();
+    const minimal = appName && appName !== "stock";
+    if (!installed.length && !minimal) return;
+    const names = lastPilotNames();
+    if (names === null) return;
+    const managed = new Set(managedPilots());
+    const pilots = ssh(`ls ${rq(cfg.pilotsDir)}`).stdout.split("\n").filter((n) => n && n !== "Last Pilot");
+    const real = pilots.filter((n) => !managed.has(n) && names.includes(n));
+    if (real.length || !pilots.some((n) => managed.has(n) && names.includes(n))) {
+        throw new NovarefError(`refusing to launch: ${installed.length ? "test plug-ins are installed" : "the minimal app was requested"} ` +
+            `and "Last Pilot" would auto-load ${JSON.stringify(real[0] ?? names[1] ?? "?")}, not an experiment pilot. ` +
+            "Use `novaref run` (it parks Last Pilot) or `novaref pilots park-last` first.", { plugins: installed });
+    }
+}
+
+async function cmdLaunch(args = []) {
     ensureHelper();
+    const appName = takeOpt(args, "--app") ?? "stock";
     const before = novaPids();
     if (before.length) {
         const w = novaWindow();
         return { ok: true, cmd: "launch", already_running: true, pids: before, nova_window: w?.bounds ?? null };
     }
-    ssh(`open -a ${shq(cfg.app)}`);
+    assertSafeToLaunch(appName);
+    ssh(`open -a ${rq(appPath(appName))}`);
     const w = await waitForWindow(30000);
     const pids = novaPids();
     // Remember what we launched so `quit` only ever force-kills our own PIDs.
     ssh(`echo ${shq(pids.join(" "))} > ${rq(cfg.remoteDir)}/state/launched.pids`);
     if (!w) return { ok: false, cmd: "launch", error: "no EV Nova window within 30 s", pids };
     await sleep(1500); // let the title screen finish drawing
-    return { ok: true, cmd: "launch", already_running: false, pids, nova_window: w.bounds, nova_content: w.content };
+    return { ok: true, cmd: "launch", app: appName, already_running: false, pids, nova_window: w.bounds, nova_content: w.content };
 }
 
 async function cmdQuit(args = []) {
@@ -454,11 +515,160 @@ async function cmdQuit(args = []) {
     return { ok: left.length === 0, cmd: "quit", was_running: true, method: "kill", killed: killable, remaining: left };
 }
 
-async function cmdRestart() {
+async function cmdRestart(args = []) {
     const q = await cmdQuit([]);
     if (!q.ok) return { ...q, cmd: "restart" };
-    const l = await cmdLaunch();
+    const l = await cmdLaunch(args);
     return { ...l, cmd: "restart" };
+}
+
+// ---------------------------------------------------------------- plug-ins
+
+const INSTALLED = () => `${rq(cfg.remoteDir)}/state/installed_plugins.txt`;
+
+function managedPilots() {
+    return ssh(`cat ${MANAGED()} 2>/dev/null || true`).stdout.split("\n").filter(Boolean);
+}
+
+/** Top-level entries in the Plug-ins folder (excluding .DS_Store). */
+function listPluginFiles() {
+    return ssh(`mkdir -p ${rq(cfg.pluginsDir)} && ls -A ${rq(cfg.pluginsDir)} | grep -v '^\\.DS_Store$' || true`)
+        .stdout.split("\n").filter(Boolean);
+}
+
+async function cmdPluginList() {
+    ensureHelper();
+    const installed = new Set(ssh(`cat ${INSTALLED()} 2>/dev/null || true`).stdout.split("\n").filter(Boolean));
+    const files = listPluginFiles().map((name) => {
+        const st = ssh(`f=${rq(cfg.pluginsDir + "/" + name)}; printf '%s %s %s' "$(stat -f %z "$f")" ` +
+            `"$(stat -f %z "$f/..namedfork/rsrc" 2>/dev/null || echo 0)" ` +
+            `"$(xattr -px com.apple.FinderInfo "$f" 2>/dev/null | tr -d ' \\n' | cut -c1-16)"`).stdout.split(" ");
+        return { name, data_bytes: Number(st[0]), rsrc_bytes: Number(st[1]), finder_info: st[2] || null,
+            novaref_managed: installed.has(name) };
+    });
+    return { ok: true, cmd: "plugin list", dir: "~/" + cfg.pluginsDir, plugins: files };
+}
+
+/**
+ * Copies a local plug-in (resource fork + FinderInfo, or a data-fork
+ * .ndat/.rez) into the Plug-ins folder. Refuses to replace a plug-in
+ * novaref didn't install. Plug-ins are read only at game start.
+ */
+async function cmdPluginInstall(args) {
+    const local = args[0];
+    if (!local) throw new NovarefError("usage: novaref plugin install <local plug-in> [as <name>]");
+    let name = path.basename(local);
+    if (args[1] === "as" && args[2]) name = args[2];
+    if (/[/\n]/.test(name) || name.startsWith(".")) throw new NovarefError(`bad plug-in name ${JSON.stringify(name)}`);
+    ensureHelper();
+    if (novaPids().length) throw new NovarefError("quit EV Nova first (plug-ins load at launch)");
+    const rsrcPath = local + "/..namedfork/rsrc";
+    const fork = fs.existsSync(rsrcPath) ? fs.readFileSync(rsrcPath) : Buffer.alloc(0);
+    const finder = spawnSync("xattr", ["-px", "com.apple.FinderInfo", local], { encoding: "utf8" });
+    const finderHex = finder.status === 0 ? finder.stdout.replace(/\s+/g, "") : null;
+    const remoteFinal = `${cfg.pluginsDir}/${name}`;
+    const exists = ssh(`[ -e ${rq(remoteFinal)} ] && (grep -qxF ${shq(name)} ${INSTALLED()} 2>/dev/null && echo managed || echo REAL) || echo absent`).stdout.trim();
+    if (exists === "REAL") throw new NovarefError(`refusing: ${name} is in Plug-ins and novaref did not install it`);
+    const stage = `${cfg.remoteDir}/tmp/plugin-${process.pid}`;
+    let script;
+    let input;
+    if (fork.length) {
+        input = fork;
+        script = `rm -f ${rq(stage)} && touch ${rq(stage)} && cat > ${rq(stage)}/..namedfork/rsrc`;
+    } else {
+        input = fs.readFileSync(local);
+        script = `rm -f ${rq(stage)} && cat > ${rq(stage)}`;
+    }
+    if (finderHex) script += ` && xattr -wx com.apple.FinderInfo ${shq(finderHex)} ${rq(stage)}`;
+    script += ` && mkdir -p ${rq(cfg.pluginsDir)} && mv -f ${rq(stage)} ${rq(remoteFinal)} && ` +
+        `(grep -qxF ${shq(name)} ${INSTALLED()} 2>/dev/null || echo ${shq(name)} >> ${INSTALLED()})`;
+    ssh(script, { input });
+    const size = ssh(`stat -f %z ${rq(remoteFinal)}${fork.length ? "/..namedfork/rsrc" : ""}`).stdout.trim();
+    return { ok: Number(size) === input.length, cmd: "plugin install", name, remote: "~/" + remoteFinal,
+        bytes: Number(size), layout: fork.length ? "resource-fork" : "data-fork", finder_info: finderHex?.slice(0, 16) ?? null,
+        replaced: exists === "managed" };
+}
+
+/**
+ * Moves plug-ins novaref installed out of Plug-ins into
+ * ~/novaref/backups/<ts>-plugin-uninstall/ (never deletes). `--all`
+ * removes every novaref-installed plug-in. Refuses plug-ins it didn't
+ * install.
+ */
+async function cmdPluginUninstall(args) {
+    ensureHelper();
+    if (novaPids().length) throw new NovarefError("quit EV Nova first");
+    const all = takeFlag(args, "--all");
+    const installed = ssh(`cat ${INSTALLED()} 2>/dev/null || true`).stdout.split("\n").filter(Boolean);
+    const present = new Set(listPluginFiles());
+    const names = all ? installed.filter((n) => present.has(n)) : args;
+    if (!all && !names.length) throw new NovarefError("usage: novaref plugin uninstall <name>... | --all");
+    for (const n of names) {
+        if (!installed.includes(n)) throw new NovarefError(`refusing: ${JSON.stringify(n)} was not installed by novaref`);
+    }
+    const dest = `${cfg.remoteDir}/backups/${timestamp()}-plugin-uninstall`;
+    const moved = [];
+    for (const n of names) {
+        if (!present.has(n)) continue;
+        ssh(`mkdir -p ${rq(dest)} && mv ${rq(cfg.pluginsDir + "/" + n)} ${rq(dest + "/")}`);
+        moved.push(n);
+    }
+    ssh(`for n in ${names.map(shq).join(" ")}; do grep -vxF "$n" ${INSTALLED()} > ${INSTALLED()}.new; ` +
+        `mv ${INSTALLED()}.new ${INSTALLED()}; done`, { allowFail: true });
+    const left = listPluginFiles();
+    return { ok: true, cmd: "plugin uninstall", moved, moved_to: moved.length ? "~/" + dest : null, plugins_left: left };
+}
+
+async function cmdPlugin(args) {
+    const sub = args.shift();
+    if (sub === "list") return cmdPluginList();
+    if (sub === "install") return cmdPluginInstall(args);
+    if (sub === "uninstall") return cmdPluginUninstall(args);
+    throw new NovarefError("usage: novaref plugin list | install <local> [as <name>] | uninstall <name>... | --all");
+}
+
+/**
+ * Builds ~/novaref/apps/EV Nova Minimal.app: a copy of the real bundle
+ * (rsync -aE keeps xattrs/forks) WITHOUT its Nova Files, whose Nova Files
+ * then hold only the given data file (AbsoluteMinimum converted with
+ * rez_to_ndat.mjs). The real /Applications bundle is only read.
+ */
+async function cmdAppSetupMinimal(args) {
+    const local = args[0];
+    if (!local) throw new NovarefError("usage: novaref app setup-minimal <AbsoluteMinimum.ndat>");
+    ensureHelper();
+    const dest = cfg.apps.minimal;
+    const freeKb = Number(ssh(`df -k "$HOME" | tail -1 | awk '{print $4}'`).stdout.trim());
+    if (freeKb < 2 * 1024 * 1024) throw new NovarefError(`only ${freeKb} KB free on the old Mac`);
+    const data = fs.readFileSync(local);
+    ssh(`mkdir -p ${rq(path.dirname(dest))} && ` +
+        `rsync -aE --delete --exclude '/Contents/Resources/Nova Files/' ${shq(cfg.app + "/")} ${rq(dest + "/")} && ` +
+        `mkdir -p ${rq(dest + "/Contents/Resources/Nova Files")} && ` +
+        `cat > ${rq(dest + "/Contents/Resources/Nova Files/" + path.basename(local))}`, { input: data });
+    const listing = ssh(`ls -la ${rq(dest + "/Contents/Resources/Nova Files")}; du -sh ${rq(dest)}`).stdout.trim();
+    return { ok: true, cmd: "app setup-minimal", app: "~/" + dest, nova_files: listing.split("\n") };
+}
+
+async function cmdApp(args) {
+    const sub = args.shift();
+    if (sub === "setup-minimal") return cmdAppSetupMinimal(args);
+    if (sub === "list") return { ok: true, cmd: "app list", apps: { stock: cfg.app, ...cfg.apps } };
+    throw new NovarefError("usage: novaref app list | setup-minimal <data.ndat>");
+}
+
+/**
+ * Moves "Last Pilot" out of the Pilots folder (into ~/novaref/state/) so
+ * the title screen loads no pilot at all; `pilots unpark-last` puts it back.
+ */
+function parkLastPilot() {
+    const r = ssh(`f=${rq(cfg.pilotsDir + "/Last Pilot")}; d=${rq(cfg.remoteDir + "/state/parked")}; ` +
+        `if [ -e "$f" ]; then mkdir -p "$d" && rm -rf "$d/Last Pilot" && mv "$f" "$d/" && echo parked; else echo none; fi`).stdout.trim();
+    return r;
+}
+
+function unparkLastPilot() {
+    return ssh(`f=${rq(cfg.pilotsDir + "/Last Pilot")}; p=${rq(cfg.remoteDir + "/state/parked/Last Pilot")}; ` +
+        `if [ -e "$p" ]; then mv -f "$p" "$f" && echo unparked; else echo none; fi`).stdout.trim();
 }
 
 // ---------------------------------------------------------------- pilots
@@ -585,7 +795,15 @@ async function cmdPilots(args) {
     if (sub === "push") return cmdPilotsPush(args);
     if (sub === "backup") return { ok: true, cmd: "pilots backup", backup: backupPilots("manual") };
     if (sub === "rm") return cmdPilotsRm(args);
-    throw new NovarefError("usage: novaref pilots list | pull <name> [dest] [--raw] | push <local> [as <name>] | rm <name> | backup");
+    if (sub === "park-last") {
+        if (novaPids().length) throw new NovarefError("quit EV Nova first");
+        return { ok: true, cmd: "pilots park-last", result: parkLastPilot() };
+    }
+    if (sub === "unpark-last") {
+        if (novaPids().length) throw new NovarefError("quit EV Nova first");
+        return { ok: true, cmd: "pilots unpark-last", result: unparkLastPilot() };
+    }
+    throw new NovarefError("usage: novaref pilots list | pull <name> [dest] [--raw] | push <local> [as <name>] | rm <name> | backup | park-last | unpark-last");
 }
 
 /**
@@ -623,6 +841,16 @@ async function cmdRecord(args) {
     const fileRec = `${rq(REC_DIR())}/current`;
     if (sub === "start") {
         const fps = takeOpt(args, "--fps") ?? "30";
+        // --window crops to EV Nova's content rect before encoding: about
+        // a quarter of the pixels, so the 2010 iMac's software encoder keeps
+        // up and drops fewer frames (matters for frame-timing measurements).
+        let crop = "";
+        if (takeFlag(args, "--window")) {
+            const w = novaWindow();
+            if (!w) throw new NovarefError("EV Nova window not found (is it running?)");
+            const [x, y, cw, ch] = w.content;
+            crop = `-vf ${shq(`crop=${cw}:${ch}:${x}:${y}`)} `;
+        }
         if (ssh(`test -x ${ff}`, { allowFail: true }).code !== 0) {
             throw new NovarefError(`ffmpeg not installed at ~/${cfg.ffmpeg}`);
         }
@@ -635,7 +863,7 @@ async function cmdRecord(args) {
         // channel open, and the ssh call never returns.
         ssh(`mkdir -p ${rq(REC_DIR())} && cd ${rq(REC_DIR())} && ` +
             `{ nohup ${ff} -hide_banner -loglevel error -y -f avfoundation -pixel_format nv12 ` +
-            `-capture_cursor 1 -framerate ${shq(fps)} -i 1:none -c:v h264_videotoolbox -allow_sw 1 -b:v 8M ` +
+            `-capture_cursor 1 -framerate ${shq(fps)} -i 1:none ${crop}-c:v h264_videotoolbox -allow_sw 1 -b:v 8M ` +
             `-movflags +frag_keyframe+empty_moov ${shq(name)} > ffmpeg.log 2>&1 < /dev/null & } ; ` +
             `echo $! > ${pidFile}; echo ${shq(remote)} > ${fileRec}`);
         await sleep(1500);
@@ -704,10 +932,23 @@ async function runStep(step, ctx) {
     if (step.click) return cmdClick([...step.click.map(String), ...(step.win ? ["--win"] : []),
         ...(step.right ? ["--right"] : []), ...(step.double ? ["--double"] : [])]);
     if (step.drag) return cmdDrag([...step.drag.map(String), ...(step.win ? ["--win"] : [])]);
+    // {"move": [x, y]} moves the mouse; {"move": true} parks it at (40, 40),
+    // outside the game window, so it never shows up in shots/recordings.
+    if (step.move) return cmdMove(step.move === true ? ["40", "40"] : [...step.move.map(String), ...(step.win ? ["--win"] : [])]);
     if (step.open_pilot) return openPilot(step.open_pilot);
-    if (step.record === "start") return cmdRecord(["start"]);
-    if (step.record === "stop") return cmdRecord(["stop", path.join(ctx.dir, "recording.mp4")]);
-    if (step.launch) return cmdLaunch();
+    if (step.record === "start") return cmdRecord(["start", ...(step.window ? ["--window"] : [])]);
+    if (step.record === "stop") {
+        ctx.recN = (ctx.recN ?? 0) + 1;
+        const base = step.label ? `recording-${step.label}.mp4` : ctx.recN === 1 ? "recording.mp4" : `recording-${ctx.recN}.mp4`;
+        return cmdRecord(["stop", path.join(ctx.dir, base)]);
+    }
+    if (step.launch) return cmdLaunch(ctx.app ? ["--app", ctx.app] : []);
+    if (step.pull) {
+        // Mid-run pilot snapshot (the game saves the pilot when it lands).
+        const name = ctx.pilotName;
+        if (!name) throw new NovarefError("pull step needs a scenario pilot");
+        return cmdPilotsPull([name, path.join(ctx.dir, `pilot-${step.pull}`, name), "--raw"]);
+    }
     if (step.quit) return cmdQuit([]);
     throw new NovarefError(`unknown step ${JSON.stringify(step)}`);
 }
@@ -730,10 +971,22 @@ async function cmdRun(args) {
     fs.copyFileSync(file, path.join(dir, "scenario.json"));
     const logPath = path.join(dir, "log.jsonl");
     const record = (obj) => fs.appendFileSync(logPath, JSON.stringify({ t: new Date().toISOString(), ...obj }) + "\n");
-    const ctx = { dir, shotN: 0 };
+    const plugins = (sc.plugins ?? []).map((p) => path.resolve(path.dirname(file), expandHome(p)));
+    const appName = sc.app ?? "stock";
+    // Test plug-ins and the minimal app must never meet Matthew's pilot:
+    // the title screen is made to load nothing (Last Pilot parked), and
+    // the game is always quit so the plug-ins can always be removed.
+    const parkLast = plugins.length > 0 || appName !== "stock" || sc.park_last_pilot === true;
+    if (plugins.length && sc.quit === false) throw new NovarefError("a scenario with plug-ins must quit (they are always uninstalled)");
+    const ctx = { dir, shotN: 0, app: appName, pilotName: sc.pilot?.as ?? sc.pilot?.name };
     let failed = null;
+    const installedNames = [];
 
     ensureHelper();
+    // Keep the display awake for the run (an assertion held by this
+    // caffeinate process only; killed at the end, capped at 2 h).
+    const awakePid = Number(ssh(`{ nohup caffeinate -d -u -t 7200 >/dev/null 2>&1 < /dev/null & } ; echo $!`).stdout.trim()) || 0;
+    await sleep(1000);
     if (novaPids().length && !sc.allow_running) {
         // A fresh game is the only way to know what's loaded.
         const q = await cmdQuit([]);
@@ -744,13 +997,29 @@ async function cmdRun(args) {
     record({ phase: "snapshot", backup: snapshot });
     try {
         if (sc.pilot?.push) {
-            const pushPath = path.resolve(path.dirname(file), sc.pilot.push);
+            const pushPath = path.resolve(path.dirname(file), expandHome(sc.pilot.push));
             const r = await cmdPilotsPush([pushPath, ...(sc.pilot.as ? ["as", sc.pilot.as] : [])]);
             record({ phase: "push", result: r });
             if (!r.ok) throw new NovarefError("pilot push failed", r);
         }
+        const leftovers = listPluginFiles();
+        if (leftovers.length) throw new NovarefError("Plug-ins is not empty before the run", { plugins: leftovers });
+        for (const p of plugins) {
+            let local = p;
+            if (/\.(json|mjs)$/.test(p)) {
+                const { pluginMake } = await import("./plugin_make.mjs");
+                const made = await pluginMake([p, path.join(dir, "plugins", path.basename(p).replace(/\.(json|mjs)$/, ""))]);
+                record({ phase: "plugin-make", result: made });
+                local = made.path;
+            }
+            const r = await cmdPluginInstall([local]);
+            record({ phase: "plugin-install", result: r });
+            installedNames.push(r.name);
+            if (!r.ok) throw new NovarefError("plug-in install failed", r);
+        }
+        if (parkLast) record({ phase: "park-last-pilot", result: parkLastPilot() });
         if (sc.launch !== false) {
-            const r = await cmdLaunch();
+            const r = await cmdLaunch(["--app", appName]);
             record({ phase: "launch", result: r });
             if (!r.ok) throw new NovarefError("launch failed", r);
         }
@@ -774,9 +1043,27 @@ async function cmdRun(args) {
     }
     const results = { ok: !failed, cmd: "run", dir, snapshot };
     if (sc.quit !== false) {
-        const q = await cmdQuit([]);
+        let q = await cmdQuit([]);
         record({ phase: "quit", result: q });
+        if (!q.ok && (installedNames.length || parkLast)) {
+            // Plug-ins must come out: kill the game this run launched.
+            q = await cmdQuit([]);
+            record({ phase: "quit-retry", result: q });
+        }
         results.quit = q.ok;
+    }
+    if (installedNames.length || plugins.length) {
+        try {
+            const r = await cmdPluginUninstall(["--all"]);
+            record({ phase: "plugin-uninstall", result: r });
+            results.plugins_uninstalled = r.moved;
+            results.plugins_left = r.plugins_left;
+            if (r.plugins_left.length) results.ok = false;
+        } catch (e) {
+            record({ phase: "plugin-uninstall", error: e.message });
+            results.ok = false;
+            results.plugin_uninstall_error = e.message;
+        }
     }
     const pullName = sc.pull === true ? (sc.pilot?.as ?? sc.pilot?.name) : sc.pull;
     if (pullName) {
@@ -794,6 +1081,8 @@ async function cmdRun(args) {
         const snapAbs = snapshot.replace(/^~\//, "");
         const r = ssh(`if [ -e ${rq(snapAbs + "/Pilots/Last Pilot")} ]; then ` +
             `ditto ${rq(snapAbs + "/Pilots/Last Pilot")} ${rq(lp)} && echo last-pilot-restored; fi; ` +
+            `if [ -e ${rq(cfg.remoteDir + "/state/parked/Last Pilot")} ]; then ` +
+            `mv ${rq(cfg.remoteDir + "/state/parked/Last Pilot")} ${rq(snapAbs + "/parked-Last Pilot")} && echo parked-copy-archived; fi; ` +
             `if [ -f ${rq(snapAbs + "/prefs.plist")} ]; then ` +
             `defaults export ${shq(cfg.bundleId)} ${rq(snapAbs + "/prefs-after.plist")}; ` +
             `[ "$(plutil -p ${rq(snapAbs + "/prefs.plist")})" = "$(plutil -p ${rq(snapAbs + "/prefs-after.plist")})" ] ` +
@@ -803,6 +1092,7 @@ async function cmdRun(args) {
         results.restored = r.stdout.trim().split("\n").filter(Boolean);
         record({ phase: "restore", result: results.restored });
     }
+    ssh(`kill ${awakePid} 2>/dev/null || true`, { allowFail: true });
     if (failed) results.error = failed.error;
     fs.writeFileSync(path.join(dir, "result.json"), JSON.stringify(results, null, 2) + "\n");
     return results;
@@ -815,10 +1105,14 @@ const USAGE = `novaref — drive the original EV Nova on the reference Mac
   shot [out.png] [--window | --rect x,y,w,h]
   keys "<sequence>" [--hold ms] [--gap ms] [--any-app]
   click x y [--win] [--right] [--double]      drag x1 y1 x2 y2 [--win]   move x y [--win]
-  launch | quit [--force] | restart
-  pilots list | pull <name> [dest] [--raw] | push <local> [as <name>] | backup
-  record start [--fps N] | record stop [out.mp4]
-  run <scenario.json> [--out dir]
+  launch [--app stock|minimal] | quit [--force] | restart [--app ...]
+  pilots list | pull <name> [dest] [--raw] | push <local> [as <name>] | rm <name> | backup | park-last | unpark-last
+  pilot-make <spec.json> [out]
+  plugin-make <spec.json> [out] [--data]
+  plugin list | install <local> [as <name>] | uninstall <name>... | --all
+  app list | setup-minimal <data.ndat>
+  record start [--fps N] [--window] | record stop [out.mp4]
+  run <scenario.json> [--out dir] [--pilot local-pilot]
 config: ${CONFIG_PATH}`;
 
 async function main(argv) {
@@ -830,10 +1124,15 @@ async function main(argv) {
         case "click": return cmdClick(args);
         case "drag": return cmdDrag(args);
         case "move": return cmdMove(args);
-        case "launch": return cmdLaunch();
+        case "launch": return cmdLaunch(args);
         case "quit": return cmdQuit(args);
-        case "restart": return cmdRestart();
+        case "restart": return cmdRestart(args);
         case "pilots": return cmdPilots(args);
+        case "plugin": return cmdPlugin(args);
+        case "app": return cmdApp(args);
+        // These two need the repo's built packages (scripts/setup_worktree.sh).
+        case "pilot-make": return (await import("./pilot_make.mjs")).pilotMake(args);
+        case "plugin-make": return (await import("./plugin_make.mjs")).pluginMake(args);
         case "record": return cmdRecord(args);
         case "run": return cmdRun(args);
         case "info": return info();

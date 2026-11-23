@@ -1,0 +1,169 @@
+{
+ "name": "protect_q1",
+ "_comment": "Q1: a ShipBehav 1 escort (govt 360), player criminal in its govt (record -500 in sys 2100). Target it (Tab once), observe 24 s unprovoked, then shoot it for 4 s with the Kit Escort Gun (30 dmg) + Kit Tickler, observe 40 s. Pilot: pilots/q1.json.",
+ "pilot": {
+  "as": "novaref-q"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 500"
+  },
+  {
+   "shot": "calm-00",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "calm-01",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "calm-02",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "calm-03",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "calm-04",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "calm-05",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Space@4000"
+  },
+  {
+   "shot": "provoked",
+   "window": true
+  },
+  {
+   "shot": "after-00",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-01",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-02",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-03",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-04",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-05",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-06",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-07",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-08",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "after-09",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

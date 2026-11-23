@@ -149,6 +149,23 @@ describe("resourceFork", () => {
             expect([...a]).toEqual([...b]);
         });
 
+        // The Resource Manager's own layout (what EV Nova writes for its
+        // pilots): data at 256, after 240 reserved zero bytes.
+        it("can place the data at the Resource Manager's offset 256", () => {
+            const specs = [
+                { type: "NpïL", id: 128, name: "Pilot Data", data: [1, 2, 3, 4] },
+                { type: "NpïL", id: 129, name: "Ship", data: [5, 6] },
+            ];
+            const fork = buildResourceFork(specs, { dataOffset: 256 });
+            expect(new DataView(fork).getUint32(0)).toEqual(256);
+            expect([...new Uint8Array(fork, 16, 240)].every(b => b === 0)).toBeTrue();
+            const parsed = parseResourceFork(fork);
+            expect(parsed["NpïL"][128].shortArray).toEqual([1, 2, 3, 4]);
+            expect(parsed["NpïL"][129].name).toEqual("Ship");
+            expect(() => buildResourceFork(specs, { dataOffset: 8 }))
+                .toThrowError(/at least 16/);
+        });
+
         it("refuses a resource type that is not four MacRoman bytes", () => {
             expect(() => buildResourceFork([{ type: "abc", id: 1, data: [] }]))
                 .toThrowError(/must be 4 bytes/);

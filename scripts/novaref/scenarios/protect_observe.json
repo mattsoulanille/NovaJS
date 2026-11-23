@@ -1,0 +1,207 @@
+{
+ "name": "protect_observe",
+ "_comment": "Q2-Q4: escort + 2 aux ships, player criminal with every kit govt; observe 70 s cycling targets with Tab. Run with --pilot pilots q2a/q2b/q3/q4.",
+ "pilot": {
+  "as": "novaref-q"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-12",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-13",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-14",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-15",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

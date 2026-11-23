@@ -1,0 +1,15 @@
+{
+  "name": "kit_smoke",
+  "pilot": { "push": "~/.local/share/novaref/pilots/novaref-probe-a", "as": "novaref-probe-a" },
+  "plugins": ["../kits/testkit.mjs"],
+  "steps": [
+    { "shot": "title", "window": true },
+    { "keys": "e wait 5000" },
+    { "shot": "spaceport", "window": true },
+    { "keys": "Return wait 5000" },
+    { "shot": "after-return", "window": true },
+    { "keys": "Return wait 4000" },
+    { "shot": "after-return2", "window": true }
+  ],
+  "pull": true
+}

@@ -16,7 +16,19 @@ export interface ResourceSpec {
     data: ArrayLike<number>;
 }
 
-export function buildResourceFork(resources: ResourceSpec[]): ArrayBuffer {
+export interface BuildResourceForkOptions {
+    /**
+     * Where resource data starts. The default, 16, puts it right after the
+     * header (the most compact legal fork). The Mac Resource Manager itself
+     * writes 256: the 16-byte header, then 240 reserved bytes (112 for the
+     * system, 128 for the application), then the data. EV Nova's own pilot
+     * files use 256, so writers that hand a file to the original game do too.
+     */
+    dataOffset?: number;
+}
+
+export function buildResourceFork(resources: ResourceSpec[],
+    options: BuildResourceForkOptions = {}): ArrayBuffer {
     // Resource data: a 4-byte length then the bytes, in input order.
     const dataOffsets: number[] = [];
     const dataBytes: number[] = [];
@@ -50,7 +62,10 @@ export function buildResourceFork(resources: ResourceSpec[]): ArrayBuffer {
             throw new Error(`Resource name "${name}" is too long`);
         }
         const offset = nameBytes.length;
-        nameBytes.push(encoded.length, ...encoded);
+        nameBytes.push(encoded.length);
+        for (const byte of encoded) {
+            nameBytes.push(byte);
+        }
         return offset;
     });
 
@@ -88,7 +103,10 @@ export function buildResourceFork(resources: ResourceSpec[]): ArrayBuffer {
     const typeListOffset = 28;
     const nameListOffset = typeListOffset + typeList.length;
     const mapLength = nameListOffset + nameBytes.length;
-    const dataOffset = headerLength;
+    const dataOffset = options.dataOffset ?? headerLength;
+    if (dataOffset < headerLength) {
+        throw new Error(`dataOffset must be at least ${headerLength}`);
+    }
     const mapOffset = dataOffset + dataBytes.length;
 
     const header: number[] = [];
@@ -100,9 +118,17 @@ export function buildResourceFork(resources: ResourceSpec[]): ArrayBuffer {
     const map: number[] = [...header, 0, 0, 0, 0, 0, 0, 0, 0];
     pushUint16(map, typeListOffset);
     pushUint16(map, nameListOffset);
-    map.push(...typeList, ...nameBytes);
 
-    return new Uint8Array([...header, ...dataBytes, ...map]).buffer;
+    // Copied with set(), not spread: a whole data file (megabytes) is far
+    // past the engine's argument-count limit.
+    const out = new Uint8Array(mapOffset + map.length + typeList.length
+        + nameBytes.length);
+    out.set(header, 0);
+    out.set(dataBytes, dataOffset);
+    out.set(map, mapOffset);
+    out.set(typeList, mapOffset + map.length);
+    out.set(nameBytes, mapOffset + map.length + typeList.length);
+    return out.buffer;
 }
 
 function pushUint16(out: number[], value: number) {

@@ -1,0 +1,21 @@
+{
+  "name": "unit_calib",
+  "_comment": "#316 calibration: video clock vs real time (map toggled twice exactly 20.000 s apart by the remote helper), the game's own frame-rate display (F12), and two unguided shots with Speed 300 and 600 fired from rest. Pilot: pilots/probe_gun.json.",
+  "pilot": { "push": "~/.local/share/novaref/pilots/novaref-probe-gun", "as": "novaref-probe-gun" },
+  "plugins": ["../kits/testkit.mjs"],
+  "steps": [
+    { "keys": "e wait 4000" },
+    { "move": true },
+    { "keys": "F12 wait 3000" },
+    { "shot": "framerate", "window": true },
+    { "record": "start", "window": true },
+    { "wait": 1500 },
+    { "keys": "m wait 20000 m" },
+    { "wait": 2000 },
+    { "keys": "Space" },
+    { "wait": 7000 },
+    { "record": "stop" },
+    { "shot": "end", "window": true }
+  ],
+  "pull": true
+}

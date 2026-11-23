@@ -1,0 +1,20 @@
+{
+  "name": "protect_explore",
+  "_comment": "UI discovery for the protect-the-player runs: land at Kit Port, see the AvailLoc 3 offer.",
+  "pilot": { "as": "novaref-q" },
+  "plugins": ["../kits/testkit.mjs"],
+  "steps": [
+    { "keys": "e wait 4000" },
+    { "move": true },
+    { "shot": "space", "window": true },
+    { "keys": "l wait 1500" },
+    { "shot": "land-request", "window": true },
+    { "keys": "l wait 9000" },
+    { "shot": "landed", "window": true },
+    { "keys": "Return wait 3000" },
+    { "shot": "after-return", "window": true },
+    { "keys": "Return wait 3000" },
+    { "shot": "after-return2", "window": true }
+  ],
+  "pull": true
+}

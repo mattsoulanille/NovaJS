@@ -52,8 +52,14 @@ on first use and again whenever its sha1 changes.
 | `pilots push <local> [as <name>]` | Pushes a Mac pilot (a file with a resource fork, or a raw `.rsrc`). See the safety rules below. |
 | `pilots rm <name>` | Moves a pilot that novaref pushed into `~/novaref/backups/<ts>-rm/`. It never deletes, and it refuses pilots novaref didn't push. |
 | `pilots backup` | Copies the Pilots folder and the prefs to `~/novaref/backups/<ts>-manual/`. |
-| `record start [--fps N]` / `record stop [out.mp4]` | Screen recording with ffmpeg (details below). |
+| `record start [--fps N] [--window]` / `record stop [out.mp4]` | Screen recording with ffmpeg (details below). `--window` crops to EV Nova's content before encoding. |
 | `run <scenario.json> [--out dir] [--pilot local-pilot]` | Runs a scenario (details below). |
+| `launch --app stock\|minimal` / `restart --app ...` | Starts the real game (default) or a named copy (see "Minimal app"). Refuses while test plug-ins are installed unless the title screen would load nothing or an experiment pilot. |
+| `pilots park-last` / `pilots unpark-last` | Moves `Last Pilot` into `~/novaref/state/parked/` and back, so the title screen loads no pilot at all. |
+| `pilot-make <spec.json> [out]` | Writes a pilot file from a JSON spec (see "Custom pilots"). Runs on the MacBook. |
+| `plugin-make <spec.json\|spec.mjs> [out] [--data]` | Builds a plug-in from a spec (see "Custom plug-ins"). Runs on the MacBook. |
+| `plugin list` / `plugin install <local> [as <name>]` / `plugin uninstall <name>... \| --all` | Manages the old Mac's Plug-ins folder. Uninstall moves files to `~/novaref/backups/<ts>-plugin-uninstall/`. Never deletes, and never touches a plug-in novaref didn't install. |
+| `app list` / `app setup-minimal <data.ndat>` | Lists app bundles, or builds the minimal copy (see "Minimal app"). |
 
 To read a pulled pilot with the repo's parser (novaparse `readPilot`), run:
 
@@ -133,6 +139,19 @@ key.
   by a landing would save over that pilot. Always load an experiment pilot
   first (`run` does this through `open_pilot` and aborts if it can't verify
   the load).
+- **Test plug-ins never meet Matthew's pilot.** A scenario with `plugins`
+  (or `"app": "minimal"`) parks `Last Pilot` before launching, so the title
+  screen loads no pilot, then opens the experiment pilot. It always quits
+  the game, uninstalls every plug-in it installed (even after a failed
+  step) and restores `Last Pilot` from its snapshot. It refuses to start if
+  Plug-ins is not empty. `launch` refuses on its own when test plug-ins are
+  installed and `Last Pilot` names a pilot novaref didn't push.
+- **Display sleep.** The old Mac's display sleeps after 10 idle minutes,
+  and WindowServer then reports `loginwindow` as frontmost. Every
+  input-posting call wakes it with a user-activity assertion
+  (`caffeinate -u`, no password involved). `run` holds `caffeinate -d -u`
+  for its whole duration (capped at 2 h) and kills it at the end. No
+  energy-saver setting is changed.
 - No system settings are touched. `launchctl asuser` is not used: plain ssh
   reaches the console user's WindowServer on 10.13, and `asuser` fails there
   with "Could not switch to audit session". Nothing is installed outside
@@ -190,6 +209,18 @@ Step types:
 - `{"record": "start" | "stop"}`
 - `{"launch": true}`
 - `{"quit": true}`
+- `{"move": [x, y], "win": true}`. `{"move": true}` parks the mouse at (40, 40), outside the game window.
+- `{"record": "start", "window": true}` crops the recording. `{"record": "stop", "label": "x"}` writes `recording-x.mp4`.
+- `{"pull": "label"}` pulls the scenario pilot mid-run into `pilot-<label>/`. The game saves the pilot when it lands.
+
+Scenario keys added for experiments:
+
+- `"plugins": ["../kits/testkit.mjs", "some-built-plugin"]`. A `.json`
+  or `.mjs` spec is built with `plugin-make` into `<run dir>/plugins/`
+  first. Built plug-ins are installed as they are. All of them come out
+  again at the end.
+- `"app": "minimal"` launches the minimal copy instead of the real game.
+- `"park_last_pilot": true` parks `Last Pilot` even without plug-ins.
 
 `open_pilot` works like this. It presses `o` on the title screen, which opens
 an NSOpenPanel (a second EV Nova window named "Open", layer 8). It presses
@@ -235,3 +266,138 @@ run ffmpeg on the MacBook, for example
   spaceport keys have not been tested.
 - Quitting in-game brings up "Are you sure you want to quit?" (OK is the
   default). `quit` handles it.
+- `e` (Enter Ship) puts the loaded pilot **in space** next to its last
+  stellar. It does not open the spaceport. Landing there takes `l`
+  (target it and request clearance) and then `l` again (autopilot down,
+  about 8 s).
+- A mission with AvailLoc 3 is offered as soon as you land, in a dialog
+  with **No / Yes**. `Return` presses Yes. In the spaceport, `Return` presses
+  Leave. The spaceport buttons are Bar, Mission BBS, Trade Center,
+  Shipyard, Outfitter and Leave.
+- `Tab` cycles targets. With a single other ship it toggles between that
+  ship and "No Target", so press it once and leave it.
+- `m` opens and closes the map. `F12` toggles an fps readout in the corner,
+  and the game renders at about 56 fps on this iMac. Physics ticks run at
+  about 29.1 Hz (see docs/reference_experiments.md).
+- The New Pilot dialog flow is: `n`, then Return to confirm replacing the
+  loaded pilot, then the name/nickname fields (Tab between them), then
+  Return, then the ship-name field, then Return. The pilot file is written
+  at once. The stock game starts a new pilot in a Shuttle with 25,000
+  credits at a random starting stellar.
+
+## Custom pilots (`pilot-make`)
+
+```sh
+novaref pilot-make scripts/novaref/pilots/probe_a.json
+```
+
+```json
+{ "name": "novaref-probe-a",
+  "base": "~/.local/share/novaref/pilots/novaref-base.rsrc",
+  "edits": { "ship": 700, "stellar": 2100, "credits": 1000000, "fuel": 3000,
+             "clearMissions": true, "clearMissionBits": true, "clearLegal": true,
+             "missionBits": {"9001": true}, "legal": {"2100": -500},
+             "weapons": {"361": {"count": 1, "ammo": 0}}, "outfits": {"601": 1},
+             "nickname": "Probe", "shipName": "Probe A" } }
+```
+
+- Edits are `PilotEdits` in `packages/novaparse/src/pilot/pilot_write.ts`.
+  The keys are: ship, stellar, credits, fuel, date, cargo, outfits, weapons
+  (+ammo), legal (**per sÿst id**, because EV Nova keeps legal records per
+  system), clearLegal, explored/exploreAll, missionBits/clearMissionBits,
+  clearMissions, escorts, fighters, rating, nickname, shipName, strictPlay,
+  dominated, and priceFlux. Ids are resource ids, not indexes.
+- The **base** is a pilot the game created itself (title screen > New
+  Pilot), so every field the spec leaves alone holds a value the original
+  wrote. The base used on 2026-11-23 is
+  `~/.local/share/novaref/pilots/novaref-base(.rsrc)` on the MacBook (a
+  stock Shuttle at Snowmelt). Recreate it with the New Pilot flow above.
+- A pilot can only reference shïp ids up to 895, oütf up to 639, wëap up
+  to 383 and sÿst/spöb up to 2175 (the pilot's array sizes).
+- Writing **active missions** is not supported. Give the pilot a mission
+  bit and let a plug-in mïsn offer the mission on landing (AvailLoc 3)
+  instead. The pilot then holds a mission the game set up itself.
+- The output is `<out>` (empty data fork, resource fork, FinderInfo
+  `NpïL`/`Nvä`) plus `<out>.rsrc`. Both are read back with the repo's
+  parser. Push either with `pilots push` or a scenario's `pilot.push`.
+
+## Custom plug-ins (`plugin-make`)
+
+A spec lists resources. Each resource is built in one of these ways:
+
+- `"clone": "shïp:128"` copies a stock resource's bytes from
+  `~/.local/share/novaref/stock`. That folder holds copies of the old Mac's
+  `Nova Data N.ndat` / `Nova Ships N.ndat`. Its Nova Data 4 differs from
+  the repo's canonical copy only in wëap 146 byte 15 (the Graphic field) and an extra dsïg 128.
+- `"fill": 255` starts from a blank template.
+- `"hex"` gives raw bytes.
+- `"strings"` builds an STR#.
+- `"text"` builds a dësc.
+
+Add `"set": {field: value}` to change named fields after that. The names
+are in `packages/novaparse/src/plugin_kit/resource_fields.ts`, and the
+spec checks every offset against the repo's own resource parsers. Raw
+fields work too, as `"@offset:i16"`. `plugin-make` refuses to override a
+stock id unless the resource says `"override": true`. The output is a Mac
+plug-in: an empty data fork, a resource fork (data at offset 256) and
+FinderInfo `Npïf`/`Nvä`. `--data` writes a data-fork `.ndat` instead.
+
+**Caches:** the game reads Plug-ins only at launch, so a plug-in change
+always needs a fresh launch (`run` does this). Pilots are read when they
+are opened and written when the player lands. The prefs domain
+(`com.AmbrosiaSW.EV_Nova`) and `Last Pilot` are rewritten on quit, and
+`run` restores both.
+
+## Test kit (`kits/testkit.mjs`)
+
+Build it with `novaref plugin-make scripts/novaref/kits/testkit.mjs`, or
+list it in a scenario's `"plugins"`.
+
+| ids | what |
+|---|---|
+| sÿst 2100 Kit Range (govt 360) | A sealed test system with no hyperlinks, no traffic, no asteroids. sÿst 2101/2102/2103 are empty "home" systems of govts 361/362/363, so a pilot can carry a record with each govt. |
+| spöb 2100 Kit Port (0,0) | Land, trade, outfitter, shipyard and bar. It sells the kit (specialTech 9000) and has MinStatus -32767, so you can always land. |
+| spöb 2101 Kit Market (900,0) | Land, trade and bar, with the opposite trade tiers to Kit Port. |
+| spöb 2102-2107 | Uninhabited markers on a 600 px grid, for motion tracking. |
+| shïp 700/701/702 Kit Probe A/B/C | Accel/Speed/Turn of 300/300/10, 150/600/30 and 600/200/20, for unit checks. |
+| shïp 703 Kit Lancer | Inertialess (flags2 0x40), fast, with 30000/30000 shield and armor. |
+| shïp 710 Kit Lancer Lite | Inertialess, 1500 shield with no recharge, so damage shows on the HUD. |
+| shïp 704 Escort, 705 Fighter, 706 Carrier (fighter bay), 707 Raider, 708 Trader, 709 Target (immobile, 30000 armor) | NPC hulls. |
+| wëap 360 Beam Turret (5000 dmg, 1500 px), 361 Tickler (1 dmg turret), 362/363/364 Missile with GuidedTurn 10/30/60, 365 Escort Gun (30 dmg turret), 366 Fighter Bay (705), 367 Raider Gun, 368/369 Speed Gun 300/600 | Weapons. |
+| oütf 600-607 | Player outfits for wëap 360, 361, 362, 363, 364, 368, 369 and 365. |
+| gövt 360 Escort, 361 Trader, 362 Raider, 363 Neutral | No classes, allies or enemies. KillPenalty 100, CrimeTol 0. |
+| düde 600 escort, 601 carrier escort, 602 raiders (362), 603 traders (361), 604 own-govt raiders (360), 605 target | Dudes. |
+| mïsn 960-965 | Offered on landing at Kit Port (AvailLoc 3) while bit 9001-9006 is set. 960-964 are ShipBehav 1 / ShipGoal 3 escort missions: alone, vs raiders, vs traders, vs own-govt raiders, and a carrier vs raiders. 965 spawns the target. Offer text is dësc 4000+id-128. |
+| jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
+
+## Minimal app (untested: the old Mac was taken offline first)
+
+`/Applications/EV Nova/AbsoluteMinimum.rez` on the MacBook is the smallest
+data set that launches the game. The Mac build does not load a `.rez`, so
+convert it with `node scripts/novaref/rez_to_ndat.mjs <in.rez> <out.ndat>`.
+The conversion produces 190 resources (1 sÿst, 1 spöb, 1 shïp, plus
+interface art) and is verified by reading it back. It is identical,
+resource for resource, to `plugconvert -data`.
+
+`novaref app setup-minimal <out.ndat>` then makes the copy:
+
+- `rsync -aE` copies `/Applications/EV Nova.app` to
+  `~/novaref/apps/EV Nova Minimal.app` without its Nova Files (the real
+  bundle is only read).
+- The `.ndat` is put in the copy's Nova Files.
+
+Use `"app": "minimal"` in a scenario. The copy shares Pilots, Plug-ins and
+prefs with the real game, so the same parking, uninstall and restore rules
+apply.
+
+## Analysis helpers (`analysis/`, MacBook, need ffmpeg)
+
+- `motion.mjs <rec.mp4>`: player turn period (from the sprite crop at
+  the centre) and a planet template track.
+- `world_motion.mjs <rec.mp4> [--from F]`: player velocity from the median
+  displacement of all stellar blobs. `RAW=1` prints per-frame
+  displacements to stderr.
+- `shots.mjs <rec.mp4> --bg F --from F --to F`: projectile speed from a
+  stationary ship.
+- `frame_events.mjs <rec.mp4> [--threshold 3]`: abrupt whole-frame
+  changes. Used to check the video clock against `keys "m wait 20000 m"`.
