@@ -1535,7 +1535,7 @@ brake after every thrust.
     is that the prize is a mïsn special ship (ShipGoal -1), which may not
     be boardable at all; wave 2's mission derelict gave no answer either.
   - All three strings match NovaJS's
-    (`N/display/status_bar_content.ts:285-303`). NovaJS boards within
+    (`N/display/status_bar_content.ts:285-302`). NovaJS boards within
     150 px (`N/nova_plugin/ship/boarding_component.ts:227`), the original
     said "not close enough" at about 46 px: likely a **mismatch**, low
     confidence until a non-mission disabled ship is used.
@@ -1616,7 +1616,7 @@ entries 13-24, and the map's "June 23rd, 1177 NC" is consistent with
 either set (June is the same in both). Which screens use which set
 beyond these two captures is not checked.
 
-**NovaJS.** `N/display/status_bar_content.ts:139-141` (`FULL_MONTH_NAMES`)
+**NovaJS.** `N/display/status_bar_content.ts:138-141` (`FULL_MONTH_NAMES`)
 matches entries 1-12, and `ordinal` there gives the same suffixes. There
 is no short table: the title screen prints "Fri, 24 Jun 1177"
 (`N/title/title_screen.ts:444`, R8 item 5). **Proposed (not applied):**
