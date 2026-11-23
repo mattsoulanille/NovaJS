@@ -415,6 +415,17 @@ stock id unless the resource says `"override": true`. The output is a Mac
 plug-in: an empty data fork, a resource fork (data at offset 256) and
 FinderInfo `Npïf`/`Nvä`. `--data` writes a data-fork `.ndat` instead.
 
+**Id limits** (`ID_LIMITS` in `plugin_make.mjs`). `plugin-make` also
+refuses ids the game can't use: wëap/gövt/flët above 383, oütf/düde above
+639, mïsn above 1127, shïp above 895, sÿst/spöb above 2175 (the Bible's
+"Max ..." table, ids starting at 128), and **rlëD above 1999**. That last
+one is empirical: in wave 3, a plug-in with rlëD 2000/2001 made the game
+quit while loading, and 1999 works (bisect in
+`~/.local/share/novaref/evidence/20261123-w3-bisect/NOTES.txt`). Add
+`"unsafeId": true` to a resource to build it anyway. The test kit has used
+the last free wëap (382, 383) and düde (635-639) ids, so the next kit
+weapons or dudes must reuse or retire old ones.
+
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
 are opened and written when the player lands. The prefs domain
@@ -445,6 +456,7 @@ list it in a scenario's `"plugins"`.
 | wëap 370 Kit Blast Bomb (2-frame life, detonates at end, 300 px blast), 372 Kit Blast Shell (NPC-usable: 180 px reach, 400 px blast), 373 Kit Big Blast (2000 dmg), 371 Kit Bomber Bay; oütf 608-610; shïp 711 Kit Bomber, 712 Kit Bomb Carrier, 713 Kit Bomb Raider | Blast experiments (B-series). |
 | shïp 720 Kit Disc Leader (white, Speed/Accel 300, Turn 30), 721-726 Kit Disc Red/Green/Blue/Yellow/Magenta/Cyan (Speed/Accel 600, Turn 60); rlëD 1970-1976 | **Trackable hulls**: a solid one-colour disc (24 px) on all 36 frames, built by `packages/novaparse/src/plugin_kit/sprites.ts`. `analysis/discs.mjs` finds each centre by colour. The shän is the stock Shuttle's with only the sprite swapped: a from-scratch shän crashed the game on Enter Ship. The rlëD must use the stock row encoding (`encodeRled(..., {original: true})`). The synthetic data set's default encoding made the game fail an assertion on load. |
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
+| wave 2 and 3 additions | A14 hostility cells, the map region, the jamming kit, the AI subjects, F1b disc sizes and the wave-3 resources (jamming at 450/1800 px, long-life and turn-away missiles, InhJam target, AI tank discs, Kit Lancer Heavy, armed blue disc escorts and Kit Fight Range, flët 300 in Kit Fleet Range, Kit Prize, Map B border systems). Each block's doc comment in `kits/testkit.mjs` lists its ids. |
 
 ## Minimal app (tested 2026-11-23: launches, enters space, lands)
 
@@ -478,3 +490,13 @@ apply.
 - `discs.mjs <rec.mp4> [--csv out.csv]`: disc-hull centroids per frame and escort offsets along and across the leader's direction of travel (taken from the starfield).
 - `frame_events.mjs <rec.mp4> [--threshold 3]`: abrupt whole-frame
   changes. Used to check the video clock against `keys "m wait 20000 m"`.
+- `panel_hits.mjs <rec.mp4> [--rect x,y,w,h] [--events recording.events.json]`:
+  times every redraw of a small static region, by default the target
+  panel's "Armor: NN%" digits, so each change is a hit on a 100-armor,
+  1-damage target. With `--events` it also gives each change relative to
+  the trigger's `down`/`up` stamps (the late-hit tail of the J-series). Two
+  hits in the same frame make one change, so take the total from the
+  start and end values in the shots; use the changes for timing.
+- `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
+  the play-area centre (where the player is drawn) in a window shot: how far
+  the planet or a target ship is (U9 gates).

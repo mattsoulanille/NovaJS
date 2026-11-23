@@ -71,11 +71,33 @@ function strList(strings) {
 }
 
 /** Builds the ResourceSpec list for a plug-in spec object. */
+/**
+ * Highest id EV Nova 1.1.1 accepts per type. Most come from the Bible's
+ * "Max ..." table (ids start at 128: Max Weapon Types 256 -> 383, Max
+ * Outfit Item Types 512 -> 639, Max Dude Types 512 -> 639, Max Govts 256,
+ * Max Fleets 256 -> 383, Max Missions 1000 -> 1127). rlëD is empirical:
+ * wave 3 found that a plug-in with rlëD 2000/2001 makes the game quit while
+ * loading, while 1999 works.
+ */
+export const ID_LIMITS = {
+    "wëap": 383, "oütf": 639, "düde": 639, "gövt": 383, "flët": 383, "mïsn": 1127,
+    "shïp": 895, "sÿst": 2175, "spöb": 2175, "rlëD": 1999,
+};
+
+/** Throws if a resource's id is above what the game accepts (see ID_LIMITS). */
+export function checkIdLimit(r) {
+    const max = ID_LIMITS[r.type];
+    if (max !== undefined && r.id > max && !r.unsafeId) {
+        throw new Error(`${r.type}:${r.id} is above EV Nova's limit of ${max} for ${r.type} (the game quits or ignores it); add "unsafeId": true to build it anyway`);
+    }
+}
+
 export function buildPluginResources(spec, { stockDir } = {}) {
     const out = [];
     const seen = new Set();
     for (const r of spec.resources ?? []) {
         if (!r.type || r.id === undefined) throw new Error(`resource needs type and id: ${JSON.stringify(r)}`);
+        checkIdLimit(r);
         const key = `${r.type}:${r.id}`;
         if (seen.has(key)) throw new Error(`duplicate resource ${key}`);
         seen.add(key);
