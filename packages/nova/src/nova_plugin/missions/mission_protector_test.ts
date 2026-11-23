@@ -11,6 +11,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
 import { styleForTarget } from '../combat/index.js';
+import { GovtComponent } from '../core/index.js';
 import { ControlBitsComponent } from '../ncb/index.js';
 import { NpcComponent } from '../npc/index.js';
 import {
@@ -152,14 +153,43 @@ async function scenario(options: { record?: number } = {}):
  * Meridian cruiser's government has no quarrel with it, so only the
  * protect-the-player rule can make the cruiser engage it.
  */
-async function addAttacker(world: World) {
+async function addAttacker(world: World, govt?: string) {
     const gameData = await getSyntheticGameData();
     const attacker = makeShip(await gameData.data.Ship.get(
         SYNTHETIC.ships.corsair));
+    if (govt !== undefined) {
+        attacker.components.set(GovtComponent, { id: govt });
+    }
     attacker.components.set(NpcComponent, { aiType: 3, aggressor: PLAYER });
     attacker.components.set(MovementStateComponent, at(700, 0));
     await completeEntity(world, attacker);
     world.entities.set(ATTACKER, attacker);
+}
+
+/**
+ * Runs the scenario for STEPS and reports whether the protector engaged
+ * ATTACKER of its own accord — before a stray shot made the attacker its
+ * own aggressor (any warship fights back against that) — and whether the
+ * attacker was ever attacking the player at all (else the run proves
+ * nothing).
+ */
+async function watchProtector(world: World, protector: string) {
+    let engagedUnprovoked = false;
+    let provoked = false;
+    let attackerAttacked = false;
+    for (let i = 0; i < STEPS; i++) {
+        world.step();
+        const ship = world.entities.get(protector)!;
+        const npc = ship.components.get(NpcComponent)!;
+        provoked ||= npc.aggressor === ATTACKER;
+        const attacker = world.entities.get(ATTACKER);
+        attackerAttacked ||= attacker !== undefined
+            && attacker.components.get(TargetComponent)?.target === PLAYER
+            && attacker.components.get(NpcComponent)?.mode === 'attack';
+        engagedUnprovoked ||= !provoked && npc.mode === 'attack'
+            && ship.components.get(TargetComponent)!.target === ATTACKER;
+    }
+    return { engagedUnprovoked, attackerAttacked };
 }
 
 /** Every SHIP that is the protector or flies off it (its bay wing). */
@@ -275,4 +305,51 @@ describe('a ShipBehav 1 ("protect the player") special ship', () => {
         }
         expect(turned).toBeFalse();
     });
+
+    // Reference Q3 (docs/reference_experiments.md, "Q2/Q3: whom does a
+    // protect-the-player ship fight?"): on the original EV Nova, two raiders
+    // of the escort's OWN government attacked the criminal player for 70 s
+    // and the escort never engaged them — their shields read 100% at every
+    // sample and its brackets stayed green. It protects the player, but not
+    // against its own government's law.
+    it('does not defend a criminal player against its OWN government\'s '
+        + 'ships (reference Q3)', async () => {
+            const { world, protector } = await scenario();
+            await addAttacker(world, SYNTHETIC.govts.meridian);
+            const { engagedUnprovoked, attackerAttacked } =
+                await watchProtector(world, protector);
+            expect(attackerAttacked).withContext(
+                'the own-govt raider attacks the criminal player').toBeTrue();
+            expect(engagedUnprovoked).toBeFalse();
+            expect(aimsAtPlayer(world.entities.get(protector)!)).toBeFalse();
+        });
+
+    // NOT measured on the original (Q3 tested the own govt only). Chosen
+    // reading: an ALLY of the protector's government — by the protector's
+    // own view, govtDisposition 'ally', the same test its own target
+    // selection uses — is treated like its own government. The Bible: allied
+    // governments "communicate your actions", and a protector never counts
+    // an ally as a hostile on any other path.
+    it('does not defend the player against its government\'s ALLIES '
+        + '(unmeasured; treated like its own government)', async () => {
+            const { world, protector } = await scenario();
+            // The Amber Compact names Meridian's class among its allies, so
+            // a Compact protector regards a Meridian raider as an ally.
+            world.entities.get(protector)!.components.set(GovtComponent,
+                { id: SYNTHETIC.govts.compact });
+            await addAttacker(world, SYNTHETIC.govts.meridian);
+            const { engagedUnprovoked, attackerAttacked } =
+                await watchProtector(world, protector);
+            expect(attackerAttacked).toBeTrue();
+            expect(engagedUnprovoked).toBeFalse();
+        });
+
+    it('still defends the player against a non-allied government\'s '
+        + 'attacker (reference Q2a)', async () => {
+            const { world, protector } = await scenario();
+            await addAttacker(world, SYNTHETIC.govts.raiders);
+            const { engagedUnprovoked } =
+                await watchProtector(world, protector);
+            expect(engagedUnprovoked).toBeTrue();
+        });
 });

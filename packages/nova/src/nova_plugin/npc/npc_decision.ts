@@ -21,7 +21,7 @@ import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from './hail_component.js';
 import { flockPlayer, isAttackingPlayer, isInFlock } from './allegiance.js';
-import { govtDispositionTo, effectiveStrength, oddsFavorable } from '../reputation/index.js';
+import { govtDisposition, govtDispositionTo, effectiveStrength, oddsFavorable } from '../reputation/index.js';
 import { ShieldComponent } from '../ship/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { landable } from '../core/index.js';
@@ -263,7 +263,17 @@ export const NpcDecisionSystem = new System({
         //    a protector does not turn on its player.
         //  - and whoever is ATTACKING the player (tier 3 of the same rule,
         //    isAttackingPlayer) is a hostile, so "protect the player" means
-        //    defending them, not just holding formation.
+        //    defending them, not just holding formation — UNLESS the
+        //    attacker flies for the protector's OWN government or one it
+        //    counts as an ALLY (govtDisposition 'ally', from the protector's
+        //    side). Reference Q3 (docs/reference_experiments.md): on the
+        //    original, raiders of the escort's own govt attacked the
+        //    criminal player for 70 s and the escort never engaged them; it
+        //    defends the player, not against its own government's law.
+        //    Allies were NOT measured; they are treated like the own govt
+        //    (the Bible: allies "communicate your actions", and nothing else
+        //    in a protector's brain ever makes an ally a hostile). Shared
+        //    classes alone are not an alliance (Bible, gövt Class1-4).
         // Everything read is synced state and the sim clock; no PRNG draw
         // is added or skipped.
         const getEntity = (id: string) => entities.get(id);
@@ -388,7 +398,9 @@ export const NpcDecisionSystem = new System({
                 // attacked on sight.
                 ranksSuppressAggression(otherSuppressGovts, govtData?.id));
             if (disposition === 'enemy'
-                || attackingProtectee(otherUuid)) {
+                || (attackingProtectee(otherUuid)
+                    && govtDisposition(govtData,
+                        lookupGovt(gameData, otherGovt)) !== 'ally')) {
                 hostiles.push([otherUuid, distanceSquared] as const);
             }
         }

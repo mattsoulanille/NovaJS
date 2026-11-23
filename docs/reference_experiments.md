@@ -167,9 +167,9 @@ So in the original, a protect-the-player escort:
 - ignores hostile-govt ships that are not attacking;
 - never turns on the player it protects (Q1).
 
-**Proposed fix (not applied).** In `packages/nova/src/nova_plugin/npc/npc_decision.ts:391`, skip `attackingProtectee(otherUuid)` when the attacker's govt is the protector's own govt (`otherGovt === govtData?.id`). Two cases are unverified, and the safe reading is to treat them like the own govt:
-- the protector's allies;
-- ships with the same `classes`.
+**Fix (applied).** `npc_decision.ts` no longer counts an attacker of the protectee as a hostile when the protector's government regards the attacker's as an ally: its own govt, or one whose classes its Ally fields name (`govtDisposition(...) === 'ally'`, read from the protector's side). Spec: `mission_protector_test.ts`. Two cases are unverified:
+- the protector's allies: **chosen** to be treated like the own govt. The Bible says allies "communicate your actions", and nothing else in a protector's brain makes an ally a hostile. Only the protector's own Ally fields count. A govt that names the protector's class as an ally, without the protector naming it back, is still defended against.
+- ships with the same `classes`: **not** excluded. The Bible says that two govts of the same class "are not inherently allied".
 
 Confidence is high for Q2a and Q3: both had clear, sustained combat (or none) over 70 s. Q2b/Q2c are medium: the traders spent much of the run off screen before leaving.
 
