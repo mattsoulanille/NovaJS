@@ -1,4 +1,4 @@
-import { GetEntity, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Entities, GetEntity, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
@@ -15,7 +15,7 @@ import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { TargetComponent, CloakDecloakOnHitSystem } from '../ship/index.js';
 import { IffProvider } from '../reputation/index.js';
-import { NpcAggressionSystem } from '../npc/index.js';
+import { NpcAggressionSystem, sameFlock } from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -106,11 +106,15 @@ const AggressionDamageSystem = new System({
     // ShipComponent: projectiles and asteroids take damage too, and
     // neither has an opinion about who shot it.
     args: [DamagedEvent, ShipComponent, ControlledByComponent, UUID,
-        GetEntity, TimeResource, RunQuery] as const,
+        GetEntity, TimeResource, RunQuery, Entities] as const,
     step({ damage, damager, scale = 1 }, _ship, _controlledBy, uuid, victim,
-        time, runQuery) {
+        time, runQuery, entities) {
+        const getEntity = (id: string) => entities.get(id);
         const aggressor = damagerRoot(runQuery(DamagerQuery, damager)[0]);
-        if (!aggressor || aggressor === uuid) {
+        // Nor anything in the player's own flock: an escort's or fighter's
+        // splash (a blast that hurts its firing ship carries no group, so
+        // it lands on the player too) is not an attack on them.
+        if (!aggressor || sameFlock(aggressor, uuid, getEntity)) {
             return;
         }
         const dealt = hitDamage(damage, scale);

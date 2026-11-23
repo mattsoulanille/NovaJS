@@ -34,7 +34,11 @@ export const BlastCollisionSystem = new System({
         // (blastHurtsFiringShip unset) carries the firer's group and
         // spares the whole group (see firing_group.ts).
         const other = entities.get(collision.other);
-        if (other && firingImmune(
+        // BLAST_FLOCK_RULE 'flockAlwaysSpared' (firing_group.ts): a blast
+        // that hurts its firing ship spares the rest of the group only.
+        const firerHit = firingGroup?.hurtsFirer === true
+            && source !== undefined && collision.other === source;
+        if (other && !firerHit && firingImmune(
             firingGroup?.group,
             victimFiringGroup(other.components.get(FiringGroupComponent),
                 other.components.get(OwnerComponent)?.owner,

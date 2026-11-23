@@ -112,6 +112,58 @@ export function isInFlock(uuid: string, rootUuid: string,
 }
 
 /**
+ * The top of `uuid`'s flock chain (flockParent, the same walk as
+ * isInFlock): the fleet leader, carrier or player every link above leads
+ * to, or `uuid` itself for a ship that follows nobody. A link naming a ship
+ * no longer in the world ends the walk AT that id — a fleet whose leader
+ * has died is still one flock, named for it, exactly as its shared firing
+ * group still is. Undefined for a leader cycle or a chain deeper than
+ * MAX_FLOCK_DEPTH (nobody's flock, as isInFlock reads them).
+ */
+export function flockRoot(uuid: string,
+    getEntity: (uuid: string) => Entity | undefined): string | undefined {
+    const visited = new Set<string>();
+    let current = uuid;
+    for (let depth = 0; depth < MAX_FLOCK_DEPTH; depth++) {
+        if (visited.has(current)) {
+            return undefined; // Leader cycle: nobody's flock.
+        }
+        visited.add(current);
+        const entity = getEntity(current);
+        if (!entity) {
+            return current;
+        }
+        const parent = flockParent(entity);
+        if (parent === undefined || parent === current) {
+            return current;
+        }
+        current = parent;
+    }
+    return undefined;
+}
+
+/**
+ * Whether ships `a` and `b` fly in ONE flock: the same ship, or two ships
+ * whose flock chains top out at the same root — a leader and its escorts, a
+ * carrier and its fighters, wingmates, an escort's own fighters, a player
+ * and everything that follows them.
+ *
+ * The provocation gate: nothing a flock member does to its own flock — a
+ * splash from its blast (BLAST_FLOCK_RULE, ship/firing_group.ts), a hit on a
+ * disabled fleetmate — makes one of them an AGGRESSOR to the other
+ * (npc_targeting.ts's NpcAggressionSystem, combat/aggression_plugin's
+ * AggressionDamageSystem). Pure over synced components, so every peer agrees.
+ */
+export function sameFlock(a: string, b: string,
+    getEntity: (uuid: string) => Entity | undefined): boolean {
+    if (a === b) {
+        return true;
+    }
+    const root = flockRoot(a, getEntity);
+    return root !== undefined && root === flockRoot(b, getEntity);
+}
+
+/**
  * TIER 3 OF THE HOSTILITY RULE on its own: whether `targetEntity` is
  * attacking the player right now — the BEHAVIOURAL reading, no politics in
  * it. True when either

@@ -20,7 +20,10 @@ import { CreateTime } from '../core/index.js';
 import { DamagedEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { FireSubs, OwnerComponent, SourceComponent } from '../combat/index.js';
-import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
+import {
+    BLAST_FLOCK_RULE, blastFriendlyFire, disabledCancelsImmunity,
+    FiringGroupComponent, firingImmune, victimFiringGroup,
+} from './firing_group.js';
 import { GovtComponent } from '../core/index.js';
 import { ProjectileDataComponent } from '../core/index.js';
 import { ProjectileCollisionSystem } from '../combat/index.js';
@@ -66,6 +69,43 @@ describe('firingImmune (pair-immunity predicate)', () => {
             .toBeFalse();
         expect(firingImmune(undefined, 'ship-1', 'nova:200', 'nova:200'))
             .toBeFalse();
+    });
+});
+
+describe('blastFriendlyFire (BLAST_FLOCK_RULE)', () => {
+    const group = { group: 'fleet-1' };
+
+    it('the switch is at the current rule (flip it in firing_group.ts)',
+        () => {
+            expect(BLAST_FLOCK_RULE).toBe('firerFlagSparesFlock');
+        });
+
+    it("'firerFlagSparesFlock': 0x0100 spares the group, else nobody",
+        () => {
+            expect(blastFriendlyFire('firerFlagSparesFlock', false, group,
+                'firer')).toEqual({ group });
+            expect(blastFriendlyFire('firerFlagSparesFlock', true, group,
+                'firer')).toEqual({});
+        });
+
+    it("'flockAlwaysSpared': the group always, the firer only with 0x0100",
+        () => {
+            expect(blastFriendlyFire('flockAlwaysSpared', false, group,
+                'firer')).toEqual({ group });
+            const hurts = blastFriendlyFire('flockAlwaysSpared', true, group,
+                'firer');
+            expect(hurts).toEqual({
+                group: { group: 'fleet-1', hurtsFirer: true },
+            });
+            // A copy: the shot's own component is never mutated.
+            expect(group).toEqual({ group: 'fleet-1' });
+        });
+
+    it("'onlyFirerSpared': no group; 0x0100 ignores the firer alone", () => {
+        expect(blastFriendlyFire('onlyFirerSpared', false, group, 'firer'))
+            .toEqual({ ignoreFirer: 'firer' });
+        expect(blastFriendlyFire('onlyFirerSpared', true, group, 'firer'))
+            .toEqual({});
     });
 });
 
@@ -394,6 +434,22 @@ describe('ProjectileCollisionSystem filtering', () => {
             collide('blast', 'member');
             expect(hits('member').length).toBe(1);
         });
+
+        it("a hurtsFirer group ('flockAlwaysSpared') hits its firer only",
+            () => {
+                addShip('firer').components
+                    .set(FiringGroupComponent, { group: 'fleet-1' });
+                addShip('member').components
+                    .set(FiringGroupComponent, { group: 'fleet-1' });
+                const blast = addBlast('blast');
+                blast.components.set(FiringGroupComponent,
+                    { group: 'fleet-1', hurtsFirer: true });
+                blast.components.set(SourceComponent, 'firer');
+                collide('blast', 'firer');
+                collide('blast', 'member');
+                expect(hits('firer').length).toBe(1);
+                expect(hits('member')).toEqual([]);
+            });
     });
 
     describe('beam group immunity', () => {

@@ -30,7 +30,10 @@ import { ActiveSecondaryProvider } from './weapon_plugin.js';
 import { BeamCollisionSystem } from './beam_plugin.js';
 import { KillCreditSystem } from '../reputation/index.js';
 import { OwnerComponent, SourceComponent, VulnerableToPD } from '../ship/index.js';
-import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
+import {
+    BLAST_FLOCK_RULE, blastFriendlyFire, disabledCancelsImmunity,
+    FiringGroupComponent, firingImmune, victimFiringGroup,
+} from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
@@ -574,16 +577,19 @@ const ProjectileBlastSystem = new System({
                 turnBack: false,
                 velocity: new Vector(0, 0),
             });
-        if (!projectileData.blastHurtsFiringShip) {
-            // The blast inherits the projectile's firing group so it
-            // spares the firer AND its fleet/carrier group (see
-            // firing_group.ts); a blastHurtsFiringShip weapon carries
-            // no group and hurts everyone, firer included — matching
-            // the old owner-only ignore, generalized to the group.
-            const group = firingGroup ?? (owner && { group: owner.owner });
-            if (group) {
-                blast.components.set(FiringGroupComponent, group);
-            }
+        // Who the blast spares is BLAST_FLOCK_RULE's call (firing_group.ts):
+        // under the current rule it inherits the projectile's firing group
+        // — sparing the firer AND its fleet/carrier group — unless the
+        // weapon's blast hurts the firing ship, in which case it carries
+        // no group and hurts everyone, firer included.
+        const spared = blastFriendlyFire(BLAST_FLOCK_RULE,
+            projectileData.blastHurtsFiringShip,
+            firingGroup ?? (owner && { group: owner.owner }), source);
+        if (spared.group) {
+            blast.components.set(FiringGroupComponent, spared.group);
+        }
+        if (spared.ignoreFirer !== undefined) {
+            blastIgnore.add(spared.ignoreFirer);
         }
         if (source !== undefined) {
             // For BlastCollisionSystem's disabled-firer carve-out.

@@ -16,7 +16,8 @@ import { Component } from 'nova_ecs/component';
  *    stamps every spawned weapon entity — projectile, beam, or bay
  *    fighter — with the firer's group, falling back to the firer's
  *    owner-chain root (OwnerComponent.owner ?? firer uuid). Blasts
- *    inherit their projectile's group (projectile_plugin).
+ *    inherit their projectile's group or not as BLAST_FLOCK_RULE below
+ *    says (projectile_plugin).
  *  - The weapon collision handlers (projectile_plugin, beam_plugin,
  *    blast_plugin) drop any hit where the weapon's group matches the
  *    victim's effective group (see victimFiringGroup) BEFORE emitting
@@ -51,6 +52,13 @@ export const FiringGroup = t.intersection([t.type({
      * Unused until the same-govt clause below is enabled.
      */
     govt: t.string,
+    /**
+     * BLAST entities only, and only under BLAST_FLOCK_RULE
+     * 'flockAlwaysSpared': the blast spares its group EXCEPT the ship
+     * that fired it (wëap Flags 0x0100 unset). Never written under the
+     * default rule.
+     */
+    hurtsFirer: t.boolean,
 })]);
 export type FiringGroup = t.TypeOf<typeof FiringGroup>;
 export const FiringGroupComponent = new Component<FiringGroup>('FiringGroup');
@@ -65,6 +73,68 @@ export const FiringGroupComponent = new Component<FiringGroup>('FiringGroup');
  * govt ids reach firingImmune), so enabling it is this one-line flip.
  */
 export const SAME_GOVT_FIRING_IMMUNITY = false;
+
+/**
+ * ============================================================================
+ * WHO A BLAST SPARES — an open rule, behind this one switch
+ * ============================================================================
+ *
+ * Direct hits (projectile and beam) always pass through the firer's flock.
+ * Whether a BLAST — a wëap BlastRadius splash, which is area damage rather
+ * than a shot that connects — spares the flock too is not settled. The
+ * only data bit is wëap Flags 0x0100, which the Bible words as "Weapon's
+ * blast doesn't hurt the player" (parsed, inverted, as
+ * ProjectileWeaponData.blastHurtsFiringShip). It speaks of the FIRING ship;
+ * what it means for the rest of the firer's fleet or carrier group is what
+ * the reference Mac is being asked. The candidate readings:
+ *
+ *  - 'firerFlagSparesFlock' (CURRENT, the behaviour NovaJS has shipped):
+ *    0x0100 set -> the blast carries the firing group and spares the whole
+ *    flock, firer included; 0x0100 unset -> it carries no group and hurts
+ *    EVERY ship in its radius, the firer's leader, carrier and wingmates
+ *    included. The flag that is about the firer decides for the flock.
+ *  - 'flockAlwaysSpared': a blast spares the flock exactly as a direct hit
+ *    does, whatever the flag; 0x0100 unset only adds the firing ship
+ *    itself back in.
+ *  - 'onlyFirerSpared': a blast spares nobody but its firing ship, and that
+ *    only with 0x0100 set; the flock always takes splash.
+ *
+ * Whatever this says, a flock member's splash never makes a ship HOSTILE to
+ * its own flock (npc_targeting.ts's NpcAggressionSystem and
+ * aggression_plugin's AggressionDamageSystem skip the pair; see
+ * npc/allegiance.ts's sameFlock). Only who takes the damage changes.
+ *
+ * Deterministic in every mode: a compile-time constant read at blast spawn.
+ */
+export type BlastFlockRule =
+    'firerFlagSparesFlock' | 'flockAlwaysSpared' | 'onlyFirerSpared';
+export const BLAST_FLOCK_RULE: BlastFlockRule = 'firerFlagSparesFlock';
+
+/**
+ * The friendly-fire identity a new blast carries under `rule`: the firing
+ * group it spares (if any) and, separately, a firer to ignore outright.
+ *
+ * `group` is the shot's firing group (fire_weapon_plugin stamps one on every
+ * projectile; the owner-chain root stands in for a legacy group-less one),
+ * `firer` the ship that actually fired it (SourceComponent). Pure.
+ */
+export function blastFriendlyFire(rule: BlastFlockRule,
+    blastHurtsFiringShip: boolean, group: FiringGroup | undefined,
+    firer: string | undefined): { group?: FiringGroup, ignoreFirer?: string } {
+    switch (rule) {
+        case 'firerFlagSparesFlock':
+            return blastHurtsFiringShip || !group ? {} : { group };
+        case 'flockAlwaysSpared':
+            if (!group) {
+                return {};
+            }
+            return blastHurtsFiringShip
+                ? { group: { ...group, hurtsFirer: true } } : { group };
+        case 'onlyFirerSpared':
+            return blastHurtsFiringShip || firer === undefined
+                ? {} : { ignoreFirer: firer };
+    }
+}
 
 /**
  * The pair-immunity predicate: should a weapon with the given firing

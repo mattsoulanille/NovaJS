@@ -3,7 +3,7 @@ import { Entity } from 'nova_ecs/entity';
 import { OwnerComponent } from './fire_weapon_plugin.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
-import { FormationComponent, NpcComponent } from '../npc/index.js';
+import { flockRoot, FormationComponent, NpcComponent, sameFlock } from '../npc/index.js';
 
 const PLAYER = 'player';
 
@@ -86,6 +86,58 @@ describe('isInFlock (transitive own-escort predicate)', () => {
         const fighter = new Entity('fighter')
             .addComponent(OwnerComponent, { owner: 'gone' });
         expect(isInFlock('fighter', PLAYER, lookup({ fighter }))).toBeFalse();
+    });
+});
+
+describe('sameFlock (the provocation gate)', () => {
+    function lookup(entities: { [uuid: string]: Entity }) {
+        return (uuid: string) => entities[uuid];
+    }
+    const leader = new Entity('leader')
+        .addComponent(FiringGroupComponent, { group: 'leader' });
+    const escort = new Entity('escort')
+        .addComponent(FormationComponent, { leader: 'leader', slot: 0 })
+        .addComponent(FiringGroupComponent, { group: 'leader' });
+    const wingmate = new Entity('wingmate')
+        .addComponent(FormationComponent, { leader: 'leader', slot: 1 })
+        .addComponent(FiringGroupComponent, { group: 'leader' });
+    // The escort's own bay fighter, engaged (owner chain only).
+    const fighter = new Entity('fighter')
+        .addComponent(OwnerComponent, { owner: 'escort' });
+    const outsider = new Entity('outsider');
+    const get = lookup({ leader, escort, wingmate, fighter, outsider });
+
+    it('joins a leader, its escorts, wingmates and their fighters', () => {
+        expect(sameFlock('leader', 'escort', get)).toBeTrue();
+        expect(sameFlock('escort', 'leader', get)).toBeTrue();
+        expect(sameFlock('escort', 'wingmate', get)).toBeTrue();
+        expect(sameFlock('fighter', 'leader', get)).toBeTrue();
+        expect(sameFlock('fighter', 'wingmate', get)).toBeTrue();
+    });
+
+    it('a ship is in its own flock (self-harm provokes nothing)', () => {
+        expect(sameFlock('outsider', 'outsider', get)).toBeTrue();
+    });
+
+    it('keeps outsiders out', () => {
+        expect(sameFlock('outsider', 'leader', get)).toBeFalse();
+        expect(sameFlock('fighter', 'outsider', get)).toBeFalse();
+    });
+
+    it("a fleet whose leader is gone is still one flock, named for it",
+        () => {
+            const orphans = lookup({ escort, wingmate });
+            expect(flockRoot('escort', orphans)).toBe('leader');
+            expect(sameFlock('escort', 'wingmate', orphans)).toBeTrue();
+        });
+
+    it('a leader cycle is nobody\'s flock', () => {
+        const a = new Entity('a')
+            .addComponent(FormationComponent, { leader: 'b', slot: 0 });
+        const b = new Entity('b')
+            .addComponent(FormationComponent, { leader: 'a', slot: 0 });
+        expect(flockRoot('a', lookup({ a, b }))).toBeUndefined();
+        expect(sameFlock('a', 'b', lookup({ a, b }))).toBeFalse();
     });
 });
 
