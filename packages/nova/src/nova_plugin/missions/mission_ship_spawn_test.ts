@@ -207,6 +207,48 @@ describe('buildMissionShipSpawns', () => {
         expect(ship.components.has(SystemHoldComponent)).toBeFalse();
     });
 
+    describe('a goal-less AI 1 special ship only passes through '
+        + '(reference A-series wave 4)', () => {
+            function trader(gameData: MockGameData, aiType: number) {
+                gameData.data.Dude.map.set(DUDE, {
+                    ...gameData.data.Dude.map.get(DUDE)!, aiType,
+                });
+                return gameData;
+            }
+
+            it('marks ShipGoal -1, ShipBehav -1, AI 1', async () => {
+                const player = makePlayer(
+                    makeObjective({ goal: GOAL_NONE, total: 1 }));
+                const [ship] = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', trader(makeGameData(), 1), makeUniverse());
+                const npc = ship.components.get(NpcComponent)!;
+                expect(npc.passingThrough).toBeTrue();
+                // The window is rolled at its first think, like every
+                // other ship's departure.
+                expect(npc.departAt).toBeUndefined();
+            });
+
+            for (const [label, aiType, goal, behavior] of [
+                ['a warship (AI 3)', 3, GOAL_NONE, -1],
+                ['a brave trader (AI 2)', 2, GOAL_NONE, -1],
+                ['a ship with a goal', 1, GOAL_DESTROY, -1],
+                ['a ship that attacks the player (ShipBehav 0)', 1,
+                    GOAL_NONE, 0],
+                ['a ship that protects the player (ShipBehav 1)', 1,
+                    GOAL_NONE, 1],
+            ] as const) {
+                it(`but not ${label}`, async () => {
+                    const player = makePlayer(makeObjective(
+                        { goal, behavior, total: 1 }));
+                    const [ship] = await buildMissionShipSpawns(player,
+                        OWNER, 'nova:128', trader(makeGameData(), aiType),
+                        makeUniverse());
+                    expect(ship.components.get(NpcComponent)
+                        ?.passingThrough).toBeUndefined();
+                });
+            }
+        });
+
     it('holds a rescue target for its OWN more specific reason', async () => {
         // A rescue target is held because it is adrift waiting to be
         // refuelled, and rescueBoarded releases it by that name.

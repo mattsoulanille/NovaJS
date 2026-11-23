@@ -33,7 +33,9 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  * for tuning:
  *
  *  1 wimpy trader:  flies planet to planet (arrive -> dwell -> next),
- *                   flees for a jump-out when attacked.
+ *                   flees for a jump-out when attacked. A goal-less
+ *                   mission ship of AI 1 only passes through: it jumps
+ *                   out 30-40 s after it appears.
  *  2 brave trader:  same, but fights its attacker back while the govt
  *                   MaxOdds calculation stays favorable, then flees.
  *  3 warship:       hunts govt enemies (disposition via GovtData
@@ -97,6 +99,7 @@ export { chooseNearest } from './npc_targeting.js';
 export {
     NPC_DECISION_INTERVAL_MS, INTERCEPTOR_ENGAGE_RANGE, WARSHIP_ENGAGE_RANGE,
     NPC_DEPART_MIN_MS, NPC_DEPART_MAX_MS, rollDepartureTime,
+    PASS_THROUGH_DEPART_MIN_MS, PASS_THROUGH_DEPART_MAX_MS,
     PlanetEntry, landingDestinations,
 } from './npc_decision.js';
 export {

@@ -55,6 +55,12 @@ export const NpcState = t.intersection([t.type({
      * 'attack' it STANDS OFF instead of closing; in 'flee' it is
      * committed to jumping out. Cleared the moment it stops losing. */
     retreatSince: t.number,
+    /** A mission special ship with no goal and AI 1 (mïsn ShipGoal -1,
+     * ShipBehav -1; set at spawn by mission_ship_spawn.ts). It has no
+     * business here: its departure roll uses the short PASS_THROUGH
+     * window (npc_decision.ts) and it leaves the moment that comes due,
+     * whatever it is doing (reference A-series wave 4). */
+    passingThrough: t.boolean,
 })]);
 export type NpcState = t.TypeOf<typeof NpcState>;
 export const NpcComponent = new Component<NpcState>('NpcComponent');

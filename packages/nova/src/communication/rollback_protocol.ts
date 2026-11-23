@@ -290,6 +290,15 @@ export const STATE_HASH_INTERVAL = 60;
 //    standing off before it jumps out. No input kind or message kind
 //    changes. The derived wire schema fingerprint changes, and the join
 //    gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): an OPTIONAL `passingThrough` NpcComponent
+//    field, set at spawn on a mïsn special ship with ShipGoal -1,
+//    ShipBehav -1 and AI 1 (missions/mission_ship_spawn.ts). Its first
+//    think rolls the departure in 30-40 s instead of 120-300 s (still one
+//    PRNG draw, so no other ship's rolls shift) and it departs the moment
+//    that is due, mid-trip or mid-dwell (reference A-series wave 4). No
+//    other ship carries the field. The derived wire schema fingerprint
+//    changes, and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

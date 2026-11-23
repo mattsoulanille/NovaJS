@@ -363,6 +363,18 @@ async function buildShip(ctx: SpawnContext, missionId: string,
                 { reason: 'missionGoal' });
         }
     }
+    // A goal-less special ship with no special behaviour and AI 1 (mïsn
+    // ShipGoal -1, ShipBehav -1) has no business in this system: on the
+    // original, nine of nine such ships jumped out about 30-40 s after
+    // they appeared, never landing (reference A-series wave 4). It rolls
+    // that short window instead of the ordinary dwell loop's (see
+    // npc_decision.ts PASS_THROUGH_DEPART_*). Aux ships are ordinary
+    // traffic and keep the ordinary roll; ordinary sÿst traffic was not
+    // measured.
+    if (npc && !options.aux && options.goal === GOAL_NONE
+        && options.behavior === -1 && npc.aiType === 1) {
+        npc.passingThrough = true;
+    }
     if (options.behavior === 0 && npc) {
         // Always attack the player: spawn already aggressed.
         npc.aggressor = ctx.ownerUuid;

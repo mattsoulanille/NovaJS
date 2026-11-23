@@ -72,17 +72,37 @@ export const INTERCEPTOR_ENGAGE_RANGE = 1800;
 /** Warships hunt enemies anywhere in the inhabited field; beyond this
  * they don't see them (keeps fights near the action). */
 export const WARSHIP_ENGAGE_RANGE = 6000;
-/** NPCs stay in the system between these bounds before jumping out. */
+/** NPCs stay in the system between these bounds before jumping out.
+ * Unmeasured for ordinary sÿst traffic (reference A-series wave 4 left
+ * it open), so kept as it was. */
 export const NPC_DEPART_MIN_MS = 120_000;
 export const NPC_DEPART_MAX_MS = 300_000;
+/**
+ * The departure window of a PASSING-THROUGH ship (NpcState
+ * `passingThrough`: a mïsn special ship with ShipGoal -1, ShipBehav -1
+ * and AI 1). Reference A-series wave 4: nine of nine such ships left by
+ * jumping out about 30-40 s after they appeared, never landing; the
+ * window is that measurement. (The original's ships were GONE by then;
+ * here the departure decision falls in the window and the outbound
+ * flight and jump sequence follow it.)
+ */
+export const PASS_THROUGH_DEPART_MIN_MS = 30_000;
+export const PASS_THROUGH_DEPART_MAX_MS = 40_000;
 
 function randomBetween(random: Random, min: number, max: number): number {
     return min + random.next() * (max - min);
 }
 
-/** Draws the sim time at which a freshly spawned NPC will depart. */
-export function rollDepartureTime(now: number, random: Random): number {
-    return now + randomBetween(random, NPC_DEPART_MIN_MS, NPC_DEPART_MAX_MS);
+/**
+ * Draws the sim time at which a freshly spawned NPC will depart: one PRNG
+ * draw either way, so a passing-through ship shifts no other NPC's rolls.
+ */
+export function rollDepartureTime(now: number, random: Random,
+    passingThrough = false): number {
+    return passingThrough
+        ? now + randomBetween(random,
+            PASS_THROUGH_DEPART_MIN_MS, PASS_THROUGH_DEPART_MAX_MS)
+        : now + randomBetween(random, NPC_DEPART_MIN_MS, NPC_DEPART_MAX_MS);
 }
 
 // --- Decision making ---
@@ -238,7 +258,8 @@ export const NpcDecisionSystem = new System({
         npc.nextDecision = time.time
             + NPC_DECISION_INTERVAL_MS * 100 / skillMult;
         if (npc.departAt === undefined) {
-            npc.departAt = rollDepartureTime(time.time, random);
+            npc.departAt = rollDepartureTime(time.time, random,
+                npc.passingThrough);
         }
 
         // Forget aggressors that no longer exist.
@@ -447,6 +468,16 @@ export const NpcDecisionSystem = new System({
         switch (npc.aiType) {
             case 1:
             case 2: {
+                // A ship only passing through (mission ShipGoal -1, AI 1)
+                // goes the moment its short window is up, straight to a
+                // jump: it does not finish a trip or a dwell first.
+                // Reference A-series wave 4. Reached only when not
+                // fleeing (the aggression switch above returns first).
+                if (npc.passingThrough && !held
+                    && time.time >= npc.departAt) {
+                    npc.mode = 'depart';
+                    return;
+                }
                 // Planet-to-planet loop.
                 if (npc.mode === 'travel') {
                     if (!npc.destination || !entities.has(npc.destination)) {
