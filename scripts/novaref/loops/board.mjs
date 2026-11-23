@@ -16,9 +16,10 @@
  *
  * Once within `args.near` px it steps in by `args.stepMs` of thrust at a
  * time, re-aiming each step, and at each stop shoots the window, presses
- * `b` and shoots again (the status line answers). A boarding dialog (a big
- * bright window over the play area) ends the walk: it is shot, then closed
- * with Return. Escape is never pressed (it quits to the title in flight).
+ * `b` and shoots again (the status line answers). A boarding dialog (the
+ * play area lit by a few percent more than in the shot before the press)
+ * ends the walk: `args.dialogClicks` ([x, y, label] window points) are
+ * clicked in turn with a shot after each, or Return is pressed if none. Escape is never pressed (it quits to the title in flight).
  *
  * Returns {ok, legs, steps}: every leg's measured offsets and heading, and
  * every boarding stop's distance (read from the shot before `b`).
@@ -203,13 +204,22 @@ export default async function board(api, args = {}) {
         if (keys) heading = want;
         await api.step({ keys: `${keys ? keys + " wait 150 " : ""}wait 200 b wait 700` });
         const reply = await shoot("b");
-        const dialog = brightShare(reply.png) > 0.25;
-        steps.push({ k, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), shot: reply.file, dialog });
-        api.log({ step: k, dist: Math.round(dist), dialog });
+        // The plunder dialog (about 310x190 px in the 832x604 window) lights
+        // a few percent of the play area that was dark in the shot before
+        // the press (wave 6: a fixed 25% threshold never fired).
+        const lit = brightShare(reply.png) - brightShare(s.png);
+        const dialog = lit > (args.dialogShare ?? 0.03);
+        steps.push({ k, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), shot: reply.file, dialog, lit: +lit.toFixed(3) });
+        api.log({ step: k, dist: Math.round(dist), dialog, lit: +lit.toFixed(3) });
         if (dialog) {
-            await api.step({ wait: 1000 });
-            await shoot("dialog");
-            await api.step({ keys: "Return wait 1500" });
+            // Optional clicks on the dialog's buttons (window points), each
+            // followed by a shot, e.g. Credits, Cargo, then Abort.
+            for (const [x, y, label] of args.dialogClicks ?? []) {
+                await api.step({ click: [x, y], win: true });
+                await api.step({ wait: 1000 });
+                await shoot(`dialog-${label}`);
+            }
+            if (!(args.dialogClicks ?? []).length) await api.step({ keys: "Return wait 1500" });
             await shoot("after-dialog");
             break;
         }

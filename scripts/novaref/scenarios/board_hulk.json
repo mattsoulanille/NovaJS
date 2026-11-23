@@ -14,7 +14,7 @@
   {"wait": 1500},
   {"keys": "Tab wait 400"},
   {"shot": "target", "window": true},
-  {"script": "../loops/board.mjs", "args": {"speedPxS": 44, "turnDegS": 87.1, "near": 160, "stepMs": 250, "maxSteps": 30}},
+  {"script": "../loops/board.mjs", "args": {"speedPxS": 44, "turnDegS": 87.1, "near": 220, "stepMs": 120, "maxSteps": 40, "dialogClicks": [[340, 353, "credits"], [418, 327, "cargo"], [418, 380, "abort"]]}},
   {"wait": 1000},
   {"record": "stop"},
   {"shot": "end", "window": true}

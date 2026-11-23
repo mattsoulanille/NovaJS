@@ -1,0 +1,120 @@
+{
+ "name": "jam_fire_away",
+ "_comment": "J wave 6, cloaked target on screen: jam_fire.json, but the target starts beside the player at Kit Port (mïsn 1008, the Cloak Target W with the stock Wraith cloak) and the player (Kit Lancer, 360 px/s) thrusts 0.7 s away and brakes before Tab, meant to put the target about 250 px off, on screen (in practice the player drifted on and the target ended off screen): does Tab keep it, do the missiles home? Pilots w6_cloak3 (Kit Cloak Scanner T: targeting only) and w6_cloak3_noscan.",
+ "pilot": {
+  "as": "novaref-jam"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 700 up:Up down:Down wait 600 up:Down wait 1500"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "aim",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-5s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-10s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-15s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "keys": "up:ctrl"
+  },
+  {
+   "shot": "fire-20s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-6s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-12s",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

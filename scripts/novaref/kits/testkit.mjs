@@ -331,8 +331,10 @@ export default {
  *      9048) Kit Bomb Carrier beside the player; wëap 245 Kit Ion Gun, shïp
  *      797 Ion Target Near, düde 289, mïsn 1005 (bit 9046); mïsn 1006 (bit
  *      9047) the Cloak Target beside the player, oütf 449 Kit Cloak Scanner
- *      T; wëap 246 Kit Long Beam + oütf 450 (0x0010 tank); shïp 795 Kit
- *      Hulk, düde 287, sÿst/spöb 2020 Kit Board Range (boarding loop).
+ *      T; shïp 798 Cloak Target W (stock Wraith cloak), düde 290, mïsn
+ *      1008/1009 (bits 9049/9050); wëap 246 Kit Long Beam + oütf 450 (0x0010
+ *      tank); shïp 795 Kit Hulk, düde 287, sÿst/spöb 2020 Kit Board Range
+ *      (boarding loop); shïp 799 Kit Hulk Cheap, düde 291, sÿst/spöb 2022.
  *  Kit-wide fix: a bay's AmmoType is the carried shïp id itself (stock wëap
  *      149 holds 144), not id - 128 as the kit wrote until now.
  */
@@ -445,6 +447,21 @@ function wave6Resources() {
     // and oütf 449 Kit Cloak Scanner T (0x000C: targeting only, so a
     // cloaked target stays invisible on screen and radar).
     out.push(...misn(1006, "Kit J cloak target near", 9047, { shipCount: 1, shipDude: 286, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // Take 3: take 2's target never cloaked (Tab found it without a
+    // scanner). The same immobile hull with the STOCK Wraith Cloaking
+    // Device (oütf 266) and the stock Wraith's cloak Flags2 0x5F00, AI 3
+    // (an AI 1 hull may never "fly around"): shïp 798, düde 290, mïsn 1008
+    // (bit 9049) beside the player.
+    out.push(...ship(798, "Cloak Target W", 136, {
+        armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1, flags2: 0x5F00,
+        outfits: [266, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
+    }));
+    out.push(dude(290, "Cloak Target W", 3, 363, 798));
+    out.push(...misn(1008, "Kit J cloak target W near", 9049, { shipCount: 1, shipDude: 290, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // Take 4: it does cloak, but beside the player a missile's 25 px fuse
+    // hits it at launch, guided or not. The same at Kit Market (900 px):
+    // mïsn 1009, bit 9050.
+    out.push(...misn(1009, "Kit J cloak target W far", 9050, { shipCount: 1, shipDude: 290, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     const scannerT = gun(449, "Kit Cloak Scanner T", 0);
     scannerT.set = { ...scannerT.set, modType: 30, modVal: 0x000C, max: 1 };
     out.push(scannerT);
@@ -452,9 +469,11 @@ function wave6Resources() {
     // --- A: gövt 0x0010, jump or stand off? In waves 4-6 the tanks that
     // jumped were already 260+ px off when their shield crossed 25%, the ones
     // that stood off were in an attack pass. wëap 246 Kit Long Beam (beam
-    // turret, 1500 px, 200 damage every 15 frames) + oütf 450 strips the
-    // tank's shield far out, before it closes.
-    out.push(weap(246, "Kit Long Beam", 170, { reload: 15, duration: 4, armorDamage: 200, shieldDamage: 200, guidance: 3, beamLength: 1500 }));
+    // turret, 1500 px, every 15 frames) + oütf 450 strips the tank's shield
+    // far out, before it closes. A beam deals its damage on every frame of
+    // its Duration: at 200 it disabled the 30000-armor tank in about 17 s
+    // (the first two runs), so it is 15 now (about 120 a second).
+    out.push(weap(246, "Kit Long Beam", 170, { reload: 15, duration: 4, armorDamage: 15, shieldDamage: 15, guidance: 3, beamLength: 1500 }));
     out.push(gun(450, "Kit Long Beam", 246));
 
     // --- U9: boarding a NON-mission disabled ship. Ordinary sÿst traffic of
@@ -471,6 +490,17 @@ function wave6Resources() {
     const board = system(2020, "Kit Board Range", -600, -740, 363, [2020]);
     board.set = { ...board.set, dudes: [287, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
     out.push(board, spob(2020, "Kit Board Port", 0, 0, 138, { flags: 0x43 }));
+    // The same hulk at another price (cost 20,000; shïp 799, düde 291, sÿst
+    // and spöb 2022): is the 1,250-credit booty a share of the price?
+    out.push({ type: "shïp", id: 799, name: "Kit Hulk Cheap", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Hulk Cheap", longName: "Kit Hulk Cheap", commName: "Kit Hulk Cheap", subtitle: "",
+        armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, cost: 20000, flags: 0, flags2: 0 } });
+    out.push({ type: "shän", id: 799, name: "Kit Hulk Cheap", clone: "shän:128", set: { "@0:i16": 1975, "@2:i16": 1976, "@4:i16": 1 } });
+    const hulkCheap = dude(291, "Kit Hulk Cheap", 1, 378, 799);
+    hulkCheap.set = { ...hulkCheap.set, flags: 0x0041 };
+    out.push(hulkCheap);
+    const boardCheap = system(2022, "Kit Board Range Cheap", -540, -740, 363, [2022]);
+    boardCheap.set = { ...boardCheap.set, dudes: [291, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+    out.push(boardCheap, spob(2022, "Kit Board Cheap Port", 0, 0, 138, { flags: 0x43 }));
     return out;
 }
 
