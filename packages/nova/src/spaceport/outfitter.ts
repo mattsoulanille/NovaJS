@@ -5,7 +5,7 @@ import { Entity } from "nova_ecs/entity";
 import { DefaultMap } from "nova_ecs/utils";
 import { DockedLiveStatus } from "../display/docked_ship.js";
 import * as PIXI from 'pixi.js';
-import { Observable, Subject } from "rxjs";
+import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/core/index.js";
@@ -32,6 +32,7 @@ import { DeployedOutfitCounts } from "./deployed_outfits.js";
 import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, govtsAllied, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
+import { ScrollArrow } from "./scroll_arrow.js";
 import { changeShipTargets } from "./shipyard_rules.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
@@ -52,8 +53,20 @@ const NO_CREDITS = { credits: 0 };
 const NO_BITS: ControlBits = new Set();
 const NO_RECORDS: LegalRecords = new Map();
 /**
+ * The shops' text size: the original's Geneva 9 body face, which our
+ * outline Geneva matches at 9.4px as in every other landed pane
+ * (dialog_layout.ts). At 10px ours ran 5-8% wide: the Shuttle's
+ * shipyard description's first line inked x934..1102 against the
+ * original's x932..1092 (shipyard/earth_spaceport.png), so it broke a
+ * word early from its fourth line on, and "Requires: Fighter Bay
+ * License" / "Can't have any of this item!" ran 6% / 8% wider than on
+ * outfitter/earth_outfitter_cant_have_any.png.
+ */
+const SHOP_FONT_SIZE = 9.4;
+
+/**
  * The body-text line pitch of every spaceport description pane. The
- * original runs Geneva 10 on a 12px pitch: successive lines' ink tops are
+ * original runs Geneva 9 on a 12px pitch: successive lines' ink tops are
  * at screen y 392 / 404 / 416 in shipyard/earth_spaceport.png's ship
  * description, and 503 / 515 / 527 in mission_bbs/un_shipping_mission.png.
  * PIXI's own default for this font is 13, which by the tenth line has
@@ -65,17 +78,17 @@ const NO_RECORDS: LegalRecords = new Map();
 export const BODY_LINE_HEIGHT = 12;
 export const FONT = {
     normal: {
-        fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
+        fontFamily: "Geneva", fontSize: SHOP_FONT_SIZE, fill: 0xffffff,
         align: 'left', wordWrap: true, wordWrapWidth: descWidth,
         lineHeight: BODY_LINE_HEIGHT,
     } as const,
     grey: {
-        fontFamily: "Geneva", fontSize: 10, fill: 0x262626,
+        fontFamily: "Geneva", fontSize: SHOP_FONT_SIZE, fill: 0x262626,
         align: 'left', wordWrap: true, wordWrapWidth: descWidth,
         lineHeight: BODY_LINE_HEIGHT,
     } as const,
     count: {
-        fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
+        fontFamily: "Geneva", fontSize: SHOP_FONT_SIZE, fill: 0xffffff,
         align: 'right', wordWrap: false, wordWrapWidth: descWidth,
         lineHeight: BODY_LINE_HEIGHT,
     } as const,
@@ -105,65 +118,6 @@ const INFO_ROWS = {
      */
     status: 138,
 } as const;
-
-/**
- * A small round scroll-arrow button for the item grid (the original's
- * outfitter has an up/down pair at the grid's bottom-left). Drawn with
- * graphics — a dark disc and a triangle that reddens when enabled and
- * dims when the page is at that end.
- */
-class ScrollArrow {
-    container = new PIXI.Container();
-    readonly click = new Subject<void>();
-    private disc = new PIXI.Graphics();
-    private glyph = new PIXI.Graphics();
-    private wrappedEnabled = true;
-
-    constructor(private direction: 'up' | 'down') {
-        this.container.addChild(this.disc, this.glyph);
-        this.container.interactive = true;
-        this.container.cursor = 'pointer';
-        // An explicit hit area so the whole disc is reliably clickable
-        // (graphics-only children can hit-test inconsistently).
-        this.container.hitArea = new PIXI.Circle(0, 0, 10);
-        this.container.on('pointerup', () => {
-            if (this.wrappedEnabled) {
-                this.click.next();
-            }
-        });
-        this.draw();
-    }
-
-    private draw() {
-        // It is the DISC that carries the state in the original, not the
-        // chevron: in outfitter/earth_outfitter.png the disabled up arrow
-        // is a near-black sphere with a dark chevron, while the enabled
-        // down arrow is a dark-red one (sampled (57,0,0)..(90,8,8)) with a
-        // WHITE chevron. We had it the other way round -- always-black
-        // disc, red-or-grey triangle. The original's spheres are shaded
-        // artwork with a specular highlight, sitting in a socket that the
-        // 8502 frame itself draws (the shipyard shows the same two sockets
-        // with no arrows over them); these flat fills reproduce the
-        // colours and the silhouette, not the gloss.
-        this.disc.clear()
-            .beginFill(this.wrappedEnabled ? 0x4a0000 : 0x0a0a0a)
-            .drawCircle(0, 0, 9)
-            .endFill();
-        this.glyph.clear().beginFill(
-            this.wrappedEnabled ? 0xffffff : 0x1f1f1f);
-        if (this.direction === 'up') {
-            this.glyph.drawPolygon([0, -4, 4, 3, -4, 3]);
-        } else {
-            this.glyph.drawPolygon([0, 4, 4, -3, -4, -3]);
-        }
-        this.glyph.endFill();
-    }
-
-    set enabled(value: boolean) {
-        this.wrappedEnabled = value;
-        this.draw();
-    }
-}
 
 export class Outfitter extends Menu<Entity> {
     private itemGrid?: ItemGrid<OutfitData>;
@@ -316,9 +270,8 @@ export class Outfitter extends Menu<Entity> {
         }),
     }
     private buttons: { buy: Button, sell: Button, done: Button };
-    // The item-grid scroll arrows, at the grid's bottom-left (only shown
-    // when the outfit list is taller than the 4x5 grid). Measured
-    // against outfitter/earth_outfitter.png.
+    // The item-grid scroll arrows, at the grid's bottom-left, greyed at
+    // either end of the list (scroll_arrow.ts).
     private scrollUpArrow = new ScrollArrow('up');
     private scrollDownArrow = new ScrollArrow('down');
 
@@ -328,12 +281,12 @@ export class Outfitter extends Menu<Entity> {
         super(displayAssets, simulationData, OUTFITTER_PICT, controlEvents);
         this.container.name = 'Outfitter';
 
-        // Sphere centres, measured on outfitter/earth_outfitter.png: the
-        // two dark discs span screen x 728-745 and 758-775 on rows
-        // 673-685, i.e. centres (736.5, 679) and (766.5, 679) -- 30px
-        // apart, where ours were 24 apart and up to 9px right.
-        this.scrollUpArrow.container.position.set(-223.5, 139);
-        this.scrollDownArrow.container.position.set(-193.5, 139);
+        // Sphere centres (738, 679.5) and (768, 679.5): the 15px spheres
+        // span x731..745 and x761..775, rows 673..686, on
+        // outfitter/earth_outfitter_cant_have_any.png and the R8 wave-5
+        // 03-outfitter.png alike.
+        this.scrollUpArrow.container.position.set(-222, 139.5);
+        this.scrollDownArrow.container.position.set(-192, 139.5);
         this.scrollUpArrow.click.subscribe(() => {
             this.itemGrid?.scrollUp();
             this.updateArrows();
@@ -497,17 +450,14 @@ export class Outfitter extends Menu<Entity> {
     }
 
     /**
-     * Shows the scroll arrows only when the outfit list overflows the
-     * grid, and greys each when the page is already at that end.
+     * Greys each scroll arrow when the page is already at that end. Both
+     * stay up even for a list that fits on one page, as the original's
+     * shipyard shows (scroll_arrow.ts).
      */
     private updateArrows() {
         if (!this.itemGrid) {
             return;
         }
-        const scrollable =
-            this.itemGrid.canScrollUp || this.itemGrid.canScrollDown;
-        this.scrollUpArrow.container.visible = scrollable;
-        this.scrollDownArrow.container.visible = scrollable;
         this.scrollUpArrow.enabled = this.itemGrid.canScrollUp;
         this.scrollDownArrow.enabled = this.itemGrid.canScrollDown;
     }
@@ -1227,6 +1177,15 @@ export class Outfitter extends Menu<Entity> {
         this.text.itemMass.visible = false;
         this.text.availableMass.visible = false;
         this.text.freeMass.visible = false;
+        // With nothing selected the original leaves the price pane EMPTY:
+        // no "Item Price:" / "You Have:" until a tile is picked
+        // (outfitter/earth_outfitter.png and the R8 wave-5 fullscreen
+        // 03-outfitter.png, both opened with no selection). The shipyard's
+        // own price block already behaves this way.
+        for (const line of [this.text.itemPrice, this.text.price,
+            this.text.youHave, this.text.count]) {
+            line.visible = outfitTile !== undefined;
+        }
 
         if (!outfitTile) {
             return;

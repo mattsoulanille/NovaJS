@@ -42,6 +42,25 @@ export const CAPTION_TOP = { single: 40, multi: 32 } as const;
  */
 export const CAPTION_GREY = 0x4e4e4e;
 
+/**
+ * The caption face: the original's Geneva 9, our 9.4px as everywhere on
+ * the landed screens. At 10px ours ran 5-10% wide ("Light Blaster" inked
+ * 61px against the R8 wave-5 03-outfitter.png's 57, "Sensor Boost" 64
+ * against 58; at 9.4px "Cargo Expansion" advances 74.4px where the
+ * capture inks x841..914).
+ */
+export const CAPTION_FONT_SIZE = 9.4;
+
+/**
+ * Where a caption wraps. Not the tile's full 83px: on the outfitter
+ * captures "Cargo Expansion" (74.4px at our size) stays on one line while
+ * "Civilian Radar Jam", "Civilian IR Jammer" (80.7) and "Raven Rocket
+ * Pod" (81.3) break, so the original's limit lies in 74.4..80.7. At 10px
+ * on the full tile width ours had already landed there by accident; at
+ * 9.4px those three would fit on one line.
+ */
+export const CAPTION_WRAP_WIDTH = 77;
+
 /** One rendered line-group of a tile caption: a run of text and its colour. */
 export interface CaptionSegment {
     text: string;
@@ -121,17 +140,19 @@ function fitWhenLoaded(sprite: PIXI.Sprite, max: number) {
 export class ItemTile<I extends Item> {
     private font = {
         normal: {
-            fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
-            align: 'center', wordWrap: true, wordWrapWidth: TILE_SIZE[0],
+            fontFamily: "Geneva", fontSize: CAPTION_FONT_SIZE, fill: 0xffffff,
+            align: 'center', wordWrap: true,
+            wordWrapWidth: CAPTION_WRAP_WIDTH,
             lineHeight: CAPTION_LINE_HEIGHT,
         } as const,
         grey: {
-            fontFamily: "Geneva", fontSize: 10, fill: CAPTION_GREY,
-            align: 'center', wordWrap: true, wordWrapWidth: TILE_SIZE[0],
+            fontFamily: "Geneva", fontSize: CAPTION_FONT_SIZE,
+            fill: CAPTION_GREY, align: 'center', wordWrap: true,
+            wordWrapWidth: CAPTION_WRAP_WIDTH,
             lineHeight: CAPTION_LINE_HEIGHT,
         } as const,
         count: {
-            fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
+            fontFamily: "Geneva", fontSize: CAPTION_FONT_SIZE, fill: 0xffffff,
             align: 'right', wordWrap: false, wordWrapWidth: TILE_SIZE[0]
         } as const,
     };
