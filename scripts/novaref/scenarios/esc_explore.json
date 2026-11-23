@@ -1,0 +1,163 @@
+{
+ "name": "esc_explore",
+ "_comment": "Escort command view (e): layout, pause, keys. Pilot w2_esc (2 hired disc escorts, 1 captured disc, 1 captured Kit Fighter, a Kit Fighter Bay with 4 fighters) or w2_esc0 (no escorts).",
+ "pilot": {
+  "as": "novaref-esc"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "keys": "w wait 400"
+  },
+  {
+   "shot": "secondary",
+   "window": true
+  },
+  {
+   "keys": "ctrl@1500 wait 1500"
+  },
+  {
+   "shot": "launched",
+   "window": true
+  },
+  {
+   "keys": "e wait 1000"
+  },
+  {
+   "shot": "menu-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "menu-0b",
+   "window": true
+  },
+  {
+   "keys": "Down wait 600"
+  },
+  {
+   "shot": "menu-down1",
+   "window": true
+  },
+  {
+   "keys": "Down wait 600"
+  },
+  {
+   "shot": "menu-down2",
+   "window": true
+  },
+  {
+   "keys": "Up wait 600"
+  },
+  {
+   "shot": "menu-up1",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "menu-tab",
+   "window": true
+  },
+  {
+   "keys": "Return wait 800"
+  },
+  {
+   "shot": "menu-return",
+   "window": true
+  },
+  {
+   "keys": "e wait 800"
+  },
+  {
+   "shot": "menu-e-again",
+   "window": true
+  },
+  {
+   "keys": "e wait 800"
+  },
+  {
+   "shot": "menu-e-third",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 800"
+  },
+  {
+   "shot": "menu-escape",
+   "window": true
+  },
+  {
+   "keys": "e wait 800"
+  },
+  {
+   "shot": "menu-reopen",
+   "window": true
+  },
+  {
+   "move": [
+    200,
+    200
+   ],
+   "win": true
+  },
+  {
+   "wait": 400
+  },
+  {
+   "shot": "menu-mouse",
+   "window": true
+  },
+  {
+   "click": [
+    200,
+    200
+   ],
+   "win": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "menu-click-space",
+   "window": true
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "Escape wait 800"
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

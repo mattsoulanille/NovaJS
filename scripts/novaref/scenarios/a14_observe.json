@@ -1,0 +1,160 @@
+{
+ "name": "a14_observe",
+ "_comment": "A14: one A14 cell system per pilot (pilots/a14_*.json). Player in Kit Lancer Lite never fires; red disc warships of one govt spawn from the system's dude. Observe ~55 s with Tab shots. Analyse with analysis/hostility.mjs.",
+ "pilot": {
+  "as": "novaref-a14"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "keys": "m wait 800"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

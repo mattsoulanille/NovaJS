@@ -1,0 +1,33 @@
+{
+  "name": "novaref-map",
+  "edits": {
+    "ship": 703,
+    "stellar": 2140,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2140": 2,
+      "2141": 2,
+      "2142": 2,
+      "2144": 2,
+      "2145": 2,
+      "2147": 2,
+      "2148": 2,
+      "2149": 2
+    },
+    "weapons": {
+      "128": 0,
+      "362": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "602": 1
+    },
+    "nickname": "Probe",
+    "shipName": "Map Probe"
+  }
+}

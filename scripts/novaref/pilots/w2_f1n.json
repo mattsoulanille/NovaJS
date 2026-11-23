@@ -1,0 +1,24 @@
+{
+  "name": "novaref-f1n",
+  "edits": {
+    "ship": 700,
+    "stellar": 2128,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2128": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "f1n"
+  }
+}

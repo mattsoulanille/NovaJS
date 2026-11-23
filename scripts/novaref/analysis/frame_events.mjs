@@ -19,7 +19,7 @@ const raw = spawnSync("ffmpeg", ["-v", "error", "-i", file, "-vf", "scale=208:15
     { maxBuffer: 1024 * 1024 * 1024 }).stdout;
 const w = 208, h = 151, N = Math.floor(raw.length / (w * h));
 const pts = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v", "-show_entries", "frame=pts_time", "-of", "csv=p=0", file],
-    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout.trim().split("\n").map(Number);
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout.trim().split("\n").map((l) => parseFloat(l));
 const events = [];
 for (let i = 1; i < N; i++) {
     let s = 0;

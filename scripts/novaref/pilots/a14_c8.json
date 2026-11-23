@@ -1,0 +1,27 @@
+{
+  "name": "novaref-a14-c8",
+  "edits": {
+    "ship": 710,
+    "stellar": 2115,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "legal": {
+      "2115": -500
+    },
+    "explored": {
+      "2115": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "A14 c8"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "novaref-a14-c3",
+  "edits": {
+    "ship": 710,
+    "stellar": 2112,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "legal": {
+      "2112": -500
+    },
+    "explored": {
+      "2112": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "A14 c3"
+  }
+}

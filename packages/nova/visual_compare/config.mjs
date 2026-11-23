@@ -47,6 +47,7 @@ export const CHROME_ARGS = [
     '--no-sandbox',
     '--window-size=1920,1080',
     '--hide-scrollbars',
+    '--mute-audio',
 ];
 
 export function ensureOutputDir() {

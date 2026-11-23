@@ -64,11 +64,13 @@ export function shanForSprite(baseImage: number, size: number, framesPer: number
 
 /**
  * rlëD + shän bytes for a solid-disc ship: `frames` identical frames (36,
- * one per 10 degrees, like a stock ship sheet).
+ * one per 10 degrees, like a stock ship sheet). `diameter` draws the disc
+ * smaller than its `size` x `size` frame (default: fills it, less a 1 px
+ * rim), to tell frame size from visible size apart.
  */
 export function discShipGraphics(rledId: number, rgb: [number, number, number],
-    size = 24, frames = 36): { rled: number[], shan: number[] } {
-    const frame = discFrame(size, rgb);
+    size = 24, frames = 36, diameter = size - 2): { rled: number[], shan: number[] } {
+    const frame = discFrame(size, rgb, diameter);
     return {
         rled: encodeRled(Array.from({ length: frames }, () => frame), { original: true }),
         shan: shanForSprite(rledId, size, frames),

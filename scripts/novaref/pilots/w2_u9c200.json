@@ -1,0 +1,27 @@
+{
+  "name": "novaref-u9c200",
+  "edits": {
+    "ship": 718,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "u9c200",
+    "missionBits": {
+      "9011": true
+    }
+  }
+}

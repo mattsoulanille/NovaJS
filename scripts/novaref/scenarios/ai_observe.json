@@ -1,0 +1,331 @@
+{
+ "name": "ai_observe",
+ "_comment": "A-series AI states: an AI subject (neutral govt 363, 2 Kit Raider Guns) beside Kit Port. Idle 10 s, a 0.5 s Escort Gun burst, 20 s, then 30 s sustained fire, 15 s. Pilots w2_ai1..ai4, w2_ai3r (govt flag 0x0010).",
+ "pilot": {
+  "as": "novaref-ai"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "idle-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "idle-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "idle-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "idle-3",
+   "window": true
+  },
+  {
+   "keys": "Space@500 wait 300"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-5",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-6",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "provoked-7",
+   "window": true
+  },
+  {
+   "keys": "down:Space"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-5",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-6",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-7",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-8",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-9",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-10",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-11",
+   "window": true
+  },
+  {
+   "keys": "up:Space"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 200"
+  },
+  {
+   "shot": "after-5",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

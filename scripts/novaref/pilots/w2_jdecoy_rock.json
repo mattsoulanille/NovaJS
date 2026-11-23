@@ -1,0 +1,29 @@
+{
+  "name": "novaref-jdecoy_rock",
+  "edits": {
+    "ship": 703,
+    "stellar": 2132,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2132": 2
+    },
+    "missionBits": {
+      "9017": true
+    },
+    "weapons": {
+      "128": 0,
+      "379": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "620": 1
+    },
+    "nickname": "Probe",
+    "shipName": "jdecoy_rock"
+  }
+}

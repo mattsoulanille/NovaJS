@@ -1,0 +1,145 @@
+{
+ "name": "map_explore",
+ "_comment": "M1-M7 exploration in the kit map region (sÿst 2140-2149). Pilot w2_map: at Map Hub, 2143 Map East and 2146 Map Void unexplored.",
+ "pilot": {
+  "as": "novaref-map"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map-open",
+   "window": true
+  },
+  {
+   "click": [
+    191,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "borders",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-1",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-2",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-3",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-4",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-5",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-6",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-7",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1000"
+  },
+  {
+   "shot": "map-escaped",
+   "window": true
+  },
+  {
+   "keys": "h wait 1200"
+  },
+  {
+   "shot": "minimap",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "minimap-then-map",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1000"
+  },
+  {
+   "shot": "after-map-escape",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 800"
+  },
+  {
+   "shot": "after-escape-2",
+   "window": true
+  },
+  {
+   "keys": "h wait 1000"
+  },
+  {
+   "shot": "h-again",
+   "window": true
+  },
+  {
+   "keys": "h wait 1000"
+  },
+  {
+   "shot": "h-third",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -456,11 +456,166 @@ The minimal app works.
   and Outfitter buttons.
 - **Evidence:** `~/.local/share/novaref/evidence/20261123-minimal-app/20261123-024321-minimal_app/`.
 
+### A14: which legal record decides an NPC's hostility? (2026-11-23, wave 2)
+
+**Setup** (`kits/testkit.mjs` `a14Resources`, `scenarios/a14_observe.json`,
+pilots `pilots/a14_c*.json`, analysis `analysis/hostility.mjs`).
+
+- One sealed system per matrix cell. Each spawns only warships of ONE
+  government through the sÿst dude list (avgShips 2): red disc hulls, AI 3,
+  a weak 5-damage turret, MaxOdds 1000.
+- The player starts beside the system's only stellar in Kit Lancer Lite
+  (1500 shield, no recharge) with an IFF and never fires.
+- Legal records are set per system in the pilot (-500 = Criminal with a
+  CrimeTol of 10; the map confirmed "Criminal" where expected).
+- Each run observes for about 85 s. An attack shows as the shield bar
+  draining from about 8 s on (in c6, from 54 s), and red brackets and
+  visible fire in the Tab shots.
+
+Governments: 370 Owner (CrimeTol 10) and 371 Ally are mutually allied
+through classes 70/71. 372 Unrel has no relations. 373 Nosy has flag
+0x0002. 374 AllyHi is an ally with CrimeTol 10000, 375 NosyHi is nosy
+with CrimeTol 10000. 376 OwnerHi (CrimeTol 10000) is allied with 377
+AllyLo (CrimeTol 10).
+
+| cell | system owner | warships' govt (AI) | -500 record in | attacked? |
+|---|---|---|---|---|
+| c0 | Owner | Owner (3) | nowhere | no |
+| c1 | Owner | Owner (3) | **this system** | **yes** (shield 138 -> 16 px) |
+| c2 | Owner | Owner (3) | another Owner system | no |
+| c3 | Owner | Ally (3) | this system | **yes** |
+| c14 | Owner | Ally (3) | the Ally's home system | no |
+| c4 | Owner | Unrel (3) | this system | no |
+| c5 | Owner | Unrel (3) | Unrel's home system | no |
+| c15 | Owner | Unrel (4, interceptor) | this system | no |
+| c16 | Owner | Unrel (4) | Unrel's home system | no |
+| c6 | Owner | Nosy (3) | this system | **yes** (see note) |
+| c7 | Owner | Nosy (3) | Nosy's home system | no |
+| c17 | Owner | Nosy (4) | Nosy's home system | no |
+| c8 | Owner (CrimeTol 10) | AllyHi (3), CrimeTol 10000 | this system | no |
+| c9 | Owner (CrimeTol 10) | NosyHi (3), CrimeTol 10000 | this system | no |
+| c12 | OwnerHi (CrimeTol 10000) | AllyLo (3), CrimeTol 10 | this system | **yes** |
+| c13 | OwnerHi (CrimeTol 10000) | OwnerHi (3) | this system | no |
+| c10 | independent | Unrel (3) | this system | no |
+| c11 | independent | Nosy (3) | this system | **yes** |
+
+**Finding.** A ship of government G attacks the player on sight
+(record-based hostility) exactly when both of these hold:
+
+1. **G enforces in the current system.** G owns it, G is allied with
+   its owner, or G has gövt flag 0x0002 (nosy). Nosy also applies in
+   independent systems. A govt with no tie to the system ignores the
+   player however criminal he is there (c4, c10), and AI 4 interceptors
+   follow the same rule (c15).
+2. **The player's record IN THE CURRENT SYSTEM is below -G.CrimeTol.**
+   - Only this system's record counts. A criminal record in another
+     system of the same govt (c2), or in G's own home system (c5, c7,
+     c14, c16, c17), changes nothing, even for nosy govts. "Enforces
+     its own laws everywhere" means its own CrimeTol, applied to the
+     local record.
+   - The CrimeTol is the **ship's own govt's**, not the system owner's.
+     A high-tolerance ally ignores a -500 player in a strict owner's
+     system (c8, and c9 for nosy). A strict ally attacks in a lenient
+     owner's system (c12).
+
+Wave 1 found the always-attacks flag 0x0004 overrides all of this
+(Q2a).
+
+Notes and limits:
+
+- **c6.** The two nosy warships present at arrival sat on the planet
+  for about 25 s without attacking, then left. Two that jumped in later
+  attacked at once. Every other "yes" cell attacked within 10 s. A
+  repeat of c6/c7 is queued.
+- Every cell ran once. The yes/no split is clean: every "no" cell kept
+  a full shield for 85 s, and every "yes" cell lost 30-90% of it.
+- Alliances here were mutual (each govt lists the other's class).
+  One-way alliances are untested.
+- How a crime spreads across systems (which systems' records a kill
+  changes) is a separate question (catalogue R2).
+
+**NovaJS today.** Records are kept per GOVERNMENT, a sanctioned
+simplification of the original's per-system records. Every ship checks
+the player's record with its OWN govt, in every system:
+
+- `N/nova_plugin/reputation/govt_disposition.ts:97-103`
+  (`govtDispositionTo`, used by the AI at
+  `N/nova_plugin/npc/npc_decision.ts:355,385`);
+- `N/nova_plugin/reputation/iff_plugin.ts:109-112` (`shipDisposition`,
+  used for the brackets and radar through `combat/hostility.ts
+  styleForTarget`).
+
+Against the original this gets five cells wrong:
+
+- c4/c10/c15: hostile in a system G does not own. NovaJS would attack if
+  the player were criminal with G; the original doesn't.
+- c5/c7/c16/c17: NovaJS attacks anywhere once the player is criminal
+  with G (its home record); the original only does so locally.
+- c3: an ally does not care in NovaJS unless the player is criminal with
+  the ally itself.
+
+**Proposed fix (not applied).** Give both predicates the current system's
+owner govt O (`statusGovtOf(system govt)`, gövt 128 when independent):
+
+    enforces = G === O || alliedWith(G, O) || G.flags.nosy   // 0x0002
+    hostile  = enforces && recordWith(records, O) < -G.crimeTol
+
+In other words:
+
+- The record comes from the status govt O, which NovaJS's per-govt
+  records already use as "the record in this system".
+- The tolerance comes from G.
+- Keep the 0x0004/xenophobic/enemy tiers as they are.
+
+Per-govt records cannot express c2: a criminal in one of O's systems
+is criminal in all of them. That is the price of the existing
+simplification, not a new error.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-a14/<cell>/<run>/`.
+Each holds `recording.mp4`, `recording.events.json`, `hostility.json`, the
+Tab shots, `01-map.png` (legal status) and `pilot-after`.
+
+### U3: do outfit speed/accel/turn mods use the hull scale? (2026-11-23, wave 2)
+
+**Setup.** `scenarios/unit_probe.json` (14 s turn, 6 s thrust) with kit
+outfits oütf 611 Kit Speed Mod (ModType 8, +300), 612 Kit Accel Mod
+(ModType 7, +300) and 613 Kit Turn Mod (ModType 9, +100). Analysed with
+`analysis/motion.mjs` and `world_motion.mjs`.
+
+| pilot | hull | outfits | expected if same scale | measured |
+|---|---|---|---|---|
+| u3a | Probe A (Accel/Speed/Turn 300/300/10) | 1 of each | Turn 20 = 58.2°/s, Speed 600 = 261-265 px/s, Accel 600 = about 111 px/s² (wave 1, same tool) | **58.38°/s**, **264-269 px/s**, **114.7 px/s²** |
+| u3b | Probe B (150/600/30) | 2 Speed, 2 Turn | Turn 50 = 145.5°/s, Accel unchanged at 26 px/s² | **145.95°/s**, **30-31 px/s²** (6 s of thrust never reaches Speed 1200) |
+
+**Finding.** ModType 7 and 8 add to the hull's Accel and Speed in the
+same units. ModType 9 adds ModVal/10 hull Turn units ("100 = 30°/s", as
+the Bible says).
+
+**NovaJS matches.**
+- `P/parsers/outfit_parse.ts:168-177` uses `ShipSpeedConversionFactor`
+  and `ShipAccelerationConversionFactor`.
+- `outfit_parse.ts:159` uses `OutfitTurnRateConversionFactor` =
+  ship turn factor / 10 (`P/parsers/constants.ts:30`).
+
+No change needed. Confidence: high (two pilots, 1x and 2x mods).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-u3/{u3a,u3b}/*/`
+(`recording.mp4`, `motion.json`, `world_motion.json`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Sporadic exits.** About 1 run in 8 ends with the game exiting just
-  after Enter Ship (`e`), with no crash report. Runs that succeed on a
-  plain rerun are still reported as failed, so rerun them.
+  after Enter Ship (`e`), with no crash report. Since wave 2, `run`
+  detects this and retries the whole run (default 2 retries; README
+  "Retries").
+- **Lock and frame sync (wave 2).** Every driving command holds
+  `~/.config/novaref/lock`, so only one agent drives the old Mac at a
+  time. Every key, click and in-recording shot is stamped with the
+  recording frame it landed in (`log.jsonl` `frame-sync` lines,
+  `recording.events.json`). The game shows a key's effect 4-5 frames
+  (about 150 ms) after the stamp. See the README.
+- **Display sleep kills recordings.** A sleeping display has no
+  "Capture screen 0" device; `record start` now wakes it first.
 - **Plug-in not loaded.** Once, the game said the pilot referenced a
   plug-in that was not loaded. A rerun worked.
 - **Custom graphics crash the game.** A from-scratch shän crashed it on

@@ -1,0 +1,117 @@
+{
+ "name": "u9_explore",
+ "_comment": "U9 exploration: land with the autopilot (l l), accept the derelict mission, take off, target the derelict and try b; shots of every dialog. Pilot w2_u9c200.",
+ "pilot": {
+  "as": "novaref-u9"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "l wait 1000"
+  },
+  {
+   "shot": "cleared",
+   "window": true
+  },
+  {
+   "keys": "l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "b wait 900"
+  },
+  {
+   "shot": "board-0",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 900"
+  },
+  {
+   "shot": "after-escape",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 1500 up:Up wait 500"
+  },
+  {
+   "shot": "away-1",
+   "window": true
+  },
+  {
+   "keys": "b wait 900"
+  },
+  {
+   "shot": "board-1",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 900"
+  },
+  {
+   "shot": "after-escape-1",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 3000 up:Up wait 500"
+  },
+  {
+   "shot": "away-2",
+   "window": true
+  },
+  {
+   "keys": "b wait 900"
+  },
+  {
+   "shot": "board-2",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 900"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

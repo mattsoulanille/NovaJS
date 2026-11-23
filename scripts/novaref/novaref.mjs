@@ -16,6 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseFfmpegStart, probeFramePts, stepEntersShip, syncEvents } from "./frame_sync.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HELPER_LOCAL = path.join(HERE, "remote", "novaref_helper.py");
@@ -371,7 +372,7 @@ async function cmdKeys(args) {
     if (!seq.trim()) throw new NovarefError('usage: novaref keys "<sequence>"');
     const steps = parseKeys(seq, { hold, gap });
     const res = helper(["keys", JSON.stringify(steps)], { front: anyApp ? null : cfg.bundleId });
-    return { ok: true, cmd: "keys", events: res.events, sequence: seq };
+    return { ok: true, cmd: "keys", events: res.events, sequence: seq, t_host: res.t_host, events_t: res.events_t };
 }
 
 /** Converts --win (content-relative) coordinates to screen points. */
@@ -389,9 +390,10 @@ async function cmdClick(args) {
     const anyApp = takeFlag(args, "--any-app");
     if (args.length < 2) throw new NovarefError("usage: novaref click x y [--win] [--right] [--double]");
     const [x, y] = toScreen(args.slice(0, 2).map(Number), rel);
-    helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1"],
+    const res = helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1"],
         { front: anyApp ? null : cfg.bundleId });
-    return { ok: true, cmd: "click", screen: [x, y], win: rel, button: right ? "right" : "left" };
+    return { ok: true, cmd: "click", screen: [x, y], win: rel, button: right ? "right" : "left",
+        t_host: res.t_host, events_t: res.events_t };
 }
 
 async function cmdDrag(args) {
@@ -400,8 +402,8 @@ async function cmdDrag(args) {
     const ms = takeOpt(args, "--ms") ?? "400";
     if (args.length < 4) throw new NovarefError("usage: novaref drag x1 y1 x2 y2 [--win] [--ms N]");
     const pts = toScreen(args.slice(0, 4).map(Number), rel);
-    helper(["drag", ...pts.map(String), "20", ms], { front: anyApp ? null : cfg.bundleId });
-    return { ok: true, cmd: "drag", from: pts.slice(0, 2), to: pts.slice(2), win: rel };
+    const res = helper(["drag", ...pts.map(String), "20", ms], { front: anyApp ? null : cfg.bundleId });
+    return { ok: true, cmd: "drag", from: pts.slice(0, 2), to: pts.slice(2), win: rel, t_host: res.t_host, events_t: res.events_t };
 }
 
 async function cmdMove(args) {
@@ -992,28 +994,43 @@ async function cmdRecord(args) {
         // The `&` must cover ffmpeg alone (braces): backgrounding a whole
         // `a && b && ffmpeg` list forks a subshell that keeps the ssh
         // channel open, and the ssh call never returns.
+        // -loglevel info (without per-frame stats) makes ffmpeg print the
+        // input's "start:" -- the host-clock time (mach_absolute_time) of
+        // the first captured frame. The helper stamps every input event on
+        // the same clock, so event time - start = time in the recording.
+        // A sleeping display has no "Capture screen 0" device (ffmpeg:
+        // "Invalid device index"): wake it first.
+        ssh("caffeinate -u -t 1 >/dev/null 2>&1; sleep 1");
         ssh(`mkdir -p ${rq(REC_DIR())} && cd ${rq(REC_DIR())} && ` +
-            `{ nohup ${ff} -hide_banner -loglevel error -y -f avfoundation -pixel_format nv12 ` +
+            `{ nohup ${ff} -hide_banner -nostats -loglevel info -y -f avfoundation -pixel_format nv12 ` +
             `-capture_cursor 1 -framerate ${shq(fps)} -i 1:none ${crop}-c:v h264_videotoolbox -allow_sw 1 -b:v 8M ` +
             `-movflags +frag_keyframe+empty_moov ${shq(name)} > ffmpeg.log 2>&1 < /dev/null & } ; ` +
             `echo $! > ${pidFile}; echo ${shq(remote)} > ${fileRec}`);
         await sleep(1500);
         const alive = ssh(`kill -0 "$(cat ${pidFile})" 2>/dev/null && echo yes || (cat ${rq(REC_DIR())}/ffmpeg.log; true)`).stdout.trim();
         if (alive !== "yes") throw new NovarefError("ffmpeg exited immediately", { log: alive });
-        return { ok: true, cmd: "record start", remote: "~/" + remote };
+        let startHost = null;
+        for (let i = 0; i < 10 && startHost === null; i++) {
+            startHost = parseFfmpegStart(ssh(`cat ${rq(REC_DIR())}/ffmpeg.log`, { allowFail: true }).stdout);
+            if (startHost === null) await sleep(500);
+        }
+        if (startHost !== null) ssh(`echo ${startHost} > ${fileRec}.start`);
+        return { ok: true, cmd: "record start", remote: "~/" + remote, start_host: startHost, fps: Number(fps) };
     }
     if (sub === "stop") {
         const out = args[0];
-        const st = ssh(`echo "$(cat ${pidFile} 2>/dev/null)"; echo "$(cat ${fileRec} 2>/dev/null)"`).stdout.split("\n");
+        const st = ssh(`echo "$(cat ${pidFile} 2>/dev/null)"; echo "$(cat ${fileRec} 2>/dev/null)"; ` +
+            `echo "$(cat ${fileRec}.start 2>/dev/null)"`).stdout.split("\n");
         const pid = st[0].trim(), remote = (st[1] || "").trim();
+        const startHost = Number(st[2]) || null;
         if (!pid || !remote) throw new NovarefError("no recording in progress");
         ssh(`kill -INT ${shq(pid)} 2>/dev/null; for i in $(seq 1 40); do kill -0 ${shq(pid)} 2>/dev/null || break; sleep 0.25; done; ` +
-            `kill -0 ${shq(pid)} 2>/dev/null && kill -TERM ${shq(pid)}; rm -f ${pidFile} ${fileRec}`, { allowFail: true });
+            `kill -0 ${shq(pid)} 2>/dev/null && kill -TERM ${shq(pid)}; rm -f ${pidFile} ${fileRec} ${fileRec}.start`, { allowFail: true });
         const dest = path.resolve(out ?? path.basename(remote));
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         scpFrom(remote, dest);
         ssh(`rm -f ${rq(remote)}`, { allowFail: true });
-        return { ok: true, cmd: "record stop", path: dest, bytes: fs.statSync(dest).size };
+        return { ok: true, cmd: "record stop", path: dest, bytes: fs.statSync(dest).size, start_host: startHost };
     }
     throw new NovarefError("usage: novaref record start [--fps N] | stop [out.mp4]");
 }
@@ -1058,7 +1075,10 @@ async function runStep(step, ctx) {
     if (step.shot !== undefined) {
         ctx.shotN++;
         const base = `${String(ctx.shotN).padStart(2, "0")}-${step.shot || "shot"}.png`;
-        return cmdShot([path.join(ctx.dir, base), ...(step.window ? ["--window"] : [])]);
+        // While recording, stamp the capture on the host clock too.
+        const t = ctx.rec ? helper(["clock"]).t_host : undefined;
+        const r = await cmdShot([path.join(ctx.dir, base), ...(step.window ? ["--window"] : [])]);
+        return t === undefined ? r : { ...r, events_t: [[t, "shot", base]] };
     }
     if (step.click) return cmdClick([...step.click.map(String), ...(step.win ? ["--win"] : []),
         ...(step.right ? ["--right"] : []), ...(step.double ? ["--double"] : [])]);
@@ -1073,14 +1093,21 @@ async function runStep(step, ctx) {
         const base = step.label ? `recording-${step.label}.mp4` : ctx.recN === 1 ? "recording.mp4" : `recording-${ctx.recN}.mp4`;
         return cmdRecord(["stop", path.join(ctx.dir, base)]);
     }
-    if (step.launch) return cmdLaunch(ctx.app ? ["--app", ctx.app] : [], { inRun: true });
+    if (step.launch) {
+        ctx.launched = true;
+        ctx.quitByStep = false;
+        return cmdLaunch(ctx.app ? ["--app", ctx.app] : [], { inRun: true });
+    }
     if (step.pull) {
         // Mid-run pilot snapshot (the game saves the pilot when it lands).
         const name = ctx.pilotName;
         if (!name) throw new NovarefError("pull step needs a scenario pilot");
         return cmdPilotsPull([name, path.join(ctx.dir, `pilot-${step.pull}`, name), "--raw"]);
     }
-    if (step.quit) return cmdQuit([]);
+    if (step.quit) {
+        ctx.quitByStep = true;
+        return cmdQuit([]);
+    }
     throw new NovarefError(`unknown step ${JSON.stringify(step)}`);
 }
 
@@ -1092,12 +1119,72 @@ async function runStep(step, ctx) {
 async function cmdRun(args) {
     const outRoot = takeOpt(args, "--out") ?? "novaref-results";
     const pilotOverride = takeOpt(args, "--pilot");
+    const retriesOpt = takeOpt(args, "--retries");
     const file = args[0];
-    if (!file) throw new NovarefError("usage: novaref run <scenario.json> [--out dir] [--pilot local-pilot]");
+    if (!file) throw new NovarefError("usage: novaref run <scenario.json> [--out dir] [--pilot local-pilot] [--retries N]");
     const sc = JSON.parse(fs.readFileSync(file, "utf8"));
+    // H2: a run whose game exits unexpectedly (the ~1-in-8 "exits right
+    // after Enter Ship" flake) is retried from scratch, up to N more times.
+    // Every attempt keeps its own results dir; the last one is returned.
+    const maxRetries = Number(retriesOpt ?? sc.retries ?? 2);
+    const attempts = [];
+    for (let attempt = 0; ; attempt++) {
+        const r = await runOnce(file, sc, { outRoot, pilotOverride, attempt });
+        attempts.push({ dir: r.dir, ok: r.ok, game_exited: !!r.game_exited, error: r.error ?? null });
+        if (!r.game_exited || attempt >= maxRetries || r.plugins_left?.length || r.quit === false) {
+            return { ...r, attempts };
+        }
+        log(`attempt ${attempt + 1}: EV Nova exited unexpectedly (${r.error}); retrying`);
+        await sleep(3000);
+    }
+}
+
+/**
+ * H3: while a recording runs, collects each step's host-clock event stamps
+ * (keys, clicks, shots) and returns the live video time of its first event;
+ * when the recording stops, maps every collected event onto the recording's
+ * frames (ffprobe pts) and logs a "frame-sync" line per step plus
+ * <recording>.events.json.
+ */
+function frameSyncStep(i, step, r, ctx, record) {
+    if (step.record === "start" && r?.ok) {
+        ctx.rec = { startHost: r.start_host, events: [] };
+        return { rec: { start_host: r.start_host } };
+    }
+    if (!ctx.rec) return {};
+    const evs = (r?.events_t ?? []).map(([host, kind, what]) => ({ step: i, kind, what, host }));
+    ctx.rec.events.push(...evs);
+    if (step.record === "stop" && r?.ok) {
+        const rec = ctx.rec;
+        ctx.rec = null;
+        const startHost = rec.startHost ?? r.start_host;
+        const pts = startHost != null ? probeFramePts(r.path) : null;
+        if (!pts) {
+            record({ phase: "frame-sync", recording: path.basename(r.path), error: startHost == null ? "no ffmpeg start time" : "ffprobe failed" });
+            return {};
+        }
+        const synced = syncEvents(rec.events, startHost, pts);
+        fs.writeFileSync(r.path.replace(/\.mp4$/, "") + ".events.json", JSON.stringify({
+            recording: path.basename(r.path), start_host: startHost, frames: pts.length,
+            duration_s: pts.at(-1) ?? 0, events: synced,
+        }, null, 1) + "\n");
+        const byStep = new Map();
+        for (const e of synced) {
+            if (!byStep.has(e.step)) byStep.set(e.step, []);
+            byStep.get(e.step).push({ kind: e.kind, what: e.what, video_t: e.video_t, frame: e.frame });
+        }
+        for (const [s, events] of byStep) record({ phase: "frame-sync", recording: path.basename(r.path), i: s, events });
+        return { rec: { frames: pts.length, events: synced.length } };
+    }
+    return evs.length && ctx.rec.startHost != null
+        ? { rec: { video_t: +(evs[0].host - ctx.rec.startHost).toFixed(3) } } : {};
+}
+
+async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
+    sc = structuredClone(sc);
     if (pilotOverride) sc.pilot = { ...(sc.pilot ?? {}), push: path.resolve(pilotOverride) };
     const name = (sc.name ?? path.basename(file, ".json")).replace(/[^\w.-]+/g, "_");
-    const dir = path.resolve(outRoot, `${timestamp()}-${name}`);
+    const dir = path.resolve(outRoot, `${timestamp()}-${name}${attempt ? `-retry${attempt}` : ""}`);
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(file, path.join(dir, "scenario.json"));
     const logPath = path.join(dir, "log.jsonl");
@@ -1159,6 +1246,7 @@ async function cmdRun(args) {
             const r = await cmdLaunch(["--app", appName], { inRun: true });
             record({ phase: "launch", result: r });
             if (!r.ok) throw new NovarefError("launch failed", r);
+            ctx.launched = true;
         }
         if (sc.pilot && sc.pilot.open !== false) {
             const pname = sc.pilot.as ?? sc.pilot.name ?? path.basename(sc.pilot.push ?? "");
@@ -1170,15 +1258,34 @@ async function cmdRun(args) {
         }
         for (const [i, step] of (sc.steps ?? []).entries()) {
             const r = await runStep(step, ctx);
-            record({ phase: "step", i, step, result: r });
+            const sync = frameSyncStep(i, step, r, ctx, record);
+            record({ phase: "step", i, step, result: r, ...sync });
             if (!r.ok) throw new NovarefError(`step ${i} failed`, r);
+            // The ~1-in-8 flake: the game quits right after Enter Ship.
+            // Check at once after an `e` step (later steps would otherwise
+            // fail with a less obvious "not running").
+            if (stepEntersShip(step) && !novaPids().length) {
+                throw new NovarefError(`EV Nova exited after Enter Ship (step ${i})`, { game_exited: true, step: i });
+            }
         }
     } catch (e) {
         failed = { error: e.message, ...e.extra };
+        // A game that vanished while the scenario still needed it (not
+        // quit by a step) is the retryable kind of failure.
+        if (ctx.launched && !ctx.quitByStep && !novaPids().length) failed.game_exited = true;
         record({ phase: "error", ...failed });
         try { await runStep({ shot: "error" }, ctx); } catch { /* best effort */ }
+        // Never leave a recording running (the next run's pre-flight would
+        // refuse); keep what it captured.
+        if (ctx.rec || ssh(`test -f ${rq(REC_DIR())}/ffmpeg.pid && echo y || true`).stdout.trim() === "y") {
+            try {
+                const r = await cmdRecord(["stop", path.join(dir, "recording-aborted.mp4")]);
+                record({ phase: "record-stop-after-error", result: r });
+            } catch (e2) { record({ phase: "record-stop-after-error", error: e2.message }); }
+            ctx.rec = null;
+        }
     }
-    const results = { ok: !failed, cmd: "run", dir, snapshot };
+    const results = { ok: !failed, cmd: "run", dir, snapshot, ...(failed?.game_exited ? { game_exited: true } : {}) };
     if (sc.quit !== false) {
         let q = await cmdQuit([]);
         record({ phase: "quit", result: q });
@@ -1250,10 +1357,51 @@ const USAGE = `novaref — drive the original EV Nova on the reference Mac
   app list | setup-minimal <data.ndat>
   recover [--baseline novaref/backups/<ts>-manual]   reconcile after a dead run
   record start [--fps N] [--window] | record stop [out.mp4]
-  run <scenario.json> [--out dir] [--pilot local-pilot]
+  run <scenario.json> [--out dir] [--pilot local-pilot] [--retries N]
+  lock [status]                                    who holds the drive lock
+Every command that drives the old Mac holds an exclusive lock (${"~/.config/novaref/lock"});
+--lock-wait <s> (or NOVAREF_LOCK_WAIT) waits for it instead of failing.
 config: ${CONFIG_PATH}`;
 
+/** Commands that never drive the old Mac, so they run without the lock. */
+const LOCK_FREE = new Set(["status", "info", "pilot-make", "plugin-make", "lock", undefined]);
+const LOCK_PATH = expandHome(cfg.lockPath ?? "~/.config/novaref/lock");
+
+async function cmdLock(args) {
+    const { lockStatus } = await import("./lock.mjs");
+    const sub = args[0] ?? "status";
+    if (sub !== "status") throw new NovarefError("usage: novaref lock [status]");
+    return { ok: true, cmd: "lock", ...lockStatus({ lockPath: LOCK_PATH }) };
+}
+
 async function main(argv) {
+    // --lock-wait <s> (any position) waits that long for another agent's
+    // command to finish instead of failing at once.
+    argv = [...argv];
+    const waitS = Number(takeOpt(argv, "--lock-wait") ?? process.env.NOVAREF_LOCK_WAIT ?? 0);
+    const [cmd] = argv;
+    if (LOCK_FREE.has(cmd)) return dispatch(argv);
+    const { acquireLock } = await import("./lock.mjs");
+    let lock;
+    try {
+        lock = await acquireLock({ lockPath: LOCK_PATH, cmd: argv.join(" ").slice(0, 200), waitMs: waitS * 1000 });
+    } catch (e) {
+        if (!e.holder) throw e;
+        return { ok: false, cmd, error: e.message, lock_holder: e.holder };
+    }
+    if (lock.tookOverStale) log(`took over a stale lock: ${JSON.stringify(lock.tookOverStale)}`);
+    const onSignal = (sig) => { lock.release(); process.exit(sig === "SIGINT" ? 130 : 143); };
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+    process.once("exit", lock.release);
+    try {
+        return await dispatch(argv);
+    } finally {
+        lock.release();
+    }
+}
+
+async function dispatch(argv) {
     const [cmd, ...args] = argv;
     switch (cmd) {
         case "status": return cmdStatus();
@@ -1275,6 +1423,7 @@ async function main(argv) {
         case "record": return cmdRecord(args);
         case "run": return cmdRun(args);
         case "info": return info();
+        case "lock": return cmdLock(args);
         default:
             process.stderr.write(USAGE + "\n");
             return { ok: false, cmd: cmd ?? null, error: "unknown command" };

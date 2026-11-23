@@ -77,7 +77,39 @@ SOURCE = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
 TAP = Quartz.kCGHIDEventTap
 
 
+def _host_clock():
+    """Seconds on the host clock (mach_absolute_time). ffmpeg's avfoundation
+    input stamps captured frames on the same clock and prints the first
+    one as "start:", so an event's host time minus that start is its time
+    in the recording."""
+    import ctypes
+
+    class TB(ctypes.Structure):
+        _fields_ = [('numer', ctypes.c_uint32), ('denom', ctypes.c_uint32)]
+    lib = ctypes.CDLL('/usr/lib/libSystem.dylib')
+    lib.mach_absolute_time.restype = ctypes.c_uint64
+    tb = TB()
+    lib.mach_timebase_info(ctypes.byref(tb))
+    scale = tb.numer / float(tb.denom) / 1e9
+    return lambda: lib.mach_absolute_time() * scale
+
+
+host_now = _host_clock()
+# (host time, "down"/"up"/"click"/..., key or "x,y") for every input event
+# this invocation posted; returned as "events_t" so a run can stamp each
+# key with the recording frame it landed in.
+EVENT_TIMES = []
+
+
+def stamp(kind, what):
+    EVENT_TIMES.append([round(host_now(), 4), kind, what])
+
+
 def out(obj):
+    obj = dict(obj)
+    obj['t_host'] = round(host_now(), 4)
+    if EVENT_TIMES and obj.get('ok'):
+        obj['events_t'] = EVENT_TIMES
     print(json.dumps(obj, sort_keys=True))
     sys.stdout.flush()
 
@@ -112,6 +144,7 @@ def press(name, mods, hold_ms):
         code, flag = MOD_KEYS[m.lower()]
         flags |= flag
         mod_codes.append(code)
+    stamp('press', '+'.join(list(mods) + [name]))
     press_code(keycode(name), flags, mod_codes, hold_ms)
 
 
@@ -182,11 +215,13 @@ def cmd_keys(spec):
             sleep_ms(st['wait'])
             continue
         if 'text' in st:
+            stamp('text', st['text'][:40])
             type_text(st['text'], min(hold, 30), min(gap, 30))
             posted += len(st['text'])
         elif 'down' in st or 'up' in st:
             down = 'down' in st
             name = st['down'] if down else st['up']
+            stamp('down' if down else 'up', name)
             n = name.lower()
             if n in MOD_KEYS:
                 code, flag = MOD_KEYS[n]
@@ -235,6 +270,8 @@ def cmd_click(x, y, button='left', count=1, hold_ms=60):
             ev = mouse(kind, x, y, btn)
             Quartz.CGEventSetIntegerValueField(
                 ev, Quartz.kCGMouseEventClickState, i + 1)
+            if kind == down_t:
+                stamp('click', '%s,%s' % (x, y))
             Quartz.CGEventPost(TAP, ev)
             sleep_ms(hold_ms if kind == down_t else 40)
     out({'ok': True, 'cmd': 'click', 'x': x, 'y': y, 'button': button,
@@ -245,6 +282,7 @@ def cmd_drag(x1, y1, x2, y2, steps=20, ms=400):
     down_t, up_t, drag_t, btn = BUTTONS['left']
     Quartz.CGEventPost(TAP, mouse(Quartz.kCGEventMouseMoved, x1, y1, btn))
     sleep_ms(40)
+    stamp('drag', '%s,%s' % (x1, y1))
     Quartz.CGEventPost(TAP, mouse(down_t, x1, y1, btn))
     sleep_ms(60)
     for i in range(1, steps + 1):
@@ -351,6 +389,8 @@ def main(argv):
                      int(args[5]) if len(args) > 5 else 400)
         elif cmd == 'move':
             cmd_move(float(args[0]), float(args[1]))
+        elif cmd == 'clock':
+            out({'ok': True, 'cmd': 'clock'})
         else:
             out({'ok': False, 'error': 'unknown helper command %s' % cmd})
             return 2

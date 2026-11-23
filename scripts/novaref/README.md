@@ -118,6 +118,27 @@ key.
   coordinates straight off a window shot. In fullscreen mode (a window that
   covers the screen) the title-bar offset is 0.
 
+## The drive lock (one agent at a time)
+
+Every command that drives the old Mac (everything except `status`,
+`info`, `lock`, `pilot-make` and `plugin-make`) holds an exclusive lock
+file on the MacBook, `~/.config/novaref/lock` (config key `lockPath`).
+The file holds `{pid, owner, host, cmd, start}`; `owner` is
+`$NOVAREF_OWNER` or the caller's working directory, so set
+`NOVAREF_OWNER=<agent name>` to make it readable.
+
+- A second command fails at once with `ok:false` and `lock_holder`, unless
+  you pass `--lock-wait <seconds>` (or set `NOVAREF_LOCK_WAIT`), which
+  waits for the holder to finish.
+- A lock whose pid is dead, or reused by something that isn't novaref, is
+  stale and is taken over automatically (logged to stderr).
+- `novaref lock` shows the current holder and whether it is held or stale.
+- A `run` holds the lock for its whole duration, so nobody can slip in
+  between its steps.
+
+The specs are `node --test scripts/novaref/test/*.test.mjs` (lock, frame
+sync, flake detection; they never touch the old Mac).
+
 ## Safety rules (maintainer rulings)
 
 - **Pilots are copies.** `push` copies the whole Pilots folder (with
@@ -244,6 +265,46 @@ copies the file back and deletes it from the old Mac. To crop to the game,
 run ffmpeg on the MacBook, for example
 `ffmpeg -i rec.mp4 -vf crop=832:604:544:248 game.mp4` (take the values from
 `status`'s `nova_content`).
+
+`record start` wakes the display first: a sleeping display has no
+"Capture screen 0" device and ffmpeg fails with "Invalid device index".
+
+### Input/frame sync (which frame did a key land in?)
+
+The remote helper stamps every key press, `down:`/`up:`, click, drag and
+(during a recording) screenshot with the old Mac's **host clock**
+(`mach_absolute_time`). ffmpeg's avfoundation input stamps captured frames
+on the same clock and logs the first one ("start:"); `record start`
+returns it as `start_host`. The mp4 keeps the capture's variable frame
+timing, so an event's time in the video is `host - start_host`.
+
+In a `run`:
+
+- every step logged while recording carries `rec.video_t` (seconds into
+  the recording of its first event);
+- after `record stop`, the run probes the mp4's per-frame pts (ffprobe)
+  and appends one `{"phase":"frame-sync","i":<step>,"events":[{kind, what,
+  video_t, frame}]}` line per step to `log.jsonl`, and writes
+  `recording.events.json` with every event. `frame` is the index of the
+  frame on screen when the event was posted, counted the way ffmpeg
+  decodes the file (what `analysis/*.mjs` call a frame).
+
+Checked on 2026-11-23 against a map toggle: `m` stamped at frames 56 and
+163, the map visibly opened at 61 and closed at 167. The game itself takes
+4-5 frames (about 150 ms) to show a key's effect, so the stamps are exact
+to the frame and the remaining gap is the game's input latency.
+
+### Retries (the "exits right after Enter Ship" flake)
+
+About one run in eight ends with EV Nova quitting just after `e`, with no
+crash report. `run` checks the game is still running right after any step
+that presses `e`. If the game has gone when the scenario still needed it
+(not quit by a `quit` step), the attempt is marked `game_exited`, cleaned
+up like any failed run (quit, plug-ins out, Last Pilot and prefs restored,
+a running recording stopped and kept as `recording-aborted.mp4`) and run
+again from scratch in a new `<ts>-<name>-retry<N>/` dir. `--retries N`
+(or the scenario's `"retries"`) bounds it; the default is 2. The result
+lists every attempt under `attempts`.
 
 ## EV Nova key facts (this install)
 

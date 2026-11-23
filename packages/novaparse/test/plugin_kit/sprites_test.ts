@@ -31,6 +31,18 @@ describe("plugin_kit disc sprites", () => {
         expect(opaque).toBeLessThan(400);
     });
 
+    it("can draw a small disc inside a large frame", () => {
+        const small = discShipGraphics(2001, [0, 31, 0], 96, 36, 22);
+        const sheet = new RledResource(resource("rlëD", 2001, small.rled), getEmptyNovaResources());
+        expect(sheet.size).toEqual([96, 96]);
+        const f = sheet.frames[0];
+        let opaque = 0;
+        for (let i = 3; i < f.data.length; i += 4) if (f.data[i] !== 0) opaque++;
+        // Same diameter-22 disc as the 24 px sprite, inside a 96 px frame.
+        expect(opaque).toBeGreaterThan(360);
+        expect(opaque).toBeLessThan(400);
+    });
+
     it("has a shän whose base image is the sheet", () => {
         const s = new ShanResource(resource("shän", 700, shan), getEmptyNovaResources());
         expect(s.images.baseImage.ID).toBe(2000);

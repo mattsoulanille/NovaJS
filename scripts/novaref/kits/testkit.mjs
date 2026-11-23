@@ -53,8 +53,8 @@ function ship(id, name, clone, set) {
  * on all 36 frames: find it in a recording by colour, its centroid is the
  * ship's position (analysis/discs.mjs). rlëD ids 2000+.
  */
-function discShip(id, name, rledId, rgb, set) {
-    const g = discShipGraphics(rledId, rgb, 24, 36);
+function discShip(id, name, rledId, rgb, set, size = 24, diameter = size - 2) {
+    const g = discShipGraphics(rledId, rgb, size, 36, diameter);
     return [
         { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
         // The stock Shuttle's shän with only its base sprite swapped (one
@@ -281,5 +281,280 @@ export default {
         ...["red", "green", "blue", "yellow", "magenta", "cyan"].flatMap((c, i) =>
             discShip(721 + i, `Kit Disc ${c[0].toUpperCase()}${c.slice(1)}`, 1971 + i, DISC_COLOURS[c], { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000 })),
         ...misn(969, "Kit B bomb raiders", 9010, { shipCount: -1, auxShipCount: 2, auxShipDude: 609, auxShipSyst: -1 }),
+
+        ...a14Resources(),
+        ...wave2Resources(),
     ],
 };
+
+/**
+ * Wave-2 experiments (docs/reference_experiments.md):
+ *
+ *  U3  oütf 611 Kit Speed Mod (ModType 8, +300), 612 Kit Accel Mod (7, +300),
+ *      613 Kit Turn Mod (9, +100).
+ *  U9  gövt 378 Kit Derelict Govt (flags 0x0800: ships start disabled);
+ *      shïp 714 Kit Derelict; düde 610; mïsn 970 (bit 9011) puts one at
+ *      Kit Port (ShipStart -1). shïp 715-718 Kit Crawler 50/100/150/200:
+ *      inertialess player hulls of known top speed for the boarding gate.
+ *  F1n flët 1000 Kit Disc Fleet (lead 720 white, one each of 721-724) of
+ *      govt 363, linked to sÿst 2128 Kit Fleet Range (no other traffic).
+ *  K9  sÿst 2129 Kit IFF Range (owner 370): AI 1 green discs (722) and AI 3
+ *      red warships (730) of always-hostile govt 362; AI 1 blue discs (723)
+ *      and AI 3 magenta discs (725, armed) of 370, hostile by record.
+ *  E   oütf 614 Kit Fighter Bay (wëap 366 launches Kit Fighter 705) and
+ *      615 its ammo (a fighter).
+ */
+/**
+ * M1-M7: a linked map region around sÿst 2140 Map Hub at (-700, 400), far
+ * from the stock map (x -358..587, y -330..300) and the other kit systems.
+ *
+ *   id    name        pos          owner              links
+ *   2140  Map Hub     (-700, 400)  379 Major Red      2141 2142 2143 2144 2145
+ *   2141  Map South   (-700, 460)  379 Major Red      2140   (90 deg, 60)
+ *   2142  Map NE      (-675, 357)  380 Major Blue     2140 2144? no: 2140 (300 deg, ~50)
+ *   2143  Map East    (-660, 400)  380 Major Blue     2140 2146 (0 deg, 40)  unlandable stellar
+ *   2144  Map SW      (-750, 450)  380 Major Blue     2140   (135 deg, ~71)
+ *   2145  Map WSW     (-728, 390)  381 Minor Green    2140   (200 deg, ~30)  gövt Flags2 0x0002
+ *   2146  Map Void    (-620, 400)  379 Major Red      2143 2147 no stellar (uninhabited)
+ *   2147  Map Far     (-580, 400)  382 Borderless     2146 2148  gövt Flags2 0x0004
+ *   2148  Map Island  (-580, 440)  379 Major Red      2147
+ *   2149  Map Lone    (-640, 470)  379 Major Red      none (an explored, unlinked system)
+ * Angles are screen angles (0 = east, 90 = south, y down). Ids are
+ * deliberately not in angle or distance order (M7 Tab cycling).
+ */
+function mapRegion() {
+    const out = [];
+    out.push(govt(379, "Map Major Red", { color: 0xff0000 }));
+    out.push(govt(380, "Map Major Blue", { color: 0x0000ff }));
+    out.push(govt(381, "Map Minor Green", { color: 0x00ff00, flags2: 0x0002 }));
+    out.push(govt(382, "Map Borderless", { color: 0xffff00, flags2: 0x0004 }));
+    const sys = [
+        [2140, "Map Hub", -700, 400, 379, [2141, 2142, 2143, 2144, 2145], true],
+        [2141, "Map South", -700, 460, 379, [2140], true],
+        [2142, "Map NE", -675, 357, 380, [2140], true],
+        [2143, "Map East", -660, 400, 380, [2140, 2146], "unlandable"],
+        [2144, "Map SW", -750, 450, 380, [2140], true],
+        [2145, "Map WSW", -728, 390, 381, [2140], true],
+        [2146, "Map Void", -620, 400, 379, [2143, 2147], false],
+        [2147, "Map Far", -580, 400, 382, [2146, 2148], true],
+        [2148, "Map Island", -580, 440, 379, [2147], true],
+        [2149, "Map Lone", -640, 470, 379, [], true],
+    ];
+    for (const [id, name, x, y, g, links, port] of sys) {
+        const s = system(id, name, x, y, g, port ? [id] : []);
+        s.set = { ...s.set, links: [...links, ...none16].slice(0, 16) };
+        out.push(s);
+        // spöb 2140-2149 (spöb ids 2140+ are free; sÿst-less ids skip).
+        if (port) out.push(spob(id, `${name} Port`, 0, 0, 138, { flags: port === "unlandable" ? 0x02 : 0x43 }));
+    }
+    return out;
+}
+
+/**
+ * Jamming (J-series). Guided missiles (Speed 600, 10 s life, reload 15
+ * frames, 1 damage, GuidedTurn 60) that differ only in JamVuln1 and Seeker:
+ *   wëap 375 JamM V100 (vuln 100)      376 JamM V50 (vuln 50)
+ *        377 JamM TurnAway (0x0010, vuln 100)
+ *        378 JamM Parent (0x8000, vuln 100)
+ *        379 JamM Decoy (0x0002, vuln 0)   380 JamM Plain (vuln 0)
+ *        381 JamM Pass (0x0001, vuln 0)
+ *   oütf 616-622 the launchers for 375-381; 623 Kit Jammer 25 (ModType 33,
+ *        +25 type-1 jamming).
+ *   shïp 732-736 Jam Target J0/J25/J50/J75/J100: immobile, shield 0, armor
+ *        100 (one hit = 1% on the target panel), carrying 0-4 Kit Jammer 25.
+ *   mïsn 971-975 (bits 9012-9016) put one at Kit Port (ShipStart -1).
+ *   sÿst 2132 Kit Rock Range (16 asteroids, spöb 2132 Kit Rock Port);
+ *        mïsn 976 (bit 9017, offered at Kit Rock Port) puts a J0 target there.
+ */
+function jammingKit() {
+    const out = [];
+    const jm = (id, name, vuln, seeker) => weap(id, name, 134, {
+        reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 0, blastRadius: 0, flags: 0,
+    });
+    out.push(jm(375, "JamM V100", 100, 0), jm(376, "JamM V50", 50, 0), jm(377, "JamM TurnAway", 100, 0x0010),
+        jm(378, "JamM Parent", 100, 0x8000), jm(379, "JamM Decoy", 0, 0x0002), jm(380, "JamM Plain", 0, 0),
+        jm(381, "JamM Pass", 0, 0x0001));
+    for (let i = 0; i < 7; i++) out.push(gun(616 + i, `JamM Launcher ${375 + i}`, 375 + i));
+    const jammer = gun(623, "Kit Jammer 25", 0);
+    jammer.set = { ...jammer.set, modType: 33, modVal: 25, max: 8 };
+    out.push(jammer);
+    for (let k = 0; k <= 4; k++) {
+        out.push(...ship(732 + k, `Jam Target J${25 * k}`, 136, {
+            armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
+            outfits: [k ? 623 : -1, -1, -1, -1], outfitCounts: [k, 0, 0, 0],
+        }));
+        out.push(dude(615 + k, `Jam Target J${25 * k}`, 1, 363, 732 + k));
+        out.push(...misn(971 + k, `Kit J target J${25 * k}`, 9012 + k, { shipCount: 1, shipDude: 615 + k, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    }
+    const rock = system(2132, "Kit Rock Range", -900, -620, 363, [2132]);
+    rock.set = { ...rock.set, asteroids: 16, asteroidTypes: 0xffff };
+    out.push(rock, spob(2132, "Kit Rock Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(976, "Kit J rock target", 9017, { availStel: 2132, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    return out;
+}
+
+/**
+ * AI states (A-series): one neutral (govt 363) subject per AI type, armed
+ * with two Kit Raider Guns (20 dmg), spawned beside Kit Port by mïsn
+ * 977-980 (bits 9018-9021) for AI 1-4; mïsn 981 (bit 9022) spawns an AI 3
+ * subject of gövt 383 Kit Retreat Govt (flags 0x0010: warships retreat
+ * below 25% shield). shïp 737 AI Subject (clone of the Kit Raider hull,
+ * 1000/1000 shield/armor, Speed 300).
+ */
+function aiKit() {
+    const out = [];
+    out.push(govt(383, "Kit Retreat Govt", { flags: 0x0010 }));
+    out.push(...ship(737, "AI Subject", 149, {
+        armor: 1000, shield: 1000, accel: 300, speed: 300, turn: 30,
+        weapons: [367, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 1, strength: 50, crew: 10,
+    }));
+    for (let ai = 1; ai <= 4; ai++) {
+        out.push(dude(629 + ai, `AI Subject ${ai}`, ai, 363, 737));
+        out.push(...misn(976 + ai, `Kit AI ${ai} subject`, 9017 + ai, { shipCount: 1, shipDude: 629 + ai, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    }
+    out.push(dude(634, "AI Subject 3 retreat", 3, 383, 737));
+    out.push(...misn(981, "Kit AI 3 retreat subject", 9022, { shipCount: 1, shipDude: 634, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    return out;
+}
+
+function wave2Resources() {
+    const out = [];
+    const mod = (id, name, modType, modVal) => {
+        const o = gun(id, name, 0);
+        o.set = { ...o.set, modType, modVal };
+        return o;
+    };
+    out.push(mod(611, "Kit Speed Mod", 8, 300), mod(612, "Kit Accel Mod", 7, 300), mod(613, "Kit Turn Mod", 9, 100));
+
+    out.push(govt(378, "Kit Derelict Govt", { flags: 0x0800 }));
+    out.push(...ship(714, "Kit Derelict", 138, { armor: 1000, shield: 1000, ai: 1, strength: 10, crew: 10 }));
+    out.push(dude(610, "Kit Derelict", 1, 378, 714));
+    out.push(...misn(970, "Kit U9 derelict", 9011, { shipCount: 1, shipDude: 610, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    [50, 100, 150, 200].forEach((sp, i) => out.push(...ship(715 + i, `Kit Crawler ${sp}`, 135, {
+        accel: 2000, speed: sp, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
+    })));
+
+    out.push(system(2128, "Kit Fleet Range", -900, -700, 363, [2128, 2130]));
+    out.push(spob(2128, "Kit Fleet Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(spob(2130, "Kit Fleet Market", 1200, 0, 138, { flags: 0x43 }));
+    out.push({
+        type: "flët", id: 1000, name: "Kit Disc Fleet", clone: "flët:128",
+        set: {
+            "@0:i16": 720, "@2:i16x4": [721, 722, 723, 724], "@10:i16x4": [1, 1, 1, 1], "@18:i16x4": [1, 1, 1, 1],
+            "@26:i16": 363, "@28:i16": 2128, "@30:str256": "", "@286:i16": -1, "@288:u16": 0,
+        },
+    });
+
+    out.push(system(2129, "Kit IFF Range", -900, -660, 370, [2131]));
+    out.push(spob(2131, "Kit IFF Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(dude(611, "Kit K9 hostile-govt traders", 1, 362, 722));
+    out.push(dude(612, "Kit K9 hostile-govt warships", 3, 362, 730));
+    out.push(dude(613, "Kit K9 record traders", 1, 370, 723));
+    out.push(...discShip(731, "Kit Disc Magenta Armed", 1981, DISC_COLOURS.magenta, {
+        accel: 400, speed: 400, turn: 40, armor: 2000, shield: 2000, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [374, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+        ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0,
+    }));
+    out.push(dude(614, "Kit K9 record warships", 3, 370, 731));
+    const k9 = out.find((r) => r.type === "sÿst" && r.id === 2129);
+    k9.set = { ...k9.set, dudes: [611, 612, 613, 614, -1, -1, -1, -1], dudeProbs: [25, 25, 25, 25, 0, 0, 0, 0], avgShips: 6 };
+
+    // F1b: does the escort slot spacing scale with hull size? 96 px discs:
+    // shïp 740 Kit Big Leader (white, like 720), 741-744 Kit Big Red/Green/
+    // Blue/Yellow (like 721-724); 745 Kit Long Leader = 720 with shïp
+    // Length 200 (sprite unchanged).
+    out.push(...discShip(740, "Kit Big Leader", 1982, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 }, 96));
+    ["red", "green", "blue", "yellow"].forEach((c, i) => out.push(...discShip(741 + i, `Kit Big ${c[0].toUpperCase()}${c.slice(1)}`, 1983 + i, DISC_COLOURS[c],
+        { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000 }, 96)));
+    out.push(...discShip(745, "Kit Long Leader", 1987, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0, length: 200 }));
+    // F1b follow-up: two more leader sizes (48, 160 px) to fit the formula.
+    out.push(...discShip(746, "Kit Mid Leader", 1988, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 }, 48));
+    out.push(...discShip(747, "Kit Huge Leader", 1989, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 }, 160));
+    // 748: a 12 px leader; 749: a 24 px disc drawn inside a 96 px frame
+    // (frame size vs visible size).
+    const leaderSet = { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 };
+    out.push(...discShip(748, "Kit Tiny Leader", 1990, DISC_COLOURS.white, leaderSet, 12, 10));
+    out.push(...discShip(749, "Kit Framed Leader", 1991, DISC_COLOURS.white, leaderSet, 96, 22));
+    out.push(...mapRegion());
+    out.push(...jammingKit());
+    out.push(...aiKit());
+
+    out.push(gun(614, "Kit Fighter Bay", 366));
+    out.push({ type: "oütf", id: 615, name: "Kit Fighter", clone: "oütf:130", set: { ...gun(615, "Kit Fighter", 366).set, modType: 3, modVal: 366, max: 8 } });
+    return out;
+}
+
+/**
+ * A14: which legal record decides an NPC's hostility to the player? One
+ * system per matrix cell, each spawning only warships (red disc hulls,
+ * AI 3, a weak 5-damage turret) of ONE government via sÿst dudes. The
+ * pilot starts beside the system's only stellar with legal records set
+ * per system (EV Nova keeps them per sÿst). See docs/reference_experiments.md.
+ *
+ *  gövt 370 Owner   class 70, allied with class 71, CrimeTol 10
+ *  gövt 371 Ally    class 71, allied with class 70, CrimeTol 10
+ *  gövt 372 Unrel   no relations, CrimeTol 10
+ *  gövt 373 Nosy    flags 0x0002, CrimeTol 10
+ *  gövt 374 AllyHi  class 71, allied with class 70, CrimeTol 10000
+ *  gövt 375 NosyHi  flags 0x0002, CrimeTol 10000
+ *  gövt 376 OwnerHi class 73, allied with class 74, CrimeTol 10000
+ *  gövt 377 AllyLo  class 74, allied with class 73, CrimeTol 10
+ *  sÿst 2110 own (370 ships, owner 370)    2111 own2 (owner 370, empty)
+ *       2112 ally (371 in 370's)  2113 unrel (372 in 370's)  2114 nosy (373 in 370's)
+ *       2115 allyHi (374 in 370's)  2116 nosyHi (375 in 370's)
+ *       2117 indep-unrel (372, no owner)  2118 indep-nosy (373, no owner)
+ *       2119 hiOwner-allyLo (377 in 376's)  2120 hiOwner-self (376 in 376's)
+ *       2121-2125 empty homes of 371, 372, 373, 374, 375
+ *       2126 interceptors (AI 4) of 372 in 370's; 2127 AI 4 of 373 in 370's
+ *  spöb 2110-2127 one landable stellar at (0,0) in each.
+ */
+function a14Resources() {
+    const out = [];
+    const g = (id, name, set) => out.push(govt(id, name, { maxOdds: 1000, crimeTol: 10, ...set }));
+    g(370, "A14 Owner", { classes: [70, -1, -1, -1], allies: [71, -1, -1, -1] });
+    g(371, "A14 Ally", { classes: [71, -1, -1, -1], allies: [70, -1, -1, -1] });
+    g(372, "A14 Unrel", { classes: [72, -1, -1, -1] });
+    g(373, "A14 Nosy", { classes: [75, -1, -1, -1], flags: 0x0002 });
+    g(374, "A14 AllyHi", { classes: [71, -1, -1, -1], allies: [70, -1, -1, -1], crimeTol: 10000 });
+    g(375, "A14 NosyHi", { classes: [76, -1, -1, -1], flags: 0x0002, crimeTol: 10000 });
+    g(376, "A14 OwnerHi", { classes: [73, -1, -1, -1], allies: [74, -1, -1, -1], crimeTol: 10000 });
+    g(377, "A14 AllyLo", { classes: [74, -1, -1, -1], allies: [73, -1, -1, -1] });
+    // Weak turret so a hostile pass is visible on the player's shield bar
+    // without killing it inside a minute.
+    out.push(weap(374, "A14 Gun", 131, { reload: 20, duration: 60, armorDamage: 5, shieldDamage: 5, guidance: 4 }));
+    out.push(...discShip(730, "A14 Warship", 1980, DISC_COLOURS.red, {
+        accel: 400, speed: 400, turn: 40, armor: 2000, shield: 2000, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [374, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+        ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0,
+    }));
+    const dudes = [[620, 370], [621, 371], [622, 372], [623, 373], [624, 374], [625, 375], [626, 376], [627, 377]];
+    for (const [id, gid] of dudes) out.push(dude(id, `A14 Warships ${gid}`, 3, gid, 730));
+    out.push(dude(628, "A14 Interceptors 372", 4, 372, 730));
+    out.push(dude(629, "A14 Interceptors 373", 4, 373, 730));
+    const cell = (sid, name, owner, dudeId) => {
+        const s = system(sid, name, -900 + (sid - 2110) * 30, -900, owner, [sid]);
+        if (dudeId) s.set = { ...s.set, dudes: [dudeId, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 };
+        out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+    };
+    cell(2110, "A14 Own", 370, 620);
+    cell(2111, "A14 Own2", 370, null);
+    cell(2112, "A14 Ally", 370, 621);
+    cell(2113, "A14 Unrel", 370, 622);
+    cell(2114, "A14 Nosy", 370, 623);
+    cell(2115, "A14 AllyHi", 370, 624);
+    cell(2116, "A14 NosyHi", 370, 625);
+    cell(2117, "A14 IndepUnrel", -1, 622);
+    cell(2118, "A14 IndepNosy", -1, 623);
+    cell(2119, "A14 HiOwnAllyLo", 376, 627);
+    cell(2120, "A14 HiOwnSelf", 376, 626);
+    cell(2121, "A14 AllyHome", 371, null);
+    cell(2122, "A14 UnrelHome", 372, null);
+    cell(2123, "A14 NosyHome", 373, null);
+    cell(2124, "A14 AllyHiHome", 374, null);
+    cell(2125, "A14 NosyHiHome", 375, null);
+    cell(2126, "A14 UnrelIcpt", 370, 628);
+    cell(2127, "A14 NosyIcpt", 370, 629);
+    return out;
+}

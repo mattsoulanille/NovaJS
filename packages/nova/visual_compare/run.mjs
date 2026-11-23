@@ -153,6 +153,15 @@ async function run() {
                     references: refEntries,
                     pageErrors: (page._vcErrors || []).slice(0, 10),
                 });
+            } catch (e) {
+                // One scenario's setup timing out must not cost the rest of
+                // the run (and the report): log it and carry on.
+                console.log(`  SCENARIO FAILED: ${scenario.id}: ${e.message.split('\n')[0]}`);
+                results.push({
+                    id: scenario.id, title: scenario.title,
+                    description: `FAILED: ${e.message.split('\n')[0]}`,
+                    oursFullFile: null, references: [], pageErrors: [],
+                });
             } finally {
                 await page.close();
             }

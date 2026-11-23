@@ -1,0 +1,27 @@
+{
+  "name": "novaref-k9",
+  "edits": {
+    "ship": 710,
+    "stellar": 2131,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2129": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "k9",
+    "legal": {
+      "2129": -500
+    }
+  }
+}

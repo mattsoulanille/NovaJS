@@ -1,0 +1,41 @@
+{
+  "name": "novaref-f1b-h",
+  "edits": {
+    "ship": 748,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "escorts": [
+      {
+        "ship": 721,
+        "hired": true
+      },
+      {
+        "ship": 722,
+        "hired": true
+      },
+      {
+        "ship": 723,
+        "hired": true
+      },
+      {
+        "ship": 724,
+        "hired": true
+      }
+    ],
+    "nickname": "Probe",
+    "shipName": "F1b h"
+  }
+}
