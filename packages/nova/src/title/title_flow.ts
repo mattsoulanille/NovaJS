@@ -25,13 +25,14 @@ import {
 import type { ClientRuntime } from '../client/runtime.js';
 import { isMuted } from '../client/mute.js';
 import { isTextEntryActive } from '../input_focus.js';
-import { formatDate, resetDiscovery } from '../nova_plugin/player/index.js';
+import { resetDiscovery } from '../nova_plugin/player/index.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
 import { combatRatingName } from '../nova_plugin/reputation/index.js';
 import { loadSave } from '../nova_plugin/pilot/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
+import { formatMapDate } from '../spaceport/route.js';
 import { loadPilotProfile, savePilotProfile } from './client_prefs.js';
 import {
     looksLikeOriginalPilot, OriginalPilotContext,
@@ -54,7 +55,7 @@ import {
     PilotEntry, showNewPilotDialog, showOpenPilotDialog, showPreferencesDialog,
 } from './title_dialogs.js';
 import { TitleMusic } from './title_music.js';
-import { TitleScreen, TitleStatus } from './title_screen.js';
+import { shipClassLines, TitleScreen, TitleStatus } from './title_screen.js';
 
 /** What the title flow needs from the page. */
 export interface TitleHost {
@@ -190,14 +191,8 @@ async function computeTitleStatus(runtime: ClientRuntime):
     let shipSubtitle = '';
     try {
         const shipData = await runtime.gameData.data.Ship.get(save.ship);
-        // The ship's name can carry a "; variant" suffix that the
-        // subtitle already spells out; show just the class on the first
-        // line and the subtitle beneath (as the original does).
-        shipClass = (shipData.name || save.ship).split(';')[0].trim();
-        shipSubtitle = shipData.subtitle || '';
-        if (shipSubtitle && shipSubtitle === shipClass) {
-            shipSubtitle = '';
-        }
+        [shipClass, shipSubtitle] =
+            shipClassLines(shipData.name || save.ship, shipData.subtitle);
     } catch {
         // Fall back to the raw id.
         shipClass = save.ship;
@@ -212,7 +207,9 @@ async function computeTitleStatus(runtime: ClientRuntime):
         shipSubtitle,
         legalStatus: 'Citizen',
         combatRating: combatRatingName(kills),
-        date: save.date ? formatDate(save.date) : '—',
+        // The original prints the map's date format here too
+        // ("Nov. 27th, 1177 NC", title_screen/title_screen.png).
+        date: save.date ? formatMapDate(save.date) : '—',
     };
 }
 

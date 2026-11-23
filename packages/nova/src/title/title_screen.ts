@@ -48,6 +48,21 @@ export interface TitleStatus {
     date: string;
 }
 
+/**
+ * The two "Ship Class:" lines. The original prints the shïp's name on the
+ * first line and its subtitle field under it: shïp 129 (name "Heavy
+ * Shuttle", subtitle "Version A") reads "Heavy Shuttle / Version A" in
+ * title_screen/title_screen.png. A name's ";comment" suffix (the editor
+ * note on variants like "Heavy Shuttle;Second-Hand - poor") is never shown.
+ * No second line when the subtitle is empty or just repeats the name.
+ */
+export function shipClassLines(name: string, subtitle = ''):
+    [string, string] {
+    const shipClass = name.split(';')[0].trim();
+    const second = subtitle.trim();
+    return [shipClass, second === shipClass ? '' : second];
+}
+
 interface ButtonSpec {
     /** SpriteSheet id (rlëD) holding the button's normal/pressed frames. */
     sheet: string;
@@ -68,6 +83,25 @@ const BG_W = 1024;
 const BG_H = 768;
 const BG_CX = BG_W / 2;
 const BG_CY = BG_H / 2;
+/** Top of the pilot block's text boxes, background-local: the first
+ * label's ink starts at y 626 (screen 783 on title_screen.png). */
+const STATUS_TOP = 623;
+
+/** One pilot-block line: a dim label, or (label '') a bright value. */
+type StatusLine = [label: string, value?: string];
+
+/**
+ * Splits the pilot block into its two colour layers, line for line, so the
+ * dim labels and the bright values share one line grid. Values are
+ * indented two spaces under their labels, as in the original.
+ */
+export function statusLayers(lines: StatusLine[]): [string, string] {
+    const labels = lines.map(([label, value]) =>
+        value === undefined ? label : '');
+    const values = lines.map(([, value]) =>
+        value === undefined ? '' : `  ${value}`);
+    return [labels.join('\n'), values.join('\n')];
+}
 
 // The corner buttons: sheet id -> label/action/rollover-frame, with the
 // art's top-left in background-local coords.
@@ -134,8 +168,12 @@ export class TitleScreen {
     private emblemTextures: PIXI.Texture[] = [];
     private titleSprite = new PIXI.Sprite();
     private titleTextures: PIXI.Texture[] = [];
+    /** Each status column is two Texts on the same 12 px grid: the dim
+     * labels and the bright values (see statusStyle). */
     private leftStatus = new PIXI.Text('');
+    private leftValues = new PIXI.Text('');
     private rightStatus = new PIXI.Text('');
+    private rightValues = new PIXI.Text('');
     private downSound?: Sound;
     private upSound?: Sound;
 
@@ -160,10 +198,17 @@ export class TitleScreen {
         document.addEventListener('keyup', this.onKeyUp);
     }
 
-    private statusStyle(): Partial<PIXI.ITextStyle> {
+    /**
+     * The pilot block's face: the cölr resource's menu font (Geneva 9; our
+     * Geneva-9 stand-in is 9.4 px, as elsewhere) on a 12 px pitch, labels
+     * in its menuDim red (0x800000) and values in menuBright (0xff0000) —
+     * the colours and pitch title_screen/title_screen.png shows.
+     */
+    private statusStyle(value: boolean): Partial<PIXI.ITextStyle> {
         return {
-            fontFamily: 'Geneva', fontSize: 11, fill: 0xc42a1e,
-            align: 'left', lineHeight: 14,
+            fontFamily: 'Geneva', fontSize: 9.4,
+            fill: value ? 0xff0000 : 0x800000,
+            align: 'left', lineHeight: 12,
         };
     }
 
@@ -260,15 +305,22 @@ export class TitleScreen {
             this.buttons.push(button);
         }
 
-        // Bottom status readout (two red columns).
-        this.leftStatus.style = new PIXI.TextStyle(this.statusStyle());
-        this.leftStatus.name = 'TitleStatusLeft';
-        this.leftStatus.position.set(322 - BG_CX, 626 - BG_CY);
-        this.frame.addChild(this.leftStatus);
-        this.rightStatus.style = new PIXI.TextStyle(this.statusStyle());
-        this.rightStatus.name = 'TitleStatusRight';
-        this.rightStatus.position.set(632 - BG_CX, 626 - BG_CY);
-        this.frame.addChild(this.rightStatus);
+        // Bottom status readout: two red columns, each a dim label layer
+        // and a bright value layer on the same line grid.
+        const columns: [PIXI.Text, PIXI.Text, string, number][] = [
+            [this.leftStatus, this.leftValues, 'Left', 322],
+            [this.rightStatus, this.rightValues, 'Right', 632],
+        ];
+        for (const [labels, values, side, x] of columns) {
+            labels.style = new PIXI.TextStyle(this.statusStyle(false));
+            labels.name = `TitleStatus${side}`;
+            values.style = new PIXI.TextStyle(this.statusStyle(true));
+            values.name = `TitleStatus${side}Values`;
+            for (const text of [labels, values]) {
+                text.position.set(x - BG_CX, STATUS_TOP - BG_CY);
+                this.frame.addChild(text);
+            }
+        }
 
         this.layout();
     }
@@ -433,15 +485,23 @@ export class TitleScreen {
 
     /** Fills the bottom status columns from the current pilot/save. */
     setStatus(status: TitleStatus) {
-        this.leftStatus.text =
-            `Pilot Name:\n  ${status.pilotName}\n\n` +
-            `Ship Name:\n  ${status.shipName}\n\n` +
-            `Ship Class:\n  ${status.shipClass}` +
-            (status.shipSubtitle ? `\n  ${status.shipSubtitle}` : '');
-        this.rightStatus.text =
-            `Legal status in\ncurrent system:\n  ${status.legalStatus}\n\n` +
-            `Combat Rating:\n  ${status.combatRating}\n\n` +
-            `Current Date:\n  ${status.date}`;
+        const [leftLabels, leftValues] = statusLayers([
+            ['Pilot Name:'], ['', status.pilotName], [''],
+            ['Ship Name:'], ['', status.shipName], [''],
+            ['Ship Class:'], ['', status.shipClass],
+            ...(status.shipSubtitle
+                ? [['', status.shipSubtitle] as StatusLine] : []),
+        ]);
+        this.leftStatus.text = leftLabels;
+        this.leftValues.text = leftValues;
+        const [rightLabels, rightValues] = statusLayers([
+            ['Legal status in'], [' current system:'],
+            ['', status.legalStatus], [''],
+            ['Combat Rating:'], ['', status.combatRating], [''],
+            ['Current Date:'], ['', status.date],
+        ]);
+        this.rightStatus.text = rightLabels;
+        this.rightValues.text = rightValues;
     }
 
     /** Shows the title and accepts input. */
