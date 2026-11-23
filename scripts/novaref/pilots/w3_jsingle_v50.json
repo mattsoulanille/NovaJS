@@ -1,0 +1,29 @@
+{
+  "name": "novaref-jsingle_v50",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9015": true
+    },
+    "weapons": {
+      "128": 0,
+      "376": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "617": 1
+    },
+    "nickname": "Probe",
+    "shipName": "jsingle_v50"
+  }
+}

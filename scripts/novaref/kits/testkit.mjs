@@ -476,12 +476,21 @@ function jammingKit() {
     const jammer = gun(623, "Kit Jammer 25", 0);
     jammer.set = { ...jammer.set, modType: 33, modVal: 25, max: 8 };
     out.push(jammer);
+    // Wave 3: Jam Target J75 (shïp 735, mïsn 974, bit 9015) was turned into
+    // "J100 single", carrying ONE Kit Jammer 100 (oütf 626, +100) instead
+    // of three Kit Jammer 25s, to test whether jammer outfits stack. Wave 2's
+    // single v100_j75 run used the old hull.
+    const jammer100 = gun(626, "Kit Jammer 100", 0);
+    jammer100.set = { ...jammer100.set, modType: 33, modVal: 100, max: 8 };
+    out.push(jammer100);
     for (let k = 0; k <= 4; k++) {
-        out.push(...ship(732 + k, `Jam Target J${25 * k}`, 136, {
+        const single = k === 3;
+        const tname = single ? "Jam Target J100 single" : `Jam Target J${25 * k}`;
+        out.push(...ship(732 + k, tname, 136, {
             armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
-            outfits: [k ? 623 : -1, -1, -1, -1], outfitCounts: [k, 0, 0, 0],
+            outfits: [single ? 626 : k ? 623 : -1, -1, -1, -1], outfitCounts: [single ? 1 : k, 0, 0, 0],
         }));
-        out.push(dude(615 + k, `Jam Target J${25 * k}`, 1, 363, 732 + k));
+        out.push(dude(615 + k, tname, 1, 363, 732 + k));
         // ShipStart -2: at Kit Market, 900 px east of Kit Port, where the
         // player sits after taking off (a backed-off inertialess Lancer
         // keeps drifting and outruns its own missiles).
