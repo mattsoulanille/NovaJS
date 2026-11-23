@@ -49,8 +49,10 @@ export interface MissionInfoAbortContext {
 // briefing text, a date strip of its own in the upper right, and
 // Abort / Done along the bottom. The geometry lives in dialog_layout.ts,
 // measured against missions/missions_info.png (1920x1080).
+// The header is a thin mid grey in the original: its ink peaks at 148
+// (0x949494) on missions_info.png, where our 0xc0c0c0 read as bold white.
 const HEADER_FONT: Partial<PIXI.ITextStyle> = {
-    fontFamily: 'Geneva', fontSize: 9.4, fill: 0xc0c0c0, align: 'left',
+    fontFamily: 'Geneva', fontSize: 9.4, fill: 0x949494, align: 'left',
     wordWrap: false, lineHeight: LINE_HEIGHT,
 };
 const DATE_FONT: Partial<PIXI.ITextStyle> = {
@@ -65,8 +67,13 @@ const DESC_FONT: Partial<PIXI.ITextStyle> = {
     wordWrapWidth: MISSION_INFO.descWrapWidth,
 };
 
-/** Stock Nova's own wording: STR# 2002 index 359 / 353. */
-const HEADER_TEXT = 'Currently active missions:';
+/**
+ * Stock Nova's own wording: STR# 2002 index 359 / 353. The STR# has no
+ * space before the colon, but the original draws one (its bitmap face
+ * sets ':' a space clear of the word, as in the map's "Current System :";
+ * missions_info.png), which our Geneva does not, so the space is written.
+ */
+const HEADER_TEXT = 'Currently active missions :';
 const NO_MISSIONS = 'You have no active missions.';
 
 /**
