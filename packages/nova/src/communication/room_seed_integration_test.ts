@@ -177,10 +177,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // Random state moved too: a guided missile now draws five
             // numbers once at launch instead of two every tick. Kestrel's
             // did not (no guided missile flies there in 300 steps).
+            //
+            // Thessaly's stepped columns moved once more for sensor
+            // interference (J-series wave 5): a guided missile's one
+            // decision now draws six numbers, not five (the sixth is the
+            // interference roll, drawn by every missile), so the Random
+            // state after 300 steps is four draws further on (four missiles
+            // launched) and everything rolled after the first launch differs.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '3ca4d4b0', 'd67a7c65',
-                    [2194062868, 547846234, 1103817874, 396450739]],
+                [THESSALY, '3ca4d4b0', '60fbbf30',
+                    [3151324470, 1269255679, 2221342106, 396450743]],
                 [SYNTHETIC.systems.kestrel, 'e5390f10', '297b0add',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];

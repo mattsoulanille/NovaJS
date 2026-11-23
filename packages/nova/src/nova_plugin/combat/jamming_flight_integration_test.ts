@@ -9,6 +9,7 @@ import {
     restoreWorld, snapshotWorld, SnapshotPoliciesResource,
 } from 'nova_ecs/plugins/snapshot_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
@@ -21,6 +22,7 @@ import { WeaponConstructors } from './fire_weapon_plugin.js';
 import {
     ASTEROID_DECOY_CAPTURE_HALF_ANGLE, ASTEROID_DECOY_CAPTURE_RANGE,
     DecoyTargetComponent, JamDecisionComponent, JammingComponent,
+    SystemInterferenceResource,
 } from './jamming_plugin.js';
 import { AsteroidComponent, loadAsteroidGameData, makeAsteroid }
     from './asteroid_plugin.js';
@@ -465,6 +467,142 @@ describe('missile jamming in flight', () => {
         expect(second.targets).toEqual(first.targets);
         expect(second.hashes).toEqual(first.hashes);
 
+        const policies = world.resources.get(SnapshotPoliciesResource)!;
+        expect([...policies.unhandled]).toEqual([]);
+    });
+    /** Fires `count` missiles in one tick and steps once; returns each
+     * uuid with its decision. */
+    function decidedSalvo(entry: Awaited<ReturnType<typeof launcher>>,
+        count: number, target: string) {
+        const ids: string[] = [];
+        for (let i = 0; i < count; i++) {
+            ids.push(fire(entry, target));
+        }
+        step(1);
+        return ids.map(id => [id, world.entities.get(id)!
+            .components.get(JamDecisionComponent)?.steer] as const);
+    }
+
+    it('flies a missile confused by interference in circles until it expires', async () => {
+        // The original's wave-5 cell: JamVuln 0, a jam-free target,
+        // Interference 100. About 68% are confused.
+        world.resources.set(SystemInterferenceResource, { interference: 100 });
+        addTarget('target', 400, 0, [0, 0, 0, 0]);
+        step(5);
+        const harrier = await gameData.data.Weapon.get(HARRIER) as
+            ProjectileWeaponData;
+        const salvo = decidedSalvo(await launcher([0, 0, 0, 0],
+            { confusedByInterference: true }), 16, 'target');
+        const confused = salvo.filter(([, steer]) =>
+            steer === 'circleClockwise' || steer === 'circleCounterclockwise');
+        expect(confused.length).toBeGreaterThan(4);
+        expect(salvo.some(([, steer]) => steer === 'track')).toBeTrue();
+
+        // All the confused missiles fly together; follow each every tick.
+        const delta = world.resources.get(TimeResource)!.delta_s;
+        const turn = harrier.physics.turnRate * delta;
+        const diameter = 2 * harrier.shotSpeed / harrier.physics.turnRate;
+        const flights = confused.map(([uuid, steer]) => ({
+            uuid,
+            sign: steer === 'circleClockwise' ? 1 : -1,
+            previous: world.entities.get(uuid)!
+                .components.get(MovementStateComponent)!.rotation,
+            ticks: 0, turns: [] as number[], xs: [] as number[],
+            ys: [] as number[],
+        }));
+        for (let tick = 0; tick < 2000
+            && flights.some(f => world.entities.has(f.uuid)); tick++) {
+            world.step();
+            for (const flight of flights) {
+                const movement = world.entities.get(flight.uuid)
+                    ?.components.get(MovementStateComponent);
+                if (!movement) {
+                    continue;
+                }
+                flight.ticks++;
+                flight.turns.push(
+                    flight.previous.distanceTo(movement.rotation).angle);
+                flight.previous = movement.rotation;
+                flight.xs.push(movement.position.x);
+                flight.ys.push(movement.position.y);
+            }
+        }
+        for (const flight of flights) {
+            // Full turn rate, one direction, every tick of its life.
+            expect(flight.turns.every(turned =>
+                Math.abs(turned - flight.sign * turn) < 1e-9))
+                .withContext(`${flight.uuid} turns ${flight.sign}`).toBeTrue();
+            // It lived its full life and never left its loop: a circle of
+            // diameter 2 v / w (about 270 px for the Harrier), never the
+            // 400 px out to the target.
+            expect(flight.ticks).toBeGreaterThanOrEqual(
+                Math.floor(harrier.shotDuration / 1000 / delta) - 1);
+            expect(Math.max(...flight.xs) - Math.min(...flight.xs))
+                .toBeLessThan(diameter + 10);
+            expect(Math.max(...flight.ys) - Math.min(...flight.ys))
+                .toBeLessThan(diameter + 10);
+        }
+    });
+
+    it('confuses no missile at Interference 0, and none without the 0x0008 flag', async () => {
+        addTarget('target', 400, 0, [0, 0, 0, 0]);
+        step(5);
+        const flagged = await launcher([0, 0, 0, 0],
+            { confusedByInterference: true });
+        expect(decidedSalvo(flagged, 24, 'target')
+            .every(([, steer]) => steer === 'track')).toBeTrue();
+        world.resources.set(SystemInterferenceResource, { interference: 100 });
+        expect(decidedSalvo(await launcher([0, 0, 0, 0]), 24, 'target')
+            .every(([, steer]) => steer === 'track')).toBeTrue();
+    });
+
+    it('replays interference decisions and the circling identically after a rollback', async () => {
+        world.resources.set(SystemInterferenceResource, { interference: 100 });
+        addTarget('target', 400, 0, [50, 0, 0, 0]);
+        step(5);
+        const entry = await launcher([100, 0, 0, 0],
+            { confusedByInterference: true });
+        const beforeLaunch = snapshotWorld(world);
+        const run = () => {
+            const salvo = decidedSalvo(entry, 24, 'target');
+            const hashes: string[] = [];
+            for (let i = 0; i < 120; i++) {
+                world.step();
+                hashes.push(hashWorld(world).hash);
+            }
+            return { salvo, hashes };
+        };
+        const first = run();
+        const steers = first.salvo.map(([, steer]) => steer);
+        // Not vacuous: all three outcomes in one salvo.
+        expect(steers.some(s => s?.startsWith('circle'))).toBeTrue();
+        expect(steers).toContain('flyStraight');
+        expect(steers).toContain('track');
+
+        restoreWorld(world, beforeLaunch, deriveEntityComponents);
+        const second = run();
+        expect(second.salvo).toEqual(first.salvo);
+        expect(second.hashes).toEqual(first.hashes);
+
+        // Mid-flight restore keeps the decision (no re-roll).
+        restoreWorld(world, beforeLaunch, deriveEntityComponents);
+        decidedSalvo(entry, 24, 'target');
+        step(30);
+        const midFlight = snapshotWorld(world);
+        const original: string[] = [];
+        for (let i = 0; i < 60; i++) {
+            world.step();
+            original.push(hashWorld(world).hash);
+        }
+        restoreWorld(world, midFlight, deriveEntityComponents);
+        expect(first.salvo.map(([id]) => world.entities.get(id)
+            ?.components.get(JamDecisionComponent)?.steer)).toEqual(steers);
+        const resimulated: string[] = [];
+        for (let i = 0; i < 60; i++) {
+            world.step();
+            resimulated.push(hashWorld(world).hash);
+        }
+        expect(resimulated).toEqual(original);
         const policies = world.resources.get(SnapshotPoliciesResource)!;
         expect([...policies.unhandled]).toEqual([]);
     });

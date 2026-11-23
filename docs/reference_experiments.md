@@ -2634,11 +2634,37 @@ about 49 missiles of Speed 600 / GuidedTurn 60, the 100-armor J0 target
   for 0x0008 missiles, which then goes through the JamVuln roll; a JamVuln-0
   missile is never affected. **Mismatch** on two counts: in the original the
   interference acts without any JamVuln, and its effect is circling, not
-  the jammed straight flight. **Proposed (not applied):** at launch, a
+  the jammed straight flight. **Proposed:** at launch, a
   0x0008 missile in a system with Interference I is confused with
   probability of about I × 0.7 / 100 (one point measured: 68% at 100), and a
   confused missile turns at its full GuidedTurn in one direction for its
   whole life; leave JamVuln out of it.
+  **Applied in "Seeker 0x0008: sensor interference confuses missiles into
+  circles, whatever their JamVuln"** (`N/nova_plugin/combat/jamming_plugin.ts`
+  rule 5, `INTERFERENCE_CONFUSION_PER_POINT_FITTED`):
+  - **The odds:** P = 0.0068 × I, a line through the origin and the one
+    measured point (1 - 16/49.5 = 0.677 at Interference 100), clamped to
+    [0, 1]. The line between 0 and 100 is an assumption.
+  - **When:** decided once, at the same moment as the jam decision, from a
+    sixth PRNG draw that every guided missile now makes (so the flag never
+    shifts another missile's rolls). The same draw picks the direction,
+    half clockwise and half counter-clockwise; these runs didn't show
+    whether the original has a preferred direction.
+  - **What happens:** a confused missile turns at its full turn rate one
+    way for life (`ProjectileGuidanceSystem`), ahead of any jam reaction.
+    Interference no longer adds to radar jamming.
+  - **Still possible:** a confused 0x0002 missile (the stock Radar Missile
+    has both flags) can still be captured by a rock that its loop sweeps
+    into the capture cone.
+  - **Loop size, not matched:** the loops in `trail-after-release.png` are
+    about 70 px across. A loop at the Kit missile's parsed turn rate (Speed
+    600 -> 180 px/s, GuidedTurn 60 -> 180°/s) would be 2 v / ω, about
+    115 px, and NovaJS's loops are that size. So either a confused missile
+    turns about 1.6 times faster than its GuidedTurn, or NovaJS's GuidedTurn
+    conversion is off for every missile. Not changed here; it needs a
+    measurement of a homing Kit missile's turn.
+  - **Drift, not matched:** the original's loops drift slowly. NovaJS's are
+    closed circles.
 - Attack-parent: `ATTACK_PARENT_IF_JAMMED_PROBABILITY` = 0.1 (line 96,
   applied at lines 340-342): a jammed 0x8000 missile retargets its parent
   10% of the time. The original's few-in-49 is **consistent** (it could be
@@ -2792,7 +2818,7 @@ first try is kept as `*-INVALID-o-too-early`.
 |---|---|---|
 | U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not built in wave 5 either; "Boarding a non-mission disabled ship" says what the steering loop would take). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Wave 5:** a hostile stock Fed Carrier in ordinary traffic DOES launch (Vipers, Anacondas); kit-fighter bays never launched. With blast-armed Vipers the carrier hung back and no blast reached it, so the question is still open: the fight must be brought to the carrier. |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (applied: 25° cone, 200 px). Open: range vs per-tick chance for rocks ahead. |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels; a confused missile's loop size (70 px vs NovaJS's 115 px at GuidedTurn 60) | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle (applied: P = 0.0068 × I, circling at full turn rate); a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (applied: 25° cone, 200 px). Open: range vs per-tick chance for rocks ahead. |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 5:** the 0x0010 retreat needs shield < 25% AND (losing on attacker Strength OR heavy fire); AI 1 traffic lands, lingers and jumps (unlike mission ships). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS (original frames recorded in wave 5, the NovaJS headless run is the hub's) | **Wave 5:** fixed guns hold fire in Formation, rear-quadrant turrets fire. Recall: full-speed dash through the slot, more than 300 px overshoot, settled after 18.5 s. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |

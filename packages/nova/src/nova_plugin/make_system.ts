@@ -187,7 +187,7 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
         [govtEntries, ranks, links, planets, asteroidTypes, npcTables]);
 
     world.resources.set(GovtsResource, new Map(govts));
-    // The system's inherent sensor interference degrades radar-guided missiles
+    // The system's inherent sensor interference confuses Seeker 0x0008 missiles
     // (see jamming_plugin.ts). Set deterministically here, before the world
     // steps, so it is identical for every peer in a room.
     world.resources.set(SystemInterferenceResource,

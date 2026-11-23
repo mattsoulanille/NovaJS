@@ -44,8 +44,8 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *    gives its ship (percent).
  *  - gövt InhJam1-4: a government's inherent jamming. Parsed, but NOT applied:
  *    the reference measured no effect (see deriveJamming).
- *  - sÿst Interference: system sensor static (0-100), which additionally
- *    degrades radar-guided missiles (Seeker flag 0x0008, confusedByInterference).
+ *  - sÿst Interference: system sensor static (0-100), which confuses
+ *    missiles with Seeker flag 0x0008 (confusedByInterference): rule 5.
  *  - Seeker flags: turnsAwayIfJammed (0x0010), attackParentIfJammed (0x8000),
  *    decoyedByAsteroids (0x0002), confusedByInterference (0x0008).
  *
@@ -82,6 +82,17 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *     good. The original lost 65% of unjammed 0x0002 missiles in a 16-rock
  *     field and 33% with 4 rocks, and ignored rocks beside or behind a
  *     missile even 60-85 px away ("Asteroid decoy capture, finer (wave 5)").
+ *  5. confusedByInterference (Seeker 0x0008) is a separate decision, made
+ *     at the same moment as the jam decision and NOT gated by JamVuln
+ *     ("J-series wave 5: sensor interference and attack-parent"): in a
+ *     system of Interference I, the missile is confused with probability
+ *     interferenceConfusionProbability(I), and a confused missile turns at
+ *     its full turn rate in one direction for the rest of its life, flying
+ *     in circles. It takes precedence over the jam reaction (the missile's
+ *     own sensors fail, whatever the target does). The original confused
+ *     68% of JamVuln-0 0x0008 missiles at Interference 100, none at 0, and
+ *     the confused ones looped until they expired. Rule 4 still applies: a
+ *     circling 0x0002 missile that sweeps a rock into its cone is captured.
  *
  * The decision lives in JamDecisionComponent, which is serializer-registered:
  * it rides in snapshots, the wire and the desync hash, so a rollback replays it
@@ -209,8 +220,20 @@ export const ASTEROID_DECOY_CAPTURE_RANGE = 200;
  */
 export const ASTEROID_DECOY_CAPTURE_HALF_ANGLE = 25 * Math.PI / 180;
 
-/** The index of the radar jamming type (0-based) in the 4-tuple. */
-export const RADAR_JAM_INDEX = 1;
+/**
+ * FITTED: the probability, per point of sÿst Interference, that a
+ * confusedByInterference (Seeker 0x0008) missile is confused at launch
+ * (rule 5): P = 0.0068 * I, clamped to [0, 1].
+ *
+ * A line through the origin fitted to the two points measured in
+ * docs/reference_experiments.md, "J-series wave 5: sensor interference and
+ * attack-parent": Interference 0 confused none of 48.7 missiles a run, and
+ * Interference 100 lost 68% (16 hits of 49.5 launched, so 1 - 16/49.5 =
+ * 0.677) with JamVuln 0, so jamming played no part. Only those two levels
+ * were measured; the line in between is an assumption (the doc's "about
+ * I x 0.7 / 100"). Stock systems run from Interference 1 to 80 (Vellos).
+ */
+export const INTERFERENCE_CONFUSION_PER_POINT_FITTED = 0.0068;
 
 /**
  * Derives a ship's jamming from its outfits (oütf ModTypes 33-36): per type,
@@ -250,31 +273,53 @@ export function deriveJamming(outfits: OutfitsState,
 
 /**
  * Computes the effective jamming strength (0-100 per type) a missile
- * experiences, combining the target ship's jamming with system interference for
- * radar-guided missiles. Pure; does not roll.
+ * experiences from the target ship's jamming: each type clamped into 0-100.
+ * System interference is NOT part of it any more (it was folded into the
+ * radar type before wave 5); it is its own decision, rule 5. Pure; does not
+ * roll.
  */
 export function effectiveJamming(
     targetJamming: JammingStrengths | Jamming | undefined,
-    seeker: SeekerFlags,
-    systemInterference: number): [number, number, number, number] {
-    const jam: [number, number, number, number] = [
-        Math.max(0, targetJamming?.[0] ?? 0),
-        Math.max(0, targetJamming?.[1] ?? 0),
-        Math.max(0, targetJamming?.[2] ?? 0),
-        Math.max(0, targetJamming?.[3] ?? 0),
+): [number, number, number, number] {
+    return [
+        percent(targetJamming?.[0]),
+        percent(targetJamming?.[1]),
+        percent(targetJamming?.[2]),
+        percent(targetJamming?.[3]),
     ];
-    // Radar-guided missiles flagged confusedByInterference are additionally
-    // degraded by the system's inherent sensor static, as a radar-type
-    // contribution. (Judgment call #3: the Bible ties interference to the radar
-    // display and to this seeker flag but doesn't give a formula, so we fold it
-    // in as extra radar jamming.)
-    if (seeker.confusedByInterference) {
-        jam[RADAR_JAM_INDEX] += Math.max(0, systemInterference);
+}
+
+/**
+ * The chance that sÿst Interference `interference` confuses a
+ * confusedByInterference missile at launch (rule 5):
+ * INTERFERENCE_CONFUSION_PER_POINT_FITTED * I, clamped to [0, 1]. Pure.
+ */
+export function interferenceConfusionProbability(interference: number): number {
+    return Math.min(1,
+        INTERFERENCE_CONFUSION_PER_POINT_FITTED * percent(interference));
+}
+
+/** How a confused missile turns for life (rule 5). Clockwise on screen is
+ * MovementState.turning +1 (clock angles grow clockwise). */
+export type ConfusedSteer = 'circleClockwise' | 'circleCounterclockwise';
+
+/**
+ * A missile's interference decision (rule 5), from `roll`, a fresh uniform
+ * [0, 1) draw: confused iff it is confusedByInterference and roll < P; the
+ * same roll picks the direction (the lower half of [0, P) clockwise), so the
+ * decision takes one draw. JamVuln plays no part. Returns undefined when the
+ * missile is not confused. Pure.
+ */
+export function rollInterferenceConfusion(seeker: SeekerFlags,
+    interference: number, roll: number): ConfusedSteer | undefined {
+    if (!seeker.confusedByInterference) {
+        return undefined;
     }
-    for (let i = 0; i < 4; i++) {
-        jam[i] = Math.min(100, jam[i]);
+    const p = interferenceConfusionProbability(interference);
+    if (!(roll < p)) {
+        return undefined;
     }
-    return jam;
+    return roll < p / 2 ? 'circleClockwise' : 'circleCounterclockwise';
 }
 
 /** Clamps a jamming or vulnerability value into 0-100 (NaN -> 0). */
@@ -509,8 +554,11 @@ export function asteroidCapture(seeker: SeekerFlags,
  *   decision (its launch heading).
  * - `veerAway`: jammed turnsAwayIfJammed missile; steer directly away from its
  *   target for the rest of its life.
+ * - `circleClockwise` / `circleCounterclockwise`: confused by sensor
+ *   interference (rule 5); turn at the full turn rate in that direction for
+ *   the rest of its life, whatever the target.
  * The one later change: an asteroid capture (rule 4) retargets the missile
- * onto the rock and sets `track`, jammed or not.
+ * onto the rock and sets `track`, jammed or confused or not.
  *
  * Its presence is also the "already decided" mark: MissileJammingSystem rolls
  * only for a guided missile that has a target and no decision yet. It is
@@ -519,12 +567,28 @@ export function asteroidCapture(seeker: SeekerFlags,
  * re-rolling it.
  */
 export const JamDecision = t.type({
-    steer: t.keyof({ track: null, flyStraight: null, veerAway: null }),
+    steer: t.keyof({
+        track: null, flyStraight: null, veerAway: null,
+        circleClockwise: null, circleCounterclockwise: null,
+    }),
 });
 export type JamDecision = t.TypeOf<typeof JamDecision>;
 export type JamSteer = JamDecision['steer'];
 export const JamDecisionComponent =
     new Component<JamDecision>('JamDecisionComponent');
+
+/** MovementState.turning for a confused missile's steer, or undefined for
+ * any other steer. */
+export function confusedTurning(steer: JamSteer | undefined): 1 | -1 | undefined {
+    switch (steer) {
+        case 'circleClockwise':
+            return 1;
+        case 'circleCounterclockwise':
+            return -1;
+        default:
+            return undefined;
+    }
+}
 
 /**
  * Live provider: keeps a ship's JammingComponent in sync as its outfits change.
@@ -551,12 +615,12 @@ const JammingProvider = ProvideFromCache({
  * JamDecisionComponent yet: normally its launch tick, or the tick it first
  * acquires a target. Never again after that.
  *
- * Deterministic: every decision draws exactly five numbers from the room's
- * PRNG (one per jamming type, then the reaction roll), whatever the jamming
- * and vulnerabilities, in the ECS's stable system-iteration order (the same
- * pattern as weapon inaccuracy). A fixed count keeps the stream independent of
- * jamming state: adding or removing a jammer never shifts another missile's
- * rolls.
+ * Deterministic: every decision draws exactly six numbers from the room's
+ * PRNG (one per jamming type, then the reaction roll, then the interference
+ * roll), whatever the jamming, interference, vulnerabilities and seeker
+ * flags, in the ECS's stable system-iteration order (the same pattern as
+ * weapon inaccuracy). A fixed count keeps the stream independent of jamming
+ * state: adding or removing a jammer never shifts another missile's rolls.
  *
  * The same system then runs the per-tick asteroid capture of
  * decoyedByAsteroids missiles (rule 4; captureByAsteroid), which draws no
@@ -606,13 +670,23 @@ function decideJam(movement: { position: Position, rotation: Angle },
 
     const targetEntity = entities.get(target);
     const targetJamming = targetEntity?.components.get(JammingComponent);
-    const effJam = effectiveJamming(targetJamming, seeker, interference);
+    const effJam = effectiveJamming(targetJamming);
 
-    // Always five draws, in a fixed order (see the system doc).
+    // Always six draws, in a fixed order (see the system doc).
     const rolls: [number, number, number, number] = [
         random.next(), random.next(), random.next(), random.next(),
     ];
     const reactionRoll = random.next();
+    const interferenceRoll = random.next();
+
+    // Rule 5 first: a missile confused by interference circles for life,
+    // jammed or not.
+    const confused = rollInterferenceConfusion(seeker, interference,
+        interferenceRoll);
+    if (confused) {
+        self.components.set(JamDecisionComponent, { steer: confused });
+        return;
+    }
 
     const jammed = rollMissileJammed(projectileData.jamVulnerabilities,
         effJam, rolls);

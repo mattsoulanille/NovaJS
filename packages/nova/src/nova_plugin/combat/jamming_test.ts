@@ -29,8 +29,10 @@ import {
     jamTypeRollJams,
     MissileJammingSystem,
     missileJamProbability,
-    RADAR_JAM_INDEX,
     rollMissileJammed,
+    rollInterferenceConfusion,
+    INTERFERENCE_CONFUSION_PER_POINT_FITTED,
+    interferenceConfusionProbability,
     SystemInterferenceResource,
 } from './jamming_plugin.js';
 import { ProjectileDataComponent } from '../core/index.js';
@@ -124,32 +126,48 @@ describe('deriveJamming (the largest single jammer outfit, per type)', () => {
 });
 
 describe('effectiveJamming', () => {
-    const noSeeker = getDefaultSeekerFlags();
-
     it('clamps negative ship jamming to zero and caps at 100', () => {
-        expect(effectiveJamming([-5, 200, 0, 0], noSeeker, 0))
-            .toEqual([0, 100, 0, 0]);
+        expect(effectiveJamming([-5, 200, 0, 0])).toEqual([0, 100, 0, 0]);
     });
 
-    it('adds system interference to the radar slot only for confusedByInterference missiles', () => {
-        const radarSeeker: SeekerFlags = { ...noSeeker, confusedByInterference: true };
-        const eff = effectiveJamming([0, 10, 0, 0], radarSeeker, 30);
-        expect(eff[RADAR_JAM_INDEX]).toEqual(40); // 10 + 30
-        // Other slots unaffected.
-        expect(eff[0]).toEqual(0);
-        expect(eff[2]).toEqual(0);
-        expect(eff[3]).toEqual(0);
+    it('is zero for a target without jamming', () => {
+        expect(effectiveJamming(undefined)).toEqual([0, 0, 0, 0]);
+    });
+});
+
+describe('sensor interference (rule 5, Seeker 0x0008)', () => {
+    const confusable: SeekerFlags = {
+        ...getDefaultSeekerFlags(), confusedByInterference: true,
+    };
+
+    it('fits the measured points: none at Interference 0, 68% at 100', () => {
+        expect(interferenceConfusionProbability(0)).toEqual(0);
+        expect(interferenceConfusionProbability(100)).toBeCloseTo(0.68, 9);
+        expect(interferenceConfusionProbability(50)).toBeCloseTo(0.34, 9);
+        expect(INTERFERENCE_CONFUSION_PER_POINT_FITTED * 100)
+            .toBeCloseTo(1 - 16 / 49.5, 2);
+        // Out-of-range interference is clamped like a percentage.
+        expect(interferenceConfusionProbability(-10)).toEqual(0);
+        expect(interferenceConfusionProbability(500)).toBeCloseTo(0.68, 9);
     });
 
-    it('ignores system interference when the missile is not confusedByInterference', () => {
-        const eff = effectiveJamming([0, 10, 0, 0], noSeeker, 30);
-        expect(eff[RADAR_JAM_INDEX]).toEqual(10);
+    it('confuses below P, splitting the directions evenly by the same roll', () => {
+        const p = interferenceConfusionProbability(100);
+        expect(rollInterferenceConfusion(confusable, 100, 0))
+            .toEqual('circleClockwise');
+        expect(rollInterferenceConfusion(confusable, 100, p / 2 - 1e-9))
+            .toEqual('circleClockwise');
+        expect(rollInterferenceConfusion(confusable, 100, p / 2))
+            .toEqual('circleCounterclockwise');
+        expect(rollInterferenceConfusion(confusable, 100, p - 1e-9))
+            .toEqual('circleCounterclockwise');
+        expect(rollInterferenceConfusion(confusable, 100, p)).toBeUndefined();
+        expect(rollInterferenceConfusion(confusable, 0, 0)).toBeUndefined();
     });
 
-    it('caps the interference-boosted radar slot at 100', () => {
-        const radarSeeker: SeekerFlags = { ...noSeeker, confusedByInterference: true };
-        const eff = effectiveJamming([0, 80, 0, 0], radarSeeker, 90);
-        expect(eff[RADAR_JAM_INDEX]).toEqual(100);
+    it('never confuses a missile without the 0x0008 flag', () => {
+        expect(rollInterferenceConfusion(getDefaultSeekerFlags(), 100, 0))
+            .toBeUndefined();
     });
 });
 
@@ -444,9 +462,9 @@ describe('MissileJammingSystem (one decision per missile)', () => {
         world.step();
         expect(steerOf(world, 'missile')).toEqual('flyStraight');
 
-        // The decision drew exactly five numbers; later ticks draw none.
+        // The decision drew exactly six numbers; later ticks draw none.
         const expected = new Random(1);
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
             expected.next();
         }
         const random = world.resources.get(RandomResource)!;
@@ -599,27 +617,93 @@ describe('MissileJammingSystem (one decision per missile)', () => {
             .toBeTrue();
     });
 
-    it('adds system interference to jam a radar missile that a jam-free ship would not', () => {
-        const world = makeJammingWorld(1, /* interference */ 100);
+    it('confuses about 68% of 0x0008 missiles at Interference 100, even at JamVuln 0', () => {
+        // The original's wave-5 cell: JamVuln 0 (no jammer can touch it),
+        // a jam-free target, Interference 100.
+        const world = makeJammingWorld(11, /* interference */ 100);
         world.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
-        world.entities.set('missile',
-            makeMissile('ship', [0, 100, 0, 0], { confusedByInterference: true }));
-        world.step();
-        expect(steerOf(world, 'missile')).toEqual('flyStraight');
+        const steers = salvo(world, 800, 'ship', [0, 0, 0, 0],
+            { confusedByInterference: true });
+        const clockwise = steers.filter(s => s === 'circleClockwise').length;
+        const counter = steers.filter(s => s === 'circleCounterclockwise')
+            .length;
+        // Binomial sd at p = 0.68, n = 800 is about 0.016.
+        expect((clockwise + counter) / 800).toBeGreaterThan(0.62);
+        expect((clockwise + counter) / 800).toBeLessThan(0.74);
+        // Both directions, about evenly.
+        expect(clockwise).toBeGreaterThan(220);
+        expect(counter).toBeGreaterThan(220);
+        expect(steers.filter(s => s === 'track').length)
+            .toEqual(800 - clockwise - counter);
     });
 
-    it('does NOT let system interference jam a radar missile without the confused flag', () => {
+    it('confuses none at Interference 0, and no missile without the 0x0008 flag', () => {
+        const clear = makeJammingWorld(11, /* interference */ 0);
+        clear.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
+        expect(salvo(clear, 200, 'ship', [0, 0, 0, 0],
+            { confusedByInterference: true })
+            .every(steer => steer === 'track')).toBeTrue();
+
+        const unflagged = makeJammingWorld(11, /* interference */ 100);
+        unflagged.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
+        expect(salvo(unflagged, 200, 'ship', [0, 100, 0, 0])
+            .every(steer => steer === 'track')).toBeTrue();
+    });
+
+    it('no longer folds interference into radar jamming', () => {
+        // A radar-V 100 0x0008 missile in Interference 100 at a jam-free
+        // target: before wave 5 the static counted as 100 radar jamming,
+        // so every one flew straight. Now none is jammed: each either
+        // circles (confused) or tracks.
         const world = makeJammingWorld(1, /* interference */ 100);
         world.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
-        world.entities.set('missile',
-            makeMissile('ship', [0, 100, 0, 0], { confusedByInterference: false }));
-        world.step();
-        expect(steerOf(world, 'missile')).toEqual('track');
+        const steers = salvo(world, 200, 'ship', [0, 100, 0, 0],
+            { confusedByInterference: true });
+        expect(steers).not.toContain('flyStraight');
+        expect(steers).toContain('track');
+    });
+
+    it('lets confusion take precedence over jamming, at the same odds', () => {
+        // Every missile is jammed (V 100 vs J 100), and Interference 100
+        // confuses about 68% of them first: those circle, the rest fly
+        // straight. Same seed without the flag: all fly straight.
+        const world = makeJammingWorld(13, /* interference */ 100);
+        world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
+        const steers = salvo(world, 400, 'ship', [100, 0, 0, 0],
+            { confusedByInterference: true });
+        const circling = steers.filter(s => s?.startsWith('circle')).length;
+        expect(circling / 400).toBeGreaterThan(0.6);
+        expect(circling / 400).toBeLessThan(0.76);
+        expect(steers.filter(s => s === 'flyStraight').length)
+            .toEqual(400 - circling);
+    });
+
+    it('draws the interference roll for every missile, so the flag never shifts the stream', () => {
+        // The second missile's decision must not depend on whether the first
+        // could be confused (same pattern as the jammer independence spec).
+        const outcomes = (firstFlag: boolean) => {
+            const world = makeJammingWorld(17, /* interference */ 100);
+            world.entities.set('ship', makeShip(0, 100, [50, 0, 0, 0]));
+            world.entities.set('a missile', makeMissile('ship', [0, 0, 0, 0],
+                { confusedByInterference: firstFlag }));
+            for (let i = 0; i < 100; i++) {
+                world.entities.set(`b missile ${i}`, makeMissile('ship',
+                    [100, 0, 0, 0], { confusedByInterference: true }));
+            }
+            world.step();
+            return [...Array(100).keys()].map(i =>
+                steerOf(world, `b missile ${i}`));
+        };
+        const withFlag = outcomes(true);
+        expect(withFlag).toContain('flyStraight');
+        expect(withFlag).toContain('track');
+        expect(withFlag.some(s => s?.startsWith('circle'))).toBeTrue();
+        expect(outcomes(false)).toEqual(withFlag);
     });
 
     /**
      * PRNG-STREAM INDEPENDENCE, the reason every decision draws the same
-     * five numbers whatever the jamming: one missile's roll must not move
+     * six numbers whatever the jamming: one missile's roll must not move
      * when a DIFFERENT missile's jamming situation changes (a player adding
      * or removing a jammer anywhere in the system would otherwise silently
      * rewrite unrelated missiles' outcomes).

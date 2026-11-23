@@ -299,6 +299,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    that is due, mid-trip or mid-dwell (reference A-series wave 4). No
 //    other ship carries the field. The derived wire schema fingerprint
 //    changes, and the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): sensor interference (reference J-series wave
+//    5). JamDecision's `steer` gains two values, `circleClockwise` and
+//    `circleCounterclockwise` (combat/jamming_plugin.ts): a Seeker 0x0008
+//    missile confused by sÿst Interference at launch turns at its full
+//    rate in one direction for life. Sim-rule changes alongside: the
+//    interference decision is its own roll, not gated by JamVuln
+//    (P = 0.0068 x Interference), and no longer adds to radar jamming;
+//    every jam decision now draws six numbers instead of five. No input
+//    kind or message kind changes. The derived wire schema fingerprint
+//    changes, and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

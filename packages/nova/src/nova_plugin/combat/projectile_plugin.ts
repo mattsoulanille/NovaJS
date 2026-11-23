@@ -43,7 +43,8 @@ import { pointDefenseMayDamage } from './point_defense.js';
 import { GovtComponent } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { guidanceAngle, Guidance, GuidanceComponent, MissileGuidanceResource, zeroOrderGuidance } from './guidance.js';
-import { JamDecisionComponent, MissileJammingSystem } from './jamming_plugin.js';
+import { confusedTurning, JamDecisionComponent, MissileJammingSystem }
+    from './jamming_plugin.js';
 import { ArmorComponent, ShieldComponent, ShipZeroArmorSystem } from '../ship/index.js';
 import { ProjectileBlastHull, ProjectileComponent, ProjectileDataComponent } from '../core/index.js';
 import { SoundEvent } from '../core/index.js';
@@ -296,6 +297,15 @@ export const ProjectileGuidanceSystem = new System({
         if (jamSteer === 'flyStraight') {
             movementState.turnTo = null;
             movementState.turning = 0;
+            return;
+        }
+        // A missile confused by sensor interference (Seeker 0x0008) turns
+        // at its full turn rate in one direction for the rest of its life,
+        // flying in circles, whatever its target does.
+        const confused = confusedTurning(jamSteer);
+        if (confused !== undefined) {
+            movementState.turnTo = null;
+            movementState.turning = confused;
             return;
         }
         if (!target) {
