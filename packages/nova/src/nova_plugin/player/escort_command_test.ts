@@ -3,7 +3,10 @@ import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
-import { getDefaultProjectileWeaponData, ProjectileWeaponData } from 'novadatainterface/weapon_data';
+import {
+    BeamWeaponData, getDefaultBeamWeaponData, getDefaultProjectileWeaponData,
+    ProjectileWeaponData, WeaponData,
+} from 'novadatainterface/weapon_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -23,7 +26,9 @@ import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { EscortCommandComponent, EscortOrdersComponent } from './escort_command.js';
-import { DEFEND_RADIUS, inFrontQuadrant } from '../escorts/index.js';
+import {
+    DEFEND_RADIUS, formationTurretKind, inFrontQuadrant,
+} from '../escorts/index.js';
 import { Entity } from 'nova_ecs/entity';
 import { FiringGroupComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
@@ -41,8 +46,19 @@ const FQ_WEAPON = 'test:fq';
 const GUN_WEAPON = 'test:gun';
 // Range: speed 500 px/s * 2 s = 1000 px.
 const FQ_RANGE = 1000;
+// Full turret (wëap guidance 4), rear-quadrant turret (guidance 8) and
+// turreted beam (guidance 3), on their own hulls (see makeWorld's
+// escortShip) so the specs above keep their two-weapon escort.
+const TURRET_WEAPON = 'test:turret';
+const RQ_WEAPON = 'test:rq';
+const BEAM_TURRET_WEAPON = 'test:beamTurret';
+/** Turret + rear-quadrant turret + fixed gun. */
+const TURRET_SHIP = 'test:turretShip';
+/** A turreted beam alone (a beam's shot has no velocity, which
+ * fireOffAxis cannot read). */
+const BEAM_TURRET_SHIP = 'test:beamTurretShip';
 
-async function makeWorld() {
+async function makeWorld(options: { escortShip?: string } = {}) {
     const gameData = new MockGameData();
 
     const fqWeapon: ProjectileWeaponData = {
@@ -78,6 +94,49 @@ async function makeWorld() {
         id: 'test:ship',
         outfits: { 'test:fqOutfit': 1, 'test:gunOutfit': 1 },
     });
+    for (const guidance of ['turret', 'rearQuadrant'] as const) {
+        const id = guidance === 'turret' ? TURRET_WEAPON : RQ_WEAPON;
+        const weapon: ProjectileWeaponData = {
+            ...getDefaultProjectileWeaponData(),
+            id,
+            guidance,
+            reload: 1,
+            shotDuration: 2000,
+            fireGroup: 'primary',
+        };
+        weapon.physics = { ...weapon.physics, speed: 500 };
+        gameData.data.Weapon.map.set(id, weapon);
+    }
+    const beamTurret: BeamWeaponData = {
+        ...getDefaultBeamWeaponData(),
+        id: BEAM_TURRET_WEAPON,
+        guidance: 'beamTurret',
+        reload: 1,
+        fireGroup: 'primary',
+    };
+    beamTurret.beamAnimation = { ...beamTurret.beamAnimation, length: 600 };
+    gameData.data.Weapon.map.set(BEAM_TURRET_WEAPON, beamTurret);
+    for (const id of [TURRET_WEAPON, RQ_WEAPON, BEAM_TURRET_WEAPON]) {
+        gameData.data.Outfit.map.set(`${id}Outfit`, {
+            ...getDefaultOutfitData(),
+            id: `${id}Outfit`,
+            weapons: { [id]: 1 },
+        });
+    }
+    gameData.data.Ship.map.set(TURRET_SHIP, {
+        ...getDefaultShipData(),
+        id: TURRET_SHIP,
+        outfits: {
+            [`${TURRET_WEAPON}Outfit`]: 1,
+            [`${RQ_WEAPON}Outfit`]: 1,
+            'test:gunOutfit': 1,
+        },
+    });
+    gameData.data.Ship.map.set(BEAM_TURRET_SHIP, {
+        ...getDefaultShipData(),
+        id: BEAM_TURRET_SHIP,
+        outfits: { [`${BEAM_TURRET_WEAPON}Outfit`]: 1 },
+    });
 
     const pirate = getDefaultGovtData();
     pirate.id = 'test:pirate';
@@ -93,8 +152,9 @@ async function makeWorld() {
     const world = await makeSystem('test:system', gameData);
 
     async function addShip(uuid: string, x: number, y: number,
-        setup: (ship: ReturnType<typeof makeShip>) => void = () => { }) {
-        const ship = makeShip(gameData.data.Ship.map.get('test:ship')!);
+        setup: (ship: ReturnType<typeof makeShip>) => void = () => { },
+        shipId = 'test:ship') {
+        const ship = makeShip(gameData.data.Ship.map.get(shipId)!);
         ship.components.set(MovementStateComponent, {
             accelerating: 0,
             position: new Position(x, y),
@@ -115,7 +175,7 @@ async function makeWorld() {
     await addShip('escort', 0, 200, ship => {
         ship.components.set(FormationComponent, { leader: 'player', slot: 0 });
         ship.components.set(EscortCommandComponent, { command: 'formation' });
-    });
+    }, options.escortShip);
     world.step();
     return { world, addShip };
 }
@@ -390,7 +450,7 @@ describe('escort commands', () => {
         });
 
     it('front-quadrant turrets fire opportunistically in formation — ' +
-        'and no other weapon type does', async () => {
+        'and the fixed gun does not', async () => {
             const { world, addShip } = await makeWorld();
             const escort = () => world.entities.get('escort')!;
             const rotation = () => escort().components
@@ -416,7 +476,8 @@ describe('escort commands', () => {
                 .get(WeaponsStateComponent)!;
             expect(weapons.get(FQ_WEAPON)!.firing).toBeTrue();
             expect(weapons.get(FQ_WEAPON)!.target).toBe('pirate');
-            // The plain gun holds fire: front-quadrant turrets ONLY.
+            // The plain gun holds fire: fixed guns never fire from the
+            // slot (formationTurretKind).
             expect(weapons.get(GUN_WEAPON)!.firing).toBeFalse();
 
             // Behind the escort: out of the front quadrant, no fire.
@@ -570,6 +631,199 @@ describe('escort commands', () => {
             expect(weapons.get(FQ_WEAPON)!.firing).toBeFalse();
         });
 
+    // --- Full turrets in formation (reference_experiments "E-fight") --
+    //
+    // On the original, two escorts with guidance-4 guns held their slots
+    // for 95 s while raiders made passes at the player, and fired bolts
+    // from the slot at raiders 200+ px away. Full turrets therefore fire
+    // in formation in every direction; fixed guns never do (nothing they
+    // could hit without turning off the slot heading), and rear-quadrant
+    // turrets, unmeasured, keep NovaJS's old hold-fire.
+    describe('full turrets in formation', () => {
+        /** Parks `uuid` `distance` px from the escort at `bearing` off its
+         * CURRENT nose for `ticks` ticks (formation turning cannot carry
+         * it elsewhere). */
+        function holdAt(world: World, uuid: string, bearing: number,
+            ticks = 3, distance = 400) {
+            const escort = world.entities.get('escort')!.components
+                .get(MovementStateComponent)!;
+            const ship = world.entities.get(uuid)!.components
+                .get(MovementStateComponent)!;
+            for (let i = 0; i < ticks; i++) {
+                ship.position = escort.position.add(escort.rotation
+                    .add(bearing).getUnitVector().scale(distance)) as Position;
+                ship.velocity = new Vector(0, 0);
+                world.step();
+            }
+        }
+
+        async function turretWorld(npc: boolean) {
+            const made = await makeWorld({ escortShip: TURRET_SHIP });
+            if (npc) {
+                makeNpcEscort(made.world);
+            }
+            await made.addShip('pirate', 400, 400, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+            });
+            return made;
+        }
+
+        const weaponsOf = (world: World) => world.entities.get('escort')!
+            .components.get(WeaponsStateComponent)!;
+
+        for (const npc of [false, true]) {
+            const suffix = npc ? ' (NPC-brained escort)' : '';
+            it('a full turret fires at a hostile ahead, beside or behind '
+                + `the escort, from its slot${suffix}`, async () => {
+                    const { world } = await turretWorld(npc);
+                    const weapons = weaponsOf(world);
+                    for (const bearing of [Math.PI / 2, Math.PI,
+                        -Math.PI / 2, 0]) {
+                        holdAt(world, 'pirate', bearing);
+                        expect(weapons.get(TURRET_WEAPON)!.firing)
+                            .withContext(`bearing ${bearing}`).toBeTrue();
+                        expect(weapons.get(TURRET_WEAPON)!.target)
+                            .toBe('pirate');
+                        expect(weapons.get(GUN_WEAPON)!.firing)
+                            .withContext(`gun, bearing ${bearing}`)
+                            .toBeFalse();
+                    }
+                    // Still a formation escort: no order, no ship lock.
+                    expect(command(world).command).toBe('formation');
+                    expect(world.entities.get('escort')!.components
+                        .get(TargetComponent)?.target).toBeUndefined();
+                });
+
+            it(`a full turret's shots fly at the hostile${suffix}`,
+                async () => {
+                    const { world } = await turretWorld(npc);
+                    const error = fireOffAxis(world,
+                        [['pirate', 3 * Math.PI / 4]]);
+                    expect(error('pirate')).toBeLessThan(2);
+                });
+        }
+
+        it('a rear-quadrant turret keeps holding fire in formation, even '
+            + 'with a hostile astern (unmeasured; unchanged)', async () => {
+                const { world } = await turretWorld(false);
+                const weapons = weaponsOf(world);
+                holdAt(world, 'pirate', Math.PI);
+                expect(weapons.get(TURRET_WEAPON)!.firing).toBeTrue();
+                expect(weapons.get(RQ_WEAPON)!.firing).toBeFalse();
+            });
+
+        it('a full turret holds fire beyond its reach and at non-hostile '
+            + 'ships', async () => {
+                const { world, addShip } = await turretWorld(false);
+                const weapons = weaponsOf(world);
+                // Reach: 500 px/s * 2 s (+ a zero proximity radius).
+                holdAt(world, 'pirate', Math.PI, 3, 1500);
+                expect(weapons.get(TURRET_WEAPON)!.firing).toBeFalse();
+                world.entities.delete('pirate');
+                await addShip('meek', 0, 0, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:meek' });
+                });
+                holdAt(world, 'meek', Math.PI);
+                expect(weapons.get(TURRET_WEAPON)!.firing).toBeFalse();
+            });
+
+        it('the restrict-turrets order narrows a full turret to the '
+            + "player's target", async () => {
+                const { world, addShip } = await turretWorld(false);
+                await addShip('pirateB', 400, 400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                });
+                press(world, 'escortRestrictFire');
+                setPlayerTarget(world, 'pirateB');
+                const escort = world.entities.get('escort')!.components
+                    .get(MovementStateComponent)!;
+                const far = world.entities.get('pirateB')!.components
+                    .get(MovementStateComponent)!;
+                // The other pirate is nearer; the turret takes the target.
+                for (let i = 0; i < 3; i++) {
+                    far.position = escort.position.add(escort.rotation
+                        .add(Math.PI).getUnitVector().scale(600)) as Position;
+                    far.velocity = new Vector(0, 0);
+                    holdAt(world, 'pirate', Math.PI / 2, 1, 200);
+                }
+                const weapons = weaponsOf(world);
+                expect(weapons.get(TURRET_WEAPON)!.firing).toBeTrue();
+                expect(weapons.get(TURRET_WEAPON)!.target).toBe('pirateB');
+            });
+
+        it('a turreted beam (guidance 3) fires from formation too',
+            async () => {
+                const { world, addShip } = await makeWorld(
+                    { escortShip: BEAM_TURRET_SHIP });
+                await addShip('pirate', 400, 400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                });
+                holdAt(world, 'pirate', Math.PI);
+                const weapons = weaponsOf(world);
+                expect(weapons.get(BEAM_TURRET_WEAPON)!.firing).toBeTrue();
+                expect(weapons.get(BEAM_TURRET_WEAPON)!.target)
+                    .toBe('pirate');
+            });
+
+        it('a hostile parked in front of the formation never pulls the '
+            + 'escort off its slot (fixed guns hold, the turret fires)',
+            async () => {
+                const quiet = await makeWorld({ escortShip: TURRET_SHIP });
+                const { world } = await turretWorld(false);
+                const pirate = world.entities.get('pirate')!.components
+                    .get(MovementStateComponent)!;
+                const at = (w: World) => w.entities.get('escort')!
+                    .components.get(MovementStateComponent)!.position;
+                let fired = false;
+                for (let i = 0; i < 300; i++) {
+                    // 300 px ahead of the PLAYER (who faces +x): where a
+                    // fixed gun would have to turn the escort to bear.
+                    pirate.position = new Position(300, 0);
+                    pirate.velocity = new Vector(0, 0);
+                    world.step();
+                    quiet.world.step();
+                    const weapons = weaponsOf(world);
+                    fired ||= weapons.get(TURRET_WEAPON)!.firing;
+                    expect(weapons.get(GUN_WEAPON)!.firing).toBeFalse();
+                }
+                expect(fired).toBeTrue();
+                expect(command(world).command).toBe('formation');
+                // It flies the same course as the same escort with no
+                // hostile in the system: firing changes nothing about
+                // where it is.
+                expect(at(world).subtract(at(quiet.world)).length)
+                    .toBeLessThan(1);
+            });
+    });
+
+    describe('formationTurretKind', () => {
+        const projectile = (guidance: ProjectileWeaponData['guidance'])
+            : WeaponData => ({ ...getDefaultProjectileWeaponData(), guidance });
+        const beam = (guidance: BeamWeaponData['guidance']): WeaponData =>
+            ({ ...getDefaultBeamWeaponData(), guidance });
+
+        it('reads guidance 4 and 3 as full turrets, 7 as front-quadrant',
+            () => {
+                expect(formationTurretKind(projectile('turret'))).toBe('full');
+                expect(formationTurretKind(beam('beamTurret'))).toBe('full');
+                expect(formationTurretKind(projectile('frontQuadrant')))
+                    .toBe('frontQuadrant');
+            });
+
+        it('holds every other weapon, rear-quadrant turrets included', () => {
+            for (const guidance of ['unguided', 'guided', 'rocket',
+                'freefallBomb', 'rearQuadrant', 'pointDefense'] as const) {
+                expect(formationTurretKind(projectile(guidance)))
+                    .withContext(guidance).toBeUndefined();
+            }
+            for (const guidance of ['beam', 'pointDefenseBeam'] as const) {
+                expect(formationTurretKind(beam(guidance)))
+                    .withContext(guidance).toBeUndefined();
+            }
+            expect(formationTurretKind(undefined)).toBeUndefined();
+        });
+    });
+
     // --- Escorts that are also NPC ships -----------------------------
     //
     // The specs above build the escort with makeShip, which does NOT
@@ -647,7 +901,7 @@ describe('escort commands', () => {
             });
 
             it('formation still restricts opportunistic fire to ' +
-                'front-quadrant turrets', async () => {
+                'turrets', async () => {
                     const { world, addShip } = await makeWorld();
                     makeNpcEscort(world);
                     // A pirate dead ahead of the escort (which faces +x),

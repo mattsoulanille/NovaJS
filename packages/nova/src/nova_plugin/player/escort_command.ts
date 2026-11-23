@@ -126,7 +126,7 @@ export const EscortCommandComponent =
  * other piece of player intent.
  */
 export const EscortOrders = t.type({
-    /** Restrict formation escorts' opportunistic front-quadrant-turret
+    /** Restrict formation escorts' opportunistic turret
      * fire to the ship the player currently targets (still only if
      * that ship is iff-hostile). */
     restrictTurretsToTarget: t.boolean,

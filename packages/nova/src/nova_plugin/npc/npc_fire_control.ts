@@ -113,7 +113,7 @@ export const NpcFireControlSystem = new System({
             // keeps ALL of the escort framework's firing decisions
             // intact, not just the attack case: hold-fire while
             // landing/jumping, holdPosition's cease-fire, and the
-            // formation-time front-quadrant-turret rule are equally
+            // formation-time turret rule are equally
             // this system's to leave alone.
             //
             // NPC-CARRIER WINGS ARE COVERED, NOT ORPHANED. A bay fighter

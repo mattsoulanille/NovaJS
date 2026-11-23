@@ -416,7 +416,7 @@ export const WeaponsSystem = new System({
 
             // What the AI chose for THIS weapon, aimed at in preference
             // to the ship's own lock (see fireFromEntity) — the lock is
-            // empty on a formation escort whose front-quadrant turret
+            // empty on a formation escort whose turret
             // picked its own victim. Read only while the trigger is
             // held: every AI that latches `firing` writes the target in
             // the same breath, so it is fresh then, but nothing clears it

@@ -1,4 +1,4 @@
-import { ProjectileWeaponData } from 'novadatainterface/weapon_data';
+import { ProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -37,7 +37,7 @@ import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/
 import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 import { TargetComponent } from '../ship/index.js';
 import {
-    shortestSuicideReachOfStates, suicideWeaponInReachState,
+    shortestSuicideReachOfStates, suicideWeaponInReachState, weaponReach,
 } from '../ship/index.js';
 import { WeaponsStateComponent, WeaponState } from '../ship/index.js';
 
@@ -262,8 +262,8 @@ const EscortCommandPropagationSystem = new System({
  * carry EscortCommandComponent and mirror their own command down). An
  * NPC warship has no command to mirror — its intent lives in
  * NpcComponent.mode plus TargetComponent — so without this its fighters
- * would launch into formation and sit there firing front-quadrant
- * turrets while the carrier fought.
+ * would launch into formation and sit there firing only their
+ * formation turrets while the carrier fought.
  *
  * The rule is a MIRROR, not a one-shot order at launch, and that single
  * choice covers three of the four cases the feature needs:
@@ -580,9 +580,51 @@ export function frontQuadrantWeaponRange(
 }
 
 /**
+ * Which of an escort's weapons fire on their own while it holds its
+ * formation slot (see the formation branch of EscortCommandBehaviorSystem),
+ * or undefined for one that holds fire there:
+ *
+ *  - 'full': a FULL turret — wëap guidance 4 "turreted, unguided" and
+ *    guidance 3, the turreted beam. Measured on the original
+ *    (docs/reference_experiments.md, "E-fight", wave 3): two escorts
+ *    with guidance-4 guns stayed in their slots for 95 s while raiders
+ *    made passes at the player, and fired bolts from the slot at raiders
+ *    200+ px away. Guidance 3 was not measured; it is the beam form of
+ *    the same 360° turret, so it is read the same way (the doc's own
+ *    proposal).
+ *  - 'frontQuadrant': guidance 7, which fires only at a ship in the
+ *    escort's front quadrant (inFrontQuadrant) — today's behaviour, kept.
+ *
+ * Everything else holds fire in formation. Fixed guns (and guided or
+ * rocket launchers) because firing them would mean turning the ship off
+ * its slot heading: in the original the escorts never left their slots,
+ * and nothing measured shows them turning to bring a fixed gun to bear.
+ * Rear-quadrant turrets (guidance 8) because the reference has not
+ * measured them (reference_experiments "Pending", E leftovers); holding
+ * fire is NovaJS's behaviour before the E-fight measurement, kept until
+ * someone does. Bays never fire on their own. Point defense has its own
+ * system.
+ */
+export type FormationTurretKind = 'full' | 'frontQuadrant';
+
+export function formationTurretKind(weapon: WeaponData | undefined)
+    : FormationTurretKind | undefined {
+    switch (weapon?.type) {
+        case 'ProjectileWeaponData':
+            return weapon.guidance === 'turret' ? 'full'
+                : weapon.guidance === 'frontQuadrant' ? 'frontQuadrant'
+                    : undefined;
+        case 'BeamWeaponData':
+            return weapon.guidance === 'beamTurret' ? 'full' : undefined;
+        default:
+            return undefined;
+    }
+}
+
+/**
  * Executes each escort's current command every tick: steering, firing,
- * command completion, and the formation-time front-quadrant-turret
- * rule. Formation STATION-KEEPING itself stays in FormationSystem
+ * command completion, and the formation-time turret rule
+ * ({@link formationTurretKind}). Formation STATION-KEEPING itself stays in FormationSystem
  * (which yields to this system for non-formation commands).
  */
 export const EscortCommandBehaviorSystem = new System({
@@ -787,15 +829,17 @@ export const EscortCommandBehaviorSystem = new System({
                 break;
         }
 
-        // --- Formation (and defend-with-no-intruder): the front-
-        // quadrant-turret rule. Faithful to the original game's odd
-        // behavior: while flying formation, ONLY front-quadrant-turret
-        // weapons (wëap guidance 'frontQuadrant' — no other weapon
-        // type, not even full turrets) opportunistically fire at
-        // iff-hostile ships in range, and only while the hostile is in
-        // the ship's front quadrant (±45° of its facing; see
-        // inFrontQuadrant). The player's restrictTurretsToTarget order
-        // narrows candidates to their current target.
+        // --- Formation (and defend-with-no-intruder, attack-with-no-
+        // target): the formation turret rule. The escort keeps its slot
+        // (FormationSystem steers; nothing here does) and its TURRETS
+        // opportunistically fire at iff-hostile ships in reach: full
+        // turrets in any direction, front-quadrant turrets only at a
+        // hostile within ±45° of the ship's facing (inFrontQuadrant).
+        // Every other weapon — fixed guns above all — holds fire, so
+        // nothing pulls the escort off its slot. See formationTurretKind
+        // for the reference measurement and the per-guidance choices.
+        // The player's restrictTurretsToTarget order narrows candidates
+        // to their current target.
         const orders = rootEntity?.components.get(EscortOrdersComponent);
         // This escort's OWN ship class, for its shïp-level turret blind
         // spots (the root's are irrelevant — the turrets are here).
@@ -805,12 +849,16 @@ export const EscortCommandBehaviorSystem = new System({
             : undefined;
         for (const [id, weapon] of weapons) {
             const weaponData = gameData.data.Weapon.getCached(id);
-            if (weaponData?.type !== 'ProjectileWeaponData'
-                || weaponData.guidance !== 'frontQuadrant') {
+            const kind = formationTurretKind(weaponData);
+            if (weaponData == null || kind === undefined
+                || weaponData.type === 'BayWeaponData') {
                 weapon.firing = false;
                 continue;
             }
-            const range = frontQuadrantWeaponRange(weaponData);
+            const range = kind === 'frontQuadrant'
+                && weaponData.type === 'ProjectileWeaponData'
+                ? frontQuadrantWeaponRange(weaponData)
+                : weaponReach(weaponData);
             const inReach: Array<readonly [string, number]> = [];
             for (const [otherUuid, other, otherMovement] of candidates) {
                 if (otherUuid === uuid || otherUuid === root
@@ -829,17 +877,20 @@ export const EscortCommandBehaviorSystem = new System({
                 if (distanceSquared > range * range) {
                     continue;
                 }
-                if (!inFrontQuadrant(movement, otherMovement.position)) {
+                if (kind === 'frontQuadrant'
+                    && !inFrontQuadrant(movement, otherMovement.position)) {
                     continue;
                 }
                 // Turret blind spots. A candidate this turret would be
                 // refused permission to shoot at (fire_weapon_plugin
                 // would return undefined) must not be CHOSEN here
                 // either, or the escort latches `firing` on a target it
-                // cannot engage and ignores one it could. Vacuous on
-                // the stock data — nothing gives a front-quadrant
-                // weapon or a ship a front blind spot — but it keeps
-                // the two halves reading the same rule.
+                // cannot engage and ignores one it could. Live for full
+                // turrets (stock shïp and wëap blind spots exist);
+                // vacuous for front-quadrant ones on the stock data —
+                // nothing gives a front-quadrant weapon or a ship a
+                // front blind spot — but it keeps the two halves
+                // reading the same rule.
                 if (blindSpotBlocksFiring({
                     guidance: weaponData.guidance,
                     weaponBlindSpots: weaponData.turretBlindSpots,

@@ -479,7 +479,7 @@ const CollectableEscortAI = new System({
  * non-formation command. EscortCommandBehaviorSystem keeps running with
  * a missing root: 'attack' still works while the victim lives, and the
  * moment it reverts to 'formation' the fighter has no leader to form on
- * and only the opportunistic front-quadrant-turret rule left. Meanwhile
+ * and only the opportunistic formation-turret rule left. Meanwhile
  * NpcDecisionSystem and NpcSteeringSystem both bail on any ship holding
  * an EscortCommandComponent, and a bay fighter has no NpcComponent to
  * fall back to anyway. Net result: the fighter drifted forever on its
