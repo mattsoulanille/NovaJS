@@ -362,6 +362,20 @@ holds `recording.mp4`, `discs.csv` (per frame), `discs.json` and
    `disasterTime`/`disasterStellar` record the active ones.
 6. A NovaJS that ignores priceFlux is consistent with this.
 
+**NovaJS (checked 2026-11-23): matches.**
+- `N/nova_plugin/economy/trade_logic.ts` `tierPrice` already computes
+  floor(base × 0.8 / 1 / 1.25).
+- `junkTradeGood` shows Low at SoldAt stellars and High at BoughtAt
+  stellars.
+- Nothing in pricing reads priceFlux. The pilot parser only round-trips it.
+- `trade_logic_test.ts` now pins this exact Kit Port table, jünk rows
+  included.
+
+Two cases remain untested in the original:
+- öops price events (`price_events.ts`: base + PriceDelta, replacing the
+  tier price);
+- a stellar in both a jünk's SoldAt and BoughtAt lists (NovaJS shows High).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261123-price-flux/`:
 `{p100,a150,b150,c150,d150,a50}/*/02-trade.png` and `day2-{a150,a50}/`.
 Each run has its `pilot-after`.

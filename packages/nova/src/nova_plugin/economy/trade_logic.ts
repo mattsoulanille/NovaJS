@@ -17,7 +17,8 @@ import { STANDARD_CARGO_NAMES } from '../missions/index.js';
  *
  * Jünk commodities are bought by the player at their SoldAt stellars
  * (low tier) and sold at their BoughtAt stellars (high tier), gated by
- * their BuyOn/SellOn control-bit tests.
+ * their BuyOn/SellOn control-bit tests — the tiers the original shows
+ * (reference #321).
  */
 
 /** Base prices of the six standard commodities (STR# 4004). */
@@ -25,15 +26,17 @@ export const STANDARD_COMMODITY_BASE_PRICES =
     [75, 350, 750, 900, 200, 550];
 
 /**
- * A commodity's price at a tier. The Bible gives the tier percentages
- * (80/100/125); rounding of fractional results (e.g. food at the high
- * tier) is an assumption — stock base prices only produce fractions
- * there.
+ * A commodity's price at a tier: exactly 80% / 100% / 125% of the base
+ * price (the Bible's percentages), TRUNCATED to whole credits. Measured on
+ * the original (docs/reference_experiments.md, #321): every Kit Port
+ * commodity, standard and jünk, showed exactly floor(base x tier), and the
+ * pilot's priceFlux globals had no effect on any price — so nothing here
+ * reads pilot state. (öops price events are separate: price_events.ts.)
  */
 export function tierPrice(basePrice: number, tier: TradeTier): number {
     // The original TRUNCATES fractional tier prices: Medical Supplies
-    // (base 750) shows High 937 in the reference screenshots, not the
-    // rounded 938 (750 x 1.25 = 937.5). Review-measured 2026-08-15.
+    // (base 750) shows High 937, not the rounded 938 (750 x 1.25 = 937.5);
+    // Equipment (550) High 687; a base-150 jünk High 187.
     switch (tier) {
         case 'low': return Math.floor(basePrice * 0.8);
         case 'med': return basePrice;

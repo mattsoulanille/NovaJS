@@ -67,6 +67,40 @@ describe('tierPrice', () => {
     });
 });
 
+describe('the original\'s Kit Port exchange (reference #321)', () => {
+    // docs/reference_experiments.md, #321: six pilots differing only in
+    // their priceFlux globals all showed exactly these prices (and so did
+    // days 2-3). Tiers are x0.8 / x1 / x1.25 of base, truncated.
+    it('prices every standard commodity exactly as the original', () => {
+        const kitPort = makePlanet(['low', 'med', 'high', 'low', 'med',
+            'high']);
+        expect(standardTradeGoods(kitPort).map(g => [g.tier, g.price]))
+            .toEqual([
+                ['low', 60], // Food
+                ['med', 350], // Industrial
+                ['high', 937], // Medical
+                ['low', 720], // Luxury
+                ['med', 200], // Metal
+                ['high', 687], // Equipment
+            ]);
+    });
+
+    it('shows a jünk High where it is bought and Low where it is sold', () => {
+        const gadgets = makeJunk({
+            id: 'kit:128', name: 'Kit Gadgets', basePrice: 150,
+            boughtAt: ['kit:port'], soldAt: [],
+        });
+        const widgets = makeJunk({
+            id: 'kit:129', name: 'Kit Widgets', basePrice: 1000,
+            soldAt: ['kit:port'], boughtAt: [],
+        });
+        expect(junkTradeGood(gadgets, 'kit:port', new Set()))
+            .toEqual(jasmine.objectContaining({ tier: 'high', price: 187 }));
+        expect(junkTradeGood(widgets, 'kit:port', new Set()))
+            .toEqual(jasmine.objectContaining({ tier: 'low', price: 800 }));
+    });
+});
+
 describe('standardTradeGoods', () => {
     it('lists only commodities the stellar trades in, in STR# order', () => {
         // Earth: Food med, Industrial med, Medical low, Luxury high,
