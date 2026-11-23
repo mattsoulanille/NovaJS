@@ -322,16 +322,27 @@ lists every attempt under `attempts`.
   it). `n` (New Pilot) and `q` (Quit) are probably the same pattern but have
   not been tested.
 - In space, the first `l` targets the nearest planet and requests landing
-  ("Cleared to land"). A second `l` autopilots the ship down. Tested from
-  the start position near Earth, where landing took under 8 s.
+  ("Landing request received, <ship>. Begin initial approach."). A
+  second `l` lands only when the ship is already close. There is **no
+  auto-approach** (wave 2): from about 800 px out it says "You're too
+  far away to land on this planet." and nothing else happens. Enter Ship
+  starts the player on the stellar, so `l l` lands at once there.
 - In the spaceport, `o` opens the Outfitter and Escape closes it. The other
   spaceport keys have not been tested.
 - Quitting in-game brings up "Are you sure you want to quit?" (OK is the
   default). `quit` handles it.
 - `e` (Enter Ship) puts the loaded pilot **in space** next to its last
   stellar. It does not open the spaceport. Landing there takes `l`
-  (target it and request clearance) and then `l` again (autopilot down,
-  about 8 s).
+  (target it and request clearance) and then `l` again (lands at once
+  from the start position; the landing animation takes a few seconds).
+- Escape in space is the pause key and quits to the title screen. Never
+  send it in flight.
+- Key bindings in this install (prefs `ShortcutRecorder *`): e escort
+  menu, f/d/v/c escort orders (attack, defend, hold, formation), b board,
+  h hyperspace minimap, `\` select hyperspace destination, j jump,
+  r nearest target, w next secondary, s weapon safe, z afterburner,
+  u cloak, y hail, k dump cargo, x eject, a autopilot (untested),
+  Control = secondary fire, Space = primary fire.
 - A mission with AvailLoc 3 is offered as soon as you land, in a dialog
   with **No / Yes**. `Return` presses Yes. In the spaceport, `Return` presses
   Leave. The spaceport buttons are Bar, Mission BBS, Trade Center,

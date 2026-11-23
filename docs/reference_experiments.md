@@ -999,6 +999,53 @@ Confidence:
 **Evidence:** `~/.local/share/novaref/evidence/20261123-jam/<config>/*/`
 (the target panel shots 04-11 show armor %; `recording.mp4`).
 
+### A-series: AI reactions to provocation (2026-11-23, wave 2, first pass)
+
+**Setup.** `scenarios/ai_observe2.json`, pilots `w2_ai1..ai4`,
+`w2_ai3r`.
+- **Subject:** an "AI Subject Disc" (yellow 24 px disc, 1000/1000
+  shield/armor, Speed 300, two Kit Raider Guns) of neutral govt 363,
+  spawned beside Kit Port by mïsn 977-981. The düde sets the AI type.
+- **Player:** Kit Lancer with only the Kit Tickler (a 1-damage turret
+  with about 2250 px reach).
+- **Sequence:** target the subject once (Tab toggles when there is only
+  one ship, so it is pressed once). Idle 6 s, one 0.6 s tickle, watch
+  25 s, fire for 20 s, watch 15 s. The target panel is shot every 2.5 s.
+- A first version (`*-v1-flawed-tab-toggle`) pressed Tab every shot and
+  lost the target; ignore it.
+
+| AI | reaction to being tickled | brackets |
+|---|---|---|
+| 1 wimpy trader | Never closed in or fired. Its shield regenerated to 100%, and about 15 s after the tickle it was gone from the system (the target panel went to "No Target" for the rest of the run). | (not seen on screen) |
+| 2 brave trader | Turned and closed in to fight. It stayed within 200 px of the player for most of the run (1201 frames) and fired back (the player's shield bar lost 2 px of 148 on 30000 shields). It was still engaged 15 s after the player stopped. | **red** after the tickle |
+| 3 warship | The same: closed in and fought back, still engaged afterwards. | **red** |
+| 3 + gövt 0x0010 (retreat below 25% shield) | The same as AI 3. The tickler never took its shield below 94%, so **the retreat threshold was not exercised**. | red |
+| 4 interceptor | The first try failed in `open_pilot`; a rerun is queued. | |
+
+**Findings.**
+- A neutral AI 2 or AI 3 ship retaliates against a single 1-damage
+  shot and keeps fighting after the player stops firing (for at least
+  15 s).
+- AI 1 leaves instead. There was no idle control of the same length,
+  so "leaves because it was attacked" and "leaves anyway" (traders
+  travel and land) can't be told apart for AI 1.
+- Retaliating ships get red brackets (the behavioural tier, consistent
+  with K9).
+
+**NovaJS:** `N/nova_plugin/npc/npc_decision.ts` cases 1-4 model the same
+split (wimpy flees, brave fights back while the odds hold, warships
+retaliate as aggressors). No mismatch was observed at this level of
+detail.
+
+Open:
+- the shield threshold for fleeing (AI 2 "runs away when the attacker
+  is out of range"; gövt 0x0010) needs a weapon that strips shields;
+- how long retaliation lasts;
+- AI 4.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-ai/<ai>/*/`
+(`hostility.json`, the shots and `recording.mp4`).
+
 ### F1n and U9 boarding: attempts without an answer yet (2026-11-23, wave 2)
 
 - **F1n, NPC fleet formations.** The kit has flët 1000 Kit Disc Fleet:
@@ -1013,6 +1060,22 @@ Confidence:
   ideas: give the system ordinary dudes as well (fleets may replace
   part of the normal traffic), or loop many jumps. Evidence:
   `~/.local/share/novaref/evidence/20261123-f1n/`.
+- **U9, landing.** `scenarios/u9_land.json` with Probe A (inertial) and
+  the inertialess Crawler 200: fly out for 6 s, then `l`, then `l`.
+  - The first `l` says "Landing request received, <ship>. Begin initial
+    approach."
+  - The second, from about 800 px, says **"You're too far away to land
+    on this planet."**
+  - **There is no auto-approach.** The ship drifted for 45 s and never
+    landed.
+  - NovaJS's `tooFar` message and the absence of an autopilot match
+    (`N/display/status_bar_content.ts:189-191`). Wave 1's README note
+    that "a second l autopilots the ship down" was wrong: it only lands
+    when already in range, and is now corrected.
+  - The exact distance and speed gate is still unmeasured. It needs
+    stops at known distances with the inertialess hull, which **does
+    stop dead when thrust is released**: the Crawler's starfield is
+    static from the first frame after release (U5).
 - **U9, boarding.** A derelict (gövt flag 0x0800, düde booty 0) spawned
   on Kit Port by mïsn 970. The player, an inertialess Kit Crawler 200
   at rest beside it, targeted it (the panel said "Disabled") and
@@ -1133,13 +1196,13 @@ Untouched so far:
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Open.** Wave 2: `b` beside a derelict did nothing (see "F1n and U9"). The autopilot landing runs needed more than 15 s (`u9_land.json` now waits 45 s). |
+| U9 | Landing and boarding speed/distance gates | **Partly.** Wave 2: there is no landing auto-approach, and "too far" matches NovaJS. `b` beside a derelict did nothing. The exact gates are unmeasured (see "F1n and U9"). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
 | F1 NPC fleets | Do flët escorts use the same slots? | **Open.** Three tries spawned no flët (see "F1n and U9"). |
 | M2/M5 leftovers | Does the minimap show itself during a real jump? Do unexplored or uninhabited systems radiate borders? | One factor per system next time. |
 | E-view leftovers | What do Attack and Defend do in a fight? How fast does Formation recall held escorts? | Needs hostiles that actually show up (mïsn 961 raiders didn't in esc_view2). |
 | J (jamming) leftovers | More trials per cell; jam types 2-4, InhJam, Interference, ion, cloak; a weak parent for 0x8000 | First pass answered (J-series). |
-| A (AI states) | AI 1-4 reactions to provocation, the retreat flag | Wave-2 v2 runs in progress (see "A-series" when present). |
+| A (AI states) leftovers | Flee thresholds (AI 2, gövt 0x0010), how long retaliation lasts, AI 4, an idle control for AI 1 | First pass answered (A-series). Needs a shield-stripping weapon. |
 
 ## Catalogue
 
