@@ -1940,15 +1940,20 @@ Wave 2, same field, no jamming: plain V 0 lost 31% (rocks in the way),
 - **Matches (c)** (jammed plain missiles fly straight, `projectile_plugin.ts:429-432`
   lets guided missiles hit asteroids) and **(d)** (0x0001 passes over
   asteroids, same lines), and the decision being made once for the jam.
-- **Proposed (not applied):** treat 0x0002 as its own per-tick check,
-  independent of jamming: while a missile has the flag, whenever an
-  asteroid is within about 200-250 px of it, retarget onto that asteroid
-  for good.
-  For a jammed 0x0002 missile, do the same check at launch with no
-  distance limit beyond the field (i.e. "jammed: go for the nearest rock
-  if any is near, else fly straight"). The capture range and whether it
-  is a certainty or a per-tick chance need a finer experiment (one missile
-  at a time, a single slow rock).
+- **Applied in 51e4d911** (`N/nova_plugin/combat/jamming_plugin.ts`, rules
+  3 and 4 of the model at the top): 0x0002 is its own per-tick check,
+  independent of jamming. The first tick an asteroid is within
+  `ASTEROID_DECOY_CAPTURE_RANGE` = 225 px of a guided 0x0002 missile whose
+  target is not an asteroid (tracked or jammed off), the missile retargets
+  onto the nearest such rock (uuid tie-break) for good. It runs right after
+  the jam decision, so a rock near the launch point captures on the launch
+  tick. A jammed 0x0002 missile goes for the nearest rock within
+  `DECOY_DISTRACTION_RANGE` (1000 px, kept as "the field") at its jam
+  decision, and with none flies straight (or veers for 0x0010) and keeps
+  the 225 px check. The 10% `DECOY_RETARGET_PROBABILITY` is gone; the
+  parent (0x8000) roll is unchanged. The capture range and whether it is
+  a certainty or a per-tick chance still need a finer experiment (one
+  missile at a time, a single slow rock); certainty is what is applied.
 
 Confidence: high that the decoy works without jamming and that jammed
 decoy missiles go to rocks (three runs per cell, clean trails); medium for
@@ -2179,7 +2184,7 @@ the exact rule.
 |---|---|---|
 | U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not attempted in wave 4: the harness can't steer onto a drifting hulk). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | Types 2-4 answered (wave 4: same rule, own type only). Asteroid decoy/pass-over: see "Asteroids and seeker flags" (wave 4). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | Types 2-4 answered (wave 4: same rule, own type only). Asteroid decoy/pass-over: see "Asteroids and seeker flags" (wave 4); the 0x0002 decoy applied in 51e4d911. |
 | A leftovers | The exact gövt 0x0010 trigger (wave 4: 5 of 12 runs jumped, more often under heavy fire); AI 2 "runs away when the attacker is out of range"; AI 1 departure of sÿst traffic (mission ships jump at 30-40 s) | AI 1 leaves by jumping; fleeing ships jump (A-series wave 4). |
 | E leftovers | Do fixed guns / rear turrets fire from the Formation slot (they never leave it, wave 4)? `scenarios/efight_panel.json` is ready. Recall overshoot vs NovaJS frame by frame | Orders in a fight, recall, slot-keeping and the panel's 8.3 s timer answered. |
 | F1n leftovers | Mixed sprite sizes in a fleet; rank order with repeated escort types | Geometry answered (F1n wave 3: same V as player escorts). |
