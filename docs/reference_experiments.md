@@ -1162,6 +1162,53 @@ Untouched so far:
 - a fullscreen 1920x1080 capture of the original for the screens
   Matthew's set lacks.
 
+### Date strings: where "Nov. 27th" and "June 23rd" come from (2026-11-23, wave 3)
+
+**Source.** Not the OS (no itl lookup) and not the scenario data: the
+month names live in the **application's own resource file**,
+`/Applications/EV Nova.app/Contents/Resources/Nova-DF.rsrc` (a data-fork
+resource file), as **STR# 137 "Date/Numbers"** (209 bytes). Read-only:
+`grep -a` over the app bundle found the strings only in that file, and the
+repo's resource parser listed the STR#. The executable (`Ev Nova.original`,
+`libNova.A.dylib`) has no month strings, and the stock `Nova Files` were
+not searched (the strings were already located).
+
+STR# 137, exactly as stored (1-based index):
+
+| # | string | # | string |
+|---|---|---|---|
+| 1 | `January` | 13 | `Jan.` |
+| 2 | `February` | 14 | `Feb.` |
+| 3 | `March` | 15 | `Mar.` |
+| 4 | `April` | 16 | `Apr.` |
+| 5 | `May` | 17 | `May` |
+| 6 | `June` | 18 | `June` |
+| 7 | `July` | 19 | `July` |
+| 8 | `August` | 20 | `Aug.` |
+| 9 | `September` | 21 | `Sept.` |
+| 10 | `October` | 22 | `Oct.` |
+| 11 | `November` | 23 | `Nov.` |
+| 12 | `December` | 24 | `Dec.` |
+
+Then 25-28 are the ordinal suffixes `st`, `nd`, `rd`, `th`, and 29-38 the
+words `one` ... `ten`.
+
+So the short form is AP style: May, June and July are never shortened,
+and September is `Sept.`. The title screen's "Nov. 27th, 1177 NC" uses
+entries 13-24, and the map's "June 23rd, 1177 NC" is consistent with
+either set (June is the same in both). Which screens use which set
+beyond these two captures is not checked.
+
+**NovaJS.** `N/display/status_bar_content.ts:139-141` (`FULL_MONTH_NAMES`)
+matches entries 1-12, and `ordinal` there gives the same suffixes. There
+is no short table: the title screen prints "Fri, 24 Jun 1177"
+(`N/title/title_screen.ts:444`, R8 item 5). **Proposed (not applied):**
+add the 12 short names above and use them for the title-screen pilot
+block.
+
+Evidence: `~/.local/share/novaref/evidence/20261123-w3-dates/`
+(`Nova-DF.rsrc` copy and the dump).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Sporadic exits.** About 1 run in 8 ends with the game exiting just
@@ -1190,6 +1237,21 @@ Untouched so far:
   (`encodeRled(..., { original: true })`).
 - **Power cut.** A power cut rolled back the last seconds of file
   operations on the old Mac's HFS+ disk. `novaref recover` handled that.
+- **rlëD ids above 1999 crash the game at load (wave 3).** The first
+  wave-3 kit made EV Nova quit while loading, three times in a row
+  (`run` reported `game_exited` on every attempt). A bisect over the
+  kit's sections pinned it on two disc hulls' rlëD 2000 and 2001;
+  renumbered to 1977/1978 the same kit loads. `plugin-make` now refuses
+  ids past the game's limits (README "Id limits"). Evidence:
+  `~/.local/share/novaref/evidence/20261123-w3-bisect/NOTES.txt`.
+- **sÿst DudeTypes can place fleets (wave 3).** The Bible's -128..-383
+  entries are flët ids, so a flët must use an id in 128-383 to be placed
+  by a system. Wave 2's flët 1000 could never appear.
+- **Takeoff heading is random.** The J-series player sits where it took
+  off, facing wherever the game put it. A jammed missile that flies
+  straight still hits when that heading points at the target, so every
+  jamming run's launch heading was checked in the recording (none of the
+  jammed cells pointed at the target).
 
 ## Pending
 
