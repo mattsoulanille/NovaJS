@@ -1162,6 +1162,124 @@ Untouched so far:
 - a fullscreen 1920x1080 capture of the original for the screens
   Matthew's set lacks.
 
+### J-series wave 3: how jamming decides a missile's fate (2026-11-23)
+
+**Setup.** The wave-2 rig (`scenarios/jam_fire.json`: hold the secondary
+trigger about 25 s, read the 100-armor, 1-damage target's armor %),
+plus:
+- `scenarios/jam_fire_long.json`: the same with a 32 s watch after the
+  trigger is released, for **wëap 382 JamM V100 Long** (wëap 375 with a 30 s
+  life) and **383 JamM TurnAway Long** (the same with Seeker 0x0010);
+- **distance**: sÿst 2150 Kit Jam Near (target 450 px away) and 2151 Kit
+  Jam Far (1800 px), besides Kit Range's 900 px;
+- **jammer stacking**: shïp 735 now carries ONE jammer outfit (oütf 626)
+  instead of 3×Kit Jammer 25: +100 for `single_*`, +75 for `single75_*`;
+- **InhJam**: a J0 target hull of gövt 364 (InhJam1 100), AI 1 for
+  `inh_v100`, AI 3 for `inh_v50` and `inh3_v100`;
+- **readout**: missiles launched = trigger hold (frame-stamped down/up) ×
+  1.944/s (reload 15 at 29.1 Hz; the J0 controls hit 49 of 48.9-49.3);
+  hits = 100 - final armor %. `analysis/panel_hits.mjs` times every hit.
+- **launch heading**: the player takes off facing a random way. A jammed
+  missile that flies straight would still hit if that heading pointed at
+  the target, so every run's heading was checked in a crop around the
+  player 2.5 s after the trigger. The closest call (the first wave-3
+  `v100_j50`) launched roughly 15-20° off the target line, which still
+  misses a 900 px target by more than 200 px.
+
+**Results** (lost = launched - hits; per-run percentages in brackets; wave
+2's valid runs folded in where the setup is identical):
+
+| cell | vuln | target jamming | runs | lost / launched | lost |
+|---|---|---|---|---|---|
+| J0 control (900, 1800 px) | 100 | 0 | 3 | 0 / 147 | 0% |
+| v100, 1-4 × Kit Jammer 25, 900 px, 10 s missile | 100 | 25 / 50 / 75 / 100 "stacked" | 10 (w2 4, w3 6) | 103 / 492 | **21%** (8-33) |
+| v100, 4 × 25, long missile, 450 / 900 / 1800 px | 100 | "100" stacked | 6 | 68 / 296 | **23%** (near 25, 23; mid 33, 21; far 20, 15) |
+| turn-away (0x0010), 4 × 25, long, 450 / 900 / 1800 px | 100 | "100" stacked | 3 | 46 / 148 | **31%** (34, 26, 33) |
+| v50, 2 × 25 or 4 × 25 | 50 | "50" / "100" stacked | 4 (w2 1, w3 3) | 0 / 196 | **0%** |
+| v100, ONE +100 jammer | 100 | 100 | 1 | 48 / 49 | **98%** |
+| v50, ONE +100 jammer | 50 | 100 | 1 | 49 / 49 | **100%** |
+| v50, ONE +75 jammer | 50 | 75 | SINGLE75_V50_RUNS | SINGLE75_V50_LOST | **SINGLE75_V50_PCT** |
+| v100, ONE +75 jammer | 100 | 75 | SINGLE75_V100_RUNS | SINGLE75_V100_LOST | **SINGLE75_V100_PCT** |
+| v100 vs InhJam1 100 (AI 1, AI 3 target) | 100 | govt 100 | 2 | 0 / 99 | **0%** |
+| v50 vs InhJam1 100 (AI 3 target) | 50 | govt 100 | 1 | 0 / 50 | 0% |
+
+**Findings.**
+1. **One decision per missile, made at launch, and permanent.**
+   - Jammed plain missiles fly **dead straight along the launch heading**
+     and never turn: the 450 px recording shows them leaving on straight
+     lines at the ship's heading while the others curve onto the target
+     (`near_j100/*055203*`, frame 300).
+   - The loss does not grow with flight time: 450 / 900 / 1800 px (2.6,
+     5 and 10 s of flight) lose the same share, for plain and turn-away
+     missiles alike. A per-frame hazard over the flight would lose about
+     4× more at 1800 px than at 450.
+   - There are no late hits: with a 30 s missile life, the last hit came
+     within the direct flight time of the trigger release in every run
+     (one exception in 16 runs: a double hit 11.5 s after release in
+     `v100_j50/*055809*`). A jammed missile does not re-acquire.
+   - So, of the two wave-2 options, **neither**: P is not a scaled
+     vuln × jam, and a plain jammed missile does not re-acquire.
+2. **The probability.** With J = the target's jamming and V = the
+   missile's JamVuln (same type), every cell fits
+       P(jammed) = clamp((J - (100 - V)) / V, 0, 1)
+   i.e. a missile resists with 100 - V plus a random share of V, and is
+   jammed when J beats that: V 100 gives P = J (25 → 21-23%, 100 → 98%);
+   V 50 gives 0 for J ≤ 50, 50% at J 75 (SINGLE75_V50_PCT measured) and
+   100% at J 100. A plain product V·J would give 12.5% at V 50 / J 25 (0
+   of 196 seen) and 50% at V 50 / J 100 (49 of 49 lost).
+3. **Jammer outfits on a hull do not add up.** One, two, three or four
+   Kit Jammer 25s (shïp default outfits) all behave like J = 25 (V 100 loses
+   about 22% whatever the count; V 50 loses nothing even with four), while
+   one +100 outfit jams 98-100%. Whether the game takes the largest outfit
+   or ignores the count is not separated.
+4. **Turn-away (0x0010)** loses a little more than plain (31% vs 22%, same
+   J). Its jammed missiles visibly fly away from the target (wave 2
+   `turn_j50`). Partly because a plain jammed missile launched roughly
+   toward the target can still hit; more runs would be needed to call the
+   difference real.
+5. **gövt InhJam1 100 did nothing** against a V 100 missile, for an AI 1
+   or AI 3 target of that government (0 of 99 lost), nor against V 50.
+   Either InhJam does not apply to a ship's own jamming the way outfits do,
+   or it needs something this kit lacks (an armed or moving ship, or the
+   0x0080 freighter rule only halving a warship value that the AI 3 should
+   have had). Open.
+
+**NovaJS (e8d0e116), and a correction to wave 2's description.**
+`N/nova_plugin/combat/jamming_plugin.ts` does NOT drop the lock for good:
+`MissileJammingSystem` (line 458) clears `JamSteerComponent` every frame,
+and the per-tick roll (`jamLoseLockProbability`, line 299: P spread over
+`JAM_LIFETIME_FRACTION` 0.8 of the life) only makes the missile fly
+straight for that one frame (`projectile_plugin.ts:294`). So:
+- any P < 1 has almost no effect (a 1-frame wobble now and then);
+- P = 1 (V 100 against J 100) is a missile that never guides at all;
+- outfit jamming is summed (`deriveJamming`, so 4 × 25 = 100) and InhJam
+  is folded in by max (`foldInhJam`).
+
+Against the original: our 4 × 25 target would lose 100% (original 22%),
+our V 100 / J 25 target almost 0% (original 22-25%), and InhJam would jam
+(original: nothing seen).
+
+**Proposed (not applied).**
+- Roll once when a guided missile is launched at a target (or acquires
+  one), per jamming type k: jammed if J_k > (100 - V_k) + rand·V_k. A
+  jammed missile keeps its launch heading for life (turn-away: steers
+  directly away; parent/decoy rules as today, but decided at the same
+  moment). No re-acquisition.
+- J_k from the target's outfits: the largest single outfit's value, not
+  the sum (the "count is ignored" alternative fits the data equally).
+- InhJam: leave it out of J until it is measured to do something.
+
+Confidence: high for findings 1-3 (about 1500 missiles over 33 runs, clean
+0/100 cells); medium for the exact formula between its anchor points (one
+or two runs at V 50 / J 75); low for 4-5.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3-jam/<cell>/*/`
+(each run: `recording.mp4`, `recording.events.json`, the armor shots
+`NN-after-*.png`). Cells: `v100_j{0,25,50,100}`, `v50_j{50,100}`,
+`{near,mid,far}_j100`, `far_j0`, `t{near,mid,far}_j100`, `single_v{100,50}`,
+`single75_v{50,100}`, `inh_v{100,50}`, `inh3_v100`. The three
+`far_j100/*-INVALID-rled2000-crash` dirs are the kit crash.
+
 ### E-fight: what the escort orders do with hostiles present (2026-11-23, wave 3)
 
 **Setup.** `scenarios/efight_{formation,defend,attack}.json`, pilot
@@ -1204,12 +1322,36 @@ Untouched so far:
   Not measured: fixed guns (do escorts turn to use them? the blue discs
   never left their slots) and rear-quadrant turrets.
 
+**Formation recall** (`scenarios/esc_recall2.json`, pilot `w3_recall`,
+quiet Kit Range). The player (Kit Lancer) gave `v` (Hold Position),
+thrust 2.6 s, braked with Down for 2 s (an inertialess hull does not stop
+by itself, see "U9 and the inertialess hulls"), waited 4 s, then `c`
+("New escort orders assigned. All ships returning to formation."). The two
+blue escorts (Speed/Accel 600, i.e. about 270 px/s top speed) had been
+left about 900 px behind:
+
+| time after `c` | escorts' distance from the player |
+|---|---|
+| 0-4.4 s | off screen |
+| 4.5 s | first one on screen at 315 px, both closing at about 270 px/s |
+| 5.7 s | 34 px: they **overshoot** the slot, swing out to 123 px at 6.7 s |
+| 6.7-10.1 s | close in slowly (about 25 px/s) |
+| 10.1 s on | on their slots (29 px, constant) |
+
+So recall is immediate and at full speed; the whole return from about
+900 px took about 10 s, a third of it settling after an overshoot. The
+first recall run (`esc_recall`, and wave 2's) never got the escorts back
+only because the player was still moving at 360 px/s. NovaJS's
+`FormationSystem` caps the closing speed so hulls brake onto the slot
+(F1 fix); it has no overshoot. Not compared frame by frame.
+
 Confidence: high for Formation vs Defend vs Attack (one run each, but
 sustained over 95 s); medium for "turrets fire in formation" (seen in one
 stretch of frames; the player had no weapon that could have produced those
-bolts).
+bolts); medium for the recall timing (one run).
 
-**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/escorts/fight-{formation,defend,attack}/*/`.
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/escorts/fight-{formation,defend,attack}/*/`
+and `escorts/recall2/*/` (`hostility-{blue,red}.json` in each).
 
 ### A-series wave 3: flee thresholds, retaliation length, the AI 1 control (2026-11-23)
 
@@ -1230,7 +1372,8 @@ bolts).
 |---|---|
 | AI 2 tank | Closed in and fought. Its shield read 85, 64, 46, 28, 13% and then "Shields Down" for the rest of the run. It **never fled**: it kept making attack passes (closest 8 px) for the whole 134 s, including the 42 s after the player stopped firing. |
 | AI 3 tank | The same: 88, 46, 10%, "Shields Down", and it kept attacking to the end of the run. |
-| AI 3 tank, gövt 383 (retreat at 25%) | **Not measured.** It moved off at once and the escort gun never reached it (shield 100% in every shot, never on screen). The pilot now also carries the long-reach Kit Tickler so the subject is provoked into range; see "take 2" below. |
+| AI 3 tank, gövt 383 (retreat at 25%), take 1 | Not measured: it moved off at once and the escort gun never reached it (shield 100% in every shot). |
+| AI 3 tank, gövt 383, take 2 (player also has the long-reach Kit Tickler, so the tank is provoked into range) | Closed in and fought: shield 81, 62, 47, **25%** (23.4 s, still making passes at 101 px), **9%** (27.6 s). By 28 s it was heading away (247 px), off screen from 30 s, and **gone from the system** ("No Target") by 44.5 s. It never came back. The AI 3 control without the flag fought on with shields down for the whole run. |
 | AI 3 subject, one tickle | Attacked from about 6 s after the tickle (the shield bar starts dropping) and **kept attacking for the rest of the run: 130 s after one 1-damage shot**. |
 | AI 2 subject, one tickle | The same, 130 s. |
 | AI 1 subject, never fired on | It left without ever coming on screen: targeted until 30.4 s into the recording, "No Target" from 37.1 s, i.e. about 35-40 s after it appeared. Wave 2's tickled AI 1 was gone about 15 s after its tickle (about 24 s into its recording), so leaving is what AI 1 does anyway; being shot at most hurries it a little. |
@@ -1240,13 +1383,16 @@ bolts).
   least two minutes after the player stops: no forgiveness within the
   window measured.
 - Without the gövt 0x0010 flag, neither AI 2 nor AI 3 runs away at any
-  shield level, even with shields gone. The Bible's AI 2 "runs away when
+  shield level, even with shields gone. With it, the warship broke off
+  within about 4 s of passing 25% shield (between the 25% and 9% shots)
+  and left the system about 15 s later, as the Bible says. The Bible's AI 2 "runs away when
   his attacker is out of range" was not exercised (the player never left).
 
 **NovaJS (e8d0e116).** `N/nova_plugin/npc/npc_decision.ts`:
 - AI 2 (line 409) fights while `oddsFavorable(maxOdds, ...)` holds, else
   flees. With MaxOdds 1000 the odds held here, so no mismatch is shown.
-- AI 3 retreats only with `warshipsRetreatAt25` (line 479): consistent.
+- AI 3 retreats only with `warshipsRetreatAt25` (line 479), when
+  shield < 25%: consistent with both the control and the flagged run.
 - `npc.aggressor` is only forgotten when the aggressor despawns, is in the
   ship's own flock, or bribes (lines 242-306), so retaliation is
   permanent: **consistent** with "at least 130 s".
@@ -1256,7 +1402,7 @@ bolts).
   long traders linger (catalogue A11), but this was one ship that may
   simply have landed; one run.
 
-**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/ai/{tank-ai2,tank-ai3,tank-ai3r,retal-ai2,retal-ai3,idle-ai1}/*/`
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/ai/{tank-ai2,tank-ai3,tank-ai3r,tank-ai3r-b,retal-ai2,retal-ai3,idle-ai1}/*/`
 (`hostility-yellow.json` timelines; the tank panels are in the `NN-fire-*` shots).
 
 ### F1n: NPC fleet formations (2026-11-23, wave 3)
@@ -1475,7 +1621,7 @@ cosmetic or rare.
 | U2 | wëap GuidedTurn scale | `P/parsers/weapon_parse.ts:313` | **answered above (#316b)**: GuidedTurn/10 °/frame, the same as shïp Turn. NovaJS already matches; no change needed. | H |
 | U3 | Outfit speed/accel/turn mods use the same scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
 | U4 | Afterburner boost (×2?) and the coast back down | `N/nova_plugin/travel/afterburner_plugin.ts:14-40` | CPl + afterburner outfit, VID | M |
-| U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | **partly (wave 2)**: Kit Crawler 200's starfield is static from the first frame after releasing thrust (u9 land_c200). Deceleration profile not measured | M |
+| U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | **answered (wave 3)**: it does NOT stop; it keeps its speed until braked (Down). Wave 2's "static from the first frame" was wrong. NovaJS matches (see "U9 and the inertialess hulls") | M |
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
@@ -1492,7 +1638,7 @@ cosmetic or rare.
 | A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | **answered**: protector carriers never launch. | M |
 | A5 | Do NPCs of the same govt pass through each other's shots? | `N/nova_plugin/ship/firing_group.ts:62-67` | CPg crossfire, VID | M |
 | A6 | Warship (AI 3) vs interceptor (AI 4) engagement thresholds against a criminal player (MaxOdds, strength) | `npc_decision.ts` odds logic | CPg govt MaxOdds variants, CPl rating/strength | M |
-| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | CPg traders + tickler | M |
+| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **partly (wave 3)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked | M |
 | A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
 | A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
@@ -1566,7 +1712,7 @@ cosmetic or rare.
 | E2 | Fixed-angle (negative Inaccuracy) firing side | `N/nova_plugin/combat/fire_weapon_plugin.ts:211-231` | CPg, SS | L |
 | E3 | Weapon readiness right after a spawn or jump (#135) | `fire_weapon_plugin.ts:85,510` | CPg slow-reload weapon, VID | L |
 | E4 | planetType weapons vs normal ships (#136/#150) | wëap planetType | CPg, VID | L |
-| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | CPg, many shots | L |
+| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up. **Mismatch** | L |
 | E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | CPg ion weapon, VID | M |
 | E7 | Auto-refuel rate (ModType 19) | `N/nova_plugin/ship/health_plugin.ts:40-48` | CPl fuel 0, timed PD | L |
 | E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | VID Kit Carrier | L |
