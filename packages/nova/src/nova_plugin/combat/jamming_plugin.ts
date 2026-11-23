@@ -87,8 +87,8 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *     ("J-series wave 5: sensor interference and attack-parent"): in a
  *     system of Interference I, the missile is confused with probability
  *     interferenceConfusionProbability(I), and a confused missile turns at
- *     its full turn rate in one direction for the rest of its life, flying
- *     in circles. It takes precedence over the jam reaction (the missile's
+ *     CONFUSED_TURN_RATE_FACTOR_FITTED (1.8) x its turn rate in one
+ *     direction for the rest of its life, flying in tight circles. It takes precedence over the jam reaction (the missile's
  *     own sensors fail, whatever the target does). The original confused
  *     68% of JamVuln-0 0x0008 missiles at Interference 100, none at 0, and
  *     the confused ones looped until they expired. Rule 4 still applies: a
@@ -555,8 +555,9 @@ export function asteroidCapture(seeker: SeekerFlags,
  * - `veerAway`: jammed turnsAwayIfJammed missile; steer directly away from its
  *   target for the rest of its life.
  * - `circleClockwise` / `circleCounterclockwise`: confused by sensor
- *   interference (rule 5); turn at the full turn rate in that direction for
- *   the rest of its life, whatever the target.
+ *   interference (rule 5); turn at CONFUSED_TURN_RATE_FACTOR_FITTED x the
+ *   turn rate in that direction for the rest of its life, whatever the
+ *   target.
  * The one later change: an asteroid capture (rule 4) retargets the missile
  * onto the rock and sets `track`, jammed or confused or not.
  *
@@ -577,14 +578,30 @@ export type JamSteer = JamDecision['steer'];
 export const JamDecisionComponent =
     new Component<JamDecision>('JamDecisionComponent');
 
-/** MovementState.turning for a confused missile's steer, or undefined for
- * any other steer. */
-export function confusedTurning(steer: JamSteer | undefined): 1 | -1 | undefined {
+/**
+ * How much faster than its turn rate (the parsed GuidedTurn) a confused
+ * missile turns. FITTED on the original (docs/reference_experiments.md, "J
+ * wave 6: how tight a confused missile's loop is"): the same JamM missile
+ * (Speed 600, GuidedTurn 60) turned 10.3° per video frame while confused
+ * (16 tracks, 9.4-11.2) against 5.7° on an ordinary homing turn (40 arcs,
+ * IQR 5.4-6.0): 10.3 / 5.7 = 1.8, so it loops about 63 px across (60-70)
+ * instead of GuidedTurn's 115 px. One GuidedTurn was measured, so a factor
+ * and "GuidedTurn plus a constant" cannot be told apart; ordinary guidance
+ * keeps GuidedTurn as is. The measured 10-25 px per lap drift of the loops
+ * is left out: a confused missile's loop is closed.
+ */
+export const CONFUSED_TURN_RATE_FACTOR_FITTED = 1.8;
+
+/** MovementState.turning for a confused missile's steer (±
+ * CONFUSED_TURN_RATE_FACTOR_FITTED: MovementPlugin multiplies `turning` by
+ * the turn rate), or undefined for any other steer. */
+export function confusedTurning(steer: JamSteer | undefined):
+    number | undefined {
     switch (steer) {
         case 'circleClockwise':
-            return 1;
+            return CONFUSED_TURN_RATE_FACTOR_FITTED;
         case 'circleCounterclockwise':
-            return -1;
+            return -CONFUSED_TURN_RATE_FACTOR_FITTED;
         default:
             return undefined;
     }

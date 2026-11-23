@@ -21,7 +21,7 @@ import { loadWeaponsGameData } from '../spawn/index.js';
 import { WeaponConstructors } from './fire_weapon_plugin.js';
 import {
     ASTEROID_DECOY_CAPTURE_HALF_ANGLE, ASTEROID_DECOY_CAPTURE_RANGE,
-    DecoyTargetComponent, JamDecisionComponent, JammingComponent,
+    CONFUSED_TURN_RATE_FACTOR_FITTED, DecoyTargetComponent, JamDecisionComponent, JammingComponent,
     SystemInterferenceResource,
 } from './jamming_plugin.js';
 import { AsteroidComponent, loadAsteroidGameData, makeAsteroid }
@@ -45,6 +45,11 @@ const HARRIER = SYNTHETIC.weapons.missile;
 /** Stock IR Missile (wëap 134) GuidedTurn 70, as the parser converts it:
  * 210 deg/s. */
 const IR_TURN_RATE = 70 * 3 * Math.PI / 180;
+
+/** Reference kit wëap 235 JamM Interf, as the parser converts it: Speed 600
+ * at 3/10 px/s per unit, GuidedTurn 60 at 3 deg/s per unit. */
+const JAMM_SHOT_SPEED = 600 * 3 / 10;
+const JAMM_TURN_RATE = 60 * 3 * Math.PI / 180;
 
 type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
@@ -500,8 +505,10 @@ describe('missile jamming in flight', () => {
 
         // All the confused missiles fly together; follow each every tick.
         const delta = world.resources.get(TimeResource)!.delta_s;
-        const turn = harrier.physics.turnRate * delta;
-        const diameter = 2 * harrier.shotSpeed / harrier.physics.turnRate;
+        const confusedRate =
+            CONFUSED_TURN_RATE_FACTOR_FITTED * harrier.physics.turnRate;
+        const turn = confusedRate * delta;
+        const diameter = 2 * harrier.shotSpeed / confusedRate;
         const flights = confused.map(([uuid, steer]) => ({
             uuid,
             sign: steer === 'circleClockwise' ? 1 : -1,
@@ -528,13 +535,13 @@ describe('missile jamming in flight', () => {
             }
         }
         for (const flight of flights) {
-            // Full turn rate, one direction, every tick of its life.
+            // 1.8 x the turn rate, one direction, every tick of its life.
             expect(flight.turns.every(turned =>
                 Math.abs(turned - flight.sign * turn) < 1e-9))
                 .withContext(`${flight.uuid} turns ${flight.sign}`).toBeTrue();
             // It lived its full life and never left its loop: a circle of
-            // diameter 2 v / w (about 270 px for the Harrier), never the
-            // 400 px out to the target.
+            // diameter 2 v / (1.8 w) (about 150 px for the Harrier), never
+            // the 400 px out to the target.
             expect(flight.ticks).toBeGreaterThanOrEqual(
                 Math.floor(harrier.shotDuration / 1000 / delta) - 1);
             expect(Math.max(...flight.xs) - Math.min(...flight.xs))
@@ -543,6 +550,67 @@ describe('missile jamming in flight', () => {
                 .toBeLessThan(diameter + 10);
         }
     });
+
+    it('loops a confused JamM about 63 px across, both directions, with no '
+        + 'drift', async () => {
+            // "J wave 6: how tight a confused missile's loop is": wëap 235
+            // JamM Interf (Speed 600, GuidedTurn 60) looped 63 px across
+            // (60-70) confused, against 115 px on an ordinary GuidedTurn.
+            addTarget('target', 400, 0, [0, 0, 0, 0]);
+            step(5);
+            const harrier = await gameData.data.Weapon.get(HARRIER) as
+                ProjectileWeaponData;
+            const jamM: ProjectileWeaponData = {
+                ...harrier,
+                shotSpeed: JAMM_SHOT_SPEED,
+                shotDuration: 20_000,
+                physics: { ...harrier.physics, speed: JAMM_SHOT_SPEED,
+                    turnRate: JAMM_TURN_RATE },
+                jamVulnerabilities: [0, 0, 0, 0],
+                seeker: { ...harrier.seeker, confusedByInterference: true },
+            };
+            const construct = world.resources.get(WeaponConstructors)!
+                .get('ProjectileWeaponData')!;
+            const entry = new construct(jamM, world.resources.get(RunQuery)!);
+            // GuidedTurn's own loop would be 2 v / w = 114.6 px.
+            expect(2 * JAMM_SHOT_SPEED / JAMM_TURN_RATE).toBeCloseTo(114.6, 1);
+
+            for (const steer of ['circleClockwise',
+                'circleCounterclockwise'] as const) {
+                const uuid = fire(entry, 'target');
+                // The decision is made once, at launch; preset it.
+                world.entities.get(uuid)!.components.set(JamDecisionComponent,
+                    { steer });
+                const track = flight(uuid).slice(0, 600);
+                expect(track.length).toBe(600);
+                const xs = track.map(p => p.x);
+                const ys = track.map(p => p.y);
+                const width = Math.max(...xs) - Math.min(...xs);
+                const height = Math.max(...ys) - Math.min(...ys);
+                // 2 v / (1.8 w) = 63.7 px, inside the measured 60-70.
+                expect(width).withContext(steer).toBeGreaterThan(60);
+                expect(width).withContext(steer).toBeLessThan(66);
+                expect(height).withContext(steer).toBeGreaterThan(60);
+                expect(height).withContext(steer).toBeLessThan(66);
+                // Clockwise turns the heading up, counter-clockwise down.
+                const turned = track[1].rotation - track[0].rotation;
+                expect(Math.sign(turned)).withContext(steer)
+                    .toBe(steer === 'circleClockwise' ? 1 : -1);
+                // Closed: after a whole number of laps it is back where it
+                // started (no drift; the original's 10-25 px a lap is left
+                // out).
+                const delta = world.resources.get(TimeResource)!.delta_s;
+                const lapTicks = 2 * Math.PI
+                    / (CONFUSED_TURN_RATE_FACTOR_FITTED * JAMM_TURN_RATE)
+                    / delta;
+                const laps = Math.floor((track.length - 1) / lapTicks);
+                expect(laps).toBeGreaterThanOrEqual(3);
+                const end = track[Math.round(laps * lapTicks)];
+                expect(Math.hypot(end.x - track[0].x, end.y - track[0].y))
+                    .withContext(`${steer} after ${laps} laps`)
+                    .toBeLessThan(6);
+            }
+        });
 
     it('confuses no missile at Interference 0, and none without the 0x0008 flag', async () => {
         addTarget('target', 400, 0, [0, 0, 0, 0]);
