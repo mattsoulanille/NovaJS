@@ -286,6 +286,13 @@ describe('formatMapDate', () => {
         expect(formatMapDate({ day: 5, month: 5, year: 1178 }))
             .toEqual('May 5th, 1178 NC');
     });
+    it("uses the original's abbreviations (STR# 137 entries 13-24)", () => {
+        const months = Array.from({ length: 12 }, (_, i) =>
+            formatMapDate({ day: 4, month: i + 1, year: 1177 })
+                .split(' ')[0]);
+        expect(months).toEqual(['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May',
+            'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.']);
+    });
 });
 
 describe('hazardDescription', () => {

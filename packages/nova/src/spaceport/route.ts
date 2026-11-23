@@ -311,9 +311,11 @@ export function reconcileRouteState(state: RouteState, current: string,
 
 // The galactic-calendar date readout, e.g. "Nov. 18th, 1177 NC" (see
 // map/map_open_over_spaceport.png). Distinct from calendar.ts formatDate
-// (the BBS header's "Wed, 18 Nov 1177" shape).
-const MAP_MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.',
-    'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
+// (the BBS header's "Wed, 18 Nov 1177" shape). The abbreviations are the
+// original's own, STR# 137 entries 13-24 in Nova-DF.rsrc: June and July
+// stay whole and September is "Sept." (docs/reference_experiments.md).
+const MAP_MONTHS = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
+    'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
 
 function ordinal(day: number): string {
     const rem100 = day % 100;
