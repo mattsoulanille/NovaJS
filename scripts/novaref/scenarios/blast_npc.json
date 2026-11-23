@@ -1,0 +1,189 @@
+{
+ "name": "blast_npc",
+ "_comment": "B1-B3 NPC case: a neutral Kit Bomb Carrier (govt 363) carrying 4 Kit Bombers; the player tickles it so it and its fighters fight the player near the carrier. Does a fighter bomb blast hurt its carrier, and does the carrier turn on its fighter? Pilot: pilots/bnpc.json.",
+ "pilot": {
+  "as": "novaref-b"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 500"
+  },
+  {
+   "keys": "Space@3000"
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-12",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-13",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-14",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "shot": "obs-15",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

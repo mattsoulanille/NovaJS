@@ -453,7 +453,7 @@ function assertSafeToLaunch(appName) {
     }
 }
 
-async function cmdLaunch(args = []) {
+async function cmdLaunch(args = [], { inRun = false } = {}) {
     ensureHelper();
     const appName = takeOpt(args, "--app") ?? "stock";
     const before = novaPids();
@@ -461,6 +461,9 @@ async function cmdLaunch(args = []) {
         const w = novaWindow();
         return { ok: true, cmd: "launch", already_running: true, pids: before, nova_window: w?.bounds ?? null };
     }
+    // A bare launch outside a run must not start on top of a dead run's
+    // leftovers (a run itself parks Last Pilot and installs plug-ins).
+    if (!inRun) assertClean("launch");
     assertSafeToLaunch(appName);
     ssh(`open -a ${rq(appPath(appName))}`);
     const w = await waitForWindow(30000);
@@ -669,6 +672,134 @@ function parkLastPilot() {
 function unparkLastPilot() {
     return ssh(`f=${rq(cfg.pilotsDir + "/Last Pilot")}; p=${rq(cfg.remoteDir + "/state/parked/Last Pilot")}; ` +
         `if [ -e "$p" ]; then mv -f "$p" "$f" && echo unparked; else echo none; fi`).stdout.trim();
+}
+
+// ---------------------------------------------------------------- recovery
+
+/**
+ * The known-good state to recover to: a `pilots backup` directory holding
+ * Pilots/Last Pilot and prefs.plist, recorded in ~/novaref/state/baseline.
+ */
+const BASELINE_FILE = () => `${rq(cfg.remoteDir)}/state/baseline`;
+// Managed pilots that predate an experiment and stay where they are.
+const KEEP_PILOTS = () => cfg.keepPilots ?? ["novaref-scenario"];
+
+/**
+ * What a dead or interrupted run can leave behind. Empty list = clean.
+ * (An unexpected running EV Nova, e.g. reopened by macOS at login, counts.)
+ */
+function leftovers({ duringRun = false } = {}) {
+    const out = [];
+    const pids = novaPids();
+    if (pids.length) out.push(`EV Nova is running (pids ${pids.join(" ")})`);
+    const plugins = listPluginFiles();
+    if (plugins.length) out.push(`Plug-ins not empty: ${plugins.join(", ")}`);
+    const st = ssh(`d=${rq(cfg.remoteDir)}; [ -e "$d/state/parked/Last Pilot" ] && echo parked; ` +
+        `[ -f "$d/rec/ffmpeg.pid" ] && echo recording; ` +
+        `[ -e ${rq(cfg.pilotsDir + "/Last Pilot")} ] || echo no-last-pilot; true`).stdout.split("\n").filter(Boolean);
+    if (st.includes("parked") && !duringRun) out.push("Last Pilot is parked in ~/novaref/state/parked (a run did not finish)");
+    if (st.includes("recording")) out.push("a recording pid file exists (~/novaref/rec/ffmpeg.pid)");
+    if (st.includes("no-last-pilot") && !duringRun) out.push("Pilots has no Last Pilot");
+    return out;
+}
+
+function assertClean(what) {
+    const left = leftovers();
+    if (left.length) {
+        throw new NovarefError(`refusing to ${what}: leftovers from an earlier run; run \`novaref recover\` first`, { leftovers: left });
+    }
+}
+
+/**
+ * `novaref recover [--baseline <backup dir>]`: puts the old Mac back to the
+ * baseline after a run died (power loss, crash, killed CLI). Nothing is
+ * deleted; everything replaced goes to ~/novaref/backups/<ts>-recover/.
+ *  1. Stops any EV Nova (AppleScript quit, then SIGTERM, then SIGKILL; a
+ *     killed game saves nothing, so no pilot can be written).
+ *  2. Stops a novaref ffmpeg and clears its pid files.
+ *  3. Moves novaref-installed plug-ins out of Plug-ins (others: reported).
+ *  4. Restores Last Pilot from the baseline (the current one and any parked
+ *     copy are backed up first).
+ *  5. Restores the prefs domain if it differs from the baseline export.
+ *  6. Moves experiment pilots (managed, not in keepPilots) out of Pilots.
+ *  7. Verifies: Matt == Pilots-backup/Matt, Plug-ins empty, Last Pilot ==
+ *     baseline, prefs == baseline.
+ */
+async function cmdRecover(args) {
+    ensureHelper();
+    let baseline = takeOpt(args, "--baseline");
+    if (baseline) {
+        baseline = baseline.replace(/^~\//, "");
+        ssh(`echo ${shq(baseline)} > ${BASELINE_FILE()}`);
+    } else {
+        baseline = ssh(`cat ${BASELINE_FILE()} 2>/dev/null || true`).stdout.trim();
+    }
+    if (!baseline) throw new NovarefError("no baseline recorded; pass --baseline novaref/backups/<ts>-manual once");
+    const check = ssh(`[ -e ${rq(baseline + "/Pilots/Last Pilot")} ] && [ -f ${rq(baseline + "/prefs.plist")} ] && echo ok || true`).stdout.trim();
+    if (check !== "ok") throw new NovarefError(`baseline ${baseline} lacks Pilots/Last Pilot or prefs.plist`);
+    const dest = `${cfg.remoteDir}/backups/${timestamp()}-recover`;
+    ssh(`mkdir -p ${rq(dest)}`);
+    const actions = [];
+
+    // 1. Stop the game.
+    if (novaPids().length) {
+        ssh(`osascript -e 'ignoring application responses' -e ${shq(`tell application id "${cfg.bundleId}" to quit`)} -e 'end ignoring'`, { allowFail: true });
+        for (let i = 0; i < 6 && novaPids().length; i++) {
+            await sleep(1000);
+            if (i === 2) { try { helper(["keys", JSON.stringify([{ k: "Return" }])], { front: cfg.bundleId }); } catch { /* gone or hung */ } }
+        }
+        let pids = novaPids();
+        if (pids.length) { ssh(`kill ${pids.join(" ")}`, { allowFail: true }); await sleep(2000); pids = novaPids(); }
+        if (pids.length) { ssh(`kill -9 ${pids.join(" ")}`, { allowFail: true }); await sleep(1000); }
+        actions.push(novaPids().length ? "EV Nova STILL RUNNING" : "stopped EV Nova");
+    }
+    // 2. Recording.
+    const rec = ssh(`d=${rq(cfg.remoteDir + "/rec")}; if [ -f "$d/ffmpeg.pid" ]; then p=$(cat "$d/ffmpeg.pid"); ` +
+        `kill -0 "$p" 2>/dev/null && ps -p "$p" -o command= | grep -q ffmpeg && kill -INT "$p"; sleep 2; ` +
+        `mv "$d/ffmpeg.pid" ${rq(dest)}/ 2>/dev/null; mv "$d/current" ${rq(dest)}/ 2>/dev/null; echo cleared-recording; fi; ` +
+        `for f in "$d"/rec-*.mp4; do [ -e "$f" ] && mv "$f" ${rq(dest)}/ && echo "moved $(basename "$f")"; done; true`).stdout.trim();
+    if (rec) actions.push(...rec.split("\n"));
+    // 3. Plug-ins.
+    const installed = ssh(`cat ${INSTALLED()} 2>/dev/null || true`).stdout.split("\n").filter(Boolean);
+    const foreign = [];
+    for (const p of listPluginFiles()) {
+        if (installed.includes(p)) {
+            ssh(`mv ${rq(cfg.pluginsDir + "/" + p)} ${rq(dest + "/")}`);
+            actions.push(`uninstalled plug-in ${p}`);
+        } else foreign.push(p);
+    }
+    ssh(`: > ${INSTALLED()}`);
+    // 4. Last Pilot.
+    const lp = ssh(`f=${rq(cfg.pilotsDir + "/Last Pilot")}; b=${rq(baseline + "/Pilots/Last Pilot")}; p=${rq(cfg.remoteDir + "/state/parked/Last Pilot")}; ` +
+        `r=""; if [ -e "$p" ]; then mkdir -p ${rq(dest + "/parked")} && mv "$p" ${rq(dest + "/parked/")} && r="$r archived-parked"; fi; ` +
+        `if [ -e "$f" ] && cmp -s "$f/..namedfork/rsrc" "$b/..namedfork/rsrc" && [ "$(xattr -px com.apple.FinderInfo "$f" 2>/dev/null)" = "$(xattr -px com.apple.FinderInfo "$b" 2>/dev/null)" ]; then r="$r last-pilot-ok"; ` +
+        `else if [ -e "$f" ]; then mkdir -p ${rq(dest + "/Pilots")} && mv "$f" ${rq(dest + "/Pilots/")}; fi; ditto "$b" "$f" && r="$r last-pilot-restored"; fi; echo $r`).stdout.trim();
+    actions.push(...lp.split(" ").filter(Boolean));
+    // 5. Prefs.
+    const pr = ssh(`b=${rq(baseline + "/prefs.plist")}; n=${rq(dest + "/prefs-before.plist")}; defaults export ${shq(cfg.bundleId)} "$n"; ` +
+        `if [ "$(plutil -p "$b")" = "$(plutil -p "$n")" ]; then echo prefs-ok; else defaults import ${shq(cfg.bundleId)} "$b" && echo prefs-restored; fi`).stdout.trim();
+    actions.push(pr);
+    // 6. Experiment pilots.
+    const keep = new Set(KEEP_PILOTS());
+    const managed = managedPilots();
+    const present = new Set(ssh(`ls ${rq(cfg.pilotsDir)}`).stdout.split("\n").filter(Boolean));
+    for (const n of managed) {
+        if (keep.has(n) || !present.has(n)) continue;
+        ssh(`mkdir -p ${rq(dest + "/experiment-pilots")} && mv ${rq(cfg.pilotsDir + "/" + n)} ${rq(dest + "/experiment-pilots/")} && ` +
+            `grep -vxF ${shq(n)} ${MANAGED()} > ${MANAGED()}.new; mv ${MANAGED()}.new ${MANAGED()}`);
+        actions.push(`moved pilot ${n}`);
+    }
+    // 7. Verify.
+    const v = ssh(`P=${rq(cfg.pilotsDir)}; B="$(dirname "$P")/Pilots-backup"; ` +
+        `a=$(shasum "$P/Matt/..namedfork/rsrc" 2>/dev/null | cut -c1-40); b=$(shasum "$B/Matt/..namedfork/rsrc" 2>/dev/null | cut -c1-40); ` +
+        `echo "matt=$a backup=$b"; ls "$P" | tr '\\n' '|'; echo`).stdout.trim().split("\n");
+    const [mattLine, pilotsLine] = v;
+    const matt = /matt=(\w*) backup=(\w*)/.exec(mattLine);
+    const left = leftovers();
+    const ok = !!matt && matt[1] === matt[2] && matt[1].length === 40 && left.length === 0 && foreign.length === 0;
+    return { ok, cmd: "recover", baseline: "~/" + baseline, backed_up_to: "~/" + dest, actions,
+        foreign_plugins: foreign, matt_sha1: matt?.[1] ?? null, matt_matches_backup: !!matt && matt[1] === matt[2],
+        pilots: (pilotsLine ?? "").split("|").filter(Boolean), leftovers: left };
 }
 
 // ---------------------------------------------------------------- pilots
@@ -942,7 +1073,7 @@ async function runStep(step, ctx) {
         const base = step.label ? `recording-${step.label}.mp4` : ctx.recN === 1 ? "recording.mp4" : `recording-${ctx.recN}.mp4`;
         return cmdRecord(["stop", path.join(ctx.dir, base)]);
     }
-    if (step.launch) return cmdLaunch(ctx.app ? ["--app", ctx.app] : []);
+    if (step.launch) return cmdLaunch(ctx.app ? ["--app", ctx.app] : [], { inRun: true });
     if (step.pull) {
         // Mid-run pilot snapshot (the game saves the pilot when it lands).
         const name = ctx.pilotName;
@@ -987,11 +1118,17 @@ async function cmdRun(args) {
     // caffeinate process only; killed at the end, capped at 2 h).
     const awakePid = Number(ssh(`{ nohup caffeinate -d -u -t 7200 >/dev/null 2>&1 < /dev/null & } ; echo $!`).stdout.trim()) || 0;
     await sleep(1000);
-    if (novaPids().length && !sc.allow_running) {
-        // A fresh game is the only way to know what's loaded.
-        const q = await cmdQuit([]);
-        record({ phase: "pre-quit", result: q });
-        if (!q.ok) throw new NovarefError("EV Nova is running and could not be quit", { quit: q });
+    // Pre-flight: a run starts only from a clean state. A running EV Nova
+    // (e.g. reopened by macOS at login after a power cut, possibly hung at
+    // the splash with a test plug-in loaded), a parked Last Pilot, a stale
+    // recording or a non-empty Plug-ins all mean an earlier run died:
+    // `novaref recover` reconciles them against the baseline.
+    try {
+        assertClean("run");
+    } catch (e) {
+        ssh(`kill ${awakePid} 2>/dev/null || true`, { allowFail: true });
+        record({ phase: "preflight", error: e.message, ...e.extra });
+        throw e;
     }
     const snapshot = backupPilots(`run-${name}`);
     record({ phase: "snapshot", backup: snapshot });
@@ -1019,7 +1156,7 @@ async function cmdRun(args) {
         }
         if (parkLast) record({ phase: "park-last-pilot", result: parkLastPilot() });
         if (sc.launch !== false) {
-            const r = await cmdLaunch(["--app", appName]);
+            const r = await cmdLaunch(["--app", appName], { inRun: true });
             record({ phase: "launch", result: r });
             if (!r.ok) throw new NovarefError("launch failed", r);
         }
@@ -1111,6 +1248,7 @@ const USAGE = `novaref — drive the original EV Nova on the reference Mac
   plugin-make <spec.json> [out] [--data]
   plugin list | install <local> [as <name>] | uninstall <name>... | --all
   app list | setup-minimal <data.ndat>
+  recover [--baseline novaref/backups/<ts>-manual]   reconcile after a dead run
   record start [--fps N] [--window] | record stop [out.mp4]
   run <scenario.json> [--out dir] [--pilot local-pilot]
 config: ${CONFIG_PATH}`;
@@ -1130,6 +1268,7 @@ async function main(argv) {
         case "pilots": return cmdPilots(args);
         case "plugin": return cmdPlugin(args);
         case "app": return cmdApp(args);
+        case "recover": return cmdRecover(args);
         // These two need the repo's built packages (scripts/setup_worktree.sh).
         case "pilot-make": return (await import("./pilot_make.mjs")).pilotMake(args);
         case "plugin-make": return (await import("./plugin_make.mjs")).pluginMake(args);

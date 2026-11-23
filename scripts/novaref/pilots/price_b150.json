@@ -1,0 +1,10 @@
+{
+  "name": "novaref-price-b150",
+  "edits": {
+    "ship": 710, "stellar": 2100, "credits": 1000000, "fuel": 3000,
+    "clearMissions": true, "clearMissionBits": true, "clearLegal": true, "explored": {"2100": 2},
+    "weapons": {"128": 0}, "outfits": {"128": 0},
+    "priceFlux": [100,150,100,100],
+    "nickname": "Probe", "shipName": "Price b150"
+  }
+}

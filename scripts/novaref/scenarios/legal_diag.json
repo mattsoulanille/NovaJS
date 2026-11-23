@@ -1,0 +1,7 @@
+{
+ "name": "legal_diag",
+ "_comment": "Shows the legal status the game derives from a pilot: title screen (current system) and the map panel.",
+ "pilot": { "as": "novaref-q" }, "plugins": ["../kits/testkit.mjs"],
+ "steps": [ {"move": true}, {"shot": "title", "window": true}, {"keys": "e wait 4000"}, {"keys": "m wait 2000"}, {"shot": "map", "window": true}, {"keys": "m wait 1000"} ],
+ "pull": false
+}

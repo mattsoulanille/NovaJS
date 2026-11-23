@@ -18,6 +18,8 @@
  * See scripts/novaref/README.md ("Test kit") for every id.
  */
 
+import { discShipGraphics } from "novaparse/plugin_kit/sprites";
+
 const KIT_TECH = 9000; // kit ships/outfits are sold only where specialTech lists it
 const none4 = [-1, -1, -1, -1];
 const zero4 = [0, 0, 0, 0];
@@ -46,6 +48,27 @@ function ship(id, name, clone, set) {
     ];
 }
 
+/**
+ * A hull drawn as a solid disc of one exact 15-bit colour (r, g, b 0-31)
+ * on all 36 frames: find it in a recording by colour, its centroid is the
+ * ship's position (analysis/discs.mjs). rlëD ids 2000+.
+ */
+function discShip(id, name, rledId, rgb, set) {
+    const g = discShipGraphics(rledId, rgb, 24, 36);
+    return [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        // The stock Shuttle's shän with only its base sprite swapped (one
+        // 36-frame set): a from-scratch shän crashed the game on Enter Ship.
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1 } },
+        { type: "rlëD", id: rledId, name, hex: Buffer.from(g.rled).toString("hex") },
+    ];
+}
+/** Exact disc colours (15-bit components) and their 8-bit screen values. */
+export const DISC_COLOURS = {
+    white: [31, 31, 31], red: [31, 0, 0], green: [0, 31, 0], blue: [0, 0, 31],
+    yellow: [31, 31, 0], magenta: [31, 0, 31], cyan: [0, 31, 31],
+};
+
 const weapBase = {
     ammoType: -1, inaccuracy: 0, flags2: 0, flags3: 0, ionization: 0, recoil: 0,
     burstCount: 0, burstReload: 0, proxSafety: 0, jamVuln: zero4, maxAmmo: 0,
@@ -68,9 +91,9 @@ const gun = (id, name, wid) => ({
 const govt = (id, name, set = {}) => ({
     type: "gövt", id, name, clone: "gövt:128",
     set: {
-        voiceType: -1, flags: 0, flags2: 0, scanFine: 0, crimeTol: 0, smugPenalty: 0,
+        voiceType: -1, flags: 0, flags2: 0, scanFine: 0, crimeTol: 10, smugPenalty: 0,
         disabPenalty: 50, boardPenalty: 50, killPenalty: 100, shootPenalty: 0, initialRec: 0,
-        maxOdds: 100, classes: none4, allies: none4, enemies: none4, skillMult: 100,
+        maxOdds: 1000, classes: none4, allies: none4, enemies: none4, skillMult: 100,
         scanMask: 0, commName: name.slice(0, 15), targetCode: "", require: 0, inhJam: zero4,
         mediumName: name, ...set,
     },
@@ -174,8 +197,11 @@ export default {
         // --- Governments. No classes/allies/enemies: only the player's
         // legal record (set in the pilot) relates them.
         govt(360, "Kit Escort Govt"),
-        govt(361, "Kit Trader Govt"),
-        govt(362, "Kit Raider Govt"),
+        // 361 is "nosy" (gövt 0x0002): it enforces the record in systems it does
+        // not own, so a player criminal in Kit Range is hostile to it.
+        govt(361, "Kit Trader Govt", { flags: 0x0002 }),
+        // 362 always attacks the player (gövt 0x0004).
+        govt(362, "Kit Raider Govt", { flags: 0x0004 }),
         govt(363, "Kit Neutral Govt"),
 
         // --- Dudes.
@@ -185,6 +211,7 @@ export default {
         dude(603, "Kit Traders", 1, 361, 708),
         dude(604, "Kit Own-Govt Raiders", 3, 360, 707),
         dude(605, "Kit Target", 1, 363, 709),
+        dude(606, "Kit Hostile Traders", 1, 362, 708),
 
         // --- The sealed test system, owned by the escort govt so a pilot's
         // record in sÿst 2100 is its record with govt 360 (EV Nova keeps
@@ -216,5 +243,42 @@ export default {
         ...misn(964, "Kit Q4 carrier vs raiders", 9005, { shipCount: 1, shipDude: 601, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
         // A plain target ship for weapon tests.
         ...misn(965, "Kit target practice", 9006, { shipCount: 1, shipDude: 605, shipGoal: -1, shipBehav: -1, shipStart: -1 }),
+        // Q2c: escort + wimpy traders of the always-attacks-player govt 362
+        // (hostile to the player by govt, but AI 1 never attacks).
+        ...misn(966, "Kit Q2c escort vs hostile traders", 9007, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 606, auxShipSyst: -1 }),
+        // Q4b: the STOCK Fed Carrier (stock bays and Vipers) as the escort.
+        ...misn(967, "Kit Q4b fed carrier vs raiders", 9008, { shipCount: 1, shipDude: 607, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
+        // B: an NPC carrier (neutral govt 363) whose fighters drop the 1-frame blast bomb.
+        ...misn(968, "Kit B bomb carrier", 9009, { shipCount: 1, shipDude: 608, shipGoal: -1, shipBehav: -1, shipStart: -1 }),
+
+        // --- Blast-damage kit (does a blast hurt its firer's parent?):
+        // the bomb detonates at the end of a 2-frame life (wëap flag 0x8000)
+        // with a 300 px blast, i.e. right at the muzzle.
+        weap(370, "Kit Blast Bomb", 134, { reload: 45, duration: 2, armorDamage: 50, shieldDamage: 50, guidance: -1, speed: 300, proxRadius: 0, blastRadius: 300, flags: 0x8000, guidedTurn: 0 }),
+        // The AI only fires within range (Speed x Duration), so NPCs get a
+        // ranged version: 180 px reach, proximity 30, 400 px blast.
+        weap(372, "Kit Blast Shell", 134, { reload: 45, duration: 60, armorDamage: 50, shieldDamage: 50, guidance: -1, speed: 300, proxRadius: 30, blastRadius: 400, flags: 0x8000, guidedTurn: 0 }),
+        weap(371, "Kit Bomber Bay", 149, { reload: 30, guidance: 99, ammoType: 711 - 128 }),
+        gun(608, "Kit Bomber Bay", 371),
+        gun(609, "Kit Blast Bomb", 370),
+        // B4: the same muzzle blast at 2000 damage, to destroy one's own escort.
+        weap(373, "Kit Big Blast", 134, { reload: 45, duration: 2, armorDamage: 2000, shieldDamage: 2000, guidance: -1, speed: 300, proxRadius: 0, blastRadius: 300, flags: 0x8000, guidedTurn: 0 }),
+        gun(610, "Kit Big Blast", 373),
+        ...ship(711, "Kit Bomber", 167, { armor: 500, shield: 500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1 }),
+        ...ship(712, "Kit Bomb Carrier", 143, { armor: 3000, shield: 3000, weapons: [365, 371, -1, -1], weaponCounts: [2, 1, 0, 0], weaponAmmo: [0, 4, 0, 0], ai: 3, strength: 100, crew: 40 }),
+        dude(607, "Kit Fed Carrier Escort", 3, 360, 143),
+        dude(608, "Kit Bomb Carrier", 3, 363, 712),
+        // Two always-attack-the-player raiders armed only with the blast bomb:
+        // do their own/each other's blasts hurt them, and do they retaliate?
+        ...ship(713, "Kit Bomb Raider", 149, { armor: 1500, shield: 1500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 80, crew: 15 }),
+        dude(609, "Kit Bomb Raiders", 3, 362, 713),
+
+        // --- Trackable disc hulls (formation and motion experiments).
+        // 720 leader (white): Speed/Accel 300, Turn 30. 721-726 escorts
+        // (red, green, blue, yellow, magenta, cyan): Speed/Accel 600, Turn 60.
+        ...discShip(720, "Kit Disc Leader", 1970, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 }),
+        ...["red", "green", "blue", "yellow", "magenta", "cyan"].flatMap((c, i) =>
+            discShip(721 + i, `Kit Disc ${c[0].toUpperCase()}${c.slice(1)}`, 1971 + i, DISC_COLOURS[c], { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000 })),
+        ...misn(969, "Kit B bomb raiders", 9010, { shipCount: -1, auxShipCount: 2, auxShipDude: 609, auxShipSyst: -1 }),
     ],
 };

@@ -1,0 +1,10 @@
+{
+  "name": "novaref-bself",
+  "edits": {
+    "ship": 710, "stellar": 2100, "credits": 1000000, "fuel": 3000,
+    "clearMissions": true, "clearMissionBits": true, "clearLegal": true,
+    "missionBits": {"9001": true}, "explored": {"2100": 2},
+    "weapons": {"128": 0, "370": 1}, "outfits": {"128": 0, "609": 1},
+    "nickname": "Probe", "shipName": "Lite B self"
+  }
+}

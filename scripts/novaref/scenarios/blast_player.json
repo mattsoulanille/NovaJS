@@ -1,0 +1,154 @@
+{
+ "name": "blast_player",
+ "_comment": "B1/B2 player case: the player (Kit Lancer Lite, 1500 shield, no recharge) launches 4 Kit Bombers (1-frame Kit Blast Bomb, 300 px blast, 50/50 dmg) at the immobile Kit Target next to it. Does the fighters blast hurt the player? Pilot: pilots/bplayer.json. After launching, escort command f (\"attack my target\") sends the fighters at the target.",
+ "pilot": {
+  "as": "novaref-b"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 500"
+  },
+  {
+   "keys": "Space@2000"
+  },
+  {
+   "keys": "w wait 400"
+  },
+  {
+   "shot": "secondary",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 4000 up:ctrl"
+  },
+  {
+   "keys": "wait 1500 f wait 500"
+  },
+  {
+   "shot": "attack-order",
+   "window": true
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

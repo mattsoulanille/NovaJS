@@ -60,6 +60,7 @@ on first use and again whenever its sha1 changes.
 | `plugin-make <spec.json\|spec.mjs> [out] [--data]` | Builds a plug-in from a spec (see "Custom plug-ins"). Runs on the MacBook. |
 | `plugin list` / `plugin install <local> [as <name>]` / `plugin uninstall <name>... \| --all` | Manages the old Mac's Plug-ins folder. Uninstall moves files to `~/novaref/backups/<ts>-plugin-uninstall/`. Never deletes, and never touches a plug-in novaref didn't install. |
 | `app list` / `app setup-minimal <data.ndat>` | Lists app bundles, or builds the minimal copy (see "Minimal app"). |
+| `recover [--baseline novaref/backups/<ts>-manual]` | After a run died (power cut, crash, killed CLI): stops any EV Nova, stops a novaref recording, moves novaref plug-ins out, restores `Last Pilot` and prefs from the baseline, moves experiment pilots out (keeps `keepPilots`, default `novaref-scenario`), then verifies Matt == Pilots-backup/Matt. Everything replaced goes to `~/novaref/backups/<ts>-recover/`. `run` and a bare `launch` refuse to start while any such leftover exists (including an EV Nova macOS reopened at login). |
 
 To read a pulled pilot with the repo's parser (novaparse `readPilot`), run:
 
@@ -365,9 +366,12 @@ list it in a scenario's `"plugins"`.
 | shïp 704 Escort, 705 Fighter, 706 Carrier (fighter bay), 707 Raider, 708 Trader, 709 Target (immobile, 30000 armor) | NPC hulls. |
 | wëap 360 Beam Turret (5000 dmg, 1500 px), 361 Tickler (1 dmg turret), 362/363/364 Missile with GuidedTurn 10/30/60, 365 Escort Gun (30 dmg turret), 366 Fighter Bay (705), 367 Raider Gun, 368/369 Speed Gun 300/600 | Weapons. |
 | oütf 600-607 | Player outfits for wëap 360, 361, 362, 363, 364, 368, 369 and 365. |
-| gövt 360 Escort, 361 Trader, 362 Raider, 363 Neutral | No classes, allies or enemies. KillPenalty 100, CrimeTol 0. |
+| gövt 360 Escort, 361 Trader (flags 0x0002 "nosy"), 362 Raider (0x0004 "always attacks player"), 363 Neutral | No classes, allies or enemies. KillPenalty 100, CrimeTol 10, MaxOdds 1000. A CrimeTol-0 / MaxOdds-100 version left a -500 player "neutral" and the raiders holding off. A govt enforces only the record of systems it owns unless it is nosy. |
 | düde 600 escort, 601 carrier escort, 602 raiders (362), 603 traders (361), 604 own-govt raiders (360), 605 target | Dudes. |
 | mïsn 960-965 | Offered on landing at Kit Port (AvailLoc 3) while bit 9001-9006 is set. 960-964 are ShipBehav 1 / ShipGoal 3 escort missions: alone, vs raiders, vs traders, vs own-govt raiders, and a carrier vs raiders. 965 spawns the target. Offer text is dësc 4000+id-128. |
+| mïsn 966-969 | 966: escort + traders of govt 362 (bit 9007). 967: stock Fed Carrier escort + raiders (9008). 968: NPC Kit Bomb Carrier (9009). 969: two Kit Bomb Raiders (9010). |
+| wëap 370 Kit Blast Bomb (2-frame life, detonates at end, 300 px blast), 372 Kit Blast Shell (NPC-usable: 180 px reach, 400 px blast), 373 Kit Big Blast (2000 dmg), 371 Kit Bomber Bay; oütf 608-610; shïp 711 Kit Bomber, 712 Kit Bomb Carrier, 713 Kit Bomb Raider | Blast experiments (B-series). |
+| shïp 720 Kit Disc Leader (white, Speed/Accel 300, Turn 30), 721-726 Kit Disc Red/Green/Blue/Yellow/Magenta/Cyan (Speed/Accel 600, Turn 60); rlëD 1970-1976 | **Trackable hulls**: a solid one-colour disc (24 px) on all 36 frames, built by `packages/novaparse/src/plugin_kit/sprites.ts`. `analysis/discs.mjs` finds each centre by colour. The shän is the stock Shuttle's with only the sprite swapped: a from-scratch shän crashed the game on Enter Ship. The rlëD must use the stock row encoding (`encodeRled(..., {original: true})`). The synthetic data set's default encoding made the game fail an assertion on load. |
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
 
 ## Minimal app (untested: the old Mac was taken offline first)
@@ -399,5 +403,6 @@ apply.
   displacements to stderr.
 - `shots.mjs <rec.mp4> --bg F --from F --to F`: projectile speed from a
   stationary ship.
+- `discs.mjs <rec.mp4> [--csv out.csv]`: disc-hull centroids per frame and escort offsets along and across the leader's direction of travel (taken from the starfield).
 - `frame_events.mjs <rec.mp4> [--threshold 3]`: abrupt whole-frame
   changes. Used to check the video clock against `keys "m wait 20000 m"`.

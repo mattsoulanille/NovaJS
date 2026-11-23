@@ -1,0 +1,147 @@
+{
+ "name": "blast_self",
+ "_comment": "B1/B4: the player fires the Kit Blast Bomb (2-frame life, detonates at end, 300 px blast, 50/50 dmg) with its protect-the-player Kit Escort (mïsn 960) beside it. Does the blast hurt the player itself, and the escort? Pilot: pilots/bself.json.",
+ "pilot": {
+  "as": "novaref-b"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 500"
+  },
+  {
+   "shot": "before-00",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "before-01",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "keys": "Space@100"
+  },
+  {
+   "shot": "bomb1-00",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "bomb1-01",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "bomb1-02",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Space@4000"
+  },
+  {
+   "shot": "after-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-03",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-04",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-05",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-06",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-07",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -140,17 +140,187 @@ can't happen in the original.
 (`recording.mp4` at about 35-39 s, `08-…19-*.png`). The earlier run
 `20261123-010655-protect_q1/` provoked with no target selected.
 
-## Pending (set up, not yet run: the reference Mac was taken offline mid-session)
+### Q2/Q3: whom does a protect-the-player ship fight? (2026-11-23)
 
-These are ready to run. Scenarios are in `scripts/novaref/scenarios/` and
-pilots in `scripts/novaref/pilots/`.
+**Setup.**
+
+- Scenario: `scenarios/protect_observe.json` with pilots `q2a`, `q2b`,
+  `q2c`, `q3`.
+- mïsn ShipBehav 1, ShipGoal 3. A Kit Escort (govt 360, AI 3, escort gun
+  30 dmg ×2) plus two aux ships appear in Kit Range (owned by govt 360).
+- The player is criminal there: record -500 in sÿst 2100, shown as
+  "Criminal" on the map. Kit govts have CrimeTol 10 and MaxOdds 1000.
+- The player never fires. Every 3.5 s for 70 s the run takes a screenshot
+  after pressing Tab, so the target panel shows each ship's shield/armor
+  in turn. The player's own shield/armor bars show who is being hit.
+
+**Findings.**
+
+| run | aux ships | what the escort did | NovaJS (0e701c4b) |
+|---|---|---|---|
+| Q2a | 2 Kit Raiders, govt 362 "always attacks player" (gövt 0x0004), AI 3 | Raiders attacked the player (shield 100% to 0%, then armor dropping). The escort **fought them**: raider shield 60%, then armor 82%, 39%, then **Disabled**. The escort's own shield fell to 83%. | Matches: an attacker of the protectee is a hostile (`npc_decision.ts:275-285, 391`). |
+| Q2b | 2 Kit Traders, AI 1, govt 361 "nosy" (0x0002) | Traders never attacked. Their brackets were **yellow**. Every time they were targeted their shield read 100% until they left. The escort **left them alone**. | Matches: not attacking and not a govt enemy of the escort, so not hostile. |
+| Q2c | 2 Kit Traders, AI 1, govt 362 "always attacks player" | Same as Q2b: yellow brackets, 100% shield every time, left alone. A ship whose govt is hostile to the player but which does not attack is **not** engaged. | Matches. |
+| Q3 | 2 Kit Raiders of the **escort's own govt 360** | The raiders attacked the criminal player: shield to 0, armor nearly gone by 70 s. Their shield read 100% at every sample and the escort's stayed at 100%. The escort **did not defend the player against its own govt**, and kept green brackets the whole time. | **Mismatch.** NovaJS counts any ship attacking the protectee as a hostile (`attackingProtectee`, `npc_decision.ts:391`), including the escort's own government's ships. |
+
+So in the original, a protect-the-player escort:
+- engages ships that attack the player, as long as they are not its own
+  government's;
+- ignores hostile-govt ships that are not attacking;
+- never turns on the player it protects (Q1).
+
+**Proposed fix (not applied).** In `packages/nova/src/nova_plugin/npc/npc_decision.ts:391`, skip `attackingProtectee(otherUuid)` when the attacker's govt is the protector's own govt (`otherGovt === govtData?.id`). Two cases are unverified, and the safe reading is to treat them like the own govt:
+- the protector's allies;
+- ships with the same `classes`.
+
+Confidence is high for Q2a and Q3: both had clear, sustained combat (or none) over 70 s. Q2b/Q2c are medium: the traders spent much of the run off screen before leaving.
+
+**Side finding, the IFF bracket colour.** Ships of the always-attacks-player govt that did not attack (AI 1 traders) showed **yellow** brackets, so the colour does not simply follow the govt's attitude. NovaJS colours by govt disposition (`N/nova_plugin/hostility.ts`). Worth a dedicated check (catalogue K9).
+
+**Side finding, which record matters (A14).** Kit Raiders of govt 362 left a player who was -500 in Kit Range (govt 360) and -500 in govt 362's own home system **neutral** (yellow, no attack) until govt 362 got the "always attacks player" flag. The Bible's gövt flag 0x0002 text ("will attack the player in non-allied systems if he's a criminal there") implies that a govt by default only enforces the record of systems it or its allies own. The record that counts is the CURRENT system's, and only for that system's govt and its allies. NovaJS keeps per-govt records and checks them everywhere.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-protect-player/`
+
+- `q2a/20261123-013524-protect_observe/`
+- `q2b/20261123-013801-*`
+- `q2c/20261123-014609-*`: complete. The old Mac lost power after the
+  run's last step, before cleanup; it was recovered with `novaref
+  recover`.
+- `q3/20261123-014021-*`
+
+Each holds `recording.mp4`, the per-Tab shots and `pilot-after`. The two
+earlier q2a runs (`…012816…`, `…013143…`) are the CrimeTol-0/MaxOdds-100
+attempts in which nobody attacked.
+
+### Q4: do a protector's bay fighters follow suit? (2026-11-23)
+
+**Finding:** the question doesn't arise in the original. A ShipBehav-1
+carrier **never launched its fighters**.
+
+- Q4 used a kit carrier with Kit Fighter Bay ×4.
+- Q4b used the **stock Fed Carrier** with its stock bays.
+- In both, raiders were attacking the player and the carrier for 70 s.
+  Neither carrier launched anything: Tab never cycled to a fighter, and no
+  small craft appear in the recording. The carriers fought with their own
+  guns instead; the Fed Carrier's shield fell 100% → 48%, then armor 62%,
+  then Disabled ("Mission failed").
+- NovaJS also has NPC carriers never fire their bays, so it is consistent.
+
+Confidence: medium. Two runs of 70 s each; a longer fight or a non-mission
+carrier might behave differently.
+
+**Evidence:**
+- `~/.local/share/novaref/evidence/20261123-protect-player/q4/20261123-014238-*`
+- `q4b/20261123-015700-*`. The `q4b/…015436…` run is a sporadic game
+  exit on Enter Ship, not data.
+
+### B-series: does blast damage hit the firer, its formation-mates or its protector, and does anyone retaliate? (2026-11-23)
+
+**Kit.**
+- wëap 370 Kit Blast Bomb: 2-frame life, detonates at end (wëap flag
+  0x8000), 300 px BlastRadius, 50/50 damage. Fired by the player.
+- wëap 372 Kit Blast Shell: for NPCs, since the AI only fires inside
+  Speed×Duration range. 180 px reach, ProxRadius 30, 400 px blast,
+  detonates at end.
+- wëap 373: the 2000-damage version of 370.
+
+| id | setup | finding | confidence |
+|---|---|---|---|
+| B1 (firer) | Player in Kit Lancer Lite (1500 shield, no recharge) fires the Kit Blast Bomb: one tap, then 4 s of fire. `scenarios/blast_self.json` | **The player's own blast damages the player.** The shield bar drops visibly with each bomb; nothing else was shooting. | high |
+| B1 (protector) | Same run, with the mïsn 960 protect-the-player Kit Escort in formation next to the player | **The blast damages the escort:** shield 100 → 98 → 95%. Direct projectiles pass through it (Q1); blasts do not. | high |
+| B2 (protector) | Same | The escort **did not retaliate**: brackets stayed green throughout and the player took no further damage. | high |
+| B1 (NPC mates) | Two Kit Bomb Raiders (govt 362, always attack the player, armed only with the Kit Blast Shell) attack a passive Kit Lancer. Pilot `bnpc2.json`, `protect_observe.json` | Their shields fell steadily (100 → 96 → 90 → 85 → 79 → 76%) though the player never fired. **An NPC's own blast, or its wingmate's, damages it.** | high |
+| B2 (NPC mates) | Same | No infighting in 70 s. The two kept making joint passes at the player, side by side. | medium |
+| B4 | Player in Kit Lancer destroys its own mïsn-960 escort with the 2000-damage blast, then lands. `scenarios/blast_kill.json`, pilot `bkill.json` | The escort ended **Disabled** (not destroyed) and the game printed "Mission failed". After landing and re-saving, the pilot shows **no legal-record change** in sÿst 2100 (govt 360 DisabPenalty 50) and **combat rating 0**: no crime and no credit for disabling one's own escort with a blast. | medium (the escort was disabled, not killed) |
+| B3 (direct hits) | Q1 | Direct projectiles from the player pass through its protect-the-player escort. | high |
+
+**For the NovaJS bug** (an AI carrier turning hostile to its own fighter
+or escort after the fighter's missile blast damaged it):
+
+- In the original the damage itself **is possible**. A blast hurts its
+  firer and the firer's own side.
+- But nobody retaliated against its own side in any run:
+  - the player's escort ignored the player's blasts;
+  - the NPC wingmates ignored each other's.
+- So "damaged by a friendly blast" must not make a ship an aggressor
+  against its own leader or flock.
+
+**Not covered.** The NPC carrier and bay-fighter case. NPC carriers never
+launched (Q4), and player-launched bombers took no action:
+- Kit Target is neutral, and the escort command `f` didn't send them in.
+- Their 2-frame bomb has no AI range.
+
+Kit Bombers now carry the ranged 372 shell. A retry needs a hostile target
+next to the player.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-blast/`
+- `20261123-020446-blast_self/`
+- `npc/20261123-020955-protect_observe/`
+- `20261123-021248-blast_kill/`: includes `pilot-landed/` and `pilot-after/`.
+
+### F1: where do escorts fly relative to their leader? (2026-11-23)
+
+**Kit.** Disc hulls are solid one-colour discs, 24 px across, drawn on all
+36 frames. They are built with `packages/novaparse/src/plugin_kit/sprites.ts`
+and given the stock Shuttle's shän with only the sprite swapped.
+- Leader: white, shïp 720, Speed/Accel 300, Turn 30.
+- Hired escorts: red, green, blue and yellow, shïp 721–724, Speed/Accel
+  600.
+
+**Run.** `scenarios/formation_player.json` (pilot `f1.json`):
+1. 8 s at rest.
+2. 4 s of thrust, then cruise at top speed (4.49 px/frame, about 135 px/s
+   at 30 Hz).
+3. Turn about 175° and keep drifting.
+4. Thrust out the other way.
+
+**Analysis.** `analysis/discs.mjs` finds each disc's centroid per frame
+and takes the leader's direction of travel from the starfield. Offsets are
+**along** the heading (+ = ahead) and **across** it (+ = left of travel).
+
+| escort (pilot slot) | rest | accelerating | cruise A (135 px/s) | cruise B (reversed, 135 px/s) |
+|---|---|---|---|---|
+| red (0) | −25.7 / +24.8 | −10.3 / +22.9 | −23.9 / +16.7 | −15.2 / +27.7 |
+| green (1) | −25.6 / −21.7 | −10.3 / −23.6 | −24.0 / −29.9 | −22.2 / −15.0 |
+| blue (2) | −49.6 / +48.9 | −34.1 / +46.7 | −47.9 / +40.8 | −39.9 / +50.8 |
+| yellow (3) | −49.3 / −45.5 | −34.0 / −44.7 | −47.6 / −53.8 | −46.2 / −39.6 |
+
+Cells are along / across in px (medians). At rest, along/across use the
+heading the leader then thrust along.
+
+**Findings.**
+
+- **Geometry.** The original flies a **45° V trailing the leader**. Slot
+  pairs sit at (−25, ±25) and (−50, ±48) px. The first escort goes left of
+  travel, the second right, the third left-outer, the fourth right-outer.
+  Distances: about 35 px for the first pair, 70 px for the second.
+- **Speed.** At full speed the escorts sit **on the same slots as at
+  rest**. Along offsets agree within 2 px at 135 px/s. There is **no
+  speed-proportional lead or lag**. While the leader accelerates, the
+  escorts are about 15 px ahead of their slots, catching up.
+- **NovaJS mismatch.** `N/nova_plugin/npc/npc_formation.ts`:
+  - It sets the target AHEAD of the slot by `FORMATION_LOOKAHEAD_S` (0.4
+    s) × leader velocity (line 26, used at about line 258). At 135 px/s
+    that is 54 px ahead.
+  - Its rows are 60 px astern with ±27.5 px lateral cells (lines 18-23)
+    and a different shape.
+- **Proposed fix (not applied).** Drop the lookahead. Hold escorts exactly
+  on their slots, and use the original's 45° echelon slot table.
+  - Whether the original's spacing scales with hull size is untested: all
+    discs are 24 px.
+  - NPC fleet (flët) escorts are untested.
+
+Confidence: high for the rest/cruise slots; medium for the transient
+lead while accelerating.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-formation/20261123-022125-formation_player/`
+holds `recording.mp4`, `discs.csv` (per frame), `discs.json` and
+`windows.json`.
+
+## Pending
 
 | id | question | experiment | where it matters |
 |---|---|---|---|
-| Q2a | Does a protect-the-player ship engage ships that are **attacking** the player? | `protect_observe.json`, pilot `q2a.json`: mïsn 961 escort + 2 Kit Raiders (govt 362, AI 3, player criminal). Tab through targets, watch shield % of the raiders and the player. | `N/nova_plugin/npc/npc_decision.ts` `attackingProtectee` (~275, ~391) |
-| Q2b | …or any ship merely **hostile** to the player and not attacking (wimpy traders)? | Pilot `q2b.json`: mïsn 962 escort + 2 Kit Traders (govt 361, AI 1). | Same. NovaJS: not engaged unless its own govt is an enemy. |
-| Q3 | Does it fight its **own govt's** ships when they attack a criminal player? | Pilot `q3.json`: mïsn 963 escort + 2 own-govt raiders (govt 360). | Same. NovaJS: yes (isAttackingPlayer wins over govt). |
-| Q4 | Do its bay fighters follow suit? | Pilot `q4.json`: mïsn 964 Kit Carrier (fighter bay 366) + raiders. | Bay fighters' flock membership (`N/nova_plugin/escorts/bay_plugin.ts`, `allegiance.ts`). |
 | #321 | What sets the trade tier multiplier k (×1.25/×0.8 vs ×1.1)? Is it the pilot's priceFlux? | CPl: identical pilots that differ only in `priceFlux` (pilot-make supports it). Land at Kit Port / Kit Market (opposite tiers + jünk 200/201), SS the Trade Center, buy/sell, PD credits. | `N/nova_plugin/economy/trade_logic.ts:33` |
 | #316b | Is wëap GuidedTurn on the ship Turn scale (1°/frame per 10)? | CPg: Kit Missile T10/T30/T60 (speed 600, i.e. 5.8 px/frame) fired 90° off a Kit Target (mïsn 965). The turning radius is v/ω: 1°/frame per 10 gives about 330 px for T10. | `P/parsers/weapon_parse.ts:313` |
 

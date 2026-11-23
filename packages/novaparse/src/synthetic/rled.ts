@@ -16,7 +16,28 @@ import { RasterFrame, TRANSPARENT } from "./raster.js";
  * Every opcode is a 32-bit word: the top byte is the opcode, the low 24
  * bits a byte count (two bytes per 16-bit pixel).
  */
-export function encodeRled(frames: readonly RasterFrame[]): number[] {
+export interface EncodeRledOptions {
+    /**
+     * Encode rows the way the stock files do, which the ORIGINAL game
+     * needs (it asserted on load with the default encoding, 2026-11-23,
+     * docs/reference_experiments.md):
+     * - each LineStart carries the byte count of the row's opcodes and
+     *   data;
+     * - trailing transparent pixels are left out (an empty row is a bare
+     *   LineStart);
+     * - opaque pixels are always literal PixelData (opcode 2).
+     *
+     * Off by default so the checked-in synthetic data set stays
+     * byte-identical; our own parser reads both forms.
+     */
+    original?: boolean;
+}
+
+export function encodeRled(frames: readonly RasterFrame[],
+    options: EncodeRledOptions = {}): number[] {
+    if (options.original) {
+        return encodeRledOriginal(frames);
+    }
     if (frames.length === 0) {
         throw new Error("An rlëD needs at least one frame");
     }
@@ -69,6 +90,57 @@ export function encodeRled(frames: readonly RasterFrame[]): number[] {
             }
         }
         opcode(0, 0); // EndOfFrame
+    }
+    return w.toArray();
+}
+
+function encodeRledOriginal(frames: readonly RasterFrame[]): number[] {
+    if (frames.length === 0) {
+        throw new Error("An rlëD needs at least one frame");
+    }
+    const { width, height } = frames[0];
+    const w = new ByteWriter();
+    w.uint16(width).uint16(height).uint16(16).uint16(0)
+        .uint16(frames.length).zeros(6);
+    const word = (out: number[], code: number, byteCount: number) => {
+        const v = ((code << 24) | byteCount) >>> 0;
+        out.push((v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff);
+    };
+    for (const frame of frames) {
+        if (frame.width !== width || frame.height !== height) {
+            throw new Error("Every frame of an rlëD shares one size");
+        }
+        for (let y = 0; y < height; y++) {
+            const row = frame.pixels.slice(y * width, (y + 1) * width);
+            let last = row.length - 1;
+            while (last >= 0 && row[last] === TRANSPARENT) {
+                last--;
+            }
+            const body: number[] = [];
+            let x = 0;
+            while (x <= last) {
+                const start = x;
+                if (row[x] === TRANSPARENT) {
+                    while (x <= last && row[x] === TRANSPARENT) x++;
+                    word(body, 3, 2 * (x - start));
+                } else {
+                    while (x <= last && row[x] !== TRANSPARENT) x++;
+                    word(body, 2, 2 * (x - start));
+                    for (let i = start; i < x; i++) {
+                        body.push((row[i] >> 8) & 0xff, row[i] & 0xff);
+                    }
+                    if ((2 * (x - start)) % 4 !== 0) {
+                        body.push(0, 0);
+                    }
+                }
+            }
+            const line: number[] = [];
+            word(line, 1, body.length); // LineStart: bytes that follow in this row
+            for (const b of [...line, ...body]) {
+                w.uint8(b);
+            }
+        }
+        w.uint32(0); // EndOfFrame
     }
     return w.toArray();
 }

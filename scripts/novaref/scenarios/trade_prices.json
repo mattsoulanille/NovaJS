@@ -1,0 +1,7 @@
+{
+ "name": "trade_prices",
+ "_comment": "#321: land at Kit Port and screenshot the Trade Center. Run once per pilots/price_*.json (they differ only in the globals priceFlux[4]).",
+ "pilot": { "as": "novaref-price" }, "plugins": ["../kits/testkit.mjs"],
+ "steps": [ {"keys": "e wait 4000"}, {"move": true}, {"keys": "l wait 1500 l wait 9000"}, {"shot": "spaceport", "window": true}, {"keys": "t wait 2500"}, {"shot": "trade", "window": true}, {"keys": "Escape wait 1500"}, {"shot": "after", "window": true} ],
+ "pull": true
+}
