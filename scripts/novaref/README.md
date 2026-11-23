@@ -234,6 +234,14 @@ Step types:
 - `{"move": [x, y], "win": true}`. `{"move": true}` parks the mouse at (40, 40), outside the game window.
 - `{"record": "start", "window": true}` crops the recording. `{"record": "stop", "label": "x"}` writes `recording-x.mp4`.
 - `{"pull": "label"}` pulls the scenario pilot mid-run into `pilot-<label>/`. The game writes the pilot when the player LEAVES the spaceport (the date advances then), not on landing: pull after `Return` (Leave), wave 5.
+- `{"script": "../loops/x.mjs", "args": {...}}` (wave 6) runs a closed-loop
+  step: the module (resolved against the scenario's folder) default-exports
+  `async (api, args) => ({ok, ...})`. `api.step(s)` runs any ordinary step
+  inside the run (same lock, same shot numbering; its keys and shots are
+  frame-stamped under the script step's index), `api.dir` is the run folder
+  and `api.log(obj)` appends a `{"phase":"script"}` line to `log.jsonl`. A
+  script cannot press Escape (refused). `loops/board.mjs` steers to a target
+  by measurement and boards it (see "Boarding loop" below).
 - `{"repeat": N, "steps": [...]}` runs its steps N times (`steps.mjs`). Every
   `{i}` in a string of the inner steps becomes the iteration number, padded
   to two digits, so `{"shot": "watch-{i}"}` gives watch-00, watch-01, ...
@@ -483,7 +491,28 @@ list it in a scenario's `"plugins"`.
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
 | wave 4 additions | sÿst/spöb 2160-2169 Kit Land 40/72/250/325/304x134/96/112/315x200/80/88 (one landable stellar each, cloned from stock spöbs of those sprite sizes), shïp 771/772 Kit Crawler Slowbrake (inertialess, slow Accel, for the landing speed gate), mïsn 991 (bit 9032: four AI 1 subjects), wëap 368 Kit Fixed Gun / 369 Kit Rear Turret (they **replace the #316 Speed Guns**; oütf 605/606 now install them) and shïp 769/770 blue disc escorts carrying them. Jamming types 2-4 (wëap 362-364, oütf 602-604 and 627-629, shïp 773-775, mïsn 962/963/965/966/970), asteroid tests (wëap 378 JamM Decoy V100, 380 JamM Pass V100, oütf 630/631 single +50/+100 jammers, shïp 776/777, mïsn 967/968/992, sÿst 2170 Kit Rock Range 4) and K9 brackets (düde 609/613/614, mïsn 993-995). **Retired** for these: wëap 362-364 (#316b missiles), 368/369 (#316 speed guns), 378/380 (JamM Parent / Plain); düde 603-610 and 613/614 with mïsn 962-970 (Q2b, Q3, Q4b, Q2c, #316b target, B bomb carrier/raiders, the wave-2 derelict, K9's record-hostile ships). Old pilots that name them now get the new resources. See `wave4Resources`. |
 | wave 5 additions (`wave5Resources`, `jamWave5`; nothing retired) | sÿst/spöb 2172-2175 Kit Decoy Range (1 rock) and Kit Decoy Range 3 (3 rocks), target on a marker 250 px east (mïsn 996/997, bits 9037/9038); sÿst 2000 Kit Traffic Range (AI 1 traffic, two landable stellars); shïp 778/779 Kit Lancer Heavy Weak/Strong (Strength 1 / 10000); gövt 365-367, düde 275/276, sÿst 2002/2003 (A14 one-way alliances); düde 277 + sÿst 2004 Kit Carrier Range (AI 3 Kit Bomb Carrier traffic of gövt 362); flët 301/302 + sÿst 2005/2006 (fleets with mixed sprite sizes / repeated escort types); wëap 235 JamM Interf (0x0008) + oütf 444, sÿst 2007 Kit Static Range (Interference 100) and 2009 Kit Static Control (0), mïsn 998/999; wëap 236 JamM Parent V100 (0x8000) + oütf 445, mïsn 1000 (S100 target at Kit Market); düde 278 + sÿst 2011 (hostile STOCK Fed Carrier traffic), shïp 780-782, wëap 237, düde 279 + sÿst 2012 (Fed hull with kit bombers: never launched). `kits/viper_blast.mjs` is a separate test-only plug-in overriding the stock Fed Viper (shïp 144) to carry the Kit Blast Shell. |
+| wave 6 additions (`wave6Resources`; nothing retired, ids above the stock ones) | U9 tiny stellars: sÿst/spöb 2013 Kit Land 17x31 (stock station Type 53), 2014 15x21 (Type 51), 2015 35x22 (Type 48), all with the stock station flags 0x11, and 2016 the 17x31 art as a planet (0x43); shïp 783 Kit Crawler Mini (Crawler 50 on the Shuttle's 24 px sprite). B carrier: mïsn 1001 (bit 9042) puts the stock Fed Carrier of gövt 362 (düde 278) at Kit Port beside the player, mïsn 1002 (9043) an anchored copy (shïp 790, düde 283); wëap 243 Kit Blast Shell 1 (1 damage) for `kits/viper_blast1.mjs`; launch factors: Viper clones shïp 784 (stock bytes, new id), 785 (blast shell only), 786 (kit shipBase), 415 (stock bytes at the first free low id) in Fed Carrier hulls 787/788/789/796 (bays wëap 238/239/240/244, Anaconda bay kept), traffic of sÿst 2017/2018/2019/2021 (düde 280-282, 288). J: wëap 241 JamM Ion (Seeker 0x0020) + oütf 446, shïp 792 Kit Lancer Ion (IonizeMax 100, Deionize 1), shïp 793 Ion Target firing wëap 242 Kit Ion Turret (düde 285, mïsn 1003, bit 9044); shïp 794 Cloak Target (oütf 447 Kit Cloak, Flags2 0x0800; düde 286, mïsn 1004, bit 9045), oütf 448 Kit Cloak Scanner (ModType 30, 0x000F). U9 boarding: shïp 795 Kit Hulk (immobile magenta disc), düde 287 of the derelict gövt 378, sÿst/spöb 2020 Kit Board Range. Later in the wave: shïp 415 Kit Viper Low (carrier 796, bay 244, sÿst 2021), mïsn 1007 (bit 9048) the Kit Bomb Carrier beside the player, wëap 245 Kit Ion Gun / shïp 797 / mïsn 1005 (bit 9046), mïsn 1006 (bit 9047) + oütf 449 (cloak take 2), wëap 246 Kit Long Beam + oütf 450. **Kit-wide fix:** a bay's AmmoType is the carried shïp's id itself (stock wëap 149 holds 144); until wave 6 the kit wrote id - 128, so every kit bay pointed at a missing ship (or a stock one) and never launched what it was meant to. A harness spec now checks it. |
 | wave 2 and 3 additions | A14 hostility cells, the map region, the jamming kit, the AI subjects, F1b disc sizes and the wave-3 resources (jamming at 450/1800 px, long-life and turn-away missiles, InhJam target, AI tank discs, Kit Lancer Heavy, armed blue disc escorts and Kit Fight Range, flët 300 in Kit Fleet Range, Kit Prize, Map B border systems). Each block's doc comment in `kits/testkit.mjs` lists its ids. |
+
+## Boarding loop (`loops/board.mjs`, wave 6)
+
+A `script` step (`scenarios/board_hulk.json`) that brings the player to a
+target it can only see in screenshots, then boards it:
+
+- The target is a magenta disc (kit shïp 795 Kit Hulk), found by colour in
+  a window shot; off screen, the one radar blip that is neither the player
+  nor the stellar the player started on (its blip is dead-reckoned).
+- The heading is measured, not assumed: an inertialess hull stops dead on
+  Down, so a leg of thrust followed by Down moves the player in a straight
+  line, and the target's (or, on the first leg, the stellar's) shift on
+  screen is minus that displacement. Turns between legs are dead-reckoned
+  at the hull's turn rate (Turn 30 = 87.1 deg/s) and re-measured after
+  every leg.
+- Within `near` px it steps in `stepMs` of thrust at a time, presses `b` at
+  every stop and shoots the status line; a boarding dialog (a quarter of
+  the play area lit) is shot and closed with Return.
+- The result (`log.jsonl` phase `script`, and the step's result) lists
+  every leg and every stop's distance; the `b-NN` shots carry the answers.
 
 ## Minimal app (tested 2026-11-23: launches, enters space, lands)
 
@@ -561,6 +590,18 @@ apply.
   wëap 131's orange graphic tracked from where it first appears, and
   attributed to the red or blue disc it appeared beside: which ship is
   firing when two sides share a weapon graphic.
+- `recall_frames.mjs <rec.mp4> --events recording.events.json [--key c]`
+  (wave 6): every blue escort disc's distance from the player per frame,
+  linked into one track per escort, and per escort the shape of its return
+  after the `c` press: first frame on screen, closest pass, the farthest
+  swing-out after it (and whether it left the screen), and when it settled
+  (steady within 2 px for 30 frames). E-recall runs (`esc_recall2.json`).
+- `decoy_encounters.mjs tracks.json...` (wave 6): from `decoy_track.mjs`
+  outputs, the rock-in-cell exposure (distance band x bearing off the
+  missile's heading) before any capture, the captures per cell, and the
+  "misses inside" (a rock 10 deg ahead under 160 px, nearer than the target,
+  for 3+ frames, and no capture). The tracker's ends and onsets are noisy:
+  check every listed missile against its trail picture.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).

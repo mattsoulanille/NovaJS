@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseFfmpegStart, probeFramePts, stepEntersShip, syncEvents } from "./frame_sync.mjs";
 import { expandSteps } from "./steps.mjs";
 
@@ -1126,7 +1126,38 @@ async function runStep(step, ctx) {
         ctx.quitByStep = true;
         return cmdQuit([]);
     }
+    if (step.script) return runScriptStep(step, ctx);
     throw new NovarefError(`unknown step ${JSON.stringify(step)}`);
+}
+
+/**
+ * {"script": "../loops/x.mjs", "args": {...}} (wave 6): a closed-loop step.
+ * The module (resolved against the scenario's folder) default-exports
+ * `async (api, args) => ({ok, ...})`. `api.step(s)` runs any ordinary step
+ * inside this run (same lock, shot numbering and frame stamps: every key and
+ * shot the script posts ends up in recording.events.json under this step's
+ * index), `api.dir` is the run folder, `api.log(obj)` appends a
+ * {"phase":"script"} line to log.jsonl. A script must never press Escape
+ * in flight (it quits to the title).
+ */
+export async function runScriptStep(step, ctx, importer = (u) => import(u)) {
+    const file = path.resolve(ctx.scenarioDir ?? process.cwd(), expandHome(step.script));
+    const mod = await importer(pathToFileURL(file).href);
+    const events = [];
+    const api = {
+        dir: ctx.dir,
+        log: (obj) => ctx.record?.({ phase: "script", script: step.script, ...obj }),
+        step: async (s) => {
+            if (s.script) throw new NovarefError("a script step cannot run another script");
+            if (s.keys !== undefined && /(^|\s)Escape(\s|$|@|\*)/.test(s.keys)) throw new NovarefError("scripts may not press Escape");
+            const r = await runStep(s, ctx);
+            if (r?.events_t) events.push(...r.events_t);
+            if (!r?.ok) throw new NovarefError(`script sub-step failed: ${JSON.stringify(s)}`, r);
+            return r;
+        },
+    };
+    const r = await mod.default(api, step.args ?? {});
+    return { cmd: "script", script: step.script, ...r, ok: r?.ok !== false, events_t: events };
 }
 
 /**
@@ -1214,7 +1245,7 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
     // the game is always quit so the plug-ins can always be removed.
     const parkLast = plugins.length > 0 || appName !== "stock" || sc.park_last_pilot === true;
     if (plugins.length && sc.quit === false) throw new NovarefError("a scenario with plug-ins must quit (they are always uninstalled)");
-    const ctx = { dir, shotN: 0, app: appName, pilotName: sc.pilot?.as ?? sc.pilot?.name };
+    const ctx = { dir, shotN: 0, app: appName, pilotName: sc.pilot?.as ?? sc.pilot?.name, scenarioDir: path.dirname(file), record };
     let failed = null;
     const installedNames = [];
 

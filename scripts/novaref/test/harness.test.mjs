@@ -154,6 +154,14 @@ test("the test kit stays inside the game's id limits", async () => {
     for (const r of kit.resources) checkIdLimit(r);
     const keys = kit.resources.map((r) => `${r.type}:${r.id}`);
     assert.equal(new Set(keys).size, keys.length, "duplicate kit resource");
+    // A bay's AmmoType is the carried shïp's id itself (stock wëap 149 holds
+    // 144); wave 6 found the kit writing id - 128. Every kit bay must name a
+    // kit hull or a stock one (the stock block is 128-414).
+    const kitShips = new Set(kit.resources.filter((r) => r.type === "shïp").map((r) => r.id));
+    for (const r of kit.resources.filter((x) => x.type === "wëap" && (x.set?.guidance === 99 || x.clone === "wëap:149"))) {
+        const ammo = r.set.ammoType;
+        assert.ok(kitShips.has(ammo) || (ammo >= 128 && ammo <= 414), `bay wëap ${r.id} carries shïp ${ammo}`);
+    }
 });
 
 test("expandSteps unrolls repeat blocks and numbers labels", async () => {
@@ -234,4 +242,45 @@ test("stepEntersShip spots a bare e key", () => {
     assert.equal(stepEntersShip({ keys: "Escape wait 500" }), false);
     assert.equal(stepEntersShip({ keys: "text:\"e\"" }), false);
     assert.equal(stepEntersShip({ shot: "e" }), false);
+});
+
+test("board loop: turn keys, heading from a shift, colour blobs", async () => {
+    const { turnKeys, headingFromShift, wrapDeg, findColour, isMagenta, brightShare } = await import("../loops/board.mjs");
+    assert.equal(wrapDeg(190), -170);
+    assert.equal(wrapDeg(-190), 170);
+    // Clockwise on screen (y down) is Right: 87.1 deg/s -> 90 deg in 1033 ms.
+    assert.equal(turnKeys(90, 87.1), "Right@1033");
+    assert.equal(turnKeys(-45, 87.1), "Left@517");
+    assert.equal(turnKeys(2, 87.1), null);
+    // The target moved up-left on screen by (-30, -40): we moved (+30, +40),
+    // i.e. down-right: atan2(40, 30) = 53.13 deg.
+    assert.equal(+headingFromShift([100, 100], [70, 60]).toFixed(2), 53.13);
+    assert.equal(headingFromShift([100, 100], [99, 99]), null);
+    // A 10x10 magenta square at (400..409, 50..59) and a white one at the centre.
+    const W = 832, H = 604, data = Buffer.alloc(W * H * 4);
+    const paint = (x0, y0, n, rgb) => { for (let y = y0; y < y0 + n; y++) for (let x = x0; x < x0 + n; x++) data.set([...rgb, 255], (y * W + x) * 4); };
+    paint(400, 50, 10, [255, 0, 255]);
+    paint(313, 297, 10, [255, 255, 255]);
+    const png = { width: W, height: H, data };
+    const m = findColour(png, isMagenta);
+    assert.deepEqual([m.x, m.y, m.n], [404.5, 54.5, 100]);
+    assert.equal(findColour(png, (r, g, b) => r > 200 && g > 200, 30, 22), null); // the player's sprite is excluded
+    assert.ok(brightShare(png) < 0.01);
+});
+
+test("runScriptStep: a closed-loop script runs ordinary steps and may not press Escape", async () => {
+    const { runScriptStep } = await import("../novaref.mjs");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "novaref-script-"));
+    fs.writeFileSync(path.join(dir, "loop.mjs"),
+        "export default async (api, args) => { await api.step({ wait: 1 }); api.log({ n: args.n }); return { ok: true, n: args.n * 2 }; };\n");
+    fs.writeFileSync(path.join(dir, "bad.mjs"),
+        "export default async (api) => { await api.step({ keys: 'Up wait 10 Escape' }); return { ok: true }; };\n");
+    const logged = [];
+    const ctx = { dir, shotN: 0, scenarioDir: dir, record: (o) => logged.push(o) };
+    const r = await runScriptStep({ script: "loop.mjs", args: { n: 21 } }, ctx);
+    assert.equal(r.ok, true);
+    assert.equal(r.n, 42);
+    assert.deepEqual(r.events_t, []);
+    assert.deepEqual(logged, [{ phase: "script", script: "loop.mjs", n: 21 }]);
+    await assert.rejects(runScriptStep({ script: "bad.mjs" }, ctx), /Escape/);
 });
