@@ -986,6 +986,9 @@ Three earlier attempts are marked INVALID in the evidence:
   - Or let a plain jammed missile re-acquire, keeping permanent loss for
     turn-away (0x0010) missiles.
 - More trials per cell are needed before choosing between the two.
+- **Wave 3 update:** neither option; see "J-series wave 3". The NovaJS
+  description above is also inexact: a jammed frame only flies straight for
+  that one frame, so P < 1 does almost nothing and P = 1 never guides.
 - The asteroid rules (blocking, and pass-over for 0x0001) match NovaJS
   (`N/nova_plugin/combat/projectile_plugin.ts:424-431`).
 
@@ -1182,9 +1185,11 @@ plus:
 - **launch heading**: the player takes off facing a random way. A jammed
   missile that flies straight would still hit if that heading pointed at
   the target, so every run's heading was checked in a crop around the
-  player 2.5 s after the trigger. The closest call (the first wave-3
-  `v100_j50`) launched roughly 15-20° off the target line, which still
-  misses a 900 px target by more than 200 px.
+  player 2.5 s after the trigger. Three wave-3 runs launched within about
+  30° of the target line (`v100_j50` at 05:58 and 07:38, `v100_j25` at
+  07:40); a straight missile then misses a 900 px target by only a few
+  hundred px or less, so those three may undercount. They are kept in the
+  totals and called out below.
 
 **Results** (lost = launched - hits; per-run percentages in brackets; wave
 2's valid runs folded in where the setup is identical):
@@ -1192,10 +1197,10 @@ plus:
 | cell | vuln | target jamming | runs | lost / launched | lost |
 |---|---|---|---|---|---|
 | J0 control (900, 1800 px) | 100 | 0 | 3 | 0 / 147 | 0% |
-| v100, 1-4 × Kit Jammer 25, 900 px, 10 s missile | 100 | 25 / 50 / 75 / 100 "stacked" | 10 (w2 4, w3 6) | 103 / 492 | **21%** (8-33) |
+| v100, 1-4 × Kit Jammer 25, 900 px, 10 s missile | 100 | 25 / 50 / 75 / 100 "stacked" | 13 (w2 4, w3 9) | 145 / 641 | **23%** (8-47; 24% without the three runs launched within about 30° of the target) |
 | v100, 4 × 25, long missile, 450 / 900 / 1800 px | 100 | "100" stacked | 6 | 68 / 296 | **23%** (near 25, 23; mid 33, 21; far 20, 15) |
 | turn-away (0x0010), 4 × 25, long, 450 / 900 / 1800 px | 100 | "100" stacked | 3 | 46 / 148 | **31%** (34, 26, 33) |
-| v50, 2 × 25 or 4 × 25 | 50 | "50" / "100" stacked | 4 (w2 1, w3 3) | 0 / 196 | **0%** |
+| v50, 2 × 25 or 4 × 25 | 50 | "50" / "100" stacked | 5 (w2 1, w3 4) | 0 / 245 | **0%** |
 | v100, ONE +100 jammer | 100 | 100 | 1 | 48 / 49 | **98%** |
 | v50, ONE +100 jammer | 50 | 100 | 1 | 49 / 49 | **100%** |
 | v50, ONE +75 jammer | 50 | 75 | 2 | 48 / 99 | **48%** (45, 51) |
@@ -1226,7 +1231,7 @@ plus:
    jammed when J beats that: V 100 gives P = J (25 → 21-23%, 75 → 72%, 100 → 98%);
    V 50 gives 0 for J ≤ 50, 50% at J 75 (48% measured) and
    100% at J 100. A plain product V·J would give 12.5% at V 50 / J 25 (0
-   of 196 seen) and 50% at V 50 / J 100 (49 of 49 lost).
+   of 245 seen) and 50% at V 50 / J 100 (49 of 49 lost).
 3. **Jammer outfits on a hull do not add up.** One, two, three or four
    Kit Jammer 25s (shïp default outfits) all behave like J = 25 (V 100 loses
    about 22% whatever the count; V 50 loses nothing even with four), while
@@ -1269,9 +1274,11 @@ our V 100 / J 25 target almost 0% (original 22-25%), and InhJam would jam
   the sum (the "count is ignored" alternative fits the data equally).
 - InhJam: leave it out of J until it is measured to do something.
 
-Confidence: high for findings 1-3 (about 1500 missiles over 33 runs, clean
-0/100 cells); medium for the exact formula between its anchor points (one
-or two runs at V 50 / J 75); low for 4-5.
+Confidence: high for findings 1-3 (about 1850 missiles over 38 runs, 32 of them in wave 3; clean
+0/100 cells); medium for the exact formula between its anchor points (two
+runs at V 50 / J 75, one at V 100 / J 75); low for 4-5. The spread
+between identical runs (8-47% in the stacked-25 cell, one 47% outlier)
+is wider than binomial noise alone, so single runs mean little.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-w3-jam/<cell>/*/`
 (each run: `recording.mp4`, `recording.events.json`, the armor shots
