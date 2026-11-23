@@ -202,7 +202,15 @@ carrier **never launched its fighters**.
   small craft appear in the recording. The carriers fought with their own
   guns instead; the Fed Carrier's shield fell 100% → 48%, then armor 62%,
   then Disabled ("Mission failed").
-- NovaJS also has NPC carriers never fire their bays, so it is consistent.
+- NovaJS: that "NPC carriers never fire their bays" note was stale. NPC
+  carriers have launched at their victims since 0655408c, a protector
+  included, so this was a mismatch. **Applied in f71fd85e:**
+  `N/nova_plugin/npc/npc_fire_control.ts` holds the bays of a mission
+  ship in a player's flock (`MissionShipComponent` plus `flockPlayer`:
+  ShipBehav 1 and escort-goal ships). Its guns still fire. The player's
+  own escorts in the flock (hired, captured) are not covered; they were
+  not measured. Specs: `npc_bay_test.ts`,
+  `npc_carrier_integration_test.ts`, `mission_carrier_fighter_test.ts`.
 
 Confidence: medium. Two runs of 70 s each; a longer fight or a non-mission
 carrier might behave differently.
@@ -2277,10 +2285,13 @@ the control).
 (`formationTurretKind`) lets full turrets and front-quadrant turrets fire
 from the slot; fixed guns hold fire (**matches**) and so do rear-quadrant
 turrets (**mismatch**; the comment at lines 608-611 holds them only because
-they were unmeasured). **Proposed (not applied):** add guidance 8 as a
+they were unmeasured). **Applied in a9e28b47:** guidance 8 is a
 'rearQuadrant' kind that fires at an iff-hostile ship within ±45° of the
-escort's tail (the mirror of `inFrontQuadrant`). Front-quadrant turrets
-(guidance 7) are still unmeasured; by symmetry keeping them is right.
+escort's tail (`inRearQuadrant`, the mirror of `inFrontQuadrant`, read
+through the same `getQuadrant` the turret aims by), out to the shot's
+speed × lifetime. Specs: `N/nova_plugin/player/escort_command_test.ts`.
+Front-quadrant turrets (guidance 7) are still unmeasured; by symmetry
+keeping them is right.
 
 Confidence: high for fixed guns (100 s, no damage) and for the control;
 medium-high for rear turrets (clean births in one stretch, and the panel's
@@ -2526,10 +2537,41 @@ on (one at 60%). **The carrier read 100% shield in all 16 of its panels**:
 it hung back, far from where its fighters fought, so no blast reached it
 and the retaliation question could not arise.
 
-**NovaJS:** NPC carriers never fire their bays (wave 1's note), so the
-original's launching traffic carrier is a **mismatch**. The blast-
-retaliation question stays open: it needs the fight brought to the
-carrier (e.g. the player parked beside it, or a carrier with a short
+**NovaJS:** the "NPC carriers never fire their bays" note (wave 1) was
+stale. `N/nova_plugin/npc/npc_fire_control.ts` has opened an attacking
+NPC's bays since 0655408c, one fighter per reload, and
+`NpcWingCommandSystem` (`N/nova_plugin/escorts/escort_command_plugin.ts`)
+orders the wing onto the carrier's victim. Checked:
+- Headless on 7972a28f (real data): a stock Fed Carrier (shïp 143) set on
+  a Shuttle launched 6 fighters in 20 s.
+- Browser on f71fd85e (`?ship=nova:128`, real traffic): a Shuttle fired
+  one burst at a stock Fed Carrier (shïp 220) in Sol. Within a second it
+  was in 'attack' on the player and launched up to 8 fighters (Vipers
+  shïp 144 among them), all ordered to attack the player. Earlier runs
+  of the same change saw the same from a Fed Carrier (shïp 222) and a
+  Pirate Carrier (shïp 287, up to 9 fighters).
+
+So the traffic carrier **matches**.
+
+**Applied in f71fd85e:**
+- the Q4 protector exception (see Q4);
+- recovery, which the reference has not measured: once the carrier has
+  stopped fighting (any NPC mode but 'attack'), its wings get
+  'returnToBay', fly home and dock, refunding their rounds. Between
+  victims they hold formation. A wing already flying home is not turned
+  back if the carrier fights again; the carrier launches again instead,
+  one per reload.
+
+In the browser runs the dev respawn kept killing and reviving the
+Shuttle, so the carrier flipped between 'attack' and 'patrol' every few
+seconds. Recalled wings flew home while fresh ones launched, and the
+magazine bounded the total.
+
+**Not modelled:** the kit-bomber carriers that never launched (cause not
+separated); NovaJS would launch them.
+
+The blast-retaliation question stays open: it needs the fight brought to
+the carrier (e.g. the player parked beside it, or a carrier with a short
 leash). The fighters' own blasts hurting them matches B1.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-w5/{carrier,carrier-fed,carrier-fedbomb,carrier-fedbomb-f,carrier-blast}/*/`
@@ -2710,13 +2752,41 @@ nearly constant 35-45 px/s, settling about 18.5 s after `c` (wave 3's run:
 screen; it arrived late on the same slow final approach. The size of the
 overshoot varies a lot between runs (123 px vs more than 315 px).
 
-**For the comparison (not run here):** NovaJS's `FormationSystem`
-(`N/nova_plugin/npc/npc_formation.ts`, closing speed capped so a hull can
-brake onto its slot, F1 fix) has no overshoot. A headless NovaJS run of the
-same order sequence (escorts about 900 px behind a stopped player, Speed
-600 escorts) should give the frame of first contact (original: 135 + 36
-frames after `c` to the slot), the peak overshoot (original: more than
-300 px) and the settling frame (original: 546-561 frames after `c`).
+**NovaJS comparison (headless, main 7972a28f + f71fd85e; formation
+steering unchanged).** Two escorts with the kit disc's converted stats
+(Speed 600 = 270 px/s, Accel 600 = 108 px/s², Turn 60, 24 px frame) on
+'holdPosition' 900 px behind a stopped Kit Lancer (±40 px abreast, facing
+it), then ordered back to 'formation' (`c`). Distances sampled at the
+recording's 30.04 fps. The two escorts started mirror-symmetric, so they
+flew identical paths.
+
+| | original (escort A) | NovaJS |
+|---|---|---|
+| on screen (≤ 315 px) | frame 135 (4.49 s), 285 px/s | frame 111 (3.70 s), 206 px/s |
+| fastest on the way in | 285 px/s (top speed) | 225 px/s (the brake cap, √(2 · 0.5 · Accel · d)) |
+| first contact (reaches the slot) | frame 171 (5.69 s), 18 px from the player | frame 156 (5.19 s), 171 px/s; closest 29.5 px |
+| peak overshoot | more than 315 px from the player (off screen, frames 225-272) | 201 px from the player at frame 220 (161 px past the 40 px slot), then a second, smaller swing (99 px at frame 350) |
+| return | slow, nearly constant 35-45 px/s from 315 px | up to about 90 px/s |
+| settled | frames 546-561 (18.2-18.7 s), 28.7 / 37.4 px | frame 414 (13.8 s), 40.1 px |
+
+Starting 800 or 1000 px back moves NovaJS's numbers only a little:
+contact at frame 147 / 165, peak 183 / 217 px, settled at 403 / 427.
+
+**Finding.** NovaJS overshoots too, so the "no overshoot" line above is
+wrong. The shape is the same: a dash, an overshoot past the player, a
+turn, a slower return, then the slot. But NovaJS:
+- brakes on the way in (it never reaches top speed);
+- reaches the slot about 15 frames sooner;
+- overshoots about half as far;
+- comes back faster;
+- settles about 4.5 s sooner.
+
+It is closer to wave 3's run (overshoot to 123 px, settled about 10 s
+after `c`) than to this one. The original's second escort arrived late on
+the slow approach without ever dashing through; a symmetric start in
+NovaJS can't show that. No change proposed, since the two original runs
+already differ this much. The script is in this wave's hand-back (the
+agent's scratchpad `recall.mjs`).
 
 Confidence: high for this run's timeline (frame-exact), low for how
 typical it is (two runs so far, very different overshoots).
