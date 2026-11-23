@@ -26,6 +26,7 @@ import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';
+import { LINE_HEIGHT } from './dialog_layout.js';
 import { describeOutfitChanges, requestCheckpoint } from './checkpoint_requests.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import {
@@ -143,9 +144,16 @@ export class Spaceport extends Menu<Entity> {
             fontFamily: "Geneva", fontSize: 18, fill: 0xffffff,
             align: 'center'
         } as const,
+        // The landing description is the original's body text, Geneva 9
+        // on a 12px pitch, like every other landed pane (dialog_layout.ts):
+        // at 9px/11px ours ran ~2.5% narrow and a line short every 11, so
+        // Earth's text wrapped a word late on most lines and ended at
+        // y719 where the R8 wave-5 capture (02-spaceport.png) ends at
+        // y738. 9.4px reproduces that capture's breaks line for line.
         desc: {
-            fontFamily: "Geneva", fontSize: 9, fill: 0xffffff,
-            align: 'left', wordWrap: true, wordWrapWidth: 301
+            fontFamily: "Geneva", fontSize: 9.4, fill: 0xffffff,
+            align: 'left', wordWrap: true, wordWrapWidth: 301,
+            lineHeight: LINE_HEIGHT,
         } as const,
     };
 
@@ -1017,7 +1025,9 @@ export class Spaceport extends Menu<Entity> {
             this.id);
         const title = new PIXI.Text(data.name, this.font.title);
         title.anchor.x = 0.5;
-        title.position.x = -2;
+        // "Earth"'s ink spans x940..982 on the R8 wave-5 capture
+        // (02-spaceport.png), centred on x961; at -2 ours centred on 957.5.
+        title.position.x = 1;
         title.position.y = 39;
         this.container.addChild(title);
 

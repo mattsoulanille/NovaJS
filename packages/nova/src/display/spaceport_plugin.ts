@@ -1,3 +1,4 @@
+import * as PIXI from "pixi.js";
 import { Emit, Entities, GetEntity, RunQuery } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
@@ -22,7 +23,7 @@ import { OpenPlayerInfoResource } from './player_info_plugin.js';
 import {
     ResizeEvent, ScreenSize, screenCentre,
 } from './screen_size_plugin.js';
-import { Stage } from './stage_resource.js';
+import { Stage, WorldLayer } from './stage_resource.js';
 import { OpenStarmapResource } from './starmap_plugin.js';
 import { UiSoundEvent } from './ui_sound.js';
 import { MissionShipDoneSystem } from "./mission_ship_done_plugin.js";
@@ -90,16 +91,26 @@ const OpenSpaceportSystem = new System({
         DockedShipResource, Entities, SimulationGameDataResource,
         DisplayAssetDataResource, ControlsSubject, Stage, OpenStarmapResource,
         OpenPlayerInfoResource, OpenMissionInfoResource,
-        SingletonComponent] as const,
+        Optional(WorldLayer), SingletonComponent] as const,
     step({ planetId, ship, uuid, landedEscorts, onShipSwap }, runQuery,
         { x, y }, emit, dockedHolder, entities, gameData, displayAssets,
-        controls, stage, openStarmap, openPlayerInfo, openMissionInfo) {
+        controls, stage, openStarmap, openPlayerInfo, openMissionInfo,
+        worldLayer) {
         const landedAt = runQuery(PlanetSpaceportQuery)
             .find(([, { id }]) => id === planetId);
         if (!landedAt) {
             return;
         }
         const [planet, , existing] = landedAt;
+        // The original draws NOTHING of space while the player is landed:
+        // the spaceport sits on a black screen with only the status bar
+        // beside it (every 1920x1080 capture, e.g.
+        // spaceport/earth.png and the R8 wave-5 fullscreen set in
+        // docs/reference_experiments.md). Our display world keeps
+        // simulating — other ships fly on, the starfield scrolls — so its
+        // layer is hidden for the visit and shown again at Leave. The UI
+        // Stage (status bar, the spaceport itself) is a separate layer.
+        setSpaceVisible(worldLayer, false);
         let spaceport = existing;
         if (!spaceport) {
             // First landing here this visit: build the stellar's spaceport
@@ -156,12 +167,26 @@ const OpenSpaceportSystem = new System({
 const CloseSpaceportSystem = new System({
     name: 'CloseSpaceportSystem',
     events: [LeaveSpaceportEvent],
-    args: [DockedShipResource, SingletonComponent] as const,
-    step(dockedHolder) {
+    args: [DockedShipResource, Optional(WorldLayer),
+        SingletonComponent] as const,
+    step(dockedHolder, worldLayer) {
         // Back in flight: the in-world PlayerShipSelector systems take over.
         dockedHolder.current = undefined;
+        setSpaceVisible(worldLayer, true);
     }
 });
+
+/**
+ * Shows or hides the flight view (the WorldLayer: starfield, stellars,
+ * ships) behind the landed UI. Absent in a display world built without
+ * the Display plugin (headless specs), where there is nothing to hide.
+ */
+function setSpaceVisible(worldLayer: PIXI.Container | undefined,
+    visible: boolean) {
+    if (worldLayer) {
+        worldLayer.visible = visible;
+    }
+}
 
 const SpaceportResizeSystem = new System({
     name: 'SpaceportResize',
