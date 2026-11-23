@@ -1825,15 +1825,27 @@ Planet centres are good to about 5 px.
 numbers are off: the range is about 2.3x too small for a typical planet
 (and too large for a 40 px moon), the speed gate about 2.7x too lenient.
 
-**Proposed (not applied).**
+**Applied in "Landing range scales with the stellar's sprite; 20 px/s
+speed gate" (wave-4 fixes).**
 - `LAND_SPEED_SQUARED = 400` (20 px/s).
 - Landing range from the stellar's sprite frame size S (the larger of
-  width and height): **R = min(2 S, 240) px**, optionally max(R, 0.8 S)
-  so the 315-325 px art gets its measured 260-295.
+  width and height): **R = max(min(2 S, 240), 0.8 S) px**
+  (`planet_plugin.ts` `landingRange`), so the 315-325 px art gets 252-260.
+  S is the new `PlanetData.spriteFrameSize`, the rlëD frame size the
+  parser reads through spöb Type -> spïn 1000+Type (the spïn's xSize/ySize
+  if the rlëD is missing). PlanetData is staged on every peer, so the range
+  is the same everywhere. A stellar with no data, or game-data JSON without
+  the field, keeps the old 100 px (S = 50).
 - Keep "too far" before "too fast". The receding-ship extension (finding 4)
-  is message-only and can be left out.
+  is message-only and is left out.
+- The touch autopilot (`N/autopilot.ts`) now aims at 90% of the stellar's
+  range and half the speed² gate, with a proportional inertial burn so it
+  can brake below 20 px/s.
+- Not measured, but the formula applies: the small stock stations get
+  small ranges (17x31 -> 62 px, 15x21 -> 42 px).
 - `N/nova_plugin/escorts/player_escort_plugin.ts:196-197` (escort landing,
-  300 px / 100 px/s) is a separate NovaJS-only tuning, not measured here.
+  300 px / 100 px/s) is a separate NovaJS-only tuning, not measured here,
+  and is unchanged.
 
 Confidence: high for the speed gate (two hulls, the same answer) and for
 the at-rest ranges (each a clean too far / landed pair 26-28 px apart);
@@ -2191,7 +2203,7 @@ cosmetic or rare.
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
-| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **answered (wave 4)**: range about min(2 S, 240) px, speed gate about 20 px/s. **Mismatch** (NovaJS 100 px, 54.8 px/s) | L |
+| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **answered (wave 4)**: range about min(2 S, 240) px, speed gate about 20 px/s. **Mismatch** (NovaJS 100 px, 54.8 px/s), applied in the wave-4 fixes (R = max(min(2 S, 240), 0.8 S), 20 px/s) | L |
 | U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship | L |
 
 ### NPC AI and state transitions (Matthew's category)

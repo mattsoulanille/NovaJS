@@ -176,6 +176,17 @@ describe("the synthetic Nova data set", () => {
                 expect(refuge.landingFee).toEqual(250);
             });
 
+        it("gives each stellar its sprite's frame size (spöb Type -> spïn "
+            + "-> rlëD header), which the landing range scales with", async () => {
+                const sizeOf = async (id: string) =>
+                    (await novaParse.data.Planet.get(id)).spriteFrameSize;
+                expect(await sizeOf(SYNTHETIC.planets.port)).toEqual([40, 40]);
+                expect(await sizeOf(SYNTHETIC.planets.moon)).toEqual([28, 28]);
+                expect(await sizeOf(SYNTHETIC.planets.refuge)).toEqual([36, 36]);
+                // Not square: width first.
+                expect(await sizeOf(SYNTHETIC.planets.kestrelGate)).toEqual([24, 32]);
+            });
+
         it("gives each ship its sprites, stock loadout and descriptions", async () => {
             for (const def of SHIPS) {
                 const ship = await novaParse.data.Ship.get(sid(def.id));

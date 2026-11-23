@@ -149,22 +149,43 @@ describe("PlanetParse gate projection", () => {
 
 describe("PlanetParse stellar graphic (spïn -> rlëD resolution)", () => {
     let idSpace: ReturnType<typeof getEmptyNovaResources>;
-    // The parser reads spïn.spriteID and rlëD.globalID; stub just those.
-    const spin = (spriteID: number) => ({ spriteID }) as never;
-    const rled = (globalID: string) => ({ globalID }) as never;
+    // The parser reads spïn.spriteID/spriteSize and rlëD.globalID/size;
+    // stub just those.
+    const spin = (spriteID: number, spriteSize = [72, 72]) =>
+        ({ spriteID, spriteSize }) as never;
+    const rled = (globalID: string, size = [40, 40]) =>
+        ({ globalID, size }) as never;
 
     beforeEach(() => {
         idSpace = getEmptyNovaResources();
     });
 
-    function graphicOf(type: number): Promise<string> {
+    function parseType(type: number) {
         const spob = new SpobResource(
             buildSpob({
                 flags2: type === 59 ? 0x2000 : 0,
                 hyperlinks: [], ambientSound: -1, fee: 0, type,
             }).resource("spöb", 200), idSpace);
-        return parse(spob).then(p => p.animation.images.baseImage.id);
+        return parse(spob);
     }
+
+    function graphicOf(type: number): Promise<string> {
+        return parseType(type).then(p => p.animation.images.baseImage.id);
+    }
+
+    it("reads the sprite frame size (the landing range's input) from the "
+        + "rlëD header, width first", async () => {
+            idSpace.spïn[1018] = spin(2018, [304, 134]);
+            idSpace.rlëD[2018] = rled("nova:2018", [304, 134]);
+            expect((await parseType(18)).spriteFrameSize).toEqual([304, 134]);
+        });
+
+    it("falls back to the spïn's declared size when the rlëD is missing, "
+        + "then to the 50 px default", async () => {
+            idSpace.spïn[1005] = spin(2005, [325, 325]);
+            expect((await parseType(5)).spriteFrameSize).toEqual([325, 325]);
+            expect((await parseType(7)).spriteFrameSize).toEqual([50, 50]);
+        });
 
     it("resolves Type through spïn (1000 + Type), not a linear 2000 + Type",
         async () => {

@@ -2,6 +2,9 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { World } from 'nova_ecs/world';
 import { ControlEvent } from './nova_plugin/core/index.js';
 import { AnalogControlState, ControlledByComponent } from './nova_plugin/player/index.js';
+import {
+    LAND_SPEED_SQUARED, PlanetDataComponent, stellarLandingRange,
+} from './nova_plugin/travel/index.js';
 
 /**
  * Client-side autopilot: flies the player's ship to a tapped planet
@@ -17,11 +20,25 @@ export interface ControlSinks {
     analogControl(control: AnalogControlState): void;
 }
 
-/** Landing wants dist² < 10_000 and speed² < 3_000; aim inside both. */
-const ARRIVE_DISTANCE_SQUARED = 8_100;   // 90 units
-const ARRIVE_SPEED_SQUARED = 2_500;      // 50 units/s
-/** Stop aiming closer than this; the landing radius is 100 units. */
+/**
+ * Landing wants the ship inside the stellar's landing range
+ * (stellarLandingRange, 80-260 px by sprite size) and slower than 20 px/s
+ * (LAND_SPEED_SQUARED); aim inside both: 90% of the range, half the
+ * speed² (about 14 px/s).
+ */
+const ARRIVE_RANGE_FRACTION = 0.9;
+const ARRIVE_SPEED_SQUARED = LAND_SPEED_SQUARED / 2;
+/** Stop aiming closer than this (px), or 60% of a small stellar's range. */
 const STOP_MARGIN = 60;
+const STOP_MARGIN_RANGE_FRACTION = 0.6;
+/** An inertial ship coasts once its velocity is this close (px/s) to the
+ * wanted one; finer than the landing gate, so it settles below it. */
+const COAST_TOLERANCE = 4;
+/** Below a full burn's worth of correction the inertial throttle is
+ * proportional: a needed change of `acceleration * this` px/s (a fifth of
+ * a second's thrust) burns at full throttle, smaller ones less, so braking
+ * to the 20 px/s gate does not overshoot it. */
+const PROPORTIONAL_BURN_SECONDS = 0.2;
 /** Thrust only when facing within this many radians of the burn. */
 const BURN_FACING_TOLERANCE = 0.5;
 /** Pump frames between 'land' taps, and held frames per tap. The gap
@@ -84,8 +101,13 @@ export class Autopilot {
             return;
         }
 
-        const planetMovement = world.entities.get(this.planetUuid)
-            ?.components.get(MovementStateComponent);
+        const planet = world.entities.get(this.planetUuid);
+        const planetMovement = planet?.components.get(MovementStateComponent);
+        const landingRange =
+            stellarLandingRange(planet?.components.get(PlanetDataComponent));
+        const arriveDistance = ARRIVE_RANGE_FRACTION * landingRange;
+        const stopMargin = Math.min(STOP_MARGIN,
+            STOP_MARGIN_RANGE_FRACTION * landingRange);
         let ship;
         for (const entity of world.entities.values()) {
             if (entity.components.get(ControlledByComponent)?.peerId === myPeerId) {
@@ -107,7 +129,7 @@ export class Autopilot {
         const speedSquared = movement.velocity.x * movement.velocity.x
             + movement.velocity.y * movement.velocity.y;
 
-        if (distanceSquared < ARRIVE_DISTANCE_SQUARED
+        if (distanceSquared < arriveDistance * arriveDistance
             && speedSquared < ARRIVE_SPEED_SQUARED) {
             this.sendAnalog({ heading: null, throttle: 0 });
             this.tapLand();
@@ -121,7 +143,7 @@ export class Autopilot {
         // under it so the ship settles inside the landing window.
         const desiredSpeed = Math.min(physics.maxVelocity,
             0.8 * Math.sqrt(2 * physics.acceleration
-                * Math.max(0, distance - STOP_MARGIN)));
+                * Math.max(0, distance - stopMargin)));
 
         if (physics.movementType === MovementType.INERTIALESS) {
             // Velocity follows the nose; point at the planet and match
@@ -140,7 +162,7 @@ export class Autopilot {
         const burnX = desiredVelocityX - movement.velocity.x;
         const burnY = desiredVelocityY - movement.velocity.y;
         const burn = Math.hypot(burnX, burnY);
-        if (burn < physics.acceleration * 0.05) {
+        if (burn < Math.min(physics.acceleration * 0.05, COAST_TOLERANCE)) {
             // Velocity is right; coast, nose toward the planet.
             this.sendAnalog({ heading: Math.atan2(toX, -toY), throttle: 0 });
             return;
@@ -150,7 +172,10 @@ export class Autopilot {
             angleDifference(burnHeading, movement.rotation.angle));
         this.sendAnalog({
             heading: burnHeading,
-            throttle: facingError < BURN_FACING_TOLERANCE ? 1 : 0,
+            throttle: facingError < BURN_FACING_TOLERANCE
+                ? Math.min(1, burn
+                    / Math.max(1, physics.acceleration * PROPORTIONAL_BURN_SECONDS))
+                : 0,
         });
     }
 

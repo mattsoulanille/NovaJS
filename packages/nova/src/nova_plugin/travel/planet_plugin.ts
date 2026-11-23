@@ -157,9 +157,51 @@ export const STELLAR_BRIBE_MS = 120_000;
 
 registerSimulationBridgeEvent({ event: LandingBlockedEvent });
 
-/** Landing window: within 100 units (dist²) and slower than ~54.8 (speed²). */
-export const LAND_DISTANCE_SQUARED = 10_000;
-export const LAND_SPEED_SQUARED = 3_000;
+/**
+ * The landing speed gate: a ship lands only below 20 px/s (speed², strict).
+ * Measured on the original (docs/reference_experiments.md, "U9 wave 4"):
+ * the first press that landed was read at 19.0 px/s on one hull and 15.7 on
+ * another, the presses before them at 21.7 and 20.5 said "too fast". The
+ * gate is absolute: the same for a 100 and a 200 px/s hull, not a share of
+ * the hull's top speed. So an inertialess ship at full speed never lands.
+ */
+export const LAND_SPEED_SQUARED = 400;
+
+/** The landing range's ceiling for mid-sized sprites, in px. */
+const LAND_RANGE_CAP = 240;
+/** getDefaultPlanetData's frame size: a 100 px landing range. */
+const DEFAULT_SPRITE_FRAME_SIZE: readonly [number, number] = [50, 50];
+
+/**
+ * How far from a stellar's centre a ship may land, in px, from the size S
+ * of one frame of its sprite (the larger of width and height):
+ * R = max(min(2 S, 240), 0.8 S).
+ *
+ * Measured on the original ("U9 wave 4"): up to about 110 px sprites the
+ * range is about twice the frame size (40 px -> 72-99, 112 -> 205-233),
+ * then it levels off around 230-260 (150, 250 and 304x134 frames), a
+ * little more for the biggest art (315x200 -> 280-308, 325 -> 247-275),
+ * which the 0.8 S floor covers. The default PlanetData's 50 px frame gives
+ * the 100 px range every stellar had before.
+ */
+export function landingRange(spriteFrameSize: readonly [number, number]):
+    number {
+    const size = Math.max(spriteFrameSize[0], spriteFrameSize[1]);
+    return Math.max(Math.min(2 * size, LAND_RANGE_CAP), 0.8 * size);
+}
+
+/**
+ * landingRange for a stellar whose data may not have loaded. Unknown data
+ * (the provider has not run) and data without a frame size (game data JSON
+ * written before PlanetData had the field) use the default 50 px frame,
+ * i.e. a 100 px range. PlanetData is staged identically on every peer, so
+ * every peer reads the same range.
+ */
+export function stellarLandingRange(planetData?: PlanetData): number {
+    const frame = planetData?.spriteFrameSize;
+    return landingRange(Array.isArray(frame) && frame.length >= 2
+        ? frame : DEFAULT_SPRITE_FRAME_SIZE);
+}
 
 /**
  * The landing-clearance decision for one player at one stellar, assembled from
@@ -266,7 +308,9 @@ const AttemptLandingSystem = new System({
                 const distanceSquared =
                     planetPosition.subtract(position).lengthSquared;
                 const isStation = planetData?.flags.isStation ?? false;
-                if (distanceSquared >= LAND_DISTANCE_SQUARED) {
+                const range = stellarLandingRange(planetData);
+                // "Too far" before "too fast", as the original answers.
+                if (distanceSquared >= range * range) {
                     emit(LandingBlockedEvent, { reason: 'tooFar', isStation },
                         [playerUuid]);
                 } else if (velocity.lengthSquared >= LAND_SPEED_SQUARED) {

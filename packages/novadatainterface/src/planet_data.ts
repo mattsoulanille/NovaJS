@@ -264,6 +264,17 @@ export interface PlanetData extends SpaceObjectData {
     gate: GateData | null;
 
     /**
+     * The pixel size [width, height] of one frame of the stellar's sprite
+     * (its rlëD, reached through spöb Type -> spïn 1000 + Type; the spïn's
+     * own xSize/ySize when the rlëD is missing). The original scales its
+     * landing range with this size (see planet_plugin.ts's landingRange),
+     * so the simulation reads it from here, where it is staged with the
+     * rest of the stellar's data on every peer, rather than from the sprite
+     * sheet, which only the display loads.
+     */
+    spriteFrameSize: [number, number];
+
+    /**
      * Fee deducted from the player's credits on landing (spöb Fee field,
      * Bible p. 61). Hook only: credits are not yet modeled, so nothing charges
      * this today. Hypergates in stock EV Nova charge no fee (all observed
@@ -409,6 +420,10 @@ export function getDefaultPlanetData(): PlanetData {
         landingDesc: "default",
         position: [0, 0],
         gate: null,
+        // 50 px gives the 100 px landing range every stellar had before the
+        // range scaled with the sprite, so default fixtures keep landing
+        // where they always did.
+        spriteFrameSize: [50, 50],
         landingFee: 0,
         govt: null,
         // The Bible's "Ignored (player can always land)" sentinel: a default

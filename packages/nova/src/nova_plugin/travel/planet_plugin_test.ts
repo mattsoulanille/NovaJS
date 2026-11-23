@@ -15,10 +15,12 @@ import { makeSystem } from '../make_system.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { applyControlEvents } from '../player/index.js';
 import {
-    applySetPlanetTarget, LandEvent, LandingBlockedEvent, PlanetComponent,
-    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent,
-    STELLAR_BRIBE_MS, stellarClearanceFor,
+    applySetPlanetTarget, LAND_SPEED_SQUARED, LandEvent, LandingBlockedEvent,
+    landingRange, PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
+    StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
+    stellarLandingRange,
 } from './planet_plugin.js';
+import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { applyHail } from '../encounters/index.js';
@@ -239,6 +241,125 @@ describe('AttemptLandingSystem', () => {
 
         expect(blocked.length).toBe(1);
         expect(blocked[0].entities).toEqual([SHIP_UUID]);
+    }, 30_000);
+});
+
+/**
+ * The landing window measured on the original (docs/reference_experiments.md,
+ * "U9 wave 4"): the range scales with the stellar's sprite frame size S,
+ * R = max(min(2 S, 240), 0.8 S), and the speed gate is an absolute 20 px/s.
+ */
+describe('landingRange', () => {
+    it('is twice the frame size for small sprites (40 px -> 80, 112 -> 224)',
+        () => {
+            expect(landingRange([40, 40])).toBe(80);
+            expect(landingRange([112, 112])).toBe(224);
+        });
+
+    it('levels off at 240 px for mid-sized and wide sprites', () => {
+        expect(landingRange([150, 150])).toBe(240);
+        expect(landingRange([250, 250])).toBe(240);
+        // The larger of width and height is the size: 0.8 * 304.
+        expect(landingRange([304, 134])).toBeCloseTo(243.2, 9);
+    });
+
+    it('grows again at 0.8 S for the biggest art (325 px -> 260)', () => {
+        expect(landingRange([325, 325])).toBe(260);
+        expect(landingRange([315, 200])).toBe(252);
+    });
+
+    it('gives the default PlanetData, and unknown data, the old 100 px range',
+        () => {
+            expect(stellarLandingRange(getDefaultPlanetData())).toBe(100);
+            expect(stellarLandingRange(undefined)).toBe(100);
+            // Game-data JSON written before the field existed.
+            const old: Partial<PlanetData> = getDefaultPlanetData();
+            delete old.spriteFrameSize;
+            expect(stellarLandingRange(old as PlanetData)).toBe(100);
+        });
+
+    it('gates speed at 20 px/s', () => {
+        expect(LAND_SPEED_SQUARED).toBe(400);
+    });
+});
+
+describe('AttemptLandingSystem landing window', () => {
+    const PORT = `planet ${SYNTHETIC.planets.port}`;
+    const MOON = `planet ${SYNTHETIC.planets.moon}`;
+
+    async function atStellar(uuid: string, spriteFrameSize?: [number, number]) {
+        const harness = await makeHarness();
+        const stellar = stellars(harness.world).find(p => p.uuid === uuid)!;
+        harness.ship.components.get(PlanetTargetComponent)!.target = uuid;
+        if (spriteFrameSize) {
+            // A copy: the component holds the shared cached PlanetData.
+            const planet = harness.world.entities.get(uuid)!;
+            planet.components.set(PlanetDataComponent, {
+                ...planet.components.get(PlanetDataComponent)!,
+                spriteFrameSize,
+            });
+        }
+        return { ...harness, stellar };
+    }
+
+    /** Presses land with the ship `offset` px east of the stellar's centre. */
+    async function pressAt(uuid: string, offset: number,
+        velocity = new Vector(0, 0), spriteFrameSize?: [number, number]) {
+        const { world, ship, stellar } = await atStellar(uuid, spriteFrameSize);
+        place(ship, new Position(stellar.position.x + offset,
+            stellar.position.y), velocity);
+        return pressLand(world);
+    }
+
+    it('reads the range from the stellar\'s sprite: Port Amberline\'s '
+        + '40 px frame lands within 80 px', async () => {
+            const { world } = await atStellar(PORT);
+            const data = world.entities.get(PORT)!
+                .components.get(PlanetDataComponent)!;
+            expect(data.spriteFrameSize).toEqual([40, 40]);
+            expect(stellarLandingRange(data)).toBe(80);
+
+            const inside = await pressAt(PORT, 79);
+            expect(inside.blocked).toEqual([]);
+            expect(inside.lands.length).toBe(1);
+
+            const outside = await pressAt(PORT, 81);
+            expect(outside.lands).toEqual([]);
+            expect(outside.blocked.map(b => b.reason)).toEqual(['tooFar']);
+        }, 30_000);
+
+    it('gives a smaller sprite a smaller range: the Sallow Moon\'s 28 px '
+        + 'frame lands within 56 px', async () => {
+            expect((await pressAt(MOON, 55)).lands.length).toBe(1);
+            expect((await pressAt(MOON, 57)).blocked.map(b => b.reason))
+                .toEqual(['tooFar']);
+        }, 30_000);
+
+    it('lands on a big planet from far out (a 325 px frame lands within '
+        + '260 px)', async () => {
+            const big: [number, number] = [325, 325];
+            expect((await pressAt(PORT, 255, undefined, big)).lands.length)
+                .toBe(1);
+            expect((await pressAt(PORT, 265, undefined, big)).blocked
+                .map(b => b.reason)).toEqual(['tooFar']);
+        }, 30_000);
+
+    it('lands below 20 px/s and refuses at or above it, whatever the hull',
+        async () => {
+            // Moving across the radius, so the step barely changes the
+            // distance.
+            const slow = await pressAt(PORT, 40, new Vector(0, 19));
+            expect(slow.blocked).toEqual([]);
+            expect(slow.lands.length).toBe(1);
+
+            const fast = await pressAt(PORT, 40, new Vector(0, 21));
+            expect(fast.lands).toEqual([]);
+            expect(fast.blocked.map(b => b.reason)).toEqual(['tooFast']);
+        }, 30_000);
+
+    it('answers "too far" before "too fast"', async () => {
+        const { blocked } = await pressAt(PORT, 120, new Vector(0, 100));
+        expect(blocked.map(b => b.reason)).toEqual(['tooFar']);
     }, 30_000);
 });
 

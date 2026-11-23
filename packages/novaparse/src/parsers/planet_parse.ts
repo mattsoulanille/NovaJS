@@ -127,6 +127,17 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         rledID = defaultAnimationImage.id;
     }
 
+    // One sprite frame's pixel size, which the landing range scales with
+    // (PlanetData.spriteFrameSize). The rlëD header is what the game draws;
+    // the spïn's declared size stands in when the rlëD is missing, and the
+    // default (a 100 px landing range) when neither exists.
+    let spriteFrameSize: [number, number] = [50, 50];
+    if (rledResource) {
+        spriteFrameSize = [rledResource.size[0], rledResource.size[1]];
+    } else if (spin) {
+        spriteFrameSize = [spin.spriteSize[0], spin.spriteSize[1]];
+    }
+
     // Hypergate / wormhole transit metadata. The spöb HyperLink fields hold
     // local spöb ids of the connected gates/wormholes; resolve each to its
     // global id (the same key SystemData.planets uses) so transit can find the
@@ -325,6 +336,7 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         landingDesc: desc,
         landingPict: pictID,
         animation,
+        spriteFrameSize,
         govt,
         // spöb MinStatus (int16 at offset 22), passed through verbatim
         // including both sentinels (-32767 ignored / 32767 never).
