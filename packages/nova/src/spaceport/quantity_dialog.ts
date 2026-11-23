@@ -228,7 +228,8 @@ export class QuantityDialog {
 /**
  * A classic grey bevel system button (the reference dialog's Cancel /
  * Buy / Sell), drawn with Graphics rather than the game's red PICT
- * buttons. Shared with the starmap's Find dialog.
+ * buttons. (The starmap's Find dialog draws Aqua buttons instead; see
+ * find_dialog.ts.)
  */
 export class SystemButton {
     container = new PIXI.Container();

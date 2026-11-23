@@ -336,12 +336,12 @@ export const scenarios = [
         id: 'map_find_system',
         title: 'Star map — Find dialog',
         description: 'The Find dialog opened from the map (map/find_system.png). '
-            + 'It is drawn with Graphics (not a game PICT frame), centered on '
-            + "the map like the original's native Find sheet. Compare the "
-            + 'panel frame and the Cancel/Find button row. Known CONTENT '
-            + "differences: the original's sheet carries the NOVA app icon at "
-            + 'left and a wider field; ours omits the icon. Text is HTML/Pixi '
-            + 'vs the OS sheet.',
+            + 'It is drawn with Graphics (not a game PICT frame) after the '
+            + "original's native Aqua alert, at the same size and place: icon "
+            + 'top left, indented text, a 206 px field, white Cancel and blue '
+            + 'Find. Known CONTENT difference: the icon is a placeholder (the '
+            + "original's is the application icon, which is not in the game "
+            + 'data). Text is Pixi vs the OS alert.',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
@@ -355,9 +355,8 @@ export const scenarios = [
             { name: 'find_system', file: 'map/find_system.png' },
         ],
         regions: [
-            // Reference white panel interior spans x818-1102, y488-592
-            // (measured); the outer frame + icon column start ~x800. Ours is
-            // the 300x104 panel centered on screen (x810-1110, y488-592).
+            // The white panel spans x818-1101, y488-592 on both (measured
+            // on the reference; find_dialog.ts draws the same 284x105).
             region('find_panel', 'Find dialog panel frame', 803, 484, 312, 114),
             region('find_button_row', 'Cancel / Find button row',
                 820, 556, 300, 34),

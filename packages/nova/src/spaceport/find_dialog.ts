@@ -3,27 +3,133 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { beginPixiTextEntry } from '../input_focus.js';
 import { MenuControls } from './menu_controls.js';
-import { SystemButton } from './quantity_dialog.js';
 
-// The starmap's Find dialog (map/find_system.png): a plain white system
-// panel with "Enter the name of a system to find:", a text field, and
-// Cancel / Find buttons. Like the quantity dialog, it is not one of the
-// game's PICT frames, so it's drawn with Graphics.
-const PANEL_WIDTH = 300;
-const PANEL_HEIGHT = 104;
-const FIELD_HEIGHT = 20;
-const BUTTON_WIDTH = 78;
-const BUTTON_HEIGHT = 26;
+// The starmap's Find dialog, drawn after the original's native Aqua alert
+// (map/find_system.png, measured at 1920x1080): a 284x105 white panel with
+// a 1 px grey edge, centred on the screen; the application icon (32x32) at
+// its top left; "Enter the name of a system to find:" indented 51 px; a
+// 206x22 black-edged field under it, indented 57 px; and a white rounded
+// Cancel beside the blue default Find button (70x22 each, 12 px apart),
+// 11 px above the bottom edge. It is not one of the game's PICT frames, so
+// it is drawn with Graphics.
+const PANEL_WIDTH = 284;
+const PANEL_HEIGHT = 105;
+const ICON_X = 7;
+const ICON_Y = 5;
+const ICON_SIZE = 32;
+const TEXT_X = 51;
+const TEXT_Y = 6;
+const FIELD_X = 57;
+const FIELD_Y = 35;
+const FIELD_WIDTH = 206;
+const FIELD_HEIGHT = 22;
+const BUTTON_WIDTH = 70;
+const BUTTON_HEIGHT = 22;
+const BUTTON_GAP = 12;
+const BUTTON_Y = 72;
+/** Cancel's left edge; Find sits BUTTON_GAP to its right. */
+const CANCEL_X = 83;
 const MAX_LENGTH = 40;
 
+/** The original's alert text is the system UI face, regular weight. */
+const SYSTEM_FONT = ['-apple-system', 'BlinkMacSystemFont', 'Helvetica Neue',
+    'Helvetica', 'Arial', 'sans-serif'];
 const LABEL_FONT: Partial<PIXI.ITextStyle> = {
-    fontFamily: 'Geneva', fontSize: 12, fontWeight: 'bold', fill: 0x000000,
+    fontFamily: SYSTEM_FONT, fontSize: 13, fill: 0x000000,
     align: 'left', wordWrap: false,
 };
 const FIELD_FONT: Partial<PIXI.ITextStyle> = {
-    fontFamily: 'Geneva', fontSize: 12, fill: 0x000000,
+    fontFamily: SYSTEM_FONT, fontSize: 13, fill: 0x000000,
     align: 'left', wordWrap: false,
 };
+
+/**
+ * Where the alert's application icon goes. The original shows EV Nova's
+ * own application icon, which lives in the application bundle, not in the
+ * game data: the data files carry no icon-sized cicn or PICT (their cicns
+ * are 16x16 marks, a 32x16 badge and two 60x40 images). So this draws a
+ * neutral placeholder tile of the same size; swap in a real texture here if
+ * an icon resource ever becomes available.
+ */
+function drawIconPlaceholder(g: PIXI.Graphics, x: number, y: number) {
+    g.lineStyle(1, 0x5a5a5a)
+        .beginFill(0x1c1c1c)
+        .drawRoundedRect(x + 0.5, y + 0.5, ICON_SIZE - 1, ICON_SIZE - 1, 5)
+        .endFill()
+        .lineStyle(0)
+        .beginFill(0x8a8a8a)
+        .drawPolygon([x + 7, y + 23, x + 26, y + 9, x + 21, y + 24])
+        .endFill();
+}
+
+/** Linear blend of two 0xRRGGBB colours (t in [0, 1]). */
+function blend(from: number, to: number, t: number): number {
+    const channel = (shift: number) => {
+        const a = (from >> shift) & 0xff;
+        const b = (to >> shift) & 0xff;
+        return Math.round(a + (b - a) * t) << shift;
+    };
+    return channel(16) | channel(8) | channel(0);
+}
+
+/**
+ * An Aqua push button: the white rounded Cancel, or the blue default
+ * button (a top-to-bottom gradient, drawn as 1 px bands under a rounded
+ * mask so it needs no canvas texture). The container is named
+ * `Button:<caption>` for headless driving.
+ */
+class AquaButton {
+    container = new PIXI.Container();
+
+    constructor(caption: string, x: number, y: number, primary: boolean,
+        onClick: () => void) {
+        this.container.name = `Button:${caption}`;
+        this.container.position.set(x, y);
+
+        const face = new PIXI.Graphics();
+        if (primary) {
+            const bands = new PIXI.Graphics();
+            for (let row = 0; row < BUTTON_HEIGHT; row++) {
+                bands.beginFill(blend(0x6eb3f8, 0x2184fc,
+                    row / (BUTTON_HEIGHT - 1)))
+                    .drawRect(0, row, BUTTON_WIDTH, 1)
+                    .endFill();
+            }
+            const mask = new PIXI.Graphics()
+                .beginFill(0xffffff)
+                .drawRoundedRect(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 5)
+                .endFill();
+            bands.mask = mask;
+            this.container.addChild(bands, mask);
+            face.lineStyle(1, 0x3284f9)
+                .drawRoundedRect(0.5, 0.5, BUTTON_WIDTH - 1,
+                    BUTTON_HEIGHT - 1, 4.5);
+        } else {
+            face.lineStyle(1, 0xd2d2d2)
+                .beginFill(0xffffff)
+                .drawRoundedRect(0.5, 0.5, BUTTON_WIDTH - 1,
+                    BUTTON_HEIGHT - 1, 4.5)
+                .endFill()
+                // The darker bottom edge that reads as a drop shadow.
+                .lineStyle(1, 0xbababa)
+                .moveTo(4, BUTTON_HEIGHT - 0.5)
+                .lineTo(BUTTON_WIDTH - 4, BUTTON_HEIGHT - 0.5);
+        }
+        this.container.addChild(face);
+
+        const label = new PIXI.Text(caption, {
+            ...LABEL_FONT, fill: primary ? 0xffffff : 0x000000,
+            align: 'center',
+        });
+        label.anchor.set(0.5);
+        label.position.set(BUTTON_WIDTH / 2, BUTTON_HEIGHT / 2);
+        this.container.addChild(label);
+
+        this.container.interactive = true;
+        this.container.cursor = 'pointer';
+        this.container.on('pointerup', onClick);
+    }
+}
 
 /**
  * Applies one typed key to the find field's text. Returns the new text,
@@ -72,44 +178,44 @@ export class FindDialog {
         shield.interactive = true;
         this.container.addChild(shield);
 
-        const left = -PANEL_WIDTH / 2;
-        const top = -PANEL_HEIGHT / 2;
+        // Whole pixels: the panel is 105 high, so its top sits 52 px above
+        // the dialog's origin (y 488 on a 1080-high screen, as measured).
+        const left = -Math.floor(PANEL_WIDTH / 2);
+        const top = -Math.floor(PANEL_HEIGHT / 2);
         const panel = new PIXI.Graphics()
-            .beginFill(0x000000, 0.35)
-            .drawRect(left + 3, top + 3, PANEL_WIDTH, PANEL_HEIGHT)
+            // A soft drop shadow, then the panel with its 1 px grey edge.
+            .beginFill(0x000000, 0.18)
+            .drawRect(left - 2, top, PANEL_WIDTH + 4, PANEL_HEIGHT + 4)
             .endFill()
+            .lineStyle(1, 0xa9a9a9)
+            .beginFill(0xffffff)
+            .drawRect(left - 0.5, top - 0.5, PANEL_WIDTH + 1,
+                PANEL_HEIGHT + 1)
+            .endFill()
+            // The entry field: white with a 1 px black edge.
             .lineStyle(1, 0x000000)
             .beginFill(0xffffff)
-            .drawRect(left, top, PANEL_WIDTH, PANEL_HEIGHT)
-            .endFill()
-            // The entry field: white with a dark inset border.
-            .lineStyle(1, 0x404040)
-            .beginFill(0xffffff)
-            .drawRect(left + 12, top + 34, PANEL_WIDTH - 24, FIELD_HEIGHT)
+            .drawRect(left + FIELD_X + 0.5, top + FIELD_Y + 0.5,
+                FIELD_WIDTH - 1, FIELD_HEIGHT - 1)
             .endFill();
+        drawIconPlaceholder(panel, left + ICON_X, top + ICON_Y);
         panel.interactive = true;
         this.container.addChild(panel);
 
         const label = new PIXI.Text('Enter the name of a system to find:',
             LABEL_FONT);
-        label.position.set(left + 12, top + 12);
+        label.position.set(left + TEXT_X, top + TEXT_Y);
         this.container.addChild(label);
 
-        this.valueText.position.set(left + 17, top + 37);
+        this.valueText.position.set(left + FIELD_X + 4, top + FIELD_Y + 3);
         this.container.addChild(this.valueText);
 
-        const buttonY = top + PANEL_HEIGHT - BUTTON_HEIGHT - 10;
-        // The original's Find sheet groups Cancel and Find together at the
-        // bottom, adjacent and slightly right of center, with the primary
-        // (Find) rightmost (map/find_system.png) — not spread to opposite
-        // corners. Match that grouping.
-        const gap = 8;
-        const groupWidth = 2 * BUTTON_WIDTH + gap;
-        const cancelX = -groupWidth / 2 + 18;
-        const cancel = new SystemButton('Cancel',
-            cancelX, buttonY, () => this.close(undefined));
-        const find = new SystemButton('Find',
-            cancelX + BUTTON_WIDTH + gap, buttonY,
+        // Cancel and the default Find button sit together right of centre,
+        // Find rightmost (map/find_system.png).
+        const cancel = new AquaButton('Cancel', left + CANCEL_X,
+            top + BUTTON_Y, false, () => this.close(undefined));
+        const find = new AquaButton('Find',
+            left + CANCEL_X + BUTTON_WIDTH + BUTTON_GAP, top + BUTTON_Y, true,
             () => this.close(this.text));
         this.container.addChild(cancel.container, find.container);
 
