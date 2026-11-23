@@ -17,6 +17,7 @@ import * as PIXI from 'pixi.js';
 import * as sound from '@pixi/sound';
 import urlJoin from 'url-join';
 import { dataPath } from '../../common/game_data_paths.js';
+import { isNoPict } from './no_pict.js';
 
 /**
  * `snd ` resources are served as RIFF/WAVE at their original sample rate —
@@ -68,14 +69,23 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
     }
 
     textureFromPict(id: string): PIXI.Texture {
+        if (isNoPict(id)) {
+            return PIXI.Texture.EMPTY;
+        }
         return PIXI.Texture.from(this.url(id));
     }
 
     spriteFromPict(id: string) {
+        if (isNoPict(id)) {
+            return new PIXI.Sprite(PIXI.Texture.EMPTY);
+        }
         return PIXI.Sprite.from(this.url(id));
     }
 
     async textureFromPictAsync(id: string, priority?: number) {
+        if (isNoPict(id)) {
+            return PIXI.Texture.EMPTY;
+        }
         const pictPath = this.url(id);
         await this.data.PictImage.get(id, priority);
         return PIXI.Texture.from(pictPath);
@@ -95,6 +105,9 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
      * spriteFromPict retries instead of inheriting the failure.
      */
     prefetchPict(id: string): Promise<void> {
+        if (isNoPict(id)) {
+            return Promise.resolve();
+        }
         const url = this.url(id);
         const texture = PIXI.Texture.from(url);
         const base = texture.baseTexture;
