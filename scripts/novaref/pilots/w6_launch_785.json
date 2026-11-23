@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w6-launch-785",
+  "edits": {
+    "ship": 703,
+    "stellar": 2018,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2018": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "launch785"
+  }
+}

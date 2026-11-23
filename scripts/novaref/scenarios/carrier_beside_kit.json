@@ -1,0 +1,58 @@
+{
+ "name": "carrier_beside_kit",
+ "_comment": "Wave 6, B with the bay AmmoType fixed: the kit Kit Bomb Carrier (mïsn 1007, pilot w6_kitbomb_beside: shïp 712, gövt 362, a Kit Bomber Bay of Kit Bombers whose only weapon is the 50-damage 400 px Kit Blast Shell) starts at Kit Port beside the player (Kit Lancer, no weapons). Land, accept, leave, sit still; Tab every 1.3 s reads each ship. Do bomber blasts hurt the carrier, and does it turn on its bombers?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "repeat": 32,
+   "steps": [
+    {
+     "keys": "Tab wait 300"
+    },
+    {
+     "shot": "obs-{i}",
+     "window": true
+    },
+    {
+     "wait": 1000
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,23 @@
+{
+ "name": "board_hulk",
+ "_comment": "U9 wave 6: boarding a NON-mission disabled ship. Pilot w6_board (Kit Crawler 100, inertialess, 44 px/s) at Kit Board Port (sÿst 2020), whose only traffic is one Kit Hulk (immobile magenta disc of the derelict gövt 378: starts disabled). Tab targets it; loops/board.mjs steers to it by measurement (colour on screen, radar off screen), then steps in 0.25 s at a time pressing b at every stop, and shoots the boarding dialog if one opens. Read each stop's status-line answer from the b-* shots; the distances are in log.jsonl (phase script) and result.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 3000"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"wait": 1500},
+  {"keys": "Tab wait 400"},
+  {"shot": "target", "window": true},
+  {"script": "../loops/board.mjs", "args": {"speedPxS": 44, "turnDegS": 87.1, "near": 160, "stepMs": 250, "maxSteps": 30}},
+  {"wait": 1000},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}

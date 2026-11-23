@@ -175,8 +175,11 @@ export default {
         // wëap 362-364 were the #316b Kit Missiles T10/T30/T60 (GuidedTurn
         // 10/30/60); retired in wave 4 for jamming types 2-4 (wave4Resources).
         weap(365, "Kit Escort Gun", 131, { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30, guidance: 4 }),
-        // Fighter bay: AmmoType of a bay is the carried shïp id - 128.
-        weap(366, "Kit Fighter Bay", 149, { reload: 30, guidance: 99, ammoType: 705 - 128 }),
+        // Fighter bay: AmmoType of a bay is the carried shïp id itself (the
+        // stock Viper Bay, wëap 149, holds 144). Until wave 6 the kit wrote
+        // id - 128, which named no ship (or a stock one): see
+        // docs/reference_experiments.md "B wave 6".
+        weap(366, "Kit Fighter Bay", 149, { reload: 30, guidance: 99, ammoType: 705 }),
         weap(367, "Kit Raider Gun", 130, { reload: 20, duration: 60, armorDamage: 20, shieldDamage: 20, guidance: 4 }),
         // wëap 368/369 were the #316 Kit Speed Guns 300/600 (unguided, Speed
         // 300/600); retired in wave 4 for the escort weapon tests (see
@@ -246,7 +249,7 @@ export default {
         // The AI only fires within range (Speed x Duration), so NPCs get a
         // ranged version: 180 px reach, proximity 30, 400 px blast.
         weap(372, "Kit Blast Shell", 134, { reload: 45, duration: 60, armorDamage: 50, shieldDamage: 50, guidance: -1, speed: 300, proxRadius: 30, blastRadius: 400, flags: 0x8000, guidedTurn: 0 }),
-        weap(371, "Kit Bomber Bay", 149, { reload: 30, guidance: 99, ammoType: 711 - 128 }),
+        weap(371, "Kit Bomber Bay", 149, { reload: 30, guidance: 99, ammoType: 711 }),
         gun(608, "Kit Bomber Bay", 371),
         gun(609, "Kit Blast Bomb", 370),
         // B4: the same muzzle blast at 2000 damage, to destroy one's own escort.
@@ -273,8 +276,203 @@ export default {
         ...wave2Resources(),
         ...wave3Resources(),
         ...wave4Resources(),
+        ...wave6Resources(),
     ],
 };
+
+/**
+ * Wave-6 experiments (docs/reference_experiments.md). Nothing retired: like
+ * wave 5 it uses the gaps above the stock ids (wëap 238+, oütf 446+, düde
+ * 280+, sÿst/spöb 2013+, shïp 783+, mïsn 1001+, bits 9042+).
+ *
+ *  U9  Landing range of the tiny stock stellars. One landable stellar at
+ *      (0,0) per system, cloned from a stock spöb so it keeps its graphic:
+ *        sÿst/spöb 2013 Type 53 (spöb 299 Holpa Station) 17x31, station
+ *        2014 Type 51 (spöb 264 A'j He) 15x21, station
+ *        2015 Type 48 (spöb 235 Kel'a He) 35x22, station
+ *        2016 Type 53 again, but a PLANET (flags 0x43): does the station
+ *             flag matter?
+ *      The stations keep the stock station flags (0x11: land + station).
+ *      shïp 783 Kit Crawler Mini: Kit Crawler 50 on the stock Shuttle's
+ *      24 px sprite (the Lightning's 48 px frame outshines a 15x21 station
+ *      in planet_track.mjs's largest-blob search).
+ *  B   NPC carrier vs its own fighters' blasts: mïsn 1001 (bit 9042) puts
+ *      the STOCK Fed Carrier of always-attacks gövt 362 (düde 278) at Kit
+ *      Port beside the player (ShipStart -1); use with kits/viper_blast.mjs.
+ *      mïsn 1002 (bit 9043): the same hull anchored (shïp 790, the stock
+ *      Fed Carrier byte for byte with Speed/Accel 0; düde 283).
+ *      Kit bombers that never launch, one factor at a time (each its own
+ *      traffic system like sÿst 2011, gövt 362, avgShips 1; the stock Fed
+ *      Carrier hull with its Viper bay swapped, Anaconda bay KEPT as an
+ *      in-run control):
+ *        sÿst 2017 / düde 280 / shïp 787 / wëap 238 -> shïp 784 Kit Viper
+ *             Clone: the stock Viper byte for byte under a new id;
+ *        sÿst 2018 / düde 281 / shïp 788 / wëap 239 -> shïp 785 Kit Viper
+ *             Shell: that clone armed ONLY with the Kit Blast Shell;
+ *        sÿst 2019 / düde 282 / shïp 789 / wëap 240 -> shïp 786 Kit Viper
+ *             Base: that clone with the kit's shipBase fields (tech 9000,
+ *             cost 1000, crew 1, ...) but its stock guns.
+ *  J   Seeker 0x0020 "can't fire if ionized": wëap 241 JamM Ion (JamVuln
+ *      0, Seeker 0x0020) and oütf 446 its launcher; control = wëap 375 with
+ *      oütf 616 (no jammer anywhere, so its JamVuln plays no part). shïp
+ *      792 Kit Lancer Ion: Kit Lancer Heavy with IonizeMax 100 and Deionize
+ *      1. The target, shïp 793 Ion Target (immobile, armor 100, shield 0)
+ *      of always-attacks gövt 362, AI 3, fires wëap 242 Kit Ion Turret
+ *      (the Tickler with Ionization 50) at the player; düde 285, mïsn 1003
+ *      (bit 9044) at Kit Market.
+ *      Cloaked targets: shïp 794 Cloak Target (the J0 target with oütf 447
+ *      Kit Cloak, ModType 17, and shïp Flags2 0x0800 "cloak when just
+ *      flying around"), düde 286 (AI 1, govt 363), mïsn 1004 (bit 9045) at
+ *      Kit Market; oütf 448 Kit Cloak Scanner (ModType 30, 0x000F: radar,
+ *      screen, untargetable and cloaked targeting) for the player.
+ *  Added during the wave (each block's comment below says why): shïp 415
+ *      Kit Viper Low + carrier 796 / bay wëap 244 / düde 288 / sÿst 2021;
+ *      wëap 243 Kit Blast Shell 1 (kits/viper_blast1.mjs); mïsn 1007 (bit
+ *      9048) Kit Bomb Carrier beside the player; wëap 245 Kit Ion Gun, shïp
+ *      797 Ion Target Near, düde 289, mïsn 1005 (bit 9046); mïsn 1006 (bit
+ *      9047) the Cloak Target beside the player, oütf 449 Kit Cloak Scanner
+ *      T; wëap 246 Kit Long Beam + oütf 450 (0x0010 tank); shïp 795 Kit
+ *      Hulk, düde 287, sÿst/spöb 2020 Kit Board Range (boarding loop).
+ *  Kit-wide fix: a bay's AmmoType is the carried shïp id itself (stock wëap
+ *      149 holds 144), not id - 128 as the kit wrote until now.
+ */
+function wave6Resources() {
+    const out = [];
+    // --- U9: tiny stellars.
+    const land = (sid, name, clone, flags) => {
+        out.push(system(sid, name, -1200 + 30 * (sid - 2000), -740, 363, [sid]));
+        out.push(spob(sid, `${name} Port`, 0, 0, clone, { flags }));
+    };
+    land(2013, "Kit Land 17x31", 299, 0x11);
+    land(2014, "Kit Land 15x21", 264, 0x11);
+    land(2015, "Kit Land 35x22", 235, 0x11);
+    land(2016, "Kit Land 17x31 Planet", 299, 0x43);
+    out.push(...ship(783, "Kit Crawler Mini", 128, {
+        accel: 2000, speed: 50, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
+    }));
+
+    // --- B: the stock Fed Carrier beside the player.
+    out.push(...misn(1001, "Kit B Fed Carrier at Kit Port", 9042, { shipCount: 1, shipDude: 278, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    out.push({ type: "shïp", id: 790, name: "Kit Fed Carrier Anchored", clone: "shïp:143", set: {
+        speed: 0, accel: 0, shortName: "Kit Fed Carrier Anchored", longName: "Kit Fed Carrier Anchored", commName: "Kit Fed Carrier Anchored" } });
+    out.push({ type: "shän", id: 790, name: "Kit Fed Carrier Anchored", clone: "shän:143" });
+    out.push(dude(283, "Kit Fed Carrier Anchored 362", 3, 362, 790));
+    // The Kit Blast Shell at 1 damage (kits/viper_blast1.mjs): the Vipers
+    // survive their own blasts, and the carrier is still "hit" by every one.
+    out.push(weap(243, "Kit Blast Shell 1", 134, { reload: 45, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: -1, speed: 300, proxRadius: 30, blastRadius: 400, flags: 0x8000, guidedTurn: 0 }));
+    // With the bay AmmoType fixed, the kit's own Kit Bomb Carrier (shïp 712:
+    // 3000/3000, Kit Bomber Bay of Kit Bombers with the 50-damage 400 px
+    // Kit Blast Shell; düde 277, gövt 362) beside the player: mïsn 1007,
+    // bit 9048.
+    out.push(...misn(1007, "Kit B Kit Bomb Carrier at Kit Port", 9048, { shipCount: 1, shipDude: 277, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    out.push(...misn(1002, "Kit B anchored Fed Carrier at Kit Port", 9043, { shipCount: 1, shipDude: 283, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+
+    // --- B: launch factors. Stock Fed Carrier slots: 132 x2, 135 x2 (90),
+    // 149 (4 Vipers), 150 (2 Anacondas); here 149 -> the test bay.
+    const viper = (id, name, set) => [
+        { type: "shïp", id, name, clone: "shïp:144", set: { shortName: name, longName: name, commName: name, ...set } },
+        { type: "shän", id, name, clone: "shän:144" },
+    ];
+    out.push(...viper(784, "Kit Viper Clone", {}));
+    out.push(...viper(785, "Kit Viper Shell", { weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    // shipBase minus its weapon fields: the Viper keeps its stock guns.
+    const { weapons: _w, weaponCounts: _c, weaponAmmo: _a, weapons2: _w2, weaponCounts2: _c2, weaponAmmo2: _a2, ...baseNoGuns } = shipBase;
+    out.push(...viper(786, "Kit Viper Base", { ...baseNoGuns, escortType: 0 }));
+    // The same clone at shïp 415, the first id after the stock block
+    // 128-414 (sÿst 2021, düde 288, carrier shïp 796, bay wëap 244). Its
+    // first run, with the old AmmoType = id - 128, pointed the bay at stock
+    // shïp 287 (Pirate Carrier) and filled the system with pirates: that is
+    // how the AmmoType bug was found.
+    out.push(...viper(415, "Kit Viper Low", {}));
+    [[2017, 280, 787, 238, 784], [2018, 281, 788, 239, 785], [2019, 282, 789, 240, 786], [2021, 288, 796, 244, 415]].forEach(([sid, did, cid, bay, fighter]) => {
+        const name = `Kit Fed Carrier ${fighter}`;
+        out.push({ type: "wëap", id: bay, name: `Kit Viper Bay ${fighter}`, clone: "wëap:149", set: { ammoType: fighter } });
+        out.push({ type: "shïp", id: cid, name, clone: "shïp:143", set: {
+            weapons: [132, 135, bay, 150], weaponCounts: [2, 2, 1, 1], weaponAmmo: [-1, 90, 4, 2], shortName: name, longName: name, commName: name } });
+        out.push({ type: "shän", id: cid, name, clone: "shän:143" });
+        out.push(dude(did, `${name} traffic 362`, 3, 362, cid));
+        const s = system(sid, `Kit Launch ${fighter}`, -1200 + 30 * (sid - 2000), -740, 363, [sid]);
+        s.set = { ...s.set, dudes: [did, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+        out.push(s, spob(sid, `Kit Launch ${fighter} Port`, 0, 0, 138, { flags: 0x43 }));
+    });
+
+    // --- J: Seeker 0x0020 and ionization.
+    out.push(weap(241, "JamM Ion", 134, {
+        reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: 0x0020, jamVuln: [0, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
+    }));
+    out.push(gun(446, "JamM Launcher Ion", 241));
+    out.push(...ship(792, "Kit Lancer Ion", 135, {
+        accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1,
+    }));
+    out.push(weap(242, "Kit Ion Turret", 130, { reload: 15, duration: 90, armorDamage: 1, shieldDamage: 1, guidance: 4, speed: 2500, ionization: 50 }));
+    out.push(...ship(793, "Ion Target", 136, {
+        armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1,
+        weapons: [242, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+    }));
+    out.push(dude(285, "Ion Target", 3, 362, 793));
+    out.push(...misn(1003, "Kit J ion target", 9044, { shipCount: 1, shipDude: 285, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // Take 2: the first Ion Target never fired its Tickler-based turret at
+    // 900 px (no bolts reached the player, which turned at full rate). Now
+    // the Kit Escort Gun the AI is known to fire, at 1 damage with
+    // Ionization 200 (wëap 245), on an immobile target that starts beside
+    // the player at Kit Port (shïp 797, düde 289, mïsn 1005, bit 9046).
+    out.push(weap(245, "Kit Ion Gun", 131, { reload: 10, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 200 }));
+    out.push(...ship(797, "Ion Target Near", 136, {
+        armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 3, strength: 1, crew: 1,
+        weapons: [245, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+    }));
+    out.push(dude(289, "Ion Target Near", 3, 362, 797));
+    out.push(...misn(1005, "Kit J ion target near", 9046, { shipCount: 1, shipDude: 289, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+
+    // --- J: cloaked target.
+    const cloak = gun(447, "Kit Cloak", 0);
+    cloak.set = { ...cloak.set, modType: 17, modVal: 0x0002, max: 1 };
+    const scanner = gun(448, "Kit Cloak Scanner", 0);
+    scanner.set = { ...scanner.set, modType: 30, modVal: 0x000F, max: 1 };
+    out.push(cloak, scanner);
+    out.push(...ship(794, "Cloak Target", 136, {
+        armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1, flags2: 0x0800,
+        outfits: [447, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
+    }));
+    out.push(dude(286, "Cloak Target", 1, 363, 794));
+    out.push(...misn(1004, "Kit J cloak target", 9045, { shipCount: 1, shipDude: 286, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    // Take 2: the first run hit as often as an uncloaked target, and from
+    // 900 px nothing showed whether it had cloaked at all. The same target
+    // beside the player at Kit Port (mïsn 1006, bit 9047, ShipStart -1),
+    // and oütf 449 Kit Cloak Scanner T (0x000C: targeting only, so a
+    // cloaked target stays invisible on screen and radar).
+    out.push(...misn(1006, "Kit J cloak target near", 9047, { shipCount: 1, shipDude: 286, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    const scannerT = gun(449, "Kit Cloak Scanner T", 0);
+    scannerT.set = { ...scannerT.set, modType: 30, modVal: 0x000C, max: 1 };
+    out.push(scannerT);
+
+    // --- A: gövt 0x0010, jump or stand off? In waves 4-6 the tanks that
+    // jumped were already 260+ px off when their shield crossed 25%, the ones
+    // that stood off were in an attack pass. wëap 246 Kit Long Beam (beam
+    // turret, 1500 px, 200 damage every 15 frames) + oütf 450 strips the
+    // tank's shield far out, before it closes.
+    out.push(weap(246, "Kit Long Beam", 170, { reload: 15, duration: 4, armorDamage: 200, shieldDamage: 200, guidance: 3, beamLength: 1500 }));
+    out.push(gun(450, "Kit Long Beam", 246));
+
+    // --- U9: boarding a NON-mission disabled ship. Ordinary sÿst traffic of
+    // the derelict gövt 378 (flags 0x0800: its ships start disabled): shïp
+    // 795 Kit Hulk, an immobile magenta disc (Kit Disc Magenta's rlëD 1975)
+    // that loops/board.mjs finds by colour; düde 287 (booty 0x0041 food and
+    // money); sÿst 2020 Kit Board Range, spöb 2020 Kit Board Port.
+    out.push({ type: "shïp", id: 795, name: "Kit Hulk", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Hulk", longName: "Kit Hulk", commName: "Kit Hulk", subtitle: "",
+        armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, cost: 50000, flags: 0, flags2: 0 } });
+    out.push({ type: "shän", id: 795, name: "Kit Hulk", clone: "shän:128", set: { "@0:i16": 1975, "@2:i16": 1976, "@4:i16": 1 } });
+    const hulk = dude(287, "Kit Hulk", 1, 378, 795);
+    hulk.set = { ...hulk.set, flags: 0x0041 };
+    out.push(hulk);
+    const board = system(2020, "Kit Board Range", -600, -740, 363, [2020]);
+    board.set = { ...board.set, dudes: [287, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+    out.push(board, spob(2020, "Kit Board Port", 0, 0, 138, { flags: 0x43 }));
+    return out;
+}
 
 /**
  * Wave-4 experiments (docs/reference_experiments.md).
@@ -442,7 +640,7 @@ function wave5Resources() {
     // byte except AmmoType (-> shïp 781), and shïp 781 Kit Bomber F = the
     // Kit Bomber with EscortType 0 (fighter, like the stock Viper; the kit's
     // shipBase sets -1). düde 279 now flies shïp 782, the Fed hull with 237.
-    out.push({ type: "wëap", id: 237, name: "Kit Bomber Bay F", clone: "wëap:149", set: { ammoType: 781 - 128 } });
+    out.push({ type: "wëap", id: 237, name: "Kit Bomber Bay F", clone: "wëap:149", set: { ammoType: 781 } });
     out.push(...ship(781, "Kit Bomber F", 167, { armor: 500, shield: 500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1, escortType: 0 }));
     out.push({ type: "shïp", id: 782, name: "Kit Fed Bomb Carrier F", clone: "shïp:143", set: {
         weapons: [132, 135, 237, -1], weaponCounts: [2, 2, 1, 0], weaponAmmo: [-1, 90, 4, 0],

@@ -1,0 +1,60 @@
+{
+ "name": "land_step_mini",
+ "_comment": "U9 wave 6: landing range AT REST for tiny stellars. land_step.json with the slower Kit Crawler Mini (Speed 50, ~22 px/s, the Shuttle sprite): request, fly out 12 s (~265 px), brake, turn 180 deg, then 30 steps of 0.5 s thrust (~11 px), brake, `l` at rest. Pilots w6_land_*. Analyse with planet_track.mjs --exclude-centre 15 (at_read).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "l wait 1200"
+  },
+  {
+   "shot": "request",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 12000 up:Up down:Down wait 1500 up:Down wait 600"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "Left@2060 wait 600"
+  },
+  {
+   "shot": "turned",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500 down:Up wait 500 up:Up down:Down wait 400 up:Down wait 250 l wait 500"
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

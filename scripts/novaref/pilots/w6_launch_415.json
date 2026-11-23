@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w6-launch-415",
+  "edits": {
+    "ship": 703,
+    "stellar": 2021,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2021": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "launch415"
+  }
+}

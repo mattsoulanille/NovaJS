@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w6-ret-8guns",
+  "edits": {
+    "ship": 763,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9029": true
+    },
+    "weapons": {
+      "128": 0,
+      "365": 8,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 8,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "ret_8guns"
+  }
+}

@@ -1,0 +1,131 @@
+{
+ "name": "jam_fire_ion",
+ "_comment": "J wave 6, Seeker 0x0020 'can't fire if ship is ionized': jam_fire.json with the Ion Target (mïsn 1003) at Kit Market firing the Kit Ion Turret (Ionization 50) at the player's Kit Lancer Ion (IonizeMax 100, Deionize 1). Waits 6 s under ion fire before the trigger, then 20 s of secondary fire; a 1 s Left at the end shows whether the hull is ionized (barely turns). Pilots w6_ion (JamM Ion, 0x0020) and w6_ion_ctrl (JamM V100, no flags, no jammer).",
+ "pilot": {
+  "as": "novaref-jam"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "aim",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "ionized",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-5s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-10s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-15s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "keys": "up:ctrl"
+  },
+  {
+   "shot": "fire-20s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-6s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-12s",
+   "window": true
+  },
+  {
+   "shot": "before-turn",
+   "window": true
+  },
+  {
+   "keys": "Left@1000 wait 300"
+  },
+  {
+   "shot": "after-turn",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

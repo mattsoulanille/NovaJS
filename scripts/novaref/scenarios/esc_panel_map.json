@@ -1,0 +1,29 @@
+{
+ "name": "esc_panel_map",
+ "_comment": "E-view wave 6: does the escort panel's 8.3 s self-close timer keep running, pause, or does the panel close while the full map (m) is open? Pilot w3_recall (two hired escorts, quiet Kit Range). Trial A: e, 2 s, m (shot of the map), about 3.5 s, m, 15 s. Trial B: e, 2 s, m, 10 s, m, 15 s. Each twice. Time the panel with analysis/region_lit.mjs --events recording.events.json (the map itself lights the rect while it is open; read the frames after each close).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 2500"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"wait": 2000},
+  {"repeat": 2, "steps": [
+   {"keys": "e wait 2000 m wait 500"},
+   {"shot": "a{i}-map-open", "window": true},
+   {"keys": "wait 1000 m wait 300"},
+   {"shot": "a{i}-map-closed", "window": true},
+   {"wait": 13000},
+   {"keys": "e wait 2000 m wait 10000 m wait 300"},
+   {"shot": "b{i}-map-closed", "window": true},
+   {"wait": 13000}
+  ]},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}

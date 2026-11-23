@@ -1,0 +1,138 @@
+{
+ "name": "jam_fire_ion2",
+ "_comment": "J wave 6, Seeker 0x0020 take 2: jam_fire_ion.json with the Ion Target Near (mïsn 1005: immobile, beside the player at Kit Port, firing the Kit Ion Gun, 1 damage, Ionization 200, which the AI does fire). Before the trigger, a 1 s Left shows whether the hull is ionized (barely turns); then 20 s of secondary fire. Pilots w6_ion2 (JamM Ion, 0x0020) and w6_ion2_ctrl (JamM V100).",
+ "pilot": {
+  "as": "novaref-jam"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "aim",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "ionized",
+   "window": true
+  },
+  {
+   "keys": "Left@1000 wait 300"
+  },
+  {
+   "shot": "turn-test-before-fire",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-5s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-10s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-15s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "keys": "up:ctrl"
+  },
+  {
+   "shot": "fire-20s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-6s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-12s",
+   "window": true
+  },
+  {
+   "shot": "before-turn",
+   "window": true
+  },
+  {
+   "keys": "Left@1000 wait 300"
+  },
+  {
+   "shot": "after-turn",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w6-ion2",
+  "edits": {
+    "ship": 792,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9046": true
+    },
+    "weapons": {
+      "128": 0,
+      "241": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "446": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w6-ion2"
+  }
+}
