@@ -39,6 +39,9 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *  3 warship:       hunts govt enemies (disposition via GovtData
  *                   classes/allies/enemies); patrols waypoints when
  *                   there is nothing to hunt; jumps out eventually.
+ *                   With gövt Flags 0x0010, under 25% shield and
+ *                   losing, it stands off and then jumps out
+ *                   (npc_retreat.ts).
  *  4 interceptor:   orbits a home planet and engages govt enemies that
  *                   come within its engagement bubble. (The Bible's
  *                   cargo-scanning "buzz" and piracy-police reactions
@@ -76,7 +79,9 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *                           mode transition; its tuning constants
  *  npc_departure.ts         flee/depart exits: chaserBlocksJump,
  *                           departByJump, steerOutward, NPC_DEPART_RADIUS
- *  npc_steering.ts          NpcSteeringSystem and steerArrive
+ *  npc_retreat.ts           gövt Flags 0x0010 retreat: damage load,
+ *                           warshipRetreat, its guessed thresholds
+ *  npc_steering.ts          NpcSteeringSystem, steerArrive, steerStandoff
  *  npc_fire_control.ts      NpcFireControlSystem
  *  npc_plunder.ts           gövt Flags 0x1000 rules and tunables
  *  npc_plunder_board.ts     NpcPlunderBoardSystem, PlayerPlunderedEvent

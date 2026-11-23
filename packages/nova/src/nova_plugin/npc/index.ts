@@ -19,6 +19,7 @@ export * from './npc_decision.js';
 export * from './npc_fire_control.js';
 export * from './npc_formation_system.js';
 export * from './npc_departure.js';
+export * from './npc_retreat.js';
 export * from './npc_steering.js';
 export * from './npc_plunder_board.js';
 export * from './npc_ai_plugin.js';

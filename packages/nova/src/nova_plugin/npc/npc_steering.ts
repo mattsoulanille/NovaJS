@@ -16,6 +16,9 @@ import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
+import {
+    RETREAT_STANDOFF_HOLD_SPEED, RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN,
+} from './npc_retreat.js';
 import { TargetComponent } from '../ship/index.js';
 
 /**
@@ -93,6 +96,30 @@ export function steerArrive(movement: MovementState, physics: {
     const misalignment = movement.rotation.distanceTo(heading).angle;
     movement.accelerating = Math.abs(misalignment) < 0.6 ? 1 : 0;
     return false;
+}
+
+/**
+ * The gövt 0x0010 stand-off (npc_retreat.ts): get to the band
+ * RETREAT_STANDOFF_MIN-MAX px from the enemy, on the line through it, and
+ * once there (and slow) turn to face it so forward guns bear. Uses the
+ * arrival primitive, so a ship running in at speed brakes rather than
+ * sailing through the band. With the two ships on top of each other the
+ * escape heading is the ship's own facing.
+ */
+export function steerStandoff(movement: MovementState, physics: {
+    acceleration: number, turnRate: number, speed: number,
+}, targetUuid: string, enemy: Position) {
+    const fromEnemy = movement.position.subtract(enemy);
+    const mid = (RETREAT_STANDOFF_MIN + RETREAT_STANDOFF_MAX) / 2;
+    const offset = fromEnemy.lengthSquared > 1e-12
+        ? fromEnemy.normalize(mid)
+        : movement.rotation.getUnitVector().scale(mid);
+    const held = steerArrive(movement, physics, enemy.add(offset),
+        (RETREAT_STANDOFF_MAX - RETREAT_STANDOFF_MIN) / 2,
+        RETREAT_STANDOFF_HOLD_SPEED);
+    if (held) {
+        movement.turnTo = targetUuid;
+    }
 }
 
 /**
@@ -211,6 +238,13 @@ export const NpcSteeringSystem = new System({
                     : undefined;
                 if (!other) {
                     return;
+                }
+                if (npc.retreatSince !== undefined) {
+                    // A gövt 0x0010 warship that is losing: hold off
+                    // instead of closing (npc_retreat.ts).
+                    steerStandoff(movement, physics, target.target!,
+                        Position.fromVectorLike(other.position));
+                    break;
                 }
                 const toTarget = other.position.subtract(movement.position);
                 movement.turnTo = target.target!;

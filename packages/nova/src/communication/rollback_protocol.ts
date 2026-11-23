@@ -278,6 +278,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    and gövt InhJam no longer adds to it. No input kind or message kind
 //    changes. The derived wire schema fingerprint changes, and the join
 //    gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the gövt 0x0010 retreat (npc/npc_retreat.ts,
+//    reference A-series wave 4). Three OPTIONAL NpcComponent fields:
+//    `damageLoad` / `damageLoadAt` (a leaky bucket of recent damage, kept
+//    only on AI 3 ships of a flagged govt and dropped once drained) and
+//    `retreatSince` (when such a ship started losing). Ships of every
+//    other govt never carry them, so their components and hash inputs
+//    are unchanged. Sim-rule change alongside: a flagged warship under
+//    25% shield retreats only while losing (heavy fire or bad odds),
+//    standing off before it jumps out. No input kind or message kind
+//    changes. The derived wire schema fingerprint changes, and the join
+//    gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

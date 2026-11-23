@@ -34,6 +34,7 @@ import {
 } from './npc_plunder.js';
 import { chooseNearest } from './npc_targeting.js';
 import { attacksOnSight, huntsOnSight } from './on_sight.js';
+import { warshipRetreat } from './npc_retreat.js';
 import { ShootAllWeaponsAI } from './npc_plugin.js';
 import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
@@ -484,33 +485,49 @@ export const NpcDecisionSystem = new System({
                 break;
             }
             case 3: { // Warship: hunt, else patrol; jump out eventually.
-                if (govtData?.flags.warshipsRetreatAt25
-                    && shield && shield.max > 0
-                    && shield.current < 0.25 * shield.max) {
-                    npc.mode = 'flee';
-                    target.target = undefined;
-                    return;
-                }
                 const engageable = hostiles.filter(([, d2]) =>
                     d2 <= WARSHIP_ENGAGE_RANGE * WARSHIP_ENGAGE_RANGE);
                 if (aggressorEntry) {
                     engageable.push([aggressorEntry[0], aggressorEntry[1]]);
                 }
                 const chosen = chooseNearest(engageable);
+                // MaxOdds: engage only while the fight looks favorable
+                // (per-pair simplification of the Bible's
+                // friends-vs-enemies strength sums).
+                let favorable = false;
                 if (chosen) {
-                    // MaxOdds: engage only while the fight looks
-                    // favorable (per-pair simplification of the
-                    // Bible's friends-vs-enemies strength sums).
                     const chosenEntry = ships.find(([u]) => u === chosen);
                     const chosenStrength = chosenEntry ? effectiveStrength(
                         chosenEntry[3].strength,
                         shieldFraction(chosenEntry[5])) : 0;
-                    if (oddsFavorable(govtData?.maxOdds ?? 100,
-                        myStrength, chosenStrength)) {
+                    favorable = oddsFavorable(govtData?.maxOdds ?? 100,
+                        myStrength, chosenStrength);
+                }
+                // gövt Flags 0x0010: under 25% shield AND losing, stand
+                // off, then jump out if it lasts (npc_retreat.ts; the
+                // reference showed the shield level alone does not do
+                // it). Clock and synced state only; no PRNG draw.
+                if (govtData?.flags.warshipsRetreatAt25) {
+                    const retreat = warshipRetreat(npc, shield, time.time,
+                        chosen !== undefined, favorable, !held);
+                    if (retreat === 'jump') {
+                        npc.mode = 'flee';
+                        target.target = undefined;
+                        return;
+                    }
+                    if (retreat === 'standoff') {
+                        // Still 'attack', so it keeps firing what reaches;
+                        // `retreatSince` makes NpcSteeringSystem hold the
+                        // stand-off band instead of closing.
                         npc.mode = 'attack';
                         target.target = chosen;
                         return;
                     }
+                }
+                if (chosen && favorable) {
+                    npc.mode = 'attack';
+                    target.target = chosen;
+                    return;
                 }
                 if (npc.mode === 'attack' || npc.mode === 'flee') {
                     npc.mode = undefined;

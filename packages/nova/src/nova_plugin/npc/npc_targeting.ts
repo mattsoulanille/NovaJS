@@ -1,10 +1,13 @@
 import { Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
-import { DamagedEvent } from '../ship/index.js';
+import { DamagedEvent, ShieldComponent } from '../ship/index.js';
+import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import { NpcComponent } from './npc_component.js';
 import { sameFlock } from './allegiance.js';
+import { addDamageLoad } from './npc_retreat.js';
 import { SourceComponent } from '../ship/index.js';
 
 /**
@@ -50,15 +53,35 @@ const DamagerSourceQuery = new Query([Optional(SourceComponent)] as const);
  * DISABLED fleetmate forfeits group immunity. Recording that firer here made
  * a warship parent hunt its own escort or bay fighter for a missile that
  * burst beside it (Matthew's report, 2026-11-23).
+ *
+ * Also keeps the DAMAGE LOAD a gövt Flags 0x0010 warship's retreat reads
+ * (npc_retreat.ts): each such hit adds its damage, as a fraction of the
+ * ship's max shield, to a leaky bucket. Only flagged AI 3 ships carry it,
+ * so no other NPC's synced state changes. A hit counts the larger of its
+ * shield and armor damage: roughly what it takes off whichever layer it
+ * lands on, without depending on whether DamageSystem has applied it yet.
  */
 export const NpcAggressionSystem = new System({
     name: 'NpcAggressionSystem',
     events: [DamagedEvent],
-    args: [DamagedEvent, NpcComponent, UUID, RunQuery, Entities] as const,
-    step({ damager }, npc, uuid, runQuery, entities) {
+    args: [DamagedEvent, NpcComponent, UUID, RunQuery, Entities,
+        Optional(GovtComponent), Optional(ShieldComponent), TimeResource,
+        SimulationGameDataResource] as const,
+    step({ damager, damage, scale = 1 }, npc, uuid, runQuery, entities,
+        govt, shield, time, gameData) {
         const source = runQuery(DamagerSourceQuery, damager)[0]?.[0];
         if (source && !sameFlock(source, uuid, id => entities.get(id))) {
             npc.aggressor = source;
+            // getCached is deterministic here for the reason
+            // npc_decision.ts's lookupGovt gives: every assigned govt is
+            // staged.
+            if (npc.aiType === 3 && shield && shield.max > 0 && govt
+                && gameData.data.Govt.getCached(govt.id)
+                    ?.flags.warshipsRetreatAt25) {
+                const dealt = Math.max(0, damage.shield * scale,
+                    damage.armor * scale);
+                addDamageLoad(npc, dealt / shield.max, time.time);
+            }
             // React at the next think, not next frame: reaction time.
             // A bribe (hail beg-for-mercy) only lasts "until the player
             // provokes them again": if the briber is the one now shooting

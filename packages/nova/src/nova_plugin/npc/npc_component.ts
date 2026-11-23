@@ -43,6 +43,18 @@ export const NpcState = t.intersection([t.type({
     pacifiedFrom: t.string,
     /** Sim time (ms) until which `pacifiedFrom` is ignored. */
     pacifiedUntil: t.number,
+    /** How hard this ship is being hit: a leaky bucket of recent damage,
+     * in fractions of its max shield, as of `damageLoadAt` (npc_retreat.ts).
+     * Kept only for warships of a gövt Flags 0x0010 government, and
+     * dropped once it has drained to zero. */
+    damageLoad: t.number,
+    /** Sim time (ms) `damageLoad` was last brought up to date. */
+    damageLoadAt: t.number,
+    /** Sim time (ms) a gövt 0x0010 warship started losing its fight
+     * (shield under 25% and losing, npc_retreat.ts). While set and in
+     * 'attack' it STANDS OFF instead of closing; in 'flee' it is
+     * committed to jumping out. Cleared the moment it stops losing. */
+    retreatSince: t.number,
 })]);
 export type NpcState = t.TypeOf<typeof NpcState>;
 export const NpcComponent = new Component<NpcState>('NpcComponent');
