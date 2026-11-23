@@ -1,0 +1,7 @@
+{
+ "name": "trade_prices_day2",
+ "_comment": "#321: land at Kit Port, take off (the date advances one day on take-off), land again and screenshot the Trade Center: does priceFlux act once a day passes? Run per pilots/price_*.json.",
+ "pilot": { "as": "novaref-price" }, "plugins": ["../kits/testkit.mjs"],
+ "steps": [ {"keys": "e wait 4000"}, {"move": true}, {"keys": "l wait 1500 l wait 9000"}, {"keys": "t wait 2500"}, {"shot": "trade-day1", "window": true}, {"keys": "Escape wait 1500"}, {"keys": "Return wait 4000"}, {"keys": "l wait 1500 l wait 9000"}, {"keys": "t wait 2500"}, {"shot": "trade-day2", "window": true}, {"keys": "Escape wait 1500"}, {"keys": "Return wait 4000"}, {"keys": "l wait 1500 l wait 9000"}, {"keys": "t wait 2500"}, {"shot": "trade-day3", "window": true}, {"keys": "Escape wait 1500"} ],
+ "pull": true
+}

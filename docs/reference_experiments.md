@@ -80,17 +80,15 @@ and recorded at 30 fps, cropped to the window. Their Accel/Speed/Turn are
   (`P/parsers/weapon_parse.ts:11`, `WEAP_SPEED_FACTOR = 3/10`) match the
   original at a nominal 30 Hz.
 
-**Proposed fix (not applied).**
+**Fix (applied separately).** Matthew ruled for the nominal 30 Hz, and
+another agent is landing it on main:
 
-- `ShipSpeedConversionFactor = 1.5 * FPS / 100` (0.45).
-- `ShipAccelerationConversionFactor = FPS * FPS / 5000` (0.18).
-- Update the comments, which claim "equal values reach top speed in one
-  second".
-- Re-check NPC AI tuning that assumed the old speeds.
+- `ShipSpeedConversionFactor = 1.5 * FPS / 100` (0.45·Speed px/s).
+- `ShipAccelerationConversionFactor` set to 0.18·Accel px/s².
+- The comments are corrected.
 
-Ruling needed (needs/maintainer): should NovaJS target the nominal 30 Hz
-(0.45/0.18) or this machine's 29.1 Hz wall clock (0.436/0.173)? The
-nominal rate keeps the turn and weapon factors exactly where they are.
+Turn and weapon factors stay as they are. NPC AI tuning that assumed the
+old speeds is worth a re-check.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-unit-constants/`
 
@@ -317,12 +315,128 @@ lead while accelerating.
 holds `recording.mp4`, `discs.csv` (per frame), `discs.json` and
 `windows.json`.
 
+### #321: does the pilot's priceFlux set the trade tier multiplier? (2026-11-23)
+
+**Setup.**
+- Pilots `price_{p100,a150,b150,c150,d150,a50}.json` are identical except
+  for globals `priceFlux[4]`:
+  - all four at 100;
+  - each entry in turn at 150;
+  - entry 0 at 50.
+- Each lands at Kit Port and screenshots the Trade Center
+  (`scenarios/trade_prices.json`).
+- a150 and a50 also took off and landed twice more, two days later
+  (`trade_prices_day2.json`).
+
+**Findings.**
+
+1. **priceFlux has no visible effect on prices.** All six pilots, and
+   days 1-3, show exactly the same prices.
+2. **The tiers are exactly ×0.8 / ×1 / ×1.25 of base, truncated**, at a
+   stellar with no disaster:
+
+   | commodity | tier | price |
+   |---|---|---|
+   | Food | Low | 60 |
+   | Industrial | Med | 350 |
+   | Medical | High | 937 |
+   | Luxury | Low | 720 |
+   | Metal | Med | 200 |
+   | Equipment | High | 687 |
+   | Kit Gadgets (jünk, base 150) | High | 187 |
+   | Kit Widgets (jünk, base 1000) | Low | 800 |
+
+3. **jünk semantics.** A jünk's **SoldAt** stellar shows it at the **Low**
+   tier, and its **BoughtAt** stellar at the **High** tier.
+4. **priceFlux is state the game advances daily.** It moves back toward
+   100 each day, with small noise:
+   - 150 → 115 after 2 days, and 50 → 85 (roughly halving the distance
+     each day);
+   - the base pilot went from [100,100,100,100] to [100,99,100,100] after
+     one day.
+   Taking off advances the date by one day; landing doesn't.
+5. **Hypothesis for the ×1.10 captures (not tested):** öops disasters.
+   The Bible says each one changes a single commodity's price at a stellar
+   by PriceDelta, and the exchange dialog shows the disaster's name. Check
+   the #321 captures for a disaster name next to those rows. pilot globals
+   `disasterTime`/`disasterStellar` record the active ones.
+6. A NovaJS that ignores priceFlux is consistent with this.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-price-flux/`:
+`{p100,a150,b150,c150,d150,a50}/*/02-trade.png` and `day2-{a150,a50}/`.
+Each run has its `pilot-after`.
+
+### #316b: is wëap GuidedTurn on the ship Turn scale? (2026-11-23)
+
+**Setup.**
+- The stationary player sits at Kit Port. The immobile Kit Target appears
+  900 px east at Kit Market (mïsn 965, ShipStart -2).
+- The player fires Kit Missile T10, T30 and T60: GuidedTurn 10/30/60,
+  Speed 600, unlimited range.
+- Pilot `missile.json`, `scenarios/guided_turn.json`. Analysed with
+  `analysis/missile_turn.mjs`, which tracks the missile head against a
+  pre-launch background frame.
+
+**Findings.** Missile speed was 5.85 px per video frame (176 px/s), the
+same as wëap Speed 600 from #316. The heading change while turning:
+
+| missile | turn per video frame | turn per second | turn per 29.1 Hz game frame |
+|---|---|---|---|
+| T10 | 0.97° | 29.1°/s | 1.0° |
+| T30 | 2.97° (125° in 42 frames) | 89°/s | 3.06° |
+| T60 | 5.66° (136° in 24 frames) | 170°/s | 5.83° |
+
+**GuidedTurn uses the same scale as shïp Turn: GuidedTurn/10 degrees per
+frame.** NovaJS's `P/parsers/weapon_parse.ts:313` uses
+`ShipTurnRateConversionFactor`, which **matches** (the IR Missile's 70
+gives 210°/s).
+
+Confidence: high for T10, which was tracked cleanly for 57 frames. T30
+and T60 are good: the slopes are hand-picked over the turning arc,
+because the track crosses the planet.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-guided-turn/20261123-024013-guided_turn/recording.mp4`.
+The missile frames are about 92-148, 402-513 and 659-743.
+
+### Minimal app (2026-11-23)
+
+The minimal app works.
+
+- AbsoluteMinimum was converted with `rez_to_ndat.mjs` and installed with
+  `novaref app setup-minimal`. That made `~/novaref/apps/EV Nova
+  Minimal.app` (21 MB): the real bundle copied without its Nova Files,
+  plus the 7.8 MB `.ndat`.
+- `scenarios/minimal_app.json` (pilot `minimal.json`: shïp 128 at spöb
+  128) launched it, opened the pilot, entered space and landed at
+  "www.evula.org/artanis", with Bar, Mission BBS, Trade Center, Shipyard
+  and Outfitter buttons.
+- **Evidence:** `~/.local/share/novaref/evidence/20261123-minimal-app/20261123-024321-minimal_app/`.
+
+### Reliability notes (for anyone running the reference)
+
+- **Sporadic exits.** About 1 run in 8 ends with the game exiting just
+  after Enter Ship (`e`), with no crash report. Runs that succeed on a
+  plain rerun are still reported as failed, so rerun them.
+- **Plug-in not loaded.** Once, the game said the pilot referenced a
+  plug-in that was not loaded. A rerun worked.
+- **Custom graphics crash the game.** A from-scratch shän crashed it on
+  Enter Ship every time. An rlëD with the synthetic data set's row
+  encoding failed an assertion on load. The kit therefore clones the
+  stock Shuttle shän and encodes rlëD rows the stock way
+  (`encodeRled(..., { original: true })`).
+- **Power cut.** A power cut rolled back the last seconds of file
+  operations on the old Mac's HFS+ disk. `novaref recover` handled that.
+
 ## Pending
 
-| id | question | experiment | where it matters |
-|---|---|---|---|
-| #321 | What sets the trade tier multiplier k (×1.25/×0.8 vs ×1.1)? Is it the pilot's priceFlux? | CPl: identical pilots that differ only in `priceFlux` (pilot-make supports it). Land at Kit Port / Kit Market (opposite tiers + jünk 200/201), SS the Trade Center, buy/sell, PD credits. | `N/nova_plugin/economy/trade_logic.ts:33` |
-| #316b | Is wëap GuidedTurn on the ship Turn scale (1°/frame per 10)? | CPg: Kit Missile T10/T30/T60 (speed 600, i.e. 5.8 px/frame) fired 90° off a Kit Target (mïsn 965). The turning radius is v/ω: 1°/frame per 10 gives about 330 px for T10. | `P/parsers/weapon_parse.ts:313` |
+| id | question | status |
+|---|---|---|
+| U3 | Do outfit speed/accel/turn mods use the hull scale? | Kit outfits with ModType 9/10/11 values on a Probe, then `unit_probe.json`. Not run yet. |
+| U9 | Landing (and boarding) speed/distance gate | Approach Kit Port at known speeds with the inertialess Lancer (VID). Not run yet. |
+| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
+| F1 NPC fleets | Do flët escorts use the same slots? | A flët of disc hulls in a test system. |
+| M1-M7 | Map questions (minimap close/persist, routes, shift-click, borders, zoom, Tab order) | Queued as one "map" session. It needs a linked multi-system test region in the kit (current Kit Range has no links). |
+| K9 | IFF bracket colour vs disposition: are non-attacking hostile-govt ships yellow? | Seen in Q2b/Q2c. A dedicated check would put AI 1 and AI 3 ships of the same always-hostile govt side by side. |
 
 ## Catalogue
 
@@ -338,8 +452,8 @@ cosmetic or rare.
 
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
-| U1 | shïp Speed/Accel/Turn units | `P/parsers/constants.ts:9-21` | **answered above** | H |
-| U2 | wëap GuidedTurn scale | `P/parsers/weapon_parse.ts:313` | CPg, VID (Kit Missile T10/30/60) | H |
+| U1 | shïp Speed/Accel/Turn units | `P/parsers/constants.ts:9-21` | **answered above, and the fix has landed** (Matthew ruled for nominal 30 Hz: 0.45·Speed px/s, 0.18·Accel px/s²) | H |
+| U2 | wëap GuidedTurn scale | `P/parsers/weapon_parse.ts:313` | **answered above (#316b)**: GuidedTurn/10 °/frame, the same as shïp Turn. NovaJS already matches; no change needed. | H |
 | U3 | Outfit speed/accel/turn mods use the same scale? | `P/parsers/outfit_parse.ts:159,172,177` | CPg outfit with each ModType; VID with the Probe | M |
 | U4 | Afterburner boost (×2?) and the coast back down | `N/nova_plugin/travel/afterburner_plugin.ts:14-40` | CPl + afterburner outfit, VID | M |
 | U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | Kit Lancer, VID | M |
@@ -354,9 +468,9 @@ cosmetic or rare.
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
 | A1 | Q1: does a protect-the-player ship retaliate when shot? | `N/nova_plugin/npc/npc_decision.ts:247-288` | **answered above** (shots pass through; it never turns) | H |
-| A2 | Q2: does it engage attackers only, or any hostile? | same, ~391 | pending (Q2a/Q2b) | H |
-| A3 | Q3: does it fight its own govt's ships? | same | pending | H |
-| A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | pending | M |
+| A2 | Q2: does it engage attackers only, or any hostile? | `npc_decision.ts:391` | **answered**: attackers only. Matches. | H |
+| A3 | Q3: does it fight its own govt's ships? | `npc_decision.ts:391` | **answered**: no. **Mismatch**; fix proposed above. | H |
+| A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | **answered**: protector carriers never launch. | M |
 | A5 | Do NPCs of the same govt pass through each other's shots? | `N/nova_plugin/ship/firing_group.ts:62-67` | CPg crossfire, VID | M |
 | A6 | Warship (AI 3) vs interceptor (AI 4) engagement thresholds against a criminal player (MaxOdds, strength) | `npc_decision.ts` odds logic | CPg govt MaxOdds variants, CPl rating/strength | M |
 | A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | CPg traders + tickler | M |
@@ -366,13 +480,13 @@ cosmetic or rare.
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | Stock busy system, VID 10 min | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
-| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? (The original keeps records per system; NovaJS per govt.) | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | CPl with records differing between Kit Range and the home systems; watch which kit ships attack | H |
+| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **partly answered** (see Q2/Q3): a non-owning govt ignored a -500 player in Kit Range until given flag 0x0002 or 0x0004. A dedicated run is still to do. | H |
 
 ### Reputation, missions and economy
 
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
-| R1 | #321 trade tier multiplier k / priceFlux | `N/nova_plugin/economy/trade_logic.ts:33` | pending (above) | H |
+| R1 | #321 trade tier multiplier k / priceFlux | `N/nova_plugin/economy/trade_logic.ts:33` | **answered above**: priceFlux has no effect, tiers are exact ×0.8/1/1.25, and öops disasters are the likely ×1.1 | H |
 | R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | CPg govt KillPenalty 100 + ally/enemy govt owning home systems; kill one; PD legalStatus | H |
 | R3 | #320.2 negative gövt penalty = none? | `reputation.ts:127-139` | CPg govt KillPenalty -5, PD | H |
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
@@ -394,6 +508,23 @@ cosmetic or rare.
 | R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:239-243,370-377` | CPl, board kit ships of known Cost/crew, PD | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |
+
+### Blast, formation and map (added 2026-11-23)
+
+| id | question | where it matters | how | prio |
+|---|---|---|---|---|
+| B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
+| F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
+| U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | Kit outfit with each ModType on a Probe, VID | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | Approach at known speeds with the inertialess Lancer, VID | M |
+| M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | NovaJS minimap | Linked kit region, SS | L |
+| M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
+| M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
+| M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | CPl exploration bits | M |
+| M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | CPg map region with known govt colours | M |
+| M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | SS with known positions | L |
+| M7 | Tab cycling order on the big map | NovaJS map | CPg system with links at known angles and ids | M |
+| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/hostility.ts` | Seen yellow in Q2b/Q2c; needs a dedicated check | M |
 
 ### UI navigation and hotkeys (Matthew's category)
 

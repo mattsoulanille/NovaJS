@@ -242,7 +242,8 @@ export default {
         ...misn(963, "Kit Q3 escort vs own govt", 9004, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 604, auxShipSyst: -1 }),
         ...misn(964, "Kit Q4 carrier vs raiders", 9005, { shipCount: 1, shipDude: 601, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
         // A plain target ship for weapon tests.
-        ...misn(965, "Kit target practice", 9006, { shipCount: 1, shipDude: 605, shipGoal: -1, shipBehav: -1, shipStart: -1 }),
+        // The target appears on nav default 2 (Kit Market, 900 px east of Kit Port).
+        ...misn(965, "Kit target practice", 9006, { shipCount: 1, shipDude: 605, shipGoal: -1, shipBehav: -1, shipStart: -2 }),
         // Q2c: escort + wimpy traders of the always-attacks-player govt 362
         // (hostile to the player by govt, but AI 1 never attacks).
         ...misn(966, "Kit Q2c escort vs hostile traders", 9007, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 606, auxShipSyst: -1 }),

@@ -1,0 +1,7 @@
+{
+ "name": "minimal_app",
+ "_comment": "Launch test of the minimal app (Nova Files = AbsoluteMinimum.ndat only): title, Enter Ship, land. Pilot: pilots/minimal.json (shïp 128 at spöb 128, the only ones the minimal data has).",
+ "app": "minimal", "pilot": { "as": "novaref-minimal" },
+ "steps": [ {"move": true}, {"shot": "title", "window": true}, {"keys": "e wait 5000"}, {"shot": "space", "window": true}, {"keys": "l wait 1500 l wait 9000"}, {"shot": "landed", "window": true} ],
+ "pull": true
+}

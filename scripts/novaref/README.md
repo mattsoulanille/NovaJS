@@ -374,7 +374,7 @@ list it in a scenario's `"plugins"`.
 | shïp 720 Kit Disc Leader (white, Speed/Accel 300, Turn 30), 721-726 Kit Disc Red/Green/Blue/Yellow/Magenta/Cyan (Speed/Accel 600, Turn 60); rlëD 1970-1976 | **Trackable hulls**: a solid one-colour disc (24 px) on all 36 frames, built by `packages/novaparse/src/plugin_kit/sprites.ts`. `analysis/discs.mjs` finds each centre by colour. The shän is the stock Shuttle's with only the sprite swapped: a from-scratch shän crashed the game on Enter Ship. The rlëD must use the stock row encoding (`encodeRled(..., {original: true})`). The synthetic data set's default encoding made the game fail an assertion on load. |
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
 
-## Minimal app (untested: the old Mac was taken offline first)
+## Minimal app (tested 2026-11-23: launches, enters space, lands)
 
 `/Applications/EV Nova/AbsoluteMinimum.rez` on the MacBook is the smallest
 data set that launches the game. The Mac build does not load a `.rez`, so

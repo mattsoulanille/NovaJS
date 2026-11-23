@@ -1,0 +1,61 @@
+{
+ "name": "guided_turn",
+ "_comment": "#316b: the stationary player (just launched from Kit Port, next to the immobile Kit Target of mïsn 965) fires Kit Missile T10, T30, T60 (GuidedTurn 10/30/60, Speed 600) one at a time. A missile that cannot turn tightly enough circles the target; the circle radius r gives the turn rate w = v / r. Pilot: pilots/missile.json.",
+ "pilot": {
+  "as": "novaref-m"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "keys": "Tab wait 500"
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "aim",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "down:ctrl wait 150 up:ctrl wait 9000"
+  },
+  {
+   "keys": "w wait 500 down:ctrl wait 150 up:ctrl wait 7000"
+  },
+  {
+   "keys": "w wait 500 down:ctrl wait 150 up:ctrl wait 6000"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

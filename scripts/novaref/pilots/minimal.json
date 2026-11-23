@@ -1,0 +1,10 @@
+{
+  "name": "novaref-minimal",
+  "edits": {
+    "ship": 128, "stellar": 128, "credits": 1000, "fuel": 300,
+    "clearMissions": true, "clearMissionBits": true, "clearLegal": true, "explored": {"128": 2},
+    "weapons": {"128": 0}, "outfits": {"128": 0},
+    "escorts": [], "fighters": [],
+    "nickname": "Minimal", "shipName": "Minimal Shuttle"
+  }
+}
