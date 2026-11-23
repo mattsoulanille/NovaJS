@@ -370,7 +370,7 @@ function jammingKit() {
     const out = [];
     const jm = (id, name, vuln, seeker) => weap(id, name, 134, {
         reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
-        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 0, blastRadius: 0, flags: 0x0002, // 0x0002: second trigger
+        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002, // 0x0002: second trigger
     });
     out.push(jm(375, "JamM V100", 100, 0), jm(376, "JamM V50", 50, 0), jm(377, "JamM TurnAway", 100, 0x0010),
         jm(378, "JamM Parent", 100, 0x8000), jm(379, "JamM Decoy", 0, 0x0002), jm(380, "JamM Plain", 0, 0),
@@ -385,12 +385,16 @@ function jammingKit() {
             outfits: [k ? 623 : -1, -1, -1, -1], outfitCounts: [k, 0, 0, 0],
         }));
         out.push(dude(615 + k, `Jam Target J${25 * k}`, 1, 363, 732 + k));
-        out.push(...misn(971 + k, `Kit J target J${25 * k}`, 9012 + k, { shipCount: 1, shipDude: 615 + k, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+        // ShipStart -2: at Kit Market, 900 px east of Kit Port, where the
+        // player sits after taking off (a backed-off inertialess Lancer
+        // keeps drifting and outruns its own missiles).
+        out.push(...misn(971 + k, `Kit J target J${25 * k}`, 9012 + k, { shipCount: 1, shipDude: 615 + k, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     }
-    const rock = system(2132, "Kit Rock Range", -900, -620, 363, [2132]);
+    const rock = system(2132, "Kit Rock Range", -900, -620, 363, [2132, 2134]);
     rock.set = { ...rock.set, asteroids: 16, asteroidTypes: 0xffff };
-    out.push(rock, spob(2132, "Kit Rock Port", 0, 0, 138, { flags: 0x43 }));
-    out.push(...misn(976, "Kit J rock target", 9017, { availStel: 2132, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    out.push(rock, spob(2132, "Kit Rock Port", 0, 0, 138, { flags: 0x43 }),
+        spob(2134, "Kit Rock Marker", 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(...misn(976, "Kit J rock target", 9017, { availStel: 2132, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     return out;
 }
 
@@ -409,11 +413,16 @@ function aiKit() {
         armor: 1000, shield: 1000, accel: 300, speed: 300, turn: 30,
         weapons: [367, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 1, strength: 50, crew: 10,
     }));
+    // A trackable version (yellow 24 px disc, same stats) for recordings.
+    out.push(...discShip(760, "AI Subject Disc", 1999, DISC_COLOURS.yellow, {
+        armor: 1000, shield: 1000, accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [367, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 1, strength: 50, crew: 10, flags: 0, flags2: 0,
+    }));
     for (let ai = 1; ai <= 4; ai++) {
-        out.push(dude(629 + ai, `AI Subject ${ai}`, ai, 363, 737));
+        out.push(dude(629 + ai, `AI Subject ${ai}`, ai, 363, 760));
         out.push(...misn(976 + ai, `Kit AI ${ai} subject`, 9017 + ai, { shipCount: 1, shipDude: 629 + ai, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
     }
-    out.push(dude(634, "AI Subject 3 retreat", 3, 383, 737));
+    out.push(dude(634, "AI Subject 3 retreat", 3, 383, 760));
     out.push(...misn(981, "Kit AI 3 retreat subject", 9022, { shipCount: 1, shipDude: 634, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
     return out;
 }

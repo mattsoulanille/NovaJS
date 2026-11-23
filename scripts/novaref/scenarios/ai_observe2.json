@@ -1,0 +1,244 @@
+{
+ "name": "ai_observe2",
+ "_comment": "A-series AI states, v2: a neutral AI subject (yellow disc, govt 363, 2 Kit Raider Guns) appears beside Kit Port; the player (Kit Lancer, Kit Tickler only: 1 dmg, about 2250 px reach) targets it ONCE (Tab toggles with one ship), idles 6 s, fires one 0.6 s tickle, watches 25 s, fires for 20 s, watches 15 s. Analyse with analysis/hostility.mjs --colour yellow. Pilots w2_ai1..ai4, w2_ai3r.",
+ "pilot": {
+  "as": "novaref-ai"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle-1",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle-2",
+   "window": true
+  },
+  {
+   "keys": "Space@600 wait 200"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-5",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-6",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-7",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-8",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "provoked-9",
+   "window": true
+  },
+  {
+   "keys": "down:Space"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-5",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-6",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "firing-7",
+   "window": true
+  },
+  {
+   "keys": "up:Space"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-1",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-2",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-3",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-4",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "after-5",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

@@ -640,6 +640,121 @@ simplification, not a new error.
 Each holds `recording.mp4`, `recording.events.json`, `hostility.json`, the
 Tab shots, `01-map.png` (legal status) and `pilot-after`.
 
+### M-batch: star map and `h` minimap (2026-11-23, wave 2)
+
+**Kit.** A linked map region around sÿst 2140 Map Hub at (-700, 400)
+(`kits/testkit.mjs` `mapRegion`):
+- two major govts, red 379 and blue 380;
+- minor green 381 (gövt Flags2 0x0002) and borderless yellow 382
+  (Flags2 0x0004);
+- an unlinked explored system (2149 Map Lone);
+- two unexplored systems in a chain, D-U-U-D: Hub, 2143 East, 2146 Void,
+  2147 Far.
+
+The hub's link list is deliberately not in id order:
+[2144, 2142, 2145, 2141, 2143].
+
+Pilot `w2_map`; scenarios `map_explore.json` (first pass) and
+`map_follow.json`. The game window is 832x604.
+
+**M6, default zoom.** **1.77 px per map unit** when the map opens.
+Measured on four systems (South, 60 units, at +106 px; Lone (60, 70) at
+(+106, +124)). The minimap uses the same scale. NovaJS's full map opens
+at 2.0 (`MINI_MAP_ZOOM` comment in `N/spaceport/mini_map.ts:44-50`), so
+the **full map is 12.5% too zoomed in**.
+
+**M7, Tab on the big map.** Tab cycles the current system's
+neighbours in **sÿst link-slot order**, not by id, angle or distance:
+- with links [2141..2145] in id order the cycle was South, NE, East,
+  SW, WSW;
+- with links [2144, 2142, 2145, 2141, 2143] it was SW, NE, WSW, South,
+  East.
+
+Unexplored neighbours are included. The cycle wraps with no "nothing
+selected" step, and each pick is a single-jump route (thin green line).
+The status bar then reads "Hyperspace / <name>", or "Unexplored
+System".
+
+**M4, routing (shift-click pins).**
+- **The D-U-U-D quirk is real.** Shift-clicking East (unexplored), then
+  Void (unexplored), then Far (explored) drew a strong green route
+  Hub -> East -> Void -> Far. The info panel read "Destination System:
+  <Unknown>" while the route ended in an unexplored system, and "Map
+  Far" once Far was pinned. (NovaJS refuses this route on purpose,
+  `N/spaceport/route.ts:19-29`; Matthew's ruling stands. This is just
+  the confirmation.)
+- **A shift-click on an unroutable system** (Lone, explored but with no
+  links) is ignored: the route and the info panel are unchanged.
+- A plain click on a non-neighbour (Lone, Far) selects it for its info
+  ("Selected System: ...") and draws no route.
+- The panel heading has three states: "Current System" (no selection),
+  "Destination System" (end of a route) and "Selected System" (an
+  info-only pick).
+- Clear Route is greyed when there is no multi-jump route.
+
+**M1-M3, the `h` minimap** (832x604 window):
+- **Geometry.** A 208x206 box at (414, 151) with a 1 px RGB (8,8,8)
+  outline and no background. It is centred on the current system at
+  1.77 px/unit and shows only names, dots, links and the route. (The
+  1920x1080 capture's box is 480 px with the same top and the same
+  16 px gap to the status bar; see R8.)
+- **It is a 2.2 s peek, not a toggle.** Every press of `h` shows it for
+  64-66 frames (2.1-2.2 s), then it hides itself. Measured frame by
+  frame from the recording's frame-sync: shown at frame 1978, hidden at
+  2044, and the same after every later press. A second `h` does not
+  close it.
+- **Clicks work while it is hidden.** A click where it sits picks a
+  destination and shows it again for 2.2 s:
+  - SW: status "Hyperspace Map SW";
+  - East: "Unexplored System";
+  - shift-click and ctrl-click: picked WSW like a plain click (no
+    multi-jump pin from the minimap);
+  - a drag starting on the current system cleared the destination
+    ("No Destination").
+- **Neither Tab nor thrust shows it.**
+- **The full map (`m`)** opens normally over it.
+- **No automatic display** after landing and taking off, or after `j`
+  with no destination.
+- **Not tested:** whether it appears by itself during a real jump (the
+  1920x1080 reference capture is "Jumping into the Tau Ceti system";
+  our `j` had no destination after the drag cleared it).
+- **M3:** in this install the secondary trigger is Control
+  (`fireKey1` = 59), not shift. A ctrl-click with no secondary selected
+  fired nothing, so this stays open.
+
+**M5, borders (Show Borders), first pass.**
+- Radiating: the explored, inhabited systems of the two majors (Hub,
+  South, Lone, Island in red; NE and SW in blue).
+- Not radiating:
+  - Map East (blue, unexplored, its stellar not landable);
+  - Map Void (red, unexplored, no stellar);
+  - Map Far (Flags2 0x0004).
+  East and Void each combine two factors, so which one matters is
+  unresolved.
+- The minor govt's system (WSW, 30 units from the hub) shows **no green
+  at all**: the red hub territory covers it completely.
+- Where red and blue meet, the boundary is a straight cut, as NovaJS
+  models it.
+
+**NovaJS mismatches (not fixed):**
+1. Full map default zoom 2.0 vs 1.77 px/unit (`N/spaceport/starmap.ts`
+   opening zoom; noted at `mini_map.ts:44-50`).
+2. The minimap is a persistent toggle in NovaJS (`mini_map.ts:1-30`:
+   "h toggles it, it survives jumps"). The original shows it for 2.2 s
+   per `h` press or click, and clicks on its hidden area still work.
+3. Shift-click on the minimap: NovaJS does nothing; the original treats
+   it like a plain click (picks the system).
+4. The minimap's size is fixed at 480 px (`mini_map.ts:37`). In an
+   832x604 window the original uses 208 px.
+5. Tab: NovaJS cycles through an extra "off" slot
+   (`N/spaceport/route.ts:233-252` `cycleSingle`:
+   undefined -> adj[0] -> ... -> undefined). The original wraps
+   straight from the last neighbour to the first. The order (adjacency
+   = link order) already matches.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-map/{explore,follow}/*/`
+(`follow` has `recording.mp4` plus frame-sync).
+
 ### E-view: the escort command panel (`e`) (2026-11-23, wave 2)
 
 **Setup.**
@@ -697,12 +812,22 @@ Key bindings in this install (from the prefs): `escortMenuKey` = e,
   counter went 4 to 0), with no target selected. One 1.5 s hold of
   Control in the first run launched none.
 
+**Follow-up** (`scenarios/esc_view2.json`, pilot `w2_esc3`):
+- **The selection does not persist.** Selecting row 3, closing and
+  reopening shows row 1 (All Ships) selected again.
+- **The order keys work with the panel closed** and apply to all
+  escorts (the row-1 default). With the panel closed:
+  - `v`, then opening the panel, showed every category on Hold
+    Position;
+  - `c` turned them all back to Formation.
+- **Hold Position:** after `v` the player flew 2.5 s away and the
+  escorts stayed where they were.
+
 **Not pinned down:**
-- whether `f/d/v/c` work with the panel closed;
-- whether the selection persists between openings;
-- what each order makes the escorts do. The recording holds that data
-  but it is not analysed. After `v` the escorts stopped following;
-  after `c`, 4 s was not enough to see them return.
+- **What Attack and Defend do in a fight.** The mïsn 961 raiders never
+  showed up in this run, and `r` (nearest hostile) found nothing.
+- **How fast Formation recalls held escorts.** 8 s after `c` the
+  escorts, left about 900 px behind, were still off screen.
 
 **NovaJS today:**
 - `controls.json` binds `escorts: KeyE`, but no panel exists.
@@ -786,6 +911,118 @@ No change needed. Confidence: high (two pilots, 1x and 2x mods).
 **Evidence:** `~/.local/share/novaref/evidence/20261123-u3/{u3a,u3b}/*/`
 (`recording.mp4`, `motion.json`, `world_motion.json`).
 
+### J-series: missile jamming and asteroids (2026-11-23, wave 2)
+
+**Setup.** `kits/testkit.mjs` `jammingKit`, `scenarios/jam_fire.json`,
+pilots `pilots/w2_j*.json`.
+- **Weapons.** Guided secondary missiles that differ only in JamVuln1 and
+  Seeker flags: Speed 600, GuidedTurn 60, 10 s life, reload 15 frames,
+  1 damage, a 25 px proximity fuse.
+- **Targets.** Immobile Jam Targets with armor 100 and shield 0, so one
+  hit is 1% on the target panel. They carry 0-4 "Kit Jammer 25" outfits
+  (oütf ModType 33, +25 type-1 jamming each) in their shïp outfit slots.
+- **Geometry.** The target appears at Kit Market, 900 px east. The
+  player (Kit Lancer) takes off from Kit Port, stays put, targets it and
+  holds the secondary trigger for 20 s. The armor % is read 12 s later.
+- **Readout.** Hits = 100 - armor %. Every run fired the same number of
+  missiles: the control's 49 hits.
+
+Three earlier attempts are marked INVALID in the evidence:
+- the missiles were primary weapons;
+- there was no proximity fuse;
+- the player had backed off and the geometry failed.
+
+| config | JamVuln1 | target jamming | seeker | hits (of 49) | lost |
+|---|---|---|---|---|---|
+| control | 0 | 0 | 0 | **49** | 0% |
+| v100_j0 | 100 | 0 | 0 | **49** | 0% |
+| v100_j25 | 100 | 25 | 0 | 40 | 18% |
+| v100_j50 | 100 | 50 | 0 | 43 | 12% |
+| v100_j75 | 100 | 75 | 0 | 45 | 8% |
+| v100_j100 | 100 | 100 | 0 | 35 | 29% |
+| v50_j50 | 50 | 50 | 0 | **49** | 0% |
+| turn_j50 | 100 | 50 | 0x0010 turns away | 32 | 35% |
+| parent_j50 | 100 | 50 | 0x8000 may attack parent | 36 | 27% |
+| rock: plain | 0 | 0 | 0, 16 asteroids | 34 | 31% |
+| rock: decoy | 0 | 0 | 0x0002 decoyed by asteroids | 29 | 41% |
+| rock: pass | 0 | 0 | 0x0001 passes over asteroids | **49** | 0% |
+
+**Findings.**
+1. **Jamming is far weaker than vuln x jam.**
+   - At JamVuln 100 against 100% jamming, only 29% of missiles missed;
+     every 25-75 level lost 8-18%.
+   - With N = 49 the per-run noise is about ±7 percentage points, so
+     the 25/50/75 levels can't be told apart; only 100 stands out.
+   - JamVuln 50 against 50 lost nothing.
+   - In this geometry (900 px, about 5 s of flight) the loss is roughly
+     0.1-0.3 x vuln x jam. Whether the roll is per frame or per launch,
+     and whether distance matters, is untested.
+2. **Seeker 0x0010 (turns away if jammed)** loses more than a plain
+   missile at the same jamming (35% vs 12%). A plain missile that is
+   jammed apparently often re-acquires and still hits; a turn-away one
+   doesn't.
+3. **Seeker 0x8000 (may attack parent):** 27% lost. No missile was
+   seen turning back on the player in the recording, and the player's
+   30000 shields hide 1-damage hits, so the "attack parent" half is
+   unmeasured.
+4. **Asteroids.**
+   - Without seeker flags, the asteroid field stopped 31% of the
+     missiles: they hit rocks in the way.
+   - Seeker 0x0002 (decoyed) lost 41%.
+   - Seeker 0x0001 (passes over asteroids) lost **none**: asteroids are
+     fully transparent to it.
+   - No jamming was involved; asteroids act as blockers and decoys on
+     their own.
+
+**NovaJS today** (`N/nova_plugin/combat/jamming_plugin.ts:30-117,
+299-317`).
+- The single-shot lose-lock probability is P = vuln x jam per type
+  (100 x 100 gives P = 1, so every missile is jammed). It is spread over
+  80% of the flight, and a jammed missile never re-acquires.
+- The original lost 29% at 100 x 100.
+- **Proposed (not applied).**
+  - Scale P down: about 0.3 x vuln x jam reproduces 100x100 = 29%,
+    50x50 = 7.5% (0 observed) and 100x50 = 15% (12% observed).
+  - Or let a plain jammed missile re-acquire, keeping permanent loss for
+    turn-away (0x0010) missiles.
+- More trials per cell are needed before choosing between the two.
+- The asteroid rules (blocking, and pass-over for 0x0001) match NovaJS
+  (`N/nova_plugin/combat/projectile_plugin.ts:424-431`).
+
+**Not covered:** jamming types 2-4, gövt InhJam, sÿst Interference
+(0x0008), ionization (0x0020) and cloaked targets.
+
+Confidence:
+- **high:** asteroid pass-over / blocking; 100x100 vs 0;
+- **medium:** the size of the jam effect (single runs, N = 49).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-jam/<config>/*/`
+(the target panel shots 04-11 show armor %; `recording.mp4`).
+
+### F1n and U9 boarding: attempts without an answer yet (2026-11-23, wave 2)
+
+- **F1n, NPC fleet formations.** The kit has flët 1000 Kit Disc Fleet:
+  a white disc lead and four coloured disc escorts, govt 363, LinkSyst
+  2128. Three tries put **no fleet on screen**: 60-80 s each, with the
+  radar showing only the stellars.
+  - Kit Fleet Range with avgShips 0;
+  - the same system with avgShips 6 and no dudes;
+  - jumping in from the linked sÿst 2133 so the system is populated on
+    arrival.
+  So a flët isn't produced just by linking it to a quiet system. Next
+  ideas: give the system ordinary dudes as well (fleets may replace
+  part of the normal traffic), or loop many jumps. Evidence:
+  `~/.local/share/novaref/evidence/20261123-f1n/`.
+- **U9, boarding.** A derelict (gövt flag 0x0800, düde booty 0) spawned
+  on Kit Port by mïsn 970. The player, an inertialess Kit Crawler 200
+  at rest beside it, targeted it (the panel said "Disabled") and
+  pressed `b` (boardKey): **nothing happened**. No dialog, and no
+  "repelled" message either, although booty 0 should produce "repelled
+  while attempting to board". Escape then quit to the title, which ended
+  the run. Unresolved. Next: a ship disabled by gunfire, a booty bit
+  set, and `b` pressed at a range of distances. Evidence:
+  `~/.local/share/novaref/evidence/20261123-u9/explore/`.
+
 ### R8: UI rendering, original vs NovaJS (2026-11-23, wave 2, partial)
 
 **How.**
@@ -868,7 +1105,12 @@ Untouched so far:
 - **Sporadic exits.** About 1 run in 8 ends with the game exiting just
   after Enter Ship (`e`), with no crash report. Since wave 2, `run`
   detects this and retries the whole run (default 2 retries; README
-  "Retries").
+  "Retries"). In wave 2 it fired once in about 60 runs: the game died
+  during the landing step just after `e`, and the run cleaned up and
+  reran as `...-retry1`
+  (`evidence/20261123-jam/v100_j50/20261123-043646-*`).
+- **Escape in space quits to the title screen.** It is the pause key in
+  this install. Scenarios must never press it in flight.
 - **Lock and frame sync (wave 2).** Every driving command holds
   `~/.config/novaref/lock`, so only one agent drives the old Mac at a
   time. Every key, click and in-recording shot is stamped with the
@@ -891,12 +1133,13 @@ Untouched so far:
 
 | id | question | status |
 |---|---|---|
-| U3 | Do outfit speed/accel/turn mods use the hull scale? | Kit outfits with ModType 9/10/11 values on a Probe, then `unit_probe.json`. Not run yet. |
-| U9 | Landing (and boarding) speed/distance gate | Approach Kit Port at known speeds with the inertialess Lancer (VID). Not run yet. |
+| U9 | Landing and boarding speed/distance gates | **Open.** Wave 2: `b` beside a derelict did nothing (see "F1n and U9"). The autopilot landing runs needed more than 15 s (`u9_land.json` now waits 45 s). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
-| F1 NPC fleets | Do flët escorts use the same slots? | A flët of disc hulls in a test system. |
-| M1-M7 | Map questions (minimap close/persist, routes, shift-click, borders, zoom, Tab order) | Queued as one "map" session. It needs a linked multi-system test region in the kit (current Kit Range has no links). |
-| K9 | IFF bracket colour vs disposition: are non-attacking hostile-govt ships yellow? | Seen in Q2b/Q2c. A dedicated check would put AI 1 and AI 3 ships of the same always-hostile govt side by side. |
+| F1 NPC fleets | Do flët escorts use the same slots? | **Open.** Three tries spawned no flët (see "F1n and U9"). |
+| M2/M5 leftovers | Does the minimap show itself during a real jump? Do unexplored or uninhabited systems radiate borders? | One factor per system next time. |
+| E-view leftovers | What do Attack and Defend do in a fight? How fast does Formation recall held escorts? | Needs hostiles that actually show up (mïsn 961 raiders didn't in esc_view2). |
+| J (jamming) leftovers | More trials per cell; jam types 2-4, InhJam, Interference, ion, cloak; a weak parent for 0x8000 | First pass answered (J-series). |
+| A (AI states) | AI 1-4 reactions to provocation, the retreat flag | Wave-2 v2 runs in progress (see "A-series" when present). |
 
 ## Catalogue
 
@@ -914,9 +1157,9 @@ cosmetic or rare.
 |---|---|---|---|---|
 | U1 | shïp Speed/Accel/Turn units | `P/parsers/constants.ts:9-21` | **answered above, and the fix has landed** (Matthew ruled for nominal 30 Hz: 0.45·Speed px/s, 0.18·Accel px/s²) | H |
 | U2 | wëap GuidedTurn scale | `P/parsers/weapon_parse.ts:313` | **answered above (#316b)**: GuidedTurn/10 °/frame, the same as shïp Turn. NovaJS already matches; no change needed. | H |
-| U3 | Outfit speed/accel/turn mods use the same scale? | `P/parsers/outfit_parse.ts:159,172,177` | CPg outfit with each ModType; VID with the Probe | M |
+| U3 | Outfit speed/accel/turn mods use the same scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
 | U4 | Afterburner boost (×2?) and the coast back down | `N/nova_plugin/travel/afterburner_plugin.ts:14-40` | CPl + afterburner outfit, VID | M |
-| U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | Kit Lancer, VID | M |
+| U5 | Inertialess stop behaviour: does it stop instantly, decelerate at Accel, or turn the velocity? | inertialess physics in `ship_parse.ts:329` consumers | **partly (wave 2)**: Kit Crawler 200's starfield is static from the first frame after releasing thrust (u9 land_c200). Deceleration profile not measured | M |
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
@@ -940,7 +1183,7 @@ cosmetic or rare.
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | Stock busy system, VID 10 min | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
-| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **partly answered** (see Q2/Q3): a non-owning govt ignored a -500 player in Kit Range until given flag 0x0002 or 0x0004. A dedicated run is still to do. | H |
+| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; fix proposed. | H |
 
 ### Reputation, missions and economy
 
@@ -975,16 +1218,16 @@ cosmetic or rare.
 |---|---|---|---|---|
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
-| U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | Kit outfit with each ModType on a Probe, VID | M |
+| U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
 | U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | Approach at known speeds with the inertialess Lancer, VID | M |
-| M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | NovaJS minimap | Linked kit region, SS | L |
+| M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
-| M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | CPl exploration bits | M |
+| M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | **answered (wave 2)**: D-U-U-D routes; an unroutable shift-click is ignored | M |
 | M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | CPg map region with known govt colours | M |
-| M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | SS with known positions | L |
-| M7 | Tab cycling order on the big map | NovaJS map | CPg system with links at known angles and ids | M |
-| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/hostility.ts` | Seen yellow in Q2b/Q2c; needs a dedicated check | M |
+| M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
+| M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
+| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/reputation/iff_plugin.ts:101-112` | **answered (wave 2)**: AI 1 traders are yellow, warships red. **Mismatch** | M |
 
 ### UI navigation and hotkeys (Matthew's category)
 
@@ -996,7 +1239,7 @@ cosmetic or rare.
 | K4 | Map (`m`) keys: zoom +/-, Find, Escape | map dialog | SS | L |
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
 | K6 | Venue buttons when a stellar lacks a venue: hidden or greyed? (#373) | `N/spaceport/spaceport.ts:1037-1050` | CPg Kit Market (no outfitter/shipyard): SS its spaceport | H |
-| K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | CPl with escorts, SS | M |
+| K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
 | K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar | L |
 
 ### Edge cases

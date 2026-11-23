@@ -1,6 +1,6 @@
 {
  "name": "jam_fire",
- "_comment": "J-series: land, accept the Jam Target mission, take off (target beside Kit Port), back off 1.5 s (inertialess Lancer, ~540 px), hold secondary fire 20 s (~40 guided missiles), read the target's armor % (armor 100, 1 dmg per hit). Pilots w2_jv*_j*, w2_jturn_j50, w2_jparent_j50; rock pilots w2_j*_rock (Kit Rock Range).",
+ "_comment": "J-series: land at Kit Port, accept the Jam Target mission (target appears at Kit Market, 900 px east; Kit Rock Marker in the rock range), take off and stay put, hold secondary fire 20 s (about 40 guided missiles, proximity fuse 25 px), read the target's armor % (armor 100, 1 dmg per hit). Pilots w2_jv*_j*, w2_jturn_j50, w2_jparent_j50; rock pilots w2_j*_rock (Kit Rock Range).",
  "pilot": {
   "as": "novaref-jam"
  },
@@ -41,9 +41,6 @@
   {
    "shot": "target",
    "window": true
-  },
-  {
-   "keys": "down:Up wait 1500 up:Up wait 600"
   },
   {
    "keys": "w wait 500"
