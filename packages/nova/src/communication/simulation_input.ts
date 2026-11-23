@@ -553,12 +553,29 @@ function warnDrop(peerId: string | undefined, kind: unknown,
  * on every later step of every world holding the record (it stays in
  * the tick's input map), wedging the room. Dropping the offending input
  * is deterministic — the same input throws identically everywhere.
+ *
+ * THE RECORD IS READ-ONLY TO THE WORLD. Each input is applied from a
+ * private deep copy. An input's payload becomes world state (an
+ * addEntity's components, an accepted mission and its ships, a route),
+ * and an io-ts decode hands back its input object when nothing needs
+ * converting, so applying the record itself would put the record's own
+ * objects into the world, where the simulation edits them in place
+ * (`route.shift()`, `npc.nextDecision = ...`). The same record object is
+ * applied again later — the rollback driver re-applies it on every
+ * resimulation, the relay's log is what the archive applies and what
+ * joiners, resyncs and desync replays read — and it must say the same
+ * thing every time. The nova:282 desync: a retimed addEntity re-applied
+ * after its first application's beginJump had shifted the route it
+ * carried, so the client inserted a different ship the second time; the
+ * archive, which applied it once intact, jumped the ship out, and its
+ * world rewrote the relay's logged copy as well.
  */
 export function applySimulationInputs(world: World, inputs: SimulationInput[],
     peerId?: string, origin?: InputOrigin) {
     for (const input of inputs) {
         try {
-            applySimulationInput(world, input, peerId, origin);
+            applySimulationInput(world, structuredClone(input), peerId,
+                origin);
         } catch (error) {
             const kind = (input as { kind?: unknown })?.kind;
             warnDrop(peerId, kind, () =>

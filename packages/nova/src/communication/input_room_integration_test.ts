@@ -1225,6 +1225,143 @@ describe('Input-driven rooms', () => {
         }
     }, 240_000);
 
+    it('a retimed insertion re-applied by a rollback inserts the ship it was sent '
+        + 'as: the sender, the archive and the log agree (the nova:282 desync)', async () => {
+        // Matthew's playtest, twice: arriving in Tekel mid multi-jump
+        // (JumpSequence 'arriving', one auto-jump left) while his client
+        // was still catching up to the room, both of his first records
+        // were retimed. The insertion's echo came back at once and he
+        // applied the ECHOED record at the room's tick; his world took
+        // the record's own component objects (an io-ts decode hands back
+        // its input), and the auto-continued jump's `route.shift()` edited
+        // the record. Then the second record's echo arrived late, he
+        // rolled back past the insertion and applied the same record
+        // again — now a ship whose route had lost its next hop, so it
+        // stayed. The archive applied the logged record once, intact,
+        // and jumped the ship out (and its world rewrote the log the same
+        // way). Two voters, server canonical: the honest client was
+        // convicted and resynced onto a world without its ship.
+        relay.close();
+        let archive: RoomArchive | undefined;
+        relay = new RollbackRelay(comms.get('server')!, {
+            autoClock: false,
+            baseline: () => archive?.latest,
+            referenceHash: tick => archive?.hashAt(tick),
+        });
+        const gameData = await getSyntheticGameData();
+        const ids = await gameData.ids;
+        const systemId = [...ids.System].sort()[0]!;
+        const destination = [...(await gameData.data.System.get(systemId))
+            .links].sort()[0]!;
+        archive = new RoomArchive(relay,
+            () => makeSystem(systemId, gameData, 'node', { npcs: false }),
+            { intervalTicks: 600, autoUpdate: false });
+        const { TimeResource } = await import('nova_ecs/plugins/time_plugin');
+        const frame = (world: World) => world.resources.get(TimeResource)!.frame;
+        const { JumpComponent, JumpRouteComponent, JUMP_DISTANCE } =
+            await import('../nova_plugin/travel/index.js');
+
+        // What reaches A comes over a WIRE: a fresh copy of the relay's
+        // object, never the object itself (in process the mock would hand
+        // A the relay's logged record). Echoes can be held in flight.
+        const server = comms.get('server')!;
+        const held: { source: string, message: unknown }[] = [];
+        let holding = false;
+        server.mockPeers = new Map(comms);
+        server.mockPeers.set('a', {
+            messages: { next: (message: { source: string, message: unknown }) => {
+                const copy = structuredClone(message);
+                if (holding) {
+                    held.push(copy);
+                } else {
+                    comms.get('a')!.messages.next(copy);
+                }
+            } },
+        } as unknown as MockCommunicator);
+
+        const peerA = await makePeer('a');
+        for (let i = 0; i < 10; i++) {
+            peerA.host.step();
+            relay.advanceTicks(1);
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        // A falls behind the room (a busy client on system entry).
+        relay.advanceTicks(20);
+
+        // The ship arrives mid multi-jump: the tick after its insertion,
+        // with no key pressed, it begins the jump to the route's head.
+        const ship = await makePeerShip('a', peerA.world);
+        ship.components.set(JumpRouteComponent, { route: [destination] });
+        ship.components.set(JumpComponent, {
+            stage: 'arriving', to: systemId, direction: 0, autoJumpsLeft: 1,
+        });
+        ship.components.get(MovementStateComponent)!.position =
+            new Position(0, -(JUMP_DISTANCE * 2));
+        await peerA.client.addEntity('ship a', ship);
+        // The insertion goes out stamped behind the clock; its echo comes
+        // straight back, before A reaches the room's tick.
+        peerA.host.step();
+        await new Promise(resolve => setImmediate(resolve));
+        const insertedAt = relay.inputLog.at(-1)!.tick;
+        expect(insertedAt).withContext('the insertion was retimed')
+            .toBe(relay.tick + 1);
+        // A second record, also stamped behind the clock: ITS echo is late.
+        holding = true;
+        peerA.host.controlEvents([{ action: 'accelerate', state: 'start' }]);
+        peerA.host.step();
+        await new Promise(resolve => setImmediate(resolve));
+        expect(held.length).withContext('the second record was retimed')
+            .toBe(1);
+        // A catches up past the insertion: the ship is inserted from the
+        // echoed record and begins its jump.
+        while (frame(peerA.world) < insertedAt + 10) {
+            peerA.host.step();
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        expect(peerA.world.entities.get('ship a')?.components.has(JumpComponent))
+            .withContext('A inserted the ship and it began the jump').toBeTrue();
+        // The late echo: A rolls back past the insertion and applies the
+        // echoed insertion record a second time.
+        holding = false;
+        for (const message of held) {
+            comms.get('a')!.messages.next(message);
+        }
+        for (let i = 0; i < 120; i++) {
+            peerA.host.step();
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        while (relay.tick < frame(peerA.world)) {
+            relay.advanceTicks(1);
+        }
+        while (frame(peerA.world) < relay.tick) {
+            peerA.host.step();
+        }
+        await archive.update();
+        expect(frame(archive.archiveWorld!)).toBe(frame(peerA.world));
+
+        // Both flew the record as it was sent: the ship is on its way out.
+        for (const [name, world] of [['A', peerA.world],
+            ['the archive', archive.archiveWorld!]] as const) {
+            const jumping = world.entities.get('ship a');
+            expect(jumping === undefined
+                || jumping.components.has(JumpComponent))
+                .withContext(`the ship is jumping out on ${name}`).toBeTrue();
+        }
+        const { diffWorldHashes } = await import('nova_ecs/plugins/world_hash');
+        expect(diffWorldHashes(
+            hashWorld(peerA.world, PEER_LOCAL_COMPONENTS),
+            hashWorld(archive.archiveWorld!, PEER_LOCAL_COMPONENTS)))
+            .withContext('the sender against the archive').toEqual([]);
+        // The log still says what A sent: the archive's world did not
+        // rewrite the record it applied.
+        const logged = relay.inputLog.flatMap(record => record.inputs)
+            .find(input => input.kind === 'addEntity');
+        const loggedRoute = logged?.kind === 'addEntity'
+            ? logged.entity.components.find(
+                ([name]) => name === 'JumpRouteComponent')?.[1] : undefined;
+        expect(loggedRoute).toEqual({ route: [destination] });
+    }, 240_000);
+
     it('per-tick steering survives a one-tick retime: the sender matches the archive (#359)', async () => {
         // The browser form of the same bug (the hub's mouse-steer
         // incident): mouse or touch steering sends an analogControl
