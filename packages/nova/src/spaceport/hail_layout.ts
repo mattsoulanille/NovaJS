@@ -81,6 +81,19 @@ export interface CommFrameLayout {
 export const COMM_LINE_HEIGHT = 15;
 
 /**
+ * The comm dialogs' button captions are a LIGHTER face than our default
+ * button caption (Geneva 12). On hail/hail.png the labels are thin
+ * single-pixel strokes, letter-spaced: "Greetings" inks 128 px over 53x9,
+ * "Request Assistance" 258 px over 109x9, where Geneva 12 inked 204 and 426
+ * over 55x10 and 112x10. Geneva 10 with 1 px letter spacing keeps the
+ * widths (54 and 111) at about 60% less ink; nothing in a browser draws the
+ * original's unsmoothed bitmap strokes exactly.
+ */
+export const COMM_BUTTON_FONT = {
+    fontFamily: 'Geneva', fontSize: 10, letterSpacing: 1,
+} as const;
+
+/**
  * The plunder dialog's readout is set tighter still: 14px, from
  * space/board_ship.png's Cargo / Credits / Ammo / Energy rows at frame y =
  * 28 / 42 / 56 / 70.

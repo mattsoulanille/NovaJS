@@ -249,6 +249,19 @@ export class Button {
         this.text.text = label;
     }
 
+    /**
+     * Restyles the caption in every state; the per-state colours (the colr
+     * ones) stay unless `style` sets a fill. The comm dialogs set their
+     * labels in a lighter face than the spaceport's (hail_layout
+     * COMM_BUTTON_FONT).
+     */
+    setLabelFont(style: Partial<PIXI.ITextStyle>) {
+        for (const [state, font] of this.font) {
+            this.font.set(state, { ...font, ...style });
+        }
+        this.state = this.wrappedState;
+    }
+
     set state(state: ButtonState) {
         for (const container of this.states.values()) {
             container.visible = false;

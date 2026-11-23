@@ -6,7 +6,8 @@ import { EscortDeal } from '../nova_plugin/player/index.js';
 import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 import { Button } from './button.js';
 import {
-    buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,
+    buttonRowY, commButtonSlots, COMM_BUTTON_FONT, COMM_ESCORT, COMM_HAGGLE,
+    COMM_LINE_HEIGHT,
     COMM_PLANET, COMM_SHIP, CommFrameLayout, escortButtonSlots, fitImage,
     frameOrigin,
 } from './hail_layout.js';
@@ -961,10 +962,13 @@ export class HailDialog {
      * ending at container.x + BUTTON_CAP_INSET). */
     private placeButton(label: string, frame: CommFrameLayout,
         originX: number, originY: number, row: number): Button {
-        return new Button(this.displayAssets, label, frame.buttonWidth, {
-            x: originX + frame.buttonX - BUTTON_CAP_INSET,
-            y: originY + buttonRowY(frame, row),
-        });
+        const button = new Button(this.displayAssets, label,
+            frame.buttonWidth, {
+                x: originX + frame.buttonX - BUTTON_CAP_INSET,
+                y: originY + buttonRowY(frame, row),
+            });
+        button.setLabelFont(COMM_BUTTON_FONT);
+        return button;
     }
 
     private async renderMain(context: HailContext, frame: CommFrameLayout,
