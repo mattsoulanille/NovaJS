@@ -144,6 +144,17 @@ describe('dialog layout', () => {
             expect(screenX(TRADE.priceRight)).toBe(1127);
         });
 
+        it('rules the pane and indents the summary as the reference does', () => {
+            // Two #404040 rules, x785..1136, at y439 and y538 (every
+            // trade capture); the summary's ink starts at x790, a pixel
+            // right of its origin.
+            expect(screenX(TRADE.rules.x)).toBe(785);
+            expect(screenX(TRADE.rules.x) + TRADE.rules.width - 1)
+                .toBe(1136);
+            expect(TRADE.rules.ys.map(screenY)).toEqual([439, 538]);
+            expect(screenX(TRADE.summaryX) + 1).toBe(790);
+        });
+
         it('lands Buy / Sell / Done evenly on the reference pills', () => {
             // Buy's face is x812..899 and Done's x1024..1111, y640..652;
             // Sell sits exactly midway.

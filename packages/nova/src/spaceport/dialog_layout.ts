@@ -160,6 +160,23 @@ export const TRADE = {
      * whose first line's cap lands at y544. */
     summaryTop: 1,
     /**
+     * The cargo summary's ink starts at x790, two pixels LEFT of the
+     * commodity names (earth_trade_center.png, the Port Kane capture and
+     * the R8 wave-5 07-trade.png all agree). Our Geneva "F"/"O" ink sits
+     * a pixel right of the text origin, hence 789.
+     */
+    summaryX: -171,
+    /**
+     * The two 1px #404040 rules the game draws across the pane: under
+     * the column headers (y439) and above the cargo summary (y538). Both
+     * run x785..1136, a pixel past the pane on each side, on every
+     * trade-center capture; they are not part of PICT 8510.
+     */
+    rules: { x: -175, width: 352, ys: [-101, -2] },
+    ruleColor: 0x404040,
+    /** The column headers are the strip grey (#c0c0c0), not white. */
+    headerColor: 0xc0c0c0,
+    /**
      * The strip below the main pane (x786..1135, y603..627) carries the
      * öops price-event line; its ink cap is at y607.
      */

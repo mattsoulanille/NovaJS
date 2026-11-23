@@ -39,6 +39,8 @@ const LIST_FONT: Partial<PIXI.ITextStyle> = {
 };
 const RIGHT_FONT: Partial<PIXI.ITextStyle> =
     { ...LIST_FONT, align: 'right' };
+const HEADER_FONT: Partial<PIXI.ITextStyle> =
+    { ...LIST_FONT, fill: TRADE.headerColor };
 
 /**
  * The exchange's column headers and cargo-summary wording, stock Nova's
@@ -169,9 +171,9 @@ export class TradeCenter extends Menu<Entity> {
     private quantityDialog: QuantityDialog;
 
     private text = {
-        headerCommodity: new PIXI.Text(HEADER_COMMODITY, LIST_FONT),
-        headerHold: new PIXI.Text('', LIST_FONT),
-        headerPrice: new PIXI.Text(HEADER_PRICE, LIST_FONT),
+        headerCommodity: new PIXI.Text(HEADER_COMMODITY, HEADER_FONT),
+        headerHold: new PIXI.Text('', HEADER_FONT),
+        headerPrice: new PIXI.Text(HEADER_PRICE, HEADER_FONT),
         otherCargo: new PIXI.Text('', LIST_FONT),
         freeSpace: new PIXI.Text('', LIST_FONT),
         /** The fleet free-space line, one row under the ship's. */
@@ -216,10 +218,10 @@ export class TradeCenter extends Menu<Entity> {
         this.text.headerHold.position.set(
             TRADE.quantityHeaderX, TRADE.headerY);
         this.text.headerPrice.position.set(TRADE.tierX, TRADE.headerY);
-        this.text.otherCargo.position.set(TRADE.nameX, TRADE.summaryTop);
-        this.text.freeSpace.position.set(TRADE.nameX, TRADE.summaryTop);
+        this.text.otherCargo.position.set(TRADE.summaryX, TRADE.summaryTop);
+        this.text.freeSpace.position.set(TRADE.summaryX, TRADE.summaryTop);
         this.text.freeSpaceFleet.position.set(
-            TRADE.nameX, TRADE.summaryTop + LINE_HEIGHT);
+            TRADE.summaryX, TRADE.summaryTop + LINE_HEIGHT);
         // The event line sits in the strip below the pane (the reference
         // screenshot's "food surplus" position); transaction feedback
         // shows just under it.
@@ -228,7 +230,13 @@ export class TradeCenter extends Menu<Entity> {
         this.text.status.position.set(
             TRADE.statusText.x, TRADE.statusText.y + LINE_HEIGHT);
 
-        this.container.addChild(this.highlight, this.listContainer);
+        const rules = new PIXI.Graphics();
+        for (const y of TRADE.rules.ys) {
+            rules.beginFill(TRADE.ruleColor)
+                .drawRect(TRADE.rules.x, y, TRADE.rules.width, 1)
+                .endFill();
+        }
+        this.container.addChild(rules, this.highlight, this.listContainer);
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
@@ -540,7 +548,10 @@ export class TradeCenter extends Menu<Entity> {
                 [good.name, TRADE.nameX, 0],
                 [held > 0 ? `${held}` : '', TRADE.quantityRight, 1],
                 [tierWord, TRADE.tierX, 0],
-                [`${good.price.toLocaleString()}`, TRADE.priceRight, 1],
+                // No thousands separator: the original prints Earth's
+                // Luxury Goods as "1125" (earth_trade_center.png, R8
+                // wave-5 07-trade.png), where toLocaleString gave "1,125".
+                [`${good.price}`, TRADE.priceRight, 1],
             ];
             for (const [label, x, anchor] of columns) {
                 if (!label) {
