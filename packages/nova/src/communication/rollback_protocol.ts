@@ -245,6 +245,13 @@ export const STATE_HASH_INTERVAL = 60;
 //    moving the schema fingerprint while never crossing the wire).
 //    The derived wire schema fingerprint changes, and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): an OPTIONAL `hurtsFirer` field on the
+//    FiringGroup component (ship/firing_group.ts), written only when
+//    BLAST_FLOCK_RULE is 'flockAlwaysSpared'. Under the default rule it is
+//    never set, so every existing component and hash input is unchanged.
+//    The derived wire schema fingerprint changes, and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
