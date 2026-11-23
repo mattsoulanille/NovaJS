@@ -329,8 +329,9 @@ export const StarmapPlugin: Plugin = {
             world.emit(SetJumpRouteEvent, { route });
         };
 
-        // The `h` hyperspace minimap (spaceport/mini_map.ts). Built with
-        // the world, not on the first `h`: its hidden area takes clicks.
+        // The `h` hyperspace minimap (spaceport/mini_map.ts). Built as soon
+        // as the player is here, not on the first `h`: its hidden area
+        // takes clicks.
         const miniMap = new MiniMap(
             () => world.resources.get(TimeResource)?.time ?? 0, miniMapPeek);
         stage.addChild(miniMap.container);
@@ -364,10 +365,11 @@ export const StarmapPlugin: Plugin = {
             miniMap.peek();
             void refreshMiniMap();
         };
-        // The graph built with the world may predate the player's ship
-        // reaching the display world (no control bits, no missions yet);
-        // rebuilt once it is here, so the hidden map's clicks are on the
-        // systems the player can really see.
+        // Not before the player's ship has reached the display world: a
+        // graph filtered against no control bits would show the wrong NCB
+        // copies, and building one reconciles the persisted route against
+        // its links (Starmap.miniMapGraph), which could drop a pick that
+        // only the player's real bits make adjacent.
         let builtForPlayer = false;
         world.resources.set(MiniMapResource, {
             miniMap,
@@ -390,7 +392,6 @@ export const StarmapPlugin: Plugin = {
             },
         });
         world.addSystem(DrawMiniMap);
-        void refreshMiniMap();
         // Debug/headless-driving handle (window_hooks.ts).
         if (typeof window !== 'undefined') {
             window.novaMiniMap = {
