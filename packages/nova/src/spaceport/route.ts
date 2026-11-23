@@ -232,23 +232,26 @@ export function adjacentSystems(adj: Adjacency, current: string): string[] {
 
 /**
  * Cycles the single-jump destination through the current system's
- * neighbours. The cycle includes an "off" (undefined) slot so Tab can also
- * clear the route:
- *   undefined -> adj[0] -> adj[1] -> ... -> adj[n-1] -> undefined -> ...
- * `direction` may be +1 (forward) or -1 (backward).
+ * neighbours, in their sÿst link-slot order (`adjacent` is the system's
+ * links as declared), wrapping from the last straight back to the first:
+ *   adj[0] -> adj[1] -> ... -> adj[n-1] -> adj[0] -> ...
+ * Unexplored neighbours are in the cycle like any other. With nothing (or
+ * a non-neighbour) picked, forward starts at adj[0] and backward at
+ * adj[n-1]. There is no "nothing selected" step: reference_experiments M7
+ * (the original wraps from the last neighbour to the first, and Clear
+ * Route is how a pick is dropped). `direction` may be +1 or -1.
  */
 export function cycleSingle(adjacent: readonly string[],
     current: string | undefined, direction = 1): string | undefined {
     if (adjacent.length === 0) {
         return undefined;
     }
-    const cycle: (string | undefined)[] = [undefined, ...adjacent];
-    let index = cycle.indexOf(current);
-    if (index === -1) {
-        index = 0;
-    }
     const step = direction < 0 ? -1 : 1;
-    return cycle[(index + step + cycle.length) % cycle.length];
+    const index = current === undefined ? -1 : adjacent.indexOf(current);
+    if (index === -1) {
+        return step > 0 ? adjacent[0] : adjacent[adjacent.length - 1];
+    }
+    return adjacent[(index + step + adjacent.length) % adjacent.length];
 }
 
 /**

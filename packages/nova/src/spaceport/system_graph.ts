@@ -407,7 +407,7 @@ export class SystemGraph {
     }
 
     /** Tab: cycles the single-jump route through the current system's
-     * neighbours (through an "off" slot to clear it). */
+     * neighbours in link-slot order, wrapping (route.ts cycleSingle). */
     cycleSingleRoute(direction = 1) {
         if (this.selectable) {
             return;

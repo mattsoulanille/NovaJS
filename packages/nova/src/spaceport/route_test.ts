@@ -108,19 +108,36 @@ describe('adjacentSystems', () => {
 
 describe('cycleSingle (Tab cycling)', () => {
     const neighbours = adjacentSystems(adj, 'b'); // ['a', 'c', 'e']
-    it('starts from off and advances to the first neighbour', () => {
+    it('starts from nothing and advances to the first neighbour', () => {
         expect(cycleSingle(neighbours, undefined)).toEqual('a');
     });
     it('advances through neighbours in order', () => {
         expect(cycleSingle(neighbours, 'a')).toEqual('c');
         expect(cycleSingle(neighbours, 'c')).toEqual('e');
     });
-    it('wraps from the last neighbour back to off', () => {
-        expect(cycleSingle(neighbours, 'e')).toBeUndefined();
+    it('wraps from the last neighbour straight to the first', () => {
+        // reference_experiments M7: no "nothing selected" step.
+        expect(cycleSingle(neighbours, 'e')).toEqual('a');
+    });
+    it('follows link-slot order, not id order', () => {
+        // The kit hub's links [2144, 2142, 2145, 2141, 2143] cycled SW,
+        // NE, WSW, South, East, then SW again.
+        const slots = ['2144', '2142', '2145', '2141', '2143'];
+        const seen: (string | undefined)[] = [];
+        let pick: string | undefined;
+        for (let i = 0; i < 6; i++) {
+            pick = cycleSingle(slots, pick);
+            seen.push(pick);
+        }
+        expect(seen).toEqual([...slots, '2144']);
+    });
+    it('starts over from the first neighbour after a non-neighbour pick', () => {
+        expect(cycleSingle(neighbours, 'z')).toEqual('a');
     });
     it('cycles backward', () => {
         expect(cycleSingle(neighbours, undefined, -1)).toEqual('e');
-        expect(cycleSingle(neighbours, 'a', -1)).toBeUndefined();
+        expect(cycleSingle(neighbours, 'a', -1)).toEqual('e');
+        expect(cycleSingle(neighbours, 'e', -1)).toEqual('c');
     });
     it('returns undefined when there are no neighbours', () => {
         expect(cycleSingle([], 'a')).toBeUndefined();
