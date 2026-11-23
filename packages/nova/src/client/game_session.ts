@@ -40,7 +40,7 @@ import { EscortPanelResource } from '../display/escort_panel_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
 import {
-    ControlEvent, EcsControlEvent, Controls, getActions, SimulationGameDataResource,
+    ControlEvent, EcsControlEvent, Controls, SimulationGameDataResource,
 } from '../nova_plugin/core/index.js';
 import { GateTransitEvent, FinishJumpEvent, LandEvent } from '../nova_plugin/travel/index.js';
 import type { AcceptedMission } from '../nova_plugin/missions/index.js';
@@ -62,6 +62,7 @@ import {
     beginTeardown, dockedShip, enterFailed, enterGame, liveSystem, tornDown,
 } from './client_state.js';
 import { ControlRouter } from './control_routing.js';
+import { KeyActions } from './key_actions.js';
 import { onLand, onLeaveSpaceport } from './docking.js';
 import {
     localPlayerShipUuid, spawnHiredEscorts,
@@ -484,6 +485,7 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         'turnRight', 'reverse', 'pointTo', 'land', 'hyperjump',
         'afterburner', 'board']);
 
+    const keyActions = new KeyActions();
     function handleControlEvent(event: KeyboardEvent) {
         const controls = host.controls();
         if (!controls) {
@@ -503,7 +505,9 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         if (event.key === 'Tab') {
             event.preventDefault();
         }
-        const actions = getActions(controls, event);
+        // A key-up releases what its press pressed, whatever the
+        // modifiers are now (Alt let go before C: key_actions.ts).
+        const actions = keyActions.resolve(controls, event);
         const controlEvents: ControlEvent[] = actions.map(action => ({
             action,
             state: event.type === 'keyup' ? false
