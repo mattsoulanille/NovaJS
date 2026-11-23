@@ -2065,9 +2065,15 @@ traffic was not tested and may visit planets first.
 departure 120-300 s after spawning and AI 1/2 traders loop planet to
 planet in between, "dwell" standing in for a landing (lines 440-470). For
 mission ships like these the original leaves 3-9x sooner and never
-dwells. **Proposed (not applied):** give special ships with no goal
-(ShipGoal -1) and AI 1 a departure 30-40 s after spawning, straight to a
-jump; keep the dwell loop for sÿst traffic until that is measured.
+dwells. **Applied in 902bff7c:** special ships with no goal
+(ShipGoal -1), ShipBehav -1 and AI 1 (not aux ships) are marked
+`passingThrough` at spawn; their first think rolls the departure 30-40 s
+out (`PASS_THROUGH_DEPART_MIN_MS`/`MAX`, the same single PRNG draw) and
+they go to 'depart' the moment it is due, without finishing a trip or
+dwell first. Until then they fly the trader loop. Note the window is the
+departure DECISION: the outbound flight and jump sequence follow it, so
+they vanish some seconds later than the original's 30-40 s. The dwell
+loop is kept for sÿst traffic until that is measured.
 Confidence: high for these mission ships; untested for traffic.
 
 **gövt 0x0010 retreat** (`scenarios/ai_tank.json`, `ai_tank_esc.json`). Wave
@@ -2111,11 +2117,18 @@ All flag-less controls (wave 3: AI 2 and AI 3 tanks) fought to the end.
 flee the moment its shield is under 25%, every time (and fleeing ends in
 `departByJump`, which matches the exit). Against the original this is
 too eager against a single weak attacker and has no stand-off.
-**Proposed (not applied):** keep the < 25% shield condition but also
-require the ship to be losing (the existing `oddsFavorable` false, or
-recent damage above a threshold); while it holds, keep out of the
-attacker's weapon range instead of closing, and jump out if it persists
-(about 15-30 s). Treat the thresholds as a guess.
+**Applied in aa2c6aad** (`npc/npc_retreat.ts`): the < 25% shield
+condition now also requires the ship to be losing, i.e. under heavy fire
+(a leaky bucket of damage taken, in fractions of max shield, draining at
+6%/s and tripping at 10%) or facing a fight its `oddsFavorable` calls
+unfavorable. While that holds it stays in 'attack' (still firing) but
+holds 360-420 px off its enemy instead of closing; after 16 s of losing
+it flees, which ends in a jump; when the firing stops the bucket clears
+within 4 s and it goes back to close passes. A ship held in the system
+(mission goal) never commits to the jump. Every number is a named
+constant marked as a guess fitted to the table above. One divergence by
+design: the original's 4-gun runs 1 and 3 stood off for all 84 s of
+fire without jumping; here a stand-off that long jumps at 16 s.
 Confidence: high that the flag alone does not trigger a retreat and that
 the exit is a jump; medium for "more firepower, more retreat"; low on
 the exact rule.
