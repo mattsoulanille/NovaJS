@@ -2137,6 +2137,563 @@ the exact rule.
 (`tracks.jsonl` radar tracks, `hostility-*.json`, the target-panel shots).
 `ret-esc/20261123-083222-*` is the launch that died while loading.
 
+### Asteroid decoy capture, finer (2026-11-23, wave 5)
+
+**Setup.** The brief asked for one rock at known offsets (150-300 px) from
+the flight line. The original gives no way to place an asteroid: sÿst
+Asteroids is only a count, and the rocks drift (about 30-60 px/s here).
+So the rig makes the rock come to the missiles instead, and measures every
+encounter from the recording:
+- sÿst 2172 Kit Decoy Range holds ONE asteroid (AsteroidTypes 0x0001, the
+  small röid 128); sÿst 2174 Kit Decoy Range 3 holds three. The target (the
+  100-armor J0 hull) sits on a marker 250 px east of the port, so the whole
+  flight is inside the 636x604 play area (`kits/testkit.mjs` `wave5Resources`).
+- The player sits at the port and fires ONE JamM Decoy missile (wëap 379:
+  Seeker 0x0002, JamVuln 0, so jamming plays no part; Speed 600, GuidedTurn
+  60, proximity 25 px) every 2 s for 90 s: 45 missiles a run, never two in
+  flight at once (`scenarios/decoy_single.json`, pilots `w5_decoy1`,
+  `w5_decoy3`).
+- `analysis/decoy_track.mjs` (new) tracks every missile head and rock per
+  frame and gives, per missile, where it ended and the closest any rock
+  came, split by the rock's bearing off the missile's heading: ahead
+  (≤ 30°), oblique (30-60°), side or behind (> 60°). Per-missile trail
+  pictures (`missiles/mNN.png`, `sheet-*.png`) were checked by eye, because
+  the tracker loses a missile inside the target's sprite.
+- Hits are read from the target panel (armor % before, at 30 s, 60 s, end).
+
+| run | rocks | hits / 45 | lost |
+|---|---|---|---|
+| decoy1 | 1 | 42 (14, 14, 14 per 30 s) | 3 (7%) |
+| decoy3 | 3 | 25 (6, 7, 12) | 20 (44%) |
+
+**Findings.**
+1. **Captures happen only on rocks AHEAD of the missile.** Every capture
+   seen had the rock within about 20° of the missile's heading when it
+   turned (or flew straight on into it), at 20-200 px: in decoy3 four
+   missiles were on a rock from launch with the rock 175-197 px dead ahead
+   (3-5° off the heading); others turned onto a rock 100-120 px ahead
+   (14-15° off). In decoy1 the three losses were all missiles that had
+   nearly reached the target when the drifting rock was just beyond it,
+   125-145 px from the missile and in its path (missile 9 passed 18 px from
+   the target's centre without hitting it, then hit the rock).
+2. **Rocks to the side are ignored, even very close** (the hub's question).
+   Five missiles launched with a rock 59-84 px to the side of the launch
+   point (78-107° off the heading): decoy3 missiles 0, 11, 20, 24 and 25.
+   **None was captured; all five flew on and hit the target** (trail
+   pictures: no turn toward the rock, puff on the target). A rock just
+   behind the launch point (decoy1 missiles 30 and 31, 79-142 px) was
+   ignored too.
+3. **Captured missiles hit the rock.** In 90 missiles no trail circled a
+   rock; every capture ended in a puff on it. So there is no "circle until
+   expiry" in the original, and the side-rock case that makes NovaJS circle
+   does not capture at all.
+4. **Not every rock ahead captures.** A rock 150-260 px ahead within 20° was
+   passed by several missiles (decoy3 missiles 7, 8, 18, 36; decoy1 10 and
+   44). With the captures from up to about 190 px that is either a range of
+   about 150-200 px with some measurement scatter, or a per-tick chance.
+   Not separated.
+5. More rocks, far more losses: 1 rock lost 7%, 3 rocks 44%. With 3 rocks
+   one of them was ahead of a missile much more often (a rock within 30°
+   ahead and under 200 px at some point: 26 of 45 missiles in decoy3, 5 of
+   45 in decoy1).
+
+**NovaJS (main a90e8f39).** `N/nova_plugin/combat/jamming_plugin.ts:84,134`
+still decoys only jammed missiles (10%, any decoy within 1000 px). The hub's
+in-flight change (capture onto any rock within 225 px from the launch tick)
+has no direction limit, which is what makes a missile circle a rock beside
+it. **Proposed (not applied):** capture only a rock whose bearing is within
+about 30° of the missile's heading (a forward field of view), at up to
+about 200 px; once captured, steer to it as to any target (it hits; with a
+forward cone the rock is always reachable, so no circling). Keep the jammed
+case of wave 4 (a jammed 0x0002 missile goes for a rock) under the same
+cone, untested.
+
+Confidence: high that side rocks at 60-85 px are ignored (5 of 5, clean
+pictures) and that captures hit; medium for the cone width (captures seen
+up to about 20° off; 27-29° at 80 px not captured, decoy3 missiles 24 and
+25) and for the range (175-197 px captured, 150-260 px sometimes not).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/rocks/{decoy1,decoy3}/*/`
+(`recording.mp4`, `tracks.json`, `tracks_summary.jsonl`, `missiles/`,
+`sheet-0..2.png`, `panel.png`, `trail-m*.png`).
+
+### E-fight wave 5: do fixed guns and rear turrets fire from the Formation slot? (2026-11-23)
+
+**Setup.** `scenarios/efight_panel.json` (written in wave 4, first run now):
+the wave-4 E-fight rig (Kit Fight Range, two always-attacks A14 Warship
+raiders, 2000 shield, making passes; the player idle with only the Kit
+Tickler, never fired), and every 5.5 s `r` targets the nearest hostile and
+a shot reads its shield. Escorts: two blue discs with two Kit Fixed Guns
+(wëap 368, guidance -1; pilot `w4_efix`), two Kit Rear Turrets (369,
+guidance 8; `w4_erear`) or, as the control, two Kit Escort Guns (365, full
+turret; `w3_efight`). The Kit Escort Gun and the raiders' A14 Gun share
+wëap 131's graphic, so `analysis/bolt_births.mjs` (new) tracks every bolt
+and attributes each new one to the disc it appears beside (validated on
+the control).
+
+| escorts | bolts born at a blue escort | raider shields read (25 shots) |
+|---|---|---|
+| full turrets (control) | 68 in the first 50 s | 13%, Shields Down by 8 s; both raiders **Disabled** by 25 s |
+| rear turrets | 6 clean ones in the first 6 s (flying away from the escort toward a raider behind the formation), later bursts hidden in the raiders' crossfire | 88, 83 ... 82% (one raider), 95% then **77-74%** (another): 26% = about 17 Kit Escort Gun hits |
+| fixed guns | 1 (doubtful) in 100 s | 98-100% throughout |
+
+**Findings.**
+- **Rear-quadrant turrets fire from the slot** at a ship behind the
+  formation (raiders passed through the formation and out behind it on
+  every pass), without leaving the slot (wave 4: 36-39 px all run).
+- **Fixed guns do not fire** from the slot: no escort bolts, and the
+  raiders kept 98-100% shield while passing in front of the escorts many
+  times. Escorts do not turn to bring a fixed gun to bear.
+- Full turrets, as wave 3 saw, fire freely.
+
+**NovaJS (main a90e8f39, unchanged since d17654fe):**
+`N/nova_plugin/escorts/escort_command_plugin.ts:616-628`
+(`formationTurretKind`) lets full turrets and front-quadrant turrets fire
+from the slot; fixed guns hold fire (**matches**) and so do rear-quadrant
+turrets (**mismatch**; the comment at lines 608-611 holds them only because
+they were unmeasured). **Proposed (not applied):** add guidance 8 as a
+'rearQuadrant' kind that fires at an iff-hostile ship within ±45° of the
+escort's tail (the mirror of `inFrontQuadrant`). Front-quadrant turrets
+(guidance 7) are still unmeasured; by symmetry keeping them is right.
+
+Confidence: high for fixed guns (100 s, no damage) and for the control;
+medium-high for rear turrets (clean births in one stretch, and the panel's
+26% drop with nothing else firing at the raiders but each other, which the
+fixed-gun run shows is negligible).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/escorts/panel-{efix,erear,efight}/*/`
+(`recording.mp4`, `bolt_births.jsonl`, `panels.png`, `hostility-*.json`,
+`trail-drop.png`).
+
+### A14 wave 5: one-way alliances, and which systems' records a crime changes (2026-11-23)
+
+**One-way alliances.** `scenarios/a14_observe.json` as in wave 2 (Kit
+Lancer Lite, never firing, -500 record in the current system only; AI 3 red
+disc warships of ONE govt spawned by the system):
+- c19 (sÿst 2002, owner 370 Owner): warships of gövt 365 "GtoO", whose
+  Allies list Owner's class 70; Owner does NOT list 365's class.
+- c20 (sÿst 2003, owner 367 "Owner2", whose Allies list class 78):
+  warships of gövt 366 "OtoG" (class 78, no allies of its own).
+
+| cell | who lists whom | attacked? |
+|---|---|---|
+| c19 run 1 | G lists O only | **yes**, late: the two warships present at arrival sat 58 px away on the planet for about 30 s and left; two that arrived later attacked from 59 s (shield 148 -> 118 by 81 s) |
+| c19 run 2 | G lists O only | **yes**, from 7.6 s (shield 140 -> 14) |
+| c20 | O lists G only | **yes**, from 9.6 s (shield 146 -> 24) |
+
+(c19 run 1 is wave 2's c6 pattern again: ships already sitting on the
+planet when the player arrives can stay passive; ships that arrive later
+attack.)
+
+**Finding.** A one-way alliance is enough, in either direction: G enforces
+the record of a system owned by O when G lists O's class as an ally OR O
+lists G's class. With wave 2 (no tie at all: never), the "G enforces here"
+test of the A14 proposal is `G === O || G.allies ∩ O.classes || O.allies ∩
+G.classes || G nosy`.
+
+**Which records a crime changes.** `scenarios/crime_kill.json`, pilot
+`w5_crime`: Kit Lancer with the 5000-damage Kit Beam Turret, every record
+0, starts in A14 Own (sÿst 2110, owner 370), destroys one of the AI 3
+warships of 370 (one beam burst; "No Target" after), lands at A14 Own Port,
+leaves, and the pilot is read back (`pilot_summary.mjs`, which now lists
+every non-zero record).
+
+| pilot | date | combat rating | non-zero records |
+|---|---|---|---|
+| pushed | June 23 | 0 | none |
+| after the kill, pulled IN the spaceport | June 23 | 0 | none (the file is not written on landing) |
+| after Leave | June 24 | **10** | **sÿst 2110: -150** only |
+
+- **Only the system where the crime happened changed.** The other nine
+  systems owned by the same govt 370 (A14 Own2 2111, 2112-2116, 2126,
+  2127 and 2002), the ally's home (2121, owner 371, which lists
+  370's class) and the unrelated homes all stayed at 0.
+- -150 = DisabPenalty 50 + KillPenalty 100: the beam disabled the ship and
+  then destroyed it, and both were charged.
+- Combat rating +10 for one Strength-50 kill.
+- **Harness lesson:** the pilot file is written when the player LEAVES the
+  spaceport (the date advances then), not on landing. Wave 4's B4 note
+  ("after landing and re-saving") was the same thing; README fixed.
+
+**NovaJS (main a90e8f39).**
+- Hostility: `N/nova_plugin/reputation/govt_disposition.ts:38-65`
+  (`govtDisposition`) counts an ally only from the acting govt's own Allies
+  list, and the record test in `govtDispositionTo` (lines 76-105) uses the
+  player's record with the ship's OWN govt. The A14 proposal (not applied
+  yet) should test the alliance both ways, as above.
+- Crime: `N/nova_plugin/reputation/reputation.ts` `applyCrime` (around line
+  148) charges the victim govt's record (which NovaJS uses everywhere that
+  govt owns) and propagates half the penalty to its allies
+  (`PROPAGATION_DIVISOR` 2, line 75). The original charged the CURRENT
+  system only, and nothing to the ally (catalogue R2: the ally propagation
+  is 0 in this test, though the ally here listed the victim's class rather
+  than the other way round). Per-govt records are a sanctioned
+  simplification, so the system-scope part is a known difference; the ally
+  propagation is a **mismatch** worth a ruling. **Proposed (not applied):**
+  drop the ally/enemy propagation (or put it behind a ruling), and charge
+  DisabPenalty and KillPenalty both when a kill passes through disabled.
+
+Confidence: high for the one-way alliances (three runs, two clean) and for
+the single-system charge (a clean before/after diff); medium on the ally
+propagation (one ally, one direction of the alliance).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/a14/{c19,c20}/*/`
+(`hostility.json`, the Tab shots) and `a14/crime/20261123-115810-crime_kill/`
+(`pilot-landed/`, `pilot-left/`, `pilot-after/`, shots). The first crime
+run (`*-NO-SAVE-pulled-before-leave`) is the one that showed the file is
+not written on landing.
+
+### A-series wave 5: AI 1 departure of ordinary sÿst traffic (2026-11-23)
+
+**Setup.** `scenarios/traffic_watch.json`, pilot `w5_traffic`: sÿst 2000
+Kit Traffic Range has two landable stellars, Traffic Port (0,0, where the
+player sits, never firing) and Traffic Market (900,0), and ordinary traffic
+of düde 630: the AI 1 yellow AI Subject Disc that wave 4 used as a mïsn
+special ship, now as sÿst traffic (avgShips 4). 230 s recorded; radar blips
+sampled every 2 s (`analysis/radar_blips.mjs`, `blips.jsonl`; Traffic Market
+is the stellar dot at radar (28,0), about 32 world px per radar px) and
+trail pictures of the play area.
+
+**What the traffic did** (radar times are recording seconds):
+- **It lands.** At 124-146 s three ships converged on Traffic Port from
+  the north-west and north-east; their trails end ON the planet and they
+  vanish there (`trail-136.png`). At 46-58 s another flew in from the west
+  and vanished at the Port.
+- **It takes off and leaves.** At 94-108 s a ship appeared beside the Port
+  and flew straight south off the radar (`trail-94.png`).
+- **It visits the other stellar and then jumps.** Ships flew to Traffic
+  Market and held a blip on it (just past it, radar (31,1)) for about 20 s
+  (12-34 s and 72-92 s), then accelerated east and vanished about
+  2000 px out (radar 61-63) at 36 s and 94 s: the jump-out signature of
+  wave 4.
+- Single blips that only crossed the system were also seen; the radar
+  tracker fragments too much to give each ship's full life, so no
+  per-ship lifetime is claimed.
+
+**Finding.** Ordinary AI 1 traffic is not like the AI 1 mission ships of
+wave 4 (which jumped out 30-40 s after appearing, 9 of 9, never landing):
+traffic flies to stellars, lands on them or lingers about 20 s beside them,
+takes off again, and leaves by jumping. That is the shape NovaJS already
+gives traffic.
+
+**NovaJS (main a90e8f39):** `N/nova_plugin/npc/npc_decision.ts:75-76`
+(departure 120-300 s after spawning) and the AI 1/2 planet-to-planet loop
+with "dwell" standing in for landing (around line 454): **matches in
+shape** for traffic. The wave-4 proposal (a
+30-40 s straight-to-jump departure for goal-less mïsn special ships only)
+stands; keep the dwell loop for traffic. Not measured: the length of a
+landed stay (a landed ship disappears from the radar) and the total time a
+trader spends in the system.
+
+Confidence: medium (one 230 s run; several landings and two jump-outs seen
+clearly).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/ai/traffic/*/`
+(`recording.mp4`, `blips.jsonl`, `tracks.jsonl`, `trail-94.png`,
+`trail-136.png`, `NN-watch-*.png`).
+
+### A-series wave 5: what triggers the gövt 0x0010 retreat (2026-11-23)
+
+**Setup.** Wave 4's rig (`scenarios/ai_tank.json`: the AI 3 AI Tank Disc of
+gövt 383, 1000 shield, 30000 armor, Strength 50, MaxOdds 1000; the player
+holds fire about 85 s, target panel every 2.7 s; radar tracks show a
+jump-out as a hard acceleration and a vanish 1700-2100 px out) with the
+player hull's shïp **Strength** changed and nothing else:
+- `w5_ret_weak4`: Kit Lancer Heavy **Weak** (shïp 778, Strength 1) with 4
+  Kit Escort Guns: fast damage from a "weak" attacker;
+- `w5_ret_strong1`: Kit Lancer Heavy **Strong** (779, Strength 10000) with 1
+  gun: slow damage from a "strong" attacker;
+- `scenarios/ai_tank_burst.json` with wave 4's 4-gun pilot (Strength 100):
+  fire only about 13 s (shield down by about 13 s), then 85 s of watching.
+
+| attacker (Strength, guns) | runs | what the tank did after its shield fell below 25% |
+|---|---|---|
+| 100, 1 gun (waves 3-4) | 6 | fought on in 5 (passes to 8-23 px until the end), jumped in 1 |
+| **10000, 1 gun** | 2 | **jumped both times**: backed out of the gun's reach at once (its shield stopped falling at 14% / 8%), jumped about 20 s after crossing 25% (39 s, 42 s) |
+| **1, 4 guns** | 2 | **jumped** about 10 s after crossing 25%; **stood off** at 380-420 px for the whole 85 s of fire, still firing |
+| 100, 4 guns (wave 4) | 4 | jumped 2, stood off 2 |
+| 100, 4 guns for 13 s, then nothing | 2 | stood off while fired on, then **came back to close passes** (14-35 px every 7 s, shields down) for the 85 s after the trigger was released; the other **jumped** 7 s after the release |
+| 100, 1 gun + two attacking escorts (wave 4) | 2 | jumped both times |
+
+**Findings.**
+- The attacker's **Strength** matters: the same slow single gun that a
+  Strength-100 hull fires without effect (5 of 6 fought on) made the tank
+  leave both times from a Strength-10000 hull. That is the MaxOdds-style
+  odds test (the tank's 50 against its attacker's strength), not the damage.
+- Heavy damage makes it leave **whatever** the attacker's strength: a
+  Strength-1 hull with 4 guns got the same jump/stand-off mix as the
+  Strength-100 one. So the rule looks like "shield < 25% AND (losing on
+  odds OR taking heavy fire)".
+- What it does then is either jump out (about 10-20 s later) or stand off
+  out of the attacker's reach while still shooting; once the fire stops it
+  can come back to close passes with its shield still down (1 of 2), or
+  leave anyway (1 of 2). Which of the two it picks looks random from run to
+  run.
+
+**NovaJS (main a90e8f39):** `N/nova_plugin/npc/npc_decision.ts:487`
+(`warshipsRetreatAt25`) flees as soon as the shield is under 25%, always,
+and the flight ends in `departByJump`; `oddsFavorable` (line 419 for AI 2,
+line 508 for whether a warship engages at all) is not consulted for it. **Proposed (not
+applied)**, refining wave 4's: under 25% shield, retreat only if
+`oddsFavorable(maxOdds, ...)` is false OR the ship lost more than about
+12% of its shield per second over the last few seconds (4 guns took about
+20%/s off this tank, 1 gun 5-9%/s); a retreating ship either jumps out after
+10-20 s or (50/50) keeps out of the attacker's weapon reach and returns to
+the fight when the damage stops. The thresholds are a guess between the
+measured cases.
+
+Confidence: medium. Two runs per new cell; the Strength effect is clean
+(2 of 2 against 5 of 6 the other way), the damage-rate effect rests on
+the 4-gun cells (8 runs in all, none fought on).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/ai/{ret-weak4,ret-strong1,ret-burst}/*/`
+(`panels-fire.png`, `panels-after.png`, `hostility-yellow.json`,
+`tracks.jsonl`).
+
+### B NPC carrier wave 5: which carriers launch (2026-11-23, blast question still open)
+
+**Setup.** `scenarios/carrier_watch.json`: the player (Kit Lancer, no
+weapons) sits at a port whose only traffic is ONE AI 3 carrier of the
+always-attacks gövt 362 (avgShips 1); Tab every 3.3 s for 110 s reads
+whatever ship is targeted.
+
+| carrier (traffic düde) | launched? | attacked the player? |
+|---|---|---|
+| Kit Bomb Carrier (shïp 712: kit hull from the Fed Carrier, 2 Kit Escort Guns, Kit Bomber Bay of 4 Kit Bombers) | **no** (Tab only ever found the carrier) | no (player's shield untouched 110 s) |
+| **stock Fed Carrier** (shïp 143, stock bays) | **yes: Fed Vipers and Fed Anacondas** from the first Tab on | yes, steadily (shield 148 -> 132 px over 100 s) |
+| Fed Carrier hull, its Viper bay swapped for the Kit Bomber Bay (shïp 780) | no | no |
+| the same with a byte-for-byte copy of the Viper bay pointing at a Kit Bomber with EscortType 0 (wëap 237, shïp 781/782) | no | no |
+
+**Findings.**
+- An NPC carrier in ordinary traffic DOES launch (the stock Fed Carrier,
+  hostile to the player). Wave 1's Q4 (ShipBehav-1 mission carriers never
+  launch) is specific to protect-the-player mission ships.
+- With the kit's bombers in its bay the same hull neither launched nor
+  closed to attack, even with the stock bay's bytes. So it is the carried
+  ship that stops the launch (the kit bomber's 180 px blast shell, its kit
+  fields, or something else the NPC launch decision reads), not the bay.
+  Not separated.
+- Side observation from the stock run: a Fed Viper read 47% shield late in
+  the run although the player had no weapons, so the carrier group's own
+  fire hurt one of its fighters. Whether anyone turned on it could not be
+  seen.
+
+**Take 2, blasting Vipers** (`scenarios/carrier_watch_blast.json`: the
+stock Fed Carrier again, plus `kits/viper_blast.mjs`, a test-only override
+of the stock Fed Viper, shïp 144, giving it the Kit Blast Shell next to its
+three guns). The carrier launched its Vipers and Anacondas as before. The
+Vipers read 38% and 40% shield at 10-13 s (their own 400 px blasts, as in
+B1) and were gone from the Tab cycle after about 16 s; the Anacondas went
+on (one at 60%). **The carrier read 100% shield in all 16 of its panels**:
+it hung back, far from where its fighters fought, so no blast reached it
+and the retaliation question could not arise.
+
+**NovaJS:** NPC carriers never fire their bays (wave 1's note), so the
+original's launching traffic carrier is a **mismatch**. The blast-
+retaliation question stays open: it needs the fight brought to the
+carrier (e.g. the player parked beside it, or a carrier with a short
+leash). The fighters' own blasts hurting them matches B1.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/{carrier,carrier-fed,carrier-fedbomb,carrier-fedbomb-f,carrier-blast}/*/`
+(`panels.png`, `recording.mp4`).
+
+### Boarding a non-mission disabled ship (U9 leftover): not attempted (2026-11-23, wave 5)
+
+Not built this wave. What it would take: the harness can only press keys
+blind, and a non-mission hulk appears wherever the game puts traffic. The
+cheap version is a sÿst whose only traffic is an immobile hull (Speed 0,
+so it never drifts) of a govt with gövt flag 0x0800 (starts disabled),
+plus a closed steering loop in `novaref`: take a window shot, find the
+target's bracket offset (`analysis/blob_offset.mjs`), find the player's
+heading by thrusting 0.2 s and reading the starfield shift
+(`world_motion.mjs`), turn by the angle at the measured 87°/s (Turn 30),
+thrust, brake with Down, repeat until within 100 px, then step in as
+`land_step.json` does and press `b` at each stop. Each loop costs about 3 s
+of ssh, so an approach from 1000 px is roughly 2-3 minutes; about half a
+day to build and test.
+
+### F1n wave 5: mixed sprite sizes and repeated escort types in one flët (2026-11-23)
+
+**Setup.** `scenarios/f1n_observe.json` (Probe A sitting at the port, 80 s
+recorded), `analysis/fleet_groups.mjs` (escort offsets in each white lead's
+frame; along + = ahead, across + = left of travel). Two new fleets, govt
+363, each placed by its own system's DudeTypes:
+- flët 301 (sÿst 2005, pilot `w5_f1n_mixed`): white 24 px lead; escorts
+  Kit Big Red (96 px frame), green, blue, yellow (24 px), one each;
+- flët 302 (sÿst 2006, pilot `w5_f1n_repeat`): white 24 px lead; escorts
+  red ×2 (min 2, max 2) then green ×2.
+
+| fleet | escort | measured along / across (mode of the samples; median) | F1b slot with the group's S |
+|---|---|---|---|
+| mixed (S = 96, a = 56.6) | red, 96 px (rank 1) | -56.3 / +56.1 (median, 159 samples) | (-56.6, +56.6) |
+| | green (rank 2) | -55.1 / -56.5 | (-56.6, -56.6) |
+| | blue (rank 3) | about -110 / +115 (mode; median -94 / +120 with mis-assigned samples) | (-113, +113) |
+| | yellow (rank 4) | about -110 / -115 (median -85 / -118) | (-113, -113) |
+| repeat (S = 24, a = 23.5) | the two reds | -20 / +20 (149) and -20 / -20 (167) | ranks 1 and 2: (-23.5, ±23.5) |
+| | the two greens | -50 / +50 (67+63) and -50 / -50 (76+41) | ranks 3 and 4: (-47, ±47) |
+
+**Findings.**
+- **Mixed sizes:** every slot of an NPC fleet uses the step of the
+  group's LARGEST frame, including the small escorts (24 px discs at the
+  96 px step), as for player escorts (F1b run g).
+- **Repeated types:** ranks follow the flët's escort fields in order, all
+  of a type before the next type: both reds take ranks 1-2 (left, right),
+  both greens ranks 3-4.
+
+**NovaJS (main a90e8f39):** `N/nova_plugin/spawn/npc_spawn_plugin.ts:1105-1135`
+draws every escort count first, takes the spacing from the largest
+`spriteFrameWidth` among the lead and the escorts actually spawned, then
+places escorts type by type in field order into consecutive slots:
+**matches** both. Confidence: high (two fleets of samples each, ±5 px for
+the inner pair, ±10 px for the outer pair at the 96 px step).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/f1n/{mixed,repeat}/*/`
+(`recording.mp4`, `fleet_groups.json` with every sample).
+
+### J-series wave 5: sensor interference and attack-parent (2026-11-23)
+
+**Setup.** The J rig (`scenarios/jam_fire.json`: about 25 s of trigger,
+about 49 missiles of Speed 600 / GuidedTurn 60, the 100-armor J0 target
+900 px east; hits = 100 - armor %), with two new missiles
+(`kits/testkit.mjs` `jamWave5`):
+- wëap 235 **JamM Interf**: Seeker 0x0008 "confused by sensor
+  interference", JamVuln 0 (so no jamming at all), fired in sÿst 2007 Kit
+  Static Range (**Interference 100**) and in sÿst 2009 Kit Static Control
+  (Interference 0), otherwise identical (pilots `w5_static`,
+  `w5_static_ctrl`);
+- wëap 236 **JamM Parent V100**: Seeker 0x8000 "may attack parent ship if
+  jammed", JamVuln1 100, against Jam Target S100 (ONE +100 jammer, so every
+  missile is jammed) at Kit Market, fired from Kit Lancer Lite (pilot
+  `w5_parent`).
+
+| cell | launched | hits | lost |
+|---|---|---|---|
+| 0x0008, Interference 100 | 49.5 | 16 | **68%** |
+| 0x0008, Interference 0 | 48.7 | 49 | 0% |
+| 0x8000 V100 vs +100 jammer | about 49 | 0 | 100% |
+
+**Findings.**
+1. **Interference confuses 0x0008 missiles regardless of JamVuln.** A
+   JamVuln-0 missile (immune to every jammer) lost 68% in a system of
+   Interference 100 and nothing in the identical system of Interference 0.
+2. **A confused missile circles.** Its trail is a tight loop (about 70 px
+   across) repeated, drifting slowly, until it expires
+   (`trail-after-release.png`: a dozen loops near the launch point); the
+   others fly straight to the target and hit. It looks decided per missile
+   (a missile either loops for its life or homes normally); only one
+   Interference level was tried, so how the share scales is open.
+3. **0x8000: most jammed missiles fly straight on; a few turn back on the
+   parent.** All 49 missed the jammed target. In the trail pictures nearly
+   all fly off along the launch heading; one is seen looping back, and
+   pink hit puffs appear on the player (about 3 in the whole run; the
+   puff detector confirmed one, the player's shield bar fell 2 px of 148,
+   1-damage missiles on 1500 shield). So a minority, on the order of 5%,
+   attack the parent.
+
+**NovaJS (main a90e8f39), `N/nova_plugin/combat/jamming_plugin.ts`:**
+- Interference: `effectiveJamming` (lines 214-236) adds the system's
+  Interference to the RADAR jamming type (`RADAR_JAM_INDEX` 1, line 171)
+  for 0x0008 missiles, which then goes through the JamVuln roll; a JamVuln-0
+  missile is never affected. **Mismatch** on two counts: in the original the
+  interference acts without any JamVuln, and its effect is circling, not
+  the jammed straight flight. **Proposed (not applied):** at launch, a
+  0x0008 missile in a system with Interference I is confused with
+  probability of about I × 0.7 / 100 (one point measured: 68% at 100), and a
+  confused missile turns at its full GuidedTurn in one direction for its
+  whole life; leave JamVuln out of it.
+- Attack-parent: `ATTACK_PARENT_IF_JAMMED_PROBABILITY` = 0.1 (line 96,
+  applied at lines 340-342): a jammed 0x8000 missile retargets its parent
+  10% of the time. The original's few-in-49 is **consistent** (it could be
+  5-10%); no change proposed.
+
+Confidence: high for "interference works with JamVuln 0" and for the
+circling (clean 68% vs 0%, trails); low for the share at other
+Interference levels; medium-low for the attack-parent rate (hits on the
+parent are hard to count on a 1500-shield bar).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/jam/{static,static-ctrl,parent}/*/`
+(`panel.png`, `trail-mid.png`, `trail-after-release.png`, `trail-all.png`,
+`recording.mp4`, `recording.events.json`). Not done this wave: ion damage
+and cloaked targets (no time; they need an ion weapon and a cloaking
+target hull).
+
+### E-recall wave 5: the recall overshoot frame by frame (2026-11-23)
+
+**Setup.** Wave 3's `scenarios/esc_recall2.json` again (pilot `w3_recall`:
+Kit Lancer with two hired Kit Disc Blue Armed escorts, Speed/Accel 600, in
+quiet Kit Range). Key stamps (video frames, 30.04 fps): `v` (Hold Position)
+222, thrust 268-345, Down (brake) 365-427, **`c` (formation) 549**. Every
+blue disc's distance from the player per frame is in `recall_frames.json`
+(all 2079 frames; the player is stopped, so screen = world).
+
+| frames after `c` | seconds | escort A | escort B |
+|---|---|---|---|
+| 0-134 | 0-4.5 | off screen (> 300 px) | off screen |
+| 135 | 4.49 | enters at 312 px, closing at about 9.5 px/frame (285 px/s, its top speed) | |
+| 165 / 171 | 5.49 / 5.69 | 47 px / **18 px: flies straight through the slot** | |
+| 177-219 | 5.9-7.3 | 56, 101, 144, 183, 224, 259, 291, 314 px: carries on out the far side, slowing | |
+| 225-272 | 7.5-9.1 | off screen again (> 315 px) | |
+| 273 | 9.1 | back at 315 px, now closing at about 1.3 px/frame (40 px/s) | |
+| 303 | 10.1 | 264 px | enters at 318 px, same slow approach from the same side |
+| 351 / 441 / 501 | 11.7 / 14.7 / 16.7 | 204 / 124 / 59 px | 242 / 100 / 36 px |
+| 546-561 | 18.2-18.7 | **settled: 28.7 px**, constant to the end | **settled: 37.4 px** |
+
+**Finding.** Recall in the original is a full-speed dash that does NOT
+brake for the slot: the first escort shot through the player at 285 px/s,
+overshot by more than 300 px (off screen), turned, and came back at a slow,
+nearly constant 35-45 px/s, settling about 18.5 s after `c` (wave 3's run:
+10 s, overshoot to 123 px). The second escort never dashed through the
+screen; it arrived late on the same slow final approach. The size of the
+overshoot varies a lot between runs (123 px vs more than 315 px).
+
+**For the comparison (not run here):** NovaJS's `FormationSystem`
+(`N/nova_plugin/npc/npc_formation.ts`, closing speed capped so a hull can
+brake onto its slot, F1 fix) has no overshoot. A headless NovaJS run of the
+same order sequence (escorts about 900 px behind a stopped player, Speed
+600 escorts) should give the frame of first contact (original: 135 + 36
+frames after `c` to the slot), the peak overshoot (original: more than
+300 px) and the settling frame (original: 546-561 frames after `c`).
+
+Confidence: high for this run's timeline (frame-exact), low for how
+typical it is (two runs so far, very different overshoots).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/escorts/recall/20261123-115519-esc_recall2/`
+(`recording.mp4`, `recording.events.json`, `recall_frames.json`).
+
+### R8 wave 5: fullscreen 1920x1080 captures of the spaceport venues (2026-11-23)
+
+**Setup.** `scenarios/fullscreen_shops.json` (pilot `w4_fs`: a stock
+Shuttle at Earth) with the scenario `"prefs": {"RunInAWindow": 0}`; the run
+restores the prefs afterwards (`prefs-restored`). The first try failed:
+in fullscreen the game window exists before the title screen is drawn, so
+`open_pilot` pressed `o` too early. Scenarios now take `"title_wait"` (ms
+before `open_pilot`; 12000 here).
+
+**Captured** (full-screen PNGs, 1920x1080): title, spaceport, outfitter,
+shipyard, trade center, the bar (with its mission offer up) and the star map
+from the spaceport. The game ran at the desktop's 1920x1080 (window
+[-1,-1,1922,1082]); no display-mode change.
+
+**K1 / K2 (spaceport keys), new answers:**
+- `o` Outfitter, `s` Shipyard, `t` Trade Center and `b` Bar open those
+  venues; Escape closes the outfitter, shipyard and trade center back to the
+  spaceport.
+- `m` in the spaceport opens the **star map**, not the Mission BBS (Escape
+  closes it). NovaJS binds `m` to the star map there too
+  (`N/spaceport/spaceport.ts:155`): matches. The BBS key is still unknown;
+  `scenarios/fullscreen_bbs.json` clicks the button instead (screen
+  715,668), which captured the Mission BBS ("The following missions are
+  available here:" with the date at top right, a list on the left, the
+  selected mission's title and text on the right, Accept / Leave).
+- Entering Earth's bar offered a mission at once (No / Yes), and **Escape did
+  not dismiss it**: the offer was still up 2 s later. So Escape is not "No"
+  in a mission offer (catalogue K2).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w5/ui/fullscreen/20261123-110717-fullscreen_shops/`
+(`02-spaceport.png` ... `12-after-bar.png`, `montage.png`) and
+`ui/fullscreen-bbs/20261123-115704-fullscreen_bbs/02-bbs.png`. The failed
+first try is kept as `*-INVALID-o-too-early`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Launch can die while loading (wave 4).** Once in about 90 wave-4 runs
@@ -2195,13 +2752,12 @@ the exact rule.
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not attempted in wave 4: the harness can't steer onto a drifting hulk). |
-| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | Types 2-4 answered (wave 4: same rule, own type only). Asteroid decoy/pass-over: see "Asteroids and seeker flags" (wave 4); the 0x0002 decoy applied in 51e4d911. |
-| A leftovers | The exact gövt 0x0010 trigger (wave 4: 5 of 12 runs jumped, more often under heavy fire); AI 2 "runs away when the attacker is out of range"; AI 1 departure of sÿst traffic (mission ships jump at 30-40 s) | AI 1 leaves by jumping; fleeing ships jump (A-series wave 4). |
-| E leftovers | Do fixed guns / rear turrets fire from the Formation slot (they never leave it, wave 4)? `scenarios/efight_panel.json` is ready. Recall overshoot vs NovaJS frame by frame | Orders in a fight, recall, slot-keeping and the panel's 8.3 s timer answered. |
-| F1n leftovers | Mixed sprite sizes in a fleet; rank order with repeated escort types | Geometry answered (F1n wave 3: same V as player escorts). |
-| R8 leftover | Fullscreen 1920x1080 capture of shops, trade and BBS | Not run (wave 4 ran out of time). `scenarios/fullscreen_shops.json` (pilot `w4_fs`) and the scenario `"prefs"` key are ready; it also tries the spaceport hotkeys (K1). |
+| U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not built in wave 5 either; "Boarding a non-mission disabled ship" says what the steering loop would take). |
+| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Wave 5:** a hostile stock Fed Carrier in ordinary traffic DOES launch (Vipers, Anacondas); kit-fighter bays never launched. With blast-armed Vipers the carrier hung back and no blast reached it, so the question is still open: the fight must be brought to the carrier. |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (the 0x0002 decoy as applied in 51e4d911 has no cone). |
+| A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 5:** the 0x0010 retreat needs shield < 25% AND (losing on attacker Strength OR heavy fire); AI 1 traffic lands, lingers and jumps (unlike mission ships). |
+| E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS (original frames recorded in wave 5, the NovaJS headless run is the hub's) | **Wave 5:** fixed guns hold fire in Formation, rear-quadrant turrets fire. Recall: full-speed dash through the slot, more than 300 px overshoot, settled after 18.5 s. |
+| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
 
 ## Catalogue
 
@@ -2242,7 +2798,7 @@ cosmetic or rare.
 | A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
 | A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
-| A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (wave 4)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9). Traffic untested | M |
+| A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (waves 4-5)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9); AI 1 traffic lands, lingers about 20 s at a stellar and jumps (wave 5) | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
 | A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; fix proposed. | H |
@@ -2252,7 +2808,7 @@ cosmetic or rare.
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
 | R1 | #321 trade tier multiplier k / priceFlux | `N/nova_plugin/economy/trade_logic.ts:33` | **answered above**: priceFlux has no effect, tiers are exact ×0.8/1/1.25, and öops disasters are the likely ×1.1 | H |
-| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | CPg govt KillPenalty 100 + ally/enemy govt owning home systems; kill one; PD legalStatus | H |
+| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | **partly (wave 5, A14 wave 5)**: a kill changed only the current system's record (-150 = Disab 50 + Kill 100); the ally's home (an ally listing the victim's class) got 0. The reverse alliance direction and enemies are untested | H |
 | R3 | #320.2 negative gövt penalty = none? | `reputation.ts:127-139` | CPg govt KillPenalty -5, PD | H |
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
@@ -2295,8 +2851,8 @@ cosmetic or rare.
 
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
-| K1 | Spaceport hotkeys (Bar/Mission BBS/Trade/Shipyard/Outfitter/Leave): which letters, and does Return = Leave? (Return = Leave **confirmed**; `o` = Outfitter confirmed) | `N/spaceport/spaceport.ts` key handling | SS after each key | H |
-| K2 | Mission offer dialog keys: Return = Yes (**confirmed** for AvailLoc 3), Escape = No? | spaceport mission offer | SS | M |
+| K1 | Spaceport hotkeys (Bar/Mission BBS/Trade/Shipyard/Outfitter/Leave): which letters, and does Return = Leave? (Return = Leave **confirmed**; `o` = Outfitter confirmed) | `N/spaceport/spaceport.ts` key handling | **mostly (wave 5)**: `o` `s` `t` `b` open Outfitter, Shipyard, Trade, Bar; `m` opens the star map (not the BBS); Escape closes each back to the spaceport. The BBS key is unknown | H |
+| K2 | Mission offer dialog keys: Return = Yes (**confirmed** for AvailLoc 3), Escape = No? | spaceport mission offer | **answered (wave 5)**: Escape does NOT dismiss a bar mission offer | M |
 | K3 | Tab with one ship toggles target ↔ none (**observed**). Does `r` skip friendly escorts? | `N/nova_plugin/hostility.ts` targeting | SS | M |
 | K4 | Map (`m`) keys: zoom +/-, Find, Escape | map dialog | SS | L |
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
