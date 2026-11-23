@@ -99,7 +99,11 @@ export interface TerritoryDisc {
 /** A 0..255 channel value as a 16-bit screen shows it: 5 bits, floored,
  * expanded back the way the Mac does ((v << 3) | (v >> 2)). */
 function to5Bit(value: number): number {
-    const level = Math.max(0, Math.min(31, Math.floor(value * 31 / 255)));
+    // The epsilon keeps a value that is exactly on a level in real numbers
+    // (territoryDiscs asks for exactly level j) from flooring to j - 1
+    // when the float arithmetic lands a hair under.
+    const level = Math.max(0, Math.min(31,
+        Math.floor(value * 31 / 255 + 1e-9)));
     return (level << 3) | (level >> 2);
 }
 

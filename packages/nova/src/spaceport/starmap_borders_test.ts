@@ -33,6 +33,21 @@ describe('government territory (Show Borders)', () => {
         expect(territoryShade(FEDERATION, 0)).toBe(0);
     });
 
+    it('fades a full-intensity Color through every 5-bit level', () => {
+        // 0xff at half strength climbs 15.5 levels: one disc per level,
+        // none lost to floating-point flooring (1/15.5 x 15.5 came out a
+        // hair under 1, painting the faintest ring black and skipping
+        // levels 2 and 8).
+        const levels = (color: number) => territoryDiscs(
+            [{ x: 0, y: 0, color, minor: false }])
+            .map(d => Math.max((d.color >> 16) & 0xff, (d.color >> 8) & 0xff,
+                d.color & 0xff) >> 3);
+        const each = Array.from({ length: 15 }, (_, i) => i + 1);
+        expect(levels(0xff0000)).toEqual(each);
+        expect(levels(0x00ff00)).toEqual(each);
+        expect(levels(0x0000ff)).toEqual(each);
+    });
+
     it('is flat out to the inner radius and gone at the outer one', () => {
         const fed = [site(0, 0)];
         expect(colorAt(fed, 0, 0)).toBe(FEDERATION_FULL);
@@ -88,6 +103,45 @@ describe('government territory (Show Borders)', () => {
         expect(firstMajor).toBeGreaterThan(0);
         expect(discs.slice(firstMajor).every(d => !d.minor)).toBeTrue();
     });
+
+    it('shows no colour for a minor system inside a major\'s territory, as '
+        + 'on the test kit\'s map region', () => {
+            // reference_experiments M5: the radiating systems of the kit's
+            // map region. Red major 379: Hub, South, Lone, Island; blue
+            // major 380: NE, SW; green MINOR 381: WSW, 30 units from the
+            // red hub. (East, Void and Far radiate nothing: unexplored or
+            // Flags2 0x0004.) The original shows no green at all.
+            const red = 0xff0000, blue = 0x0000ff, green = 0x00ff00;
+            const sites = [
+                site(-700, 400, red), site(-700, 460, red),
+                site(-640, 470, red), site(-580, 440, red),
+                site(-675, 357, blue), site(-750, 450, blue),
+                site(-728, 390, green, true),
+            ];
+            const discs = territoryDiscs(sites);
+            // (The faintest level can floor to black; black is not green.)
+            const greens = new Set(discs.filter(d => d.minor && d.color !== 0)
+                .map(d => d.color));
+            expect(greens.size).toBeGreaterThan(0);
+            // Every point the WSW blob could reach, on a quarter-unit grid.
+            const reach = TERRITORY_OUTER_RADIUS * MINOR_TERRITORY_SCALE;
+            let sampled = 0;
+            for (let dx = -reach; dx <= reach; dx += 0.25) {
+                for (let dy = -reach; dy <= reach; dy += 0.25) {
+                    if (Math.hypot(dx, dy) > reach) {
+                        continue;
+                    }
+                    sampled++;
+                    const color = territoryColorAt(discs,
+                        (-728 + dx) * BASE_SCALE, (390 + dy) * BASE_SCALE);
+                    if (greens.has(color)) {
+                        fail(`green at (${-728 + dx}, ${390 + dy})`);
+                        return;
+                    }
+                }
+            }
+            expect(sampled).toBeGreaterThan(40000);
+        });
 });
 
 /**
