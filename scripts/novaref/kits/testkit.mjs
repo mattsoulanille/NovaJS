@@ -423,6 +423,33 @@ function wave5Resources() {
 
     out.push(dude(277, "Kit Bomb Carrier traffic", 3, 362, 712));
     oneStellar(2004, "Kit Carrier Range", 363, { dudes: [277, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 });
+    // The Kit Bomb Carrier neither attacked nor launched in 110 s, so the
+    // same with the STOCK Fed Carrier (shïp 143, its own bays and Vipers).
+    out.push(dude(278, "Fed Carrier traffic 362", 3, 362, 143));
+    oneStellar(2011, "Kit Fed Carrier Range", 363, { dudes: [278, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 });
+    // The stock Fed Carrier launched its Vipers and Anacondas, so: the stock
+    // hull byte for byte (no shipBase) with only its Viper bay swapped for
+    // the Kit Bomber Bay (wëap 371: Kit Bombers with the 400 px blast shell)
+    // and its Anaconda bay removed. Stock slots: 132 x2, 135 x2 (90), 149
+    // (4 Vipers), 150 (2 Anacondas); 133 x2 stays in the second block.
+    out.push({ type: "shïp", id: 780, name: "Kit Fed Bomb Carrier", clone: "shïp:143", set: {
+        weapons: [132, 135, 371, -1], weaponCounts: [2, 2, 1, 0], weaponAmmo: [-1, 90, 4, 0],
+        shortName: "Kit Fed Bomb Carrier", longName: "Kit Fed Bomb Carrier", commName: "Kit Fed Bomb Carrier" } });
+    out.push({ type: "shän", id: 780, name: "Kit Fed Bomb Carrier", clone: "shän:143" });
+    out.push(dude(279, "Kit Fed Bomb Carrier traffic 362", 3, 362, 780));
+    // That one did not launch either, so the bay and fighter are the
+    // difference. Second try: wëap 237 = the stock Viper bay (149) byte for
+    // byte except AmmoType (-> shïp 781), and shïp 781 Kit Bomber F = the
+    // Kit Bomber with EscortType 0 (fighter, like the stock Viper; the kit's
+    // shipBase sets -1). düde 279 now flies shïp 782, the Fed hull with 237.
+    out.push({ type: "wëap", id: 237, name: "Kit Bomber Bay F", clone: "wëap:149", set: { ammoType: 781 - 128 } });
+    out.push(...ship(781, "Kit Bomber F", 167, { armor: 500, shield: 500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1, escortType: 0 }));
+    out.push({ type: "shïp", id: 782, name: "Kit Fed Bomb Carrier F", clone: "shïp:143", set: {
+        weapons: [132, 135, 237, -1], weaponCounts: [2, 2, 1, 0], weaponAmmo: [-1, 90, 4, 0],
+        shortName: "Kit Fed Bomb Carrier F", longName: "Kit Fed Bomb Carrier F", commName: "Kit Fed Bomb Carrier F" } });
+    out.push({ type: "shän", id: 782, name: "Kit Fed Bomb Carrier F", clone: "shän:143" });
+    out[out.findIndex((r) => r.type === "düde" && r.id === 279)].set.ships[0] = 782;
+    oneStellar(2012, "Kit Fed Bomb Range", 363, { dudes: [279, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 });
 
     const fleet = (id, name, escorts, mins, maxs, sid) => ({
         type: "flët", id, name, clone: "flët:128",

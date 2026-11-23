@@ -1,0 +1,24 @@
+{
+ "name": "carrier_watch_blast",
+ "_comment": "Wave 5, B NPC carrier take 2: carrier_watch.json with kits/viper_blast.mjs installed too, so the hostile STOCK Fed Carrier (pilot w5_fedcarrier, sÿst 2011) launches stock Fed Vipers that also carry the 400 px Kit Blast Shell. Does a Viper's blast hurt the carrier, and does the carrier (or another fighter) then turn on the Viper? The Tab panels show each ship's shield.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs",
+  "../kits/viper_blast.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 2500"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"repeat": 32, "steps": [
+   {"keys": "Tab wait 300"},
+   {"shot": "obs-{i}", "window": true},
+   {"wait": 1000}
+  ]},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}
