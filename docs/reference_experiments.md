@@ -1020,7 +1020,7 @@ Confidence:
 | 2 brave trader | Turned and closed in to fight. It stayed within 200 px of the player for most of the run (1201 frames) and fired back (the player's shield bar lost 2 px of 148 on 30000 shields). It was still engaged 15 s after the player stopped. | **red** after the tickle |
 | 3 warship | The same: closed in and fought back, still engaged afterwards. | **red** |
 | 3 + gövt 0x0010 (retreat below 25% shield) | The same as AI 3. The tickler never took its shield below 94%, so **the retreat threshold was not exercised**. | red |
-| 4 interceptor | The first try failed in `open_pilot`; a rerun is queued. | |
+| 4 interceptor | The same as AI 2/3 (rerun after an `open_pilot` failure): closed in and fought back (1254 frames within 200 px). | red |
 
 **Findings.**
 - A neutral AI 2 or AI 3 ship retaliates against a single 1-damage
@@ -1040,8 +1040,7 @@ detail.
 Open:
 - the shield threshold for fleeing (AI 2 "runs away when the attacker
   is out of range"; gövt 0x0010) needs a weapon that strips shields;
-- how long retaliation lasts;
-- AI 4.
+- how long retaliation lasts.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-ai/<ai>/*/`
 (`hostility.json`, the shots and `recording.mp4`).
@@ -1202,7 +1201,7 @@ Untouched so far:
 | M2/M5 leftovers | Does the minimap show itself during a real jump? Do unexplored or uninhabited systems radiate borders? | One factor per system next time. |
 | E-view leftovers | What do Attack and Defend do in a fight? How fast does Formation recall held escorts? | Needs hostiles that actually show up (mïsn 961 raiders didn't in esc_view2). |
 | J (jamming) leftovers | More trials per cell; jam types 2-4, InhJam, Interference, ion, cloak; a weak parent for 0x8000 | First pass answered (J-series). |
-| A (AI states) leftovers | Flee thresholds (AI 2, gövt 0x0010), how long retaliation lasts, AI 4, an idle control for AI 1 | First pass answered (A-series). Needs a shield-stripping weapon. |
+| A (AI states) leftovers | Flee thresholds (AI 2, gövt 0x0010), how long retaliation lasts, an idle control for AI 1 | First pass answered (A-series). Needs a shield-stripping weapon. |
 
 ## Catalogue
 
