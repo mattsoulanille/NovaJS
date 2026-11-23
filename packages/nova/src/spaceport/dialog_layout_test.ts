@@ -33,13 +33,13 @@ describe('dialog layout', () => {
         it('puts the header strip caption and date where the original does',
             () => {
                 // Strip x715..1114, y444..458; caption ink at x719,
-                // date ink ending at x1104.
+                // date ink STARTING at x1016 (left-aligned).
                 expect(screenX(BBS.headerStrip.x)).toBe(715);
                 expect(screenX(BBS.headerStrip.x) + BBS.headerStrip.width - 1)
                     .toBe(1114);
                 expect(screenY(BBS.headerStrip.y)).toBe(444);
                 expect(screenX(BBS.headerText.x)).toBe(719);
-                expect(screenX(BBS.dateRight)).toBe(1105);
+                expect(screenX(BBS.dateLeft)).toBe(1016);
             });
 
         it('fits twelve 12px rows in the listing pane', () => {

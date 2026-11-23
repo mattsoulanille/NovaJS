@@ -57,10 +57,12 @@ export const BBS = {
     /** The strip's caption ink starts at x719, cap top y448. */
     headerText: { x: -241, y: -95 },
     /**
-     * The date is right-aligned in the strip: its ink ends at x1104,
-     * ten pixels short of the strip's right edge.
+     * The date is LEFT-aligned in the strip, its ink starting at x1016:
+     * "Nov. 18th, 1177 NC" spans x1016..1104 on earth_mission_bbs.png
+     * and "June 23rd, 1177 NC" x1016..1106 on the R8 wave-5 02-bbs.png —
+     * same left edge, different right edges.
      */
-    dateRight: 145,
+    dateLeft: 56,
     /**
      * The list pane: black, twelve 12px rows (x715..924, y470..613 —
      * 144px is exactly 12 rows).
@@ -76,6 +78,22 @@ export const BBS = {
     titlePane: { x: -26, y: -70, width: 275, height: 25 },
     titleText: { x: -22, y: -65 },
     titleFontSize: 17,
+    /**
+     * The original's large Geneva has our glyph heights (the "F" of
+     * "Ferry" spans y479..491 in both) but wider advances: "Ferry
+     * Passengers to Misfire" inks x939..1177 on earth_mission_bbs.png
+     * and x939..1158 in ours at 17px — 20px over 26 letter gaps.
+     */
+    titleLetterSpacing: 0.75,
+    /**
+     * The name WRAPS at the pane's width and only its first line shows:
+     * "Ferry Passengers to Greenwich" reads "Ferry Passengers to" on the
+     * R8 wave-5 02-bbs.png (the pane clips the second line), where the
+     * shorter "Ferry Passengers to Misfire" fits whole on
+     * earth_mission_bbs.png (ink x939..1177). The same width as the
+     * description's wrap.
+     */
+    titleWrapWidth: 266,
     /**
      * The description pane below it (x934..1208, y499..593); its text is
      * inset 4px and its first line's cap lands at y503.

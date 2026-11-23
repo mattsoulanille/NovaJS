@@ -44,13 +44,17 @@ const LIST_FONT_HEADER: Partial<PIXI.ITextStyle> =
  * earth_mission_bbs.png), not white. */
 const STRIP_FONT: Partial<PIXI.ITextStyle> =
     { ...LIST_FONT, fill: 0xc0c0c0 };
-/** The date is dimmer still (#404040 on the same capture). */
+/** The date is dimmer still: #404040 on every BBS capture (we drew it
+ * #808080, twice as bright as the original's). */
 const DATE_FONT: Partial<PIXI.ITextStyle> =
-    { ...LIST_FONT, fill: 0x808080, align: 'right' };
-/** The selected listing's name, in the upper right pane's large type. */
+    { ...LIST_FONT, fill: 0x404040 };
+/** The selected listing's name, in the upper right pane's large type.
+ * It wraps, and the pane's mask keeps only the first line — what the
+ * original shows of a name too long for the pane (BBS.titleWrapWidth). */
 const TITLE_FONT: Partial<PIXI.ITextStyle> = {
     fontFamily: 'Geneva', fontSize: BBS.titleFontSize, fill: 0xffffff,
-    align: 'left', wordWrap: false,
+    letterSpacing: BBS.titleLetterSpacing,
+    align: 'left', wordWrap: true, wordWrapWidth: BBS.titleWrapWidth,
 };
 const DESC_FONT: Partial<PIXI.ITextStyle> = {
     ...LIST_FONT, wordWrap: true, wordWrapWidth: BBS.descWrapWidth,
@@ -168,8 +172,7 @@ export class MissionBoard extends Menu<Entity> {
         this.addButtons(this.buttons);
 
         this.text.header.position.set(BBS.headerText.x, BBS.headerText.y);
-        this.text.date.anchor.x = 1;
-        this.text.date.position.set(BBS.dateRight, BBS.headerText.y);
+        this.text.date.position.set(BBS.dateLeft, BBS.headerText.y);
         this.text.title.position.set(BBS.titleText.x, BBS.titleText.y);
         this.listContainer.position.set(BBS.list.x, BBS.list.y);
         this.text.description.position.set(
