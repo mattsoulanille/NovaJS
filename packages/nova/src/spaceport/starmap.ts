@@ -30,6 +30,7 @@ import {
     DEFAULT_ZOOM, KEY_PAN_STEP, ZOOM_STEP,
 } from "./starmap_viewport.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
+import { ZoomButton } from "./starmap_zoom_button.js";
 import { TerritoryOwner } from "./starmap_borders.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
@@ -90,6 +91,24 @@ const MAP_POS = { x: -290, y: -248 };
 // moves 7px down.
 const BUTTON_Y = 227;
 
+/**
+ * The button row: each button's left edge (Button position) and middle
+ * width, dialog-centred. Fitted to map_single_jump_route.png by aligning
+ * the rendered caps' left and right edges with the capture's (red cores
+ * x 677..792, 828..929 for the greyed Clear Route, 954..1038, 1149..1233);
+ * the previous row had every button 4-9 px too narrow and Find/Done 2-6 px
+ * off. The zoom buttons are round (starmap_zoom_button.ts): discs centred
+ * at x 1080 and 1110.
+ */
+export const STARMAP_BUTTONS = {
+    borders: { x: -289, width: 104 },
+    clear: { x: -145, width: 94 },
+    find: { x: -12, width: 73 },
+    zoomOut: { x: 107, width: 0 },
+    zoomIn: { x: 137, width: 0 },
+    done: { x: 183, width: 73 },
+} as const;
+
 export class Starmap extends Menu<string[] /* route list of systems */> {
     private systemGraph?: SystemGraph;
     private allSystems?: SystemData[];
@@ -145,19 +164,19 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         super(displayAssets, simulationData, "nova:8509", controlEvents);
         this.container.name = "StarMap";
         this.universe = MissionUniverse.shared(simulationData);
+        const layout = STARMAP_BUTTONS;
+        const labelled = (label: string, { x, width }: { x: number,
+            width: number }) =>
+            new Button(displayAssets, label, width, { x, y: BUTTON_Y });
         this.buttons = {
-            borders: new Button(displayAssets, "Show Borders", 100,
-                { x: -287, y: BUTTON_Y }),
-            clear: new Button(displayAssets, "Clear Route", 88,
-                { x: -142, y: BUTTON_Y }),
-            find: new Button(displayAssets, "Find", 66,
-                { x: -10, y: BUTTON_Y }),
-            zoomOut: new Button(displayAssets, "-", 10,
-                { x: 110, y: BUTTON_Y }),
-            zoomIn: new Button(displayAssets, "+", 10,
-                { x: 141, y: BUTTON_Y }),
-            done: new Button(displayAssets, "Done", 64,
-                { x: 188, y: BUTTON_Y }),
+            borders: labelled("Show Borders", layout.borders),
+            clear: labelled("Clear Route", layout.clear),
+            find: labelled("Find", layout.find),
+            zoomOut: new ZoomButton(displayAssets, 'minus',
+                { x: layout.zoomOut.x, y: BUTTON_Y }),
+            zoomIn: new ZoomButton(displayAssets, 'plus',
+                { x: layout.zoomIn.x, y: BUTTON_Y }),
+            done: labelled("Done", layout.done),
         };
         this.addButtons(this.buttons);
 
