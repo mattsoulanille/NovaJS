@@ -1,0 +1,36 @@
+{
+ "name": "decoy_single",
+ "_comment": "Wave 5, asteroid decoy capture: land at Kit Decoy Port, accept the J0 target mission (target on Kit Decoy Marker, 250 px east, on screen), take off and stay put, then fire ONE JamM Decoy missile (Seeker 0x0002, JamVuln 0) every 2 s for 90 s while one asteroid drifts around. analysis/decoy_track.mjs gives each missile's path and its distance to the rock. Pilot w5_decoy1.",
+ "pilot": {
+  "as": "novaref-jam"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 3000"},
+  {"move": true},
+  {"keys": "l wait 1000 l wait 9000"},
+  {"shot": "offer", "window": true},
+  {"keys": "Return wait 2500"},
+  {"shot": "spaceport", "window": true},
+  {"keys": "Return wait 3500"},
+  {"shot": "takeoff", "window": true},
+  {"keys": "Tab wait 400"},
+  {"shot": "target", "window": true},
+  {"keys": "w wait 500"},
+  {"shot": "aim", "window": true},
+  {"record": "start", "window": true},
+  {"wait": 2000},
+  {"keys": "down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880"},
+  {"shot": "fire-30s", "window": true},
+  {"keys": "down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880"},
+  {"shot": "fire-60s", "window": true},
+  {"keys": "down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880 down:ctrl wait 120 up:ctrl wait 1880"},
+  {"wait": 4000},
+  {"shot": "after", "window": true},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}

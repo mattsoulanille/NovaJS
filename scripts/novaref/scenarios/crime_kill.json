@@ -1,0 +1,27 @@
+{
+ "name": "crime_kill",
+ "_comment": "Wave 5, A14 follow-up / R2: which systems' legal records does a crime change? The player (Kit Lancer with the 5000-damage Kit Beam Turret, records all 0) starts in A14 Own (sÿst 2110, owner 370, AI 3 warships of 370). It targets the first warship with Tab and fires the beam for 1.5 s (a 2000/2000 hull: destroyed), then lands at A14 Own Port at once (it never moved), which saves the pilot. Read the records with pilot_summary.mjs (legal: every non-zero system). Pilot w5_crime.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 2500"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"wait": 8000},
+  {"keys": "Tab wait 300"},
+  {"shot": "target", "window": true},
+  {"keys": "Space@1500 wait 2500"},
+  {"shot": "after-fire", "window": true},
+  {"keys": "Tab wait 300"},
+  {"shot": "next-target", "window": true},
+  {"keys": "l wait 1000 l wait 9000"},
+  {"shot": "landed", "window": true},
+  {"record": "stop"},
+  {"pull": "landed"}
+ ],
+ "pull": true
+}

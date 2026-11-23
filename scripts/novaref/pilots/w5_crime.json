@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w5-crime",
+  "edits": {
+    "ship": 703,
+    "stellar": 2110,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2110": 2,
+      "2111": 2,
+      "2112": 2,
+      "2121": 2,
+      "2122": 2
+    },
+    "weapons": {
+      "128": 0,
+      "360": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "600": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w5_crime"
+  }
+}

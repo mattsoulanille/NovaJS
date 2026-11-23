@@ -1,0 +1,27 @@
+{
+  "name": "novaref-a14-c19",
+  "edits": {
+    "ship": 710,
+    "stellar": 2002,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "legal": {
+      "2002": -500
+    },
+    "explored": {
+      "2002": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "A14 c19"
+  }
+}

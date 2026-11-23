@@ -1,0 +1,23 @@
+{
+ "name": "carrier_watch",
+ "_comment": "Wave 5, B NPC carrier: the player (Kit Lancer, 30000 shield, recharging, no weapons) sits at Kit Carrier Port (sÿst 2004) where ordinary traffic is ONE AI 3 Kit Bomb Carrier of the always-attacks gövt 362 (bay of 4 Kit Bombers, each firing the 400 px blast shell). Does it launch its bombers, and does a bomber blast near the carrier turn the carrier on the bomber? Tab every 3.3 s cycles through the ships (target panel: name, shield/armor). 110 s recorded. Pilot w5_carrier.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 2500"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"repeat": 32, "steps": [
+   {"keys": "Tab wait 300"},
+   {"shot": "obs-{i}", "window": true},
+   {"wait": 1000}
+  ]},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}

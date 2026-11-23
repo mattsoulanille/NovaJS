@@ -1,6 +1,6 @@
 {
  "name": "fullscreen_shops",
- "_comment": "R8 wave 4: fullscreen (1920x1080) captures of the spaceport, outfitter, shipyard, trade center, mission BBS and bar at Earth with stock data and a stock Shuttle (pilot w4_fs). \"prefs\" turns RunInAWindow off for this run only; the run restores the prefs after quitting. Each venue is tried by its first letter (K1: spaceport hotkeys), then Escape.",
+ "_comment": "R8 wave 4: fullscreen (1920x1080) captures of the spaceport, outfitter, shipyard, trade center, mission BBS and bar at Earth with stock data and a stock Shuttle (pilot w4_fs). \"prefs\" turns RunInAWindow off for this run only; the run restores the prefs after quitting. Each venue is tried by its first letter (K1: spaceport hotkeys), then Escape. Wave 5: title_wait 12000 (in fullscreen the window appears before the title screen is ready; the first try pressed o too early).",
  "pilot": {
   "as": "novaref-scenario"
  },
@@ -8,6 +8,7 @@
  "prefs": {
   "RunInAWindow": 0
  },
+ "title_wait": 12000,
  "steps": [
   {
    "shot": "title"

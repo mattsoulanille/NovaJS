@@ -1,0 +1,22 @@
+{
+ "name": "traffic_watch",
+ "_comment": "Wave 5, A11 / AI 1 departure of ordinary sÿst traffic: the player sits at Kit Traffic Port (sÿst 2000: two landable stellars, Traffic Port at 0,0 and Traffic Market at 900,0) while düde 630 AI 1 yellow discs (avgShips 4) come and go. Nothing is fired. 240 s recorded; a shot every 10 s. Analyse with analysis/radar_blips.mjs --tracks (a ship that vanishes on a stellar's dot landed, one that accelerates hard and vanishes in open space jumped). Pilot w5_traffic.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {"keys": "e wait 1500"},
+  {"move": true},
+  {"record": "start", "window": true},
+  {"repeat": 24, "steps": [
+   {"shot": "watch-{i}", "window": true},
+   {"wait": 8000}
+  ]},
+  {"record": "stop"},
+  {"shot": "end", "window": true}
+ ],
+ "pull": true
+}

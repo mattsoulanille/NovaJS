@@ -1,0 +1,25 @@
+{
+ "name": "fullscreen_bbs",
+ "_comment": "R8 wave 5: the Mission BBS at Earth in fullscreen (1920x1080), which fullscreen_shops could not reach because `m` in the spaceport opens the star map. The BBS button is clicked at its fullscreen position (screen 715,668, read off the wave-5 spaceport shot). Pilot w4_fs.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "park_last_pilot": true,
+ "prefs": {
+  "RunInAWindow": 0
+ },
+ "title_wait": 12000,
+ "steps": [
+  {"keys": "e wait 4000"},
+  {"move": true},
+  {"keys": "l wait 1000 l wait 9000"},
+  {"shot": "spaceport"},
+  {"click": [715, 668]},
+  {"wait": 3000},
+  {"move": true},
+  {"shot": "bbs"},
+  {"keys": "Escape wait 2000"},
+  {"shot": "after-bbs"}
+ ],
+ "pull": true
+}

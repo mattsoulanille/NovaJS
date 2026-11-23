@@ -253,6 +253,11 @@ Scenario keys added for experiments:
   written after the snapshot, so the post-quit prefs check finds the
   difference and imports the snapshot back (`prefs-restored`). Wave 4
   used it for fullscreen captures; it never touches system settings.
+- `"title_wait": 12000` waits that long (ms) after launch before
+  `open_pilot`. Needed in fullscreen (`RunInAWindow` 0): the game's window
+  exists before the title screen is drawn, and an early `o` is lost (wave 5).
+  Fullscreen runs at the desktop's 1920x1080; `shot` without `--window`
+  then captures the whole game.
 
 `open_pilot` works like this. It presses `o` on the title screen, which opens
 an NSOpenPanel (a second EV Nova window named "Open", layer 8). It presses
@@ -440,8 +445,11 @@ one is empirical: in wave 3, a plug-in with rlëD 2000/2001 made the game
 quit while loading, and 1999 works (bisect in
 `~/.local/share/novaref/evidence/20261123-w3-bisect/NOTES.txt`). Add
 `"unsafeId": true` to a resource to build it anyway. The test kit has used
-the last free wëap (382, 383) and düde (635-639) ids, so the next kit
-weapons or dudes must reuse or retire old ones.
+the last free wëap (382, 383) and düde (635-639) ids of ITS ranges, but
+the ranges between the stock ids and the kit's are free and allowed
+(wave 5 uses them): wëap 235-359 (stock wëap stop at 234), oütf 444-599
+(stock 443), düde 275-599 (stock 274), gövt 196-359, flët 256-383 except
+300, sÿst/spöb 2000-2099 (stock sÿst 1127, spöb 1420). Stock shïp ids are scattered up to 895; plugin-make refuses a stock id, so just try one (778/779 were free).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they
@@ -474,6 +482,7 @@ list it in a scenario's `"plugins"`.
 | shïp 720 Kit Disc Leader (white, Speed/Accel 300, Turn 30), 721-726 Kit Disc Red/Green/Blue/Yellow/Magenta/Cyan (Speed/Accel 600, Turn 60); rlëD 1970-1976 | **Trackable hulls**: a solid one-colour disc (24 px) on all 36 frames, built by `packages/novaparse/src/plugin_kit/sprites.ts`. `analysis/discs.mjs` finds each centre by colour. The shän is the stock Shuttle's with only the sprite swapped: a from-scratch shän crashed the game on Enter Ship. The rlëD must use the stock row encoding (`encodeRled(..., {original: true})`). The synthetic data set's default encoding made the game fail an assertion on load. |
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
 | wave 4 additions | sÿst/spöb 2160-2169 Kit Land 40/72/250/325/304x134/96/112/315x200/80/88 (one landable stellar each, cloned from stock spöbs of those sprite sizes), shïp 771/772 Kit Crawler Slowbrake (inertialess, slow Accel, for the landing speed gate), mïsn 991 (bit 9032: four AI 1 subjects), wëap 368 Kit Fixed Gun / 369 Kit Rear Turret (they **replace the #316 Speed Guns**; oütf 605/606 now install them) and shïp 769/770 blue disc escorts carrying them. Jamming types 2-4 (wëap 362-364, oütf 602-604 and 627-629, shïp 773-775, mïsn 962/963/965/966/970), asteroid tests (wëap 378 JamM Decoy V100, 380 JamM Pass V100, oütf 630/631 single +50/+100 jammers, shïp 776/777, mïsn 967/968/992, sÿst 2170 Kit Rock Range 4) and K9 brackets (düde 609/613/614, mïsn 993-995). **Retired** for these: wëap 362-364 (#316b missiles), 368/369 (#316 speed guns), 378/380 (JamM Parent / Plain); düde 603-610 and 613/614 with mïsn 962-970 (Q2b, Q3, Q4b, Q2c, #316b target, B bomb carrier/raiders, the wave-2 derelict, K9's record-hostile ships). Old pilots that name them now get the new resources. See `wave4Resources`. |
+| wave 5 additions (`wave5Resources`, `jamWave5`; nothing retired) | sÿst/spöb 2172-2175 Kit Decoy Range (1 rock) and Kit Decoy Range 3 (3 rocks), target on a marker 250 px east (mïsn 996/997, bits 9037/9038); sÿst 2000 Kit Traffic Range (AI 1 traffic, two landable stellars); shïp 778/779 Kit Lancer Heavy Weak/Strong (Strength 1 / 10000); gövt 365-367, düde 275/276, sÿst 2002/2003 (A14 one-way alliances); düde 277 + sÿst 2004 Kit Carrier Range (AI 3 Kit Bomb Carrier traffic of gövt 362); flët 301/302 + sÿst 2005/2006 (fleets with mixed sprite sizes / repeated escort types); wëap 235 JamM Interf (0x0008) + oütf 444, sÿst 2007 Kit Static Range (Interference 100) and 2009 Kit Static Control (0), mïsn 998/999; wëap 236 JamM Parent V100 (0x8000) + oütf 445, mïsn 1000 (S100 target at Kit Market). |
 | wave 2 and 3 additions | A14 hostility cells, the map region, the jamming kit, the AI subjects, F1b disc sizes and the wave-3 resources (jamming at 450/1800 px, long-life and turn-away missiles, InhJam target, AI tank discs, Kit Lancer Heavy, armed blue disc escorts and Kit Fight Range, flët 300 in Kit Fleet Range, Kit Prize, Map B border systems). Each block's doc comment in `kits/testkit.mjs` lists its ids. |
 
 ## Minimal app (tested 2026-11-23: launches, enters space, lands)
@@ -540,6 +549,18 @@ apply.
   `ffmpeg -ss <t> -t 3 -i recording.mp4 -vf "crop=636:604:0:0,lagfun=decay=1" -update 1 trail.png`
   (t from the trigger's `down` stamp in `recording.events.json`). Rocks
   leave wide streaks, missiles thin purple trails, hits a pink puff.
+- `decoy_track.mjs <rec.mp4> [--target x,y] [--out tracks.json]` (wave 5):
+  missile heads (saturated red/blue sprites, the white sparkle trail is
+  ignored) and asteroids (grey/brown blobs) per frame of a rig where the
+  player sits still; each missile's track, where it ended (target, rock,
+  edge, lost) and the closest any rock came ahead (≤ 30° off its
+  heading), oblique (30-60°) or to the side/behind. The tracker loses a
+  missile inside the target's static sprite, so check the ends against
+  per-missile trail pictures (lagfun over the track's frames).
+- `bolt_births.mjs <rec.mp4> [--radius 26]` (wave 5): every bolt of
+  wëap 131's orange graphic tracked from where it first appears, and
+  attributed to the red or blue disc it appeared beside: which ship is
+  firing when two sides share a weapon graphic.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).

@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w5-static",
+  "edits": {
+    "ship": 703,
+    "stellar": 2007,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2007": 2
+    },
+    "missionBits": {
+      "9039": true
+    },
+    "weapons": {
+      "128": 0,
+      "235": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "444": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w5-static"
+  }
+}

@@ -341,7 +341,137 @@ function wave4Resources() {
         { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": 1973, "@2:i16": 1974, "@4:i16": 1 } },
     ];
     out.push(...blueEscort(769, "Kit Disc Blue Fixed", 368), ...blueEscort(770, "Kit Disc Blue Rear", 369));
-    out.push(...jamWave4(), ...wave4Rocks(), ...wave4Brackets());
+    out.push(...jamWave4(), ...wave4Rocks(), ...wave4Brackets(), ...wave5Resources());
+    return out;
+}
+
+/**
+ * Wave-5 experiments (docs/reference_experiments.md). Nothing retired.
+ * Besides the last kit-range ids (sÿst/spöb 2172-2175), wave 5 uses the
+ * gaps ABOVE the stock ids, which plugin-make allows and the game accepts
+ * like any plug-in id: sÿst/spöb 2000-2099 (stock sÿst stop at 1127, spöb
+ * at 1420), düde 275+ (stock stop at 274), gövt 365-369 (free inside the
+ * kit range), flët 301+ (stock 128-255, kit 300), shïp 778+.
+ *
+ *  J   Decoy capture: sÿst 2172 Kit Decoy Range (owner 363) holds ONE
+ *      asteroid (AsteroidTypes 0x0001, röid 128 only), spöb 2172 Kit Decoy
+ *      Port at (0,0) and spöb 2173 Kit Decoy Marker at (250,0), inside the
+ *      832x604 window's play area. mïsn 996 (bit 9037) puts the J0 target
+ *      (düde 615) on the marker. sÿst 2174 Kit Decoy Range 3 is the same
+ *      with THREE asteroids (spöb 2174 port, 2175 marker; mïsn 997, bit
+ *      9038). The player fires single JamM Decoy missiles (wëap 379: Seeker
+ *      0x0002, JamVuln 0) one at a time; analysis/decoy_track.mjs gives each
+ *      missile's path and the rocks' positions.
+ *  A   AI 1 sÿst traffic: sÿst 2000 Kit Traffic Range (owner 363) with two
+ *      landable stellars, spöb 2000 Traffic Port (0,0) and 2001 Traffic
+ *      Market (900,0), and ordinary traffic of düde 630 (the AI 1 yellow AI
+ *      Subject Disc that mïsn 991 used as a mission ship in wave 4),
+ *      avgShips 4.
+ *  A   gövt 0x0010 retreat: shïp 778 Kit Lancer Heavy Weak (the 763 player
+ *      hull with Strength 1) and 779 Kit Lancer Heavy Strong (Strength
+ *      10000), to tell attacker strength from damage rate.
+ *  A14 one-way alliances: gövt 365 "A14 GtoO" (class 77, lists the Owner's
+ *      class 70 as ally; 370 does not list 77) and 366 "A14 OtoG" (class
+ *      78, no allies) with 367 "A14 Owner2" (class 79, lists 78 as ally).
+ *      sÿst 2002 A14 GtoO (owner 370) spawns AI 3 warships of 365 (düde
+ *      275); sÿst 2003 A14 OtoG (owner 367) spawns warships of 366 (düde
+ *      276). One landable stellar each (spöb 2002, 2003).
+ *  B   NPC carrier: sÿst 2004 Kit Carrier Range (owner 363, spöb 2004)
+ *      spawns düde 277, an AI 3 Kit Bomb Carrier (shïp 712: 2 Kit Escort
+ *      Guns and a Kit Bomber Bay of 4 Kit Bombers armed with the 400 px
+ *      blast shell) of the always-attacks gövt 362, avgShips 1.
+ *  F1n fleets: flët 301 (white 720 lead; escorts: Kit Big Red 741 (96 px),
+ *      green 722, blue 723, yellow 724: mixed sprite sizes) placed by sÿst
+ *      2005 Kit Fleet Mixed; flët 302 (white lead; escorts red 721 x2 and
+ *      green 722 x2: repeated types) placed by sÿst 2006 Kit Fleet Repeat.
+ *      Both govt 363; one landable stellar each (spöb 2005, 2006).
+ */
+function wave5Resources() {
+    const out = [];
+    const decoyRange = (sid, name, x, rocks, misnId, bit) => {
+        const s = system(sid, name, x, -650, 363, [sid, sid + 1]);
+        s.set = { ...s.set, asteroids: rocks, asteroidTypes: 0x0001 };
+        out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
+            spob(sid + 1, `${name} Marker`, 250, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+        out.push(...misn(misnId, `Kit decoy J0 target ${rocks}`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    };
+    decoyRange(2172, "Kit Decoy Range", -1140, 1, 996, 9037);
+    decoyRange(2174, "Kit Decoy Range 3", -1170, 3, 997, 9038);
+
+    // One landable stellar at (0,0) per system; sÿst positions on a row far from everything else.
+    const oneStellar = (sid, name, owner, set = {}) => {
+        const s = system(sid, name, -1200 + 30 * (sid - 2000), -700, owner, [sid]);
+        s.set = { ...s.set, ...set };
+        out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+        return s;
+    };
+    const traffic = oneStellar(2000, "Kit Traffic Range", 363, { dudes: [630, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 4 });
+    traffic.set.spobs = [2000, 2001, ...none16].slice(0, 16);
+    out.push(spob(2001, "Kit Traffic Market", 900, 0, 138, { flags: 0x43 }));
+
+    const heavy = { accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, flags: 0, flags2: 0x00C8 };
+    out.push(...ship(778, "Kit Lancer Heavy Weak", 135, { ...heavy, strength: 1 }));
+    out.push(...ship(779, "Kit Lancer Heavy Strong", 135, { ...heavy, strength: 10000 }));
+
+    out.push(govt(365, "A14 GtoO", { maxOdds: 1000, crimeTol: 10, classes: [77, -1, -1, -1], allies: [70, -1, -1, -1] }));
+    out.push(govt(366, "A14 OtoG", { maxOdds: 1000, crimeTol: 10, classes: [78, -1, -1, -1] }));
+    out.push(govt(367, "A14 Owner2", { maxOdds: 1000, crimeTol: 10, classes: [79, -1, -1, -1], allies: [78, -1, -1, -1] }));
+    out.push(dude(275, "A14 Warships 365", 3, 365, 730), dude(276, "A14 Warships 366", 3, 366, 730));
+    const warships = (d) => ({ dudes: [d, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 });
+    oneStellar(2002, "A14 GtoO", 370, warships(275));
+    oneStellar(2003, "A14 OtoG", 367, warships(276));
+
+    out.push(dude(277, "Kit Bomb Carrier traffic", 3, 362, 712));
+    oneStellar(2004, "Kit Carrier Range", 363, { dudes: [277, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 });
+
+    const fleet = (id, name, escorts, mins, maxs, sid) => ({
+        type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": 720, "@2:i16x4": escorts, "@10:i16x4": mins, "@18:i16x4": maxs, "@26:i16": 363, "@28:i16": sid, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 },
+    });
+    out.push(fleet(301, "Kit Disc Fleet Mixed", [741, 722, 723, 724], [1, 1, 1, 1], [1, 1, 1, 1], 2005));
+    out.push(fleet(302, "Kit Disc Fleet Repeat", [721, 722, -1, -1], [2, 2, 0, 0], [2, 2, 0, 0], 2006));
+    const fleetSys = (f) => ({ dudes: [-f, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 6 });
+    oneStellar(2005, "Kit Fleet Mixed", 363, fleetSys(301));
+    oneStellar(2006, "Kit Fleet Repeat", 363, fleetSys(302));
+    out.push(...jamWave5());
+    return out;
+}
+
+/**
+ * Wave-5 jamming oddities (wëap/oütf ids above the stock ones: stock wëap
+ * stop at 234, oütf at 443).
+ *
+ *  wëap 235 JamM Interf (Seeker 0x0008 "confused by sensor interference",
+ *       JamVuln 0), oütf 444 its launcher. sÿst 2007 Kit Static Range
+ *       (owner 363, Interference 100): spöb 2007 port (0,0), 2008 marker
+ *       (900,0); mïsn 998 (bit 9039) puts the J0 target on the marker.
+ *       sÿst 2009 Kit Static Control is the same with Interference 0
+ *       (spöb 2009, 2010; mïsn 999, bit 9040).
+ *  wëap 236 JamM Parent V100 (Seeker 0x8000 "may attack parent ship if
+ *       jammed", JamVuln1 100), oütf 445. mïsn 1000 (bit 9041) puts Jam
+ *       Target S100 (düde 608: ONE +100 jammer, so every V100 missile is
+ *       jammed) at Kit Market, 900 px from Kit Port. Flown from Kit Lancer
+ *       Lite (1500 shield, no recharge), the parent's shield bar shows any
+ *       missile that turns back on it.
+ */
+function jamWave5() {
+    const out = [];
+    const jm = (id, name, vuln, seeker) => weap(id, name, 134, {
+        reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
+    });
+    out.push(jm(235, "JamM Interf", 0, 0x0008), gun(444, "JamM Launcher Interf", 235));
+    out.push(jm(236, "JamM Parent V100", 100, 0x8000), gun(445, "JamM Launcher Parent", 236));
+    const range = (sid, name, x, interference, misnId, bit) => {
+        const s = system(sid, name, x, -760, 363, [sid, sid + 1]);
+        s.set = { ...s.set, interference };
+        out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
+            spob(sid + 1, `${name} Marker`, 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+        out.push(...misn(misnId, `Kit ${name} J0 target`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    };
+    range(2007, "Kit Static Range", -1200, 100, 998, 9039);
+    range(2009, "Kit Static Control", -1170, 0, 999, 9040);
+    out.push(...misn(1000, "Kit J parent S100 target", 9041, { availStel: 2100, shipCount: 1, shipDude: 608, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
     return out;
 }
 

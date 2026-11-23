@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w5-decoy3",
+  "edits": {
+    "ship": 703,
+    "stellar": 2174,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2174": 2
+    },
+    "missionBits": {
+      "9038": true
+    },
+    "weapons": {
+      "128": 0,
+      "379": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "620": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w5_decoy3"
+  }
+}

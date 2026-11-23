@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w5-f1n-mixed",
+  "edits": {
+    "ship": 700,
+    "stellar": 2005,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2005": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w5-f1n-mixed"
+  }
+}

@@ -1,0 +1,95 @@
+{
+ "name": "ai_tank_burst",
+ "_comment": "Wave 5, gövt 0x0010 retreat, damage delivered FAST then stopped: as ai_tank.json, but the trigger is held only about 8 s (4 Kit Escort Guns strip the AI Tank Disc 3 retreat (gov 383) shield to under 25%), then 80 s of watching with the target panel shot every 2.7 s. Does it still retreat/jump when the damage stops? Pilot w4_ret_4guns (or any ai_tank pilot).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "keys": "down:Space"
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-00",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-01",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-02",
+   "window": true
+  },
+  {
+   "keys": "up:Space"
+  },
+  {
+   "repeat": 28,
+   "steps": [
+    {
+     "wait": 2700
+    },
+    {
+     "shot": "after-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
