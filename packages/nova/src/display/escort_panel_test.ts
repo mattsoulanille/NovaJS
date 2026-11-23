@@ -1,7 +1,8 @@
 import 'jasmine';
 import type { ControlEvent } from '../nova_plugin/core/index.js';
 import {
-    EscortPanelController, ESCORT_PANEL_STRINGS, escortPanelRows,
+    EscortPanelController, ESCORT_PANEL_FRAME_MS, ESCORT_PANEL_LIFETIME_FRAMES,
+    ESCORT_PANEL_STRINGS, escortPanelRows,
 } from './escort_panel.js';
 
 const start = (action: string): ControlEvent =>
@@ -121,22 +122,15 @@ describe('EscortPanelController', () => {
             .toEqual([start('formation')]);
     });
 
-    it('Up/Down close it and still fly the ship; Left/Right only turn',
-        () => {
+    it('flying keys fly the ship and leave it open (wave 2\'s "Up/Down '
+        + 'close it" was the timer)', () => {
             const { panel } = controller();
             panel.filter([start('escorts')]);
-            expect(panel.filter([start('turnLeft')]))
-                .toEqual([start('turnLeft')]);
-            expect(panel.filter([start('turnRight')]))
-                .toEqual([start('turnRight')]);
-            expect(panel.open).toBeTrue();
-            expect(panel.filter([start('accelerate')]))
-                .toEqual([start('accelerate')]);
-            expect(panel.open).toBeFalse();
-            panel.filter([start('escorts')]);
-            expect(panel.filter([start('reverse')]))
-                .toEqual([start('reverse')]);
-            expect(panel.open).toBeFalse();
+            for (const action of ['turnLeft', 'turnRight', 'accelerate',
+                'reverse', 'firePrimary', 'fireSecondary']) {
+                expect(panel.filter([start(action)])).toEqual([start(action)]);
+                expect(panel.open).withContext(action).toBeTrue();
+            }
         });
 
     it('Tab and Return neither open it nor touch it', () => {
@@ -157,6 +151,114 @@ describe('EscortPanelController', () => {
         panel.close();
         expect(panel.open).toBeFalse();
     });
+});
+
+describe('EscortPanelController self-close timer', () => {
+    /** Runs `frames` of the original's 30 fps frames. */
+    function run(panel: EscortPanelController, frames: number) {
+        for (let i = 0; i < frames; i++) {
+            panel.advance(ESCORT_PANEL_FRAME_MS);
+        }
+    }
+
+    it('closes it 250 frames (8.3 s) after it opens', () => {
+        expect(ESCORT_PANEL_LIFETIME_FRAMES).toBe(250);
+        const { panel } = controller();
+        panel.filter([start('escorts')]);
+        run(panel, 249);
+        expect(panel.open).toBeTrue();
+        expect(panel.framesOpen).toBe(249);
+        run(panel, 1);
+        expect(panel.open).toBeFalse();
+        expect(panel.framesOpen).toBe(0);
+    });
+
+    it('counts display time, however it is sliced into frames', () => {
+        const { panel } = controller();
+        panel.filter([start('escorts')]);
+        // 60 Hz display frames: 8.3 s is 500 of them.
+        for (let i = 0; i < 499; i++) {
+            panel.advance(1000 / 60);
+        }
+        expect(panel.open).toBeTrue();
+        panel.advance(1000 / 60);
+        expect(panel.open).toBeFalse();
+
+        // One long frame (a backgrounded tab) closes it outright.
+        panel.filter([start('escorts')]);
+        panel.advance(10_000);
+        expect(panel.open).toBeFalse();
+    });
+
+    it('a row key restarts it: the panel closes 250 frames after the key',
+        () => {
+            const { panel } = controller();
+            panel.filter([start('escorts')]);
+            run(panel, 125);
+            panel.filter([start('selectStellar2')]);
+            expect(panel.framesOpen).toBe(0);
+            run(panel, 249);
+            expect(panel.open).toBeTrue();
+            run(panel, 1);
+            expect(panel.open).toBeFalse();
+        });
+
+    it('reselecting the row already selected restarts it too', () => {
+        const { panel } = controller();
+        panel.filter([start('escorts')]);
+        run(panel, 200);
+        panel.filter([start('selectStellar1')]);
+        run(panel, 200);
+        expect(panel.open).toBeTrue();
+    });
+
+    it('a click on a row restarts it', () => {
+        const { panel } = controller();
+        panel.filter([start('escorts')]);
+        run(panel, 200);
+        panel.selectRow(3);
+        run(panel, 249);
+        expect(panel.open).toBeTrue();
+        run(panel, 1);
+        expect(panel.open).toBeFalse();
+    });
+
+    it('orders, flying, firing and Tab neither restart it nor close it',
+        () => {
+            const { panel } = controller();
+            panel.filter([start('escorts')]);
+            run(panel, 125);
+            for (const action of ['formation', 'formation', 'attack',
+                'turnLeft', 'accelerate', 'reverse', 'firePrimary',
+                'nextTarget']) {
+                panel.filter([start(action)]);
+                panel.filter([release(action)]);
+                expect(panel.open).withContext(action).toBeTrue();
+            }
+            // A held key's auto-repeat does not restart it either.
+            panel.filter([{ action: 'selectStellar2' as never,
+                state: 'repeat' }]);
+            expect(panel.framesOpen).toBe(125);
+            run(panel, 124);
+            expect(panel.open).toBeTrue();
+            run(panel, 1);
+            expect(panel.open).toBeFalse();
+        });
+
+    it('starts afresh each time it opens, and `e` still closes it early',
+        () => {
+            const { panel } = controller();
+            panel.filter([start('escorts')]);
+            run(panel, 200);
+            panel.filter([start('escorts')]);
+            expect(panel.open).toBeFalse();
+            // Time while closed counts for nothing.
+            run(panel, 300);
+            panel.filter([start('escorts')]);
+            expect(panel.framesOpen).toBe(0);
+            run(panel, 249);
+            expect(panel.open).toBeTrue();
+        });
 });
 
 describe('escortPanelRows', () => {

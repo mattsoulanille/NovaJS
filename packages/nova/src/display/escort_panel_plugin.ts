@@ -3,6 +3,7 @@ import { getDefaultInterfaceColorsData, INTERFACE_COLORS_ID, InterfaceColorsData
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/index.js';
 import { BayFighterComponent, escortParent } from '../nova_plugin/escorts/index.js';
@@ -26,8 +27,11 @@ import { showStatusMessage } from './status_message_plugin.js';
  */
 export interface EscortPanelState {
     controller: EscortPanelController;
-    /** Re-derives the panel's rows, visibility and colours (every frame). */
-    update(): void;
+    /**
+     * Runs the self-close timer on by `deltaMs` of display time, then
+     * re-derives the panel's rows, visibility and colours (every frame).
+     */
+    update(deltaMs: number): void;
     /** The rows as last drawn (the window hook reads them). */
     rows(): EscortPanelRow[];
     /** Takes the panel off the stage for good (plugin removal). */
@@ -172,12 +176,16 @@ class EscortPanelView {
     }
 }
 
-/** Keeps the panel drawn and placed; see EscortPanelState.update. */
+/**
+ * Keeps the panel drawn and placed, and its self-close timer running on
+ * the display world's own clock (client-local UI; the simulation never
+ * sees the panel). See EscortPanelState.update.
+ */
 const DrawEscortPanel = new System({
     name: 'DrawEscortPanel',
-    args: [EscortPanelResource, SingletonComponent] as const,
-    step(state) {
-        state.update();
+    args: [EscortPanelResource, TimeResource, SingletonComponent] as const,
+    step(state, time) {
+        state.update(time.delta_ms);
     },
 });
 
@@ -220,12 +228,16 @@ export const EscortPanelPlugin: Plugin = {
                 stage.removeChild(view.container);
                 view.destroy();
             },
-            update() {
+            update(deltaMs) {
                 // Landing removes the ship from the world; the panel goes
                 // with it rather than reappearing over the next launch.
                 if (world.resources.get(DockedShipResource)?.current) {
                     controller.close();
                 }
+                // 250 frames after it opened or a row was last selected,
+                // it closes itself. The count also runs while the full
+                // map hides it (not measured on the original).
+                controller.advance(deltaMs);
                 // A landed screen or the full map owns the screen and the
                 // keyboard while it is up.
                 view.container.visible = controller.open
@@ -247,6 +259,9 @@ export const EscortPanelPlugin: Plugin = {
                 },
                 get selectedRow() {
                     return controller.selectedRow;
+                },
+                get framesOpen() {
+                    return controller.framesOpen;
                 },
                 rows: () => rows,
             };

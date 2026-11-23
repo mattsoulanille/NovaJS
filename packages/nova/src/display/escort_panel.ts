@@ -15,9 +15,13 @@
 // time; with no escorts it does not open and the status line says so.
 // 1-5 and clicks pick a row; f/d/v/c give the selected category (row 1:
 // every category) Attack/Defend/Hold Position/Formation, and with the
-// panel closed they go to every category. Up/Down close it and still fly
-// the ship; Left/Right just turn. It never pauses the game and never
-// times out.
+// panel closed they go to every category. It never pauses the game.
+//
+// Lifetime (the doc's "Wave 4: the panel's lifetime"): the panel closes
+// itself 250 frames (8.3 s at the original's 30 fps) after it opens, and
+// selecting a row (1-5 or a click) restarts that count. Nothing else
+// touches it: order keys, turning, thrust, reverse, fire and Tab neither
+// restart it nor close it. (Wave 2's "Up/Down close it" was this timer.)
 //
 // This module is the panel's logic, free of PIXI so it can be specced:
 // the control-event filter (EscortPanelController) and the rows
@@ -49,6 +53,15 @@ export const ESCORT_PANEL_POSITION = { x: 15, y: 150 };
 export const ESCORT_PANEL_BAR = { x: 4, y: 30, width: 153, height: 13 };
 export const ESCORT_PANEL_ROW_PITCH = 18;
 export const ESCORT_PANEL_ROWS = 5;
+
+/**
+ * How long the panel stays up untouched, in the original's 30 fps frames:
+ * it closed 248-251 recording frames after `e` (and 249-250 after a row
+ * key) in every trial of two runs.
+ */
+export const ESCORT_PANEL_LIFETIME_FRAMES = 250;
+/** One of the original's frames, in ms. */
+export const ESCORT_PANEL_FRAME_MS = 1000 / 30;
 
 /**
  * The panel's words: stock Nova's STR# 2002 ("misc strings"), which the
@@ -168,8 +181,6 @@ const ORDER_PRECEDENCE: readonly EscortCommand[] =
 /** The order keys: f, d, v, c (and NovaJS's Alt+C return-to-bay). */
 const ORDER_ACTIONS = new Set<ControlAction>(
     ['attack', 'defend', 'holdPosition', 'formation', 'returnToBay']);
-/** Thrust and reverse close the panel (and still fly the ship). */
-const CLOSING_ACTIONS = new Set<ControlAction>(['accelerate', 'reverse']);
 /** Rows 1-5 answer to the stellar-selection number keys while open. */
 const ROW_ACTIONS = new Map<ControlAction, number>(
     [1, 2, 3, 4, 5].map(n => [`selectStellar${n}` as ControlAction, n - 1]));
@@ -190,13 +201,42 @@ export interface EscortPanelHost {
  * simulation and the rest of the client: `e` and the row keys are
  * consumed while they act on the panel, and an order on rows 2-5 gains
  * its category selector.
+ *
+ * The self-close timer is driven by `advance`, which the display world
+ * calls once per frame with that frame's elapsed time (client-local UI:
+ * it never touches the simulation). Time is counted in the original's
+ * frames, so a spec can step it frame by frame.
  */
 export class EscortPanelController {
     open = false;
     selectedRow = 0;
     strings: EscortPanelStrings = ESCORT_PANEL_STRINGS;
+    /** Original frames (fractional) since the panel opened or a row was
+     * last selected. */
+    private frames = 0;
 
     constructor(private readonly host: EscortPanelHost) { }
+
+    /** Whole original frames since the panel opened or a row was last
+     * selected (0 while closed). */
+    get framesOpen(): number {
+        return this.open ? Math.floor(this.frames) : 0;
+    }
+
+    /**
+     * Moves the self-close timer on by `deltaMs` of display time, closing
+     * the panel once it has gone ESCORT_PANEL_LIFETIME_FRAMES frames
+     * without a row being selected.
+     */
+    advance(deltaMs: number) {
+        if (!this.open || !(deltaMs > 0)) {
+            return;
+        }
+        this.frames += deltaMs / ESCORT_PANEL_FRAME_MS;
+        if (this.frames >= ESCORT_PANEL_LIFETIME_FRAMES) {
+            this.close();
+        }
+    }
 
     filter(events: readonly ControlEvent[]): ControlEvent[] {
         const passed: ControlEvent[] = [];
@@ -218,28 +258,29 @@ export class EscortPanelController {
                 }
                 continue;
             }
+            // An order neither closes the panel nor restarts its timer.
             if (event.state === 'start' && ORDER_ACTIONS.has(event.action)) {
                 const selector = ROW_SELECTORS[this.selectedRow];
                 if (selector) {
                     passed.push({ action: selector, state: 'start' });
                 }
-            } else if (event.state === 'start'
-                && CLOSING_ACTIONS.has(event.action)) {
-                this.close();
             }
             passed.push(event);
         }
         return passed;
     }
 
+    /** Selects a row (a row key or a click) and restarts the timer. */
     selectRow(row: number) {
         if (row >= 0 && row < ESCORT_PANEL_ROWS) {
             this.selectedRow = row;
+            this.frames = 0;
         }
     }
 
     close() {
         this.open = false;
+        this.frames = 0;
     }
 
     private toggle() {
@@ -253,5 +294,6 @@ export class EscortPanelController {
         }
         this.open = true;
         this.selectedRow = 0;
+        this.frames = 0;
     }
 }

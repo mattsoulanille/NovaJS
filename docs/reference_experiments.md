@@ -863,10 +863,14 @@ from the key's stamp.
 
 **NovaJS (9ec7a496), `N/display/escort_panel.ts`:** no timer, and
 `CLOSING_ACTIONS` (line 172: accelerate, reverse) closes the panel on
-thrust or reverse (lines 226-229). **Mismatch** on both. **Proposed (not
-applied):** drop `CLOSING_ACTIONS`; close the panel 240 ticks (8 s)
-after it opens or after the last row selection (key or click); `e` still
-toggles. Confidence: high (two runs, every trial within 2 frames).
+thrust or reverse (lines 226-229). **Mismatch** on both. **Applied in
+"Escort panel closes itself after 250 frames" (wave-4 fixes):**
+`CLOSING_ACTIONS` is gone; the panel closes 250 frames (8.3 s at 30 fps,
+`ESCORT_PANEL_LIFETIME_FRAMES`) after it opens or after the last row
+selection (key or click); `e` still toggles. The count is client-side: the
+display world's frame time, converted to 30 fps frames
+(`EscortPanelController.advance`). Confidence: high (two runs, every trial
+within 2 frames).
 
 Evidence: `~/.local/share/novaref/evidence/20261123-w4/escorts/panel-timer/*/`
 (`recording.mp4`, `recording.events.json`, `lit.json`).

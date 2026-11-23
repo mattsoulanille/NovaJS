@@ -92,6 +92,9 @@ declare global {
         novaEscortPanel?: {
             readonly open: boolean;
             readonly selectedRow: number;
+            /** Original (30 fps) frames since it opened or a row was last
+             * selected; it closes itself at 250. */
+            readonly framesOpen: number;
             rows(): EscortPanelRow[];
         };
         /** The background landed-UI warm-up (client/landed_ui_prefetch.ts):
