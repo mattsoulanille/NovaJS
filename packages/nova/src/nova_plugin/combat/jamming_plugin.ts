@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { JammingStrengths } from 'novadatainterface/outfit_data';
-import { SeekerFlags, JammingVulnerabilities } from 'novadatainterface/weapon_data';
+import { SeekerFlags, JammingVulnerabilities, ProjectileWeaponData }
+    from 'novadatainterface/weapon_data';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Component } from 'nova_ecs/component';
@@ -11,7 +12,8 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Optional } from 'nova_ecs/optional';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
-import { RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { Query } from 'nova_ecs/query';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
@@ -60,11 +62,21 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *     The missile is jammed if any type jams it.
  *  3. A jammed plain missile flies dead straight along its heading at the
  *     decision (its launch heading); a turnsAwayIfJammed one steers directly
- *     away from its target. attackParentIfJammed / decoyedByAsteroids missiles
- *     retarget with the reaction roll's odds (ATTACK_PARENT_IF_JAMMED_PROBABILITY,
- *     DECOY_RETARGET_PROBABILITY), decided at the same moment, and otherwise
- *     fall back to veer/straight. A retargeted missile then tracks its new
+ *     away from its target. An attackParentIfJammed missile retargets its
+ *     parent with the reaction roll's odds (ATTACK_PARENT_IF_JAMMED_PROBABILITY),
+ *     decided at the same moment, and otherwise falls through to the rules
+ *     below. A jammed decoyedByAsteroids missile goes for the nearest rock
+ *     within DECOY_DISTRACTION_RANGE, always (the original lost every one of
+ *     them to rocks against a full jammer), and flies straight (or veers)
+ *     only when there is none. A retargeted missile then tracks its new
  *     target with no further roll.
+ *  4. decoyedByAsteroids (Seeker 0x0002) is ALSO its own per-tick check,
+ *     independent of jamming ("Asteroids and seeker flags, with and without
+ *     jamming (wave 4)"): the first tick an asteroid is within
+ *     ASTEROID_DECOY_CAPTURE_RANGE of a guided 0x0002 missile whose target
+ *     is not an asteroid (tracked or jammed off), the missile retargets onto
+ *     it for good. The original lost 65% of unjammed 0x0002 missiles in a
+ *     16-rock field and 33% with 4 rocks.
  *
  * The decision lives in JamDecisionComponent, which is serializer-registered:
  * it rides in snapshots, the wire and the desync hash, so a rollback replays it
@@ -72,16 +84,16 @@ import { DisableCreditSystem } from '../reputation/index.js';
  */
 
 /**
- * Given a jammed missile, the probability that a missile whose Seeker flag
- * makes it *eligible* for a special retarget reaction actually takes it
- * (instead of falling through to veer/fly-straight).
+ * Given a jammed attackParentIfJammed (0x8000) missile, the probability that
+ * it actually turns on its parent (instead of falling through to the decoy
+ * rule and then veer/fly-straight).
  * JUDGMENT CALL: the Bible gives no rate (its only hint is the word "may" in
  * "May attack parent ship if jammed") and the reference left the parent half
  * unmeasured; 10% is an eyeballed starting point. Tune freely.
+ * (Its decoy twin, DECOY_RETARGET_PROBABILITY 0.1, is gone: a jammed
+ * decoyedByAsteroids missile now always goes for a rock in range.)
  */
 export const ATTACK_PARENT_IF_JAMMED_PROBABILITY = 0.1;
-/** See ATTACK_PARENT_IF_JAMMED_PROBABILITY. */
-export const DECOY_RETARGET_PROBABILITY = 0.1;
 
 /**
  * A ship's jamming strength for each of the four jamming types, derived from
@@ -106,12 +118,13 @@ export const SystemInterferenceResource =
 /**
  * Decoy hook for the asteroid agent (and any other distraction source).
  *
- * Attach this component to any entity that a jammed, `decoyedByAsteroids`
- * missile may be lured onto. The entity MUST also carry a
- * MovementStateComponent (so the missile has a position to steer toward). When
- * a missile loses lock and its weapon has the `decoyedByAsteroids` seeker flag,
- * the retarget system may switch the missile's TargetComponent to a nearby
- * decoy instead of applying the veer/straight-fly behaviour.
+ * Attach this component to any entity that a `decoyedByAsteroids` missile may
+ * be lured onto. The entity MUST also carry a MovementStateComponent (so the
+ * missile has a position to steer toward). A missile whose weapon has the
+ * `decoyedByAsteroids` seeker flag switches its TargetComponent to a decoy
+ * that comes within ASTEROID_DECOY_CAPTURE_RANGE of it, jammed or not; a
+ * jammed one goes for the nearest decoy within DECOY_DISTRACTION_RANGE at its
+ * jam decision instead of applying the veer/straight-fly behaviour.
  *
  * `weight` biases selection: higher-weight decoys are more attractive. Use 1
  * for a plain decoy. (Asteroids can set this to model bigger rocks being more
@@ -125,15 +138,34 @@ export const SystemInterferenceResource =
 export const DecoyTargetComponent =
     new Component<{ weight: number }>('DecoyTargetComponent');
 
+/** Every decoy (asteroid) with a position, for MissileJammingSystem. */
+const DecoyQuery = new Query([UUID, DecoyTargetComponent,
+    MovementStateComponent] as const, 'DecoyQuery');
+
 /**
- * The radius within which a jammed, decoy-vulnerable missile can be distracted
- * onto a decoy. JUDGMENT CALL: the Bible does not specify a range, so we use a
- * generous fixed radius in world units. Kept as a named constant so it is easy
- * to tune or make data-driven later.
+ * The radius within which a JAMMED decoy-vulnerable missile goes for a decoy
+ * at its jam decision. The reference ("Asteroids and seeker flags ... (wave
+ * 4)", finding 2) saw every jammed 0x0002 missile against a full jammer curve
+ * onto "a nearby rock" in a 16-rock field, and proposed "no distance limit
+ * beyond the field"; it did not measure a range. JUDGMENT CALL: the 1000 px
+ * kept from before stands for "the field around the launch point": about a
+ * screen and a half, reachable within a missile's life, without sending a
+ * missile across the system after a far rock.
  */
 export const DECOY_DISTRACTION_RANGE = 1000;
-const DECOY_DISTRACTION_RANGE_SQUARED =
-    DECOY_DISTRACTION_RANGE * DECOY_DISTRACTION_RANGE;
+
+/**
+ * The distance (px) at which an asteroid captures a decoyedByAsteroids
+ * (Seeker 0x0002) missile, jammed or not: the first tick a rock is this close,
+ * the missile retargets onto it for good. The reference measured "about
+ * 200-260 px" for captures near the launch point and 150-250 px for
+ * mid-flight turns, and could not pin it finer (docs/reference_experiments.md,
+ * "Asteroids and seeker flags, with and without jamming (wave 4)", finding
+ * 1); 225 is about the middle of the 200-260 range. Whether it is a certainty
+ * within range or a per-tick chance is unmeasured; certainty is the simpler
+ * reading of the trails.
+ */
+export const ASTEROID_DECOY_CAPTURE_RANGE = 225;
 
 /** The index of the radar jamming type (0-based) in the 4-tuple. */
 export const RADAR_JAM_INDEX = 1;
@@ -282,7 +314,9 @@ export function rollMissileJammed(vulnerabilities: JammingVulnerabilities,
 export type JamReaction =
     | { kind: 'none' }                       // not jammed: tracks its target
     | { kind: 'retargetParent' }             // attackParentIfJammed
-    | { kind: 'retargetDecoy' }              // decoyedByAsteroids (caller finds decoy)
+    // decoyedByAsteroids: the caller looks for the nearest decoy within
+    // DECOY_DISTRACTION_RANGE and steers by `fallback` if there is none.
+    | { kind: 'retargetDecoy', fallback: 'veerAway' | 'flyStraight' }
     | { kind: 'veerAway' }                   // turnsAwayIfJammed
     | { kind: 'flyStraight' };               // default jammed behaviour
 
@@ -290,65 +324,54 @@ export type JamReaction =
  * Decides, deterministically, how a missile reacts to its jam decision.
  * `reactionRoll` must be a fresh draw from the deterministic PRNG in [0, 1).
  *
- * The retargeting flags gate on `reactionRoll`: each eligible retarget owns its
- * own slice of the unit interval (parent first, then decoy), so with both flags
- * set the outcomes are ATTACK_PARENT_IF_JAMMED_PROBABILITY parent,
- * DECOY_RETARGET_PROBABILITY decoy, remainder veer/straight -- and setting one
- * flag never changes the other's odds. When no retarget slice is hit, the
- * precedence is turnsAwayIfJammed > flyStraight.
- * (The caller is responsible for finding a decoy for `retargetDecoy`; if none is
- * nearby it falls back to veer/straight, so decoy vulnerability never makes a
- * missile *more* accurate.)
+ * Precedence for a jammed missile:
+ *  1. attackParentIfJammed, when `reactionRoll` <
+ *     ATTACK_PARENT_IF_JAMMED_PROBABILITY (the roll's only use now);
+ *  2. decoyedByAsteroids, always: the caller looks for a rock in range, and
+ *     with none the missile takes `fallback`, so decoy vulnerability never
+ *     makes a jammed missile *more* accurate;
+ *  3. turnsAwayIfJammed > flyStraight.
  */
 export function decideJamReaction(jammed: boolean, reactionRoll: number,
     seeker: SeekerFlags): JamReaction {
     if (!jammed) {
         return { kind: 'none' };
     }
-    let threshold = 0;
-    if (seeker.attackParentIfJammed) {
-        threshold += ATTACK_PARENT_IF_JAMMED_PROBABILITY;
-        if (reactionRoll < threshold) {
-            return { kind: 'retargetParent' };
-        }
+    if (seeker.attackParentIfJammed
+        && reactionRoll < ATTACK_PARENT_IF_JAMMED_PROBABILITY) {
+        return { kind: 'retargetParent' };
     }
+    const fallback = seeker.turnsAwayIfJammed ? 'veerAway' : 'flyStraight';
     if (seeker.decoyedByAsteroids) {
-        threshold += DECOY_RETARGET_PROBABILITY;
-        if (reactionRoll < threshold) {
-            return { kind: 'retargetDecoy' };
-        }
+        return { kind: 'retargetDecoy', fallback };
     }
-    if (seeker.turnsAwayIfJammed) {
-        return { kind: 'veerAway' };
-    }
-    return { kind: 'flyStraight' };
+    return { kind: fallback };
 }
 
+/** A decoy as the decoy query yields it: uuid, its DecoyTargetComponent and
+ * its MovementStateComponent. */
+export type DecoyCandidate =
+    readonly [string, { weight: number }, { position: Position }];
+
 /**
- * Finds the best decoy entity within range of a position, deterministically.
+ * Picks the best decoy within `range` of a position, deterministically.
  * "Best" = highest weight, ties broken by smallest distance, then by uuid for a
- * total order (so resimulation always picks the same decoy). Returns the decoy
- * uuid or undefined.
+ * total order (so resimulation picks the same decoy whatever order `decoys`
+ * comes in). Every asteroid has weight 1, so among rocks this is the nearest.
+ * Returns the decoy uuid or undefined.
  */
-export function findNearestDecoy(entities: Iterable<[string, Entity]>,
-    from: Position): string | undefined {
+export function nearestDecoy(decoys: Iterable<DecoyCandidate>,
+    from: Position, range: number): string | undefined {
+    const rangeSq = range * range;
     let bestId: string | undefined;
     let bestWeight = -Infinity;
     let bestDistSq = Infinity;
-    for (const [id, entity] of entities) {
-        const decoy = entity.components.get(DecoyTargetComponent);
-        if (!decoy) {
-            continue;
-        }
-        const movement = entity.components.get(MovementStateComponent);
-        if (!movement) {
-            continue;
-        }
+    for (const [id, decoy, movement] of decoys) {
         // Position.subtract wraps around the toroidal ±BOUNDARY world, so this
         // is the true shortest-path distance (matching how point defense picks
         // its nearest target).
         const distSq = movement.position.subtract(from).lengthSquared;
-        if (distSq > DECOY_DISTRACTION_RANGE_SQUARED) {
+        if (distSq > rangeSq) {
             continue;
         }
         const weight = decoy.weight;
@@ -366,6 +389,40 @@ export function findNearestDecoy(entities: Iterable<[string, Entity]>,
 }
 
 /**
+ * nearestDecoy over a plain entity map (entities with a DecoyTargetComponent
+ * and a MovementStateComponent), within `range` (default
+ * DECOY_DISTRACTION_RANGE). For tests and tooling; the sim iterates its decoy
+ * query instead.
+ */
+export function findNearestDecoy(entities: Iterable<[string, Entity]>,
+    from: Position, range = DECOY_DISTRACTION_RANGE): string | undefined {
+    const candidates: DecoyCandidate[] = [];
+    for (const [id, entity] of entities) {
+        const decoy = entity.components.get(DecoyTargetComponent);
+        const movement = entity.components.get(MovementStateComponent);
+        if (decoy && movement) {
+            candidates.push([id, decoy, movement]);
+        }
+    }
+    return nearestDecoy(candidates, from, range);
+}
+
+/**
+ * The asteroid that captures a decoyedByAsteroids missile this tick, if any
+ * (rule 4 at the top of this file): only while the missile has a target that
+ * is not itself a decoy (once on a rock it stays there), and only a decoy
+ * within ASTEROID_DECOY_CAPTURE_RANGE. Independent of the jam decision. Pure.
+ */
+export function asteroidCapture(seeker: SeekerFlags,
+    target: string | undefined, targetIsDecoy: boolean, from: Position,
+    decoys: Iterable<DecoyCandidate>): string | undefined {
+    if (!seeker.decoyedByAsteroids || !target || targetIsDecoy) {
+        return undefined;
+    }
+    return nearestDecoy(decoys, from, ASTEROID_DECOY_CAPTURE_RANGE);
+}
+
+/**
  * A guided missile's one, permanent jam decision (see the model at the top of
  * this file), consumed by ProjectileGuidanceSystem every tick:
  * - `track`: not jammed (or retargeted onto its parent or a decoy): steer at
@@ -374,6 +431,8 @@ export function findNearestDecoy(entities: Iterable<[string, Entity]>,
  *   decision (its launch heading).
  * - `veerAway`: jammed turnsAwayIfJammed missile; steer directly away from its
  *   target for the rest of its life.
+ * The one later change: an asteroid capture (rule 4) retargets the missile
+ * onto the rock and sets `track`, jammed or not.
  *
  * Its presence is also the "already decided" mark: MissileJammingSystem rolls
  * only for a guided missile that has a target and no decision yet. It is
@@ -420,51 +479,92 @@ const JammingProvider = ProvideFromCache({
  * pattern as weapon inaccuracy). A fixed count keeps the stream independent of
  * jamming state: adding or removing a jammer never shifts another missile's
  * rolls.
+ *
+ * The same system then runs the per-tick asteroid capture of
+ * decoyedByAsteroids missiles (rule 4; captureByAsteroid), which draws no
+ * random numbers. It runs after the decision so a rock near the launch point
+ * captures the missile on its launch tick, before its first aim.
  */
 export const MissileJammingSystem = new System({
     name: 'MissileJammingSystem',
     args: [MovementStateComponent, TargetComponent, ProjectileDataComponent,
         Optional(JamDecisionComponent), GetEntity, UUID, Entities,
-        RandomResource, SystemInterferenceResource] as const,
+        RandomResource, SystemInterferenceResource, DecoyQuery] as const,
     // No longer reads the clock; TimeSystem stays in `after` so the system
     // order is unchanged. JammingProvider is a #237 pin (shared: *).
     after: [TimeSystem, JammingProvider],
     step(movement, targetRef, projectileData, decision, self, uuid, entities,
-        random, systemInterference) {
-        // Decided once, for life: no re-roll and no re-acquisition.
-        if (decision) {
-            return;
-        }
-        // Only guided missiles with a target can be jammed. Vulnerabilities are
+        random, systemInterference, decoys) {
+        // Only guided missiles can be jammed or decoyed. Vulnerabilities are
         // "ignored if the weapon is not a guided weapon" (Bible).
         if (projectileData.guidance !== 'guided') {
             return;
         }
-        const target = targetRef.target;
-        if (!target) {
-            return;
+        // Decided once, for life: no re-roll and no re-acquisition.
+        if (!decision) {
+            decideJam(movement, targetRef.target, projectileData, self, uuid,
+                entities, random, systemInterference.interference, decoys);
         }
-        const seeker = projectileData.seeker;
-
-        const targetEntity = entities.get(target);
-        const targetJamming = targetEntity?.components.get(JammingComponent);
-        const effJam = effectiveJamming(targetJamming, seeker,
-            systemInterference.interference);
-
-        // Always five draws, in a fixed order (see the system doc).
-        const rolls: [number, number, number, number] = [
-            random.next(), random.next(), random.next(), random.next(),
-        ];
-        const reactionRoll = random.next();
-
-        const jammed = rollMissileJammed(projectileData.jamVulnerabilities,
-            effJam, rolls);
-        const reaction = decideJamReaction(jammed, reactionRoll, seeker);
-        self.components.set(JamDecisionComponent, {
-            steer: applyJamReaction(reaction, self, uuid, movement, entities),
-        });
+        if (projectileData.seeker.decoyedByAsteroids) {
+            captureByAsteroid(movement, projectileData.seeker, self, entities,
+                decoys);
+        }
     },
 });
+
+/**
+ * MissileJammingSystem's one jam decision for a missile with no
+ * JamDecisionComponent yet (see the system doc). Does nothing without a
+ * target.
+ */
+function decideJam(movement: { position: Position },
+    target: string | undefined, projectileData: ProjectileWeaponData,
+    self: Entity, uuid: string, entities: EntityMap, random: Random,
+    interference: number, decoys: Iterable<DecoyCandidate>) {
+    if (!target) {
+        return;
+    }
+    const seeker = projectileData.seeker;
+
+    const targetEntity = entities.get(target);
+    const targetJamming = targetEntity?.components.get(JammingComponent);
+    const effJam = effectiveJamming(targetJamming, seeker, interference);
+
+    // Always five draws, in a fixed order (see the system doc).
+    const rolls: [number, number, number, number] = [
+        random.next(), random.next(), random.next(), random.next(),
+    ];
+    const reactionRoll = random.next();
+
+    const jammed = rollMissileJammed(projectileData.jamVulnerabilities,
+        effJam, rolls);
+    const reaction = decideJamReaction(jammed, reactionRoll, seeker);
+    self.components.set(JamDecisionComponent, {
+        steer: applyJamReaction(reaction, self, uuid, movement, decoys),
+    });
+}
+
+/**
+ * Rule 4 (Seeker 0x0002 without or with jamming): the first tick a rock is
+ * within ASTEROID_DECOY_CAPTURE_RANGE of the missile, and its target is not
+ * already a rock, retarget onto the nearest such rock and track it for good,
+ * whatever the jam decision said. Draws no random numbers.
+ */
+function captureByAsteroid(movement: { position: Position },
+    seeker: SeekerFlags, self: Entity, entities: EntityMap,
+    decoys: Iterable<DecoyCandidate>) {
+    // Read fresh: the jam decision may have just retargeted the missile.
+    const target = self.components.get(TargetComponent)?.target;
+    const targetIsDecoy = target !== undefined
+        && entities.get(target)?.components.has(DecoyTargetComponent) === true;
+    const rock = asteroidCapture(seeker, target, targetIsDecoy,
+        movement.position, decoys);
+    if (!rock) {
+        return;
+    }
+    self.components.set(TargetComponent, { target: rock });
+    self.components.set(JamDecisionComponent, { steer: 'track' });
+}
 
 /**
  * Carries out a missile's reaction: retargets it if the reaction says so, and
@@ -473,7 +573,7 @@ export const MissileJammingSystem = new System({
  */
 export function applyJamReaction(reaction: JamReaction, self: Entity,
     uuid: string, movement: { position: Position },
-    entities: EntityMap): JamSteer {
+    decoys: Iterable<DecoyCandidate>): JamSteer {
     switch (reaction.kind) {
         case 'none':
             return 'track';
@@ -488,13 +588,15 @@ export function applyJamReaction(reaction: JamReaction, self: Entity,
             return 'veerAway';
         }
         case 'retargetDecoy': {
-            const decoy = findNearestDecoy(entities, movement.position);
+            const decoy = nearestDecoy(decoys, movement.position,
+                DECOY_DISTRACTION_RANGE);
             if (decoy) {
                 self.components.set(TargetComponent, { target: decoy });
                 return 'track';
             }
-            // No decoy in range: don't reward the missile with better aim.
-            return 'veerAway';
+            // No rock in the field: the plain jammed behaviour (straight, or
+            // away for turnsAwayIfJammed). Capture can still happen later.
+            return reaction.fallback;
         }
         case 'veerAway':
             return 'veerAway';

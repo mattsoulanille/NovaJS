@@ -12,9 +12,10 @@ import { getDefaultProjectileWeaponData, getDefaultSeekerFlags, SeekerFlags }
     from 'novadatainterface/weapon_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import {
+    ASTEROID_DECOY_CAPTURE_RANGE,
     ATTACK_PARENT_IF_JAMMED_PROBABILITY,
     decideJamReaction,
-    DECOY_RETARGET_PROBABILITY,
+    DECOY_DISTRACTION_RANGE,
     deriveJamming,
     DecoyTargetComponent,
     effectiveJamming,
@@ -217,15 +218,12 @@ describe('the jam threshold J > (100 - V) + r * V', () => {
     });
 });
 
-describe('decideJamReaction (seeker-flag reaction slices)', () => {
+describe('decideJamReaction (seeker-flag reactions)', () => {
     const flags = (over: Partial<SeekerFlags>): SeekerFlags =>
         ({ ...getDefaultSeekerFlags(), ...over });
-    // A reaction roll inside the first (parent) slice / just past each slice.
+    // A reaction roll inside / just past the parent slice.
     const inFirstSlice = ATTACK_PARENT_IF_JAMMED_PROBABILITY / 2;
-    const pastParent = ATTACK_PARENT_IF_JAMMED_PROBABILITY
-        + DECOY_RETARGET_PROBABILITY / 2;
-    const pastBoth = ATTACK_PARENT_IF_JAMMED_PROBABILITY
-        + DECOY_RETARGET_PROBABILITY;
+    const pastParent = ATTACK_PARENT_IF_JAMMED_PROBABILITY;
 
     it('returns none when the missile is not jammed', () => {
         expect(decideJamReaction(false, 0, flags({})).kind).toEqual('none');
@@ -247,28 +245,30 @@ describe('decideJamReaction (seeker-flag reaction slices)', () => {
         });
         expect(decideJamReaction(true, inFirstSlice, all).kind)
             .toEqual('retargetParent');
-        // Past the parent slice but inside the decoy slice.
-        expect(decideJamReaction(true, pastParent, all).kind)
-            .toEqual('retargetDecoy');
-        // Past both retarget slices: falls through to veer.
-        expect(decideJamReaction(true, pastBoth, all).kind)
-            .toEqual('veerAway');
+        // Past the parent slice: the decoy rule, falling back to veer.
+        expect(decideJamReaction(true, pastParent, all))
+            .toEqual({ kind: 'retargetDecoy', fallback: 'veerAway' });
+        expect(decideJamReaction(true, 0.99, all))
+            .toEqual({ kind: 'retargetDecoy', fallback: 'veerAway' });
     });
 
-    it('gives decoy the first slice when the parent flag is unset', () => {
-        const decoyVeer = flags({
-            decoyedByAsteroids: true,
-            turnsAwayIfJammed: true,
-        });
-        expect(decideJamReaction(true, DECOY_RETARGET_PROBABILITY / 2,
-            decoyVeer).kind).toEqual('retargetDecoy');
-        expect(decideJamReaction(true, DECOY_RETARGET_PROBABILITY,
-            decoyVeer).kind).toEqual('veerAway');
+    it('sends every jammed decoyedByAsteroids missile to the decoy rule, whatever the roll', () => {
+        for (const roll of [0, 0.05, 0.1, 0.5, 0.999]) {
+            expect(decideJamReaction(true, roll,
+                flags({ decoyedByAsteroids: true })))
+                .toEqual({ kind: 'retargetDecoy', fallback: 'flyStraight' });
+            expect(decideJamReaction(true, roll, flags({
+                decoyedByAsteroids: true, turnsAwayIfJammed: true,
+            }))).toEqual({ kind: 'retargetDecoy', fallback: 'veerAway' });
+        }
     });
 
-    it('flies straight when a retarget slice misses and turnsAway is unset', () => {
-        expect(decideJamReaction(true, 0.99,
-            flags({ decoyedByAsteroids: true })).kind).toEqual('flyStraight');
+    it('falls back to veer/straight when the parent slice misses and there is no decoy flag', () => {
+        expect(decideJamReaction(true, pastParent,
+            flags({ attackParentIfJammed: true })).kind).toEqual('flyStraight');
+        expect(decideJamReaction(true, pastParent, flags({
+            attackParentIfJammed: true, turnsAwayIfJammed: true,
+        })).kind).toEqual('veerAway');
     });
 
     it('veers away when only turnsAwayIfJammed is set, whatever the reaction roll', () => {
@@ -300,6 +300,15 @@ describe('findNearestDecoy (decoy retargeting selection)', () => {
             ['far', decoyEntity(5000, 0)],
         ]);
         expect(findNearestDecoy(entities, new Position(0, 0))).toBeUndefined();
+    });
+
+    it('takes an explicit range (the asteroid capture range)', () => {
+        const entities = new Map<string, Entity>([
+            ['rock', decoyEntity(ASTEROID_DECOY_CAPTURE_RANGE + 1, 0)],
+        ]);
+        expect(findNearestDecoy(entities, new Position(0, 0),
+            ASTEROID_DECOY_CAPTURE_RANGE)).toBeUndefined();
+        expect(findNearestDecoy(entities, new Position(0, 0))).toEqual('rock');
     });
 
     it('picks the nearest in-range decoy at equal weight', () => {
@@ -371,6 +380,22 @@ function steerOf(world: World, uuid: string) {
         ?.steer;
 }
 
+function targetOf(world: World, uuid: string) {
+    return world.entities.get(uuid)!.components.get(TargetComponent)?.target;
+}
+
+/** The uuid salvo() gives its i-th missile. */
+function missileId(i: number) {
+    return `m${String(i).padStart(3, '0')}`;
+}
+
+/** A stand-in asteroid: a decoy with a position. */
+function makeRock(x: number, y: number) {
+    return new Entity('rock')
+        .addComponent(DecoyTargetComponent, { weight: 1 })
+        .addComponent(MovementStateComponent, movement(x, y));
+}
+
 /** Launches `count` missiles (`m000`, `m001`, ...) at `target` in one tick
  * and returns their decisions. */
 function salvo(world: World, count: number, target: string,
@@ -378,7 +403,7 @@ function salvo(world: World, count: number, target: string,
     seeker: Partial<SeekerFlags> = {}) {
     const ids: string[] = [];
     for (let i = 0; i < count; i++) {
-        const id = `m${String(i).padStart(3, '0')}`;
+        const id = missileId(i);
         world.entities.set(id, makeMissile(target, vuln, seeker));
         ids.push(id);
     }
@@ -490,25 +515,39 @@ describe('MissileJammingSystem (one decision per missile)', () => {
         expect(outcomes(42)).not.toEqual(outcomes(43));
     });
 
-    it('retargets some jammed decoy-vulnerable missiles onto a nearby decoy', () => {
+    it('sends every jammed decoyedByAsteroids missile to the nearest rock in the field', () => {
         const world = makeJammingWorld(1);
-        world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
-        world.entities.set('decoy', new Entity('decoy')
-            .addComponent(DecoyTargetComponent, { weight: 1 })
-            .addComponent(MovementStateComponent, movement(0, 50)));
+        // J 50 against V 100: about half jammed. Rocks beyond the capture
+        // range but inside the field, so only the jammed ones go for them.
+        world.entities.set('ship', makeShip(0, -900, [50, 0, 0, 0]));
+        world.entities.set('rock near', makeRock(0, 600));
+        world.entities.set('rock far', makeRock(0, 800));
         const steers = salvo(world, 200, 'ship', [100, 0, 0, 0],
             { decoyedByAsteroids: true });
-        const decoyed = steers.map((steer, i) => [steer,
-            world.entities.get(`m${String(i).padStart(3, '0')}`)!
-                .components.get(TargetComponent)!.target] as const)
-            .filter(([, target]) => target === 'decoy');
-        // DECOY_RETARGET_PROBABILITY of 200: about 20.
-        expect(decoyed.length).toBeGreaterThan(5);
-        expect(decoyed.length).toBeLessThan(50);
-        // A decoyed missile tracks the decoy; the rest fly straight.
-        expect(decoyed.every(([steer]) => steer === 'track')).toBeTrue();
-        expect(steers.filter(steer => steer === 'flyStraight').length)
-            .toEqual(200 - decoyed.length);
+        const targets = steers.map((_, i) => targetOf(world, missileId(i)));
+        const onRock = targets.filter(target => target === 'rock near').length;
+        // Binomial sd at p = 0.5, n = 200 is about 0.035.
+        expect(onRock).toBeGreaterThan(70);
+        expect(onRock).toBeLessThan(130);
+        // Every missile tracks: on the rock if jammed, on the ship if not.
+        expect(steers.every(steer => steer === 'track')).toBeTrue();
+        expect(targets.filter(target => target === 'ship').length)
+            .toEqual(200 - onRock);
+        expect(targets).not.toContain('rock far');
+    });
+
+    it('flies a jammed decoyedByAsteroids missile straight when no rock is in the field', () => {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
+        world.entities.set('rock', makeRock(0, DECOY_DISTRACTION_RANGE + 10));
+        expect(salvo(world, 20, 'ship', [100, 0, 0, 0],
+            { decoyedByAsteroids: true })
+            .every(steer => steer === 'flyStraight')).toBeTrue();
+        const veer = makeJammingWorld(1);
+        veer.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
+        expect(salvo(veer, 20, 'ship', [100, 0, 0, 0],
+            { decoyedByAsteroids: true, turnsAwayIfJammed: true })
+            .every(steer => steer === 'veerAway')).toBeTrue();
     });
 
     it('retargets some jammed attackParentIfJammed missiles onto their parent', () => {
@@ -585,5 +624,121 @@ describe('MissileJammingSystem (one decision per missile)', () => {
         expect(withJammer.b).toContain('flyStraight');
         expect(withJammer.b).toContain('track');
         expect(withoutJammer.b).toEqual(withJammer.b);
+    });
+});
+
+describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () => {
+    /** Moves an entity (rock or missile) to a new position. */
+    function moveTo(world: World, uuid: string, x: number, y: number) {
+        world.entities.get(uuid)!.components.get(MovementStateComponent)!
+            .position = new Position(x, y);
+    }
+
+    /** One unjammed (V 0) missile at the origin aimed at a ship 900 px off. */
+    function unjammedWorld(seeker: Partial<SeekerFlags>) {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, -900, [0, 0, 0, 0]));
+        world.entities.set('missile',
+            makeMissile('ship', [0, 0, 0, 0], seeker));
+        return world;
+    }
+
+    it('captures an unjammed missile when a rock is within the capture range, on the launch tick', () => {
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.entities.set('rock',
+            makeRock(ASTEROID_DECOY_CAPTURE_RANGE - 1, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock');
+        expect(steerOf(world, 'missile')).toEqual('track');
+    });
+
+    it('does not capture beyond the capture range, and captures the first tick a rock comes within it', () => {
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.entities.set('rock',
+            makeRock(ASTEROID_DECOY_CAPTURE_RANGE + 1, 0));
+        for (let i = 0; i < 30; i++) {
+            world.step();
+            expect(targetOf(world, 'missile')).toEqual('ship');
+        }
+        // The rock drifts (or the missile flies) within range mid-flight.
+        moveTo(world, 'rock', 0, ASTEROID_DECOY_CAPTURE_RANGE - 1);
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock');
+    });
+
+    it('is permanent: the missile stays on its rock whatever comes nearer', () => {
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.entities.set('rock a', makeRock(200, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock a');
+        // A nearer rock, and the first one drifting far away: no switch.
+        world.entities.set('rock b', makeRock(10, 0));
+        moveTo(world, 'rock a', 3000, 0);
+        for (let i = 0; i < 30; i++) {
+            world.step();
+            expect(targetOf(world, 'missile')).toEqual('rock a');
+        }
+    });
+
+    it('picks the nearest rock in range, and breaks a tie by uuid', () => {
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.entities.set('rock far', makeRock(200, 0));
+        world.entities.set('rock z', makeRock(0, 100));
+        world.entities.set('rock a', makeRock(-100, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock a');
+    });
+
+    it('captures a jammed missile flying straight when a rock comes within range later', () => {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
+        world.entities.set('missile', makeMissile('ship', [100, 0, 0, 0],
+            { decoyedByAsteroids: true }));
+        world.step();
+        // No rock anywhere: the plain jammed behaviour.
+        expect(steerOf(world, 'missile')).toEqual('flyStraight');
+        world.entities.set('rock', makeRock(150, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock');
+        expect(steerOf(world, 'missile')).toEqual('track');
+    });
+
+    it('leaves plain and 0x0001 missiles alone, jammed or not', () => {
+        for (const seeker of [{}, { passOverAsteroids: true }]) {
+            const world = makeJammingWorld(1);
+            world.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
+            world.entities.set('rock', makeRock(20, 0));
+            const jammed = salvo(world, 20, 'ship', [100, 0, 0, 0], seeker);
+            for (let i = 0; i < 30; i++) {
+                world.step();
+            }
+            expect(jammed.every(steer => steer === 'flyStraight')).toBeTrue();
+            for (let i = 0; i < 20; i++) {
+                expect(targetOf(world, missileId(i))).toEqual('ship');
+            }
+
+            const cleanWorld = makeJammingWorld(1);
+            cleanWorld.entities.set('ship', makeShip(0, -900, [0, 0, 0, 0]));
+            cleanWorld.entities.set('rock', makeRock(20, 0));
+            const clean = salvo(cleanWorld, 20, 'ship', [100, 0, 0, 0], seeker);
+            for (let i = 0; i < 30; i++) {
+                cleanWorld.step();
+            }
+            expect(clean.every(steer => steer === 'track')).toBeTrue();
+            for (let i = 0; i < 20; i++) {
+                expect(targetOf(cleanWorld, missileId(i))).toEqual('ship');
+            }
+        }
+    });
+
+    it('draws no random numbers for a capture', () => {
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.step();
+        const random = world.resources.get(RandomResource)!;
+        const after = random.getState();
+        world.entities.set('rock', makeRock(100, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock');
+        expect(random.getState()).toEqual(after);
     });
 });

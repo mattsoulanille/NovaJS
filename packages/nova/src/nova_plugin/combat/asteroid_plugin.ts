@@ -366,9 +366,10 @@ export function makeAsteroid(gameData: SimulationGameDataInterface,
         .addComponent(CollisionVulnerabilityComponent, {
             vulnerableTo: new Set(['normal']),
         })
-        // Jammed missiles with the "decoyed by asteroids" seeker flag
-        // retarget onto the nearest decoy (see findNearestDecoy in
-        // jamming_plugin.ts).
+        // Missiles with the "decoyed by asteroids" seeker flag (0x0002)
+        // retarget onto a rock that comes within capture range, and
+        // jammed ones onto the nearest rock in the field (see the model
+        // at the top of jamming_plugin.ts).
         .addComponent(DecoyTargetComponent, { weight: 1 });
 }
 
