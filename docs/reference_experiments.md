@@ -1381,7 +1381,7 @@ and `escorts/recall2/*/` (`hostility-{blue,red}.json` in each).
 | AI 3 tank | The same: 88, 46, 10%, "Shields Down", and it kept attacking to the end of the run. |
 | AI 3 tank, gövt 383 (retreat at 25%), take 1 | Not measured: it moved off at once and the escort gun never reached it (shield 100% in every shot). |
 | AI 3 tank, gövt 383, take 2 (player also has the long-reach Kit Tickler, so the tank is provoked into range), run 1 | Closed in and fought: shield 81, 62, 47, **25%** (23.4 s, still making passes at 101 px), **9%** (27.6 s). By 28 s it was heading away (247 px), off screen from 30 s, and **gone from the system** ("No Target") by 44.5 s. It never came back. |
-| the same, run 2 | Shield 99, 74, 53, **34%** (23.8 s), **18%** (28.2 s), "Shields Down" from 32 s, and it **kept attacking for the whole run** (passes down to 19 px until 134 s), exactly like the AI 3 control. |
+| the same, runs 2-4 | Shields went the same way (run 2: 34% at 23.8 s, 18% at 28.2 s; run 3: 25%, 6%; run 4: 28%, 9%), then "Shields Down", and in **all three it kept attacking for the whole run** (passes down to 12-23 px until 134 s), exactly like the AI 3 control. |
 | AI 3 subject, one tickle | Attacked from about 6 s after the tickle (the shield bar starts dropping) and **kept attacking for the rest of the run: 130 s after one 1-damage shot**. |
 | AI 2 subject, one tickle | The same, 130 s. |
 | AI 1 subject, never fired on | It left without ever coming on screen: targeted until 30.4 s into the recording, "No Target" from 37.1 s, i.e. about 35-40 s after it appeared. Wave 2's tickled AI 1 was gone about 15 s after its tickle (about 24 s into its recording), so leaving is what AI 1 does anyway; being shot at most hurries it a little. |
@@ -1391,18 +1391,22 @@ and `escorts/recall2/*/` (`hostility-{blue,red}.json` in each).
   least two minutes after the player stops: no forgiveness within the
   window measured.
 - Without the gövt 0x0010 flag, neither AI 2 nor AI 3 runs away at any
-  shield level, even with shields gone. With it, one run broke off within
-  about 4 s of passing 25% shield and left the system about 15 s later (as
-  the Bible says), and the other never retreated. So the flag's effect is
-  not deterministic, or the first run left for another reason. Open. The Bible's AI 2 "runs away when
+  shield level, even with shields gone. With it, **one run in four** broke
+  off within about 4 s of passing 25% shield and left the system about
+  15 s later (as the Bible says); the other three fought on with shields
+  down for two minutes. So in this setup the flag mostly does nothing: it
+  may be a per-decision chance, may need something the kit lacks (a
+  friendly planet to retreat to, an armed escort, a lower armor fraction),
+  or the one run left for another reason. The Bible's AI 2 "runs away when
   his attacker is out of range" was not exercised (the player never left).
 
 **NovaJS (e8d0e116).** `N/nova_plugin/npc/npc_decision.ts`:
 - AI 2 (line 409) fights while `oddsFavorable(maxOdds, ...)` holds, else
   flees. With MaxOdds 1000 the odds held here, so no mismatch is shown.
 - AI 3 retreats only with `warshipsRetreatAt25` (line 479), always and
-  at once when shield < 25%. Consistent with the control; the flagged
-  runs split 1-1, so whether the original's retreat is certain is open.
+  at once when shield < 25%. Consistent with the control, but **likely a
+  mismatch** for the flag: the original retreated in 1 of 4 runs. Not
+  changed until the trigger is understood.
 - `npc.aggressor` is only forgotten when the aggressor despawns, is in the
   ship's own flock, or bribes (lines 242-306), so retaliation is
   permanent: **consistent** with "at least 130 s".
@@ -1673,7 +1677,7 @@ Evidence: `~/.local/share/novaref/evidence/20261123-w3-dates/`
 | U9 | Landing and boarding speed/distance gates | **Partly (wave 3).** Landing range for Kit Port is 235-277 px from its centre (NovaJS 100). Boarding: "too fast", "not close enough" (about 46 px) and a sticky "You can't board this ship." Still open: the landing speed gate, whether the range scales with planet size, and boarding with a NON-mission disabled ship (the mission prize was refused). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
 | J leftovers | Jam types 2-4, what InhJam actually does, Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | The jamming model is answered (J-series wave 3). No free wëap ids are left for type 2-4 missiles: retire old kit weapons first. |
-| A leftovers | gövt 0x0010 retreat (1 of 2 runs retreated below 25%: more runs); AI 2 "runs away when the attacker is out of range"; AI 4 provoked; how AI 1 leaves (lands or jumps) | No retreat without the flag and retaliation of 130 s+ answered (A-series wave 3). |
+| A leftovers | gövt 0x0010 retreat (1 of 4 runs retreated below 25%: what triggers it?); AI 2 "runs away when the attacker is out of range"; AI 4 provoked; how AI 1 leaves (lands or jumps) | No retreat without the flag and retaliation of 130 s+ answered (A-series wave 3). |
 | E leftovers | Do escorts with FIXED guns leave formation to shoot? Rear-quadrant turrets? Recall overshoot vs NovaJS frame by frame | Orders in a fight and recall answered (E-fight). |
 | F1n leftovers | Mixed sprite sizes in a fleet; rank order with repeated escort types | Geometry answered (F1n wave 3: same V as player escorts). |
 | R8 leftover | Fullscreen 1920x1080 capture of shops, trade and BBS | Not started (wave 3 ran out of time). |
