@@ -1,0 +1,272 @@
+{
+ "name": "ai_tank",
+ "_comment": "A-series wave 3: flee thresholds. A yellow AI Tank Disc (1000 shield, 30000 armor, 2 Kit Raider Guns) of AI 2 (w3_ai2_tank), AI 3 (w3_ai3_tank) or AI 3 of g\u00f6vt 383 'retreat below 25% shield' (w3_ai3r_tank) appears at Kit Port. The player (Kit Lancer Heavy, one Kit Escort Gun turret, 30 dmg) targets it once, idles 4 s, then holds fire for 60 s (target panel shot every 3 s shows its shield %), then watches 30 s. Analyse with analysis/hostility.mjs --colour yellow.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "keys": "down:Space"
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-00",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-01",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-02",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-03",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-04",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-05",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-06",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-07",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-08",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-09",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-10",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-11",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-12",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-13",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-14",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-15",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-16",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-17",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-18",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "fire-19",
+   "window": true
+  },
+  {
+   "keys": "up:Space"
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-00",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-01",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-02",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-03",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-04",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-05",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-06",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-07",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-08",
+   "window": true
+  },
+  {
+   "wait": 2700
+  },
+  {
+   "shot": "after-09",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,156 @@
+{
+ "name": "u9_dist",
+ "_comment": "U9 wave 3: landing distance gate. Inertialess Kit Crawler 200 (w2_u9c200 without the derelict bit: w3_u9c200) requests landing at Kit Port (`l`), flies out 4 s, turns 180 deg (Turn 30: 2.06 s), then approaches in 0.35 s thrust steps, stopping dead each time and pressing `l`; the first `l` that lands gives the distance (planet offset in the step shots, analysis/blob_offset.mjs).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "l wait 1200"
+  },
+  {
+   "shot": "request",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 4000 up:Up wait 600"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "l wait 1200"
+  },
+  {
+   "shot": "too-far",
+   "window": true
+  },
+  {
+   "keys": "Left@2060 wait 600"
+  },
+  {
+   "shot": "turned",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-00",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-01",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-02",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-03",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-04",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-05",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-06",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-07",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-08",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-09",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-10",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-11",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-12",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 l wait 1300"
+  },
+  {
+   "shot": "step-13",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,127 @@
+{
+ "name": "jam_fire_long",
+ "_comment": "J-series wave 3: jam_fire.json with a 32 s watch after the trigger is released, for the long-life w\u00ebap 382 (30 s) distance series: late hits from missiles that lost lock and re-acquired would land after the direct-flight window. Pilots w3_j{near,mid,far}_j100, w3_j{near,far}_j0.",
+ "pilot": {
+  "as": "novaref-jam"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "aim",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-5s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-10s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-15s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "keys": "up:ctrl"
+  },
+  {
+   "shot": "fire-20s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-6s",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "after-12s",
+   "window": true
+  },
+  {
+   "wait": 8000
+  },
+  {
+   "shot": "after-20s",
+   "window": true
+  },
+  {
+   "wait": 12000
+  },
+  {
+   "shot": "after-32s",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

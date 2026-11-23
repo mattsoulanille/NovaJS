@@ -1,0 +1,193 @@
+{
+ "name": "esc_recall",
+ "_comment": "E-recall wave 3: Kit Lancer (inertialess, stops dead) with two blue disc escorts in Kit Range. Formation for 4 s, `v` (Hold Position), thrust away 2.5 s (about 900 px), stop, wait 3 s, `c` (Formation) and watch 20 s. The `c` keypress is frame-stamped in recording.events.json; analysis/hostility.mjs --colour blue --every 3 gives the escorts' distance per sample. Pilot w3_recall.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "formation",
+   "window": true
+  },
+  {
+   "keys": "v wait 800"
+  },
+  {
+   "keys": "down:Up wait 2500 up:Up"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "held",
+   "window": true
+  },
+  {
+   "keys": "c"
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-00",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-01",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-02",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-03",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-04",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-05",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-06",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-07",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-08",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-09",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-10",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-11",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-12",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-13",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-14",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-15",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-16",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-17",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-18",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "recall-19",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,199 @@
+{
+ "name": "ai_retal",
+ "_comment": "A-series wave 3: how long does retaliation last? The neutral AI Subject Disc (AI 2: w3_ai2_retal, AI 3: w3_ai3_retal) appears at Kit Port; the player (Kit Lancer Heavy: 30000 shield with no recharge, so every hit shows on the shield bar; Kit Tickler only) targets it once, idles 5 s, tickles it once (0.6 s), then never fires again and watches 100 s. Analyse with analysis/hostility.mjs --colour yellow (shield-bar drops = hits).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "idle-0",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Space@600 wait 200"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-00",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-01",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-02",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-03",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-04",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-05",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-06",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-07",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-08",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-09",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-10",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-11",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-12",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-13",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-14",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-15",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-16",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-17",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-18",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "watch-19",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

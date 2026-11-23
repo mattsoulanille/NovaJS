@@ -1,0 +1,165 @@
+{
+ "name": "u9_board",
+ "_comment": "U9 wave 3: boarding distance gate. Kit Prize (immobile, armor 300, booty food + money) appears at Kit Port (m\u00efsn 990). The player (Kit Crawler 200, Kit Escort Gun turret) targets it, shoots it for 5 s (8 hits of 30: armor 300 -> 60, below the 33% disable line, above 0), flies out 3 s, turns 180 deg and approaches in 0.35 s steps pressing `b`. Pilot w3_u9board.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Space@5000 wait 1500"
+  },
+  {
+   "shot": "disabled",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 3000 up:Up wait 600"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "Left@2060 wait 600"
+  },
+  {
+   "shot": "turned",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-00",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-01",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-02",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-03",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-04",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-05",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-06",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-07",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-08",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-09",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-10",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-11",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-12",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up wait 500 b wait 1300"
+  },
+  {
+   "shot": "step-13",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

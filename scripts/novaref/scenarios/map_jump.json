@@ -1,0 +1,211 @@
+{
+ "name": "map_jump",
+ "_comment": "M2 wave 3: does the `h` minimap show itself during a real jump? Pilot w2_map at Map Hub: open the map, Tab to the first neighbour (single-jump route), close the map with `m`, fly out 2 s, press `j`, and shoot every 0.7 s through the jump.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "route",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 2000 up:Up wait 500"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "keys": "j"
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-00",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-01",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-02",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-03",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-04",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-05",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-06",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-07",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-08",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-09",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-10",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-11",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-12",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-13",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-14",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-15",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-16",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-17",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-18",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-19",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-20",
+   "window": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "jump-21",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

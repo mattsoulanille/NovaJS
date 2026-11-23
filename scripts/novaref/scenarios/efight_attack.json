@@ -1,0 +1,196 @@
+{
+ "name": "efight_attack",
+ "_comment": "E-fight wave 3: as efight_formation, but the player targets the nearest hostile (`r`) and gives `f` (Attack) 6 s after arrival, then re-targets with `r` every 12 s.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "arrive",
+   "window": true
+  },
+  {
+   "keys": "r wait 300 f wait 300"
+  },
+  {
+   "shot": "attack",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-a-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-a-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-a-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-a-03",
+   "window": true
+  },
+  {
+   "keys": "r wait 300"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-b-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-b-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-b-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-b-03",
+   "window": true
+  },
+  {
+   "keys": "r wait 300"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-c-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-c-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-c-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-c-03",
+   "window": true
+  },
+  {
+   "keys": "r wait 300"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-d-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-d-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-d-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-d-03",
+   "window": true
+  },
+  {
+   "keys": "r wait 300"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-e-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-e-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-e-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-e-03",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

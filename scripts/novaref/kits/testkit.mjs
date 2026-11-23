@@ -284,8 +284,105 @@ export default {
 
         ...a14Resources(),
         ...wave2Resources(),
+        ...wave3Resources(),
     ],
 };
+
+/**
+ * Wave-3 experiments (docs/reference_experiments.md). Id budget note: a
+ * pilot can only name wëap <= 383 and oütf <= 639, and düde ids stop at
+ * 639 (Max Dude Types 512), so this wave uses the last free ones.
+ *
+ *  J   wëap 382 JamM V100 Long: wëap 375 with a 30 s life (duration 900),
+ *      for the distance series; oütf 624 its launcher. wëap 383 JamM
+ *      TurnAway Long: the same with Seeker 0x0010; oütf 625.
+ *      sÿst 2150 Kit Jam Near (spöb 2150 port at 0,0; 2151 marker at 450,0)
+ *      and 2151 Kit Jam Far (spöb 2152 port; 2153 marker at 1800,0), both
+ *      owned by neutral 363. mïsn 982/983 (bits 9023/9024) put a J100
+ *      target on the marker (ShipStart -2 = nav default 2); 984/985 (9025/
+ *      9026) a J0 target at far/near.
+ *      gövt 364 Kit Jam Govt (InhJam1 100) and düde 635, a J0 target hull of
+ *      that govt; mïsn 986 (bit 9027) puts it at Kit Market (900 px).
+ *  A   shïp 762 AI Tank Disc: the yellow AI Subject Disc with 30000 armor, so
+ *      a player gun strips its 1000 shield without disabling it. düde 636 AI 2
+ *      (govt 363), 637 AI 3 of gövt 383 (retreat below 25% shield), 638 AI 3
+ *      (govt 363); mïsn 987-989 (bits 9028-9030) at Kit Port (ShipStart -1).
+ *      shïp 763 Kit Lancer Heavy: player hull, inertialess, 30000 shield and
+ *      armor with no recharge, so every hit shows on the shield bar.
+ *  E   shïp 764 Kit Disc Blue Armed (blue disc, 2 Kit Escort Guns, EscortType 2)
+ *      for hired escorts; sÿst 2153 Kit Fight Range (owner 363, spöb 2154
+ *      Kit Fight Port) spawns red always-attacks warships (düde 612).
+ *  F1n flët 300 Kit Disc Fleet 2 (lead 720 white, one each of 721-724,
+ *      govt 363). sÿst DudeTypes name fleets as -128..-383, and sÿst 2128
+ *      Kit Fleet Range now places it as -300.
+ *  U9  shïp 765 Kit Prize (immobile, shield 0, armor 300, crew 1); düde 639
+ *      (AI 1, govt 363, booty 0x0041 food + money); mïsn 990 (bit 9031) at
+ *      Kit Port.
+ *  M5  sÿst 2154-2156 of Major Blue (380), unlinked and 100 map units apart:
+ *      2154 Map B Inhab (landable stellar; leave it unexplored),
+ *      2155 Map B Empty (no stellar; explore it), 2156 Map B Unland
+ *      (unlandable stellar; explore it).
+ */
+function wave3Resources() {
+    const out = [];
+    out.push(weap(382, "JamM V100 Long", 134, {
+        reload: 15, duration: 900, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: 0, jamVuln: [100, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
+    }));
+    out.push(gun(624, "JamM Launcher 382", 382));
+    // The same with Seeker 0x0010 (turns away if jammed): does its loss grow
+    // with flight time (a per-frame roll) or not (one roll per missile)?
+    out.push(weap(383, "JamM TurnAway Long", 134, {
+        reload: 15, duration: 900, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: 0x0010, jamVuln: [100, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
+    }));
+    out.push(gun(625, "JamM Launcher 383", 383));
+    const marker = (id, name, x) => spob(id, name, x, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] });
+    out.push(system(2150, "Kit Jam Near", -960, -620, 363, [2150, 2151]),
+        spob(2150, "Kit Jam Near Port", 0, 0, 138, { flags: 0x43 }), marker(2151, "Kit Jam Near Marker", 450));
+    out.push(system(2151, "Kit Jam Far", -990, -620, 363, [2152, 2153]),
+        spob(2152, "Kit Jam Far Port", 0, 0, 138, { flags: 0x43 }), marker(2153, "Kit Jam Far Marker", 1800));
+    const tgt = (id, name, bit, stel, dudeId) =>
+        misn(id, name, bit, { availStel: stel, shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart: -2 });
+    out.push(...tgt(982, "Kit J near J100", 9023, 2150, 619), ...tgt(983, "Kit J far J100", 9024, 2152, 619),
+        ...tgt(984, "Kit J far J0", 9025, 2152, 615), ...tgt(985, "Kit J near J0", 9026, 2150, 615));
+    out.push(govt(364, "Kit Jam Govt", { inhJam: [100, 0, 0, 0] }));
+    out.push(dude(635, "Jam Target InhJam", 1, 364, 732));
+    out.push(...tgt(986, "Kit J InhJam100", 9027, 2100, 635));
+    out.push(...discShip(762, "AI Tank Disc", 1977, DISC_COLOURS.yellow, {
+        armor: 30000, shield: 1000, accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [367, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 1, strength: 50, crew: 10, flags: 0, flags2: 0,
+    }));
+    out.push(dude(636, "AI Tank 2", 2, 363, 762), dude(637, "AI Tank 3 retreat", 3, 383, 762), dude(638, "AI Tank 3", 3, 363, 762));
+    [[987, 9028, 636], [988, 9029, 637], [989, 9030, 638]].forEach(([id, bit, d]) =>
+        out.push(...misn(id, `Kit AI tank ${d}`, bit, { shipCount: 1, shipDude: d, shipGoal: -1, shipBehav: -1, shipStart: -1 })));
+    out.push(...ship(763, "Kit Lancer Heavy", 135, { accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8 }));
+    out.push(...discShip(764, "Kit Disc Blue Armed", 1978, DISC_COLOURS.blue, {
+        accel: 600, speed: 600, turn: 60, armor: 4000, shield: 4000, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [365, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+        ai: 3, strength: 100, crew: 20, flags: 0, flags2: 0, escortType: 2, cost: 10000,
+    }));
+    const fight = system(2153, "Kit Fight Range", -1020, -620, 363, [2154]);
+    fight.set = { ...fight.set, dudes: [612, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 };
+    out.push(fight, spob(2154, "Kit Fight Port", 0, 0, 138, { flags: 0x43 }));
+    out.push({
+        type: "flët", id: 300, name: "Kit Disc Fleet 2", clone: "flët:128",
+        set: {
+            "@0:i16": 720, "@2:i16x4": [721, 722, 723, 724], "@10:i16x4": [1, 1, 1, 1], "@18:i16x4": [1, 1, 1, 1],
+            "@26:i16": 363, "@28:i16": 2128, "@30:str256": "", "@286:i16": -1, "@288:u16": 0,
+        },
+    });
+    out.push(...ship(765, "Kit Prize", 136, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1, cost: 50000 }));
+    const prize = dude(639, "Kit Prize", 1, 363, 765);
+    prize.set = { ...prize.set, flags: 0x0041 };
+    out.push(prize, ...misn(990, "Kit U9 prize", 9031, { shipCount: 1, shipDude: 639, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    [[2154, "Map B Inhab", -800, 280, true], [2155, "Map B Empty", -700, 280, false], [2156, "Map B Unland", -600, 280, "unlandable"]]
+        .forEach(([id, name, x, y, port]) => {
+            out.push(system(id, name, x, y, 380, port ? [id + 1] : []));
+            if (port) out.push(spob(id + 1, `${name} Port`, 0, 0, 138, { flags: port === "unlandable" ? 0x02 : 0x43 }));
+        });
+    return out;
+}
 
 /**
  * Wave-2 experiments (docs/reference_experiments.md):
@@ -296,8 +393,8 @@ export default {
  *      shïp 714 Kit Derelict; düde 610; mïsn 970 (bit 9011) puts one at
  *      Kit Port (ShipStart -1). shïp 715-718 Kit Crawler 50/100/150/200:
  *      inertialess player hulls of known top speed for the boarding gate.
- *  F1n flët 1000 Kit Disc Fleet (lead 720 white, one each of 721-724) of
- *      govt 363, linked to sÿst 2128 Kit Fleet Range (no other traffic).
+ *  F1n sÿst 2128 Kit Fleet Range (govt 363). Wave 2's flët 1000 never
+ *      spawned and was removed in wave 3 (see wave3Resources, flët 300).
  *  K9  sÿst 2129 Kit IFF Range (owner 370): AI 1 green discs (722) and AI 3
  *      red warships (730) of always-hostile govt 362; AI 1 blue discs (723)
  *      and AI 3 magenta discs (725, armed) of 370, hostile by record.
@@ -449,19 +546,16 @@ function wave2Resources() {
     // with avgShips 0 never spawned it). 2133 Kit Fleet Gate is linked, so
     // a pilot can also jump in and have the system populated on arrival.
     const fleetRange = system(2128, "Kit Fleet Range", -900, -700, 363, [2128, 2130]);
-    fleetRange.set = { ...fleetRange.set, avgShips: 6, links: [2133, ...none16.slice(1)] };
+    // Wave 3: sÿst DudeTypes name fleets as -128..-383 (Bible), so the
+    // system now places flët 300 (wave3Resources). Wave 2's flët 1000 is
+    // gone: its id is past Max Fleets (256, ids 128-383) and it never spawned.
+    fleetRange.set = { ...fleetRange.set, avgShips: 6, links: [2133, ...none16.slice(1)],
+        dudes: [-300, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)] };
     const fleetGate = system(2133, "Kit Fleet Gate", -880, -700, 363, [2133]);
     fleetGate.set = { ...fleetGate.set, links: [2128, ...none16.slice(1)] };
     out.push(fleetRange, fleetGate, spob(2133, "Kit Fleet Gate Port", 0, 0, 138, { flags: 0x43 }));
     out.push(spob(2128, "Kit Fleet Port", 0, 0, 138, { flags: 0x43 }));
     out.push(spob(2130, "Kit Fleet Market", 1200, 0, 138, { flags: 0x43 }));
-    out.push({
-        type: "flët", id: 1000, name: "Kit Disc Fleet", clone: "flët:128",
-        set: {
-            "@0:i16": 720, "@2:i16x4": [721, 722, 723, 724], "@10:i16x4": [1, 1, 1, 1], "@18:i16x4": [1, 1, 1, 1],
-            "@26:i16": 363, "@28:i16": 2128, "@30:str256": "", "@286:i16": -1, "@288:u16": 0,
-        },
-    });
 
     out.push(system(2129, "Kit IFF Range", -900, -660, 370, [2131]));
     out.push(spob(2131, "Kit IFF Port", 0, 0, 138, { flags: 0x43 }));

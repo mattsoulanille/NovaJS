@@ -1,0 +1,177 @@
+{
+ "name": "efight_formation",
+ "_comment": "E-fight wave 3: the player (Kit Lancer, idle, never fires) with two armed blue disc escorts (sh\u00efp 764) in Kit Fight Range, where red always-attacks warships (d\u00fcde 612) arrive. Escorts left on their default order (Formation) for 60 s. Pilot w3_efight. Analyse with analysis/hostility.mjs --colour blue / red.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "shot": "arrive",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-12",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-13",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-14",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-15",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-16",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-17",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-18",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "obs-19",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

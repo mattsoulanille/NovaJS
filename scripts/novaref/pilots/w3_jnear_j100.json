@@ -1,0 +1,30 @@
+{
+  "name": "novaref-jnear_j100",
+  "edits": {
+    "ship": 703,
+    "stellar": 2150,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2,
+      "2150": 2
+    },
+    "missionBits": {
+      "9023": true
+    },
+    "weapons": {
+      "128": 0,
+      "382": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "624": 1
+    },
+    "nickname": "Probe",
+    "shipName": "jnear_j100"
+  }
+}

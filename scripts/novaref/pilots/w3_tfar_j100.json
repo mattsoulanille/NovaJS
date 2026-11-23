@@ -1,0 +1,30 @@
+{
+  "name": "novaref-tfar_j100",
+  "edits": {
+    "ship": 703,
+    "stellar": 2152,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2,
+      "2151": 2
+    },
+    "missionBits": {
+      "9024": true
+    },
+    "weapons": {
+      "128": 0,
+      "383": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "625": 1
+    },
+    "nickname": "Probe",
+    "shipName": "tfar_j100"
+  }
+}

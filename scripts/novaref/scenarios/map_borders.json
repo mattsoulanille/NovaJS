@@ -1,0 +1,50 @@
+{
+ "name": "map_borders",
+ "_comment": "M5 wave 3: one factor per system. Pilot w3_map (w2_map plus 2155 Map B Empty and 2156 Map B Unland explored; 2154 Map B Inhab left unexplored). Open the map, turn on Show Borders, shoot.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "click": [
+    191,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "borders",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  }
+ ],
+ "pull": true
+}
