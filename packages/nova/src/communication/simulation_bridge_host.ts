@@ -39,6 +39,7 @@ import { SimulationBridgeHostApi, SimulationStatus } from "./simulation_bridge_a
 import { DeltaFrameEncoder, SimulationFrame } from "./simulation_frame.js";
 import { RoomClock } from "./room_clock.js";
 import { inputThroughWire } from "./wire_schemas.js";
+import { takeTickInputs } from "./tick_inputs.js";
 
 
 /**
@@ -158,8 +159,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private eventsForwardedThrough = -1;
     private frameEncoder = new DeltaFrameEncoder();
     private rollback: RollbackSimulation<InputRecord[]>;
-    /** Inputs that apply at the next stepped tick. */
+    /** Inputs that apply at the next stepped tick (or, for what
+     * takeTickInputs holds back, a later one). */
     private pendingInputs: SimulationInput[] = [];
+    /**
+     * The tick of this peer's latest record on the current timeline.
+     * Each record goes on a later tick than the one before it: what
+     * takeTickInputs held back from a record must reach the room on a
+     * tick of its own even while catching up, when the room clock that
+     * stamps records stands still for a whole burst of steps.
+     */
+    private lastRecordTick = -Infinity;
     /**
      * Remote peers' input records, relayed by the server. Buffered
      * here until per-peer input application lands (Phase 3 step 3).
@@ -521,7 +531,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.scheduleReinsertions();
         this.integrateRemoteInputs();
         for (let i = 0; i < count; i++) {
-            if (this.pendingInputs.length > 0) {
+            // One tick's share of the queue: a press and its release
+            // (a quick tap) never share a record, nor do two presses of
+            // one key (tick_inputs.ts); the rest waits for the next tick.
+            const { now: inputs, later } = takeTickInputs(this.pendingInputs);
+            this.pendingInputs = later;
+            if (inputs.length > 0) {
                 // Never stamp inputs behind the room's clock: the
                 // relay would retime them for everyone but us — a
                 // guaranteed divergence. While catching up (join,
@@ -531,7 +546,9 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // this is a no-op.
                 const estimated = this.roomClock.estimatedServerTick();
                 const tick = Math.max(this.rollback.tick + 1,
-                    estimated === undefined ? 0 : Math.ceil(estimated) + 1);
+                    estimated === undefined ? 0 : Math.ceil(estimated) + 1,
+                    this.lastRecordTick + 1);
+                this.lastRecordTick = tick;
                 const communicator = this.world.resources.get(CommunicatorResource);
                 const peerId = communicator?.uuid;
                 const record: InputRecord = {
@@ -542,14 +559,13 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                     // ids (scheduled before a reconnect landed) is
                     // re-stamped to the id the record goes out under:
                     // the room applies it under that id, and so must we.
-                    inputs: peerId === undefined ? this.pendingInputs
-                        : this.pendingInputs.map(
+                    inputs: peerId === undefined ? inputs
+                        : inputs.map(
                             input => this.restampInput(input, peerId)),
                 };
                 this.addRecord(tick, record);
                 this.sentRecords.set(record.seq!, tick);
                 this.publishInputs(record);
-                this.pendingInputs = [];
             }
             this.rollback.step();
         }
@@ -632,6 +648,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // log (retimed where the relay retimed them);
                 // in-flight echoes must not move anything.
                 this.sentRecords.clear();
+                // A new timeline: the room clock stamps from here.
+                this.lastRecordTick = -Infinity;
                 // The reply carries the relay's clock: seed the
                 // estimate now rather than waiting up to a second
                 // for the first periodic tickSync. Without this,
@@ -1560,6 +1578,9 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         const rewound = this.rollback.rewindTo(this.rollback.tick - ticks);
         if (rewound) {
             this.logRollbackEvent('rewind', { ticks });
+            // The discarded future's records are gone with it.
+            this.lastRecordTick = Math.min(this.lastRecordTick,
+                this.rollback.tick);
             // Queued events from the discarded future name ticks that
             // no longer exist; and the re-lived timeline's events
             // should fire afresh (time travel re-lives them), so the
