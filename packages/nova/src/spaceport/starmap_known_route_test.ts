@@ -109,20 +109,43 @@ describe('the star map plots routes through explored systems only', () => {
             expect(map.getRouteState().single).toBe(thessaly);
             expect(map.getEffectiveRoute()).toEqual([thessaly]);
             expect(changes).toBe(1);
-            // Clicking it again un-picks it, as on the full map.
+            // Clicking it again keeps it picked: in the original a
+            // ctrl-click on the already-picked WSW left "Hyperspace Map
+            // WSW" on the status bar (reference_experiments M1-M3).
             map.clickSystem(thessaly);
-            expect(map.hasRoute).toBeFalse();
+            expect(map.getEffectiveRoute()).toEqual([thessaly]);
+            expect(changes).toBe(1);
         });
 
-        it('does nothing on shift-click', () => {
+        it('treats shift-click as a plain click', () => {
+            // The original picked WSW on a shift-click exactly as on a
+            // plain one: no multi-jump pins from the minimap.
             const map = graph([ossory, thessaly, kestrel], true);
-            let changes = 0;
-            map.routeChanged.subscribe(() => changes++);
-            for (const id of [thessaly, kestrel, vael]) {
-                map.clickSystem(id, true);
-            }
-            expect(map.hasRoute).toBeFalse();
-            expect(changes).toBe(0);
+            map.clickSystem(thessaly, true);
+            expect(map.getRouteState()).toEqual(
+                { pinned: [], single: thessaly });
+            expect(map.getEffectiveRoute()).toEqual([thessaly]);
+        });
+
+        it('clears the destination on a drag that starts on the current '
+            + 'system', () => {
+                const map = graph([ossory, thessaly], true);
+                map.clickSystem(thessaly);
+                let changes = 0;
+                map.routeChanged.subscribe(() => changes++);
+                // A drag from anywhere else does nothing.
+                map.dragFromSystem(thessaly);
+                expect(map.getEffectiveRoute()).toEqual([thessaly]);
+                map.dragFromSystem(ossory);
+                expect(map.hasRoute).toBeFalse();
+                expect(changes).toBe(1);
+            });
+
+        it('does not clear the full map\'s route on a drag', () => {
+            const map = graph([ossory, thessaly], false);
+            map.clickSystem(thessaly);
+            map.dragFromSystem(ossory);
+            expect(map.getEffectiveRoute()).toEqual([thessaly]);
         });
 
         it('ignores a click on anything but a neighbour', () => {

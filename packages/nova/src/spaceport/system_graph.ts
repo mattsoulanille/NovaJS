@@ -107,13 +107,15 @@ export interface SystemGraphOptions {
     discoveryOf?: (systemId: string) => DiscoveryLevel;
     /**
      * The in-flight hyperspace minimap (`h`, mini_map.ts) instead of the
-     * full map. A glance, not a planner: a plain click on a neighbour of
-     * the current system toggles the single-jump pick exactly as on the
-     * full map, and NOTHING else responds — shift-click does nothing (no
-     * multi-jump editing), clicking a non-neighbour inspects nothing (there
-     * is no properties column), and the view cannot be dragged or zoomed.
-     * The current system is marked by its cyan centre alone, as in
-     * mini_map.png, without the full map's dashed ring.
+     * full map. A glance, not a planner (reference_experiments M1-M3): a
+     * click on a neighbour of the current system picks it as the single
+     * next jump — shift and ctrl change nothing (no multi-jump editing),
+     * and clicking the pick again keeps it — and a drag that starts on the
+     * current system clears the route. Nothing else responds: clicking a
+     * non-neighbour inspects nothing (there is no properties column), and
+     * the view cannot be dragged or zoomed. The current system is marked
+     * by its cyan centre alone, as in mini_map.png, without the full map's
+     * dashed ring.
      */
     miniMap?: boolean;
 }
@@ -252,6 +254,12 @@ export class SystemGraph {
                 }
             },
             tap: (x, y, shiftKey) => this.onTap(x, y, shiftKey),
+            dragStart: (x, y) => {
+                const system = this.systemAt(x, y);
+                if (system) {
+                    this.onDragFromSystem(system.id);
+                }
+            },
         });
 
         this.links = knownLinks(this.systems, this.discoveryOf);
@@ -519,13 +527,44 @@ export class SystemGraph {
         }
     }
 
+    /**
+     * Whether a pane-local point (the graph container's coordinates) is
+     * within clicking distance of a drawn system — where the hidden
+     * minimap still takes clicks (mini_map.ts).
+     */
+    hasSystemAt(viewX: number, viewY: number): boolean {
+        return this.systemAt(viewX, viewY) !== undefined;
+    }
+
+    /**
+     * Acts as if the player began dragging on `systemId`: the same rule as
+     * a pointer drag that started on it. For headless driving and specs;
+     * ignored for a system not on this map.
+     */
+    dragFromSystem(systemId: string) {
+        if (this.systems.has(systemId)) {
+            this.onDragFromSystem(systemId);
+        }
+    }
+
+    private onDragFromSystem(system: string) {
+        // On the minimap, a drag that starts on the current system drops
+        // the destination ("No Destination" in the original); the full map
+        // pans instead.
+        if (this.miniMap && this.samePlace(system, this.currentSystem)
+            && this.hasRoute) {
+            this.clearRoute();
+        }
+    }
+
     private onClickSystem(system: string, shiftKey: boolean) {
         if (this.miniMap) {
             // The minimap only ever picks the single next jump (see
-            // SystemGraphOptions.miniMap): shift-click is ignored outright.
-            if (!shiftKey && adjacentSystems(this.adj, this.currentSystem)
-                .includes(system)) {
-                this.single = this.single === system ? undefined : system;
+            // SystemGraphOptions.miniMap), whatever modifier is held.
+            if (system !== this.single
+                && adjacentSystems(this.adj, this.currentSystem)
+                    .includes(system)) {
+                this.single = system;
                 this.routeChanged.next();
                 this.drawRoute();
             }

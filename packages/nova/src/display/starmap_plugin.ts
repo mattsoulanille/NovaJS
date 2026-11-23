@@ -5,6 +5,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { EcsEvent } from 'nova_ecs/events';
 import { Subscription } from 'rxjs';
 import { Component } from 'nova_ecs/component';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import {
     DisplayAssetDataResource, SimulationGameDataResource, ControlsSubject, SystemIdResource,
@@ -24,7 +25,7 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { emptyRouteState } from '../spaceport/route.js';
 import { OpenStarmapOptions, RouteStateStore, Starmap } from '../spaceport/starmap.js';
 import {
-    MINI_MAP_PANE, MINI_MAP_ZOOM, MiniMap, miniMapPosition,
+    MINI_MAP_PANE, MINI_MAP_ZOOM, MiniMap, MiniMapPeek, miniMapPosition,
 } from '../spaceport/mini_map.js';
 import type { SystemGraph } from '../spaceport/system_graph.js';
 import { DockedShipResource } from './docked_ship.js';
@@ -48,10 +49,12 @@ export interface DiscoveryHooks {
 
 /** The `window.novaMiniMap` levers (see window_hooks.ts). */
 export interface MiniMapHooks {
-    /** Toggles the minimap, exactly as the `h` key does in flight. */
-    toggle(): void;
-    readonly open: boolean;
-    /** The graph on show (to click systems on), once built. */
+    /** Presses `h`: shows the minimap for its 2.2 s peek, exactly as the
+     * key does in flight. */
+    press(): void;
+    /** Whether a peek is running (on screen, unless something modal is). */
+    readonly shown: boolean;
+    /** The graph it shows (to click systems on), once built. */
     graph(): SystemGraph | undefined;
 }
 
@@ -79,14 +82,16 @@ export const OpenStarmapResource =
 const persistentRouteStore: RouteStateStore = { state: emptyRouteState() };
 
 /**
- * Whether the player has the `h` hyperspace minimap up. Module-level for
- * the same reason as {@link persistentRouteStore}: the display world is
- * rebuilt at every jump, and a minimap that was open on departure is open
- * on arrival — the reference capture (mini_map.png) shows it up, centred
- * on the new system, with the "Jumping into the Tau Ceti system" line
- * still on screen.
+ * When the `h` minimap's current peek ends (spaceport/mini_map.ts), on the
+ * display clock — epoch-based wall time, so it carries over a display-world
+ * rebuild. Module-level for the same reason as {@link persistentRouteStore}:
+ * a peek still running when the world is rebuilt for the next system runs
+ * its remainder there rather than being cut off. Whether the original
+ * shows the minimap by itself during a jump (the reference capture
+ * mini_map.png has it up with "Jumping into the Tau Ceti system" on screen)
+ * is untested, so nothing here shows it for one.
  */
-let miniMapOpen = false;
+const miniMapPeek: MiniMapPeek = { until: -Infinity };
 
 /** The in-flight minimap's per-world state, refreshed every frame. */
 interface MiniMapState {
@@ -97,10 +102,11 @@ interface MiniMapState {
 const MiniMapResource = new Resource<MiniMapState>('MiniMap');
 
 /**
- * Keeps the minimap's visibility and place current: shown only while it
- * is toggled on, has a map to show, and nothing modal is up — a landed
- * screen, or the full map in flight, owns the screen (and the keyboard)
- * then; and anchored beside the status bar at whatever size the window is.
+ * Keeps the minimap's visibility and place current: usable (drawn during
+ * a peek, clickable between peeks) only while it has a map to show and
+ * nothing modal is up — a landed screen, or the full map in flight, owns
+ * the screen (and the keyboard) then; and anchored beside the status bar
+ * at whatever size the window is.
  */
 const DrawMiniMap = new System({
     name: 'DrawMiniMap',
@@ -288,9 +294,7 @@ export const StarmapPlugin: Plugin = {
                 }
                 commitRoute(route);
                 // The full map may have changed the route the minimap shows.
-                if (miniMapOpen) {
-                    void refreshMiniMap();
-                }
+                void refreshMiniMap();
                 return route;
             } finally {
                 opening = false;
@@ -325,11 +329,13 @@ export const StarmapPlugin: Plugin = {
             world.emit(SetJumpRouteEvent, { route });
         };
 
-        // The `h` hyperspace minimap (spaceport/mini_map.ts).
-        const miniMap = new MiniMap();
+        // The `h` hyperspace minimap (spaceport/mini_map.ts). Built with
+        // the world, not on the first `h`: its hidden area takes clicks.
+        const miniMap = new MiniMap(
+            () => world.resources.get(TimeResource)?.time ?? 0, miniMapPeek);
         stage.addChild(miniMap.container);
         /** Rebuilds the minimap's graph from the galaxy and route as they
-         * stand now. Cheap enough per toggle: only the drawn systems. */
+         * stand now. Cheap enough per `h`: only the drawn systems. */
         let miniMapBuild = 0;
         const refreshMiniMap = async () => {
             const build = ++miniMapBuild;
@@ -341,8 +347,8 @@ export const StarmapPlugin: Plugin = {
                 console.warn('Minimap failed to build:', e);
                 return;
             }
-            // Closed, superseded or torn down while the data loaded.
-            if (disposed || !miniMapOpen || build !== miniMapBuild) {
+            // Superseded or torn down while the data loaded.
+            if (disposed || build !== miniMapBuild) {
                 graph?.container.destroy({ children: true });
                 return;
             }
@@ -352,23 +358,28 @@ export const StarmapPlugin: Plugin = {
             persistentRouteStore.state = graph.getRouteState();
             commitRoute(graph.getEffectiveRoute());
         });
-        const toggleMiniMap = () => {
-            miniMapOpen = !miniMapOpen;
-            if (miniMapOpen) {
-                void refreshMiniMap();
-            } else {
-                miniMapBuild++;
-                miniMap.setGraph(undefined);
-            }
+        /** `h`: a 2.2 s peek, over a map rebuilt so it shows the mission
+         * marks and discoveries of right now. */
+        const pressMiniMap = () => {
+            miniMap.peek();
+            void refreshMiniMap();
         };
+        // The graph built with the world may predate the player's ship
+        // reaching the display world (no control bits, no missions yet);
+        // rebuilt once it is here, so the hidden map's clicks are on the
+        // systems the player can really see.
+        let builtForPlayer = false;
         world.resources.set(MiniMapResource, {
             miniMap,
             update() {
+                if (!builtForPlayer
+                    && playerComponent(world, ControlBitsComponent)) {
+                    builtForPlayer = true;
+                    void refreshMiniMap();
+                }
                 const docked = world.resources.get(DockedShipResource)
                     ?.current !== undefined;
-                miniMap.container.visible = miniMapOpen
-                    && miniMap.current !== undefined
-                    && MenuControls.focused === undefined && !docked;
+                miniMap.update(MenuControls.focused === undefined && !docked);
                 if (!miniMap.container.visible) {
                     return;
                 }
@@ -379,15 +390,13 @@ export const StarmapPlugin: Plugin = {
             },
         });
         world.addSystem(DrawMiniMap);
-        if (miniMapOpen) {
-            void refreshMiniMap();
-        }
+        void refreshMiniMap();
         // Debug/headless-driving handle (window_hooks.ts).
         if (typeof window !== 'undefined') {
             window.novaMiniMap = {
-                toggle: toggleMiniMap,
-                get open() {
-                    return miniMapOpen;
+                press: pressMiniMap,
+                get shown() {
+                    return miniMap.showing;
                 },
                 graph: () => miniMap.current,
             };
@@ -402,7 +411,7 @@ export const StarmapPlugin: Plugin = {
                     || world.resources.get(DockedShipResource)?.current) {
                     return;
                 }
-                toggleMiniMap();
+                pressMiniMap();
                 return;
             }
             if (action !== 'map' || state !== 'start') {

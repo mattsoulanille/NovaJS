@@ -13,6 +13,9 @@ export interface MapPointerHandlers {
     zoomAt(factor: number, x: number, y: number): void;
     /** A click (not the end of a drag) at the pane-local point (x, y). */
     tap(x: number, y: number, shiftKey: boolean): void;
+    /** A gesture became a drag; (x, y) is where it was pressed, pane-local.
+     * Once per gesture, before its first `pan`. */
+    dragStart?(x: number, y: number): void;
 }
 
 /**
@@ -32,6 +35,9 @@ export function bindMapPointer(container: PIXI.Container,
     // drag used to swallow the tap (click once, nothing; click again without
     // moving, it registers), which the tracker's deadzone fixes.
     const drag = new DragTracker();
+    /** The current gesture's press point, pane-local, until it is reported
+     * as a drag. */
+    let pressedAt: { x: number, y: number } | undefined;
 
     container.eventMode = 'static';
     container.hitArea = new PIXI.Rectangle(0, 0, size.x, size.y);
@@ -39,10 +45,17 @@ export function bindMapPointer(container: PIXI.Container,
 
     const onDragStart = (event: PIXI.FederatedPointerEvent) => {
         drag.down(event.pointerId, event.global.x, event.global.y);
+        const local = event.getLocalPosition(container);
+        pressedAt = { x: local.x, y: local.y };
     };
     const onDragMove = (event: PIXI.FederatedPointerEvent) => {
         const delta = drag.move(event.pointerId, event.global.x, event.global.y);
         if (delta) {
+            if (pressedAt) {
+                const { x, y } = pressedAt;
+                pressedAt = undefined;
+                handlers.dragStart?.(x, y);
+            }
             handlers.pan(delta.dx, delta.dy);
         }
     };
