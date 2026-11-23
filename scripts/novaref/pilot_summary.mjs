@@ -46,6 +46,8 @@ const summary = {
     explored_systems: p.exploration.filter((e) => e > 0).length,
     active_missions: p.missions.filter((m) => m.objectives.active).map((m) => m.data.missionName),
     strict_play: pilot.globals.strictPlay,
+    // Wave 5: every non-zero per-system legal record, keyed by sÿst id.
+    legal: Object.fromEntries(p.legalStatus.map((v, i) => [i + 128, v]).filter(([, v]) => v !== 0)),
 };
 
 if (!noNames && fs.existsSync(path.join(NOVA_DATA, "Nova Files"))) {

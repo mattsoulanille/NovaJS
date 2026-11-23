@@ -186,6 +186,48 @@ test("prefsWrites builds typed defaults-write arguments", async () => {
     assert.throws(() => prefsWrites({ Ratio: 0.5 }), /unsupported/);
 });
 
+test("decoy_track: components, mergeNear and assignRock", async () => {
+    const { components, mergeNear, assignRock, PW, PH } = await import("../analysis/decoy_track.mjs");
+    const on = new Uint8Array(PW * PH);
+    for (let y = 10; y < 20; y++) for (let x = 10; x < 20; x++) on[y * PW + x] = 1; // 100 px square
+    on[50 * PW + 50] = 1; on[51 * PW + 51] = 1; // two diagonal pixels: one 8-connected component
+    const cs = components(on);
+    assert.equal(cs.length, 2);
+    assert.deepEqual(cs.map((c) => c.n).sort((a, b) => a - b), [2, 100]);
+    assert.equal(components(on, 50).length, 1);
+    // The red and blue halves of a missile sprite become one detection.
+    const m = mergeNear([{ x: 0, y: 0, n: 2 }, { x: 6, y: 0, n: 4 }, { x: 40, y: 0, n: 3 }], 9);
+    assert.equal(m.length, 2);
+    assert.equal(m[0].x, 4);
+    // A track ending on a rock follows THAT rock back, not a nearer passer-by.
+    const pts = [
+        { x: 0, y: 0, rocks: [[100, 0], [5, 5]] },
+        { x: 50, y: 0, rocks: [[95, 0], [50, 8]] },
+        { x: 90, y: 0, rocks: [[91, 0]] },
+    ];
+    assert.equal(pts.length, 3);
+    assignRock(pts);
+    assert.deepEqual(pts.map((p) => p.rock), [[100, 0], [95, 0], [91, 0]]);
+    // Otherwise the nearest rock in each frame.
+    const free = [{ x: 0, y: 0, rocks: [[100, 0], [5, 5]] }, { x: 300, y: 300, rocks: [[0, 0]] }];
+    assignRock(free);
+    assert.deepEqual(free.map((p) => p.rock), [[5, 5], [0, 0]]);
+});
+
+test("bolt_births: discs and orange bolts in a frame", async () => {
+    const { discsAndBolts } = await import("../analysis/bolt_births.mjs");
+    const { PW, PH } = await import("../analysis/decoy_track.mjs");
+    const buf = Buffer.alloc(PW * PH * 3);
+    const put = (x, y, rgb) => { const q = (y * PW + x) * 3; buf[q] = rgb[0]; buf[q + 1] = rgb[1]; buf[q + 2] = rgb[2]; };
+    for (let y = 100; y < 114; y++) for (let x = 100; x < 114; x++) put(x, y, [0, 0, 250]); // 196 px blue disc
+    for (let x = 200; x < 208; x++) put(x, 50, [250, 150, 40]); // 8 px orange streak
+    const { discs, bolts } = discsAndBolts(buf);
+    assert.equal(discs.length, 1);
+    assert.equal(discs[0].colour, "blue");
+    assert.equal(bolts.length, 1);
+    assert.equal(Math.round(bolts[0].x), 204);
+});
+
 test("stepEntersShip spots a bare e key", () => {
     assert.equal(stepEntersShip({ keys: "e wait 4000" }), true);
     assert.equal(stepEntersShip({ keys: "Tab e@200" }), true);

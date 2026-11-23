@@ -1276,6 +1276,9 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
             ctx.launched = true;
         }
         if (sc.pilot && sc.pilot.open !== false) {
+            // Wave 5: in fullscreen the window exists before the title
+            // screen has finished drawing, so `o` arrives too early.
+            if (Number.isFinite(sc.title_wait) && sc.title_wait > 0) await sleep(sc.title_wait);
             const pname = sc.pilot.as ?? sc.pilot.name ?? path.basename(sc.pilot.push ?? "");
             const r = await runStep({ open_pilot: pname }, ctx);
             record({ phase: "open_pilot", pilot: pname, result: r });
