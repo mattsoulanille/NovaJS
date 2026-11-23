@@ -1,0 +1,17 @@
+{
+  "name": "land_outfitter",
+  "description": "Load a COPY of a pilot under an experiment name, enter the ship, land on the nearest planet, open and close the outfitter (no purchases), quit, pull the pilot back. Run with --pilot <local pilot>.",
+  "pilot": { "as": "novaref-scenario" },
+  "steps": [
+    { "shot": "title-with-pilot", "window": true },
+    { "keys": "e wait 4000" },
+    { "shot": "in-space", "window": true },
+    { "keys": "l wait 1000 l wait 8000" },
+    { "shot": "spaceport", "window": true },
+    { "keys": "o wait 2000" },
+    { "shot": "outfitter", "window": true },
+    { "keys": "Escape wait 1500" },
+    { "shot": "spaceport-after", "window": true }
+  ],
+  "pull": true
+}

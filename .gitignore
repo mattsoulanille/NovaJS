@@ -95,3 +95,6 @@ desyncs/
 # of every build. It carries the build stamp the version handshake
 # compares, so it must never be committed.
 packages/nova/src/common/generated_build_version.ts
+
+# novaref scenario results (scripts/novaref)
+novaref-results/
