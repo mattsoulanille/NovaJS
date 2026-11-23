@@ -34,7 +34,20 @@ interface Modal {
     close: () => void;
 }
 
-function makeModal(testid: string): Modal {
+/**
+ * Where a modal sits. 'centre' is the default for the pilot dialogs (the
+ * original's are native sheets with no fixed place to copy). The other
+ * form pins the panel's top-left corner a fixed distance up and left of the
+ * viewport's centre, which is where the original puts its native
+ * Preferences window: the 1024x768 title art is centred, and the window's
+ * corner sits 346 px above and 332 px left of the screen centre (628,194 on
+ * a 1920x1080 screen; set_pref_1..5.png). Fixed offsets rather than flex
+ * centring also keep an odd-width window on whole pixels.
+ */
+type ModalPlacement = 'centre' | { titleArtTop: number, titleArtLeft: number };
+
+function makeModal(testid: string, placement: ModalPlacement = 'centre'):
+    Modal {
     const backdrop = document.createElement('div');
     backdrop.className = 'nova-title-modal-backdrop';
     backdrop.dataset.testid = `${testid}-backdrop`;
@@ -44,6 +57,13 @@ function makeModal(testid: string): Modal {
         background: 'rgba(0,0,0,0.35)', zIndex: '10000',
         fontFamily: '-apple-system, Geneva, "Helvetica Neue", sans-serif',
     } as Partial<CSSStyleDeclaration>);
+    if (placement !== 'centre') {
+        Object.assign(backdrop.style, {
+            alignItems: 'flex-start', justifyContent: 'flex-start',
+            paddingTop: `max(0px, calc(50vh - ${placement.titleArtTop}px))`,
+            paddingLeft: `max(0px, calc(50vw - ${placement.titleArtLeft}px))`,
+        } as Partial<CSSStyleDeclaration>);
+    }
 
     const panel = document.createElement('div');
     panel.className = 'nova-title-modal';
@@ -523,11 +543,12 @@ export function showOpenPilotDialog(entries: PilotEntry[],
 // ---------------------------------------------------------------------------
 
 /** A game-settings checkbox: label, the override key, and whether it
- * applies to a browser build (disabled/greyed when not). */
+ * has an effect in NovaJS yet (a tooltip says so when not). */
 interface SettingToggle {
     label: string;
     key?: keyof GameSettingsOverride;
-    /** false => shown greyed out (no effect in a browser build). */
+    /** false => no effect in NovaJS yet; still drawn enabled, as in the
+     * original, with a tooltip saying so (see settingRow). */
     applicable: boolean;
     /** Default checked state when unset. */
     defaultOn: boolean;
@@ -537,9 +558,9 @@ const GAME_SETTINGS: SettingToggle[][] = [
     // Left column.
     [
         // These toggles persist to localStorage but are not yet wired to any
-        // graphics/sound effect, so they are shown greyed-out (applicable:
-        // false) rather than promising behavior the game does not deliver.
-        // Flip back to applicable: true as each effect gets wired up.
+        // graphics/sound effect (applicable: false). They are drawn enabled
+        // like the original's, with a tooltip saying they do nothing yet.
+        // Flip to applicable: true as each effect gets wired up.
         { label: 'Ship Animations', key: 'shipAnimations', applicable: false, defaultOn: true },
         { label: 'Engine Glows', key: 'engineGlows', applicable: false, defaultOn: true },
         { label: 'Running Lights', key: 'runningLights', applicable: false, defaultOn: true },
@@ -652,11 +673,49 @@ export interface DisplayScaleHandle {
     set(next: Partial<DisplaySettings>): DisplaySettings;
 }
 
+// The original's Preferences window, measured on set_pref_1..5.png (1920x1080):
+// a 663x305 native window, top at y 194; a 22 px title bar; the five-tab
+// segmented control (y 228-248) straddling the top edge (y 238) of a grey
+// group box inset 20 px (x 648-1271, down to y 448); Cancel (84x22) and the
+// default OK button right-aligned under the box at y 459, 18 px from the
+// bottom edge.
+const PREFS_WIDTH = 663;
+const PREFS_PLACEMENT = { titleArtTop: 346, titleArtLeft: 332 };
+const PREFS_BOX_HEIGHT = 211;
+/** Checkbox lefts at x 785 and 997: a 212 px left column, both centred. */
+const PREFS_LEFT_COLUMN = 212;
+const PREFS_ROW_PITCH = 20;
+const AQUA_BLUE = 'linear-gradient(#6cb3fa, #1a82fb)';
+const PREFS_VOLUMES: [string, string][] = [
+    ['muted', 'Muted'], ['quiet', 'Quiet'], ['normal', 'Normal'],
+    ['loud', 'Loud'],
+];
+
+/** The original's white rounded Cancel / blue default OK push buttons. */
+function aquaButton(label: string, testid: string, primary: boolean):
+    HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.dataset.testid = testid;
+    Object.assign(btn.style, {
+        width: '84px', height: '22px', padding: '0', borderRadius: '5px',
+        fontSize: '13px', fontFamily: 'inherit', cursor: 'pointer',
+        border: primary ? '1px solid #3d8ff5' : '1px solid #c4c4c4',
+        background: primary ? AQUA_BLUE : '#fff',
+        color: primary ? '#fff' : '#111',
+        boxShadow: '0 1px 1px rgba(0,0,0,0.12)',
+    } as Partial<CSSStyleDeclaration>);
+    return btn;
+}
+
 /**
- * The "Set Prefs" panel: Game Settings, Display, plus the four
- * control-binding tabs. On OK it persists the game-settings toggles and
- * any changed bindings to localStorage (see client_prefs); the game start
- * layers them over the served defaults. Resolves when the dialog closes.
+ * The "Set Prefs" panel: Game Settings plus the four control-binding tabs,
+ * in the original's order, then our extra Display tab LAST (the original
+ * has no display scaling; putting it at the end keeps the first five tabs
+ * where set_pref_1..5 have them). On OK it persists the game-settings
+ * toggles and any changed bindings to localStorage (see client_prefs); the
+ * game start layers them over the served defaults. Resolves when the
+ * dialog closes.
  *
  * The display scales are the odd one out: they are MACHINE-local rather
  * than per-pilot, they apply live rather than on OK, and they persist
@@ -666,13 +725,23 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
     displayScale?: DisplayScaleHandle):
     Promise<void> {
     return new Promise((resolve) => {
-        const modal = makeModal('preferences-dialog');
-        modal.panel.style.minWidth = '560px';
+        const modal = makeModal('preferences-dialog', PREFS_PLACEMENT);
+        Object.assign(modal.panel.style, {
+            width: `${PREFS_WIDTH}px`, minWidth: '0', maxWidth: 'none',
+            padding: '0 20px 18px', boxSizing: 'border-box',
+            borderRadius: '5px', overflow: 'hidden',
+            boxShadow: '0 10px 36px rgba(0,0,0,0.55), '
+                + '0 0 0 1px rgba(0,0,0,0.25)',
+        } as Partial<CSSStyleDeclaration>);
 
+        // The native title bar: "Preferences", centred, in grey.
         const title = document.createElement('div');
         title.textContent = 'Preferences';
         Object.assign(title.style, {
-            fontWeight: '600', textAlign: 'center', marginBottom: '12px',
+            margin: '0 -20px', height: '22px', lineHeight: '22px',
+            textAlign: 'center', color: '#4d4d4d',
+            background: 'linear-gradient(#ebebeb, #d5d5d5)',
+            borderBottom: '1px solid #c2c2c2', boxSizing: 'border-box',
         } as Partial<CSSStyleDeclaration>);
         modal.panel.appendChild(title);
 
@@ -680,25 +749,40 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
         const settings: GameSettingsOverride = { ...loadPilotSettings() };
         const controlsOverride: ControlsOverride = { ...loadPilotControls() };
 
+        // The segmented tab control sits centred on the group box's top
+        // edge: 12 px under the title bar, its middle on the box border.
+        const frame = document.createElement('div');
+        Object.assign(frame.style, {
+            position: 'relative', marginTop: '12px', paddingTop: '10px',
+        } as Partial<CSSStyleDeclaration>);
+        modal.panel.appendChild(frame);
+
         const tabBar = document.createElement('div');
         Object.assign(tabBar.style, {
-            display: 'flex', gap: '2px', marginBottom: '10px',
-            borderBottom: '1px solid #c4c4c4',
+            position: 'absolute', top: '0', left: '50%',
+            transform: 'translateX(-50%)', zIndex: '1', display: 'flex',
+            height: '21px', boxSizing: 'border-box', whiteSpace: 'nowrap',
+            border: '1px solid #c4c4c4', borderRadius: '5px',
+            background: '#fff', overflow: 'hidden',
+            boxShadow: '0 1px 1px rgba(0,0,0,0.08)',
         } as Partial<CSSStyleDeclaration>);
-        modal.panel.appendChild(tabBar);
+        frame.appendChild(tabBar);
 
         const content = document.createElement('div');
         Object.assign(content.style, {
-            minHeight: '210px',
+            minHeight: `${PREFS_BOX_HEIGHT}px`, boxSizing: 'border-box',
+            background: '#e2e2e2', border: '1px solid #d6d6d6',
+            borderRadius: '4px', padding: '26px 0 8px',
         } as Partial<CSSStyleDeclaration>);
-        modal.panel.appendChild(content);
+        frame.appendChild(content);
 
         // The scales the dialog opened with, so Cancel can undo a live
         // preview. Untouched (and unrestored) when there is no handle.
         const scalesOnOpen = displayScale?.get();
 
-        const tabNames = ['Game Settings', 'Display',
-            ...CONTROL_TABS.map(t => t.name)];
+        const tabNames = ['Game Settings', ...CONTROL_TABS.map(t => t.name),
+            'Display'];
+        const displayIndex = tabNames.length - 1;
         const tabButtons: HTMLButtonElement[] = [];
         let activeCapture: (() => void) | undefined;
 
@@ -706,19 +790,19 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
             activeCapture?.();
             activeCapture = undefined;
             tabButtons.forEach((b, i) => {
-                b.style.background = i === index ? '#2b6cff' : '#e4e4e4';
+                b.style.background = i === index ? AQUA_BLUE : 'transparent';
                 b.style.color = i === index ? '#fff' : '#111';
             });
             content.innerHTML = '';
             if (index === 0) {
                 content.appendChild(buildGameSettings(settings));
-            } else if (index === 1) {
+            } else if (index === displayIndex) {
                 content.appendChild(buildDisplayTab(displayScale,
                     baseControls, controlsOverride,
                     (release) => { activeCapture = release; }));
             } else {
                 content.appendChild(buildControlTab(
-                    CONTROL_TABS[index - 2], baseControls, controlsOverride,
+                    CONTROL_TABS[index - 1], baseControls, controlsOverride,
                     (release) => { activeCapture = release; }));
             }
         };
@@ -728,18 +812,28 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
             tab.textContent = name;
             tab.dataset.testid = `prefs-tab-${index}`;
             Object.assign(tab.style, {
-                padding: '5px 10px', fontSize: '12px', cursor: 'pointer',
-                border: 'none', borderRadius: '5px 5px 0 0',
-                background: '#e4e4e4',
+                // 12 px a side in the original's five tabs; 9 here so our
+                // sixth (Display) still fits across the window.
+                padding: '0 9px', fontSize: '13px', fontFamily: 'inherit',
+                cursor: 'pointer', border: 'none', borderRadius: '0',
+                borderLeft: index === 0 ? 'none' : '1px solid #d0d0d0',
+                background: 'transparent', lineHeight: '19px',
             } as Partial<CSSStyleDeclaration>);
             tab.addEventListener('click', () => showTab(index));
             tabBar.appendChild(tab);
             tabButtons.push(tab);
         });
 
-        const cancel = button('Cancel', 'prefs-cancel', false);
-        const ok = button('OK', 'prefs-ok', true);
-        modal.panel.appendChild(buttonRow(cancel, ok));
+        const cancel = aquaButton('Cancel', 'prefs-cancel', false);
+        const ok = aquaButton('OK', 'prefs-ok', true);
+        const row = document.createElement('div');
+        Object.assign(row.style, {
+            display: 'flex', justifyContent: 'flex-end', gap: '13px',
+            marginTop: '10px',
+        } as Partial<CSSStyleDeclaration>);
+        row.appendChild(cancel);
+        row.appendChild(ok);
+        modal.panel.appendChild(row);
 
         const cleanup = () => {
             activeCapture?.();
@@ -776,64 +870,136 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
     });
 }
 
+/**
+ * One Game Settings checkbox row. Every box looks ENABLED, as in the
+ * original (blue when checked). A toggle with a settings key can be
+ * changed and is saved with the pilot on OK; most are not wired to an
+ * effect yet, which the row's tooltip says. A toggle without a key (no
+ * browser equivalent) shows its default and ignores clicks.
+ */
+function settingRow(toggle: SettingToggle, settings: GameSettingsOverride):
+    HTMLElement {
+    const row = document.createElement('label');
+    Object.assign(row.style, {
+        display: 'flex', alignItems: 'center',
+        height: `${PREFS_ROW_PITCH}px`, color: '#111', whiteSpace: 'nowrap',
+        cursor: toggle.key ? 'pointer' : 'default',
+    } as Partial<CSSStyleDeclaration>);
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    Object.assign(box.style, {
+        width: '14px', height: '14px', margin: '0 5px 0 0',
+        accentColor: '#3b99fc',
+    } as Partial<CSSStyleDeclaration>);
+    if (toggle.key) {
+        const key = toggle.key;
+        box.dataset.testid = `prefs-setting-${key}`;
+        const current = settings[key];
+        box.checked = typeof current === 'boolean'
+            ? current : toggle.defaultOn;
+        box.addEventListener('change', () => {
+            (settings[key] as boolean) = box.checked;
+        });
+    } else {
+        box.checked = toggle.defaultOn;
+        box.tabIndex = -1;
+        box.addEventListener('click', e => e.preventDefault());
+    }
+    if (!toggle.applicable) {
+        row.title = toggle.key
+            ? 'Saved with the pilot; not used by NovaJS yet.'
+            : 'Has no equivalent in a browser.';
+    }
+    row.appendChild(box);
+    row.appendChild(document.createTextNode(toggle.label));
+    return row;
+}
+
 function buildGameSettings(settings: GameSettingsOverride): HTMLElement {
+    // Two columns, centred as a pair in the box (set_pref_1: checkboxes at
+    // x 785 and 997, first row centred on y 283, 20 px rows).
     const wrap = document.createElement('div');
     Object.assign(wrap.style, {
-        display: 'flex', gap: '32px', padding: '4px 8px',
+        display: 'flex', justifyContent: 'center', paddingTop: '8px',
     } as Partial<CSSStyleDeclaration>);
-    for (const column of GAME_SETTINGS) {
-        const col = document.createElement('div');
-        for (const toggle of column) {
-            const row = document.createElement('label');
-            Object.assign(row.style, {
-                display: 'flex', alignItems: 'center', margin: '6px 0',
-                color: toggle.applicable ? '#111' : '#aaa',
-                cursor: toggle.applicable ? 'pointer' : 'default',
-            } as Partial<CSSStyleDeclaration>);
-            const box = document.createElement('input');
-            box.type = 'checkbox';
-            box.disabled = !toggle.applicable;
-            if (toggle.key) {
-                box.dataset.testid = `prefs-setting-${toggle.key}`;
-                const current = settings[toggle.key];
-                box.checked = typeof current === 'boolean'
-                    ? current : toggle.defaultOn;
-                box.addEventListener('change', () => {
-                    (settings[toggle.key!] as boolean) = box.checked;
-                });
-            } else {
-                box.checked = toggle.defaultOn;
-            }
-            box.style.marginRight = '8px';
-            row.appendChild(box);
-            row.appendChild(document.createTextNode(toggle.label));
-            col.appendChild(row);
-        }
-        wrap.appendChild(col);
+    const [leftToggles, rightToggles] = GAME_SETTINGS;
+    const left = document.createElement('div');
+    left.style.width = `${PREFS_LEFT_COLUMN}px`;
+    for (const toggle of leftToggles) {
+        left.appendChild(settingRow(toggle, settings));
     }
-    // Sound Volume selector. Persisted but not yet wired to the audio engine,
-    // so it is shown greyed-out/disabled like the other unwired toggles.
-    const volRow = document.createElement('div');
-    Object.assign(volRow.style, {
-        marginTop: '12px', paddingLeft: '8px', color: '#aaa',
+    const right = document.createElement('div');
+    for (const toggle of rightToggles) {
+        right.appendChild(settingRow(toggle, settings));
+    }
+    right.appendChild(buildSoundVolume(settings));
+    wrap.appendChild(left);
+    wrap.appendChild(right);
+    return wrap;
+}
+
+/**
+ * "Sound Volume:" with the original's small up/down stepper and the
+ * current level beside it, under the right column. Saved with the pilot
+ * on OK; not wired to the audio engine yet (the tooltip says so, as for
+ * the toggles).
+ */
+function buildSoundVolume(settings: GameSettingsOverride): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.title = 'Saved with the pilot; not used by NovaJS yet.';
+    const label = document.createElement('div');
+    label.textContent = 'Sound Volume:';
+    Object.assign(label.style, {
+        height: `${PREFS_ROW_PITCH}px`, lineHeight: `${PREFS_ROW_PITCH}px`,
+        marginTop: '4px',
     } as Partial<CSSStyleDeclaration>);
-    volRow.appendChild(document.createTextNode('Sound Volume: '));
-    const vol = document.createElement('select');
-    vol.dataset.testid = 'prefs-sound-volume';
-    vol.disabled = true;
-    for (const [value, label] of [['muted', 'Muted'], ['quiet', 'Quiet'],
-    ['normal', 'Normal'], ['loud', 'Loud']]) {
-        const opt = document.createElement('option');
-        opt.value = value; opt.textContent = label;
-        vol.appendChild(opt);
-    }
-    vol.value = settings.soundVolume ?? 'normal';
-    vol.addEventListener('change', () => { settings.soundVolume = vol.value; });
-    volRow.appendChild(vol);
-    const outer = document.createElement('div');
-    outer.appendChild(wrap);
-    outer.appendChild(volRow);
-    return outer;
+    wrap.appendChild(label);
+
+    const line = document.createElement('div');
+    Object.assign(line.style, {
+        display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px',
+        marginLeft: '1px',
+    } as Partial<CSSStyleDeclaration>);
+    const stepper = document.createElement('div');
+    stepper.dataset.testid = 'prefs-sound-volume';
+    Object.assign(stepper.style, {
+        display: 'flex', flexDirection: 'column', width: '12px',
+        height: '22px', boxSizing: 'border-box', border: '1px solid #c4c4c4',
+        borderRadius: '4px', background: '#fff', overflow: 'hidden',
+    } as Partial<CSSStyleDeclaration>);
+    const value = document.createElement('div');
+    value.dataset.testid = 'prefs-sound-volume-value';
+
+    let index = Math.max(0, PREFS_VOLUMES.findIndex(
+        ([v]) => v === (settings.soundVolume ?? 'normal')));
+    const render = () => {
+        value.textContent = PREFS_VOLUMES[index][1];
+        stepper.dataset.value = PREFS_VOLUMES[index][0];
+    };
+    const arrow = (glyph: string, testid: string, delta: number) => {
+        const btn = document.createElement('button');
+        btn.textContent = glyph;
+        btn.dataset.testid = testid;
+        Object.assign(btn.style, {
+            flex: '1', padding: '0', border: 'none', background: 'none',
+            fontSize: '6px', lineHeight: '9px', color: '#333',
+            cursor: 'pointer',
+        } as Partial<CSSStyleDeclaration>);
+        btn.addEventListener('click', () => {
+            index = Math.min(PREFS_VOLUMES.length - 1,
+                Math.max(0, index + delta));
+            settings.soundVolume = PREFS_VOLUMES[index][0];
+            render();
+        });
+        stepper.appendChild(btn);
+    };
+    arrow('▲', 'prefs-sound-volume-up', 1);
+    arrow('▼', 'prefs-sound-volume-down', -1);
+    render();
+    line.appendChild(stepper);
+    line.appendChild(value);
+    wrap.appendChild(line);
+    return wrap;
 }
 
 /**
@@ -850,7 +1016,7 @@ function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
     setCapture: (release: (() => void) | undefined) => void): HTMLElement {
     const wrap = document.createElement('div');
     Object.assign(wrap.style, {
-        padding: '4px 8px',
+        padding: '0 20px',
     } as Partial<CSSStyleDeclaration>);
 
     if (!displayScale) {
@@ -930,10 +1096,16 @@ function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
 function buildControlTab(tab: { name: string, rows: ControlRow[] },
     baseControls: Record<string, unknown>, override: ControlsOverride,
     setCapture: (release: (() => void) | undefined) => void): HTMLElement {
+    // Two columns filled top-to-bottom, as the original lays its binding
+    // rows out (set_pref_5: Pause..Self-Destruct left, Engage Cloak..Show
+    // Framerate right): 21 px fields on a 30 px pitch, each right-aligned
+    // 22 px in from its half of the box.
     const grid = document.createElement('div');
     Object.assign(grid.style, {
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px',
-        padding: '4px 8px',
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gridAutoFlow: 'column',
+        gridTemplateRows: `repeat(${Math.ceil(tab.rows.length / 2)}, 21px)`,
+        rowGap: '9px',
     } as Partial<CSSStyleDeclaration>);
 
     // Rebinding can displace another row on this same tab, so every
@@ -945,7 +1117,7 @@ function buildControlTab(tab: { name: string, rows: ControlRow[] },
         const line = document.createElement('div');
         Object.assign(line.style, {
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-            gap: '8px',
+            gap: '8px', paddingRight: '22px', whiteSpace: 'nowrap',
         } as Partial<CSSStyleDeclaration>);
         const label = document.createElement('div');
         label.textContent = `${row.label}:`;
@@ -955,9 +1127,10 @@ function buildControlTab(tab: { name: string, rows: ControlRow[] },
         const capture = document.createElement('button');
         capture.dataset.testid = `prefs-bind-${row.action ?? row.label}`;
         Object.assign(capture.style, {
-            width: '92px', padding: '4px 0', borderRadius: '12px',
-            border: '1px solid #c0c0c0', background: '#fff',
-            fontSize: '12px', textAlign: 'center',
+            width: '146px', height: '21px', padding: '0',
+            boxSizing: 'border-box', borderRadius: '11px',
+            border: '1px solid #c4c4c4', background: '#fff',
+            fontSize: '12px', fontFamily: 'inherit', textAlign: 'center',
             cursor: row.action ? 'pointer' : 'default',
             color: row.action ? '#111' : '#bbb',
         } as Partial<CSSStyleDeclaration>);

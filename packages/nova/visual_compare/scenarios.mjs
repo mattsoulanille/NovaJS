@@ -74,12 +74,11 @@ const MAP_BOTTOM_INFO =
     region('map_bottom_info', 'Ports / Nav hazards / date line', 668, 718, 470, 44);
 
 // The five Preferences tabs (set_pref_1..5), captured one per scenario. The
-// original's Preferences is a native macOS window placed upper-center; ours is
-// a centered HTML modal with the same tab bar (Game Settings + four control
-// groups) and the same toggles/bindings. The tab order matches the reference
-// captures left-to-right. Placement (centered vs upper-center) and native-vs-
-// HTML rendering differ — CONTENT; the structure (tabs, two-column toggles,
-// binding rows, Cancel/OK) is the faithful part we verify by eye.
+// original's Preferences is a native macOS window at a fixed spot over the
+// title art; ours is an HTML window of the same size at the same spot, with
+// the same tab bar (Game Settings + four control groups, then our extra
+// Display tab last, so prefs-tab-1..4 are the reference's tabs 2..5) and the
+// same toggles/bindings. Native-vs-HTML text rendering still differs.
 const PREFS_TABS = [
     { file: 'set_pref_1', label: 'Game Settings' },
     { file: 'set_pref_2', label: 'Navigation Controls' },
@@ -93,10 +92,9 @@ function prefsScenarios() {
         id: `title_prefs_${index + 1}`,
         title: `Title — Preferences tab: ${tab.label}`,
         description: `The Preferences dialog (novaTitle action "setPrefs") on `
-            + `the "${tab.label}" tab, vs title_screen/${tab.file}.png. Native `
-            + `macOS window (upper-center) vs our centered HTML modal — `
-            + `CONTENT. The tab bar, two-column layout and Cancel/OK are the `
-            + `structural match we care about.`,
+            + `the "${tab.label}" tab, vs title_screen/${tab.file}.png. Both `
+            + `are a 663x305 window at y 194 over the title art; native `
+            + `macOS text vs HTML text accounts for most of what remains.`,
         entry: 'title',
         params: {},
         hideDebug: false,
@@ -112,9 +110,10 @@ function prefsScenarios() {
             { name: tab.file, file: `title_screen/${tab.file}.png` },
         ],
         regions: [
-            // Reference window: x628-1291, y195-498 (measured on set_pref_1);
-            // ours is a centered HTML modal (minWidth 560).
-            region('prefs_modal', 'Preferences dialog area', 640, 360, 640, 360),
+            // The reference window, x628-1290 y194-498 (measured on
+            // set_pref_1). Ours is the same 663x305 window at the same
+            // place (title_dialogs.ts PREFS_*), so one rect serves both.
+            region('prefs_modal', 'Preferences window', 628, 194, 663, 305),
         ],
     }));
 }
