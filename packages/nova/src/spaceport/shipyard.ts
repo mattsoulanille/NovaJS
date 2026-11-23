@@ -17,6 +17,7 @@ import { ItemGrid, ItemTile } from './item_grid.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { FONT } from './outfitter.js';
+import { ScrollArrow } from './scroll_arrow.js';
 import { ShipInfoDialog } from './ship_info.js';
 import {
     SHIPYARD_BUTTONS,
@@ -122,6 +123,15 @@ export class Shipyard extends Menu<Entity> {
         status: new PIXI.Text("", { ...FONT.normal, wordWrapWidth: 145 }),
     }
     private buttons: { info: Button, buy: Button, done: Button };
+    /**
+     * The grid's scroll arrows. The original's shipyard has the same
+     * pair as the outfitter, 7px left and a pixel higher (sphere centres
+     * (731, 678.5) and (761, 678.5) on the R8 wave-5 05-shipyard.png),
+     * shown greyed over a list that fits on one page. We drew none, so
+     * a stock longer than 20 hulls could only be reached by keyboard.
+     */
+    private scrollUpArrow = new ScrollArrow('up');
+    private scrollDownArrow = new ScrollArrow('down');
 
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
@@ -142,6 +152,19 @@ export class Shipyard extends Menu<Entity> {
         this.addButtons(buttons);
 
         buttons.info.click.subscribe(() => void this.showInfo());
+
+        this.scrollUpArrow.container.position.set(-229, 138.5);
+        this.scrollDownArrow.container.position.set(-199, 138.5);
+        this.scrollUpArrow.click.subscribe(() => {
+            this.itemGrid?.scrollUp();
+            this.updateArrows();
+        });
+        this.scrollDownArrow.click.subscribe(() => {
+            this.itemGrid?.scrollDown();
+            this.updateArrows();
+        });
+        this.container.addChild(this.scrollUpArrow.container,
+            this.scrollDownArrow.container);
         buttons.buy.click.subscribe(this.buyShip.bind(this));
         buttons.done.click.subscribe(this.done.bind(this));
 
@@ -198,12 +221,14 @@ export class Shipyard extends Menu<Entity> {
         this.itemGrid.container.position.x = -373;
         this.itemGrid.container.position.y = -153;
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
+        this.updateArrows();
 
+        // Keyboard navigation can scroll the page too.
         this.controls.controls = {
-            left: () => itemGrid.left(),
-            right: () => itemGrid.right(),
-            up: () => itemGrid.up(),
-            down: () => itemGrid.down(),
+            left: () => { itemGrid.left(); this.updateArrows(); },
+            right: () => { itemGrid.right(); this.updateArrows(); },
+            up: () => { itemGrid.up(); this.updateArrows(); },
+            down: () => { itemGrid.down(); this.updateArrows(); },
             buy: this.buyShip.bind(this),
             depart: this.done.bind(this),
         };
@@ -251,6 +276,13 @@ export class Shipyard extends Menu<Entity> {
         }
         this.itemGrid.setItems(visibleShips(this.allShips,
             this.stockContext()));
+        this.updateArrows();
+    }
+
+    /** Greys each scroll arrow when the page is already at that end. */
+    private updateArrows() {
+        this.scrollUpArrow.enabled = this.itemGrid?.canScrollUp ?? false;
+        this.scrollDownArrow.enabled = this.itemGrid?.canScrollDown ?? false;
     }
 
     /**
@@ -359,6 +391,10 @@ export class Shipyard extends Menu<Entity> {
         const ship = this.itemGrid?.selection;
         const context = this.purchaseContext();
         this.setPriceText(shipyardPriceReadout(ship, context));
+        // Info is greyed until a hull is picked, as Buy Ship is: both
+        // pills are dark on the R8 wave-5 05-shipyard.png, which opens
+        // with nothing selected.
+        this.buttons.info.state = ship ? 'normal' : 'grey';
         if (!ship || !context) {
             this.buttons.buy.state = 'grey';
             return;
