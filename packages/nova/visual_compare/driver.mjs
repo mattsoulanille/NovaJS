@@ -296,18 +296,25 @@ export async function showHail(page, context) {
  */
 export async function showOfferPopup(page,
     { text, accept = 'Okay', refuse = null, pict = null, style = 'briefing' }) {
-    const ok = await page.evaluate((opts) => {
+    // Several popups register here, and not all are the spaceport's: the
+    // in-flight ship-mission popups ('ShipOfferPopup', 'ShipDonePopup') sit
+    // on the always-visible Stage. Prefer a popup named 'OfferPopup' on a
+    // visible parent (the docked spaceport's), and wait for the one chosen
+    // by its own name: picking the ShipOfferPopup and then waiting for an
+    // 'OfferPopup' is what timed the Sigma scenarios out.
+    const name = await page.evaluate((opts) => {
         const popups = window.novaOfferPopups ?? [];
-        const popup = popups.find(p => p.container.parent?.worldVisible)
-            ?? popups[popups.length - 1];
-        if (!popup) return false;
+        const onScreen = popups.filter(p => p.container.parent?.worldVisible);
+        const popup = onScreen.find(p => p.container.name === 'OfferPopup')
+            ?? onScreen[0] ?? popups[popups.length - 1];
+        if (!popup) return null;
         void popup.show(opts.text,
             { accept: opts.accept, refuse: opts.refuse },
             { pict: opts.pict, style: opts.style });
-        return true;
+        return popup.container.name;
     }, { text, accept, refuse, pict, style });
-    if (!ok) throw new Error('showOfferPopup: no OfferPopup registered');
-    await waitForContainer(page, 'OfferPopup');
+    if (!name) throw new Error('showOfferPopup: no OfferPopup registered');
+    await waitForContainer(page, name);
     await sleep(600);
 }
 
@@ -454,8 +461,14 @@ export async function waitForTestId(page, testid, { timeout = 8000 } = {}) {
 }
 
 /** Autopilot to a planet uuid and wait until docked (body.nova-docked +
- * visible Spaceport container). */
-export async function landAt(page, planetUuid, { timeout = 90000 } = {}) {
+ * visible Spaceport container), then dismiss the mission-offer popup a
+ * landing raises (the first Earth landing offers one). That popup is modal:
+ * left up, it swallows the click on any spaceport button, and the scenario
+ * then times out waiting for the venue it meant to open (the 15 trade /
+ * BBS / bar / Sigma scenarios that stopped comparing in R8). Pass
+ * `keepOfferPopup: true` to capture the landing popup itself. */
+export async function landAt(page, planetUuid,
+    { timeout = 90000, keepOfferPopup = false } = {}) {
     await page.evaluate((u) => window.novaAutopilot.navigateTo(u), planetUuid);
     await page.waitForFunction(() => {
         if (!document.body.classList.contains('nova-docked')) return false;
@@ -468,6 +481,9 @@ export async function landAt(page, planetUuid, { timeout = 90000 } = {}) {
         return vis;
     }, { timeout, polling: 200 });
     await sleep(2000);
+    if (!keepOfferPopup) {
+        await dismissOfferPopup(page);
+    }
 }
 
 /**
