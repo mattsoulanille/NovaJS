@@ -169,11 +169,19 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // their slots (npc_spawn_plugin), so the genesis positions moved
             // with them, and the escorts fly different paths after.
             // Kestrel's 300-step Random state did not move.
+            //
+            // The four hashes were re-pinned again for the J-series wave 3
+            // jamming model: a ship's JammingComponent is now its largest
+            // jammer outfit per type with gövt InhJam left out, so genesis
+            // NPCs of an InhJam government hash differently. Thessaly's
+            // Random state moved too: a guided missile now draws five
+            // numbers once at launch instead of two every tick. Kestrel's
+            // did not (no guided missile flies there in 300 steps).
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, 'b2f5c0fa', '1e555970',
-                    [4067860223, 4085362547, 3073653351, 396451243]],
-                [SYNTHETIC.systems.kestrel, 'cc8bd060', '71a631e3',
+                [THESSALY, '3ca4d4b0', 'd67a7c65',
+                    [2194062868, 547846234, 1103817874, 396450739]],
+                [SYNTHETIC.systems.kestrel, 'e5390f10', '297b0add',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

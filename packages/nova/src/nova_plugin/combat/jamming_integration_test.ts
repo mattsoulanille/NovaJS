@@ -12,7 +12,7 @@ import { JammingComponent, SystemInterferenceResource } from './jamming_plugin.j
 // wiring end to end: oütf ModTypes -> OutfitData.jamming -> ship's
 // derived JammingComponent, and sÿst interference -> SystemInterferenceResource.
 describe('jamming wiring against parsed game data', () => {
-    it('derives a ship JammingComponent by summing its jammer outfits', async () => {
+    it('derives a ship JammingComponent from its jammer outfits (largest per type)', async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });

@@ -27,7 +27,7 @@ import { ExplodingComponent } from "./ship/index.js";
 import { ChooseRandomTargetComponent, DeathAIComponent, FollowComponent, ShootAllWeaponsComponent } from "./npc/index.js";
 import { ReturnToQueueComponent } from "./core/index.js";
 import { GuidanceComponent } from "./combat/index.js";
-import { DecoyTargetComponent, JamSteerComponent } from "./combat/index.js";
+import { DecoyTargetComponent } from "./combat/index.js";
 import { TargetIndexComponent } from "./combat/index.js";
 import { ShipPhysicsComponent } from "./ship/index.js";
 import { SingletonComponent } from "nova_ecs/world";
@@ -101,15 +101,6 @@ export function configureSnapshotPolicies(world: World) {
     // real sim state and serializer-registered, so it takes the default
     // codec path.
     policies.set(RepairComponent, { policy: 'skip' });
-
-    // Transient per-frame jam steering: recomputed by
-    // MissileJammingSystem before guidance consumes it every tick, so
-    // snapshots skip it (see the JamSteerComponent doc). Without a
-    // policy a snapshot taken while a missile was mid-jam tripped the
-    // unhandled-component check — first seen when the përs spawn roll
-    // shifted the PRNG stream under the combat resimulation test.
-    policies.set(JamSteerComponent, { policy: 'skip' });
-    policies.setWireDerived(JamSteerComponent);
 
     // Enum-valued; effectively immutable.
     policies.set(GuidanceComponent, { policy: 'share' });

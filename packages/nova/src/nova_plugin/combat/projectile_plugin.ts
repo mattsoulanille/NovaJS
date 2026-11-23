@@ -42,8 +42,8 @@ import { ShipComponent } from '../ship/index.js';
 import { pointDefenseMayDamage } from './point_defense.js';
 import { GovtComponent } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
-import { guidanceAngle, Guidance, GuidanceComponent, MissileGuidanceResource } from './guidance.js';
-import { JamSteerComponent, MissileJammingSystem } from './jamming_plugin.js';
+import { guidanceAngle, Guidance, GuidanceComponent, MissileGuidanceResource, zeroOrderGuidance } from './guidance.js';
+import { JamDecisionComponent, MissileJammingSystem } from './jamming_plugin.js';
 import { ArmorComponent, ShieldComponent, ShipZeroArmorSystem } from '../ship/index.js';
 import { ProjectileBlastHull, ProjectileComponent, ProjectileDataComponent } from '../core/index.js';
 import { SoundEvent } from '../core/index.js';
@@ -281,18 +281,21 @@ const ProjectileLifespanSystem = new System({
 
 export const ProjectileGuidanceSystem = new System({
     name: 'ProjectileGuidanceSystem',
-    // Runs after MissileJammingSystem so a jammed missile's per-frame steer
-    // override / retarget is already in place when we compute the aim.
+    // Runs after MissileJammingSystem so a newly launched missile's one jam
+    // decision (and any retarget) is in place before its first aim.
     after: [MissileJammingSystem],
     args: [MovementStateComponent, TargetComponent,
         Entities, ProjectileDataComponent, MissileGuidanceResource,
-        Optional(JamSteerComponent)] as const,
+        Optional(JamDecisionComponent)] as const,
     step(movementState, { target }, entities, projectileData, guidanceMode,
-        jamSteer) {
-        // Jamming may have told this missile to fly straight this frame (lost
-        // lock, no special seeker behaviour): ignore the target entirely.
+        jamDecision) {
+        const jamSteer = jamDecision?.steer;
+        // A jammed plain missile flies dead straight for the rest of its
+        // life, along the heading it had at the decision (its launch
+        // heading): never steer, and stop any turn in progress.
         if (jamSteer === 'flyStraight') {
             movementState.turnTo = null;
+            movementState.turning = 0;
             return;
         }
         if (!target) {
@@ -321,22 +324,22 @@ export const ProjectileGuidanceSystem = new System({
             return;
         }
 
+        // A jammed 'turns away if jammed' missile steers directly away from
+        // its target for the rest of its life: the reverse of the straight
+        // line to it, whatever the guidance mode.
+        if (jamSteer === 'veerAway') {
+            movementState.turnTo = zeroOrderGuidance(movementState.position,
+                targetMovement.position).add(Math.PI);
+            return;
+        }
+
         // 'smart' leads the target (hard to dodge); 'simple' just points at
         // the target's current position (dodgeable by circling). The mode is
         // a room-wide deterministic resource; see guidance.ts.
-        let aim = guidanceAngle(guidanceMode.mode,
+        movementState.turnTo = guidanceAngle(guidanceMode.mode,
             movementState.position, movementState.velocity,
             targetMovement.position, targetMovement.velocity,
             projectileData.shotSpeed);
-
-        // A jammed 'turns away if jammed' missile veers off: aim 180 degrees
-        // away from where it would otherwise steer, so it peels away from the
-        // target this frame.
-        if (jamSteer === 'veerAway') {
-            aim = aim.add(Math.PI);
-        }
-
-        movementState.turnTo = aim;
     },
     // #237 pin (shared: *): before core's HitboxHullProvider, the first
     // system CollisionsPlugin registers.

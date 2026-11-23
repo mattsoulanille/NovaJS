@@ -14,9 +14,8 @@ import { Component } from 'nova_ecs/component';
  * component round-trips through the serializer with the default codec policy
  * (no custom snapshot policy needed).
  *
- * Consumers so far:
- *  - jamming_plugin.ts folds the government's InhJam1-4 into the ship's
- *    effective JammingComponent.
+ * gövt InhJam1-4 is NOT folded into a ship's JammingComponent: the original
+ * showed no effect from it (see deriveJamming in combat/jamming_plugin.ts).
  *
  * Left for the future (NPC spawning / reputation work): setting this component
  * when NPCs spawn, and using allies/enemies/CrimeTol/penalties for reputation

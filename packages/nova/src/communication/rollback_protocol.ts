@@ -265,6 +265,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    formation) instead of being ignored. No component codec or hash
 //    input changes. The derived wire schema fingerprint changes, and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): missile jamming matches the original (J-series
+//    wave 3). A new serializer-registered component, JamDecision
+//    (`{steer: 'track' | 'flyStraight' | 'veerAway'}`, combat/
+//    jamming_plugin.ts), holds each guided missile's one jam decision,
+//    made the tick it launches and permanent. It joins the wire snapshot
+//    component registry and the desync hash input; the old per-frame
+//    JamSteer component (snapshot 'skip', wire-derived, never on the
+//    wire) is gone. Sim-rule changes alongside: the jam roll, a ship's
+//    jamming is its largest single jammer outfit per type (not the sum),
+//    and gövt InhJam no longer adds to it. No input kind or message kind
+//    changes. The derived wire schema fingerprint changes, and the join
+//    gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

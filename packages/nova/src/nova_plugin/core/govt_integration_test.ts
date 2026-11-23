@@ -13,7 +13,7 @@ import { makeSystem } from '../make_system.js';
 // These assertions stay on the real Nova game data (Nova_Data): the whole
 // point of this describe is to pin a few known STOCK governments' parsed
 // values (allies/enemies/MaxOdds/InhJam), which no other data set has. The
-// GovtData -> GovtComponent -> InhJam-folded JammingComponent pipeline is
+// rule that InhJam does NOT reach a ship's JammingComponent is
 // exercised on the synthetic scenario in the describe below.
 describe('GovtData against real Nova data', () => {
     it("pins the Federation's (nova:128) parsed values", async () => {
@@ -80,64 +80,47 @@ describe('GovtData against real Nova data', () => {
     });
 });
 
-describe('inherent jamming from a ship\'s government', () => {
-    it("folds a weak-InhJam govt into a jammer-less ship", async () => {
+// gövt InhJam is parsed (pinned above) but NOT applied to a ship's jamming:
+// a target of an InhJam1 100 government jammed none of 149 missiles in the
+// reference (docs/reference_experiments.md, "J-series wave 3", finding 5).
+describe('a ship\'s government does not add to its jamming (InhJam ignored)', () => {
+    it("leaves a jammer-less ship of a weak-InhJam govt at zero", async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
 
-        // The Wren Skiff carries no jamming outfits, so its jamming comes
-        // entirely from its government. The Verge Raiders have
-        // InhJam [7, 5, 0, 0].
+        // The Wren Skiff carries no jamming outfits; the Verge Raiders have
+        // InhJam [7, 5, 0, 0], which is not applied.
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
         ship.components.set(GovtComponent, { id: SYNTHETIC.govts.raiders });
         await completeEntity(system, ship);
 
-        expect(ship.components.get(JammingComponent)).toEqual([7, 5, 0, 0]);
+        expect(ship.components.get(JammingComponent)).toEqual([0, 0, 0, 0]);
     });
 
-    it("takes the max of outfit jamming and a strong govt's InhJam", async () => {
+    it("keeps a ship's outfit jamming under a strong-InhJam govt", async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
 
-        // The Shrike Ghost stocks jammers summing to [20, 15, 0, 0].
-        // The Amber Compact has InhJam [50, 50, 35, 20], which dominates
-        // every type, so the per-type max is the Compact's InhJam.
+        // The Shrike Ghost's jammers give [20, 15, 0, 0]. The Amber Compact's
+        // InhJam [50, 50, 35, 20] would dominate every type if it applied.
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
         ship.components.set(GovtComponent, { id: SYNTHETIC.govts.compact });
         await completeEntity(system, ship);
 
-        expect(ship.components.get(JammingComponent)).toEqual([50, 50, 35, 20]);
-    });
-
-    it("leaves a ship's outfit jamming intact where it out-jams its govt", async () => {
-        const gameData = await getSyntheticGameData();
-        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
-            undefined, { npcs: false });
-
-        // The Shrike Ghost's jammers -> [20, 15, 0, 0]; the Verge Raiders'
-        // InhJam is [7, 5, 0, 0], weaker on every type, so the outfit
-        // values win the per-type max.
-        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
-        const ship = makeShip(shipData);
-        ship.components.set(MultiplayerData, { owner: 'server' });
-        ship.components.set(GovtComponent, { id: SYNTHETIC.govts.raiders });
-        await completeEntity(system, ship);
-
         expect(ship.components.get(JammingComponent)).toEqual([20, 15, 0, 0]);
     });
 
-    it('leaves a ship with no GovtComponent unchanged (outfit-only)', async () => {
+    it('gives the same jamming with no GovtComponent (outfit-only)', async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
 
-        // The same Ghost, but with no government: jamming stays outfit-only.
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });

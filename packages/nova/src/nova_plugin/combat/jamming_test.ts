@@ -11,7 +11,6 @@ import { World } from 'nova_ecs/world';
 import { getDefaultProjectileWeaponData, getDefaultSeekerFlags, SeekerFlags }
     from 'novadatainterface/weapon_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
-import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import {
     ATTACK_PARENT_IF_JAMMED_PROBABILITY,
     decideJamReaction,
@@ -20,14 +19,15 @@ import {
     DecoyTargetComponent,
     effectiveJamming,
     findNearestDecoy,
+    JamDecisionComponent,
     Jamming,
     JammingComponent,
-    JamSteerComponent,
-    JAM_LIFETIME_FRACTION,
-    jamLoseLockProbability,
-    jamSingleShotProbability,
+    jamTypeProbability,
+    jamTypeRollJams,
     MissileJammingSystem,
+    missileJamProbability,
     RADAR_JAM_INDEX,
+    rollMissileJammed,
     SystemInterferenceResource,
 } from './jamming_plugin.js';
 import { ProjectileDataComponent } from '../core/index.js';
@@ -35,23 +35,14 @@ import { SourceComponent } from './fire_weapon_plugin.js';
 import { TargetComponent } from '../ship/index.js';
 
 /** A stand-in for the simulation game data, exposing only Outfit.getCached. */
-function mockGameData(outfits: Record<string, ReturnType<typeof getDefaultOutfitData>>,
-    govts: Record<string, GovtData> = {}) {
+function mockGameData(outfits: Record<string, ReturnType<typeof getDefaultOutfitData>>) {
     return {
         data: {
             Outfit: {
                 getCached: (id: string) => outfits[id],
             },
-            Govt: {
-                getCached: (id: string) => govts[id],
-            },
         },
     } as any;
-}
-
-/** A GovtData with the given InhJam1-4 and everything else at defaults. */
-function govtWithInhJam(inhJam: [number, number, number, number]): GovtData {
-    return { ...getDefaultGovtData(), inhJam };
 }
 
 function movement(x: number, y: number) {
@@ -65,30 +56,55 @@ function movement(x: number, y: number) {
     };
 }
 
-describe('deriveJamming (ship jamming accumulation from outfits)', () => {
-    it('sums per-type jamming across outfits, scaled by count', () => {
-        const irJammer = { ...getDefaultOutfitData(), jamming: [20, 0, 0, 0] as const };
-        const radarJammer = { ...getDefaultOutfitData(), jamming: [0, 15, 0, 0] as const };
+function jammer(jamming: [number, number, number, number]) {
+    return { ...getDefaultOutfitData(), jamming };
+}
+
+describe('deriveJamming (the largest single jammer outfit, per type)', () => {
+    it('takes the largest outfit per type, not the sum', () => {
         const gameData = mockGameData({
-            'nova:irJammer': irJammer,
-            'nova:radarJammer': radarJammer,
+            'nova:irJammer': jammer([20, 0, 0, 0]),
+            'nova:radarJammer': jammer([0, 15, 0, 0]),
+            'nova:bigIr': jammer([35, 5, 0, 0]),
         });
-
         const outfits = new Map([
-            ['nova:irJammer', { count: 2 }],   // 2 * [20,0,0,0]
-            ['nova:radarJammer', { count: 1 }], // 1 * [0,15,0,0]
+            ['nova:irJammer', { count: 1 }],
+            ['nova:radarJammer', { count: 1 }],
+            ['nova:bigIr', { count: 1 }],
         ]);
-
-        const result = deriveJamming(outfits, gameData);
-        expect(result).toEqual([40, 15, 0, 0]);
+        expect(deriveJamming(outfits, gameData)).toEqual([35, 15, 0, 0]);
     });
 
-    it('handles negative jamming contributions (they subtract)', () => {
-        const jammer = { ...getDefaultOutfitData(), jamming: [30, 0, 0, 0] as const };
-        const disruptor = { ...getDefaultOutfitData(), jamming: [-10, 0, 0, 0] as const };
-        const gameData = mockGameData({ a: jammer, b: disruptor });
-        const outfits = new Map([['a', { count: 1 }], ['b', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData)).toEqual([20, 0, 0, 0]);
+    it('treats four +25 jammers as 25 (the count is not a multiplier)', () => {
+        // The reference's stacked cell: 1-4 Kit Jammer 25s all behave like
+        // J = 25 against the original's missiles.
+        const gameData = mockGameData({ kit25: jammer([25, 0, 0, 0]) });
+        expect(deriveJamming(new Map([['kit25', { count: 4 }]]), gameData))
+            .toEqual([25, 0, 0, 0]);
+    });
+
+    it('lets one +100 jammer give 100', () => {
+        const gameData = mockGameData({
+            kit25: jammer([25, 0, 0, 0]),
+            big: jammer([100, 0, 0, 0]),
+        });
+        const outfits = new Map([['kit25', { count: 3 }], ['big', { count: 1 }]]);
+        expect(deriveJamming(outfits, gameData)).toEqual([100, 0, 0, 0]);
+    });
+
+    it('ignores an outfit entry with a zero count', () => {
+        const gameData = mockGameData({ big: jammer([100, 0, 0, 0]) });
+        expect(deriveJamming(new Map([['big', { count: 0 }]]), gameData))
+            .toEqual([0, 0, 0, 0]);
+    });
+
+    it('never goes below zero for a negative outfit', () => {
+        const gameData = mockGameData({
+            jam: jammer([30, 0, 0, 0]),
+            disruptor: jammer([-10, 0, 0, 0]),
+        });
+        const outfits = new Map([['jam', { count: 1 }], ['disruptor', { count: 1 }]]);
+        expect(deriveJamming(outfits, gameData)).toEqual([30, 0, 0, 0]);
     });
 
     it('returns undefined when an outfit is not cached yet', () => {
@@ -98,67 +114,9 @@ describe('deriveJamming (ship jamming accumulation from outfits)', () => {
     });
 
     it('returns all zeroes for a ship with no jamming outfits', () => {
-        const plain = { ...getDefaultOutfitData(), jamming: [0, 0, 0, 0] as const };
-        const gameData = mockGameData({ p: plain });
+        const gameData = mockGameData({ p: jammer([0, 0, 0, 0]) });
         const outfits = new Map([['p', { count: 3 }]]);
         expect(deriveJamming(outfits, gameData)).toEqual([0, 0, 0, 0]);
-    });
-});
-
-describe('deriveJamming with a government (InhJam1-4 composition)', () => {
-    it('gives a ship with a govt and no jammer outfits its govt InhJam values', () => {
-        const gameData = mockGameData({},
-            { 'nova:136': govtWithInhJam([50, 50, 35, 20]) });
-        // No outfits at all.
-        const result = deriveJamming(new Map(), gameData, 'nova:136');
-        expect(result).toEqual([50, 50, 35, 20]);
-    });
-
-    it('takes the per-type MAX of outfit jamming and govt InhJam', () => {
-        // Outfits sum to [40, 10, 0, 0]; govt InhJam is [20, 50, 35, 0].
-        // Expect per-type max: [40, 50, 35, 0].
-        const irJammer = { ...getDefaultOutfitData(), jamming: [20, 0, 0, 0] as const };
-        const radarJammer = { ...getDefaultOutfitData(), jamming: [0, 10, 0, 0] as const };
-        const gameData = mockGameData(
-            { ir: irJammer, radar: radarJammer },
-            { 'nova:g': govtWithInhJam([20, 50, 35, 0]) });
-        const outfits = new Map([['ir', { count: 2 }], ['radar', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData, 'nova:g')).toEqual([40, 50, 35, 0]);
-    });
-
-    it('does not let govt InhJam push a stronger outfit value down', () => {
-        // Outfit out-jams the govt on type 1; the outfit value wins.
-        const strong = { ...getDefaultOutfitData(), jamming: [80, 0, 0, 0] as const };
-        const gameData = mockGameData({ s: strong },
-            { 'nova:g': govtWithInhJam([50, 0, 0, 0]) });
-        const outfits = new Map([['s', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData, 'nova:g')).toEqual([80, 0, 0, 0]);
-    });
-
-    it('clamps a negative outfit total up to the govt InhJam floor (max)', () => {
-        // A "disruptor" outfit makes the outfit total negative on type 1;
-        // the govt's inherent jamming is the floor.
-        const disruptor = { ...getDefaultOutfitData(), jamming: [-30, 0, 0, 0] as const };
-        const gameData = mockGameData({ d: disruptor },
-            { 'nova:g': govtWithInhJam([10, 0, 0, 0]) });
-        const outfits = new Map([['d', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData, 'nova:g')).toEqual([10, 0, 0, 0]);
-    });
-
-    it('leaves jamming outfit-only when no govt id is given (unchanged behaviour)', () => {
-        const jammer = { ...getDefaultOutfitData(), jamming: [20, 0, 0, 0] as const };
-        const gameData = mockGameData({ j: jammer },
-            { 'nova:g': govtWithInhJam([90, 90, 90, 90]) });
-        const outfits = new Map([['j', { count: 1 }]]);
-        // No govtId -> the govt is never consulted.
-        expect(deriveJamming(outfits, gameData)).toEqual([20, 0, 0, 0]);
-    });
-
-    it('returns undefined when the govt is given but not cached yet', () => {
-        const jammer = { ...getDefaultOutfitData(), jamming: [20, 0, 0, 0] as const };
-        const gameData = mockGameData({ j: jammer }); // no govts cached
-        const outfits = new Map([['j', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData, 'nova:missing')).toBeUndefined();
     });
 });
 
@@ -192,71 +150,70 @@ describe('effectiveJamming', () => {
     });
 });
 
-describe('jamSingleShotProbability (vulnerability application per type)', () => {
-    it('is zero when the missile has no vulnerability, however strong the jamming', () => {
-        expect(jamSingleShotProbability([0, 0, 0, 0], [100, 100, 100, 100]))
-            .toEqual(0);
+/** The share of `n` evenly spaced rolls in [0, 1) that jam: the exact
+ * probability of jamTypeRollJams under a uniform roll, to 1/n. */
+function rollShare(vuln: number, jam: number, n = 10000) {
+    let jammed = 0;
+    for (let i = 0; i < n; i++) {
+        if (jamTypeRollJams(vuln, jam, (i + 0.5) / n)) {
+            jammed++;
+        }
+    }
+    return jammed / n;
+}
+
+describe('the jam threshold J > (100 - V) + r * V', () => {
+    // The reference's measured anchors (docs/reference_experiments.md,
+    // "J-series wave 3"): V 100 loses about J; V 50 loses nothing up to J 50
+    // and everything at J 100.
+    const anchors: Array<[number, number, number]> = [
+        // [V, J, P]
+        [100, 25, 0.25],
+        [100, 75, 0.75],
+        [100, 100, 1],
+        [50, 25, 0],
+        [50, 50, 0],
+        [50, 75, 0.5],
+        [50, 100, 1],
+        [100, 0, 0],
+    ];
+
+    for (const [v, j, p] of anchors) {
+        it(`gives P = ${p} at V ${v} / J ${j}`, () => {
+            expect(jamTypeProbability(v, j)).toBeCloseTo(p, 10);
+            // And the roll the sim makes realises that probability.
+            expect(rollShare(v, j)).toBeCloseTo(p, 3);
+        });
+    }
+
+    it('never jams a missile with no vulnerability, whatever the jamming', () => {
+        expect(jamTypeProbability(0, 100)).toEqual(0);
+        expect(jamTypeRollJams(0, 100, 0)).toBeFalse();
     });
 
-    it('is zero when the ship has no jamming, however vulnerable the missile', () => {
-        expect(jamSingleShotProbability([100, 100, 100, 100], [0, 0, 0, 0]))
-            .toEqual(0);
+    it('jams at V 100 / J 100 even on the highest roll', () => {
+        expect(jamTypeRollJams(100, 100, 0.999999)).toBeTrue();
     });
 
-    it('scales a single matching type by vuln * jam', () => {
-        expect(jamSingleShotProbability([100, 0, 0, 0], [100, 0, 0, 0]))
-            .toBeCloseTo(1, 10);
-        // 50% vuln vs 50% jam => 0.25.
-        expect(jamSingleShotProbability([50, 0, 0, 0], [50, 0, 0, 0]))
-            .toBeCloseTo(0.25, 10);
+    it('does not jam at V 50 / J 50 even on the lowest roll', () => {
+        // 50 > 50 + 0 * 50 is false: the threshold is strict.
+        expect(jamTypeRollJams(50, 50, 0)).toBeFalse();
     });
 
-    it('combines independent types as 1 - product(1 - p_k)', () => {
-        // Two types each at 50%/50% (p=0.25 each): 1 - 0.75*0.75 = 0.4375.
-        expect(jamSingleShotProbability([50, 50, 0, 0], [50, 50, 0, 0]))
-            .toBeCloseTo(1 - 0.75 * 0.75, 10);
+    it('rolls each type independently and jams if any type does', () => {
+        // IR jams on its roll, radar does not on its.
+        expect(rollMissileJammed([100, 100, 0, 0], [25, 25, 0, 0],
+            [0.1, 0.9, 0, 0])).toBeTrue();
+        expect(rollMissileJammed([100, 100, 0, 0], [25, 25, 0, 0],
+            [0.9, 0.9, 0, 0])).toBeFalse();
+        // A type the missile is not vulnerable to never jams.
+        expect(rollMissileJammed([0, 100, 0, 0], [100, 0, 0, 0],
+            [0, 0, 0, 0])).toBeFalse();
     });
 
-    it('only counts matching type indices (IR jammer vs radar missile does nothing)', () => {
-        // Missile vulnerable only to radar (index 1); ship jams only IR (index 0).
-        expect(jamSingleShotProbability([0, 100, 0, 0], [100, 0, 0, 0]))
-            .toEqual(0);
-    });
-});
-
-describe('jamLoseLockProbability (single-shot probability over the lifetime)', () => {
-    // A 1-second missile: the distribution window is the first 800 ms.
-    const DURATION_MS = 1000;
-    const WINDOW_MS = JAM_LIFETIME_FRACTION * DURATION_MS;
-    const VULN: [number, number, number, number] = [50, 0, 0, 0];
-    const JAM: [number, number, number, number] = [50, 0, 0, 0];
-    const SINGLE = 0.25; // 50% vuln * 50% jam
-
-    it('equals the single-shot probability when one tick spans the window', () => {
-        expect(jamLoseLockProbability(VULN, JAM, WINDOW_MS, DURATION_MS))
-            .toBeCloseTo(SINGLE, 10);
-    });
-
-    it('compounds across the window to the single-shot probability', () => {
-        // 48 ticks (~60 Hz over 800 ms): 1 - (1 - q)^48 == SINGLE.
-        const q = jamLoseLockProbability(VULN, JAM, WINDOW_MS / 48, DURATION_MS);
-        expect(q).toBeLessThan(SINGLE);
-        expect(1 - Math.pow(1 - q, 48)).toBeCloseTo(SINGLE, 10);
-    });
-
-    it('jams on the first tick when the single-shot probability is certain', () => {
-        expect(jamLoseLockProbability([100, 0, 0, 0], [100, 0, 0, 0],
-            1e-9, DURATION_MS)).toEqual(1);
-    });
-
-    it('is zero when the single-shot probability is zero', () => {
-        expect(jamLoseLockProbability([0, 100, 0, 0], [100, 0, 0, 0],
-            WINDOW_MS, DURATION_MS)).toEqual(0);
-    });
-
-    it('falls back to the single-shot probability per tick for a non-positive duration', () => {
-        expect(jamLoseLockProbability(VULN, JAM, 16, 0)).toEqual(SINGLE);
-        expect(jamLoseLockProbability(VULN, JAM, 16, -5)).toEqual(SINGLE);
+    it('combines independent types as 1 - product(1 - P_k)', () => {
+        expect(missileJamProbability([100, 100, 0, 0], [50, 50, 0, 0]))
+            .toBeCloseTo(1 - 0.5 * 0.5, 10);
     });
 });
 
@@ -270,14 +227,15 @@ describe('decideJamReaction (seeker-flag reaction slices)', () => {
     const pastBoth = ATTACK_PARENT_IF_JAMMED_PROBABILITY
         + DECOY_RETARGET_PROBABILITY;
 
-    it('returns none when the roll does not beat the probability', () => {
-        expect(decideJamReaction(0.3, 0.5, 0, flags({})).kind).toEqual('none');
-        // Boundary: roll == probability is NOT a lose (roll >= p).
-        expect(decideJamReaction(0.3, 0.3, 0, flags({})).kind).toEqual('none');
+    it('returns none when the missile is not jammed', () => {
+        expect(decideJamReaction(false, 0, flags({})).kind).toEqual('none');
+        expect(decideJamReaction(false, 0, flags({
+            attackParentIfJammed: true, turnsAwayIfJammed: true,
+        })).kind).toEqual('none');
     });
 
     it('flies straight by default when jammed with no special seeker flags', () => {
-        expect(decideJamReaction(0.5, 0.1, 0, flags({})).kind)
+        expect(decideJamReaction(true, 0, flags({})).kind)
             .toEqual('flyStraight');
     });
 
@@ -287,13 +245,13 @@ describe('decideJamReaction (seeker-flag reaction slices)', () => {
             decoyedByAsteroids: true,
             turnsAwayIfJammed: true,
         });
-        expect(decideJamReaction(0.5, 0.1, inFirstSlice, all).kind)
+        expect(decideJamReaction(true, inFirstSlice, all).kind)
             .toEqual('retargetParent');
         // Past the parent slice but inside the decoy slice.
-        expect(decideJamReaction(0.5, 0.1, pastParent, all).kind)
+        expect(decideJamReaction(true, pastParent, all).kind)
             .toEqual('retargetDecoy');
         // Past both retarget slices: falls through to veer.
-        expect(decideJamReaction(0.5, 0.1, pastBoth, all).kind)
+        expect(decideJamReaction(true, pastBoth, all).kind)
             .toEqual('veerAway');
     });
 
@@ -302,21 +260,21 @@ describe('decideJamReaction (seeker-flag reaction slices)', () => {
             decoyedByAsteroids: true,
             turnsAwayIfJammed: true,
         });
-        expect(decideJamReaction(0.5, 0.1, DECOY_RETARGET_PROBABILITY / 2,
+        expect(decideJamReaction(true, DECOY_RETARGET_PROBABILITY / 2,
             decoyVeer).kind).toEqual('retargetDecoy');
-        expect(decideJamReaction(0.5, 0.1, DECOY_RETARGET_PROBABILITY,
+        expect(decideJamReaction(true, DECOY_RETARGET_PROBABILITY,
             decoyVeer).kind).toEqual('veerAway');
     });
 
     it('flies straight when a retarget slice misses and turnsAway is unset', () => {
-        expect(decideJamReaction(0.5, 0.1, 0.99,
+        expect(decideJamReaction(true, 0.99,
             flags({ decoyedByAsteroids: true })).kind).toEqual('flyStraight');
     });
 
     it('veers away when only turnsAwayIfJammed is set, whatever the reaction roll', () => {
-        expect(decideJamReaction(0.5, 0.1, 0, flags({ turnsAwayIfJammed: true }))
+        expect(decideJamReaction(true, 0, flags({ turnsAwayIfJammed: true }))
             .kind).toEqual('veerAway');
-        expect(decideJamReaction(0.5, 0.1, 0.99,
+        expect(decideJamReaction(true, 0.99,
             flags({ turnsAwayIfJammed: true })).kind).toEqual('veerAway');
     });
 });
@@ -378,8 +336,6 @@ function makeJammingWorld(seed: number, interference = 0) {
     const world = new World('jamming-test');
     world.resources.set(RandomResource, new Random(seed));
     world.resources.set(SystemInterferenceResource, { interference });
-    // A fixed 60 Hz tick; the jamming system reads delta_ms to distribute the
-    // jam probability over the missile's lifetime.
     world.resources.set(TimeResource,
         { time: 0, delta_s: 1 / 60, delta_ms: 1000 / 60, frame: 0 });
     world.addSystem(MissileJammingSystem);
@@ -410,120 +366,178 @@ function makeShip(x: number, y: number, jamming: Jamming) {
         .addComponent(JammingComponent, jamming);
 }
 
-describe('MissileJammingSystem (deterministic integration)', () => {
+function steerOf(world: World, uuid: string) {
+    return world.entities.get(uuid)!.components.get(JamDecisionComponent)
+        ?.steer;
+}
+
+/** Launches `count` missiles (`m000`, `m001`, ...) at `target` in one tick
+ * and returns their decisions. */
+function salvo(world: World, count: number, target: string,
+    vuln: [number, number, number, number],
+    seeker: Partial<SeekerFlags> = {}) {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) {
+        const id = `m${String(i).padStart(3, '0')}`;
+        world.entities.set(id, makeMissile(target, vuln, seeker));
+        ids.push(id);
+    }
+    world.step();
+    return ids.map(id => steerOf(world, id));
+}
+
+describe('MissileJammingSystem (one decision per missile)', () => {
+    it('decides a missile the tick it is launched, and never again', () => {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
+        world.entities.set('missile', makeMissile('ship', [100, 0, 0, 0]));
+
+        world.step();
+        expect(steerOf(world, 'missile')).toEqual('flyStraight');
+
+        // The decision drew exactly five numbers; later ticks draw none.
+        const expected = new Random(1);
+        for (let i = 0; i < 5; i++) {
+            expected.next();
+        }
+        const random = world.resources.get(RandomResource)!;
+        expect(random.getState()).toEqual(expected.getState());
+        for (let i = 0; i < 200; i++) {
+            world.step();
+            expect(steerOf(world, 'missile')).toEqual('flyStraight');
+        }
+        expect(random.getState()).toEqual(expected.getState());
+    });
+
+    it('keeps a missile that passed its roll tracking for life, even if the target jams harder later', () => {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
+        world.entities.set('missile', makeMissile('ship', [100, 0, 0, 0]));
+        world.step();
+        expect(steerOf(world, 'missile')).toEqual('track');
+
+        // A jammer switched on mid-flight changes nothing: no re-roll.
+        world.entities.get('ship')!.components.set(JammingComponent,
+            [100, 0, 0, 0]);
+        for (let i = 0; i < 100; i++) {
+            world.step();
+        }
+        expect(steerOf(world, 'missile')).toEqual('track');
+    });
+
     it('never jams a missile whose vulnerabilities do not match the ship jamming', () => {
         const world = makeJammingWorld(1);
         // Ship jams IR (index 0); missile vulnerable only to radar (index 1).
         world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
-        world.entities.set('missile', makeMissile('ship', [0, 100, 0, 0]));
-
-        for (let i = 0; i < 200; i++) {
-            world.step();
-        }
-        const missile = world.entities.get('missile')!;
-        // No jam steer override was ever set, and the target is unchanged.
-        expect(missile.components.get(JamSteerComponent)).toBeUndefined();
-        expect(missile.components.get(TargetComponent)!.target).toEqual('ship');
+        expect(salvo(world, 200, 'ship', [0, 100, 0, 0])
+            .every(steer => steer === 'track')).toBeTrue();
     });
 
-    it('eventually jams a fully-vulnerable missile against a strong jammer', () => {
+    it('jams about J of V 100 missiles against J 25, and none of V 50', () => {
+        const world = makeJammingWorld(3);
+        world.entities.set('ship', makeShip(0, 100, [25, 0, 0, 0]));
+        const v100 = salvo(world, 800, 'ship', [100, 0, 0, 0]);
+        const share = v100.filter(s => s === 'flyStraight').length / 800;
+        // Binomial sd at p = 0.25, n = 800 is about 0.015.
+        expect(share).toBeGreaterThan(0.19);
+        expect(share).toBeLessThan(0.31);
+
+        const world50 = makeJammingWorld(3);
+        world50.entities.set('ship', makeShip(0, 100, [25, 0, 0, 0]));
+        expect(salvo(world50, 400, 'ship', [50, 0, 0, 0])
+            .every(steer => steer === 'track')).toBeTrue();
+    });
+
+    it('jams every V 50 missile against J 100', () => {
+        const world = makeJammingWorld(5);
+        world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
+        expect(salvo(world, 200, 'ship', [50, 0, 0, 0])
+            .every(steer => steer === 'flyStraight')).toBeTrue();
+    });
+
+    it('turns a jammed turnsAwayIfJammed missile away for life', () => {
         const world = makeJammingWorld(1);
         world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
-        // Fully vulnerable to IR, no special seeker flags -> flyStraight.
-        world.entities.set('missile', makeMissile('ship', [100, 0, 0, 0]));
-
-        let sawFlyStraight = false;
+        world.entities.set('missile',
+            makeMissile('ship', [100, 0, 0, 0], { turnsAwayIfJammed: true }));
         for (let i = 0; i < 50; i++) {
             world.step();
-            if (world.entities.get('missile')!.components.get(JamSteerComponent)
-                === 'flyStraight') {
-                sawFlyStraight = true;
-            }
+            expect(steerOf(world, 'missile')).toEqual('veerAway');
         }
-        expect(sawFlyStraight).toBeTrue();
     });
 
-    it('is deterministic: identical seed and setup give identical jam outcomes', () => {
+    it('decides a missile launched without a target when it first acquires one', () => {
+        const world = makeJammingWorld(1);
+        world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
+        world.entities.set('missile', makeMissile(undefined, [100, 0, 0, 0]));
+        for (let i = 0; i < 10; i++) {
+            world.step();
+        }
+        expect(steerOf(world, 'missile')).toBeUndefined();
+        world.entities.get('missile')!.components.set(TargetComponent,
+            { target: 'ship' });
+        world.step();
+        expect(steerOf(world, 'missile')).toEqual('flyStraight');
+    });
+
+    it('is deterministic: identical seed and setup give identical decisions', () => {
         const outcomes = (seed: number) => {
             const world = makeJammingWorld(seed);
             world.entities.set('ship', makeShip(0, 100, [50, 0, 0, 0]));
-            world.entities.set('missile', makeMissile('ship', [50, 0, 0, 0]));
-            const seq: (string | undefined)[] = [];
-            for (let i = 0; i < 100; i++) {
-                world.step();
-                seq.push(world.entities.get('missile')!
-                    .components.get(JamSteerComponent));
-            }
-            return seq;
+            return salvo(world, 200, 'ship', [100, 0, 0, 0]);
         };
-        // Same seed -> identical sequence of per-frame jam states.
         expect(outcomes(42)).toEqual(outcomes(42));
-        // A different seed produces a (very likely) different sequence.
         expect(outcomes(42)).not.toEqual(outcomes(43));
     });
 
-    it('retargets a jammed decoy-vulnerable missile onto a nearby decoy', () => {
+    it('retargets some jammed decoy-vulnerable missiles onto a nearby decoy', () => {
         const world = makeJammingWorld(1);
         world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
         world.entities.set('decoy', new Entity('decoy')
             .addComponent(DecoyTargetComponent, { weight: 1 })
             .addComponent(MovementStateComponent, movement(0, 50)));
-        world.entities.set('missile',
-            makeMissile('ship', [100, 0, 0, 0], { decoyedByAsteroids: true }));
-
-        // Retargets are gated at DECOY_RETARGET_PROBABILITY per jam event, so
-        // give the loop enough steps to make a miss astronomically unlikely.
-        let retargeted = false;
-        for (let i = 0; i < 500 && !retargeted; i++) {
-            world.step();
-            const target = world.entities.get('missile')!
-                .components.get(TargetComponent)!.target;
-            if (target === 'decoy') {
-                retargeted = true;
-            }
-        }
-        expect(retargeted).toBeTrue();
+        const steers = salvo(world, 200, 'ship', [100, 0, 0, 0],
+            { decoyedByAsteroids: true });
+        const decoyed = steers.map((steer, i) => [steer,
+            world.entities.get(`m${String(i).padStart(3, '0')}`)!
+                .components.get(TargetComponent)!.target] as const)
+            .filter(([, target]) => target === 'decoy');
+        // DECOY_RETARGET_PROBABILITY of 200: about 20.
+        expect(decoyed.length).toBeGreaterThan(5);
+        expect(decoyed.length).toBeLessThan(50);
+        // A decoyed missile tracks the decoy; the rest fly straight.
+        expect(decoyed.every(([steer]) => steer === 'track')).toBeTrue();
+        expect(steers.filter(steer => steer === 'flyStraight').length)
+            .toEqual(200 - decoyed.length);
     });
 
-    it('retargets a jammed attackParentIfJammed missile onto its parent', () => {
+    it('retargets some jammed attackParentIfJammed missiles onto their parent', () => {
         const world = makeJammingWorld(1);
         world.entities.set('parent', makeShip(0, 200, [0, 0, 0, 0]));
         world.entities.set('ship', makeShip(0, 100, [100, 0, 0, 0]));
-        const missile = makeMissile('ship', [100, 0, 0, 0],
-            { attackParentIfJammed: true });
-        missile.components.set(SourceComponent, 'parent');
-        world.entities.set('missile', missile);
-
-        // Gated at ATTACK_PARENT_IF_JAMMED_PROBABILITY per jam event; as above,
-        // run long enough that a miss is astronomically unlikely.
-        let attackedParent = false;
-        for (let i = 0; i < 500 && !attackedParent; i++) {
-            world.step();
-            if (world.entities.get('missile')!
-                .components.get(TargetComponent)!.target === 'parent') {
-                attackedParent = true;
-            }
+        for (let i = 0; i < 200; i++) {
+            const missile = makeMissile('ship', [100, 0, 0, 0],
+                { attackParentIfJammed: true });
+            missile.components.set(SourceComponent, 'parent');
+            world.entities.set(`m${String(i).padStart(3, '0')}`, missile);
         }
-        expect(attackedParent).toBeTrue();
+        world.step();
+        const onParent = [...world.entities.values()].filter(entity =>
+            entity.components.get(TargetComponent)?.target === 'parent');
+        expect(onParent.length).toBeGreaterThan(5);
+        expect(onParent.length).toBeLessThan(50);
+        expect(onParent.every(entity =>
+            entity.components.get(JamDecisionComponent)?.steer === 'track'))
+            .toBeTrue();
     });
 
     it('adds system interference to jam a radar missile that a jam-free ship would not', () => {
-        // Ship has no jamming at all; only system interference jams the missile,
-        // and only because the missile is confusedByInterference + radar-vuln.
         const world = makeJammingWorld(1, /* interference */ 100);
         world.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
         world.entities.set('missile',
             makeMissile('ship', [0, 100, 0, 0], { confusedByInterference: true }));
-
-        let jammed = false;
-        for (let i = 0; i < 50 && !jammed; i++) {
-            world.step();
-            if (world.entities.get('missile')!
-                .components.get(JamSteerComponent) !== undefined) {
-                jammed = true;
-            }
-        }
-        expect(jammed).toBeTrue();
+        world.step();
+        expect(steerOf(world, 'missile')).toEqual('flyStraight');
     });
 
     it('does NOT let system interference jam a radar missile without the confused flag', () => {
@@ -531,78 +545,45 @@ describe('MissileJammingSystem (deterministic integration)', () => {
         world.entities.set('ship', makeShip(0, 100, [0, 0, 0, 0]));
         world.entities.set('missile',
             makeMissile('ship', [0, 100, 0, 0], { confusedByInterference: false }));
-
-        for (let i = 0; i < 200; i++) {
-            world.step();
-        }
-        expect(world.entities.get('missile')!
-            .components.get(JamSteerComponent)).toBeUndefined();
+        world.step();
+        expect(steerOf(world, 'missile')).toEqual('track');
     });
 
     /**
-     * PRNG-STREAM INDEPENDENCE, the reason MissileJammingSystem draws
-     * twice per guided missile per frame even when the jam probability is
-     * zero. Every other integration spec here flies a single missile, so
-     * nothing pinned the property the unconditional draws exist for: one
-     * missile's rolls must not move when a DIFFERENT missile's jamming
-     * situation changes.
-     *
-     * Two worlds, same seed, two missiles each. Missile A's target either
-     * can or cannot jam it; missile B's situation is identical in both.
-     * If the draws were conditional, A would consume zero numbers in the
-     * no-jam world, shifting every one of B's rolls — and a player adding
-     * or removing a jammer anywhere in the system would silently rewrite
-     * unrelated missiles' outcomes (a rollback/replay desync waiting to
-     * happen).
+     * PRNG-STREAM INDEPENDENCE, the reason every decision draws the same
+     * five numbers whatever the jamming: one missile's roll must not move
+     * when a DIFFERENT missile's jamming situation changes (a player adding
+     * or removing a jammer anywhere in the system would otherwise silently
+     * rewrite unrelated missiles' outcomes).
      */
-    it('keeps one missile\'s rolls independent of another\'s jamming',
-        () => {
-            // 'missile a' sorts before 'missile b', so A's draws come
-            // first and any shift in the stream lands on B.
-            const outcomes = (aCanBeJammed: boolean) => {
-                const world = makeJammingWorld(7);
-                world.entities.set('ship a', makeShip(0, 100,
-                    aCanBeJammed ? [100, 0, 0, 0] : [0, 0, 0, 0]));
-                world.entities.set('ship b', makeShip(0, 200,
-                    [50, 0, 0, 0]));
-                world.entities.set('missile a',
-                    makeMissile('ship a', [100, 0, 0, 0]));
-                world.entities.set('missile b',
-                    makeMissile('ship b', [50, 0, 0, 0]));
-                const seq: (string | undefined)[] = [];
-                for (let i = 0; i < 120; i++) {
-                    world.step();
-                    seq.push(world.entities.get('missile b')!
-                        .components.get(JamSteerComponent));
-                }
-                return seq;
+    it('keeps one missile\'s roll independent of another\'s jamming', () => {
+        // 'a...' sorts before 'b...', so A's draws come first and any
+        // shift in the stream lands on the B missiles.
+        const outcomes = (aCanBeJammed: boolean) => {
+            const world = makeJammingWorld(7);
+            world.entities.set('ship a', makeShip(0, 100,
+                aCanBeJammed ? [100, 0, 0, 0] : [0, 0, 0, 0]));
+            world.entities.set('ship b', makeShip(0, 200, [50, 0, 0, 0]));
+            world.entities.set('a missile',
+                makeMissile('ship a', [100, 0, 0, 0]));
+            for (let i = 0; i < 100; i++) {
+                world.entities.set(`b missile ${i}`,
+                    makeMissile('ship b', [100, 0, 0, 0]));
+            }
+            world.step();
+            return {
+                a: steerOf(world, 'a missile'),
+                b: [...Array(100).keys()].map(i =>
+                    steerOf(world, `b missile ${i}`)),
             };
-
-            const withJammer = outcomes(true);
-            const withoutJammer = outcomes(false);
-            // Not vacuous: B really is being jammed some of the time, so
-            // the comparison is over a sequence with structure in it.
-            expect(withJammer.some(state => state !== undefined)).toBeTrue();
-            // Byte-identical either way. This is what the two
-            // unconditional draws buy.
-            expect(withoutJammer).toEqual(withJammer);
-
-            // And A itself really did behave differently between the two
-            // worlds, so the setups are genuinely distinct.
-            const aOutcomes = (aCanBeJammed: boolean) => {
-                const world = makeJammingWorld(7);
-                world.entities.set('ship a', makeShip(0, 100,
-                    aCanBeJammed ? [100, 0, 0, 0] : [0, 0, 0, 0]));
-                world.entities.set('missile a',
-                    makeMissile('ship a', [100, 0, 0, 0]));
-                const seq: (string | undefined)[] = [];
-                for (let i = 0; i < 120; i++) {
-                    world.step();
-                    seq.push(world.entities.get('missile a')!
-                        .components.get(JamSteerComponent));
-                }
-                return seq;
-            };
-            expect(aOutcomes(true)).not.toEqual(aOutcomes(false));
-        });
+        };
+        const withJammer = outcomes(true);
+        const withoutJammer = outcomes(false);
+        expect(withJammer.a).toEqual('flyStraight');
+        expect(withoutJammer.a).toEqual('track');
+        // Not vacuous: B's decisions are mixed.
+        expect(withJammer.b).toContain('flyStraight');
+        expect(withJammer.b).toContain('track');
+        expect(withoutJammer.b).toEqual(withJammer.b);
+    });
 });

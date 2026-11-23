@@ -8,10 +8,11 @@ import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
+import { TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Optional } from 'nova_ecs/optional';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
@@ -27,99 +28,66 @@ import { DisableCreditSystem } from '../reputation/index.js';
 
 /**
  * ============================================================================
- * Missile jamming (EVN Bible model vs. what we implement)
+ * Missile jamming (measured against the original; see docs/
+ * reference_experiments.md, "J-series wave 3: how jamming decides a
+ * missile's fate")
  * ============================================================================
- *
- * The Bible describes the *fields* but is vague on the exact per-frame math, so
- * where it is silent we pick a reasonable, data-driven model and document it
- * here.
  *
  * Bible fields (all plumbed through the data layer):
  *  - wëap JamVuln1-4: a guided weapon's vulnerability to each of the four
  *    jamming types (0-100%). "Ignored if the weapon is not a guided weapon."
- *  - oütf ModTypes 33-36 ("Jamming Type 1-4"): jamming strength an outfit adds
- *    to its ship (percent, can be negative), summed across outfits.
- *  - govt InhJam1-4: a government's inherent jamming. A ship that carries a
- *    GovtComponent folds its government's InhJam1-4 into its jamming; see
- *    deriveJamming and the InhJam composition rule documented there. Ships with
- *    no GovtComponent (e.g. the player, or NPCs before government-aware spawning
- *    exists) get their jamming purely from outfits, unchanged.
+ *  - oütf ModTypes 33-36 ("Jamming Type 1-4"): jamming strength an outfit
+ *    gives its ship (percent).
+ *  - gövt InhJam1-4: a government's inherent jamming. Parsed, but NOT applied:
+ *    the reference measured no effect (see deriveJamming).
  *  - sÿst Interference: system sensor static (0-100), which additionally
  *    degrades radar-guided missiles (Seeker flag 0x0008, confusedByInterference).
  *  - Seeker flags: turnsAwayIfJammed (0x0010), attackParentIfJammed (0x8000),
  *    decoyedByAsteroids (0x0002), confusedByInterference (0x0008).
  *
- * OUR MODEL (per frame, per jammed missile), all magnitudes data-driven:
+ * THE MODEL (what the original does, measured over ~1850 missiles):
  *
- *  1. Effective jamming strength the missile experiences for type `k` is
- *         effJam_k = clamp(targetShipJamming_k, 0, 100)
- *     plus, only for the radar type (k = 1, 0-indexed) and only when the
- *     weapon's Seeker `confusedByInterference` flag is set, the current
- *     system's Interference value (see judgment call #3).
+ *  1. ONE decision per guided missile, made the first tick it has a target
+ *     (in practice the tick it is launched), and PERMANENT for its life. The
+ *     loss share does not grow with flight time and a jammed missile never
+ *     re-acquires.
+ *  2. Per jamming type k, with J_k the target's effective jamming and V_k the
+ *     missile's JamVuln (both 0-100), and r_k a fresh uniform [0, 1) draw:
+ *         jammed_k  iff  J_k > (100 - V_k) + r_k * V_k
+ *     i.e. the missile resists with 100 - V plus a random share of V, so
+ *         P_k = clamp((J_k - (100 - V_k)) / V_k, 0, 1)
+ *     (V 100: P = J; V 50: 0 up to J 50, 1 at J 100). V_k = 0 never jams.
+ *     The missile is jammed if any type jams it.
+ *  3. A jammed plain missile flies dead straight along its heading at the
+ *     decision (its launch heading); a turnsAwayIfJammed one steers directly
+ *     away from its target. attackParentIfJammed / decoyedByAsteroids missiles
+ *     retarget with the reaction roll's odds (ATTACK_PARENT_IF_JAMMED_PROBABILITY,
+ *     DECOY_RETARGET_PROBABILITY), decided at the same moment, and otherwise
+ *     fall back to veer/straight. A retargeted missile then tracks its new
+ *     target with no further roll.
  *
- *  2. The vuln/jam products define a SINGLE-SHOT lose-lock probability -- the
- *     chance the missile would be jammed if the roll were applied exactly once
- *     at launch. Per type, p_k = (vuln_k / 100) * (effJam_k / 100); the four
- *     types are independent, so
- *         P = 1 - Π_k (1 - p_k)
- *     That single-shot probability is then DISTRIBUTED over the first
- *     JAM_LIFETIME_FRACTION of the missile's flight: each tick rolls
- *         q = 1 - (1 - P)^(delta_ms / (JAM_LIFETIME_FRACTION * shotDuration))
- *     which compounds to exactly P across that window regardless of tick rate
- *     (so an IR missile vs. a 7%-jamming ship is jammed on ~7% of flights, not
- *     with certainty). Rolls continue at the same rate for the remainder of
- *     the flight, adding slightly to the total; see jamLoseLockProbability.
- *
- *  3. A deterministic PRNG draw decides whether the missile loses lock this
- *     frame. On a lose-lock result, a second draw (the "reaction roll") decides
- *     how it reacts. The retargeting flags are treated as *eligibility*, not
- *     certainty -- the Bible's only rate language is the word "may" ("May
- *     attack parent ship if jammed"), and in the original game clearly not
- *     every jammed missile attacks an asteroid:
- *       - attackParentIfJammed: with probability
- *         ATTACK_PARENT_IF_JAMMED_PROBABILITY, retarget the firing ship.
- *       - decoyedByAsteroids: with probability DECOY_RETARGET_PROBABILITY,
- *         retarget a nearby decoy (asteroid).
- *       - turnsAwayIfJammed: mark it to veer away from its target this frame.
- *       - otherwise: drop guidance for the frame (fly straight ahead).
- *
- * A missile only ever loses lock; it does not spontaneously re-acquire (the
- * original target reference is kept unless it retargets a decoy or its parent),
- * which keeps behaviour legible and matches the "loses lock / veers off"
- * language in the Bible.
+ * The decision lives in JamDecisionComponent, which is serializer-registered:
+ * it rides in snapshots, the wire and the desync hash, so a rollback replays it
+ * rather than re-rolling it.
  */
 
 /**
- * The fraction of a missile's flight time (shotDuration) over which its
- * single-shot jam probability is distributed: the per-tick roll compounds to
- * the full vuln*jam probability across this fraction of the lifetime.
- * JUDGMENT CALL: the Bible gives no rate at all, so we anchor to "the data's
- * percentage is the chance this missile gets jammed, period" and spread it
- * over most of the flight. Less than 1 so the probability is mostly spent
- * while jamming still matters -- a lock lost in the final moments of a
- * missile's fuel is behaviorally irrelevant. Tune freely.
- */
-export const JAM_LIFETIME_FRACTION = 0.8;
-
-/**
- * Given a lose-lock event, the probability that a missile whose Seeker flag
+ * Given a jammed missile, the probability that a missile whose Seeker flag
  * makes it *eligible* for a special retarget reaction actually takes it
- * (instead of falling through to veer/fly-straight). Without a gate, the
- * retargets are absorbing states -- veer/straight last one frame but a
- * retarget permanently rewrites TargetComponent -- so over many jam events
- * every decoy-vulnerable missile would end up attacking an asteroid.
+ * (instead of falling through to veer/fly-straight).
  * JUDGMENT CALL: the Bible gives no rate (its only hint is the word "may" in
- * "May attack parent ship if jammed"); 10% is an eyeballed starting point.
- * Tune freely.
+ * "May attack parent ship if jammed") and the reference left the parent half
+ * unmeasured; 10% is an eyeballed starting point. Tune freely.
  */
 export const ATTACK_PARENT_IF_JAMMED_PROBABILITY = 0.1;
 /** See ATTACK_PARENT_IF_JAMMED_PROBABILITY. */
 export const DECOY_RETARGET_PROBABILITY = 0.1;
 
 /**
- * A ship's accumulated jamming strength for each of the four jamming types,
- * derived from its outfits (oütf ModTypes 33-36). Percentages that add across
- * outfits; clamped to be non-negative when applied against missiles.
+ * A ship's jamming strength for each of the four jamming types, derived from
+ * its outfits (oütf ModTypes 33-36): per type, the LARGEST single outfit's
+ * value (see deriveJamming). Clamped to be non-negative when applied against
+ * missiles.
  *
  * Ordered [type1, type2, type3, type4] to match weapon JamVulnerabilities.
  */
@@ -171,68 +139,39 @@ const DECOY_DISTRACTION_RANGE_SQUARED =
 export const RADAR_JAM_INDEX = 1;
 
 /**
- * Folds a government's inherent jamming (govt InhJam1-4) into a ship's
- * outfit-derived jamming, per type.
+ * Derives a ship's jamming from its outfits (oütf ModTypes 33-36): per type,
+ * the LARGEST value any single outfit gives, not the sum. The reference found
+ * one, two, three or four +25 jammers on a hull all acting as 25, while one
+ * +100 jammer acted as 100 ("Jammer outfits on a hull do not add up"; the
+ * "count is ignored" alternative fits the data equally). An outfit's count
+ * does not matter, and with no positive outfit a type stays at 0.
  *
- * INHJAM COMPOSITION RULE (JUDGMENT CALL): the EVN Bible describes InhJam1-4 as
- * the government's inherent jamming *ability* (a 0-100% value) but does not say
- * how it combines with outfit jamming (oütf ModTypes 33-36, which add across
- * hardware). We take the per-type MAX rather than a sum: a government's inherent
- * sensor tech is a floor, not another piece of bolt-on hardware, so a ship of a
- * high-jamming government (e.g. the Krypt at InhJam 100) is not pushed past 100
- * just by also carrying a jammer, and a ship whose outfits already out-jam its
- * government keeps the stronger outfit value. Outfit sums can be negative (a
- * "jamming" outfit with a negative ModType), so the max also prevents a negative
- * outfit total from cancelling a government's inherent jamming below its floor.
+ * gövt InhJam1-4 is deliberately NOT applied: a target of an InhJam1 100
+ * government jammed nothing in the reference (0 of 149 missiles). What InhJam
+ * actually does is open; see the "J leftovers" row of the pending table in
+ * docs/reference_experiments.md. The field is still parsed (GovtData.inhJam).
  *
- * Not modelled yet (deferred to NPC/AiType work): the gövt
- * `freightersHalfJamming` flag, under which AiType 1-2 freighters get 50% of the
- * warship InhJam value. Ships have no AiType in the sim yet, so every
- * govt-carrying ship is treated as getting the full warship InhJam.
- */
-function foldInhJam(outfitJamming: readonly [number, number, number, number],
-    inhJam: readonly [number, number, number, number]):
-    [number, number, number, number] {
-    return [
-        Math.max(outfitJamming[0], inhJam[0] ?? 0),
-        Math.max(outfitJamming[1], inhJam[1] ?? 0),
-        Math.max(outfitJamming[2], inhJam[2] ?? 0),
-        Math.max(outfitJamming[3], inhJam[3] ?? 0),
-    ];
-}
-
-/**
- * Derives a ship's jamming: sums the per-type strength contributed by its
- * outfits (oütf ModTypes 33-36), then, if a government id is given, folds that
- * government's inherent jamming (govt InhJam1-4) in per type via foldInhJam.
- * Pure and deterministic; returns a fresh 4-tuple.
- *
- * Returns undefined (retry next step, matching deriveWeaponsState) if any
- * outfit -- or the given government -- is not yet in the game-data cache.
+ * Pure and deterministic; returns a fresh 4-tuple. Returns undefined (retry
+ * next step, matching deriveWeaponsState) if any outfit is not yet in the
+ * game-data cache.
  */
 export function deriveJamming(outfits: OutfitsState,
-    gameData: SimulationGameDataInterface,
-    govtId?: string): Jamming | undefined {
-    const total: [number, number, number, number] = [0, 0, 0, 0];
+    gameData: SimulationGameDataInterface): Jamming | undefined {
+    const strongest: [number, number, number, number] = [0, 0, 0, 0];
     for (const [id, state] of outfits) {
         const outfit = gameData.data.Outfit.getCached(id);
         if (!outfit) {
             // Not loaded yet; retry next step (matches deriveWeaponsState).
             return undefined;
         }
+        if (!(state.count > 0)) {
+            continue;
+        }
         for (let i = 0; i < 4; i++) {
-            total[i] += (outfit.jamming[i] ?? 0) * state.count;
+            strongest[i] = Math.max(strongest[i], outfit.jamming[i] ?? 0);
         }
     }
-    if (govtId === undefined) {
-        return total;
-    }
-    const govt = gameData.data.Govt.getCached(govtId);
-    if (!govt) {
-        // Government data not loaded yet; retry next step.
-        return undefined;
-    }
-    return foldInhJam(total, govt.inhJam);
+    return strongest;
 }
 
 /**
@@ -264,71 +203,92 @@ export function effectiveJamming(
     return jam;
 }
 
+/** Clamps a jamming or vulnerability value into 0-100 (NaN -> 0). */
+function percent(value: number | undefined): number {
+    const v = value ?? 0;
+    return v > 0 ? Math.min(100, v) : 0;
+}
+
 /**
- * The probability that a missile with the given vulnerabilities would lose lock
- * if the jam roll were applied exactly once (e.g. right at launch), given the
- * effective jamming it experiences. Pure; does not roll.
- *
- * Each jamming type independently contributes p_k = vuln_k * effJam_k (as
- * fractions); the combined chance is 1 - Π(1 - p_k).
+ * Whether ONE jamming type jams a missile, given its vulnerability V and the
+ * effective jamming J it faces (both 0-100), and `roll`, a fresh uniform
+ * [0, 1) draw from the deterministic PRNG:
+ *     jammed  iff  J > (100 - V) + roll * V
+ * V = 0 never jams (the missile resists with a full 100). Pure.
  */
-export function jamSingleShotProbability(
+export function jamTypeRollJams(vulnerability: number, jamming: number,
+    roll: number): boolean {
+    const v = percent(vulnerability);
+    if (v <= 0) {
+        return false;
+    }
+    return percent(jamming) > (100 - v) + roll * v;
+}
+
+/**
+ * The probability that one jamming type jams a missile: jamTypeRollJams over
+ * a uniform roll, P = clamp((J - (100 - V)) / V, 0, 1). V = 0 gives 0. The
+ * measured anchors: V 100 gives P = J (J 25 -> 0.25, J 100 -> 1); V 50 gives
+ * 0 for J <= 50, 0.5 at J 75 and 1 at J 100. Pure; does not roll.
+ */
+export function jamTypeProbability(vulnerability: number,
+    jamming: number): number {
+    const v = percent(vulnerability);
+    if (v <= 0) {
+        return 0;
+    }
+    return Math.max(0, Math.min(1, (percent(jamming) - (100 - v)) / v));
+}
+
+/**
+ * The chance a missile is jammed at its one decision, all four types
+ * together: the types roll independently, so 1 - Π(1 - P_k). Pure; for tests
+ * and tooling (the sim rolls each type with jamTypeRollJams).
+ */
+export function missileJamProbability(
     vulnerabilities: JammingVulnerabilities,
     effectiveJam: readonly [number, number, number, number]): number {
     let keep = 1;
     for (let i = 0; i < 4; i++) {
-        const vuln = Math.max(0, Math.min(100, vulnerabilities[i] ?? 0)) / 100;
-        const jam = Math.max(0, Math.min(100, effectiveJam[i] ?? 0)) / 100;
-        keep *= (1 - vuln * jam);
+        keep *= 1 - jamTypeProbability(vulnerabilities[i] ?? 0,
+            effectiveJam[i] ?? 0);
     }
     return 1 - keep;
 }
 
 /**
- * The per-tick probability that a missile loses lock, distributing its
- * single-shot probability over JAM_LIFETIME_FRACTION of its flight time:
- *     q = 1 - (1 - P)^(deltaMs / (JAM_LIFETIME_FRACTION * shotDurationMs))
- * Compounding q across that window yields exactly P, whatever the tick rate.
- * Rolls past the window keep the same rate (the missile is about to expire, so
- * the small extra total is behaviorally irrelevant). Pure; does not roll.
- *
- * Edge cases: P = 1 jams on the first tick (matching a certain single-shot
- * roll); a non-positive shotDuration falls back to the raw single-shot
- * probability per tick.
+ * Rolls a missile's one jam decision across the four types: jammed if any
+ * type jams it. `rolls` holds one fresh [0, 1) draw per type, always all four
+ * (see MissileJammingSystem for why the draw count never depends on the
+ * jamming). Pure.
  */
-export function jamLoseLockProbability(
-    vulnerabilities: JammingVulnerabilities,
+export function rollMissileJammed(vulnerabilities: JammingVulnerabilities,
     effectiveJam: readonly [number, number, number, number],
-    deltaMs: number, shotDurationMs: number): number {
-    const single = jamSingleShotProbability(vulnerabilities, effectiveJam);
-    if (single <= 0) {
-        return 0;
+    rolls: readonly [number, number, number, number]): boolean {
+    let jammed = false;
+    for (let i = 0; i < 4; i++) {
+        if (jamTypeRollJams(vulnerabilities[i] ?? 0, effectiveJam[i] ?? 0,
+            rolls[i])) {
+            jammed = true;
+        }
     }
-    if (single >= 1) {
-        return 1;
-    }
-    const windowMs = JAM_LIFETIME_FRACTION * shotDurationMs;
-    if (!(windowMs > 0)) {
-        return single;
-    }
-    return 1 - Math.pow(1 - single, deltaMs / windowMs);
+    return jammed;
 }
 
 /**
- * How a jammed missile should react this frame. Returned by the pure decision
+ * How a missile reacts to its jam decision. Returned by the pure decision
  * helper so it can be unit-tested without an ECS world.
  */
 export type JamReaction =
-    | { kind: 'none' }                       // not jammed this frame
+    | { kind: 'none' }                       // not jammed: tracks its target
     | { kind: 'retargetParent' }             // attackParentIfJammed
     | { kind: 'retargetDecoy' }              // decoyedByAsteroids (caller finds decoy)
     | { kind: 'veerAway' }                   // turnsAwayIfJammed
-    | { kind: 'flyStraight' };               // default lost-lock behaviour
+    | { kind: 'flyStraight' };               // default jammed behaviour
 
 /**
- * Decides, deterministically, whether and how a missile loses lock this frame.
- * `roll` and `reactionRoll` must each be a fresh draw from the deterministic
- * PRNG in [0, 1).
+ * Decides, deterministically, how a missile reacts to its jam decision.
+ * `reactionRoll` must be a fresh draw from the deterministic PRNG in [0, 1).
  *
  * The retargeting flags gate on `reactionRoll`: each eligible retarget owns its
  * own slice of the unit interval (parent first, then decoy), so with both flags
@@ -337,13 +297,12 @@ export type JamReaction =
  * flag never changes the other's odds. When no retarget slice is hit, the
  * precedence is turnsAwayIfJammed > flyStraight.
  * (The caller is responsible for finding a decoy for `retargetDecoy`; if none is
- * nearby it should fall back to veer/straight, so decoy vulnerability never
- * makes a missile *more* accurate.)
+ * nearby it falls back to veer/straight, so decoy vulnerability never makes a
+ * missile *more* accurate.)
  */
-export function decideJamReaction(
-    probability: number, roll: number, reactionRoll: number,
+export function decideJamReaction(jammed: boolean, reactionRoll: number,
     seeker: SeekerFlags): JamReaction {
-    if (roll >= probability) {
+    if (!jammed) {
         return { kind: 'none' };
     }
     let threshold = 0;
@@ -407,16 +366,28 @@ export function findNearestDecoy(entities: Iterable<[string, Entity]>,
 }
 
 /**
- * Transient per-frame steering override for a jammed missile, consumed by the
- * guidance system the same tick it is set. It is recomputed every frame by
- * MissileJammingSystem, so it is intentionally NOT part of any snapshot (a
- * restore re-runs the jamming system before guidance).
+ * A guided missile's one, permanent jam decision (see the model at the top of
+ * this file), consumed by ProjectileGuidanceSystem every tick:
+ * - `track`: not jammed (or retargeted onto its parent or a decoy): steer at
+ *   the current TargetComponent as usual.
+ * - `flyStraight`: jammed; never steer again, keep the heading it had at the
+ *   decision (its launch heading).
+ * - `veerAway`: jammed turnsAwayIfJammed missile; steer directly away from its
+ *   target for the rest of its life.
  *
- * - `veerAway`: steer away from the target instead of toward it.
- * - `flyStraight`: ignore the target and keep the current heading.
+ * Its presence is also the "already decided" mark: MissileJammingSystem rolls
+ * only for a guided missile that has a target and no decision yet. It is
+ * serializer-registered (JammingPlugin), so snapshots, wire snapshots and the
+ * desync hash carry it and a rollback replays the decision instead of
+ * re-rolling it.
  */
-export type JamSteer = 'veerAway' | 'flyStraight';
-export const JamSteerComponent = new Component<JamSteer>('JamSteerComponent');
+export const JamDecision = t.type({
+    steer: t.keyof({ track: null, flyStraight: null, veerAway: null }),
+});
+export type JamDecision = t.TypeOf<typeof JamDecision>;
+export type JamSteer = JamDecision['steer'];
+export const JamDecisionComponent =
+    new Component<JamDecision>('JamDecisionComponent');
 
 /**
  * Live provider: keeps a ship's JammingComponent in sync as its outfits change.
@@ -425,38 +396,45 @@ export const JamSteerComponent = new Component<JamSteer>('JamSteerComponent');
 const JammingProvider = ProvideFromCache({
     name: 'JammingProvider',
     provided: JammingComponent,
-    // Re-derive when the outfits change or the ship's government is set/changed.
-    update: [OutfitsStateComponent, GovtComponent],
-    args: [OutfitsStateComponent, Optional(GovtComponent),
-        SimulationGameDataResource] as const,
-    factory: (outfits, govt, gameData) =>
-        deriveJamming(outfits, gameData, govt?.id),
+    update: [OutfitsStateComponent],
+    args: [OutfitsStateComponent, SimulationGameDataResource] as const,
+    factory: (outfits, gameData) => deriveJamming(outfits, gameData),
     // #237 pin (shared: *): JammingPlugin registers after ReputationPlugin
     // (and the debug cheats, which order after it).
     after: [DisableCreditSystem],
 });
 
 /**
- * Applies missile jamming to guided projectiles. Runs before
- * ProjectileGuidanceSystem so that a jammed missile's target/veer state is set
- * before the guidance angle is computed.
+ * Makes each guided missile's one jam decision. Runs before
+ * ProjectileGuidanceSystem, and after WeaponsSystem and the submunition
+ * spawners, so a missile is decided on the tick it is launched, before guidance
+ * has turned it at all: a jammed plain missile keeps its launch heading.
  *
- * Deterministic: a single PRNG draw per guided missile per frame, in the ECS's
- * stable system-iteration order (the same pattern as weapon inaccuracy).
+ * A missile is decided the first tick it is guided, has a target and has no
+ * JamDecisionComponent yet: normally its launch tick, or the tick it first
+ * acquires a target. Never again after that.
+ *
+ * Deterministic: every decision draws exactly five numbers from the room's
+ * PRNG (one per jamming type, then the reaction roll), whatever the jamming
+ * and vulnerabilities, in the ECS's stable system-iteration order (the same
+ * pattern as weapon inaccuracy). A fixed count keeps the stream independent of
+ * jamming state: adding or removing a jammer never shifts another missile's
+ * rolls.
  */
 export const MissileJammingSystem = new System({
     name: 'MissileJammingSystem',
     args: [MovementStateComponent, TargetComponent, ProjectileDataComponent,
-        GetEntity, UUID, Entities, RandomResource, SystemInterferenceResource,
-        TimeResource] as const,
-    // Determinism rule 4: reads TimeResource (delta_ms), so it must run after
-    // TimeSystem. JammingProvider is a #237 pin (shared: *).
+        Optional(JamDecisionComponent), GetEntity, UUID, Entities,
+        RandomResource, SystemInterferenceResource] as const,
+    // No longer reads the clock; TimeSystem stays in `after` so the system
+    // order is unchanged. JammingProvider is a #237 pin (shared: *).
     after: [TimeSystem, JammingProvider],
-    step(movement, targetRef, projectileData, self, uuid, entities, random,
-        systemInterference, time) {
-        // Clear last frame's steer override up front so it never lingers.
-        self.components.delete(JamSteerComponent);
-
+    step(movement, targetRef, projectileData, decision, self, uuid, entities,
+        random, systemInterference) {
+        // Decided once, for life: no re-roll and no re-acquisition.
+        if (decision) {
+            return;
+        }
         // Only guided missiles with a target can be jammed. Vulnerabilities are
         // "ignored if the weapon is not a guided weapon" (Bible).
         if (projectileData.guidance !== 'guided') {
@@ -470,66 +448,58 @@ export const MissileJammingSystem = new System({
 
         const targetEntity = entities.get(target);
         const targetJamming = targetEntity?.components.get(JammingComponent);
-
         const effJam = effectiveJamming(targetJamming, seeker,
             systemInterference.interference);
-        const probability = jamLoseLockProbability(
-            projectileData.jamVulnerabilities, effJam, time.delta_ms,
-            projectileData.shotDuration);
-        // Draw exactly twice per missile per frame for determinism, even if
-        // probability is 0 (so the PRNG sequence is independent of jamming
-        // state -- adding/removing a jammer never shifts other missiles' rolls
-        // for a given tick). The second draw gates which reaction a jammed
-        // missile takes. Guard the common no-jam case after the draws.
-        const roll = random.next();
-        const reactionRoll = random.next();
-        if (probability <= 0) {
-            return;
-        }
 
-        const reaction = decideJamReaction(probability, roll, reactionRoll,
-            seeker);
-        applyJamReaction(reaction, self, uuid, movement, entities);
+        // Always five draws, in a fixed order (see the system doc).
+        const rolls: [number, number, number, number] = [
+            random.next(), random.next(), random.next(), random.next(),
+        ];
+        const reactionRoll = random.next();
+
+        const jammed = rollMissileJammed(projectileData.jamVulnerabilities,
+            effJam, rolls);
+        const reaction = decideJamReaction(jammed, reactionRoll, seeker);
+        self.components.set(JamDecisionComponent, {
+            steer: applyJamReaction(reaction, self, uuid, movement, entities),
+        });
     },
 });
 
 /**
- * Mutates the missile according to the chosen reaction. Kept separate so the
+ * Carries out a missile's reaction: retargets it if the reaction says so, and
+ * returns how guidance should steer it from now on. Kept separate so the
  * decision stays pure and testable.
  */
 export function applyJamReaction(reaction: JamReaction, self: Entity,
     uuid: string, movement: { position: Position },
-    entities: EntityMap) {
+    entities: EntityMap): JamSteer {
     switch (reaction.kind) {
         case 'none':
-            return;
+            return 'track';
         case 'retargetParent': {
             const source = self.components.get(SourceComponent);
             const owner = self.components.get(OwnerComponent)?.owner;
             const parent = source ?? owner;
             if (parent && parent !== uuid) {
                 self.components.set(TargetComponent, { target: parent });
-            } else {
-                self.components.set(JamSteerComponent, 'veerAway');
+                return 'track';
             }
-            return;
+            return 'veerAway';
         }
         case 'retargetDecoy': {
             const decoy = findNearestDecoy(entities, movement.position);
             if (decoy) {
                 self.components.set(TargetComponent, { target: decoy });
-            } else {
-                // No decoy in range: don't reward the missile with better aim.
-                self.components.set(JamSteerComponent, 'veerAway');
+                return 'track';
             }
-            return;
+            // No decoy in range: don't reward the missile with better aim.
+            return 'veerAway';
         }
         case 'veerAway':
-            self.components.set(JamSteerComponent, 'veerAway');
-            return;
+            return 'veerAway';
         case 'flyStraight':
-            self.components.set(JamSteerComponent, 'flyStraight');
-            return;
+            return 'flyStraight';
     }
 }
 
@@ -546,14 +516,23 @@ export const JammingPlugin: Plugin = {
             componentType: Jamming,
         });
 
-        // A ship's government (optional; set by future NPC spawning). Registered
-        // for the delta/serializer so it replicates and survives snapshots; it's
-        // a plain { id } object, so the default codec/snapshot policy suffice.
-        // Registered here because JammingPlugin is its only consumer so far.
+        // A ship's government. Registered for the delta/serializer so it
+        // replicates and survives snapshots; it's a plain { id } object, so
+        // the default codec/snapshot policy suffice. It no longer feeds
+        // jamming (gövt InhJam is not applied, see deriveJamming), but it
+        // stays registered here: many systems read it and this is where it
+        // has always been registered.
         world.addComponent(GovtComponent);
         deltaMaker.addComponent(GovtComponent, {
             componentType: Govt,
         });
+
+        // A guided missile's one jam decision: real simulation state, so the
+        // serializer carries it in snapshots, wire snapshots and the desync
+        // hash (registered like ProjectileComponent, without a delta).
+        world.addComponent(JamDecisionComponent);
+        world.resources.get(SerializerResource)?.addComponent(
+            JamDecisionComponent, JamDecision);
 
         // Default to no interference; make_system.ts overrides this with the
         // current system's SystemData.interference. Defaulting here keeps the
@@ -563,17 +542,14 @@ export const JammingPlugin: Plugin = {
             world.resources.set(SystemInterferenceResource, { interference: 0 });
         }
 
-        // Re-derive a ship's jamming from its outfits (and its government's
-        // InhJam, if it has a GovtComponent) at completeEntity / snapshot
-        // restore (mirrors WeaponsStateDeriver). GovtComponent is optional, so
-        // it is not in `requires`; when absent, jamming is outfit-only.
+        // Re-derive a ship's jamming from its outfits at completeEntity /
+        // snapshot restore (mirrors WeaponsStateDeriver).
         registerEntityDeriver(world, {
             name: 'JammingDeriver',
             provided: JammingComponent,
             requires: [OutfitsStateComponent],
             derive: (entity, gameData) => deriveJamming(
-                entity.components.get(OutfitsStateComponent)!, gameData,
-                entity.components.get(GovtComponent)?.id),
+                entity.components.get(OutfitsStateComponent)!, gameData),
         });
         world.addSystem(JammingProvider);
         world.addSystem(MissileJammingSystem);
