@@ -3,7 +3,8 @@ import { World } from 'nova_ecs/world';
 import { ControlEvent } from './nova_plugin/core/index.js';
 import { AnalogControlState, ControlledByComponent } from './nova_plugin/player/index.js';
 import {
-    LAND_SPEED_SQUARED, PlanetDataComponent, stellarLandingRange,
+    landingDistance, LAND_SPEED_SQUARED, PlanetDataComponent,
+    stellarLandingRange,
 } from './nova_plugin/travel/index.js';
 
 /**
@@ -21,10 +22,13 @@ export interface ControlSinks {
 }
 
 /**
- * Landing wants the ship inside the stellar's landing range
- * (stellarLandingRange, 80-260 px by sprite size) and slower than 20 px/s
- * (LAND_SPEED_SQUARED); aim inside both: 90% of the range, half the
- * speed² (about 14 px/s).
+ * Landing wants the ship inside the stellar's landing zone, a SQUARE of
+ * half-width stellarLandingRange (about 25-212 px by the frame's width)
+ * around its centre measured as max(|dx|, |dy|) (landingDistance), and
+ * slower than 20 px/s (LAND_SPEED_SQUARED); aim inside both: 90% of the
+ * half-width on the same square, half the speed² (about 14 px/s). The
+ * approach itself flies at the centre, so it enters the square on any
+ * heading.
  */
 const ARRIVE_RANGE_FRACTION = 0.9;
 const ARRIVE_SPEED_SQUARED = LAND_SPEED_SQUARED / 2;
@@ -129,7 +133,7 @@ export class Autopilot {
         const speedSquared = movement.velocity.x * movement.velocity.x
             + movement.velocity.y * movement.velocity.y;
 
-        if (distanceSquared < arriveDistance * arriveDistance
+        if (landingDistance(toX, toY) < arriveDistance
             && speedSquared < ARRIVE_SPEED_SQUARED) {
             this.sendAnalog({ heading: null, throttle: 0 });
             this.tapLand();

@@ -130,7 +130,7 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
     // One sprite frame's pixel size, which the landing range scales with
     // (PlanetData.spriteFrameSize). The rlëD header is what the game draws;
     // the spïn's declared size stands in when the rlëD is missing, and the
-    // default (a 100 px landing range) when neither exists.
+    // default (an 85 px landing zone) when neither exists.
     let spriteFrameSize: [number, number] = [50, 50];
     if (rledResource) {
         spriteFrameSize = [rledResource.size[0], rledResource.size[1]];

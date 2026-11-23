@@ -267,7 +267,7 @@ export interface PlanetData extends SpaceObjectData {
      * The pixel size [width, height] of one frame of the stellar's sprite
      * (its rlëD, reached through spöb Type -> spïn 1000 + Type; the spïn's
      * own xSize/ySize when the rlëD is missing). The original scales its
-     * landing range with this size (see planet_plugin.ts's landingRange),
+     * landing zone with this size's width (planet_plugin.ts's landingRange),
      * so the simulation reads it from here, where it is staged with the
      * rest of the stellar's data on every peer, rather than from the sprite
      * sheet, which only the display loads.
@@ -420,9 +420,8 @@ export function getDefaultPlanetData(): PlanetData {
         landingDesc: "default",
         position: [0, 0],
         gate: null,
-        // 50 px gives the 100 px landing range every stellar had before the
-        // range scaled with the sprite, so default fixtures keep landing
-        // where they always did.
+        // A 50 px frame: an 85 px landing zone (planet_plugin.ts's
+        // landingRange, 1.7 x the frame width).
         spriteFrameSize: [50, 50],
         landingFee: 0,
         govt: null,

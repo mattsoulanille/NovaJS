@@ -167,34 +167,65 @@ registerSimulationBridgeEvent({ event: LandingBlockedEvent });
  */
 export const LAND_SPEED_SQUARED = 400;
 
-/** The landing range's ceiling for mid-sized sprites, in px. */
-const LAND_RANGE_CAP = 240;
-/** getDefaultPlanetData's frame size: a 100 px landing range. */
+/**
+ * The landing zone's half-width per px of the stellar's frame WIDTH. FITTED
+ * on the original (docs/reference_experiments.md, "U9 wave 6: landing range
+ * of the tiny stations"): measured as max(|dx|, |dy|), every at-rest bracket
+ * of waves 4 and 6 allows k = R / W between 1.66 (88 px frame: landed at
+ * 146, too far at 167) and 1.75 (80 px frame: landed at 117.5, too far at
+ * 140); the 15x21 and 17x31 stations, the 35x22 one and the 40-112 px
+ * planets all agree with about 1.7.
+ */
+export const LAND_RANGE_PER_FRAME_WIDTH = 1.7;
+/**
+ * The landing zone's half-width cap, in px. FITTED ("U9 wave 6"): the 250 px
+ * art landed at 209.5 and was too far at 235.5, the 325 px art landed at 199
+ * and was too far at 213, the 315x200 art landed at 213.5 (each centre good
+ * to about 2-5 px, so the last two are within each other's error); the doc
+ * brackets the cap at about 210-215 and proposes 212.
+ */
+export const LAND_RANGE_CAP = 212;
+/** getDefaultPlanetData's frame size, used when the frame is unknown. */
 const DEFAULT_SPRITE_FRAME_SIZE: readonly [number, number] = [50, 50];
 
 /**
- * How far from a stellar's centre a ship may land, in px, from the size S
- * of one frame of its sprite (the larger of width and height):
- * R = max(min(2 S, 240), 0.8 S).
+ * The half-width of a stellar's landing zone, in px, from one frame of its
+ * sprite ([width, height]): R = min(1.7 W, 212), W the frame's WIDTH.
  *
- * Measured on the original ("U9 wave 4"): up to about 110 px sprites the
- * range is about twice the frame size (40 px -> 72-99, 112 -> 205-233),
- * then it levels off around 230-260 (150, 250 and 304x134 frames), a
- * little more for the biggest art (315x200 -> 280-308, 325 -> 247-275),
- * which the 0.8 S floor covers. The default PlanetData's 50 px frame gives
- * the 100 px range every stellar had before.
+ * The zone is a SQUARE around the stellar's centre, not a circle: the
+ * original lands a ship when max(|dx|, |dy|) <= R (inLandingZone).
+ * Measured ("U9 wave 6"): a 17x31 station landed at (-28, -22), 35.6 px
+ * away on the diagonal, but was too far at (-6, 34), 34.5 px straight
+ * below: no circle fits that pair, the square does. Tall and wide frames
+ * land like their width (15x21 -> about 25 px, 17x31 -> 29, 35x22 -> 60),
+ * never their height; the station flag changes nothing.
  */
 export function landingRange(spriteFrameSize: readonly [number, number]):
     number {
-    const size = Math.max(spriteFrameSize[0], spriteFrameSize[1]);
-    return Math.max(Math.min(2 * size, LAND_RANGE_CAP), 0.8 * size);
+    return Math.min(LAND_RANGE_PER_FRAME_WIDTH * spriteFrameSize[0],
+        LAND_RANGE_CAP);
+}
+
+/**
+ * The distance the landing zone is measured in: the larger of the offset's
+ * two components (the Chebyshev distance), in world (= screen) axes.
+ */
+export function landingDistance(dx: number, dy: number): number {
+    return Math.max(Math.abs(dx), Math.abs(dy));
+}
+
+/** Whether an offset (dx, dy) from a stellar's centre is inside a landing
+ * zone of half-width `range` (inclusive: the original's <= R). */
+export function inLandingZone(dx: number, dy: number, range: number):
+    boolean {
+    return landingDistance(dx, dy) <= range;
 }
 
 /**
  * landingRange for a stellar whose data may not have loaded. Unknown data
  * (the provider has not run) and data without a frame size (game data JSON
  * written before PlanetData had the field) use the default 50 px frame,
- * i.e. a 100 px range. PlanetData is staged identically on every peer, so
+ * i.e. an 85 px zone. PlanetData is staged identically on every peer, so
  * every peer reads the same range.
  */
 export function stellarLandingRange(planetData?: PlanetData): number {
@@ -305,12 +336,12 @@ const AttemptLandingSystem = new System({
                 if (uuid !== planetTarget.target) {
                     continue;
                 }
-                const distanceSquared =
-                    planetPosition.subtract(position).lengthSquared;
+                const offset = planetPosition.subtract(position);
                 const isStation = planetData?.flags.isStation ?? false;
                 const range = stellarLandingRange(planetData);
-                // "Too far" before "too fast", as the original answers.
-                if (distanceSquared >= range * range) {
+                // "Too far" (outside the square zone) before "too fast", as
+                // the original answers.
+                if (!inLandingZone(offset.x, offset.y, range)) {
                     emit(LandingBlockedEvent, { reason: 'tooFar', isStation },
                         [playerUuid]);
                 } else if (velocity.lengthSquared >= LAND_SPEED_SQUARED) {

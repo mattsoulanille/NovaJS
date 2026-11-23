@@ -186,10 +186,10 @@ import { ShipComponent, ShipPhysicsComponent } from '../ship/index.js';
 /**
  * The landing window for an AI-steered escort, a NovaJS-only tuning, not
  * measured on the original. It used to be looser than the player's on both
- * counts; the player's is now planet_plugin's landingRange (80-260 px by
- * the stellar's sprite size) and LAND_SPEED_SQUARED (20 px/s). The player
- * nudges their ship into the window by hand; an escort arrives under a
- * proportional-approach controller whose final convergence is bounded by
+ * counts; the player's is now planet_plugin's square zone (landingRange,
+ * about 25-212 px by the stellar's frame width) and LAND_SPEED_SQUARED
+ * (20 px/s). The player nudges their ship into the window by hand; an
+ * escort arrives under a proportional-approach controller whose final convergence is bounded by
  * its RCS budget, so a heavy, low-acceleration hulk can hover just
  * outside the strict window for a long time. 300px / 100px per second
  * lands every stock hull promptly and is still visually "at the planet".

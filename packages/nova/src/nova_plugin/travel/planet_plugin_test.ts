@@ -15,9 +15,10 @@ import { makeSystem } from '../make_system.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { applyControlEvents } from '../player/index.js';
 import {
-    applySetPlanetTarget, LAND_SPEED_SQUARED, LandEvent, LandingBlockedEvent,
-    landingRange, PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
-    StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
+    applySetPlanetTarget, inLandingZone, LAND_RANGE_CAP,
+    LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
+    LandingBlockedEvent, landingDistance, landingRange, PlanetComponent,
+    PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
     stellarLandingRange,
 } from './planet_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
@@ -245,41 +246,192 @@ describe('AttemptLandingSystem', () => {
 });
 
 /**
- * The landing window measured on the original (docs/reference_experiments.md,
- * "U9 wave 4"): the range scales with the stellar's sprite frame size S,
- * R = max(min(2 S, 240), 0.8 S), and the speed gate is an absolute 20 px/s.
+ * The landing zone measured on the original (docs/reference_experiments.md,
+ * "U9 wave 6: landing range of the tiny stations", which re-reads wave 4's
+ * runs): a SQUARE, max(|dx|, |dy|) <= R, R = min(1.7 W, 212) from the
+ * frame's width W; the speed gate is an absolute 20 px/s ("U9 wave 4").
  */
 describe('landingRange', () => {
-    it('is twice the frame size for small sprites (40 px -> 80, 112 -> 224)',
-        () => {
-            expect(landingRange([40, 40])).toBe(80);
-            expect(landingRange([112, 112])).toBe(224);
-        });
-
-    it('levels off at 240 px for mid-sized and wide sprites', () => {
-        expect(landingRange([150, 150])).toBe(240);
-        expect(landingRange([250, 250])).toBe(240);
-        // The larger of width and height is the size: 0.8 * 304.
-        expect(landingRange([304, 134])).toBeCloseTo(243.2, 9);
+    it('is 1.7 x the frame WIDTH, capped at 212 px', () => {
+        expect(LAND_RANGE_PER_FRAME_WIDTH).toBe(1.7);
+        expect(LAND_RANGE_CAP).toBe(212);
+        expect(landingRange([40, 40])).toBeCloseTo(68, 9);
+        expect(landingRange([112, 112])).toBeCloseTo(190.4, 9);
+        expect(landingRange([250, 250])).toBe(212);
+        expect(landingRange([325, 325])).toBe(212);
     });
 
-    it('grows again at 0.8 S for the biggest art (325 px -> 260)', () => {
-        expect(landingRange([325, 325])).toBe(260);
-        expect(landingRange([315, 200])).toBe(252);
+    it('reads the width, never the height (tall and wide stations)', () => {
+        // 15x21 -> 25.5 and 17x31 -> 28.9, not 35.7 and 52.7; 35x22 ->
+        // 59.5, not 37.4.
+        expect(landingRange([15, 21])).toBeCloseTo(25.5, 9);
+        expect(landingRange([17, 31])).toBeCloseTo(28.9, 9);
+        expect(landingRange([35, 22])).toBeCloseTo(59.5, 9);
+        expect(landingRange([315, 200])).toBe(212);
     });
 
-    it('gives the default PlanetData, and unknown data, the old 100 px range',
-        () => {
-            expect(stellarLandingRange(getDefaultPlanetData())).toBe(100);
-            expect(stellarLandingRange(undefined)).toBe(100);
+    it('measures the zone as a square (max(|dx|, |dy|), inclusive)', () => {
+        expect(landingDistance(-28, -22)).toBe(28);
+        expect(landingDistance(3, -40)).toBe(40);
+        expect(inLandingZone(50, 50, 50)).toBeTrue();
+        expect(inLandingZone(50, 50.01, 50)).toBeFalse();
+        expect(inLandingZone(-50, 0, 50)).toBeTrue();
+    });
+
+    it('gives the default PlanetData, and unknown data, the 50 px frame\'s '
+        + '85 px zone', () => {
+            expect(stellarLandingRange(getDefaultPlanetData())).toBe(85);
+            expect(stellarLandingRange(undefined)).toBe(85);
             // Game-data JSON written before the field existed.
             const old: Partial<PlanetData> = getDefaultPlanetData();
             delete old.spriteFrameSize;
-            expect(stellarLandingRange(old as PlanetData)).toBe(100);
+            expect(stellarLandingRange(old as PlanetData)).toBe(85);
         });
 
     it('gates speed at 20 px/s', () => {
         expect(LAND_SPEED_SQUARED).toBe(400);
+    });
+});
+
+/**
+ * Every measured bracket of "U9 waves 4 and 6" against the rule, pressed
+ * through the real AttemptLandingSystem at rest: the stop that landed must
+ * land, the stop before it must be "too far". Port Amberline stands in for
+ * every stellar with its sprite frame swapped (the station flag changes
+ * nothing measurable: wave 6 finding 3).
+ */
+describe('AttemptLandingSystem square zone vs the measured brackets', () => {
+    const PORT = `planet ${SYNTHETIC.planets.port}`;
+    /** One measured stop: the stellar's offset (dx, dy) from the player,
+     * screen axes, and what the original answered there. */
+    type Stop = [dx: number, dy: number];
+
+    /** One harness for many presses: each press re-sizes the frame and
+     * re-places the ship, then presses land once. */
+    async function presser() {
+        const { world, ship } = await makeHarness();
+        const planet = world.entities.get(PORT)!;
+        const centre = planet.components.get(MovementStateComponent)!.position;
+        const lands: unknown[] = [];
+        const blocked: string[] = [];
+        world.events.get(LandEvent).subscribe(({ data }) => lands.push(data));
+        world.events.get(LandingBlockedEvent).subscribe(({ data }) =>
+            blocked.push(data.reason));
+        return (frame: [number, number], [dx, dy]: Stop) => {
+            planet.components.set(PlanetDataComponent, {
+                ...planet.components.get(PlanetDataComponent)!,
+                spriteFrameSize: frame,
+            });
+            ship.components.get(PlanetTargetComponent)!.target = PORT;
+            // The stellar sits at (dx, dy) from the player.
+            place(ship, new Position(centre.x - dx, centre.y - dy));
+            lands.length = 0;
+            blocked.length = 0;
+            applyControlEvents(world, undefined,
+                [{ action: 'land', state: 'start' }]);
+            world.step();
+            return lands.length === 1 && blocked.length === 0
+                ? 'landed' : blocked.join(',');
+        };
+    }
+
+    // Wave 6's runs, with the offsets of each stop ("U9 wave 6" first
+    // table): too far at, landed at.
+    const runs: Array<[string, [number, number], Stop, Stop]> = [
+        ['15x21 station, coarse', [15, 21], [30.5, -14], [17.5, -9]],
+        ['17x31 station, coarse (34.5 px straight below: too far)',
+            [17, 31], [-6, 34], [-8, 22]],
+        ['17x31 station, fine (35.6 px on the diagonal: landed)',
+            [17, 31], [-34, -28], [-28, -22]],
+        ['17x31 art with planet flags, fine', [17, 31], [-19, 35], [-16, 28]],
+        ['35x22 station, coarse', [35, 22], [54, 70], [38, 48]],
+        ['35x22 station, fine', [35, 22], [10, 63], [9, 55]],
+        ['40x40 planet, Mini hull control', [40, 40], [-7, -88], [-5, -61]],
+    ];
+    for (const [name, frame, tooFar, landed] of runs) {
+        it(`matches wave 6's ${name}`, async () => {
+            const press = await presser();
+            expect(press(frame, tooFar)).toEqual('tooFar');
+            expect(press(frame, landed)).toEqual('landed');
+        }, 30_000);
+    }
+
+    it('lands the 17x31 diagonal stop that is FARTHER than the straight '
+        + 'stop it refuses (a square, not a circle)', async () => {
+            const press = await presser();
+            const diagonal: Stop = [-28, -22];
+            const straight: Stop = [-6, 34];
+            expect(Math.hypot(...diagonal))
+                .toBeGreaterThan(Math.hypot(...straight));
+            expect(press([17, 31], diagonal)).toEqual('landed');
+            expect(press([17, 31], straight)).toEqual('tooFar');
+        }, 30_000);
+
+    // The second table: every at-rest bracket of waves 4 and 6 as
+    // max(|dx|, |dy|) (too far / landed), by frame. Pressed straight out
+    // along x, where the square distance is the plain distance.
+    const brackets: Array<[[number, number], number, number]> = [
+        [[15, 21], 28, 20],
+        [[17, 31], 34, 28],
+        [[35, 22], 63, 55],
+        [[40, 40], 87, 63],
+        [[72, 72], 131, 103],
+        [[80, 80], 140, 117.5],
+        [[88, 88], 167, 146],
+        [[96, 96], 175.5, 154.5],
+        [[112, 112], 201.5, 177.5],
+        [[250, 250], 235.5, 209.5],
+        [[325, 325], 213, 199],
+    ];
+    it('matches every square bracket of waves 4 and 6', async () => {
+        const press = await presser();
+        for (const [frame, tooFar, landed] of brackets) {
+            expect(press(frame, [tooFar, 0]))
+                .withContext(`${frame} too far at ${tooFar}`)
+                .toEqual('tooFar');
+            expect(press(frame, [0, -landed]))
+                .withContext(`${frame} landed at ${landed}`)
+                .toEqual('landed');
+        }
+    }, 30_000);
+
+    it('misses the 315x200 art\'s 213.5 px landing by 1.5 px, inside the '
+        + 'big sprites\' 2-5 px centre error, as any cap must', async () => {
+            // 315x200 landed at 213.5 while the 325 px art was too far at
+            // 213: no single cap fits both, so the two are one bracket read
+            // within the error of a clipped sprite's centre.
+            const press = await presser();
+            expect(press([315, 200], [229.5, 0])).toEqual('tooFar');
+            expect(press([315, 200], [213.5 - 2, 0])).toEqual('landed');
+            expect(213.5 - LAND_RANGE_CAP).toBeLessThanOrEqual(2);
+        }, 30_000);
+
+    it('agrees with wave 4\'s circular (Euclidean) brackets', () => {
+        // Wave 4 measured distance from the centre, not the offsets. A stop
+        // at Euclidean distance d has max(|dx|, |dy|) between d / sqrt 2
+        // and d, so the square agrees with a bracket exactly when the
+        // landed stop could be inside (d / sqrt 2 <= R) and the too-far
+        // stop outside (d > R). (Wave 4's moving runs are not landings: no
+        // ship that fast lands, finding 2.)
+        const circle: Array<[[number, number], number, number]> = [
+            [[40, 40], 99, 72],
+            [[72, 72], 131, 103],
+            [[80, 80], 178, 150],
+            [[88, 88], 210, 182],
+            [[96, 96], 238, 211],
+            [[112, 112], 233, 205],
+            [[150, 150], 277, 235],
+            [[250, 250], 255, 229],
+            [[315, 200], 308, 280],
+            [[325, 325], 275, 247],
+        ];
+        for (const [frame, tooFar, landed] of circle) {
+            const range = landingRange(frame);
+            expect(landed / Math.SQRT2).withContext(`${frame} landed`)
+                .toBeLessThanOrEqual(range);
+            expect(tooFar).withContext(`${frame} too far`)
+                .toBeGreaterThan(range);
+        }
     });
 });
 
@@ -312,35 +464,35 @@ describe('AttemptLandingSystem landing window', () => {
     }
 
     it('reads the range from the stellar\'s sprite: Port Amberline\'s '
-        + '40 px frame lands within 80 px', async () => {
+        + '40 px frame lands within 68 px', async () => {
             const { world } = await atStellar(PORT);
             const data = world.entities.get(PORT)!
                 .components.get(PlanetDataComponent)!;
             expect(data.spriteFrameSize).toEqual([40, 40]);
-            expect(stellarLandingRange(data)).toBe(80);
+            expect(stellarLandingRange(data)).toBeCloseTo(68, 9);
 
-            const inside = await pressAt(PORT, 79);
+            const inside = await pressAt(PORT, 67);
             expect(inside.blocked).toEqual([]);
             expect(inside.lands.length).toBe(1);
 
-            const outside = await pressAt(PORT, 81);
+            const outside = await pressAt(PORT, 69);
             expect(outside.lands).toEqual([]);
             expect(outside.blocked.map(b => b.reason)).toEqual(['tooFar']);
         }, 30_000);
 
     it('gives a smaller sprite a smaller range: the Sallow Moon\'s 28 px '
-        + 'frame lands within 56 px', async () => {
-            expect((await pressAt(MOON, 55)).lands.length).toBe(1);
-            expect((await pressAt(MOON, 57)).blocked.map(b => b.reason))
+        + 'frame lands within 47.6 px', async () => {
+            expect((await pressAt(MOON, 47)).lands.length).toBe(1);
+            expect((await pressAt(MOON, 48)).blocked.map(b => b.reason))
                 .toEqual(['tooFar']);
         }, 30_000);
 
     it('lands on a big planet from far out (a 325 px frame lands within '
-        + '260 px)', async () => {
+        + '212 px)', async () => {
             const big: [number, number] = [325, 325];
-            expect((await pressAt(PORT, 255, undefined, big)).lands.length)
+            expect((await pressAt(PORT, 211, undefined, big)).lands.length)
                 .toBe(1);
-            expect((await pressAt(PORT, 265, undefined, big)).blocked
+            expect((await pressAt(PORT, 213, undefined, big)).blocked
                 .map(b => b.reason)).toEqual(['tooFar']);
         }, 30_000);
 
