@@ -1,6 +1,7 @@
 import { ProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
@@ -14,7 +15,7 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
 import { BayFighterComponent, OrphanedBayFighterSystem, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
 import { ChooseTargetSystem } from '../combat/index.js';
 import { AggressionComponent, isRecentAggressor } from '../combat/index.js';
-import { blindSpotBlocksFiring } from '../combat/index.js';
+import { blindSpotBlocksFiring, getQuadrant } from '../combat/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import {
     ESCORT_CATEGORIES, ESCORT_CATEGORY_SELECTORS, EscortCategory, escortCategoryOf,
@@ -577,10 +578,29 @@ export function inFrontQuadrant(movement: MovementState,
 }
 
 /**
- * The reach of a front-quadrant turret's shots: projectile speed times
- * lifetime (the same math point-defense range uses).
+ * Whether `target` lies in the ship's REAR QUADRANT: within ±45° of the
+ * ship's TAIL — the mirror of {@link inFrontQuadrant}. Read through
+ * blind_spots.ts's getQuadrant, the very partition fire_weapon_plugin
+ * aims rearQuadrant-guidance weapons by, so a victim chosen here is one
+ * the turret will aim at rather than fire straight back past (a shot it
+ * fires with no target in its quadrant). A ship sitting exactly on the
+ * escort is not in it.
  */
-export function frontQuadrantWeaponRange(
+export function inRearQuadrant(movement: MovementState,
+    targetPosition: { x: number, y: number }): boolean {
+    const target = new Position(targetPosition.x, targetPosition.y);
+    if (target.subtract(movement.position).lengthSquared < 1e-12) {
+        return false;
+    }
+    return getQuadrant(Position.fromVectorLike(movement.position),
+        Angle.fromAngleLike(movement.rotation), target) === 'rearQuadrant';
+}
+
+/**
+ * The reach of a quadrant turret's shots (front or rear): projectile
+ * speed times lifetime (the same math point-defense range uses).
+ */
+export function quadrantWeaponRange(
     weapon: ProjectileWeaponData): number {
     return weapon.physics.speed * weapon.shotDuration / 1000;
 }
@@ -599,19 +619,24 @@ export function frontQuadrantWeaponRange(
  *    the same 360° turret, so it is read the same way (the doc's own
  *    proposal).
  *  - 'frontQuadrant': guidance 7, which fires only at a ship in the
- *    escort's front quadrant (inFrontQuadrant) — today's behaviour, kept.
+ *    escort's front quadrant (inFrontQuadrant). Unmeasured; kept by
+ *    symmetry with the rear-quadrant measurement below.
+ *  - 'rearQuadrant': guidance 8, which fires only at a ship in the
+ *    escort's rear quadrant (inRearQuadrant). Measured on the original
+ *    ("E-fight wave 5"): two escorts carrying only rear-quadrant turrets
+ *    held their slots (36-39 px all run) and fired at raiders that had
+ *    passed through the formation and out behind it, taking a raider's
+ *    shield to 74%.
  *
  * Everything else holds fire in formation. Fixed guns (and guided or
  * rocket launchers) because firing them would mean turning the ship off
- * its slot heading: in the original the escorts never left their slots,
- * and nothing measured shows them turning to bring a fixed gun to bear.
- * Rear-quadrant turrets (guidance 8) because the reference has not
- * measured them (reference_experiments "Pending", E leftovers); holding
- * fire is NovaJS's behaviour before the E-fight measurement, kept until
- * someone does. Bays never fire on their own. Point defense has its own
+ * its slot heading: measured in E-fight wave 5, escorts with only fixed
+ * guns never fired from the slot in 100 s (the raiders kept 98-100%
+ * shield while crossing in front of them) and never turned to bring the
+ * guns to bear. Bays never fire on their own. Point defense has its own
  * system.
  */
-export type FormationTurretKind = 'full' | 'frontQuadrant';
+export type FormationTurretKind = 'full' | 'frontQuadrant' | 'rearQuadrant';
 
 export function formationTurretKind(weapon: WeaponData | undefined)
     : FormationTurretKind | undefined {
@@ -619,7 +644,8 @@ export function formationTurretKind(weapon: WeaponData | undefined)
         case 'ProjectileWeaponData':
             return weapon.guidance === 'turret' ? 'full'
                 : weapon.guidance === 'frontQuadrant' ? 'frontQuadrant'
-                    : undefined;
+                    : weapon.guidance === 'rearQuadrant' ? 'rearQuadrant'
+                        : undefined;
         case 'BeamWeaponData':
             return weapon.guidance === 'beamTurret' ? 'full' : undefined;
         default:
@@ -840,9 +866,11 @@ export const EscortCommandBehaviorSystem = new System({
         // (FormationSystem steers; nothing here does) and its TURRETS
         // opportunistically fire at iff-hostile ships in reach: full
         // turrets in any direction, front-quadrant turrets only at a
-        // hostile within ±45° of the ship's facing (inFrontQuadrant).
-        // Every other weapon — fixed guns above all — holds fire, so
-        // nothing pulls the escort off its slot. See formationTurretKind
+        // hostile within ±45° of the ship's facing (inFrontQuadrant),
+        // rear-quadrant turrets only at one within ±45° of its tail
+        // (inRearQuadrant). Every other weapon — fixed guns above all —
+        // holds fire, so nothing pulls the escort off its slot. See
+        // formationTurretKind
         // for the reference measurement and the per-guidance choices.
         // The player's restrictTurretsToTarget order narrows candidates
         // to their current target.
@@ -861,9 +889,9 @@ export const EscortCommandBehaviorSystem = new System({
                 weapon.firing = false;
                 continue;
             }
-            const range = kind === 'frontQuadrant'
+            const range = kind !== 'full'
                 && weaponData.type === 'ProjectileWeaponData'
-                ? frontQuadrantWeaponRange(weaponData)
+                ? quadrantWeaponRange(weaponData)
                 : weaponReach(weaponData);
             const inReach: Array<readonly [string, number]> = [];
             for (const [otherUuid, other, otherMovement] of candidates) {
@@ -887,16 +915,20 @@ export const EscortCommandBehaviorSystem = new System({
                     && !inFrontQuadrant(movement, otherMovement.position)) {
                     continue;
                 }
+                if (kind === 'rearQuadrant'
+                    && !inRearQuadrant(movement, otherMovement.position)) {
+                    continue;
+                }
                 // Turret blind spots. A candidate this turret would be
                 // refused permission to shoot at (fire_weapon_plugin
                 // would return undefined) must not be CHOSEN here
                 // either, or the escort latches `firing` on a target it
                 // cannot engage and ignores one it could. Live for full
-                // turrets (stock shïp and wëap blind spots exist);
-                // vacuous for front-quadrant ones on the stock data —
-                // nothing gives a front-quadrant weapon or a ship a
-                // front blind spot — but it keeps the two halves
-                // reading the same rule.
+                // turrets (stock shïp and wëap blind spots exist); for
+                // a quadrant turret it bites only when a blind spot
+                // covers that turret's own sector (a ship blind astern
+                // silences its rear-quadrant turrets), and it keeps the
+                // two halves reading the same rule.
                 if (blindSpotBlocksFiring({
                     guidance: weaponData.guidance,
                     weaponBlindSpots: weaponData.turretBlindSpots,

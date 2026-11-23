@@ -21,13 +21,13 @@ import {
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
-import { styleForTarget } from '../combat/index.js';
+import { getQuadrant, styleForTarget } from '../combat/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { EscortCommandComponent, EscortOrdersComponent } from './escort_command.js';
 import {
-    DEFEND_RADIUS, formationTurretKind, inFrontQuadrant,
+    DEFEND_RADIUS, formationTurretKind, inFrontQuadrant, inRearQuadrant,
 } from '../escorts/index.js';
 import { Entity } from 'nova_ecs/entity';
 import { FiringGroupComponent } from '../ship/index.js';
@@ -57,6 +57,9 @@ const TURRET_SHIP = 'test:turretShip';
 /** A turreted beam alone (a beam's shot has no velocity, which
  * fireOffAxis cannot read). */
 const BEAM_TURRET_SHIP = 'test:beamTurretShip';
+/** Rear-quadrant turret + fixed gun: the reference's rear-turret disc
+ * (E-fight wave 5), so fireOffAxis reads the rear turret's shots alone. */
+const RQ_SHIP = 'test:rqShip';
 
 async function makeWorld(options: { escortShip?: string } = {}) {
     const gameData = new MockGameData();
@@ -136,6 +139,11 @@ async function makeWorld(options: { escortShip?: string } = {}) {
         ...getDefaultShipData(),
         id: BEAM_TURRET_SHIP,
         outfits: { [`${BEAM_TURRET_WEAPON}Outfit`]: 1 },
+    });
+    gameData.data.Ship.map.set(RQ_SHIP, {
+        ...getDefaultShipData(),
+        id: RQ_SHIP,
+        outfits: { [`${RQ_WEAPON}Outfit`]: 1, 'test:gunOutfit': 1 },
     });
 
     const pirate = getDefaultGovtData();
@@ -657,8 +665,9 @@ describe('escort commands', () => {
     // for 95 s while raiders made passes at the player, and fired bolts
     // from the slot at raiders 200+ px away. Full turrets therefore fire
     // in formation in every direction; fixed guns never do (nothing they
-    // could hit without turning off the slot heading), and rear-quadrant
-    // turrets, unmeasured, keep NovaJS's old hold-fire.
+    // could hit without turning off the slot heading; wave 5 measured
+    // that too), and rear-quadrant turrets fire at ships astern (wave 5:
+    // they took a raider behind the formation to 74% shield).
     describe('full turrets in formation', () => {
         /** Parks `uuid` `distance` px from the escort at `bearing` off its
          * CURRENT nose for `ticks` ticks (formation turning cannot carry
@@ -724,13 +733,64 @@ describe('escort commands', () => {
                 });
         }
 
-        it('a rear-quadrant turret keeps holding fire in formation, even '
-            + 'with a hostile astern (unmeasured; unchanged)', async () => {
-                const { world } = await turretWorld(false);
-                const weapons = weaponsOf(world);
-                holdAt(world, 'pirate', Math.PI);
-                expect(weapons.get(TURRET_WEAPON)!.firing).toBeTrue();
-                expect(weapons.get(RQ_WEAPON)!.firing).toBeFalse();
+        it('a rear-quadrant turret fires at a hostile astern from its '
+            + 'slot, and only astern (E-fight wave 5)', async () => {
+                for (const npc of [false, true]) {
+                    const { world } = await turretWorld(npc);
+                    const weapons = weaponsOf(world);
+                    holdAt(world, 'pirate', Math.PI);
+                    expect(weapons.get(RQ_WEAPON)!.firing)
+                        .withContext(`astern, npc ${npc}`).toBeTrue();
+                    expect(weapons.get(RQ_WEAPON)!.target).toBe('pirate');
+                    // 30° off the tail: still the rear quadrant.
+                    holdAt(world, 'pirate', Math.PI - Math.PI / 6);
+                    expect(weapons.get(RQ_WEAPON)!.firing)
+                        .withContext(`30° off the tail, npc ${npc}`)
+                        .toBeTrue();
+                    // Ahead and abeam: out of its quadrant (the full
+                    // turret beside it still fires).
+                    for (const bearing of [0, Math.PI / 2, -Math.PI / 2]) {
+                        holdAt(world, 'pirate', bearing);
+                        expect(weapons.get(RQ_WEAPON)!.firing)
+                            .withContext(`bearing ${bearing}, npc ${npc}`)
+                            .toBeFalse();
+                        expect(weapons.get(TURRET_WEAPON)!.firing)
+                            .toBeTrue();
+                    }
+                    // Astern but beyond the shot's reach (500 px/s * 2 s).
+                    holdAt(world, 'pirate', Math.PI, 3, 1500);
+                    expect(weapons.get(RQ_WEAPON)!.firing)
+                        .withContext(`out of reach, npc ${npc}`).toBeFalse();
+                    // The fixed gun never fires, and the order stands.
+                    expect(weapons.get(GUN_WEAPON)!.firing).toBeFalse();
+                    expect(command(world).command).toBe('formation');
+                }
+            });
+
+        it("a rear-quadrant turret's shots fly at the hostile behind, "
+            + 'not straight back', async () => {
+                const { world, addShip } = await makeWorld(
+                    { escortShip: RQ_SHIP });
+                await addShip('pirate', 400, 400, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
+                });
+                // 30° off the tail: a shot fired straight back would miss
+                // by 30°.
+                const error = fireOffAxis(world,
+                    [['pirate', Math.PI - Math.PI / 6]]);
+                expect(error('pirate')).toBeLessThan(2);
+            });
+
+        it('a rear-quadrant turret holds fire at a non-hostile astern',
+            async () => {
+                const { world, addShip } = await makeWorld(
+                    { escortShip: RQ_SHIP });
+                await addShip('meek', 0, 0, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:meek' });
+                });
+                holdAt(world, 'meek', Math.PI);
+                expect(weaponsOf(world).get(RQ_WEAPON)!.firing).toBeFalse();
             });
 
         it('a full turret holds fire beyond its reach and at non-hostile '
@@ -825,17 +885,19 @@ describe('escort commands', () => {
         const beam = (guidance: BeamWeaponData['guidance']): WeaponData =>
             ({ ...getDefaultBeamWeaponData(), guidance });
 
-        it('reads guidance 4 and 3 as full turrets, 7 as front-quadrant',
-            () => {
+        it('reads guidance 4 and 3 as full turrets, 7 as front-quadrant, '
+            + '8 as rear-quadrant', () => {
                 expect(formationTurretKind(projectile('turret'))).toBe('full');
                 expect(formationTurretKind(beam('beamTurret'))).toBe('full');
                 expect(formationTurretKind(projectile('frontQuadrant')))
                     .toBe('frontQuadrant');
+                expect(formationTurretKind(projectile('rearQuadrant')))
+                    .toBe('rearQuadrant');
             });
 
-        it('holds every other weapon, rear-quadrant turrets included', () => {
+        it('holds every other weapon, fixed guns above all', () => {
             for (const guidance of ['unguided', 'guided', 'rocket',
-                'freefallBomb', 'rearQuadrant', 'pointDefense'] as const) {
+                'freefallBomb', 'pointDefense'] as const) {
                 expect(formationTurretKind(projectile(guidance)))
                     .withContext(guidance).toBeUndefined();
             }
@@ -1038,6 +1100,43 @@ describe('inFrontQuadrant', () => {
         expect(inFrontQuadrant(movement, { x: -100, y: 0 })).toBeFalse();
         expect(inFrontQuadrant(movement, { x: 100, y: 110 })).toBeFalse();
     });
+});
+
+describe('inRearQuadrant', () => {
+    const movement = {
+        position: new Position(0, 0),
+        velocity: new Vector(0, 0),
+        rotation: new Angle(Math.PI / 2), // Facing +x.
+        accelerating: 0,
+        turning: 0,
+        turnBack: false,
+    };
+
+    it('accepts targets within ±45° of the tail', () => {
+        expect(inRearQuadrant(movement, { x: -100, y: 0 })).toBeTrue();
+        expect(inRearQuadrant(movement, { x: -100, y: 90 })).toBeTrue();
+        expect(inRearQuadrant(movement, { x: -100, y: -90 })).toBeTrue();
+    });
+
+    it('rejects targets ahead, beside, or on top of the ship', () => {
+        expect(inRearQuadrant(movement, { x: 100, y: 0 })).toBeFalse();
+        expect(inRearQuadrant(movement, { x: 0, y: 100 })).toBeFalse();
+        expect(inRearQuadrant(movement, { x: -100, y: 110 })).toBeFalse();
+        expect(inRearQuadrant(movement, { x: 0, y: 0 })).toBeFalse();
+    });
+
+    it('agrees with the quadrant the fire control aims by (getQuadrant)',
+        () => {
+            for (let degrees = -180; degrees < 180; degrees += 5) {
+                const bearing = degrees * Math.PI / 180;
+                const target = movement.rotation.add(bearing)
+                    .getUnitVector().scale(300);
+                expect(inRearQuadrant(movement, target))
+                    .withContext(`${degrees}°`)
+                    .toBe(getQuadrant(movement.position, movement.rotation,
+                        new Position(target.x, target.y)) === 'rearQuadrant');
+            }
+        });
 });
 
 /**
