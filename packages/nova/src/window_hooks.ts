@@ -28,7 +28,7 @@ import type { ScaleLayout } from './display/display_scale.js';
 import type { HailDialog } from './spaceport/hail_dialog.js';
 import type { OfferPopup } from './spaceport/offer_popup.js';
 import type { Starmap } from './spaceport/starmap.js';
-import type { DiscoveryHooks } from './display/starmap_plugin.js';
+import type { DiscoveryHooks, MiniMapHooks } from './display/starmap_plugin.js';
 import type { JumpVisual } from './display/jump_fade_plugin.js';
 import type { GpuParticleSystem } from './display/gpu_particles.js';
 import type { ControlEvent } from './nova_plugin/core/index.js';
@@ -120,6 +120,8 @@ declare global {
         novaStarmap?: Starmap;
         /** The discovery record levers (starmap_plugin). */
         novaDiscovery?: DiscoveryHooks;
+        /** The `h` hyperspace minimap (starmap_plugin). */
+        novaMiniMap?: MiniMapHooks;
         /** The most recent mission offer popups (offer_popup). */
         novaOfferPopups?: OfferPopup[];
         /** Live particle budget counters (particles_plugin). */

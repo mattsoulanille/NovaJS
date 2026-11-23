@@ -2,6 +2,7 @@ import 'jasmine';
 import {
     adjacentSystems,
     buildAdjacency,
+    canPin,
     cycleSingle,
     effectiveRoute,
     expandRoute,
@@ -283,5 +284,80 @@ describe('hazardDescription', () => {
         expect(hazardDescription(0, 50)).toEqual('Sensor interference');
         expect(hazardDescription(16, 50))
             .toEqual('Dense asteroid field, Sensor interference');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Known systems only (Matthew, 2026-11-23): the router may END a route in a
+// system the player has not explored, but never fly THROUGH one.
+//
+//   a - b - c - d          explored: a, b, d    (c and the e-f arm are not)
+//       |
+//       e - f
+// ---------------------------------------------------------------------------
+describe('routing through explored systems only', () => {
+    const explored = new Set(['a', 'b', 'd']);
+    const passable = (id: string) => explored.has(id);
+    const same = (x: string, y: string) => x === y;
+
+    it('may end a path in an unexplored neighbour of explored space', () => {
+        // Exactly where a plain single jump from b could go.
+        expect(shortestPath(adj, 'a', 'c', passable)).toEqual(['b', 'c']);
+        expect(shortestPath(adj, 'a', 'e', passable)).toEqual(['b', 'e']);
+    });
+
+    it('never passes through an unexplored system', () => {
+        // f is only reachable through e, and d only through c.
+        expect(shortestPath(adj, 'a', 'f', passable)).toBeNull();
+        expect(shortestPath(adj, 'a', 'd', passable)).toBeNull();
+    });
+
+    it('does not reproduce the original\'s D-U-U-D pin-by-pin quirk', () => {
+        // The original lets a pilot shift-click b, then e, then f (D-U-U)
+        // and flies the chain. Here the route stops at the first unexplored
+        // pin: f would have to be flown to FROM unexplored e.
+        expect(expandRoute(adj, 'a', ['b', 'e', 'f'], same, passable))
+            .toEqual(['b', 'e']);
+        // Even when the pin after the unexplored one is explored (a-b-c-d:
+        // D-D-U-D), nothing is plotted beyond the unexplored c.
+        expect(expandRoute(adj, 'a', ['c', 'd'], same, passable))
+            .toEqual(['b', 'c']);
+    });
+
+    it('refuses to pin what the explored route cannot reach', () => {
+        expect(canPin(adj, 'a', [], 'c', same, passable)).toBeTrue();
+        expect(canPin(adj, 'a', [], 'f', same, passable)).toBeFalse();
+        // After a route that ends in unexplored e, nothing more can be
+        // pinned — not even an explored system.
+        expect(canPin(adj, 'a', ['e'], 'f', same, passable)).toBeFalse();
+        expect(canPin(adj, 'a', ['e'], 'd', same, passable)).toBeFalse();
+        // The ship's own system, and a re-pin of the route's end, add
+        // nothing.
+        expect(canPin(adj, 'a', [], 'a', same, passable)).toBeFalse();
+        expect(canPin(adj, 'a', ['b'], 'b', same, passable)).toBeFalse();
+        // From an explored pin, on to its unexplored neighbour, is fine.
+        expect(canPin(adj, 'a', ['b'], 'e', same, passable)).toBeTrue();
+    });
+
+    it('always lets the route start from the current system', () => {
+        // Standing in an unexplored system (a fresh record, a rollback)
+        // must not strand the ship: the start is never checked.
+        const onlyD = (id: string) => id === 'd';
+        expect(shortestPath(adj, 'c', 'b', onlyD)).toEqual(['b']);
+        expect(expandRoute(adj, 'c', ['b'], same, onlyD)).toEqual(['b']);
+    });
+
+    it('feeds the effective route the same rule', () => {
+        expect(effectiveRoute(adj, 'a', { pinned: ['f'] }, same, passable))
+            .toEqual([]);
+        expect(effectiveRoute(adj, 'a', { pinned: ['f'], single: 'b' },
+            same, passable)).toEqual(['b']);
+    });
+
+    it('plans over the whole graph when no record is given', () => {
+        // The default (maps without a discovery record: the rollback
+        // replay) is unchanged.
+        expect(shortestPath(adj, 'a', 'f')).toEqual(['b', 'e', 'f']);
+        expect(canPin(adj, 'a', [], 'f')).toBeTrue();
     });
 });

@@ -13,13 +13,14 @@ import {
 import { displayName } from "../nova_plugin/core/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import {
-    Adjacency, adjacentSystems, buildAdjacency, cycleSingle, effectiveRoute,
-    expandRoute, RouteState, SamePlace,
+    Adjacency, adjacentSystems, buildAdjacency, canPin, cycleSingle,
+    effectiveRoute, expandRoute, Passable, RouteState, SamePlace,
 } from "./route.js";
 import {
-    drawBorderBlob, drawLinks, drawRouteOverlay, drawSelectionOverlay,
+    drawLinks, drawRouteOverlay, drawSelectionOverlay,
     drawSystem, installLabelFont, labelFontReady, makeSystemLabel,
 } from "./starmap_draw.js";
+import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
 import { buildMissionMarks, MissionMarkTextures } from "./starmap_marks.js";
 import { MapViewport, scalePos, worldBoundsOf } from "./starmap_viewport.js";
@@ -78,10 +79,13 @@ export interface SystemGraphOptions {
      */
     missionMarkTextures?: MissionMarkTextures;
     /**
-     * The government border color for a system (Show Borders), or null for
-     * no blob. Injected so the graph itself stays free of async data loads.
+     * Who a system's territory belongs to for Show Borders (its gövt's
+     * color and whether that gövt is "minor"), or null when it claims none
+     * (no government, or one flagged to stay off the boundaries). Injected
+     * so the graph itself stays free of async data loads; see
+     * starmap_borders.ts for how the owners become shapes.
      */
-    govtColorOf?: (system: SystemData) => number | null;
+    territoryOf?: (system: SystemData) => TerritoryOwner | null;
     /**
      * Whether a system contains at least one port, deciding the blue dot
      * (see drawSystem). Injected — like govtColorOf — because answering it
@@ -101,6 +105,17 @@ export interface SystemGraphOptions {
      * map) want: everything drawn, nothing dim.
      */
     discoveryOf?: (systemId: string) => DiscoveryLevel;
+    /**
+     * The in-flight hyperspace minimap (`h`, mini_map.ts) instead of the
+     * full map. A glance, not a planner: a plain click on a neighbour of
+     * the current system toggles the single-jump pick exactly as on the
+     * full map, and NOTHING else responds — shift-click does nothing (no
+     * multi-jump editing), clicking a non-neighbour inspects nothing (there
+     * is no properties column), and the view cannot be dragged or zoomed.
+     * The current system is marked by its cyan centre alone, as in
+     * mini_map.png, without the full map's dashed ring.
+     */
+    miniMap?: boolean;
 }
 
 export class SystemGraph {
@@ -158,6 +173,7 @@ export class SystemGraph {
      * player is standing in. See discovery.ts drawnSystems for the evidence.
      */
     private readonly drawn: Set<string>;
+    private readonly miniMap: boolean;
 
     constructor(systems: SystemData[], private currentSystem: string,
         options: SystemGraphOptions = {}) {
@@ -168,6 +184,7 @@ export class SystemGraph {
         this.viewedMarks = options.viewedMarks ?? [];
         this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
         this.discoveryOf = options.discoveryOf ?? (() => DISCOVERY_LANDED);
+        this.miniMap = options.miniMap ?? false;
         const size = options.size ?? { x: 456, y: 419 };
         // NCB-hidden systems don't exist for the player: they aren't drawn,
         // clicked, linked, or routed through. The current system is always
@@ -184,13 +201,12 @@ export class SystemGraph {
             s => [s.id, `${s.name}@${placeKey(s.position)}`]));
         this.adj = buildAdjacency(visibleSystems);
         this.routes = reachablePaths(this.systems, currentSystem);
-        // What the map is allowed to show. Route planning deliberately
-        // still runs over the WHOLE visible graph (this.adj / this.routes):
-        // the drawing rules below are a display filter on the player's
-        // knowledge, not a restriction on the ship's navigation computer,
-        // and keeping the router unfiltered is what lets a mission's
-        // faraway destination — drawn as a bare dot with no links — still
-        // be plotted to.
+        // What the map is allowed to show. The adjacency stays the WHOLE
+        // visible graph (this.adj / this.routes); what the router may fly
+        // THROUGH is the separate {@link passable} rule — explored systems
+        // only (route.ts, KNOWN SYSTEMS ONLY). A mission's faraway
+        // destination is drawn (a bare dot with no links) but is only
+        // plottable once explored space reaches up to it.
         this.drawn = drawnSystems(
             visibleSystems.map(s => s.id).filter(
                 id => this.discoveryOf(id) >= DISCOVERY_ENTERED),
@@ -224,8 +240,17 @@ export class SystemGraph {
         mapContainer.addChild(this.routeGraphics);
 
         bindMapPointer(this.container, size, {
-            pan: (dx, dy) => this.pan(dx, dy),
-            zoomAt: (factor, x, y) => this.zoomBy(factor, x, y),
+            // The minimap is a fixed glance around the current system.
+            pan: (dx, dy) => {
+                if (!this.miniMap) {
+                    this.pan(dx, dy);
+                }
+            },
+            zoomAt: (factor, x, y) => {
+                if (!this.miniMap) {
+                    this.zoomBy(factor, x, y);
+                }
+            },
             tap: (x, y, shiftKey) => this.onTap(x, y, shiftKey),
         });
 
@@ -263,8 +288,8 @@ export class SystemGraph {
             mapContainer.addChild(marks);
         }
 
-        if (options.govtColorOf) {
-            this.drawBorders(options.govtColorOf);
+        if (options.territoryOf) {
+            this.drawBorders(options.territoryOf);
         }
         drawLinks(this.linkGraphics, this.links, this.gateLinks);
         if (this.selectable) {
@@ -335,8 +360,18 @@ export class SystemGraph {
     /** The route hyperspace jumps follow (multi-jump takes precedence). */
     getEffectiveRoute(): string[] {
         return effectiveRoute(this.adj, this.currentSystem,
-            this.getRouteState(), this.samePlace);
+            this.getRouteState(), this.samePlace, this.passable);
     }
+
+    /**
+     * Whether the router may fly THROUGH a system (route.ts Passable): the
+     * player has explored it, or the ship is in it. A system that is only
+     * drawn — a dim neighbour, a mission's destination — can end a route,
+     * never be an intermediate hop of one.
+     */
+    readonly passable: Passable = id =>
+        id === this.currentSystem
+        || this.discoveryOf(id) >= DISCOVERY_ENTERED;
 
     get adjacency(): Adjacency {
         return this.adj;
@@ -467,7 +502,30 @@ export class SystemGraph {
         this.drawRoute();
     }
 
+    /**
+     * Acts as if the player clicked `systemId` on the map (with or without
+     * shift held): the same rules as a pointer tap that resolved to it.
+     * For headless driving and specs; ignored for a system not on this
+     * map.
+     */
+    clickSystem(systemId: string, shiftKey = false) {
+        if (this.systems.has(systemId)) {
+            this.onClickSystem(systemId, shiftKey);
+        }
+    }
+
     private onClickSystem(system: string, shiftKey: boolean) {
+        if (this.miniMap) {
+            // The minimap only ever picks the single next jump (see
+            // SystemGraphOptions.miniMap): shift-click is ignored outright.
+            if (!shiftKey && adjacentSystems(this.adj, this.currentSystem)
+                .includes(system)) {
+                this.single = this.single === system ? undefined : system;
+                this.routeChanged.next();
+                this.drawRoute();
+            }
+            return;
+        }
         if (this.selectable) {
             // Destination-picker mode: only the offered systems respond, and
             // clicking one selects it (clicking again deselects).
@@ -483,11 +541,18 @@ export class SystemGraph {
             // Shift-click appends the system to the multi-jump route as a
             // pinned waypoint (or unpins it). Gaps between pins auto-fill
             // with the shortest path when the route is expanded — the only
-            // auto-routing there is (map/notes.txt).
-            if (system !== this.currentSystem) {
-                this.pinned = this.pinned.includes(system)
-                    ? this.pinned.filter(p => p !== system)
-                    : [...this.pinned, system];
+            // auto-routing there is (map/notes.txt). A NEW pin is only
+            // taken when the route can reach it through explored systems
+            // (route.ts canPin); otherwise the click just inspects the
+            // system, like a plain click on a non-neighbour. Unpinning is
+            // always allowed.
+            if (this.pinned.includes(system)) {
+                this.pinned = this.pinned.filter(p => p !== system);
+                this.routeChanged.next();
+            } else if (system !== this.currentSystem
+                && canPin(this.adj, this.currentSystem, this.pinned, system,
+                    this.samePlace, this.passable)) {
+                this.pinned = [...this.pinned, system];
                 this.routeChanged.next();
             }
         } else if (adjacentSystems(this.adj, this.currentSystem)
@@ -518,23 +583,34 @@ export class SystemGraph {
     }
 
     /**
-     * Draws the government border overlay (Show Borders): a blob of the
-     * owning government's color around each governed system. Baked once
+     * Draws the government border overlay (Show Borders): the territory
+     * of every explored, inhabited, governed system (starmap_borders.ts).
+     * Baked once
      * into its own layer and simply hidden until toggled on.
      */
-    private drawBorders(govtColorOf: (system: SystemData) => number | null) {
+    private drawBorders(
+        territoryOf: (system: SystemData) => TerritoryOwner | null) {
+        const sites: TerritorySite[] = [];
         for (const { system, x, y } of this.clickTargets) {
             // Who owns a system is something you learn by going there: the
-            // dim ring around the known galaxy contributes no territory.
+            // dim ring around the known galaxy contributes no territory
+            // (govt_borders.png — the unexplored Federation system HJG-0637
+            // sits in a dark channel between two blobs).
             if (this.discoveryOf(system.id) < DISCOVERY_ENTERED) {
                 continue;
             }
-            const color = govtColorOf(system);
-            if (color === null) {
+            // Nor does an explored system without a port: territory is
+            // where a government's people are (starmap_borders.ts — the
+            // uninhabited HJG-1034 and Procyon claim none in the capture).
+            if (!this.isSystemInhabited(system)) {
                 continue;
             }
-            drawBorderBlob(this.borderGraphics, x, y, color);
+            const owner = territoryOf(system);
+            if (owner !== null) {
+                sites.push({ x, y, ...owner });
+            }
         }
+        drawTerritory(this.borderGraphics, sites);
     }
 
     /** Resolves the systems `ids` names that are on this map, in order. */
@@ -560,8 +636,9 @@ export class SystemGraph {
             return;
         }
         const multi = expandRoute(this.adj, this.currentSystem, this.pinned,
-            this.samePlace);
+            this.samePlace, this.passable);
         drawRouteOverlay(this.routeGraphics, {
+            miniMap: this.miniMap,
             current: this.systems.get(this.currentSystem),
             single: this.single === undefined
                 ? undefined : this.systems.get(this.single),

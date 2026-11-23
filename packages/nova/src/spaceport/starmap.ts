@@ -27,7 +27,8 @@ import {
     renderPropertyLines, systemProperties,
 } from "./starmap_properties.js";
 import { KEY_PAN_STEP, ZOOM_STEP } from "./starmap_viewport.js";
-import { SystemGraph } from "./system_graph.js";
+import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
+import { TerritoryOwner } from "./starmap_borders.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
 /**
@@ -237,6 +238,56 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         this.container.addChild(this.findDialog.container);
     }
 
+    /**
+     * What every graph of the player's galaxy is built with — the full
+     * map's and the in-flight minimap's alike (see {@link miniMapGraph}):
+     * NCB visibility, mission marks, discovery, ports and territory.
+     */
+    private graphOptions(bits: ReadonlySet<number>,
+        missionMarks: MissionMapMark[], viewedMarks: MissionMapMark[])
+        : SystemGraphOptions {
+        return {
+            playerBits: bits,
+            missionMarks,
+            viewedMarks,
+            missionMarkTextures: this.missionMarkTextures,
+            territoryOf: system => this.territoryOf(system),
+            isSystemInhabited: system => systemIsInhabited(system.planets,
+                id => this.universe.getPlanet(id)),
+            discoveryOf: id => this.discoveryOf(id),
+        };
+    }
+
+    /**
+     * A fresh minimap-mode graph (SystemGraphOptions.miniMap) of the
+     * player's galaxy as it stands right now, sized `size` and zoomed by
+     * `zoom`, carrying the
+     * persisted route state reconciled against the sim's `route` — or
+     * undefined if the map's data could not be loaded. For the `h`
+     * hyperspace minimap (mini_map.ts), which shares this map's loaded
+     * systems, universe and mark icons rather than loading its own.
+     */
+    async miniMapGraph(size: { x: number, y: number }, zoom: number,
+        route: readonly string[]): Promise<SystemGraph | undefined> {
+        await this.buildPromise;
+        await this.universe.load();
+        if (!this.allSystems || !this.alive) {
+            return undefined;
+        }
+        const graph = new SystemGraph(this.allSystems, this.systemId, {
+            ...this.graphOptions(this.getPlayerBits(), this.getMissionMarks(),
+                []),
+            size,
+            miniMap: true,
+        });
+        this.routeStore.state = reconcileRouteState(this.routeStore.state,
+            this.systemId, graph.adjacency, route, graph.samePlace);
+        graph.setRouteState(this.routeStore.state);
+        graph.zoomBy(zoom);
+        graph.center();
+        return graph;
+    }
+
     /** (Re)filters the map against the given control bits. */
     private rebuildGraph(bits: ReadonlySet<number>) {
         if (!this.allSystems) {
@@ -273,16 +324,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // game only reveals the network on the hypergate transit map
         // (GateMap), which is where the lanes are drawn (via
         // SystemGraphOptions.gateLinks).
-        this.systemGraph = new SystemGraph(this.allSystems, this.systemId, {
-            playerBits: bits,
-            missionMarks,
-            viewedMarks,
-            missionMarkTextures: this.missionMarkTextures,
-            govtColorOf: system => this.govtColorOf(system),
-            isSystemInhabited: system => systemIsInhabited(system.planets,
-                id => this.universe.getPlanet(id)),
-            discoveryOf: id => this.discoveryOf(id),
-        });
+        this.systemGraph = new SystemGraph(this.allSystems, this.systemId,
+            this.graphOptions(bits, missionMarks, viewedMarks));
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);
         // Keep the graph under the buttons/readouts (they were added to the
         // container first), matching the dialog frame's layering.
@@ -294,19 +337,28 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             () => this.refreshClearButton());
     }
 
-    /** The Show Borders blob color for a system: its govt's color. */
-    private govtColorOf(system: SystemData): number | null {
+    /**
+     * Who a system's Show Borders territory belongs to
+     * (starmap_borders.ts): its gövt's Color, and whether that gövt is
+     * minor (Flags2 0x0002). A gövt with Flags2 0x0004 ("this govt's
+     * systems don't affect the political boundaries") claims none, and
+     * neither does an independent system. A gövt whose Color is black
+     * paints black: in the stock data every such gövt but one carries
+     * 0x0004 anyway, and the exception (gövt 183 "Hypergate") owns no
+     * system.
+     */
+    private territoryOf(system: SystemData): TerritoryOwner | null {
         if (!system.govt) {
             return null;
         }
         const govt = this.universe.getGovt(system.govt);
-        if (!govt) {
+        if (!govt || govt.flags2.noMapBoundaries) {
             return null;
         }
-        // A govt with color 0 (black, the field's default) still owns
-        // territory; give it the original's deep blue so its space shows.
-        const color = govt.color & 0xffffff;
-        return color === 0 ? 0x000090 : color;
+        return {
+            color: govt.color & 0xffffff,
+            minor: govt.flags2.minorMapBoundaries,
+        };
     }
 
     private toggleBorders() {

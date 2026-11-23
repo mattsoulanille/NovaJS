@@ -1,6 +1,7 @@
 // How the starmap paints: the colors and line weights measured off the
 // original, the shared bitmap label font, and the painters for system dots,
-// lanes, government territory and the route / destination-picker overlays.
+// lanes and the route / destination-picker overlays. (Government territory
+// has its own module, starmap_borders.ts.)
 // Every painter draws into a caller-supplied PIXI.Graphics at laid-out
 // coordinates (starmap_viewport.ts scalePos) and knows nothing about
 // which systems exist or which are selected — SystemGraph decides that.
@@ -30,7 +31,16 @@ const ROUTE_MULTI_COLOR = 0x00ff00;
 const ROUTE_MULTI_WIDTH = 3;
 const ROUTE_SINGLE_COLOR = 0x00b400;
 const ROUTE_SINGLE_WIDTH = 1;
+/** The minimap's route (mini_map.png): a thin (1-2px) green line laid
+ * along the grey lane, for both kinds of route. */
+const MINI_ROUTE_WIDTH = 2;
 const SELECT_COLOR = 0x00ff00;
+/**
+ * The filled centre of the CURRENT system's dot: #00adef, sampled on both
+ * maps — Sol in govt_borders.png and Tau Ceti in mini_map/mini_map.png
+ * (a 4px disc inside the black interior).
+ */
+export const CURRENT_SYSTEM_CENTER_COLOR = 0x00adef;
 const LABEL_FONT_NAME = 'StarmapSystemLabel';
 const LABEL_FONT_SIZE = 10;
 
@@ -41,6 +51,9 @@ const LABEL_FONT_SIZE = 10;
 // avoids the multi-hundred-ms rasterization hitch (which stalled the main
 // thread long enough to desync the simulation) the first time the map
 // rendered.
+/** The glyphs the installed label font holds (see installLabelFont). */
+let installedLabelChars = new Set<string>();
+
 export function installLabelFont(systems: SystemData[]) {
     // BitmapFont rasterizes glyphs through a DOM canvas. In a headless
     // context (Node unit/integration tests) there's no document, so skip the
@@ -50,15 +63,24 @@ export function installLabelFont(systems: SystemData[]) {
     if (typeof document === 'undefined') {
         return;
     }
-    const chars = new Set<string>([' ']);
+    const chars = new Set<string>([' ', ...installedLabelChars]);
     for (const system of systems) {
         for (const char of system.name) {
             chars.add(char);
         }
     }
+    // Several maps share the one font — the full map and the in-flight
+    // minimap can both be up — and uninstalling it destroys the glyph
+    // pages every live label points at. So the font only ever GROWS: an
+    // install that adds no new glyph is skipped, and one that does keeps
+    // every glyph it had.
     if (PIXI.BitmapFont.available[LABEL_FONT_NAME]) {
+        if (chars.size === installedLabelChars.size) {
+            return;
+        }
         PIXI.BitmapFont.uninstall(LABEL_FONT_NAME);
     }
+    installedLabelChars = chars;
     PIXI.BitmapFont.from(LABEL_FONT_NAME, {
         fontFamily: 'Geneva',
         fontSize: LABEL_FONT_SIZE,
@@ -191,35 +213,6 @@ export function drawLinks(graphics: PIXI.Graphics,
     }
 }
 
-/**
- * Colors are dimmed toward the original's deep muted territory shading
- * (govt_borders.png) — full-strength gövt colors (including white ones)
- * wash out the map.
- */
-function dimBorderColor(color: number): number {
-    return (((color >> 16 & 0xff) * 0.55) & 0xff) << 16
-        | (((color >> 8 & 0xff) * 0.55) & 0xff) << 8
-        | ((color & 0xff) * 0.55) & 0xff;
-}
-
-/**
- * One system's contribution to the government border overlay (Show
- * Borders): a soft blob of the owning government's color, like the
- * original's territory shading (map/govt_borders.png). Two concentric
- * translucent circles approximate the original's soft-edged blobs;
- * neighbors overlap into contiguous territory.
- */
-export function drawBorderBlob(graphics: PIXI.Graphics,
-    x: number, y: number, color: number) {
-    graphics.lineStyle(0);
-    graphics.beginFill(dimBorderColor(color), 0.30);
-    graphics.drawCircle(x, y, 34 * BASE_SCALE);
-    graphics.endFill();
-    graphics.beginFill(dimBorderColor(color), 0.32);
-    graphics.drawCircle(x, y, 20 * BASE_SCALE);
-    graphics.endFill();
-}
-
 /** What the route overlay shows, already resolved to systems on the map. */
 export interface RouteOverlay {
     /** The system the player is in (absent if not on the map). */
@@ -232,6 +225,10 @@ export interface RouteOverlay {
     pinned: SystemData[];
     /** The inspected system, when it is not the current one. */
     info?: SystemData;
+    /** Paint in the minimap's style (SystemGraphOptions.miniMap): thin
+     * route lines, no pinned-waypoint boxes, and no dashed ring round the
+     * current system. */
+    miniMap?: boolean;
 }
 
 /**
@@ -241,33 +238,44 @@ export interface RouteOverlay {
  */
 export function drawRouteOverlay(g: PIXI.Graphics, route: RouteOverlay) {
     g.clear();
+    const mini = route.miniMap ?? false;
 
     // Single-jump route: the weaker green line.
     if (route.single && route.current) {
         drawLink(g, route.current, route.single,
-            ROUTE_SINGLE_COLOR, ROUTE_SINGLE_WIDTH);
+            ROUTE_SINGLE_COLOR, mini ? MINI_ROUTE_WIDTH : ROUTE_SINGLE_WIDTH);
     }
 
     // Multi-jump route: the stronger green line, over the single one.
     let prev = route.current;
     for (const system of route.multi) {
         if (prev) {
-            drawLink(g, prev, system, ROUTE_MULTI_COLOR, ROUTE_MULTI_WIDTH);
+            drawLink(g, prev, system, ROUTE_MULTI_COLOR,
+                mini ? MINI_ROUTE_WIDTH : ROUTE_MULTI_WIDTH);
         }
         prev = system;
     }
 
     // Pinned waypoints: a small green box marks each explicitly
-    // selected system (they always stay in the route).
-    for (const system of route.pinned) {
+    // selected system (they always stay in the route). Not on the
+    // minimap, which cannot edit them and shows only the route itself.
+    for (const system of mini ? [] : route.pinned) {
         const [x, y] = scalePos(system.position);
         const r = SYSTEM_RADIUS + 2;
         g.lineStyle(1, ROUTE_MULTI_COLOR);
         g.drawRect(x - r, y - r, 2 * r, 2 * r);
     }
 
-    // The current system: a dashed green ring (the original's marker).
+    // The current system: a cyan centre on both maps, and on the full map
+    // a dashed green ring as well (the original's marker).
     if (route.current) {
+        const [cx, cy] = scalePos(route.current.position);
+        g.lineStyle(0);
+        g.beginFill(CURRENT_SYSTEM_CENTER_COLOR);
+        g.drawCircle(cx, cy, 1.1 * BASE_SCALE);
+        g.endFill();
+    }
+    if (route.current && !mini) {
         const [x, y] = scalePos(route.current.position);
         const r = SYSTEM_RADIUS + 2.5;
         g.lineStyle(1.2, SELECT_COLOR);

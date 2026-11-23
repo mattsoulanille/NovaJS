@@ -16,6 +16,18 @@ import { GameDate } from 'novadatainterface/player_start_data';
 //
 // The multi-jump route always takes precedence for actual hyperspace jumps.
 //
+// KNOWN SYSTEMS ONLY (Matthew, 2026-11-23). The auto-router fills gaps only
+// through systems the player has EXPLORED (entered at least once — the
+// discovery record, discovery.ts). A system that is merely VISIBLE — a dim
+// neighbour of explored space, or a faraway mission destination the map
+// draws because a mission points at it — can END a route but never be
+// flown THROUGH: the route's last hop may enter an unexplored system only
+// from an explored one, exactly where a plain single jump could. Nothing
+// is ever plotted beyond an unexplored system, so pins after one contribute
+// nothing. The original EV Nova is laxer — pinning a D-U-U-D chain hop by
+// hop routes straight through two unexplored systems — and that quirk is
+// deliberately NOT reproduced. See {@link Passable}.
+//
 // DETERMINISM CONTRACT: the effective route feeds JumpRouteComponent, whose
 // consumer (jump_plugin.ts beginJump) relies on every hop being a *link* of
 // the system before it — that adjacency is what makes its getCached reads
@@ -42,6 +54,22 @@ export type Adjacency = ReadonlyMap<string, readonly string[]>;
  */
 export type SamePlace = (a: string, b: string) => boolean;
 const sameId: SamePlace = (a, b) => a === b;
+
+/**
+ * Whether a route may pass THROUGH a system: true for a system the player
+ * has explored, false for one they only know of (see the KNOWN SYSTEMS
+ * ONLY note above). An impassable system can still be a route's final
+ * hop; it just cannot be an intermediate one, nor the anchor any later
+ * segment starts from. The system the ship is in is always passable —
+ * the route starts there whatever the record says.
+ *
+ * Injected like {@link SamePlace}: this module knows ids and links, not
+ * the pilot's discovery record. The default (everything passable) is what
+ * maps without a record of their own want, and what the pure-graph specs
+ * assume.
+ */
+export type Passable = (id: string) => boolean;
+const everywhere: Passable = () => true;
 
 export interface RouteState {
     /** Ordered waypoint systems the player pinned via shift-click. */
@@ -77,9 +105,14 @@ export function buildAdjacency(
  * Breadth-first shortest path from `from` to `to`.
  * Returns the path *excluding* `from` and *including* `to`.
  * Returns `[]` when `from === to`, or `null` when `to` is unreachable.
+ *
+ * Only {@link Passable} systems are expanded through: `to` itself may be
+ * impassable (a route can end in an unexplored system), but no
+ * intermediate hop may be. `from` is the caller's anchor and is not
+ * checked.
  */
 export function shortestPath(adj: Adjacency, from: string,
-    to: string): string[] | null {
+    to: string, passable: Passable = everywhere): string[] | null {
     if (from === to) {
         return [];
     }
@@ -105,7 +138,9 @@ export function shortestPath(adj: Adjacency, from: string,
                     path.reverse();
                     return path;
                 }
-                next.push(link);
+                if (passable(link)) {
+                    next.push(link);
+                }
             }
         }
         frontier = next;
@@ -124,16 +159,25 @@ export function shortestPath(adj: Adjacency, from: string,
  * A pin that is the same PLACE as the anchor is skipped as well, not only
  * the same id: routing to a stacked duplicate of where the ship already is
  * would send it out and straight back in (see {@link SamePlace}).
+ *
+ * Segments only pass through {@link Passable} systems, and the route ENDS
+ * at the first impassable pin it reaches: a later segment would have to
+ * start from (fly through) that unexplored system, so every pin after it
+ * contributes nothing, like an unreachable one.
  */
 export function expandRoute(adj: Adjacency, current: string,
-    pinned: readonly string[], samePlace: SamePlace = sameId): string[] {
+    pinned: readonly string[], samePlace: SamePlace = sameId,
+    passable: Passable = everywhere): string[] {
     const route: string[] = [];
     let anchor = current;
     for (const pin of pinned) {
+        if (anchor !== current && !passable(anchor)) {
+            break;
+        }
         if (samePlace(pin, anchor)) {
             continue;
         }
-        const segment = shortestPath(adj, anchor, pin);
+        const segment = shortestPath(adj, anchor, pin, passable);
         if (segment === null) {
             continue;
         }
@@ -143,6 +187,34 @@ export function expandRoute(adj: Adjacency, current: string,
         anchor = pin;
     }
     return route;
+}
+
+/**
+ * Whether shift-clicking `candidate` onto the end of `pinned` would extend
+ * the multi-jump route to it — the gate on pinning a NEW waypoint. True
+ * exactly when the expanded route with the candidate appended ends at the
+ * candidate: there is a path from the route's current end to it through
+ * passable (explored) systems, and the route has not already ended in an
+ * unexplored system.
+ *
+ * A refused candidate is not pinned at all. Pinning it anyway (and letting
+ * {@link expandRoute} skip it, as it does for a pin that went stale) would
+ * leave a waypoint box on the map that the ship will never fly to, and
+ * would quietly start contributing the moment exploring one more system
+ * opened a path — a route the player never saw being plotted.
+ */
+export function canPin(adj: Adjacency, current: string,
+    pinned: readonly string[], candidate: string,
+    samePlace: SamePlace = sameId, passable: Passable = everywhere): boolean {
+    if (samePlace(candidate, current)) {
+        return false;
+    }
+    const route = expandRoute(adj, current, [...pinned, candidate],
+        samePlace, passable);
+    const end = route[route.length - 1];
+    return end !== undefined && samePlace(end, candidate)
+        && expandRoute(adj, current, pinned, samePlace, passable).length
+        < route.length;
 }
 
 /** Toggles a system's membership in the pinned waypoint list. */
@@ -185,8 +257,10 @@ export function cycleSingle(adjacent: readonly string[],
  * waypoint produces a route.
  */
 export function effectiveRoute(adj: Adjacency, current: string,
-    state: RouteState, samePlace: SamePlace = sameId): string[] {
-    const multi = expandRoute(adj, current, state.pinned, samePlace);
+    state: RouteState, samePlace: SamePlace = sameId,
+    passable: Passable = everywhere): string[] {
+    const multi = expandRoute(adj, current, state.pinned, samePlace,
+        passable);
     if (multi.length > 0) {
         return multi;
     }

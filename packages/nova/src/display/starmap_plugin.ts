@@ -1,6 +1,7 @@
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
-import { World } from 'nova_ecs/world';
+import { System } from 'nova_ecs/system';
+import { SingletonComponent, World } from 'nova_ecs/world';
 import { EcsEvent } from 'nova_ecs/events';
 import { Subscription } from 'rxjs';
 import { Component } from 'nova_ecs/component';
@@ -22,8 +23,13 @@ import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { emptyRouteState } from '../spaceport/route.js';
 import { OpenStarmapOptions, RouteStateStore, Starmap } from '../spaceport/starmap.js';
+import {
+    MINI_MAP_PANE, MINI_MAP_ZOOM, MiniMap, miniMapPosition,
+} from '../spaceport/mini_map.js';
+import type { SystemGraph } from '../spaceport/system_graph.js';
 import { DockedShipResource } from './docked_ship.js';
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import { StatusBarResource } from './status_bar_resource.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
 
@@ -38,6 +44,15 @@ export interface DiscoveryHooks {
     level(id: string): DiscoveryLevel;
     mark(ids: string[], level: DiscoveryLevel): void;
     markAll(level?: DiscoveryLevel): Promise<void>;
+}
+
+/** The `window.novaMiniMap` levers (see window_hooks.ts). */
+export interface MiniMapHooks {
+    /** Toggles the minimap, exactly as the `h` key does in flight. */
+    toggle(): void;
+    readonly open: boolean;
+    /** The graph on show (to click systems on), once built. */
+    graph(): SystemGraph | undefined;
 }
 
 /**
@@ -62,6 +77,38 @@ export const OpenStarmapResource =
  * the SetJumpRouteEvent -> setPlayerJumpRoute input-record path.
  */
 const persistentRouteStore: RouteStateStore = { state: emptyRouteState() };
+
+/**
+ * Whether the player has the `h` hyperspace minimap up. Module-level for
+ * the same reason as {@link persistentRouteStore}: the display world is
+ * rebuilt at every jump, and a minimap that was open on departure is open
+ * on arrival — the reference capture (mini_map.png) shows it up, centred
+ * on the new system, with the "Jumping into the Tau Ceti system" line
+ * still on screen.
+ */
+let miniMapOpen = false;
+
+/** The in-flight minimap's per-world state, refreshed every frame. */
+interface MiniMapState {
+    miniMap: MiniMap;
+    /** Re-derives visibility and position (see DrawMiniMap). */
+    update(): void;
+}
+const MiniMapResource = new Resource<MiniMapState>('MiniMap');
+
+/**
+ * Keeps the minimap's visibility and place current: shown only while it
+ * is toggled on, has a map to show, and nothing modal is up — a landed
+ * screen, or the full map in flight, owns the screen (and the keyboard)
+ * then; and anchored beside the status bar at whatever size the window is.
+ */
+const DrawMiniMap = new System({
+    name: 'DrawMiniMap',
+    args: [MiniMapResource, SingletonComponent] as const,
+    step(state) {
+        state.update();
+    },
+});
 
 /**
  * A component of the player's ship: the in-world PlayerShipSelector
@@ -239,32 +286,125 @@ export const StarmapPlugin: Plugin = {
                 if (disposed) {
                     return route;
                 }
-                // A JUMP ALREADY IN PROGRESS has consumed its destination
-                // off the route (beginJump shifts it at jump start), but
-                // the map re-derives the route from the system the ship is
-                // still in, so that hop is back at the head. Written back
-                // as-is, the ship would arrive and immediately jump out of
-                // and back into the system it just reached (Matthew's
-                // playtest, 2026-08-17). The simulation drops such a head
-                // on arrival regardless (JumpRouteReconcileSystem); this
-                // keeps the route the player and their peers see correct
-                // in the meantime.
-                const committed = playerComponent(world, JumpComponent)?.to;
-                if (committed && route[0] === committed) {
-                    route.shift();
+                commitRoute(route);
+                // The full map may have changed the route the minimap shows.
+                if (miniMapOpen) {
+                    void refreshMiniMap();
                 }
-                if (jumpRoute) {
-                    jumpRoute.route = route;
-                }
-                world.emit(SetJumpRouteEvent, { route });
                 return route;
             } finally {
                 opening = false;
             }
         };
+        /**
+         * Hands a route the player plotted (the full map's Done, or a pick
+         * on the minimap) to the simulation: mirrored onto the local
+         * JumpRouteComponent for immediate display and sent as a
+         * SetJumpRouteEvent -> setPlayerJumpRoute input record, which is
+         * what every peer actually simulates. `route` is edited in place
+         * (see below), so the caller sees what was committed.
+         */
+        const commitRoute = (route: string[]) => {
+            // A JUMP ALREADY IN PROGRESS has consumed its destination off
+            // the route (beginJump shifts it at jump start), but the map
+            // re-derives the route from the system the ship is still in, so
+            // that hop is back at the head. Written back as-is, the ship
+            // would arrive and immediately jump out of and back into the
+            // system it just reached (Matthew's playtest, 2026-08-17). The
+            // simulation drops such a head on arrival regardless
+            // (JumpRouteReconcileSystem); this keeps the route the player
+            // and their peers see correct in the meantime.
+            const committed = playerComponent(world, JumpComponent)?.to;
+            if (committed && route[0] === committed) {
+                route.shift();
+            }
+            const jumpRoute = playerJumpRoute(world);
+            if (jumpRoute) {
+                jumpRoute.route = route;
+            }
+            world.emit(SetJumpRouteEvent, { route });
+        };
+
+        // The `h` hyperspace minimap (spaceport/mini_map.ts).
+        const miniMap = new MiniMap();
+        stage.addChild(miniMap.container);
+        /** Rebuilds the minimap's graph from the galaxy and route as they
+         * stand now. Cheap enough per toggle: only the drawn systems. */
+        let miniMapBuild = 0;
+        const refreshMiniMap = async () => {
+            const build = ++miniMapBuild;
+            let graph;
+            try {
+                graph = await starmap.miniMapGraph(MINI_MAP_PANE,
+                    MINI_MAP_ZOOM, playerJumpRoute(world)?.route ?? []);
+            } catch (e) {
+                console.warn('Minimap failed to build:', e);
+                return;
+            }
+            // Closed, superseded or torn down while the data loaded.
+            if (disposed || !miniMapOpen || build !== miniMapBuild) {
+                graph?.container.destroy({ children: true });
+                return;
+            }
+            miniMap.setGraph(graph);
+        };
+        miniMap.picked.subscribe(graph => {
+            persistentRouteStore.state = graph.getRouteState();
+            commitRoute(graph.getEffectiveRoute());
+        });
+        const toggleMiniMap = () => {
+            miniMapOpen = !miniMapOpen;
+            if (miniMapOpen) {
+                void refreshMiniMap();
+            } else {
+                miniMapBuild++;
+                miniMap.setGraph(undefined);
+            }
+        };
+        world.resources.set(MiniMapResource, {
+            miniMap,
+            update() {
+                const docked = world.resources.get(DockedShipResource)
+                    ?.current !== undefined;
+                miniMap.container.visible = miniMapOpen
+                    && miniMap.current !== undefined
+                    && MenuControls.focused === undefined && !docked;
+                if (!miniMap.container.visible) {
+                    return;
+                }
+                const statusBar = world.resources.get(StatusBarResource);
+                const { x, y } = miniMapPosition(screenSize,
+                    statusBar?.container.width ?? 0);
+                miniMap.container.position.set(x, y);
+            },
+        });
+        world.addSystem(DrawMiniMap);
+        if (miniMapOpen) {
+            void refreshMiniMap();
+        }
+        // Debug/headless-driving handle (window_hooks.ts).
+        if (typeof window !== 'undefined') {
+            window.novaMiniMap = {
+                toggle: toggleMiniMap,
+                get open() {
+                    return miniMapOpen;
+                },
+                graph: () => miniMap.current,
+            };
+        }
         world.resources.set(OpenStarmapResource, openStarmap);
         world.resources.set(StarmapDisposer, () => { disposed = true; });
         world.resources.set(StarmapControlsSubscription, controls.subscribe(({ action, state }) => {
+            if (action === 'smallMap' && state === 'start') {
+                // In flight only, like 'm': a landed menu, or the full
+                // map, owns the keyboard (and in the bar, `h` is Hire).
+                if (MenuControls.focused
+                    || world.resources.get(DockedShipResource)?.current) {
+                    return;
+                }
+                toggleMiniMap();
+                return;
+            }
             if (action !== 'map' || state !== 'start') {
                 return;
             }
@@ -287,6 +427,13 @@ export const StarmapPlugin: Plugin = {
     },
     remove(world) {
         world.resources.get(StarmapControlsSubscription)?.unsubscribe();
+        world.removeSystem(DrawMiniMap);
+        const miniMapState = world.resources.get(MiniMapResource);
+        if (miniMapState) {
+            world.resources.get(Stage)?.removeChild(miniMapState.miniMap.container);
+            miniMapState.miniMap.destroy();
+        }
+        world.resources.delete(MiniMapResource);
         const stage = world.resources.get(Stage);
         const starmap = world.resources.get(StarmapResource);
         // A map still open while its world dies (jumped with 'm' up) would
