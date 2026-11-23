@@ -252,6 +252,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    never set, so every existing component and hash input is unchanged.
 //    The derived wire schema fingerprint changes, and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the escort command panel (`e`). Four new
+//    unbound control actions, the escort-order category selectors
+//    (`escortSelectFighters` / `Medium` / `Warships` / `Freighters`,
+//    player/escort_command.ts ESCORT_CATEGORY_SELECTORS), extend the
+//    `ControlAction` enum derived into `ControlEventType`. An order whose
+//    input record carries one selector's 'start' edge reaches only that
+//    category's escorts (EscortCommandInputSystem); a record without one
+//    applies exactly as before. Sim-rule change alongside: `attack` with
+//    no player target now sets the order (no victim; the escort keeps
+//    formation) instead of being ignored. No component codec or hash
+//    input changes. The derived wire schema fingerprint changes, and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

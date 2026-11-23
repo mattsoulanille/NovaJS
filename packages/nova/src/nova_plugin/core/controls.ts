@@ -72,6 +72,14 @@ const SavedControlsPartialObject = t.partial({
     'formation': ControlInputs,
     'returnToBay': ControlInputs,
     'escortRestrictFire': ControlInputs,
+    // Escort-order category selectors (player/escort_command.ts
+    // ESCORT_CATEGORY_SELECTORS). No default keybind: the escort command
+    // panel (`e`) sends the selected row's selector alongside an order key
+    // in the same input record, narrowing that order to one category.
+    'escortSelectFighters': ControlInputs,
+    'escortSelectMedium': ControlInputs,
+    'escortSelectWarships': ControlInputs,
+    'escortSelectFreighters': ControlInputs,
     'map': ControlInputs,
     'smallMap': ControlInputs,
     'hyperjump': ControlInputs,

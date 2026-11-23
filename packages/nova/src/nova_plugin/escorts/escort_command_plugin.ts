@@ -16,7 +16,10 @@ import { ChooseTargetSystem } from '../combat/index.js';
 import { AggressionComponent, isRecentAggressor } from '../combat/index.js';
 import { blindSpotBlocksFiring } from '../combat/index.js';
 import { DisabledComponent } from '../ship/index.js';
-import { EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersComponent } from '../player/index.js';
+import {
+    ESCORT_CATEGORIES, ESCORT_CATEGORY_SELECTORS, EscortCategory, escortCategoryOf,
+    EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersComponent,
+} from '../player/index.js';
 import { OwnerComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { ExplodingComponent } from '../ship/index.js';
@@ -42,6 +45,16 @@ import { WeaponsStateComponent, WeaponState } from '../ship/index.js';
  * ============================================================================
  * Escort commands (attack / defend / formation / holdPosition / returnToBay)
  * ============================================================================
+ *
+ * The first four are the original's escort orders (f / d / c / v, and the
+ * `e` panel). returnToBay is NovaJS's own (Alt+C, not on the panel): the
+ * one way to dock launched bay fighters mid-system, which the landed
+ * refund and the escort-rejoin rules depend on. (The original's STR# 2002
+ * carries a "Return to Hangar" order string too, so it is not foreign.)
+ *
+ * Orders go to a CATEGORY (escortCategoryOf: Fighters, Medium Ships,
+ * Warships, Freighters) when the record carries that category's selector
+ * edge (ESCORT_CATEGORY_SELECTORS), and to every category otherwise.
  *
  * Commands apply to the player's DIRECT escorts only — one parent-link
  * hop: hired escorts holding formation on the player, and fighters
@@ -123,6 +136,27 @@ const EscortsQuery = new Query([UUID, GetEntity, ShipComponent,
     Optional(FormationComponent), Optional(OwnerComponent),
     EscortCommandComponent] as const);
 
+/** The escort's panel category, from its own (synced) hull data. */
+export function escortCategoryOfEntity(entity: Entity): EscortCategory {
+    return escortCategoryOf(entity.components.get(ShipDataComponent),
+        entity.components.has(BayFighterComponent));
+}
+
+/**
+ * The category an order in this input record is for: the one selector
+ * whose 'start' edge rides in the record, else undefined (every category).
+ * Only the edge counts — a selector held over from an earlier record (they
+ * are never released) says nothing about this order. Two edges at once is
+ * not something the panel sends; it is read as "every category" rather
+ * than guessing which was meant.
+ */
+function orderedCategory(controlState: Map<string, unknown>):
+    EscortCategory | undefined {
+    const selected = ESCORT_CATEGORIES.filter(category =>
+        controlState.get(ESCORT_CATEGORY_SELECTORS[category]) === 'start');
+    return selected.length === 1 ? selected[0] : undefined;
+}
+
 const COMMAND_ACTIONS = ['attack', 'defend', 'formation', 'holdPosition',
     'returnToBay'] as const;
 type CommandAction = typeof COMMAND_ACTIONS[number];
@@ -157,11 +191,7 @@ export const EscortCommandInputSystem = new System({
         if (!action) {
             return;
         }
-        // attack needs a victim: the player's current target at
-        // command time. With no target the command is ignored.
-        if (action === 'attack' && !target.target) {
-            return;
-        }
+        const category = orderedCategory(controlState);
         for (const [, escortEntity] of escorts) {
             // One shared definition of the parent link (escortParent),
             // rather than a second inline copy of the same chain that
@@ -169,8 +199,18 @@ export const EscortCommandInputSystem = new System({
             if (escortParent(escortEntity) !== uuid) {
                 continue; // Not a DIRECT escort of the commander.
             }
+            if (category !== undefined
+                && escortCategoryOfEntity(escortEntity) !== category) {
+                continue;
+            }
+            // attack snapshots the player's current target as the victim.
+            // With none, the original still sets the order to Attack (`f`
+            // with no target, reference E-view): the order stands, and the
+            // escort keeps formation until it is given another.
             const state: EscortCommandState = action === 'attack'
-                ? { command: 'attack', target: target.target }
+                ? (target.target !== undefined
+                    ? { command: 'attack', target: target.target }
+                    : { command: 'attack' })
                 : { command: action };
             escortEntity.components.set(EscortCommandComponent, state);
         }
@@ -634,6 +674,13 @@ export const EscortCommandBehaviorSystem = new System({
 
         switch (command.command) {
             case 'attack': {
+                if (command.target === undefined) {
+                    // Ordered with no target: hold formation (station-
+                    // keeping is FormationSystem's), turrets as in
+                    // formation below. The order itself stands.
+                    target.target = undefined;
+                    break;
+                }
                 const victim = command.target !== undefined
                     ? entities.get(command.target) : undefined;
                 const victimMovement = victim?.components

@@ -68,10 +68,12 @@ export const FormationSystem = new System({
             return;
         }
         // Player-commanded escorts: station-keep only while the
-        // command is formation (or defend with no intruder engaged) —
-        // the command behavior system steers everything else.
+        // command is formation (or defend with no intruder engaged, or
+        // attack given with no target) — the command behavior system
+        // steers everything else.
         if (escortCommand && !(escortCommand.command === 'formation'
-            || (escortCommand.command === 'defend'
+            || ((escortCommand.command === 'defend'
+                || escortCommand.command === 'attack')
                 && escortCommand.target === undefined))) {
             return;
         }

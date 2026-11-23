@@ -214,12 +214,15 @@ describe('escort commands', () => {
             expect([...weapons.values()].every(w => !w.firing)).toBeTrue();
         });
 
-    it('attack without a player target is ignored', async () => {
-        const { world } = await makeWorld();
-        setPlayerTarget(world, undefined);
-        press(world, 'attack');
-        expect(command(world).command).toBe('formation');
-    });
+    it('attack without a player target still sets the order (the ' +
+        'original does), with no victim', async () => {
+            const { world } = await makeWorld();
+            setPlayerTarget(world, undefined);
+            press(world, 'attack');
+            expect(command(world)).toEqual({ command: 'attack' });
+            world.step();
+            expect(command(world)).toEqual({ command: 'attack' });
+        });
 
     it('a new command interrupts the current one', async () => {
         const { world, addShip } = await makeWorld();
