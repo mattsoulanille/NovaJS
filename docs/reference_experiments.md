@@ -2197,11 +2197,15 @@ encounter from the recording:
    ahead and under 200 px at some point: 26 of 45 missiles in decoy3, 5 of
    45 in decoy1).
 
-**NovaJS (main a90e8f39).** `N/nova_plugin/combat/jamming_plugin.ts:84,134`
-still decoys only jammed missiles (10%, any decoy within 1000 px). The hub's
-in-flight change (capture onto any rock within 225 px from the launch tick)
-has no direction limit, which is what makes a missile circle a rock beside
-it. **Proposed (not applied):** capture only a rock whose bearing is within
+**NovaJS (main 7025aac4, after 818de7af "Seeker 0x0002: asteroids capture
+missiles with or without jamming").** `N/nova_plugin/combat/jamming_plugin.ts:168`
+(`ASTEROID_DECOY_CAPTURE_RANGE` = 225) captures a 0x0002 missile onto any
+rock within 225 px, from the launch tick on, in every direction, which is
+what makes a missile circle a rock beside it; a jammed one goes for the
+nearest rock within `DECOY_DISTRACTION_RANGE` 1000 px (line 155). Against
+wave 5: the range is about right for rocks ahead, the missing direction
+limit is a **mismatch** (5 of 5 side rocks at 60-85 px ignored in the
+original). **Proposed (not applied):** capture only a rock whose bearing is within
 about 30° of the missile's heading (a forward field of view), at up to
 about 200 px; once captured, steer to it as to any target (it hits; with a
 forward cone the rock is always reachable, so no circling). Keep the jammed
@@ -2246,7 +2250,7 @@ the control).
   times. Escorts do not turn to bring a fixed gun to bear.
 - Full turrets, as wave 3 saw, fire freely.
 
-**NovaJS (main a90e8f39, unchanged since d17654fe):**
+**NovaJS (main 7025aac4, unchanged since d17654fe):**
 `N/nova_plugin/escorts/escort_command_plugin.ts:616-628`
 (`formationTurretKind`) lets full turrets and front-quadrant turrets fire
 from the slot; fixed guns hold fire (**matches**) and so do rear-quadrant
@@ -2315,7 +2319,7 @@ every non-zero record).
   spaceport (the date advances then), not on landing. Wave 4's B4 note
   ("after landing and re-saving") was the same thing; README fixed.
 
-**NovaJS (main a90e8f39).**
+**NovaJS (main 7025aac4).**
 - Hostility: `N/nova_plugin/reputation/govt_disposition.ts:38-65`
   (`govtDisposition`) counts an ally only from the acting govt's own Allies
   list, and the record test in `govtDispositionTo` (lines 76-105) uses the
@@ -2376,12 +2380,13 @@ traffic flies to stellars, lands on them or lingers about 20 s beside them,
 takes off again, and leaves by jumping. That is the shape NovaJS already
 gives traffic.
 
-**NovaJS (main a90e8f39):** `N/nova_plugin/npc/npc_decision.ts:75-76`
-(departure 120-300 s after spawning) and the AI 1/2 planet-to-planet loop
-with "dwell" standing in for landing (around line 454): **matches in
-shape** for traffic. The wave-4 proposal (a
-30-40 s straight-to-jump departure for goal-less mïsn special ships only)
-stands; keep the dwell loop for traffic. Not measured: the length of a
+**NovaJS (main 7025aac4):** `N/nova_plugin/npc/npc_decision.ts:78-79`
+(traffic departs 120-300 s after spawning) and the AI 1/2 planet-to-planet
+loop with "dwell" standing in for landing (around line 486): **matches in
+shape** for traffic. The wave-4 proposal, a 30-40 s pass-through for
+goal-less mïsn special ships only (lines 89-90, 104, applied in
+ae017162), is confirmed as specific to mission ships: keep the dwell loop
+for traffic. Not measured: the length of a
 landed stay (a landed ship disappears from the radar) and the total time a
 trader spends in the system.
 
@@ -2430,17 +2435,28 @@ player hull's shïp **Strength** changed and nothing else:
   leave anyway (1 of 2). Which of the two it picks looks random from run to
   run.
 
-**NovaJS (main a90e8f39):** `N/nova_plugin/npc/npc_decision.ts:487`
-(`warshipsRetreatAt25`) flees as soon as the shield is under 25%, always,
-and the flight ends in `departByJump`; `oddsFavorable` (line 419 for AI 2,
-line 508 for whether a warship engages at all) is not consulted for it. **Proposed (not
-applied)**, refining wave 4's: under 25% shield, retreat only if
-`oddsFavorable(maxOdds, ...)` is false OR the ship lost more than about
-12% of its shield per second over the last few seconds (4 guns took about
-20%/s off this tank, 1 gun 5-9%/s); a retreating ship either jumps out after
-10-20 s or (50/50) keeps out of the attacker's weapon reach and returns to
-the fight when the damage stops. The thresholds are a guess between the
-measured cases.
+(Rates: the panel shots are about 4.7 s apart, not 2.7 s, because each
+shot itself takes about 2 s. 4 guns took about 11% of the shield per
+second off this tank, 1 gun 3-5%/s.)
+
+**NovaJS (main 7025aac4, after ba4eee66 "gövt 0x0010 retreat: only when
+losing").** `N/nova_plugin/npc/npc_retreat.ts:50-68` (`warshipRetreat`,
+called from `npc_decision.ts:542`): under 25% shield AND losing, where
+losing = a damage-load bucket over `HEAVY_FIRE_LOAD` (fed above
+`HEAVY_FIRE_RATE_PER_S` 6%/s, line 41) OR a threat whose `oddsFavorable`
+call is false; it stands off at 360-420 px and jumps after
+`RETREAT_JUMP_MS` 16 s (line 57), resuming the attack once the load drains
+(4 s). Against wave 5:
+- the Strength cells **match**: the Strength-10000 attacker makes the
+  MaxOdds call unfavorable, so it retreats even against one gun (the
+  original jumped 2 of 2, about 20 s after crossing 25%);
+- the heavy-fire cells **match** (Strength-1 attacker with 4 guns: jump or
+  stand-off), and so does the burst run that came back after the fire
+  stopped;
+- the one thing NovaJS cannot give is the burst run that jumped out 7 s
+  AFTER the fire had stopped, and the run-to-run choice between jumping
+  and standing off: in NovaJS a stand-off always lasts 16 s before the
+  jump. Not worth a random draw on two runs. No change proposed.
 
 Confidence: medium. Two runs per new cell; the Strength effect is clean
 (2 of 2 against 5 of 6 the other way), the damage-rate effect rests on
@@ -2540,7 +2556,7 @@ frame; along + = ahead, across + = left of travel). Two new fleets, govt
   of a type before the next type: both reds take ranks 1-2 (left, right),
   both greens ranks 3-4.
 
-**NovaJS (main a90e8f39):** `N/nova_plugin/spawn/npc_spawn_plugin.ts:1105-1135`
+**NovaJS (main 7025aac4):** `N/nova_plugin/spawn/npc_spawn_plugin.ts:1105-1135`
 draws every escort count first, takes the spacing from the largest
 `spriteFrameWidth` among the lead and the escorts actually spawned, then
 places escorts type by type in field order into consecutive slots:
@@ -2590,7 +2606,7 @@ about 49 missiles of Speed 600 / GuidedTurn 60, the 100-armor J0 target
    1-damage missiles on 1500 shield). So a minority, on the order of 5%,
    attack the parent.
 
-**NovaJS (main a90e8f39), `N/nova_plugin/combat/jamming_plugin.ts`:**
+**NovaJS (main 7025aac4), `N/nova_plugin/combat/jamming_plugin.ts`:**
 - Interference: `effectiveJamming` (lines 214-236) adds the system's
   Interference to the RADAR jamming type (`RADAR_JAM_INDEX` 1, line 171)
   for 0x0008 missiles, which then goes through the JamVuln roll; a JamVuln-0
@@ -2754,7 +2770,7 @@ first try is kept as `*-INVALID-o-too-early`.
 |---|---|---|
 | U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not built in wave 5 either; "Boarding a non-mission disabled ship" says what the steering loop would take). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Wave 5:** a hostile stock Fed Carrier in ordinary traffic DOES launch (Vipers, Anacondas); kit-fighter bays never launched. With blast-armed Vipers the carrier hung back and no blast reached it, so the question is still open: the fight must be brought to the carrier. |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (the 0x0002 decoy as applied in 51e4d911 has no cone). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (the 0x0002 capture applied in 818de7af has no cone). |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 5:** the 0x0010 retreat needs shield < 25% AND (losing on attacker Strength OR heavy fire); AI 1 traffic lands, lingers and jumps (unlike mission ships). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS (original frames recorded in wave 5, the NovaJS headless run is the hub's) | **Wave 5:** fixed guns hold fire in Formation, rear-quadrant turrets fire. Recall: full-speed dash through the slot, more than 300 px overshoot, settled after 18.5 s. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
