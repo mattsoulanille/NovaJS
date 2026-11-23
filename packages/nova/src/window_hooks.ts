@@ -25,6 +25,7 @@ import type { CommunicatorClient } from './communication/communicator_client.js'
 import type { MultiRoom } from './communication/multi_room_communicator.js';
 import type { DEBUG_FLAGS } from './debug_flags.js';
 import type { ScaleLayout } from './display/display_scale.js';
+import type { EscortPanelRow } from './display/escort_panel.js';
 import type { HailDialog } from './spaceport/hail_dialog.js';
 import type { OfferPopup } from './spaceport/offer_popup.js';
 import type { Starmap } from './spaceport/starmap.js';
@@ -87,6 +88,12 @@ declare global {
         /** Hire escorts onto the player through the bar's spawn path. */
         novaSpawnEscorts?: (shipIds: string[]) => Promise<void>;
         novaEscortRosters?: () => ReturnType<FleetLedger['summary']>;
+        /** The escort command panel, `e` (escort_panel_plugin). */
+        novaEscortPanel?: {
+            readonly open: boolean;
+            readonly selectedRow: number;
+            rows(): EscortPanelRow[];
+        };
         /** The background landed-UI warm-up (client/landed_ui_prefetch.ts):
          * `await novaLandedUiPrefetch.idle` waits for the current run. */
         novaLandedUiPrefetch?: LandedUiPrefetch;

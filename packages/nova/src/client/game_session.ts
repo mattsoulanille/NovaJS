@@ -36,6 +36,7 @@ import {
 } from '../display/ship_mission_offer_plugin.js';
 import { LeaveSpaceportEvent } from '../display/spaceport_plugin.js';
 import { SetJumpRouteEvent } from '../display/starmap_plugin.js';
+import { EscortPanelResource } from '../display/escort_panel_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
 import {
@@ -356,6 +357,15 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
 
     const controlRouter = new ControlRouter();
     function emitControlEvents(controlEvents: ControlEvent[]) {
+        // The escort command panel (`e`) has first say over in-space keys:
+        // it consumes its own toggle and, while open, the row keys 1-5,
+        // and adds the selected category's selector to an order key
+        // (display/escort_panel.ts).
+        const escortPanel = liveSystem(state.state)?.world.resources
+            .get(EscortPanelResource)?.controller;
+        if (escortPanel) {
+            controlEvents = escortPanel.filter(controlEvents);
+        }
         if (controlEvents.length === 0) {
             return;
         }

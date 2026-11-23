@@ -45,6 +45,7 @@ import { StatusBarPlugin } from "./status_bar.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 import { StatusMessagePlugin } from "./status_message_plugin.js";
 import { SpeedIndicatorPlugin } from "./speed_indicator_plugin.js";
+import { EscortPanelPlugin } from "./escort_panel_plugin.js";
 import { DrawTargetCornersSystem, TargetCornersPlugin } from "./target_corners_plugin.js";
 import { UiSoundTriggersPlugin } from "./ui_sound_triggers_plugin.js";
 
@@ -154,6 +155,9 @@ export const Display: Plugin = {
         await world.addPlugin(StatusBarPlugin);
         await world.addPlugin(StatusMessagePlugin);
         await world.addPlugin(SpeedIndicatorPlugin);
+        // The escort command panel (`e`). Its controller filters in-space
+        // key presses (client/game_session.ts emitControlEvents).
+        await world.addPlugin(EscortPanelPlugin);
         await world.addPlugin(AnimationPlugin);
         await world.addPlugin(AnimationGraphicPlugin);
         world.addSystem(CenterShipSystem);
