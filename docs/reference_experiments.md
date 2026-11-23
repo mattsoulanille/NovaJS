@@ -801,10 +801,10 @@ Key bindings in this install (from the prefs): `escortMenuKey` = e,
 | click on a row | Selects it. Hovering does nothing. |
 | `f` / `d` / `v` / `c` | Gives the selected category the order Attack / Defend / Hold Position / Formation. On row 1 it applies to every category. Example: `2` then `v` turned only Fighters to Hold Position. |
 | Left/Right arrows | Turn the ship as usual. **The game does not pause**: escorts and the ship keep moving. |
-| Up/Down arrows | Thrust or reverse as usual, **and close the panel**. |
+| Up/Down arrows | Thrust or reverse as usual. (Wave 2 said they close the panel; **wrong**, see "Wave 4: the panel's lifetime": that close was the timer.) |
 | Tab, Return | Do nothing to the panel; they don't open it either. |
 | Escape | In space this always quits to the title screen (pause key), panel or not. |
-| no input | The panel stays open; there is no timeout over at least 4 s. |
+| no input | The panel closes by itself **8.3 s** after it opened (wave 4; wave 2 only watched 4 s). |
 
 - `f` with no target still sets the order to Attack.
 - Bay fighters: with the Kit Fighter Bay as secondary (`w`), four taps
@@ -829,7 +829,49 @@ Key bindings in this install (from the prefs): `escortMenuKey` = e,
 - **How fast Formation recalls held escorts.** 8 s after `c` the
   escorts, left about 900 px behind, were still off screen.
 
-**NovaJS today:**
+**Wave 4: the panel's lifetime** (`scenarios/escpanel_timer.json`, pilot
+`w3_recall`: two hired escorts in quiet Kit Range; two runs). One
+recording per run: `e` and 60 s untouched, then one trial per key (`e`,
+4 s, the key, 14 s). `analysis/region_lit.mjs` times the panel from the
+bright pixels of its rows; frames are recording frames (30 fps), counted
+from the key's stamp.
+
+| after `e`, at about 125 frames | panel closed, frames after `e` (run 1 / run 2) | frames after the key |
+|---|---|---|
+| nothing (watched 60 s) | 248 / 250 | |
+| row `2` | 375 / 374 | **250 / 250** |
+| row `4` | 373 / 374 | **249 / 250** |
+| order `c` (Formation) | 249 / 251 | |
+| order `c` again | 249 / 249 | |
+| Left (turn) | 250 / 250 | |
+| Up (thrust) | 249 / 250 | |
+| Down (reverse/brake) | 250 / 250 | |
+| Space (fire) | 250 / 250 | |
+| Tab (target) | 250 / 250 | |
+
+- The panel **closes itself 249-250 recording frames (8.3 s) after it
+  opens**, i.e. about 240 game frames at 29.1 Hz (8 s nominal).
+- **Selecting a row (1-5) restarts the timer**: the close comes 250
+  frames after the row key. The wave-2 recording also shows a **click** on
+  a row restarting it (closed 249 frames after the click).
+- **Nothing else restarts or closes it**: order keys (`c`), turning,
+  thrust, reverse, firing and Tab all leave the close at 250 frames after
+  `e`. Wave 2's "Up/Down close the panel" was the timer (the panel had been
+  open 8.3 s since its last click); the Up press there came 46 frames
+  before the close.
+- `e` while it is open still closes it (wave 2).
+
+**NovaJS (9ec7a496), `N/display/escort_panel.ts`:** no timer, and
+`CLOSING_ACTIONS` (line 172: accelerate, reverse) closes the panel on
+thrust or reverse (lines 226-229). **Mismatch** on both. **Proposed (not
+applied):** drop `CLOSING_ACTIONS`; close the panel 240 ticks (8 s)
+after it opens or after the last row selection (key or click); `e` still
+toggles. Confidence: high (two runs, every trial within 2 frames).
+
+Evidence: `~/.local/share/novaref/evidence/20261123-w4/escorts/panel-timer/*/`
+(`recording.mp4`, `recording.events.json`, `lit.json`).
+
+**NovaJS today (wave 2):**
 - `controls.json` binds `escorts: KeyE`, but no panel exists.
 - The orders are implemented as attack/defend/formation/holdPosition/
   returnToBay (`N/nova_plugin/escorts/escort_command_plugin.ts`), with
@@ -899,6 +941,52 @@ Specs: `display/target_corners_test.ts` (K9 block),
 **Evidence:** `~/.local/share/novaref/evidence/20261123-k9/*/`: `02-17
 obs-*.png` (the target panel names the ship; the brackets are in the
 space view) and `hostility.json`.
+
+**Wave 4 follow-up: AI 2 and AI 4** (`scenarios/k9b_observe.json`,
+`k9b_observe_early.json`; kit `wave4Brackets`). One armed yellow AI Subject
+Disc appears at Kit Port. The player (Kit Lancer Heavy with an IFF and the
+1-damage Kit Tickler) targets it once with Tab and shoots every 2.5 s:
+six shots, one 0.6 s tickle, 24 more shots (60 s). In `_early` the tickle
+comes after one shot (the AI 2 trader leaves within about 18 s). Bracket
+colour = the dominant colour 15-40 px around the disc in each shot
+(`brackets.txt` per run); attacks from the player's shield bar.
+
+| case (2 runs each) | before the tickle | after the tickle |
+|---|---|---|
+| AI 2, gövt 362 (always attacks the player) | **yellow** (2 runs where it was on screen: `ai2` and `ai2-early` run 1); it never attacked, flew off and, without a tickle in reach, left the system about 18 s in | **red** in every shot from the first after the tickle (both `_early` runs); it attacked (shield drops from 20-24 s) and was still attacking and red at the end, 60 s later |
+| AI 4, gövt 362 | **red** from the first shot, 2.5 s after Tab | red throughout |
+| AI 4, gövt 360, record -500 in its system | **red** from the first shot | red throughout |
+| AI 4, gövt 363 (neutral control) | off screen (patrolling away; its radar dot was the neutral colour) | **red** once it came back to attack after the tickle |
+
+The hostile interceptors had already hit the player before the recording
+started (shield 146 of 148 px at the first frame, against 148 for the
+neutral one): they attack the moment the player takes off, so "red before
+it attacks" can't be separated for AI 4.
+
+**Findings.**
+- An AI 2 trader of an always-attacks government is **yellow** until the
+  player hits it, then **red** while it fights back (and it did not stop
+  within the 60 s, so whether it turns back to yellow later is
+  unmeasured; wave 3 saw AI 2 keep attacking for 130 s).
+- AI 4 interceptors of a hostile govt (flag 0x0004, or the local record)
+  attack at once and are red at every look. A neutral AI 4 turns red when
+  provoked.
+- Together with wave 2 (AI 1 yellow, AI 3 red): **the bracket is red
+  exactly when the ship is, or will at once be, attacking the player**:
+  warships and interceptors of a hostile govt from the start; traders
+  only once provoked.
+
+**NovaJS (9ec7a496):** `N/nova_plugin/reputation/iff_plugin.ts:101-113`
+paints any ship of an always-attacks / xenophobic / enemy / record-hostile
+govt hostile regardless of AI type. Wrong for AI 1 and AI 2 (yellow until
+they attack); right for AI 3 and AI 4. **Applied in 29237401** (the
+political tier is now `combat/hostility.ts` onSightDisposition: hostile
+only for AI 3/4 ships that would attack on sight; AI 1/2 are neutral and
+go red through the behavioural tier once they attack). Confidence: high for AI 2 and AI 4 (two runs each, every shot
+consistent).
+
+Evidence: `~/.local/share/novaref/evidence/20261123-w4/k9b/{ai2,ai2-early,ai4h,ai4r,ai4n}/*/`
+(`NN-pre-*/post-*.png`, `brackets.txt`, `hostility-yellow.json`).
 
 ### U3: do outfit speed/accel/turn mods use the hull scale? (2026-11-23, wave 2)
 
@@ -1280,7 +1368,7 @@ Against the original: our 4 × 25 target would lose 100% (original 22%),
 our V 100 / J 25 target almost 0% (original 22-25%), and InhJam would jam
 (original: nothing seen).
 
-**Proposed (not applied).**
+**Applied in c9fc116c** (`N/nova_plugin/combat/jamming_plugin.ts`):
 - Roll once when a guided missile is launched at a target (or acquires
   one), per jamming type k: jammed if J_k > (100 - V_k) + rand·V_k. A
   jammed missile keeps its launch heading for life (turn-away: steers
@@ -1337,11 +1425,12 @@ is wider than binomial noise alone, so single runs mean little.
 - `case 'attack'` (line 676) and `case 'defend'` (line 704, hostiles
   within `DEFEND_RADIUS` 1000 px, attack until disabled) match what was
   seen.
-- **Mismatch:** the formation branch (lines 786-803) lets ONLY
+- Was a mismatch: the formation branch (lines 786-803) let ONLY
   front-quadrant turrets (guidance 7) fire opportunistically, "not even full
   turrets". The original's guidance-4 turrets fired from formation.
-  **Proposed (not applied):** let full turrets (guidance 4, and probably
-  turreted beams, guidance 3) fire at iff-hostile ships from formation too.
+  **Applied in ff0aa775** (`formationTurretKind`): full turrets (guidance 4,
+  and turreted beams, guidance 3, by inference) fire at iff-hostile ships
+  from the formation slot too.
   Not measured: fixed guns (do escorts turn to use them? the blue discs
   never left their slots) and rear-quadrant turrets.
 
@@ -1525,6 +1614,9 @@ brake after every thrust.
   | (step 2 stop, before `l`) | 235 px | **"u9c200, you're cleared to land. Welcome to Kit Port."** appeared by itself 7 frames before the `l` |
   | step 2 `l` | 235 px | **landed** (spaceport 5 frames later) |
 
+  (Wave 4 re-measured this and ten other planets, and the speed gate:
+  see "U9 wave 4". The 277 px answer was a fresh landing request, not a
+  range verdict.)
   So the landing range of this planet is **between about 235 and 277 px
   from its centre**, and once a request is pending the game announces
   "cleared to land" by itself on entering that range. NovaJS lands within
@@ -1584,11 +1676,12 @@ border asks "is it inhabited?".
 **NovaJS:** `N/spaceport/starmap_borders.ts:9-31` radiates from "explored,
 INHABITED systems — systems with a port" (landable AND not 0x0020), and
 `N/spaceport/starmap_draw.ts:136-138` notes the inhabited-but-unlandable
-corner as unwitnessed. The dot rule matches; the border rule is a
-**mismatch** for that corner (the four stock Wraith systems sÿst
-510/521/582/593). **Proposed (not applied):** territory sites = explored
-systems with at least one stellar whose 0x0020 is clear; keep `isPort` for
-the dot colour.
+corner as unwitnessed. The dot rule matched; the border rule was a
+mismatch for that corner (the four stock Wraith systems sÿst
+510/521/582/593). **Applied in 6d202ebc** (`N/core/landable.ts`
+`systemHasInhabitedStellar`): territory sites = explored systems with at
+least one stellar whose 0x0020 is clear; `isPort` still picks the dot
+colour.
 
 Confidence: high for the three cells (one clean screenshot each).
 
@@ -1642,7 +1735,286 @@ block.
 Evidence: `~/.local/share/novaref/evidence/20261123-w3-dates/`
 (`Nova-DF.rsrc` copy and the dump).
 
+### U9 wave 4: landing range by planet size, and the landing speed gate (2026-11-23)
+
+**Kit.** sÿst 2160-2169 "Kit Land NN", each with one landable stellar at
+(0,0) cloned from a stock spöb, so only its graphic differs (spöb Type ->
+spïn 1000+Type -> sprite frame size). The player is an inertialess Kit
+Crawler 100 (44 px/s). `analysis/planet_track.mjs` measures the planet's
+centre in every frame (clipped sprites are centred from their free edge)
+and reads the status-line message after every `l`.
+
+**Two methods.**
+- **At rest** (`scenarios/land_step.json`): fly out about 700 px, turn, then
+  34 steps of 0.5 s thrust (about 24-27 px), Down to stop, `l` at rest. The
+  first stop that lands is inside the range, the stop before it outside.
+  This is the landing range proper.
+- **Moving** (`land_range.json`, `land_range_far.json`): fly straight
+  through the planet at a constant 44 px/s pressing `l` every 160 ms (one
+  keys step, no gaps). It never lands (see the speed gate), but the
+  answer flips from "You're too far away to land on this planet." to
+  "You're moving too fast to land on this planet." and back.
+
+| planet (sprite frame) | at rest: too far / landed | moving, approaching: too far / too fast | moving, receding: too fast / too far |
+|---|---|---|---|
+| Type 3, 40x40 | 99 / **72** | 87 / 77 | 74 / 84 |
+| Type 6, 72x72 | 131 / **103** | (in a gap) | 160 / 170 |
+| Type 16, 80x80 | 178 / **150** | | |
+| Type 24, 88x88 | 210 / **182** | | |
+| Type 9, 96x96 | 238 / **211** | | |
+| Type 10, 112x112 | 233 / **205** | | |
+| Type 0, 150x150 (Kit Port) | wave 3: 277 / **235** | 259 / 250 | 262 / 272 |
+| Type 25, 250x250 | 255 / **229** | 254 / 244 | 450 / 460 |
+| Type 18, 304x134 | | 249 / 239 | 524 / 534 |
+| Type 39, 315x200 (station art) | 308 / **280** | | |
+| Type 5, 325x325 (Jupiter) | 275 / **247** | 333 / 323 | still "too fast" at 700 |
+
+Distances are px from the planet's centre, measured in the frame the game
+read the key (4.5 frames after the stamp; at rest it doesn't matter).
+Planet centres are good to about 5 px.
+
+**Findings.**
+1. **The landing range is far larger than NovaJS's 100 px.** Up to about
+   110 px sprites it grows with the sprite at roughly **twice the frame
+   size** (40 -> 72-99, 72 -> 103-131, 80 -> 150-178, 88 -> 182-210,
+   96 -> 211-238, 112 -> 205-233: midpoints 1.6-2.3 S, mean about 2.0 S).
+   From there it levels off at **about 230-260 px** (150, 250 and the
+   304x134 art), a little more for the biggest art (325 -> 247-275,
+   315x200 station -> 280-308). Most stock planets are 72-150 px, so most
+   are in the 2 S part.
+   - Candidate formula: **R ≈ min(2 S, 240)**, S = sprite frame size. It
+     falls inside the measured bracket for 40, 80, 112, 150, 250 and
+     304x134; it is 6-19 px short for 88 and 96, 13 px long for 72, and
+     about 10-40 px short for the 315 and 325 px art. No smooth function
+     of S hits every bracket (72 is low, 88-96 high), so either the frame
+     size is not the input (the visible art differs per planet) or the
+     brackets carry a ±15 px error from single runs.
+2. **The speed gate is about 20 px/s, absolute** (`scenarios/land_brake.json`,
+   `land_brake200.json`). Kit Crawler Slowbrake (Speed 100, Accel 60) and
+   Slowbrake 200 (Speed 200, Accel 120) fly back into Kit Port's range and
+   brake with Down while pressing `l`; the deceleration was measured
+   (11.8 px/s² for Accel 60, about 0.197·Accel). The first press that
+   landed was read at 19.0 px/s (Speed-100 hull; the press before it,
+   21.7 px/s, said "too fast") and at 15.7 px/s (Speed-200 hull; 20.5 px/s
+   before it). So the gate is **between about 19 and 20.5 px/s** for both
+   hulls: not a share of the hull's top speed (that would be 22 vs 44 px/s).
+   An inertialess hull at full speed never lands, even 44 px/s; wave 3's
+   Crawler 200 "landing while moving" was 5 frames into its thrust, still
+   slow.
+3. **"Too fast" is answered first** whenever the ship is in the zone, so
+   moving through a planet gives too far / too fast / too far.
+4. **A receding ship stays "in" much longer** around the big planets: the
+   too fast -> too far flip on the way out came at 450-530 px (250,
+   304x134) and beyond 700 px (325), while the way in flipped at 240-330.
+   Small planets (40, 150) were symmetric. And for the 325 px planet the
+   moving zone (323-333 on the way in) is larger than the at-rest landing
+   range (247-275). So the zone in which the game says "too fast" is not
+   simply the landing circle; it can only matter for messages, since no
+   ship that fast can land. Not explained.
+5. Messages: the first `l` is answered with one of several traffic-control
+   lines, e.g. "Landing request received, <ship>. Begin initial
+   approach.", "<port> traffic control reads you, <ship>. Begin initial
+   approach.", "Cleared to land, <ship>. Welcome to <port>." or "You are
+   cleared to land. Commence final approach." (the last two when already
+   in range).
+
+**NovaJS (9ec7a496).** `N/nova_plugin/travel/planet_plugin.ts:161-162`:
+`LAND_DISTANCE_SQUARED = 10_000` (100 px for every planet) and
+`LAND_SPEED_SQUARED = 3_000` (54.8 px/s), checked in that order at lines
+269-273 (too far, then too fast). The order matches finding 3. Both
+numbers are off: the range is about 2.3x too small for a typical planet
+(and too large for a 40 px moon), the speed gate about 2.7x too lenient.
+
+**Proposed (not applied).**
+- `LAND_SPEED_SQUARED = 400` (20 px/s).
+- Landing range from the stellar's sprite frame size S (the larger of
+  width and height): **R = min(2 S, 240) px**, optionally max(R, 0.8 S)
+  so the 315-325 px art gets its measured 260-295.
+- Keep "too far" before "too fast". The receding-ship extension (finding 4)
+  is message-only and can be left out.
+- `N/nova_plugin/escorts/player_escort_plugin.ts:196-197` (escort landing,
+  300 px / 100 px/s) is a separate NovaJS-only tuning, not measured here.
+
+Confidence: high for the speed gate (two hulls, the same answer) and for
+the at-rest ranges (each a clean too far / landed pair 26-28 px apart);
+one run per planet, so a planet's exact range is good to about ±15 px.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w4/u9/`:
+`step-*/` (at rest), `land-*/` (moving), `brake-150/`, `brake-200/`. Each
+run holds `recording.mp4`, `recording.events.json`, `track.json` (per-frame
+planet centre), `track_summary.json` (every press: distance, speed and
+message id) and `msgs/` (one crop per distinct message).
+
+### E-fight wave 4: fixed-gun and rear-turret escorts in Formation (2026-11-23)
+
+**Setup.** `scenarios/efight_formation.json` as in wave 3 (Kit Fight
+Range, two always-attacks raiders making passes, the player idle), with
+the two hired escorts swapped for blue discs carrying two **fixed guns**
+(shïp 769, wëap 368 = the Kit Escort Gun with guidance -1; pilot
+`w4_efix`) or two **rear-quadrant turrets** (shïp 770, wëap 369, guidance
+8; pilot `w4_erear`). Both weapons retire the #316 Speed Guns. One run
+each, 100 s, `analysis/hostility.mjs --colour blue|red`.
+
+| escorts | distance from the player, every second | raiders |
+|---|---|---|
+| fixed guns | 39-47 px for all 100 s (the formation slots) | 2 raiders passing at 10-240 px the whole time; the escorts' shields flashed with hits |
+| rear turrets | 36-39 px for all 100 s | the same, 8-247 px |
+
+**Findings.** Escorts on Formation whose only weapons are fixed guns or
+rear-quadrant turrets **never leave their slots to fight**, not even while
+being hit. Whether they fire from the slot (a fixed gun when a raider
+crosses the bow, a rear turret at one behind) could not be told from the
+recording: bolts near the escorts can't be told from the raiders' turret
+fire, and the raiders' shields were not read. A follow-up scenario that
+reads the raiders' shields with `r` (`scenarios/efight_panel.json`) is
+written but was not run.
+
+**NovaJS (main, ff0aa775):** `formationTurretKind` lets only full turrets
+(guidance 4, beam turrets 3) and front-quadrant turrets (7) fire from the
+slot; fixed guns and rear-quadrant turrets hold fire, and "nothing pulls
+the escort off its slot". **Matches** on staying in the slot; the
+rear-turret firing question stays open. Confidence: high for the slots
+(two runs, 100 s each), none for firing.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w4/escorts/{efix,erear}/*/`
+(`hostility-{blue,red}.json`).
+
+### J-series wave 4: jamming types 2-4 and gövt InhJam (2026-11-23)
+
+**Kit** (`kits/testkit.mjs` `jamWave4`; retired for it: wëap 362-364, the
+#316b Kit Missiles; düde 603-606 and 610 with mïsn 962, 963, 965, 966,
+970). wëap 362/363/364 are the wave-3 missile (JamM V100) with JamVuln 100
+in type 2, 3 or 4 instead of type 1. Each target is the immobile 100-armor
+J0 hull carrying ONE +100 jammer outfit of the matching type (oütf 627-629,
+ModType 34-36), at Kit Market (900 px). Same rig as wave 3
+(`scenarios/jam_fire.json`): about 25 s of trigger, about 49 missiles.
+
+| cell | missile | target | hits / launched | lost |
+|---|---|---|---|---|
+| jt2 | V100 type 2 | +100 type 2 | 0 / 49 | **100%** |
+| jt3 | V100 type 3 | +100 type 3 | 0 / 49 | **100%** |
+| jt4 | V100 type 4 | +100 type 4 | 1 / 50 | **98%** |
+| jt2_vs_t1 | V100 type 2 | 4 x Kit Jammer 25, type 1 (J100) | 49 / 49 | **0%** |
+| inh_ai2 | V100 type 1 | J0 hull of gövt 364 (InhJam1 100), AI 2 | 49 / 49 | 0% |
+| inh_ai4 | V100 type 1 | the same, AI 4 | 49 / 49 | 0% |
+
+**Findings.**
+- Types 2-4 work exactly like type 1: V 100 against a +100 jammer of the
+  same type is jammed every time (wave 3's type 1: 98%). A missile is only
+  jammed by its own types: a type-2-only missile ignores type-1 jamming.
+- **gövt InhJam1 100 does nothing** against a type-1 V 100 missile for a
+  target of any AI type: AI 1 and AI 3 in wave 3, AI 2 and AI 4 here (0 of
+  about 250 missiles lost in all). What InhJam does is still unknown; the
+  brief's "player's govt side" was not tested (the player has no gövt, and
+  no kit setup gives one).
+
+**NovaJS (c9fc116c, now on main):** the per-type roll
+(`jamTypeRollJams`, `rollMissileJammed`: a missile is jammed if any type
+jams it, V 0 never jams) and InhJam left out of J (`deriveJamming`) **match**
+all six cells. Confidence: high (clean 0/100% cells, single runs).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w4/jam/{jt2,jt3,jt4,jt2_vs_t1,inh_ai2,inh_ai4}/*/`
+(target panel shots `04-target`, `09-fire-20s`, `10-/11-after-*`).
+
+### A-series wave 4: AI 1 departure, gövt 0x0010 retreat (2026-11-23)
+
+**How a ship leaves.** `analysis/radar_blips.mjs --tracks` follows every
+moving radar dot (about 31.6 world px per radar px in Kit Range). A ship
+that lands vanishes on a stellar's dot; every departure seen in waves 3 and
+4 instead **accelerated hard** (from 1-4 to 30-36 radar px/s, i.e. about
+1000-1150 px/s) and vanished 1250-2600 px from the nearest stellar: a
+hyperspace exit, although Kit Range has no hyperlinks.
+
+**AI 1 unprovoked departure** (`scenarios/ai_idle_long.json`, pilot
+`w4_ai1x4`: mïsn 991 puts FOUR AI 1 AI Subject Discs at Kit Port; the
+player never fires; 200 s recorded). Two runs, eight ships:
+
+| run | what the radar shows | gone (recording time) | after takeoff |
+|---|---|---|---|
+| 1 | All four fly straight north past Kit Marker 2, one sits about 1250 px out for 6 s, then each accelerates and vanishes 2400-2500 px north of Kit Port | last blip 30.3 s (targeted one "No Target" by 36.9 s) | about 34 s |
+| 2 | The same path, north | last blip 29.8 s | about 34 s |
+| wave 3 | one AI 1 subject | "No Target" at 37.1 s | 35-40 s |
+
+So an AI 1 trader that has nothing to do here (no mission, no reason to
+land) **leaves by jumping out about 30-40 s after it appears**, without
+landing at Kit Port or Kit Market. Nine of nine ships, very consistent.
+All were mïsn special ships (ShipGoal -1, ShipBehav -1); ordinary sÿst
+traffic was not tested and may visit planets first.
+
+**NovaJS (9ec7a496):** `N/nova_plugin/npc/npc_decision.ts:74-75` rolls a
+departure 120-300 s after spawning and AI 1/2 traders loop planet to
+planet in between, "dwell" standing in for a landing (lines 440-470). For
+mission ships like these the original leaves 3-9x sooner and never
+dwells. **Proposed (not applied):** give special ships with no goal
+(ShipGoal -1) and AI 1 a departure 30-40 s after spawning, straight to a
+jump; keep the dwell loop for sÿst traffic until that is measured.
+Confidence: high for these mission ships; untested for traffic.
+
+**gövt 0x0010 retreat** (`scenarios/ai_tank.json`, `ai_tank_esc.json`). Wave
+3's four runs (one Kit Escort Gun against the 1000-shield / 30000-armor
+AI Tank Disc of gövt 383) plus wave 4's variations:
+
+| run | damage | what the tank did after its shield fell below 25% |
+|---|---|---|
+| w3 run 1 | 1 gun | broke off within 4 s, **jumped out** 17 s after crossing 25% |
+| w3 runs 2-4 | 1 gun | kept making attack passes (12-23 px) to the end, shields down |
+| w4 armor 1 and 2 (AI Subject Disc of gövt 383: 1000 shield, **1000 armor**) | 1 gun | kept fighting (passes to 8-15 px) until **disabled** (both runs; run 2 was then destroyed) |
+| w4 4 guns, run 1 | 4 Kit Escort Guns: shield 51% to 11% in 4 s | **stood off** 360-420 px from the player (still firing: the player's shield kept dropping) for the whole 84 s of fire, then came straight back to close passes within 4 s of the player releasing the trigger, shields still down |
+| w4 4 guns, run 2 | 4 guns: 84, 50, 2% | never came within view (about 800 px out), **jumped out** 16 s after crossing 25% |
+| w4 4 guns, run 3 | 4 guns | like run 1: **stood off** at 360-400 px while the player fired, back to close passes (12-50 px) once the trigger was released |
+| w4 4 guns, run 4 | 4 guns: 57, 11% | **jumped out** at 29.5 s, about 16 s after crossing 25% |
+| w4 escorts, run 1 | 1 gun + two hired Kit Disc Blue Armed escorts told to attack (`f`) | shields down before the first shot at 11 s; moved slowly away (to about 2600 px) with the escorts on it and **jumped out** at 92 s; the escorts then returned to formation |
+| w4 escorts, run 2 | the same | shields down by the first shot; **jumped out** at 26.5 s |
+
+All flag-less controls (wave 3: AI 2 and AI 3 tanks) fought to the end.
+
+**Findings.**
+- With the flag, an AI 3 ship whose shield is under 25% **often but not
+  always** quits the fight, and when it leaves it **jumps out**, never
+  lands: 5 of 12 runs jumped (about 16-17 s after crossing 25% three
+  times, 26.5 s and 92 s with escorts), 2 stood off, 5 fought on. Without the flag,
+  never (wave 3 controls).
+- What decides it is not pinned down:
+  - not the armor: both 1000-armor ships fought until disabled;
+  - more firepower changes the answer: with 4 guns the tank never fought
+    on (2 jumps, 2 stand-offs), with two attacking escorts it jumped both
+    times, with 1 gun it fought on in 5 of 6 runs. That fits a retreat
+    that weighs how much it is being hurt (or the attackers' strength,
+    MaxOdds-style) rather than the shield level alone;
+  - a per-decision random chance can't be ruled out.
+- "Retreat" includes **standing off**: keeping 360-420 px away (still
+  firing) while under heavy fire, and coming back to close passes within
+  a few seconds of the firing stopping, shields still down (4-gun runs 1
+  and 3).
+
+**NovaJS (9ec7a496):** `npc_decision.ts:478-484` makes a 0x0010 warship
+flee the moment its shield is under 25%, every time (and fleeing ends in
+`departByJump`, which matches the exit). Against the original this is
+too eager against a single weak attacker and has no stand-off.
+**Proposed (not applied):** keep the < 25% shield condition but also
+require the ship to be losing (the existing `oddsFavorable` false, or
+recent damage above a threshold); while it holds, keep out of the
+attacker's weapon range instead of closing, and jump out if it persists
+(about 15-30 s). Treat the thresholds as a guess.
+Confidence: high that the flag alone does not trigger a retreat and that
+the exit is a jump; medium for "more firepower, more retreat"; low on
+the exact rule.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w4/ai/{ai1x4,ret-armor,ret-4guns,ret-esc}/*/`
+(`tracks.jsonl` radar tracks, `hostility-*.json`, the target-panel shots).
+`ret-esc/20261123-083222-*` is the launch that died while loading.
+
 ### Reliability notes (for anyone running the reference)
+
+- **Launch can die while loading (wave 4).** Once in about 90 wave-4 runs
+  EV Nova never showed a window ("no EV Nova window within 30 s", no
+  process left); the kit loaded fine in every other run. `run` now
+  retries that like the Enter Ship flake.
+- **The escort panel closes itself 8.3 s after opening (wave 4)**, so a
+  scenario that shoots it must do so within that time or reselect a row.
+- **Planets and the message line overlap.** `planet_track.mjs` reads the
+  status line at grey > 200 so a planet drawn behind the text does not
+  split one message into many.
 
 - **Sporadic exits.** About 1 run in 8 ends with the game exiting just
   after Enter Ship (`e`), with no crash report. Since wave 2, `run`
@@ -1690,13 +2062,13 @@ Evidence: `~/.local/share/novaref/evidence/20261123-w3-dates/`
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Partly (wave 3).** Landing range for Kit Port is 235-277 px from its centre (NovaJS 100). Boarding: "too fast", "not close enough" (about 46 px) and a sticky "You can't board this ship." Still open: the landing speed gate, whether the range scales with planet size, and boarding with a NON-mission disabled ship (the mission prize was refused). |
+| U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not attempted in wave 4: the harness can't steer onto a drifting hulk). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | NPC carriers never launch (Q4). It needs a carrier that launches: try a non-mission carrier from a syst düde, or a hostile carrier with the 372-armed bombers. |
-| J leftovers | Jam types 2-4, what InhJam actually does, Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | The jamming model is answered (J-series wave 3). No free wëap ids are left for type 2-4 missiles: retire old kit weapons first. |
-| A leftovers | gövt 0x0010 retreat (1 of 4 runs retreated below 25%: what triggers it?); AI 2 "runs away when the attacker is out of range"; AI 4 provoked; how AI 1 leaves (lands or jumps) | No retreat without the flag and retaliation of 130 s+ answered (A-series wave 3). |
-| E leftovers | Do escorts with FIXED guns leave formation to shoot? Rear-quadrant turrets? Recall overshoot vs NovaJS frame by frame | Orders in a fight and recall answered (E-fight). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); Interference, ion, cloak, a weak parent for 0x8000, max-vs-ignore-count for stacked jammers | Types 2-4 answered (wave 4: same rule, own type only). Asteroid decoy/pass-over: see "Asteroids and seeker flags" (wave 4). |
+| A leftovers | The exact gövt 0x0010 trigger (wave 4: 5 of 12 runs jumped, more often under heavy fire); AI 2 "runs away when the attacker is out of range"; AI 1 departure of sÿst traffic (mission ships jump at 30-40 s) | AI 1 leaves by jumping; fleeing ships jump (A-series wave 4). |
+| E leftovers | Do fixed guns / rear turrets fire from the Formation slot (they never leave it, wave 4)? `scenarios/efight_panel.json` is ready. Recall overshoot vs NovaJS frame by frame | Orders in a fight, recall, slot-keeping and the panel's 8.3 s timer answered. |
 | F1n leftovers | Mixed sprite sizes in a fleet; rank order with repeated escort types | Geometry answered (F1n wave 3: same V as player escorts). |
-| R8 leftover | Fullscreen 1920x1080 capture of shops, trade and BBS | Not started (wave 3 ran out of time). |
+| R8 leftover | Fullscreen 1920x1080 capture of shops, trade and BBS | Not run (wave 4 ran out of time). `scenarios/fullscreen_shops.json` (pilot `w4_fs`) and the scenario `"prefs"` key are ready; it also tries the spaceport hotkeys (K1). |
 
 ## Catalogue
 
@@ -1720,7 +2092,7 @@ cosmetic or rare.
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
-| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **partly (wave 3)**: Kit Port lands from 235-277 px of its centre. **Mismatch** (NovaJS 100). Speed gate open | L |
+| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **answered (wave 4)**: range about min(2 S, 240) px, speed gate about 20 px/s. **Mismatch** (NovaJS 100 px, 54.8 px/s) | L |
 | U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship | L |
 
 ### NPC AI and state transitions (Matthew's category)
@@ -1737,7 +2109,7 @@ cosmetic or rare.
 | A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
 | A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
-| A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | Stock busy system, VID 10 min | M |
+| A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (wave 4)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9). Traffic untested | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
 | A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; fix proposed. | H |
@@ -1776,15 +2148,15 @@ cosmetic or rare.
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
 | U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **partly (wave 3)**, see "U9 and the inertialess hulls" | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:160-162` | **landing answered (wave 4)**, see "U9 wave 4"; boarding partly (wave 3) | M |
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
 | M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | **answered (wave 2)**: D-U-U-D routes; an unroutable shift-click is ignored | M |
-| M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. **Mismatch** for the unlandable corner | M |
+| M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. Applied in 6d202ebc | M |
 | M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
 | M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
-| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/combat/hostility.ts` (onSightDisposition) | **answered (wave 2)**: AI 1 traders are yellow, warships red. Mismatch **fixed (wave 3)** | M |
+| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/combat/hostility.ts` (onSightDisposition) | **answered (waves 2 and 4)**: red exactly when the ship attacks or will at once: AI 3/4 of a hostile govt from the start, AI 1/2 only once provoked. Applied in 29237401 | M |
 
 ### UI navigation and hotkeys (Matthew's category)
 
@@ -1807,7 +2179,7 @@ cosmetic or rare.
 | E2 | Fixed-angle (negative Inaccuracy) firing side | `N/nova_plugin/combat/fire_weapon_plugin.ts:211-231` | CPg, SS | L |
 | E3 | Weapon readiness right after a spawn or jump (#135) | `fire_weapon_plugin.ts:85,510` | CPg slow-reload weapon, VID | L |
 | E4 | planetType weapons vs normal ships (#136/#150) | wëap planetType | CPg, VID | L |
-| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up. **Mismatch** | L |
+| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up. Applied in c9fc116c | L |
 | E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | CPg ion weapon, VID | M |
 | E7 | Auto-refuel rate (ModType 19) | `N/nova_plugin/ship/health_plugin.ts:40-48` | CPl fuel 0, timed PD | L |
 | E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | VID Kit Carrier | L |
