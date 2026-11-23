@@ -347,7 +347,8 @@ function wave3Resources() {
     out.push(...tgt(982, "Kit J near J100", 9023, 2150, 619), ...tgt(983, "Kit J far J100", 9024, 2152, 619),
         ...tgt(984, "Kit J far J0", 9025, 2152, 615), ...tgt(985, "Kit J near J0", 9026, 2150, 615));
     out.push(govt(364, "Kit Jam Govt", { inhJam: [100, 0, 0, 0] }));
-    out.push(dude(635, "Jam Target InhJam", 1, 364, 732));
+    // AI 3 since 06:54 wave 3: the first run (inh_v100) used AI 1 and lost nothing.
+    out.push(dude(635, "Jam Target InhJam", 3, 364, 732));
     out.push(...tgt(986, "Kit J InhJam100", 9027, 2100, 635));
     out.push(...discShip(762, "AI Tank Disc", 1977, DISC_COLOURS.yellow, {
         armor: 30000, shield: 1000, accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10,

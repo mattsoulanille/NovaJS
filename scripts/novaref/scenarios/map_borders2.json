@@ -1,0 +1,80 @@
+{
+ "name": "map_borders2",
+ "_comment": "M5 wave 3, take 2: map_borders put the Map B systems at the very top edge of the map view, so this one zooms out (the round minus button) once and twice with Show Borders on. Pilot w3_map.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "click": [
+    191,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "borders",
+   "window": true
+  },
+  {
+   "click": [
+    536,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "zoom-out-1",
+   "window": true
+  },
+  {
+   "click": [
+    536,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "zoom-out-2",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  }
+ ],
+ "pull": true
+}

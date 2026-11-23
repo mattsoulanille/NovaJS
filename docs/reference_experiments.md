@@ -1162,6 +1162,198 @@ Untouched so far:
 - a fullscreen 1920x1080 capture of the original for the screens
   Matthew's set lacks.
 
+### E-fight: what the escort orders do with hostiles present (2026-11-23, wave 3)
+
+**Setup.** `scenarios/efight_{formation,defend,attack}.json`, pilot
+`w3_efight`.
+- The player sits idle in Kit Lancer (30000 shield, recharging) at Kit
+  Fight Port in sÿst 2153 Kit Fight Range. It never fires (Kit Tickler only).
+- Escorts: two hired **Kit Disc Blue Armed** (shïp 764: blue 24 px discs,
+  2 Kit Escort Guns, which are wëap guidance 4 "turreted, unguided",
+  4000/4000).
+- Hostiles: the system's own traffic, düde 612 (red A14 warship discs of
+  always-attacks gövt 362, AI 3, a 5-damage turret), avgShips 2. They
+  arrived within 6 s and made repeated firing passes at the player in all
+  three runs.
+- Each run records 95 s. `analysis/hostility.mjs --colour blue|red` gives
+  every disc's distance from the player per second (files
+  `hostility-{blue,red}.json` in each run).
+
+| order (key, time) | what the escorts did |
+|---|---|
+| none: Formation (the default) | **Stayed in formation the whole 95 s**, 38-47 px from the player, while two raiders made passes from 300 px down to 8 px. They **fired their turrets from the slot**: frames 700-706 show a new bolt leaving a blue disc toward a red one 200+ px away. Both raiders were gone by 46 s. |
+| `d` Defend at 9.5 s | Left formation about 2.5 s later and chased the raiders, out of view for long stretches. Between engagements they came back to their slots (61-71 s, 33 px, while the only red ship on screen sat still 200 px away, probably disabled), and left again when another raider arrived (72 s). |
+| `r` then `f` Attack at 9.9 s | Left formation about 2.5 s later after the targeted raider and stayed on it: **both escorts were off screen from 31 to 67 s while a second raider made passes at the player** (closest 3-21 px). Re-targeting with `r` every 20 s did not visibly redirect them. |
+
+**Findings.**
+- Formation is not passive: escorts hold their slots but their full
+  turrets (guidance 4) shoot at ships attacking the player.
+- Defend sends them after attackers and brings them back between fights.
+- Attack sends them after the player's target at the time of the order
+  and they ignore other attackers meanwhile.
+
+**NovaJS (e8d0e116).** `N/nova_plugin/escorts/escort_command_plugin.ts`:
+- `case 'attack'` (line 676) and `case 'defend'` (line 704, hostiles
+  within `DEFEND_RADIUS` 1000 px, attack until disabled) match what was
+  seen.
+- **Mismatch:** the formation branch (lines 786-803) lets ONLY
+  front-quadrant turrets (guidance 7) fire opportunistically, "not even full
+  turrets". The original's guidance-4 turrets fired from formation.
+  **Proposed (not applied):** let full turrets (guidance 4, and probably
+  turreted beams, guidance 3) fire at iff-hostile ships from formation too.
+  Not measured: fixed guns (do escorts turn to use them? the blue discs
+  never left their slots) and rear-quadrant turrets.
+
+Confidence: high for Formation vs Defend vs Attack (one run each, but
+sustained over 95 s); medium for "turrets fire in formation" (seen in one
+stretch of frames; the player had no weapon that could have produced those
+bolts).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/escorts/fight-{formation,defend,attack}/*/`.
+
+### A-series wave 3: flee thresholds, retaliation length, the AI 1 control (2026-11-23)
+
+**Setup.**
+- **Flee threshold:** an **AI Tank Disc** (shïp 762: the yellow AI Subject
+  Disc with 1000 shield and 30000 armor, so it can't be disabled) of AI 2
+  (düde 636), AI 3 (638) or AI 3 of gövt 383 "warships retreat below 25%
+  shield" (637), at Kit Port. The player (Kit Lancer Heavy, shïp 763:
+  30000 shield and armor, no recharge, so each hit shows on the shield bar)
+  holds fire with a Kit Escort Gun (30 damage) for 85 s, then watches
+  40 s. The target panel is shot every 4 s. `scenarios/ai_tank.json`.
+- **Retaliation length:** the wave-2 AI Subject Disc (AI 2 or AI 3), one
+  0.6 s tickle with the 1-damage Kit Tickler, then 130 s of watching.
+  `scenarios/ai_retal.json`.
+- **Idle control:** the AI 1 subject, never fired on. `scenarios/ai_idle.json`.
+
+| subject | result |
+|---|---|
+| AI 2 tank | Closed in and fought. Its shield read 85, 64, 46, 28, 13% and then "Shields Down" for the rest of the run. It **never fled**: it kept making attack passes (closest 8 px) for the whole 134 s, including the 42 s after the player stopped firing. |
+| AI 3 tank | The same: 88, 46, 10%, "Shields Down", and it kept attacking to the end of the run. |
+| AI 3 tank, gövt 383 (retreat at 25%) | **Not measured.** It moved off at once and the escort gun never reached it (shield 100% in every shot, never on screen). The pilot now also carries the long-reach Kit Tickler so the subject is provoked into range; see "take 2" below. |
+| AI 3 subject, one tickle | Attacked from about 6 s after the tickle (the shield bar starts dropping) and **kept attacking for the rest of the run: 130 s after one 1-damage shot**. |
+| AI 2 subject, one tickle | The same, 130 s. |
+| AI 1 subject, never fired on | It left without ever coming on screen: targeted until 30.4 s into the recording, "No Target" from 37.1 s, i.e. about 35-40 s after it appeared. Wave 2's tickled AI 1 was gone about 15 s after its tickle (about 24 s into its recording), so leaving is what AI 1 does anyway; being shot at most hurries it a little. |
+
+**Findings.**
+- A neutral AI 2 or AI 3 ship that is provoked once keeps attacking for at
+  least two minutes after the player stops: no forgiveness within the
+  window measured.
+- Without the gövt 0x0010 flag, neither AI 2 nor AI 3 runs away at any
+  shield level, even with shields gone. The Bible's AI 2 "runs away when
+  his attacker is out of range" was not exercised (the player never left).
+
+**NovaJS (e8d0e116).** `N/nova_plugin/npc/npc_decision.ts`:
+- AI 2 (line 409) fights while `oddsFavorable(maxOdds, ...)` holds, else
+  flees. With MaxOdds 1000 the odds held here, so no mismatch is shown.
+- AI 3 retreats only with `warshipsRetreatAt25` (line 479): consistent.
+- `npc.aggressor` is only forgotten when the aggressor despawns, is in the
+  ship's own flock, or bribes (lines 242-306), so retaliation is
+  permanent: **consistent** with "at least 130 s".
+- AI 1 traders roll a departure 120-300 s after spawning
+  (`NPC_DEPART_MIN_MS`/`MAX`, lines 74-75) and dwell at planets. The
+  original's AI 1 subject was gone in 35-40 s. Likely a mismatch in how
+  long traders linger (catalogue A11), but this was one ship that may
+  simply have landed; one run.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/ai/{tank-ai2,tank-ai3,tank-ai3r,retal-ai2,retal-ai3,idle-ai1}/*/`
+(`hostility-yellow.json` timelines; the tank panels are in the `NN-fire-*` shots).
+
+### F1n: NPC fleet formations (2026-11-23, wave 3)
+
+**Why wave 2 saw no fleet.** sÿst DudeTypes place a fleet as **-128 to
+-383** (the Bible's sÿst table), so a flët must have an id in 128-383.
+Wave 2's flët 1000 was out of range and could never be placed. The kit now
+has flët 300 (same contents: white 720 lead, one each of red/green/blue/
+yellow 721-724, govt 363) and Kit Fleet Range lists it as -300 (100%,
+avgShips 6).
+
+**Run.** `scenarios/f1n_observe.json`, pilot `w2_f1n` (Probe A sitting at
+Kit Fleet Port). **Two whole fleets flew past** within the first 20 s, and
+fleets were on screen for most of the 80 s.
+`analysis/fleet_groups.mjs` (new: assigns every escort disc to the nearest
+white lead, so several fleets can be on screen) measured 129-154 samples
+per colour with the lead moving at about 3.1 px per video frame:
+
+| escort | along | across | distance | side |
+|---|---|---|---|---|
+| red | -22.9 | +25.0 | 32.8 | left 152 / right 2 |
+| green | -24.5 | -22.9 | 32.1 | right 149 / left 1 |
+| blue | -46.1 | +49.0 | 67.0 | left 141 / right 1 |
+| yellow | -49.0 | -46.4 | 67.6 | right 128 / left 1 |
+
+**Finding.** NPC fleet escorts fly the **same 45° V as player escorts**:
+rank 1 at (-a, +a), rank 2 at (-a, -a), rank 3 at (-2a, +2a), rank 4 at
+(-2a, -2a) with a = 23.5 for 24 px frames, i.e. the F1b formula
+a = clamp(0.59·S, 23.5, 59.5). The ranks follow the order of the flët's
+four escort fields (red, green, blue, yellow) in both fleets.
+
+**NovaJS:** `N/nova_plugin/npc/npc_formation.ts:44` (`formationSpacing`)
+and `:183` (`formationOffset`) already apply the F1b rule to fleet escorts
+("NPC fleet (flët) escorts are untested. They use the same rule"): now
+confirmed, **matches**. Untested: fleets with mixed sprite sizes, and
+whether the rank order follows escort type or spawn order when types repeat.
+
+Confidence: high (two fleets, hundreds of samples, ±2 px).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/f1n/observe/*/`
+(`recording.mp4`, `fleet_groups.json`).
+
+### M2 leftover: no minimap during a real jump (2026-11-23, wave 3)
+
+`scenarios/map_jump.json`, pilot `w2_map`: at Map Hub, the big map, Tab to
+Map SW (single jump), close the map, fly out 2 s, `j`. The jump completed
+("Arriving in the Map SW system on June 24th, 1177 NC.", with the full
+month name). A tile of every 10th frame of the minimap's area (window
+x 400-640, y 140-380) from map close to the end of the recording, through
+the whole jump, shows **no minimap at any point**: no system names, dots or
+links. So the 2.2 s minimap peek is only triggered by `h` and clicks
+(wave 2), not by jumping. The 1920x1080 reference capture with the minimap
+over "Jumping into the Tau Ceti system" must have had `h` pressed by hand.
+NovaJS's persistent toggle is already listed as a mismatch (M-batch item 2);
+nothing new to change for jumps. Confidence: high.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/map/jump/*/`.
+
+### U9 and the inertialess hulls (2026-11-23, wave 3, partial)
+
+**Correction to wave 2.** An inertialess hull (shïp Flags2 0x0040) does
+**not** stop when thrust is released: it keeps its speed and heading.
+Wave 2's U5 note ("the Crawler's starfield is static from the first frame
+after release") was wrong. Seen twice in wave 3:
+- `esc_recall`: Kit Lancer released thrust at frame 341, and a moon kept
+  sweeping across the screen at full speed for the next 2 s;
+- `u9_dist`: Kit Crawler 200 released at frame 287, and Kit Port kept
+  moving down the screen afterwards.
+
+NovaJS's inertialess physics keep `targetSpeed` when no thrust is applied
+and brake only on reverse (`nova_ecs/src/plugins/movement_plugin.ts:159`
+and `N/nova_plugin/travel/ship_controller_plugin.ts:53-58`): **matches**.
+
+Because of this, the wave-3 U9 runs were mostly spoiled:
+- **Landing distance gate** (`u9_dist`): never stopped near the planet,
+  so there is no distance. A take 2 that brakes with Down after every
+  thrust is queued below.
+- **Landing while moving** (`u9_pass`): Crawler 200 (87 px/s) landed at
+  the first `l` after thrust started, about 5 frames in, while still on top
+  of the planet; Crawler 100 (44 px/s) did not land on any of 25 presses
+  from the same start ("You're too far away to land on this planet." from
+  the third). The two starts differ (the first `l` answered "you're cleared
+  to land. Welcome to Kit Port." for one and "Commence final approach." for
+  the other), so this says nothing about a speed gate yet. **Inconclusive.**
+- **Boarding** (`u9_board`): the Kit Prize (armor 300) was disabled by
+  8 hits of the Kit Escort Gun and stayed "Disabled"; every `b` while the
+  Crawler drifted past at full speed answered **"You're moving too fast to
+  board this ship."** So boarding has a speed check with exactly the
+  string NovaJS uses (`N/display/status_bar_content.ts:298`). The distance
+  and speed limits are still unmeasured.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w3/u9/{dist-c200,pass-c200,pass-c100,board}/*/`
+and `escorts/recall/*/` (the first recall run is invalid for the same
+reason: the player never stopped, so the escorts at 270 px/s could not
+catch a 360 px/s ship; that is also why wave 2's escorts were "still off
+screen 8 s after `c`").
+
 ### Date strings: where "Nov. 27th" and "June 23rd" come from (2026-11-23, wave 3)
 
 **Source.** Not the OS (no itl lookup) and not the scenario data: the

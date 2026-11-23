@@ -1,0 +1,172 @@
+{
+ "name": "u9_board2",
+ "_comment": "U9 wave 3, take 2: as u9_board, but every thrust is followed by Down (brake): u9_board's Crawler never stopped and every `b` said \"You're moving too fast to board this ship.\" Pilot w3_u9board.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Space@5000 wait 1500"
+  },
+  {
+   "shot": "disabled",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 3000 up:Up down:Down wait 1500 up:Down wait 600"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "b wait 1200"
+  },
+  {
+   "shot": "b-far",
+   "window": true
+  },
+  {
+   "keys": "Left@2060 wait 600"
+  },
+  {
+   "shot": "turned",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-00",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-01",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-02",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-03",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-04",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-05",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-06",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-07",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-08",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-09",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-10",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-11",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-12",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 350 up:Up down:Down wait 600 up:Down wait 300 b wait 1300"
+  },
+  {
+   "shot": "step-13",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
