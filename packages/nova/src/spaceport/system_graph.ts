@@ -96,6 +96,16 @@ export interface SystemGraphOptions {
      */
     isSystemInhabited?: (system: SystemData) => boolean;
     /**
+     * Whether a system holds at least one INHABITED stellar, landable or
+     * not, deciding whether an explored system radiates territory under
+     * Show Borders (see drawBorders). Not the same question as {@link
+     * isSystemInhabited}: an inhabited stellar nobody can land on draws a
+     * grey dot but still claims territory (reference_experiments.md "M5
+     * leftover"). Callers pass `system => systemHasInhabitedStellar(
+     * system.planets, getPlanet)`; defaults to "none", like the dot.
+     */
+    hasInhabitedStellar?: (system: SystemData) => boolean;
+    /**
      * How much the player knows about a system (discovery.ts): 0 unknown,
      * 1 entered, 2 landed within. Drives THREE things — whether the system
      * is drawn at all, whether its dot is dim, and whether it is labeled.
@@ -167,6 +177,7 @@ export class SystemGraph {
     // The two questions drawSystem asks about each dot. Injected; see
     // SystemGraphOptions.
     private readonly isSystemInhabited: (system: SystemData) => boolean;
+    private readonly hasInhabitedStellar: (system: SystemData) => boolean;
     private readonly discoveryOf: (systemId: string) => DiscoveryLevel;
     /**
      * The systems this map draws at all: everything the player has entered,
@@ -185,6 +196,8 @@ export class SystemGraph {
         this.missionMarks = options.missionMarks ?? [];
         this.viewedMarks = options.viewedMarks ?? [];
         this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
+        this.hasInhabitedStellar = options.hasInhabitedStellar
+            ?? (() => false);
         this.discoveryOf = options.discoveryOf ?? (() => DISCOVERY_LANDED);
         this.miniMap = options.miniMap ?? false;
         const size = options.size ?? { x: 456, y: 419 };
@@ -628,7 +641,8 @@ export class SystemGraph {
 
     /**
      * Draws the government border overlay (Show Borders): the territory
-     * of every explored, inhabited, governed system (starmap_borders.ts).
+     * of every explored, governed system with an inhabited stellar
+     * (starmap_borders.ts).
      * Baked once
      * into its own layer and simply hidden until toggled on.
      */
@@ -643,10 +657,13 @@ export class SystemGraph {
             if (this.discoveryOf(system.id) < DISCOVERY_ENTERED) {
                 continue;
             }
-            // Nor does an explored system without a port: territory is
+            // Nor does an explored system with nobody in it: territory is
             // where a government's people are (starmap_borders.ts — the
             // uninhabited HJG-1034 and Procyon claim none in the capture).
-            if (!this.isSystemInhabited(system)) {
+            // People, not a port: an inhabited stellar that cannot be
+            // landed on still radiates (reference_experiments.md "M5
+            // leftover"), though its dot is grey.
+            if (!this.hasInhabitedStellar(system)) {
                 continue;
             }
             const owner = territoryOf(system);

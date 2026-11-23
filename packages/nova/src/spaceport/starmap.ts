@@ -8,7 +8,9 @@ import * as PIXI from 'pixi.js';
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent, systemIsInhabited } from '../nova_plugin/core/index.js';
+import {
+    ControlEvent, systemHasInhabitedStellar, systemIsInhabited,
+} from '../nova_plugin/core/index.js';
 import { DISCOVERY_LANDED, DiscoveryLevel } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
@@ -275,6 +277,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             territoryOf: system => this.territoryOf(system),
             isSystemInhabited: system => systemIsInhabited(system.planets,
                 id => this.universe.getPlanet(id)),
+            hasInhabitedStellar: system => systemHasInhabitedStellar(
+                system.planets, id => this.universe.getPlanet(id)),
             discoveryOf: id => this.discoveryOf(id),
         };
     }

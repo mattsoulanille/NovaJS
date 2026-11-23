@@ -6,7 +6,9 @@ import {
 } from "../communication/simulation_test_fixture.js";
 import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
-import { isPort, systemIsInhabited } from "../nova_plugin/core/index.js";
+import {
+    isPort, systemHasInhabitedStellar, systemIsInhabited,
+} from "../nova_plugin/core/index.js";
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_UNEXPLORED_COLOR,
     SYSTEM_UNINHABITED_COLOR, systemDotColor,
@@ -39,6 +41,8 @@ async function loadUniverse(gameData: GameDataAggregator) {
         system: (id: string) => systems.find(s => s.id === id)!,
         inhabited: (system: SystemData) =>
             systemIsInhabited(system.planets, id => planets.get(id)),
+        radiates: (system: SystemData) =>
+            systemHasInhabitedStellar(system.planets, id => planets.get(id)),
     };
 }
 
@@ -177,6 +181,42 @@ describe('star map inhabited coloring (stock data)', () => {
                     || p.flags.hasOutfitter || p.flags.hasShipyard));
             expect(contradictions.map(p => p.name)).toEqual([]);
         });
+
+    /**
+     * Show Borders asks a different question from the dot: "is anybody
+     * there?", not "is there a port?" (reference_experiments.md, "M5
+     * leftover: which systems radiate borders" — an inhabited, unlandable
+     * test stellar drew a grey dot and a full territory disc). In the stock
+     * data the two rules part only at the four Wraith systems, each of
+     * whose one inhabited stellar has 0x0001 clear.
+     */
+    it('radiates territory from exactly the port systems plus the four '
+        + 'Wraith systems, whose inhabited stellar is unlandable', () => {
+            const parted = universe.systems
+                .filter(s => universe.radiates(s) !== universe.inhabited(s));
+            expect(parted.map(s => s.id).sort())
+                .toEqual(['nova:510', 'nova:521', 'nova:582', 'nova:593']);
+            for (const system of parted) {
+                // Grey dot, territory all the same.
+                expect(universe.inhabited(system)).withContext(system.id)
+                    .toBeFalse();
+                expect(universe.radiates(system)).withContext(system.id)
+                    .toBeTrue();
+                const inhabited = system.planets
+                    .map(id => universe.planets.get(id)!)
+                    .filter(p => !p.flags.uninhabited);
+                expect(inhabited.length).withContext(system.id)
+                    .toBeGreaterThan(0);
+                for (const stellar of inhabited) {
+                    expect(stellar.flags.canLand).withContext(stellar.id)
+                        .toBeFalse();
+                }
+            }
+        });
+
+    it('radiates nothing from a system with no stellars (Pollux)', () => {
+        expect(universe.radiates(universe.system('nova:139'))).toBeFalse();
+    });
 
     it('is strictly narrower than the old "has any spöb" rule', () => {
         const withSpobs = universe.systems

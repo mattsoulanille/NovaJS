@@ -6,7 +6,8 @@
 // so only the shading is measured; every labeled system matched back to its
 // sÿst position — the reference draws ~1.78 px per map unit):
 //
-//  * Each explored, INHABITED system with a government radiates territory:
+//  * Each explored system with a government and an INHABITED stellar
+//    radiates territory:
 //    FULL strength out to TERRITORY_FLAT_RADIUS map units, then fading
 //    linearly to nothing at TERRITORY_OUTER_RADIUS. A least-squares sweep
 //    over the capture's ~186,000 shaded pixels puts the two at 32 and 62.5
@@ -23,14 +24,24 @@
 //    meet — midway between their nearest systems.
 //  * Only EXPLORED systems claim territory: the unexplored Federation
 //    system HJG-0637 sits in a dark channel 25 px from its own blob's edge.
-//  * And only INHABITED ones — systems with a port, the blue dots (see
-//    starmap_draw.ts systemDotColor). HJG-1034 and Procyon are explored
-//    Federation systems drawn light grey (landable but uninhabited
-//    stellars only), and the capture is dark where only they would reach.
-//    Counting them, the model misses 10% of the pixels by more than one
-//    5-bit step; leaving them out, 2.4% (mean channel error 2.3/255, 84%
-//    of pixels exact — the rest is the capture's own dithering and the
-//    ~1.78 px/unit scale being measured, not known).
+//  * And only INHABITED ones — systems holding at least one stellar with
+//    spöb Flags 0x0020 clear (landable.ts systemHasInhabitedStellar).
+//    HJG-1034 and Procyon are explored Federation systems drawn light grey
+//    (landable but uninhabited stellars only), and the capture is dark
+//    where only they would reach. Counting them, the model misses 10% of
+//    the pixels by more than one 5-bit step; leaving them out, 2.4% (mean
+//    channel error 2.3/255, 84% of pixels exact — the rest is the
+//    capture's own dithering and the ~1.78 px/unit scale being measured,
+//    not known).
+//    Habitation, NOT a port: this is where the border rule parts from the
+//    blue-dot rule (starmap_draw.ts systemDotColor, landable.ts isPort).
+//    Measured on the original (docs/reference_experiments.md, "M5
+//    leftover: which systems radiate borders"): an explored system whose
+//    only stellar is inhabited but unlandable (Flags 0x0002) draws a light
+//    grey dot yet radiates a full disc; an explored system with no stellar
+//    radiates nothing; an unexplored one with a port radiates nothing. In
+//    the stock data that corner is the four Wraith systems (sÿst
+//    510/521/582/593).
 //  * MINOR governments (gövt Flags2 0x0002, "considered minor for the
 //    purposes of drawing the political boundaries") give way to major ones:
 //    the capture's Nesre Secundus (Roughnecks, gövt 145 — the SAME colour as

@@ -112,3 +112,28 @@ export function systemIsInhabited(planetIds: readonly string[],
         return planet !== undefined && isPort(planet.flags);
     });
 }
+
+/**
+ * Whether a system holds at least one INHABITED stellar ({@link
+ * isInhabited}: spöb Flags 0x0020 clear), landable or not.
+ *
+ * This is the star map's Show Borders rule, which is NOT the blue-dot rule
+ * above: measured on the original (docs/reference_experiments.md, "M5
+ * leftover: which systems radiate borders"), an explored system whose only
+ * stellar is inhabited but unlandable (Flags 0x0002: no 0x0001, no 0x0020)
+ * draws a light grey dot — no port — yet radiates its government's
+ * territory; a system with no stellar radiates nothing. The dot asks "is
+ * there a port?", the border asks "is anybody there?". In the stock data
+ * this separates the four Wraith systems (sÿst 510/521/582/593).
+ *
+ * Stellars that fail to resolve are skipped, as in {@link
+ * systemIsInhabited}.
+ */
+export function systemHasInhabitedStellar(planetIds: readonly string[],
+    getPlanet: (id: string) => { flags: { uninhabited: boolean } }
+        | undefined): boolean {
+    return planetIds.some(id => {
+        const planet = getPlanet(id);
+        return planet !== undefined && isInhabited(planet.flags);
+    });
+}

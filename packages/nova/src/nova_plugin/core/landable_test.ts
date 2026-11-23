@@ -3,7 +3,8 @@ import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data'
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
 import {
-    isInhabited, isPort, landable, systemIsInhabited,
+    isInhabited, isPort, landable, systemHasInhabitedStellar,
+    systemIsInhabited,
 } from './landable.js';
 
 function planet(flags: Partial<PlanetData['flags']>): PlanetData {
@@ -96,6 +97,41 @@ describe('systemIsInhabited', () => {
 
     it('skips stellars that do not resolve rather than counting them', () => {
         expect(systemIsInhabited(['missing'], lookup({}))).toBeFalse();
+    });
+});
+
+describe('systemHasInhabitedStellar (the Show Borders rule)', () => {
+    const port = planet({ canLand: true, uninhabited: false });
+    // Reference experiments M5: sÿst 2156's stellar, Flags 0x0002.
+    const unlandableInhabited = planet({ canLand: false, uninhabited: false });
+    const rock = planet({ canLand: true, uninhabited: true });
+    const scenery = planet({ canLand: false, uninhabited: true });
+    const lookup = (map: Record<string, PlanetData>) =>
+        (id: string) => map[id];
+
+    it('is false for a system with no stellars (sÿst 2155 Map B Empty)', () => {
+        expect(systemHasInhabitedStellar([], lookup({}))).toBeFalse();
+    });
+
+    it('is TRUE for an inhabited stellar that cannot be landed on (sÿst 2156 '
+        + 'Map B Unland), where the blue-dot rule says no port', () => {
+            const system = lookup({ a: unlandableInhabited });
+            expect(systemHasInhabitedStellar(['a'], system)).toBeTrue();
+            expect(systemIsInhabited(['a'], system)).toBeFalse();
+        });
+
+    it('is true for a port', () => {
+        expect(systemHasInhabitedStellar(['a'], lookup({ a: port })))
+            .toBeTrue();
+    });
+
+    it('is false when every stellar is uninhabited, landable or not', () => {
+        expect(systemHasInhabitedStellar(['a', 'b'],
+            lookup({ a: rock, b: scenery }))).toBeFalse();
+    });
+
+    it('skips stellars that do not resolve', () => {
+        expect(systemHasInhabitedStellar(['missing'], lookup({}))).toBeFalse();
     });
 });
 

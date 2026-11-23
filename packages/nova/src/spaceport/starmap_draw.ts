@@ -133,10 +133,14 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     enough: HJG-1034's UHP-0474 and Procyon's UHP-1002 are both landable
  *     but flagged uninhabited, and both systems draw light grey.
  *
- * The stock data leaves one corner of rule 2 unwitnessed: four Wraith
- * systems (sÿst 510/521/582/593) hold a stellar that is inhabited but NOT
- * landable, and no reference screenshot covers them. They draw grey here,
- * on the reading that the map is showing ports.
+ * Rule 2's corner — a stellar that is inhabited but NOT landable, as in the
+ * four stock Wraith systems (sÿst 510/521/582/593) — was measured on the
+ * original with a test system (docs/reference_experiments.md, "M5
+ * leftover: which systems radiate borders", sÿst 2156 Map B Unland, spöb
+ * Flags 0x0002): its dot is light grey (#c6c6c6), so the dot really is
+ * showing ports. Its Show Borders territory is a different question with a
+ * different answer — it DOES radiate, because the border asks "is anybody
+ * there?" (landable.ts systemHasInhabitedStellar, starmap_borders.ts).
  *
  * WHY 0x0020 AND NOT THE STELLAR'S GOVERNMENT (Matthew, 2026-09-02, "why is
  * Heraan Hiro grey? it has a station with a mission BBS"). Every reference
