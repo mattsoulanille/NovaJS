@@ -1848,6 +1848,8 @@ speed gate" (wave-4 fixes).**
   if the rlëD is missing). PlanetData is staged on every peer, so the range
   is the same everywhere. A stellar with no data, or game-data JSON without
   the field, keeps the old 100 px (S = 50).
+- Superseded by "U9 wave 6": the zone is a square from the frame width,
+  applied in bd344b9f.
 - Keep "too far" before "too fast". The receding-ship extension (finding 4)
   is message-only and is left out.
 - The touch autopilot (`N/autopilot.ts`) now aims at 90% of the stellar's
@@ -2704,7 +2706,8 @@ about 49 missiles of Speed 600 / GuidedTurn 60, the 100-armor J0 target
     115 px, and NovaJS's loops are that size. So either a confused missile
     turns about 1.6 times faster than its GuidedTurn, or NovaJS's GuidedTurn
     conversion is off for every missile. Not changed here; it needs a
-    measurement of a homing Kit missile's turn.
+    measurement of a homing Kit missile's turn. (Measured in "J wave 6: how
+    tight a confused missile's loop is": 1.8x, applied in bdc43534.)
   - **Drift, not matched:** the original's loops drift slowly. NovaJS's are
     closed circles.
 - Attack-parent: `ATTACK_PARENT_IF_JAMMED_PROBABILITY` = 0.1 (line 96,
@@ -2919,10 +2922,19 @@ circular distance test against it (`distanceSquared >= range * range`, lines
 and about 17% too strict on the diagonal, where the square reaches 1.7 x
 1.41 = 2.4 W), in the input (max(w, h) gives the 17x31 station 62 px where
 the original allows about 29) and in the cap (240 and the 0.8 S floor give
-the 315-325 px art 252-260, the original about 212). **Proposed (not
-applied):** land when max(|dx|, |dy|) <= R with R = min(1.7 x frameWidth,
-212); keep "too far" before "too fast". The touch autopilot's 90% aim
-(`N/autopilot.ts`) then wants the same square.
+the 315-325 px art 252-260, the original about 212). **Applied in
+bd344b9f** ("Landing zone is a square from the frame width"):
+`N/nova_plugin/travel/planet_plugin.ts` lands when max(|dx|, |dy|) <= R
+(`landingDistance` / `inLandingZone`), R = min(1.7 x frame width, 212)
+(`LAND_RANGE_PER_FRAME_WIDTH`, `LAND_RANGE_CAP`, both named as fitted);
+"too far" still before "too fast", the 20 px/s gate unchanged. A stellar
+with unknown data (the default 50 px frame) gets 85 px. The touch
+autopilot (`N/autopilot.ts`) arrives on the same square at 90% of R.
+`planet_plugin_test.ts` presses every at-rest bracket of both tables
+through `AttemptLandingSystem`; the one miss is the 315x200 art's
+213.5 px landing, 1.5 px past the cap, which no cap can fit together with
+the 325 px art's 213 "too far" (both within the big sprites' centre
+error).
 
 Confidence: high that the zone is a square (it is the only shape that
 fits the 17x31 diagonal/straight pair and all twelve brackets at once) and
@@ -3076,10 +3088,13 @@ same moment.
 ("Missile lock vs cloak"): a homing missile loses its lock while its
 target is cloaked, "a cloak scanner on the missile's PARENT ship does NOT
 keep its missiles tracking". **Mismatch** for the scanner case: the
-original's missiles kept tracking. **Proposed (not applied):** when the
-parent's cloak scanner can target cloaked ships (ModType 30 flag 0x0008),
-its missiles keep homing on a cloaked target. The no-scanner case (target
-dropped, later launches unguided) matches.
+original's missiles kept tracking. **Applied in 2ccf6ee9** ("A parent's
+cloak scanner keeps its missiles homing on a cloaked target"): when the
+parent (the missile's owner, else the ship it was fired from) has a cloak
+scanner that can target cloaked ships (ModType 30 flag 0x0008, the
+`isTargetable` test the ship's own targeting uses), its missiles keep
+homing on a cloaked target. The no-scanner case (target dropped, later
+launches unguided) matches and is unchanged.
 Confidence: medium (two runs per cell, clean 49-vs-lost contrast; the
 cloak itself inferred from the paired runs).
 
@@ -3430,9 +3445,12 @@ at line 557, `confusedTurning` at line 582, applied in
 `N/nova_plugin/combat/projectile_plugin.ts:302-310` on main), the rate being
 the parsed GuidedTurn (`P/parsers/weapon_parse.ts:313`). So its loop is the
 115 px circle of finding 1, closed, with no drift. **Mismatch** on the size.
-**Proposed (not applied):** turn a confused missile at about 1.8 x its
-turnRate (a named, fitted constant), and leave GuidedTurn's conversion
-alone. The drift is small enough to leave out.
+**Applied in bdc43534** ("Confused missiles turn at 1.8x their turn
+rate"): a confused missile turns at `CONFUSED_TURN_RATE_FACTOR_FITTED`
+= 1.8 x its turnRate, both directions (`N/nova_plugin/combat/jamming_plugin.ts`
+`confusedTurning`), so the JamM loops 2 v / (1.8 w) = 63.7 px across;
+GuidedTurn's conversion and ordinary guidance are unchanged, and the
+drift is left out (closed loops).
 
 Confidence: high for the two rates (40 and 16 independent arcs, tight
 spreads, same missile, same rig); medium for the drift (four long tracks);
@@ -3519,9 +3537,9 @@ the 1.8 factor is one GuidedTurn value only.
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px, NovaJS gives 42 / 62). Boarding a non-mission disabled hulk: the dialog opens only at about 13-17 px centre to centre (NovaJS 150); money booty fixed per hull, 1,250 for a 50,000 hull and 1,000 for a 20,000 one (NovaJS 10%); capture greyed at 0%. Still open: more prices and a bigger hull, the boarding speed gate, why a receding ship stays "too fast" far out around big planets. |
+| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). Boarding a non-mission disabled hulk: the dialog opens only at about 13-17 px centre to centre (NovaJS 150); money booty fixed per hull, 1,250 for a 50,000 hull and 1,000 for a 20,000 one (NovaJS 10%); capture greyed at 0%. Still open: more prices and a bigger hull, the boarding speed gate, why a receding ship stays "too fast" far out around big planets. |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (wave 6): no.** A stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player; its Vipers lived. Also found: the kit's bay AmmoType was id - 128 since wave 1 (fixed; the "kit bombers never launch" of wave 5 was that bug). Open: a carrier that stays in the fight with kit bombers (the Kit Bomb Carrier left within 12 s). |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (NovaJS drops the lock: mismatch); a confused (Interference) missile turns about 1.8x its GuidedTurn (63 px loops, drifting 10-25 px a lap) while ordinary turns match GuidedTurn. Asteroid capture range vs per-tick chance: not separated (rocks can't be placed). Still open: InhJam, stacked-jammer max vs ignore, other Interference levels, where ionization starts. |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (63 px loops, drifting 10-25 px a lap) while ordinary turns match GuidedTurn (1.8x applied in bdc43534, drift left out). Asteroid capture range vs per-tick chance: not separated (rocks can't be placed). Still open: InhJam, stacked-jammer max vs ignore, other Interference levels, where ionization starts. |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 6:** jump vs stand-off is not damage rate (8 guns stood off twice). Where the tank is when its shield crosses 25% mostly decides: near (in a pass) stood off 5 of 5, far (260+ px or never in view) jumped 4 of 5; the fifth fought on under a moderate beam. Distance and damage rate still tangled; AI 2's out-of-range flight untested. |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). Front-quadrant turrets still unmeasured. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
@@ -3548,7 +3566,7 @@ cosmetic or rare.
 | U6 | How fast does a disabled ship drift to a stop? | `N/nova_plugin/ship/disabled_component.ts:63-68` | VID | L |
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
-| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:187-190,308-316` | **answered (waves 4, 6)**: a square zone, max(\|dx\|, \|dy\|) <= about 1.7 x frame width (cap about 212), speed gate about 20 px/s. **Mismatch** in shape and input (NovaJS: circle, 2 x max(w, h)) | L |
+| U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:187-190,308-316` | **answered (waves 4, 6)**: a square zone, max(\|dx\|, \|dy\|) <= about 1.7 x frame width (cap about 212), speed gate about 20 px/s. Applied in bd344b9f (was a circle of 2 x max(w, h)) | L |
 | U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship | L |
 
 ### NPC AI and state transitions (Matthew's category)
@@ -3604,7 +3622,7 @@ cosmetic or rare.
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
 | U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227` | **landing answered (waves 4, 6: a square zone)**; boarding range about 13-17 px (wave 6) | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227` | **landing answered (waves 4, 6: a square zone), applied in bd344b9f**; boarding range about 13-17 px (wave 6) | M |
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
