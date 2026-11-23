@@ -1,0 +1,29 @@
+{
+  "name": "novaref-rk-passS100",
+  "edits": {
+    "ship": 703,
+    "stellar": 2132,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2132": 2
+    },
+    "missionBits": {
+      "9009": true
+    },
+    "weapons": {
+      "128": 0,
+      "380": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "621": 1
+    },
+    "nickname": "Probe",
+    "shipName": "rk_passS100"
+  }
+}

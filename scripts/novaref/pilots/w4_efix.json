@@ -1,0 +1,38 @@
+{
+  "name": "novaref-efix",
+  "edits": {
+    "ship": 703,
+    "stellar": 2154,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2,
+      "2153": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "efix",
+    "escorts": [
+      {
+        "ship": 769,
+        "hired": true
+      },
+      {
+        "ship": 769,
+        "hired": true
+      }
+    ]
+  }
+}

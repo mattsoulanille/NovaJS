@@ -1,0 +1,137 @@
+{
+ "name": "escpanel_timer",
+ "_comment": "E-view wave 4: the escort panel's lifetime. Pilot w3_recall (two hired escorts, quiet Kit Range). (a) `e` then 60 s untouched; then one trial per key: `e`, 4 s, the key (row 2/4, order c = Formation, which they already have, Left, Up, Down, Space fire, Tab), 14 s. Time the panel with analysis/region_lit.mjs --events recording.events.json.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "keys": "e"
+  },
+  {
+   "shot": "a-open",
+   "window": true
+  },
+  {
+   "wait": 60000
+  },
+  {
+   "shot": "a-60s",
+   "window": true
+  },
+  {
+   "keys": "e wait 4000 2"
+  },
+  {
+   "shot": "row2-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 c"
+  },
+  {
+   "shot": "order-c-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 Left@300"
+  },
+  {
+   "shot": "left-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 Up@300"
+  },
+  {
+   "shot": "up-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 Down@1500"
+  },
+  {
+   "shot": "down-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 Space@300"
+  },
+  {
+   "shot": "fire-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 Tab"
+  },
+  {
+   "shot": "tab-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 4"
+  },
+  {
+   "shot": "row4-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "keys": "e wait 4000 c"
+  },
+  {
+   "shot": "order-c2-after-key",
+   "window": true
+  },
+  {
+   "wait": 14000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -172,26 +172,22 @@ export default {
         // --- Weapons.
         weap(360, "Kit Beam Turret", 170, { reload: 30, duration: 4, armorDamage: 5000, shieldDamage: 5000, guidance: 3, beamLength: 1500 }),
         weap(361, "Kit Tickler", 130, { reload: 15, duration: 90, armorDamage: 1, shieldDamage: 1, guidance: 4, speed: 2500 }),
-        weap(362, "Kit Missile T10", 134, { reload: 90, duration: 600, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 10 }),
-        weap(363, "Kit Missile T30", 134, { reload: 90, duration: 600, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 30 }),
-        weap(364, "Kit Missile T60", 134, { reload: 90, duration: 600, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60 }),
+        // wëap 362-364 were the #316b Kit Missiles T10/T30/T60 (GuidedTurn
+        // 10/30/60); retired in wave 4 for jamming types 2-4 (wave4Resources).
         weap(365, "Kit Escort Gun", 131, { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30, guidance: 4 }),
         // Fighter bay: AmmoType of a bay is the carried shïp id - 128.
         weap(366, "Kit Fighter Bay", 149, { reload: 30, guidance: 99, ammoType: 705 - 128 }),
         weap(367, "Kit Raider Gun", 130, { reload: 20, duration: 60, armorDamage: 20, shieldDamage: 20, guidance: 4 }),
-        // Unguided shots with round speeds for the speed-unit check (#316):
-        // wëap Speed is documented as "100 = 1 pixel per frame".
-        weap(368, "Kit Speed Gun 300", 128, { reload: 60, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: -1, speed: 300 }),
-        weap(369, "Kit Speed Gun 600", 128, { reload: 60, duration: 150, armorDamage: 1, shieldDamage: 1, guidance: -1, speed: 600 }),
+        // wëap 368/369 were the #316 Kit Speed Guns 300/600 (unguided, Speed
+        // 300/600); retired in wave 4 for the escort weapon tests (see
+        // wave4Resources). Pilot probe_gun.json now gets the new weapons.
 
         // --- Outfits (player weapons).
         gun(600, "Kit Beam Turret", 360),
         gun(601, "Kit Tickler", 361),
-        gun(602, "Kit Missile T10", 362),
-        gun(603, "Kit Missile T30", 363),
-        gun(604, "Kit Missile T60", 364),
-        gun(605, "Kit Speed Gun 300", 368),
-        gun(606, "Kit Speed Gun 600", 369),
+        // oütf 602-604 (launchers for 362-364) are redefined in wave4Resources.
+        gun(605, "Kit Fixed Gun", 368),
+        gun(606, "Kit Rear Turret", 369),
         gun(607, "Kit Escort Gun", 365),
 
         // --- Governments. No classes/allies/enemies: only the player's
@@ -208,10 +204,9 @@ export default {
         dude(600, "Kit Escort", 3, 360, 704),
         dude(601, "Kit Carrier Escort", 3, 360, 706),
         dude(602, "Kit Raiders", 3, 362, 707),
-        dude(603, "Kit Traders", 1, 361, 708),
-        dude(604, "Kit Own-Govt Raiders", 3, 360, 707),
-        dude(605, "Kit Target", 1, 363, 709),
-        dude(606, "Kit Hostile Traders", 1, 362, 708),
+        // düde 603-606 (Q2b traders, Q3 own-govt raiders, the #316b Kit
+        // Target, Q2c hostile traders) were retired in wave 4 for jamming
+        // targets (wave4Resources), with their missions 962, 963, 965, 966.
 
         // --- The sealed test system, owned by the escort govt so a pilot's
         // record in sÿst 2100 is its record with govt 360 (EV Nova keeps
@@ -238,19 +233,11 @@ export default {
         // Special ship(s) start on nav default 1 (Kit Port, ShipStart -1).
         ...misn(960, "Kit Q1 escort alone", 9001, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1 }),
         ...misn(961, "Kit Q2a escort vs raiders", 9002, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
-        ...misn(962, "Kit Q2b escort vs traders", 9003, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 603, auxShipSyst: -1 }),
-        ...misn(963, "Kit Q3 escort vs own govt", 9004, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 604, auxShipSyst: -1 }),
         ...misn(964, "Kit Q4 carrier vs raiders", 9005, { shipCount: 1, shipDude: 601, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
-        // A plain target ship for weapon tests.
-        // The target appears on nav default 2 (Kit Market, 900 px east of Kit Port).
-        ...misn(965, "Kit target practice", 9006, { shipCount: 1, shipDude: 605, shipGoal: -1, shipBehav: -1, shipStart: -2 }),
-        // Q2c: escort + wimpy traders of the always-attacks-player govt 362
-        // (hostile to the player by govt, but AI 1 never attacks).
-        ...misn(966, "Kit Q2c escort vs hostile traders", 9007, { shipCount: 1, shipDude: 600, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 606, auxShipSyst: -1 }),
         // Q4b: the STOCK Fed Carrier (stock bays and Vipers) as the escort.
-        ...misn(967, "Kit Q4b fed carrier vs raiders", 9008, { shipCount: 1, shipDude: 607, shipGoal: 3, shipBehav: 1, shipStart: -1, auxShipCount: 2, auxShipDude: 602, auxShipSyst: -1 }),
+        // mïsn 967 (Q4b, the stock Fed Carrier escort) was retired in wave 4.
         // B: an NPC carrier (neutral govt 363) whose fighters drop the 1-frame blast bomb.
-        ...misn(968, "Kit B bomb carrier", 9009, { shipCount: 1, shipDude: 608, shipGoal: -1, shipBehav: -1, shipStart: -1 }),
+        // mïsn 968 (B, NPC Kit Bomb Carrier) was retired in wave 4.
 
         // --- Blast-damage kit (does a blast hurt its firer's parent?):
         // the bomb detonates at the end of a 2-frame life (wëap flag 0x8000)
@@ -267,12 +254,13 @@ export default {
         gun(610, "Kit Big Blast", 373),
         ...ship(711, "Kit Bomber", 167, { armor: 500, shield: 500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1 }),
         ...ship(712, "Kit Bomb Carrier", 143, { armor: 3000, shield: 3000, weapons: [365, 371, -1, -1], weaponCounts: [2, 1, 0, 0], weaponAmmo: [0, 4, 0, 0], ai: 3, strength: 100, crew: 40 }),
-        dude(607, "Kit Fed Carrier Escort", 3, 360, 143),
-        dude(608, "Kit Bomb Carrier", 3, 363, 712),
+        // düde 607/608 (Q4b Fed Carrier escort, B bomb carrier) were
+        // retired in wave 4 for the asteroid tests (wave4Rocks).
         // Two always-attack-the-player raiders armed only with the blast bomb:
         // do their own/each other's blasts hurt them, and do they retaliate?
         ...ship(713, "Kit Bomb Raider", 149, { armor: 1500, shield: 1500, weapons: [372, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 80, crew: 15 }),
-        dude(609, "Kit Bomb Raiders", 3, 362, 713),
+        // düde 609 (Kit Bomb Raiders) and mïsn 969 were retired in wave 4
+        // for the K9 bracket tests (wave4Brackets).
 
         // --- Trackable disc hulls (formation and motion experiments).
         // 720 leader (white): Speed/Accel 300, Turn 30. 721-726 escorts
@@ -280,13 +268,82 @@ export default {
         ...discShip(720, "Kit Disc Leader", 1970, DISC_COLOURS.white, { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 }),
         ...["red", "green", "blue", "yellow", "magenta", "cyan"].flatMap((c, i) =>
             discShip(721 + i, `Kit Disc ${c[0].toUpperCase()}${c.slice(1)}`, 1971 + i, DISC_COLOURS[c], { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000 })),
-        ...misn(969, "Kit B bomb raiders", 9010, { shipCount: -1, auxShipCount: 2, auxShipDude: 609, auxShipSyst: -1 }),
 
         ...a14Resources(),
         ...wave2Resources(),
         ...wave3Resources(),
+        ...wave4Resources(),
     ],
 };
+
+/**
+ * Wave-4 experiments (docs/reference_experiments.md).
+ *
+ *  U9  Landing range vs planet sprite size: sÿst 2160-2164 "Kit Land NN",
+ *      unlinked, owned by neutral 363, each with ONE landable stellar at
+ *      (0,0) (spöb 2160-2164) cloned from a stock spöb so it keeps that
+ *      spöb's graphic (spöb Type -> spïn 1000+Type):
+ *        2160 Type 3  (spöb 132)  40x40
+ *        2161 Type 6  (spöb 138)  72x72
+ *        2162 Type 25 (spöb 176)  250x250
+ *        2163 Type 5  (spöb 159)  325x325 (Jupiter)
+ *        2164 Type 18 (spöb 169)  304x134 (non-square: width or height?)
+ *        2165 Type 9  (spöb 145)  96x96
+ *        2166 Type 10 (spöb 174)  112x112
+ *        2167 Type 39 (spöb 311)  315x200 (non-square)
+ *        2168 Type 16 (spöb 168)  80x80
+ *        2169 Type 24 (spöb 183)  88x88
+ *      Kit Port (Type 0, 150x150) is the wave-3 point.
+ *      Landing speed gate: shïp 771 Kit Crawler Slowbrake (inertialess,
+ *      Speed 100, Accel 60) and 772 Kit Crawler Slowbrake 200 (Speed 200,
+ *      Accel 120) brake slowly under Down, so `l` pressed while braking
+ *      samples the gate.
+ *  A   mïsn 991 (bit 9032): FOUR AI 1 subjects (düde 630) at Kit Port, for
+ *      unprovoked departure times.
+ *  E   wëap 368 Kit Fixed Gun (guidance -1, the Kit Escort Gun otherwise),
+ *      369 Kit Rear Turret (guidance 8). They retire the #316 speed guns.
+ *      shïp 769 Kit Disc Blue Fixed (2 x 368), 770 Kit Disc Blue Rear
+ *      (2 x 369): the blue armed escort disc with those weapons (sprite
+ *      reuses rlëD 1973, Kit Disc Blue's).
+ */
+function wave4Resources() {
+    const out = [];
+    const sizes = [[2160, "Kit Land 40", 132], [2161, "Kit Land 72", 138], [2162, "Kit Land 250", 176],
+        [2163, "Kit Land 325", 159], [2164, "Kit Land 304x134", 169],
+        [2165, "Kit Land 96", 145], [2166, "Kit Land 112", 174], [2167, "Kit Land 315x200", 311],
+        [2168, "Kit Land 80", 168], [2169, "Kit Land 88", 183]];
+    sizes.forEach(([id, name, clone], i) => {
+        out.push(system(id, name, -1080, -620 + 30 * i, 363, [id]));
+        out.push(spob(id, `${name} Port`, 0, 0, clone, { flags: 0x43 }));
+    });
+    // Speed 100 (44 px/s) with Accel 60 (about 11 px/s^2): Down brakes it
+    // over about 4 s, so `l` pressed while braking samples the speed gate.
+    out.push(...ship(771, "Kit Crawler Slowbrake", 135, {
+        accel: 60, speed: 100, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
+    }));
+    // The same at Speed 200 (87 px/s), Accel 120: is the speed gate absolute
+    // or a share of the hull's top speed?
+    out.push(...ship(772, "Kit Crawler Slowbrake 200", 135, {
+        accel: 120, speed: 200, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
+    }));
+    out.push(...misn(991, "Kit AI 1 subjects x4", 9032, { shipCount: 4, shipDude: 630, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // The Kit Escort Gun (wëap 365, clone of 131) with another guidance.
+    const escortGun = { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30 };
+    out.push(weap(368, "Kit Fixed Gun", 131, { ...escortGun, guidance: -1 }));
+    out.push(weap(369, "Kit Rear Turret", 131, { ...escortGun, guidance: 8 }));
+    const blueEscort = (id, name, wid) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "",
+            accel: 600, speed: 600, turn: 60, armor: 4000, shield: 4000, mass: 50, freeMass: 100, cargo: 10,
+            weapons: [wid, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+            ai: 3, strength: 100, crew: 20, flags: 0, flags2: 0, escortType: 2, cost: 10000 } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": 1973, "@2:i16": 1974, "@4:i16": 1 } },
+    ];
+    out.push(...blueEscort(769, "Kit Disc Blue Fixed", 368), ...blueEscort(770, "Kit Disc Blue Rear", 369));
+    out.push(...jamWave4(), ...wave4Rocks(), ...wave4Brackets());
+    return out;
+}
 
 /**
  * Wave-3 experiments (docs/reference_experiments.md). Id budget note: a
@@ -471,7 +528,10 @@ function jammingKit() {
         seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002, // 0x0002: second trigger
     });
     out.push(jm(375, "JamM V100", 100, 0), jm(376, "JamM V50", 50, 0), jm(377, "JamM TurnAway", 100, 0x0010),
-        jm(378, "JamM Parent", 100, 0x8000), jm(379, "JamM Decoy", 0, 0x0002), jm(380, "JamM Plain", 0, 0),
+        // 378 (JamM Parent, 0x8000) and 380 (JamM Plain, vuln 0) were
+        // retired in wave 4: they are now JamM Decoy V100 / JamM Pass V100
+        // (wave4Rocks). Their launchers oütf 619/621 keep the ids.
+        jm(379, "JamM Decoy", 0, 0x0002),
         jm(381, "JamM Pass", 0, 0x0001));
     for (let i = 0; i < 7; i++) out.push(gun(616 + i, `JamM Launcher ${375 + i}`, 375 + i));
     const jammer = gun(623, "Kit Jammer 25", 0);
@@ -547,8 +607,7 @@ function wave2Resources() {
 
     out.push(govt(378, "Kit Derelict Govt", { flags: 0x0800 }));
     out.push(...ship(714, "Kit Derelict", 138, { armor: 1000, shield: 1000, ai: 1, strength: 10, crew: 10 }));
-    out.push(dude(610, "Kit Derelict", 1, 378, 714));
-    out.push(...misn(970, "Kit U9 derelict", 9011, { shipCount: 1, shipDude: 610, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // düde 610 / mïsn 970 (the wave-2 U9 derelict) were retired in wave 4.
     [50, 100, 150, 200].forEach((sp, i) => out.push(...ship(715 + i, `Kit Crawler ${sp}`, 135, {
         accel: 2000, speed: sp, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000,
         cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
@@ -573,15 +632,16 @@ function wave2Resources() {
     out.push(spob(2131, "Kit IFF Port", 0, 0, 138, { flags: 0x43 }));
     out.push(dude(611, "Kit K9 hostile-govt traders", 1, 362, 722));
     out.push(dude(612, "Kit K9 hostile-govt warships", 3, 362, 730));
-    out.push(dude(613, "Kit K9 record traders", 1, 370, 723));
+    // düde 613/614 (the AI 1 and AI 3 record-hostile K9 ships of govt 370)
+    // were retired in wave 4 (wave4Brackets); Kit IFF Range now spawns only
+    // the 362 ships, 611 and 612.
     out.push(...discShip(731, "Kit Disc Magenta Armed", 1981, DISC_COLOURS.magenta, {
         accel: 400, speed: 400, turn: 40, armor: 2000, shield: 2000, mass: 50, freeMass: 100, cargo: 10,
         weapons: [374, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
         ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0,
     }));
-    out.push(dude(614, "Kit K9 record warships", 3, 370, 731));
     const k9 = out.find((r) => r.type === "sÿst" && r.id === 2129);
-    k9.set = { ...k9.set, dudes: [611, 612, 613, 614, -1, -1, -1, -1], dudeProbs: [25, 25, 25, 25, 0, 0, 0, 0], avgShips: 6 };
+    k9.set = { ...k9.set, dudes: [611, 612, -1, -1, -1, -1, -1, -1], dudeProbs: [50, 50, 0, 0, 0, 0, 0, 0], avgShips: 6 };
 
     // F1b: does the escort slot spacing scale with hull size? 96 px discs:
     // shïp 740 Kit Big Leader (white, like 720), 741-744 Kit Big Red/Green/
@@ -687,5 +747,111 @@ function a14Resources() {
     cell(2125, "A14 NosyHiHome", 375, null);
     cell(2126, "A14 UnrelIcpt", 370, 628);
     cell(2127, "A14 NosyIcpt", 370, 629);
+    return out;
+}
+
+/**
+ * Wave-4 jamming leftovers. Retired for it: wëap 362-364 (#316b missiles),
+ * düde 603-606 and 610 with mïsn 962, 963, 965, 966, 970 (Q2b/Q3/Q2c,
+ * #316b target practice, the wave-2 derelict).
+ *
+ *  wëap 362/363/364 JamM V100 T2/T3/T4: wëap 375 (JamM V100) with JamVuln
+ *       100 in jamming type 2/3/4 instead of type 1; oütf 602-604 launch them.
+ *  oütf 627/628/629 Kit Jammer T2/T3/T4: ONE outfit, +100 jamming of type
+ *       2/3/4 (ModType 34/35/36).
+ *  shïp 773/774/775 Jam Target T2/T3/T4: the J0 target (immobile, armor
+ *       100) carrying one of those jammers. düde 604/606/610 (AI 1, govt
+ *       363); mïsn 963/966/970 (bits 9004/9007/9011) put one at Kit Market.
+ *  InhJam on the other AI types: düde 603 (AI 2) and 605 (AI 4) are the J0
+ *  target hull of gövt 364 (InhJam1 100); mïsn 962/965 (bits 9003/9006) put
+ *  one at Kit Market. Wave 3 did AI 1 and AI 3 (mïsn 986).
+ */
+function jamWave4() {
+    const out = [];
+    [2, 3, 4].forEach((k, i) => {
+        const vuln = [0, 0, 0, 0];
+        vuln[k - 1] = 100;
+        out.push(weap(362 + i, `JamM V100 T${k}`, 134, {
+            reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+            seekerFlags: 0, jamVuln: vuln, proxRadius: 25, blastRadius: 0, flags: 0x0002,
+        }));
+        out.push(gun(602 + i, `JamM Launcher T${k}`, 362 + i));
+        const jammer = gun(627 + i, `Kit Jammer T${k}`, 0);
+        jammer.set = { ...jammer.set, modType: 32 + k, modVal: 100, max: 8 };
+        out.push(jammer);
+        out.push(...ship(773 + i, `Jam Target T${k}`, 136, {
+            armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
+            outfits: [627 + i, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
+        }));
+        const [dudeId, misnId, bit] = [[604, 963, 9004], [606, 966, 9007], [610, 970, 9011]][i];
+        out.push(dude(dudeId, `Jam Target T${k}`, 1, 363, 773 + i));
+        out.push(...misn(misnId, `Kit J T${k} target`, bit, { shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    });
+    [[603, 2, 962, 9003], [605, 4, 965, 9006]].forEach(([dudeId, ai, misnId, bit]) => {
+        out.push(dude(dudeId, `Jam Target InhJam AI ${ai}`, ai, 364, 732));
+        out.push(...misn(misnId, `Kit J InhJam AI ${ai}`, bit, { shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    });
+    return out;
+}
+
+/**
+ * Wave-4 asteroid tests (hub priority 2): seeker 0x0002 "decoyed by
+ * asteroids" and 0x0001 "passes over asteroids" with and without jamming.
+ *
+ *  wëap 378 JamM Decoy V100 (Seeker 0x0002, JamVuln1 100), 380 JamM Pass
+ *       V100 (0x0001, JamVuln1 100); oütf 619/621 launch them. wëap 379
+ *       (JamM Decoy, vuln 0) is the no-jamming decoy missile.
+ *  oütf 630/631 Kit Jammer 50/100: ONE outfit of +50/+100 type-1 jamming
+ *       (stacked outfits don't add up, wave 3).
+ *  shïp 776/777 Jam Target S50/S100: the J0 target with one of those.
+ *       düde 607/608 (AI 1, govt 363); mïsn 967/968 (bits 9008/9009) put
+ *       one on Kit Rock Marker (900 px) in sÿst 2132 Kit Rock Range (16
+ *       asteroids), where mïsn 976 (bit 9017) puts the J0 target.
+ *  sÿst 2170 Kit Rock Range 4: the same with 4 asteroids (spöb 2170 port,
+ *       2171 marker at 900,0); mïsn 992 (bit 9033) puts the J0 target there.
+ */
+function wave4Rocks() {
+    const out = [];
+    const jm = (id, name, seeker) => weap(id, name, 134, {
+        reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
+        seekerFlags: seeker, jamVuln: [100, 0, 0, 0], proxRadius: 25, blastRadius: 0, flags: 0x0002,
+    });
+    out.push(jm(378, "JamM Decoy V100", 0x0002), jm(380, "JamM Pass V100", 0x0001));
+    [[630, 50, 776, 607, 967, 9008], [631, 100, 777, 608, 968, 9009]].forEach(([oid, j, sid, did, mid, bit]) => {
+        const jammer = gun(oid, `Kit Jammer ${j}`, 0);
+        jammer.set = { ...jammer.set, modType: 33, modVal: j, max: 8 };
+        out.push(jammer);
+        out.push(...ship(sid, `Jam Target S${j}`, 136, {
+            armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
+            outfits: [oid, -1, -1, -1], outfitCounts: [1, 0, 0, 0],
+        }));
+        out.push(dude(did, `Jam Target S${j}`, 1, 363, sid));
+        out.push(...misn(mid, `Kit rock S${j} target`, bit, { availStel: 2132, shipCount: 1, shipDude: did, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    });
+    const rock4 = system(2170, "Kit Rock Range 4", -1110, -650, 363, [2170, 2171]);
+    rock4.set = { ...rock4.set, asteroids: 4, asteroidTypes: 0xffff };
+    out.push(rock4, spob(2170, "Kit Rock4 Port", 0, 0, 138, { flags: 0x43 }),
+        spob(2171, "Kit Rock4 Marker", 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(...misn(992, "Kit rock4 J0 target", 9033, { availStel: 2170, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    return out;
+}
+
+/**
+ * Wave-4 K9 follow-up: bracket colours of AI 2 and AI 4 ships. Each is the
+ * armed yellow AI Subject Disc (shïp 760: two Kit Raider Guns, 1000/1000),
+ * put at Kit Port (ShipStart -1) by a mission offered on landing there:
+ *   düde 609 AI 2, gövt 362 (always attacks the player)  mïsn 993, bit 9034
+ *   düde 613 AI 4, gövt 362                               mïsn 994, bit 9035
+ *   düde 614 AI 4, gövt 360 (Kit Range's owner: hostile when the pilot has
+ *            a -500 record in sÿst 2100)                    mïsn 995, bit 9036
+ * The non-hostile AI 4 control is the wave-2 AI 4 subject (düde 633, gövt
+ * 363, mïsn 980, bit 9021).
+ */
+function wave4Brackets() {
+    const out = [];
+    [[609, 2, 362, 993, 9034], [613, 4, 362, 994, 9035], [614, 4, 360, 995, 9036]].forEach(([did, ai, g, mid, bit]) => {
+        out.push(dude(did, `K9b AI ${ai} govt ${g}`, ai, g, 760));
+        out.push(...misn(mid, `Kit K9b AI ${ai} govt ${g}`, bit, { shipCount: 1, shipDude: did, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    });
     return out;
 }

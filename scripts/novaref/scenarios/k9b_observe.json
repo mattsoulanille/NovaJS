@@ -1,0 +1,73 @@
+{
+ "name": "k9b_observe",
+ "_comment": "K9 wave 4: bracket colour of one armed AI Subject Disc (AI 2 or AI 4, hostile or not) at Kit Port. The player (Kit Lancer Heavy, IFF, Kit Tickler) targets it once with Tab (with one other ship Tab toggles, so only once), shoots every 2.5 s for 15 s, tickles it once (Space 0.6 s), then shoots every 2.5 s for 60 s. Pilots w4_k9b_{ai2,ai4h,ai4r,ai4n}.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "repeat": 6,
+   "steps": [
+    {
+     "wait": 2500
+    },
+    {
+     "shot": "pre-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "keys": "Space@600"
+  },
+  {
+   "repeat": 24,
+   "steps": [
+    {
+     "wait": 2500
+    },
+    {
+     "shot": "post-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,20 @@
+{
+  "name": "novaref-fs",
+  "edits": {
+    "ship": 128,
+    "stellar": 128,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "128": 2
+    },
+    "missionBits": {},
+    "weapons": {},
+    "outfits": {},
+    "nickname": "Probe",
+    "shipName": "fs"
+  }
+}

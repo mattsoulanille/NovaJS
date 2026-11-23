@@ -1,0 +1,29 @@
+{
+  "name": "novaref-jt3",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9007": true
+    },
+    "weapons": {
+      "128": 0,
+      "363": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "603": 1
+    },
+    "nickname": "Probe",
+    "shipName": "jt3"
+  }
+}

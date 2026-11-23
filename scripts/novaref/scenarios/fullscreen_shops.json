@@ -1,0 +1,89 @@
+{
+ "name": "fullscreen_shops",
+ "_comment": "R8 wave 4: fullscreen (1920x1080) captures of the spaceport, outfitter, shipyard, trade center, mission BBS and bar at Earth with stock data and a stock Shuttle (pilot w4_fs). \"prefs\" turns RunInAWindow off for this run only; the run restores the prefs after quitting. Each venue is tried by its first letter (K1: spaceport hotkeys), then Escape.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "park_last_pilot": true,
+ "prefs": {
+  "RunInAWindow": 0
+ },
+ "steps": [
+  {
+   "shot": "title"
+  },
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "spaceport"
+  },
+  {
+   "keys": "o wait 3000"
+  },
+  {
+   "shot": "outfitter"
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "after-outfitter"
+  },
+  {
+   "keys": "s wait 3000"
+  },
+  {
+   "shot": "shipyard"
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "after-shipyard"
+  },
+  {
+   "keys": "t wait 3000"
+  },
+  {
+   "shot": "trade"
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "after-trade"
+  },
+  {
+   "keys": "m wait 3000"
+  },
+  {
+   "shot": "bbs"
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "after-bbs"
+  },
+  {
+   "keys": "b wait 3000"
+  },
+  {
+   "shot": "bar"
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "after-bar"
+  }
+ ],
+ "pull": true
+}

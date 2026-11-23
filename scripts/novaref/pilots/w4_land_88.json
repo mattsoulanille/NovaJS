@@ -1,0 +1,27 @@
+{
+  "name": "novaref-land88",
+  "edits": {
+    "ship": 716,
+    "stellar": 2169,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2169": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "land88"
+  }
+}

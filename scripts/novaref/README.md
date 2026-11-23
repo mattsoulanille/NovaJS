@@ -234,6 +234,11 @@ Step types:
 - `{"move": [x, y], "win": true}`. `{"move": true}` parks the mouse at (40, 40), outside the game window.
 - `{"record": "start", "window": true}` crops the recording. `{"record": "stop", "label": "x"}` writes `recording-x.mp4`.
 - `{"pull": "label"}` pulls the scenario pilot mid-run into `pilot-<label>/`. The game saves the pilot when it lands.
+- `{"repeat": N, "steps": [...]}` runs its steps N times (`steps.mjs`). Every
+  `{i}` in a string of the inner steps becomes the iteration number, padded
+  to two digits, so `{"shot": "watch-{i}"}` gives watch-00, watch-01, ...
+  Repeats nest. Each step is its own ssh call (a shot takes about 2 s), so
+  for evenly spaced key presses put them in ONE `keys` string instead.
 
 Scenario keys added for experiments:
 
@@ -243,6 +248,11 @@ Scenario keys added for experiments:
   again at the end.
 - `"app": "minimal"` launches the minimal copy instead of the real game.
 - `"park_last_pilot": true` parks `Last Pilot` even without plug-ins.
+- `"prefs": {"RunInAWindow": 0}` writes EV Nova's own prefs for this run
+  only (numbers as `-int`, booleans `-bool`, strings `-string`). They are
+  written after the snapshot, so the post-quit prefs check finds the
+  difference and imports the snapshot back (`prefs-restored`). Wave 4
+  used it for fullscreen captures; it never touches system settings.
 
 `open_pilot` works like this. It presses `o` on the title screen, which opens
 an NSOpenPanel (a second EV Nova window named "Open", layer 8). It presses
@@ -304,7 +314,10 @@ up like any failed run (quit, plug-ins out, Last Pilot and prefs restored,
 a running recording stopped and kept as `recording-aborted.mp4`) and run
 again from scratch in a new `<ts>-<name>-retry<N>/` dir. `--retries N`
 (or the scenario's `"retries"`) bounds it; the default is 2. The result
-lists every attempt under `attempts`.
+lists every attempt under `attempts`. Since wave 4 a launch that never
+shows a window and leaves no EV Nova process (it died while loading, seen
+once in wave 4 with a kit that loads fine otherwise) is retried the same
+way.
 
 ## EV Nova key facts (this install)
 
@@ -327,6 +340,10 @@ lists every attempt under `attempts`.
   auto-approach** (wave 2): from about 800 px out it says "You're too
   far away to land on this planet." and nothing else happens. Enter Ship
   starts the player on the stellar, so `l l` lands at once there.
+  Wave 4: the second `l` lands only inside the planet's landing range
+  (80-330 px, depending on the planet) AND below about 20 px/s; otherwise
+  "too far" or "You're moving too fast to land on this planet.". An
+  inertialess Crawler at full speed never lands: brake with Down first.
 - In the spaceport, `o` opens the Outfitter and Escape closes it. The other
   spaceport keys have not been tested.
 - Quitting in-game brings up "Are you sure you want to quit?" (OK is the
@@ -447,7 +464,7 @@ list it in a scenario's `"plugins"`.
 | shïp 703 Kit Lancer | Inertialess (flags2 0x40), fast, with 30000/30000 shield and armor. |
 | shïp 710 Kit Lancer Lite | Inertialess, 1500 shield with no recharge, so damage shows on the HUD. |
 | shïp 704 Escort, 705 Fighter, 706 Carrier (fighter bay), 707 Raider, 708 Trader, 709 Target (immobile, 30000 armor) | NPC hulls. |
-| wëap 360 Beam Turret (5000 dmg, 1500 px), 361 Tickler (1 dmg turret), 362/363/364 Missile with GuidedTurn 10/30/60, 365 Escort Gun (30 dmg turret), 366 Fighter Bay (705), 367 Raider Gun, 368/369 Speed Gun 300/600 | Weapons. |
+| wëap 360 Beam Turret (5000 dmg, 1500 px), 361 Tickler (1 dmg turret), 362/363/364 Missile with GuidedTurn 10/30/60, 365 Escort Gun (30 dmg turret), 366 Fighter Bay (705), 367 Raider Gun, 368 Fixed Gun, 369 Rear Turret (wave 4; until then the #316 Speed Guns 300/600) | Weapons. |
 | oütf 600-607 | Player outfits for wëap 360, 361, 362, 363, 364, 368, 369 and 365. |
 | gövt 360 Escort, 361 Trader (flags 0x0002 "nosy"), 362 Raider (0x0004 "always attacks player"), 363 Neutral | No classes, allies or enemies. KillPenalty 100, CrimeTol 10, MaxOdds 1000. A CrimeTol-0 / MaxOdds-100 version left a -500 player "neutral" and the raiders holding off. A govt enforces only the record of systems it owns unless it is nosy. |
 | düde 600 escort, 601 carrier escort, 602 raiders (362), 603 traders (361), 604 own-govt raiders (360), 605 target | Dudes. |
@@ -456,6 +473,7 @@ list it in a scenario's `"plugins"`.
 | wëap 370 Kit Blast Bomb (2-frame life, detonates at end, 300 px blast), 372 Kit Blast Shell (NPC-usable: 180 px reach, 400 px blast), 373 Kit Big Blast (2000 dmg), 371 Kit Bomber Bay; oütf 608-610; shïp 711 Kit Bomber, 712 Kit Bomb Carrier, 713 Kit Bomb Raider | Blast experiments (B-series). |
 | shïp 720 Kit Disc Leader (white, Speed/Accel 300, Turn 30), 721-726 Kit Disc Red/Green/Blue/Yellow/Magenta/Cyan (Speed/Accel 600, Turn 60); rlëD 1970-1976 | **Trackable hulls**: a solid one-colour disc (24 px) on all 36 frames, built by `packages/novaparse/src/plugin_kit/sprites.ts`. `analysis/discs.mjs` finds each centre by colour. The shän is the stock Shuttle's with only the sprite swapped: a from-scratch shän crashed the game on Enter Ship. The rlëD must use the stock row encoding (`encodeRled(..., {original: true})`). The synthetic data set's default encoding made the game fail an assertion on load. |
 | jünk 200 Kit Widgets (base 1000), 201 Kit Gadgets (base 150) | Bought at one kit port and sold at the other. |
+| wave 4 additions | sÿst/spöb 2160-2169 Kit Land 40/72/250/325/304x134/96/112/315x200/80/88 (one landable stellar each, cloned from stock spöbs of those sprite sizes), shïp 771/772 Kit Crawler Slowbrake (inertialess, slow Accel, for the landing speed gate), mïsn 991 (bit 9032: four AI 1 subjects), wëap 368 Kit Fixed Gun / 369 Kit Rear Turret (they **replace the #316 Speed Guns**; oütf 605/606 now install them) and shïp 769/770 blue disc escorts carrying them. Jamming types 2-4 (wëap 362-364, oütf 602-604 and 627-629, shïp 773-775, mïsn 962/963/965/966/970), asteroid tests (wëap 378 JamM Decoy V100, 380 JamM Pass V100, oütf 630/631 single +50/+100 jammers, shïp 776/777, mïsn 967/968/992, sÿst 2170 Kit Rock Range 4) and K9 brackets (düde 609/613/614, mïsn 993-995). **Retired** for these: wëap 362-364 (#316b missiles), 368/369 (#316 speed guns), 378/380 (JamM Parent / Plain); düde 603-610 and 613/614 with mïsn 962-970 (Q2b, Q3, Q4b, Q2c, #316b target, B bomb carrier/raiders, the wave-2 derelict, K9's record-hostile ships). Old pilots that name them now get the new resources. See `wave4Resources`. |
 | wave 2 and 3 additions | A14 hostility cells, the map region, the jamming kit, the AI subjects, F1b disc sizes and the wave-3 resources (jamming at 450/1800 px, long-life and turn-away missiles, InhJam target, AI tank discs, Kit Lancer Heavy, armed blue disc escorts and Kit Fight Range, flët 300 in Kit Fleet Range, Kit Prize, Map B border systems). Each block's doc comment in `kits/testkit.mjs` lists its ids. |
 
 ## Minimal app (tested 2026-11-23: launches, enters space, lands)
@@ -497,6 +515,26 @@ apply.
   the trigger's `down`/`up` stamps (the late-hit tail of the J-series). Two
   hits in the same frame make one change, so take the total from the
   start and end values in the shots; use the changes for timing.
+- `planet_track.mjs <rec.mp4> --events recording.events.json [--from F --to F] [--msg-dir d]`:
+  the planet's distance at every `l` press (U9 landing runs). The planet is
+  the largest bright blob; a blob clipped by the play-area edge is centred
+  from its free side using the size seen in the first frames. `fit` is a
+  constant-velocity line through --from..--to read 4.5 frames after the
+  press (when the game acts on it), `at_read` the per-frame value (use it
+  for stop-and-go runs). Each press also gets a status-line message id;
+  `--msg-dir` writes one crop per distinct message to read by eye.
+  `land_frame` is the first spaceport frame.
+- `radar_blips.mjs <rec.mp4> [--every 5] [--tracks]`: radar dots per frame
+  (radar px from the player, about 31.6 world px each in Kit Range), or
+  with `--tracks` the moving ones linked into tracks with their first/last
+  time and position and their speed at the end: a ship that vanishes away
+  from every stellar after accelerating hard jumped out, one that vanishes
+  on a stellar's dot landed. h264 strips the colour from 1-pixel dots, so
+  tracks link blips of any hue.
+- `region_lit.mjs <rec.mp4> [--rect x,y,w,h] --events recording.events.json`:
+  when a rect holds white text (an overlay is open): every lit/unlit flip
+  with the key events before it. The default rect is the escort panel's
+  rows; wave 4 timed the panel's 8.3 s self-close with it.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).

@@ -1,0 +1,57 @@
+{
+ "name": "land_range_far",
+ "_comment": "U9 wave 4: land_range for big planets: out 20 s (~880 px), back with 150 `l` presses. Pilots w4_land_{250,304,325}.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "l wait 1200"
+  },
+  {
+   "shot": "request",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 20000 up:Up down:Down wait 1500 up:Down wait 600"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "Left@2060 wait 600"
+  },
+  {
+   "shot": "turned",
+   "window": true
+  },
+  {
+   "keys": "down:Up hold:60 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 l wait 100 up:Up wait 1500"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

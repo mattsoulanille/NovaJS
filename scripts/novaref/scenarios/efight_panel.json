@@ -1,0 +1,48 @@
+{
+ "name": "efight_panel",
+ "_comment": "E-fight wave 4: efight_formation, but before every shot `r` targets the nearest hostile, so the target panel shows a raider's shield/armor. The player never fires (Kit Tickler only, never triggered): any damage on the raiders is the escorts'. Pilots w4_efix (fixed guns, sh\u00efp 769), w4_erear (rear turrets, 770), w3_efight (full turrets, 764, the control).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 2500"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 6000
+  },
+  {
+   "repeat": 25,
+   "steps": [
+    {
+     "keys": "r wait 300"
+    },
+    {
+     "shot": "obs-{i}",
+     "window": true
+    },
+    {
+     "wait": 2500
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
