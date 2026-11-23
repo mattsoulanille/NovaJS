@@ -14,6 +14,20 @@ export const BASE_SCALE = 2;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 4;
 export const ZOOM_STEP = 1.15;
+/**
+ * The original's map scale, in screen px per map unit: what the full map
+ * OPENS at and what the `h` minimap always draws at (reference_experiments
+ * M6). Measured on the test kit's map region (832x604 window), dot centre
+ * to dot centre from the hub: 40 units east +71 px, 80 east +142, 60
+ * east +106, 50 west -89, 50 south +88, 70 south +124 — a least-squares
+ * fit of 1.772, and the 1920x1080 captures agree (Sol->Tichel, 110 units,
+ * 195 px). 16/9 = 1.778 looks like a plausible "round" constant, but it
+ * predicts +107 and +89 for two of those six where the capture has 106 and
+ * 88; 1.77 rounds to every one of them, so the measured value is used.
+ */
+export const DEFAULT_PX_PER_UNIT = 1.77;
+/** {@link DEFAULT_PX_PER_UNIT} as a zoom over the laid-out map. */
+export const DEFAULT_ZOOM = DEFAULT_PX_PER_UNIT / BASE_SCALE;
 // How far the arrow keys pan per press, in screen pixels.
 export const KEY_PAN_STEP = 40;
 // Radius of a system's outer circle in laid-out coordinates.

@@ -26,7 +26,9 @@ import {
     PORTS_VALUE_X, PORTS_Y, PROP_LABEL_FONT, PROP_VALUE_FONT,
     renderPropertyLines, systemProperties,
 } from "./starmap_properties.js";
-import { KEY_PAN_STEP, ZOOM_STEP } from "./starmap_viewport.js";
+import {
+    DEFAULT_ZOOM, KEY_PAN_STEP, ZOOM_STEP,
+} from "./starmap_viewport.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
 import { TerritoryOwner } from "./starmap_borders.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
@@ -326,6 +328,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // SystemGraphOptions.gateLinks).
         this.systemGraph = new SystemGraph(this.allSystems, this.systemId,
             this.graphOptions(bits, missionMarks, viewedMarks));
+        // The original's opening scale (starmap_viewport.ts).
+        this.systemGraph.zoomBy(DEFAULT_ZOOM);
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);
         // Keep the graph under the buttons/readouts (they were added to the
         // container first), matching the dialog frame's layering.

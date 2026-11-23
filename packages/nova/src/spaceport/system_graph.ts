@@ -480,6 +480,11 @@ export class SystemGraph {
         this.viewport.zoomBy(factor, centerX, centerY);
     }
 
+    /** The view's zoom over the laid-out map (BASE_SCALE px per unit). */
+    get zoom(): number {
+        return this.viewport.zoom;
+    }
+
     private onTap(viewX: number, viewY: number, shiftKey: boolean) {
         const system = this.systemAt(viewX, viewY);
         if (system) {

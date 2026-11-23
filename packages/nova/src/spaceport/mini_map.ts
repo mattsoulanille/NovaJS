@@ -31,6 +31,7 @@
 // a ship or planet underneath.
 import * as PIXI from 'pixi.js';
 import { Subject, Subscription } from 'rxjs';
+import { DEFAULT_ZOOM } from './starmap_viewport.js';
 import { SystemGraph } from './system_graph.js';
 
 /** The map pane: the frame's inside. */
@@ -41,13 +42,12 @@ export const MINI_MAP_FRAME = MINI_MAP_PANE.x + 2;
  * the game data yet — see item_grid.ts gridDim/gridBright). */
 export const MINI_MAP_FRAME_COLOR = 0x080808;
 /**
- * The minimap's zoom over the laid-out map (BASE_SCALE = 2 px per map unit):
- * the reference's ~1.778 px per unit (Sol->Tichel is 195 px for 110 units
- * on both mini_map.png and the full-map captures). NovaJS's FULL map opens
- * at zoom 1 — 12.5% larger than the original's — so the two maps differ in
- * scale here where the original's agree; the minimap follows the capture.
+ * The minimap's zoom over the laid-out map: the original's map scale,
+ * ~1.77 px per map unit (Sol->Tichel is 195 px for 110 units on both
+ * mini_map.png and the full-map captures) — the same scale the full map
+ * opens at (starmap_viewport.ts DEFAULT_PX_PER_UNIT).
  */
-export const MINI_MAP_ZOOM = 1.778 / 2;
+export const MINI_MAP_ZOOM = DEFAULT_ZOOM;
 /** The frame's top edge, in UI-logical pixels. */
 export const MINI_MAP_TOP = 150;
 /** Clear pixels between the frame's right edge and the status bar. */
