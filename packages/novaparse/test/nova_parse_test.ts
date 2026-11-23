@@ -133,25 +133,33 @@ describe("NovaParse", () => {
     });
 
     it("Converts ship speed and acceleration to pixels per second", async () => {
-        // The original engine ran physics at 30fps and stored speed as
-        // pixels/frame * 100 (EVN Bible: weapon "Speed" is "pixels per
-        // frame * 100"; particle velocity "a value of 100 is one pixel
-        // per frame"). Ship Top Speed and Acceleration share that
-        // encoding, so px/s = field * 30 / 100 = field * 0.3.
+        // Measured on the original EV Nova 1.1.1 (#316; docs/
+        // reference_experiments.md "U1"): shïp Speed is 1.5 * Speed / 100
+        // px per game frame and Accel is Accel / 5000 px per frame^2 — NOT
+        // the wëap "pixels per frame * 100" encoding. At the nominal 30
+        // frames/s (Matthew's ruling): px/s = Speed * 0.45 and
+        // px/s^2 = Accel * 0.18.
         //
         // The MovementSystem integrates velocity as px/s (it multiplies
         // by time.delta_s in seconds), so the parsed values must be px/s.
         const s128 = await np.data[NovaDataType.Ship].get("nova:128");
 
-        // An "average" ship (Top Speed field 300) should move 90 px/s,
-        // not 300 px/s. Before the fix the field passed through raw,
-        // making every ship 100/30 ~= 3.33x too fast.
-        expect(300 * ShipSpeedConversionFactor).toEqual(90);
-        expect(300 * ShipAccelerationConversionFactor).toEqual(90);
+        expect(ShipSpeedConversionFactor).toEqual(1.5 * FPS / 100);
+        expect(ShipAccelerationConversionFactor).toEqual(FPS * FPS / 5000);
+
+        // An "average" ship (Speed 300, Accel 300) tops out at 135 px/s
+        // (4.5 px/frame), accelerates at 54 px/s^2 (0.06 px/frame^2), and
+        // so takes 2.5 s from rest to top speed. The old shared
+        // FPS / 100 factor made it 90 px/s, 90 px/s^2 and one second:
+        // 1.5x too slow and ~1.67x too quick to accelerate.
+        expect(300 * ShipSpeedConversionFactor).toEqual(135);
+        expect(300 * ShipAccelerationConversionFactor).toEqual(54);
+        expect((300 * ShipSpeedConversionFactor)
+            / (300 * ShipAccelerationConversionFactor)).toBeCloseTo(2.5, 12);
 
         // The contrived fixture ship has raw speed 12 and acceleration 11.
-        expect(s128.physics.speed).toEqual(12 * 0.3);
-        expect(s128.physics.acceleration).toEqual(11 * 0.3);
+        expect(s128.physics.speed).toBeCloseTo(12 * 0.45, 12);
+        expect(s128.physics.acceleration).toBeCloseTo(11 * 0.18, 12);
     });
 
     it("Should parse the right pict ID for ships with the same baseImage", async () => {

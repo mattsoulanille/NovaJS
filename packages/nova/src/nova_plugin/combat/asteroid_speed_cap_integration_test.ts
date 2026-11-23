@@ -9,7 +9,7 @@ import { MAX_ASTEROID_SPEED } from "./asteroid_plugin.js";
  * of the fastest stock ship that is not the Escape Pod.
  */
 describe("MAX_ASTEROID_SPEED derivation", () => {
-    // shïp nova:895, Speed 2000 -> 600 px/s. A lifeboat, not a ship
+    // shïp nova:895, Speed 2000 -> 900 px/s. A lifeboat, not a ship
     // anyone flies, and fast enough to make the cap meaningless.
     const ESCAPE_POD_ID = "nova:895";
     const MANTA_ID = "nova:315";
@@ -32,8 +32,8 @@ describe("MAX_ASTEROID_SPEED derivation", () => {
 
             expect(fastest).toBeDefined();
             // The Manta, shïp Speed 660, converted by ship_parse with
-            // ShipSpeedConversionFactor (FPS / 100 = 0.3) into px/s:
-            // 660 * 0.3 = 198, the same units asteroid drift uses.
+            // ShipSpeedConversionFactor (1.5 * FPS / 100 = 0.45) into
+            // px/s: 660 * 0.45 = 297, the same units asteroid drift uses.
             expect(fastest!.id).toBe(MANTA_ID);
             expect(fastest!.name).toBe("Manta");
             expect(fastest!.speed).toBe(MAX_ASTEROID_SPEED);

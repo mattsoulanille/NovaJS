@@ -31,6 +31,19 @@ describe("OutfitParse", () => {
         expect(outfit.physics.jumpDistanceMod).toEqual(-300);
     });
 
+    it("converts speed and acceleration mods with the shïp factors", async () => {
+        // Outfit speed (ModType 8) and accel (ModType 7) mods add to the
+        // hull's Speed and Accel fields, so they go through the same
+        // ShipSpeedConversionFactor (0.45) and ShipAccelerationConversion-
+        // Factor (0.18) as shïp Speed/Accel (#316): +100 speed is +45 px/s,
+        // +100 accel is +18 px/s^2.
+        const outfit = await OutfitParse(fakeOutf([
+            ["speed", 100], ["acceleration", 100],
+        ]), () => { });
+        expect(outfit.physics.speed).toBeCloseTo(45, 12);
+        expect(outfit.physics.acceleration).toBeCloseTo(18, 12);
+    });
+
     it("parses fast jump into canJumpWithoutSlowing", async () => {
         const outfit = await OutfitParse(
             fakeOutf([["fast jump", true]]), () => { });

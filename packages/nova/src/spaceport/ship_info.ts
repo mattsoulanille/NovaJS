@@ -1,4 +1,5 @@
 import { ShipData } from 'novadatainterface/ship_data';
+import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
@@ -217,8 +218,9 @@ export class ShipInfoDialog {
         const physics = ship.physics;
         // Raw shïp units, inverting the parser's conversions (see
         // ship_parse.ts / constants.ts).
-        const rawSpeed = Math.round(physics.speed * 100 / 30);
-        const rawAccel = Math.round(physics.acceleration * 100 / 30);
+        const rawSpeed = Math.round(physics.speed / ShipSpeedConversionFactor);
+        const rawAccel = Math.round(
+            physics.acceleration / ShipAccelerationConversionFactor);
         const rawTurn = Math.round(physics.turnRate * 60 / Math.PI);
         const jumps = Math.floor(physics.energy / 100);
 

@@ -1,6 +1,7 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
+import { ShipAccelerationConversionFactor as ACCEL, ShipSpeedConversionFactor as SPEED } from 'novaparse/parsers/constants';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { OutfitsState, deriveShipPhysics } from '../nova_plugin/ship/index.js';
 import { dialogShipPhysics, InfoRow, physicsRows } from './player_info.js';
@@ -24,15 +25,15 @@ import { dialogShipPhysics, InfoRow, physicsRows } from './player_info.js';
 describe('the docked player-info physics rows', () => {
     /**
      * A hull worth 300 raw speed, 300 raw accel and 30°/sec of turn.
-     * Speed and acceleration are stored in px/sec (raw * 30/100), turn
-     * rate in rad/sec.
+     * Speed and acceleration are stored in px/sec and px/sec^2 (raw times
+     * the parser's conversion factors, #316), turn rate in rad/sec.
      */
     function hull(): ShipData {
         const ship = getDefaultShipData();
         ship.physics = {
             ...ship.physics,
-            speed: 300 * 30 / 100,
-            acceleration: 300 * 30 / 100,
+            speed: 300 * SPEED,
+            acceleration: 300 * ACCEL,
             turnRate: 30 * Math.PI / 180,
             freeMass: 100,
         };
@@ -45,8 +46,8 @@ describe('the docked player-info physics rows', () => {
             ...getDefaultOutfitData(), id,
             physics: {
                 freeMass: 10,
-                speed: 60 * 30 / 100,
-                acceleration: 100 * 30 / 100,
+                speed: 60 * SPEED,
+                acceleration: 100 * ACCEL,
                 turnRate: 15 * Math.PI / 180,
             },
         };
@@ -142,8 +143,8 @@ describe('the docked player-info physics rows', () => {
             // component the entity still carries beats the bare hull.
             const ship = hull();
             const attached = {
-                ...ship.physics, speed: 360 * 30 / 100,
-                acceleration: 400 * 30 / 100, turnRate: 45 * Math.PI / 180,
+                ...ship.physics, speed: 360 * SPEED,
+                acceleration: 400 * ACCEL, turnRate: 45 * Math.PI / 180,
             };
             expect(physicsRows(dialogShipPhysics(gameData([]), ship,
                 owned(['nova:200', 1]), attached)))

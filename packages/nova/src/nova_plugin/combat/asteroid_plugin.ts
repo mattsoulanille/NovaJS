@@ -92,19 +92,20 @@ const ASTEROID_MAX_SPEED = 50;
  *
  * The value: the top speed of the fastest ship in the stock game, so a
  * capped asteroid can always be outrun. Excluding the Escape Pod (shïp
- * nova:895, Speed 2000 -> 600 px/s; not a ship anyone flies), the
+ * nova:895, Speed 2000 -> 900 px/s; not a ship anyone flies), the
  * fastest of the 288 stock shïp resources is the Manta (shïp nova:315,
- * Speed 660). shïp Speed is pixels/frame * 100 at the original engine's
- * 30 fps, which ship_parse converts with ShipSpeedConversionFactor =
- * FPS / 100 = 0.3 into the px/s that MovementState.velocity and
- * asteroid drift both use: 660 * 0.3 = 198 px/s.
+ * Speed 660). shïp Speed is 1.5 * Speed / 100 px per frame at the
+ * original engine's 30 fps (#316), which ship_parse converts with
+ * ShipSpeedConversionFactor = 1.5 * FPS / 100 = 0.45 into the px/s that
+ * MovementState.velocity and asteroid drift both use: 660 * 0.45 = 297
+ * px/s.
  *
  * Hardcoded rather than derived at runtime: the sim must not vary with
  * which plug-ins happen to be installed (see the fixture note in
  * simulation_test_fixture.ts). asteroid_plugin_test.ts pins the
  * derivation against real Nova Files data.
  */
-export const MAX_ASTEROID_SPEED = 198;
+export const MAX_ASTEROID_SPEED = 297;
 
 /**
  * Clamps an asteroid velocity to MAX_ASTEROID_SPEED, preserving

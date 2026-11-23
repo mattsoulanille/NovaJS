@@ -1,4 +1,5 @@
 import { ShipData, ShipPhysics } from 'novadatainterface/ship_data';
+import { ShipAccelerationConversionFactor, ShipSpeedConversionFactor } from 'novaparse/parsers/constants';
 import { Entity } from 'nova_ecs/entity';
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
@@ -199,8 +200,9 @@ export interface InfoRow {
 /**
  * The General page's three physics rows, straight off the physics
  * `dialogShipPhysics` resolved. Turn rate is stored in rad/sec (raw EVN
- * units * 0.3°/sec); speed and acceleration in px/sec (raw * 30/100).
- * Display the original's raw-unit numbers, as the reference does. All
+ * units * 0.3°/sec); speed and acceleration in px/sec and px/sec^2 (raw
+ * times the parser's ShipSpeedConversionFactor / ShipAccelerationConversion-
+ * Factor). Display the original's raw-unit numbers, as the reference does. All
  * three read '-' only when the ship's physics could not be resolved at
  * all (no ship data).
  */
@@ -214,9 +216,11 @@ export function physicsRows(physics?: ShipPhysics): InfoRow[] {
         { label: 'Turn Rate:',
             value: `${Math.round(physics.turnRate * 180 / Math.PI)}°/sec` },
         { label: 'Accel Rate:',
-            value: `${Math.round(physics.acceleration * 100 / 30)}` },
+            value: `${Math.round(
+                physics.acceleration / ShipAccelerationConversionFactor)}` },
         { label: 'Max Speed:',
-            value: `${Math.round(physics.speed * 100 / 30)}` },
+            value: `${Math.round(
+                physics.speed / ShipSpeedConversionFactor)}` },
     ];
 }
 

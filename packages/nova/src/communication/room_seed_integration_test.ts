@@ -151,12 +151,21 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // synthetic systems (one with a Person list and a roaming
             // wing, one with a fleet entry). Specs, the determinism
             // harness and offline play build exactly these worlds.
+            //
+            // The two stepped columns (hash and Random state after 300
+            // steps) were re-pinned for #316, which made shïp Speed 1.5x
+            // and Accel 0.6x what they were: the genesis hashes did not
+            // move, but the NPCs fly different paths, so the world after
+            // 300 steps differs and the AI's arrival-triggered rolls
+            // (new waypoints, dwell ends) draw Random a different number
+            // of times. The fixed-mode property itself is unchanged: no
+            // seed reaches the world, and the genesis is the old one.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '8d6c6c3f', 'ad539e4f',
-                    [635476003, 3134353079, 451984453, 396451034]],
-                [SYNTHETIC.systems.kestrel, 'a90af946', '758103fd',
-                    [4277036284, 1584214963, 126678300, 1491742349]],
+                [THESSALY, '8d6c6c3f', 'f0f98b64',
+                    [540372827, 2359486158, 3964262456, 396451155]],
+                [SYNTHETIC.systems.kestrel, 'a90af946', '9bb5246e',
+                    [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {
                 const world = await makeSystem(systemId, gameData, 'worker');
