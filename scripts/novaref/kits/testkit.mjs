@@ -309,7 +309,7 @@ export default {
  * from the stock map (x -358..587, y -330..300) and the other kit systems.
  *
  *   id    name        pos          owner              links
- *   2140  Map Hub     (-700, 400)  379 Major Red      2141 2142 2143 2144 2145
+ *   2140  Map Hub     (-700, 400)  379 Major Red      2144 2142 2145 2141 2143 (link order differs from id order, M7)
  *   2141  Map South   (-700, 460)  379 Major Red      2140   (90 deg, 60)
  *   2142  Map NE      (-675, 357)  380 Major Blue     2140 2144? no: 2140 (300 deg, ~50)
  *   2143  Map East    (-660, 400)  380 Major Blue     2140 2146 (0 deg, 40)  unlandable stellar
@@ -329,7 +329,7 @@ function mapRegion() {
     out.push(govt(381, "Map Minor Green", { color: 0x00ff00, flags2: 0x0002 }));
     out.push(govt(382, "Map Borderless", { color: 0xffff00, flags2: 0x0004 }));
     const sys = [
-        [2140, "Map Hub", -700, 400, 379, [2141, 2142, 2143, 2144, 2145], true],
+        [2140, "Map Hub", -700, 400, 379, [2144, 2142, 2145, 2141, 2143], true],
         [2141, "Map South", -700, 460, 379, [2140], true],
         [2142, "Map NE", -675, 357, 380, [2140], true],
         [2143, "Map East", -660, 400, 380, [2140, 2146], "unlandable"],
@@ -370,7 +370,7 @@ function jammingKit() {
     const out = [];
     const jm = (id, name, vuln, seeker) => weap(id, name, 134, {
         reload: 15, duration: 300, armorDamage: 1, shieldDamage: 1, guidance: 1, speed: 600, guidedTurn: 60,
-        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 0, blastRadius: 0, flags: 0,
+        seekerFlags: seeker, jamVuln: [vuln, 0, 0, 0], proxRadius: 0, blastRadius: 0, flags: 0x0002, // 0x0002: second trigger
     });
     out.push(jm(375, "JamM V100", 100, 0), jm(376, "JamM V50", 50, 0), jm(377, "JamM TurnAway", 100, 0x0010),
         jm(378, "JamM Parent", 100, 0x8000), jm(379, "JamM Decoy", 0, 0x0002), jm(380, "JamM Plain", 0, 0),
@@ -436,7 +436,14 @@ function wave2Resources() {
         cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8,
     })));
 
-    out.push(system(2128, "Kit Fleet Range", -900, -700, 363, [2128, 2130]));
+    // avgShips 6 and no dudes: the only traffic is the fleet (a first try
+    // with avgShips 0 never spawned it). 2133 Kit Fleet Gate is linked, so
+    // a pilot can also jump in and have the system populated on arrival.
+    const fleetRange = system(2128, "Kit Fleet Range", -900, -700, 363, [2128, 2130]);
+    fleetRange.set = { ...fleetRange.set, avgShips: 6, links: [2133, ...none16.slice(1)] };
+    const fleetGate = system(2133, "Kit Fleet Gate", -880, -700, 363, [2133]);
+    fleetGate.set = { ...fleetGate.set, links: [2128, ...none16.slice(1)] };
+    out.push(fleetRange, fleetGate, spob(2133, "Kit Fleet Gate Port", 0, 0, 138, { flags: 0x43 }));
     out.push(spob(2128, "Kit Fleet Port", 0, 0, 138, { flags: 0x43 }));
     out.push(spob(2130, "Kit Fleet Market", 1200, 0, 138, { flags: 0x43 }));
     out.push({
@@ -477,6 +484,15 @@ function wave2Resources() {
     const leaderSet = { accel: 300, speed: 300, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 100, flags: 0, flags2: 0 };
     out.push(...discShip(748, "Kit Tiny Leader", 1990, DISC_COLOURS.white, leaderSet, 12, 10));
     out.push(...discShip(749, "Kit Framed Leader", 1991, DISC_COLOURS.white, leaderSet, 96, 22));
+    // Size sweep: 750-755 leaders of 36, 64, 72, 112, 128, 200 px.
+    [36, 64, 72, 112, 128, 200].forEach((s, i) =>
+        out.push(...discShip(750 + i, `Kit Leader ${s}`, 1992 + i, DISC_COLOURS.white, leaderSet, s)));
+    // Escort command view: one hull per shïp EscortType (0 fighter, 1
+    // medium, 2 warship, 3 freighter), cloned from the Kit Escort.
+    ["Fighter", "Medium", "Warship", "Freighter"].forEach((n, i) => out.push(...ship(756 + i, `Esc ${n}`, 163, {
+        armor: 4000, shield: 4000, accel: 600, speed: 330, turn: 70, weapons: [365, -1, -1, -1], weaponCounts: [2, 0, 0, 0],
+        weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 100, crew: 20, escortType: i, cost: 10000,
+    })));
     out.push(...mapRegion());
     out.push(...jammingKit());
     out.push(...aiKit());

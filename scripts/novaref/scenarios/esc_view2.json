@@ -1,0 +1,281 @@
+{
+ "name": "esc_view2",
+ "_comment": "Escort panel follow-up: selection persistence, f/d/v/c with the panel closed, and what the orders do against attacking raiders (m\u00efsn 961). Pilot w2_esc3.",
+ "pilot": {
+  "as": "novaref-esc"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "open",
+   "window": true
+  },
+  {
+   "keys": "3 wait 600"
+  },
+  {
+   "shot": "sel3",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "reopen",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "close-again",
+   "window": true
+  },
+  {
+   "keys": "v wait 1500"
+  },
+  {
+   "shot": "closed-v",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "open-after-v",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "close-3",
+   "window": true
+  },
+  {
+   "keys": "c wait 1500"
+  },
+  {
+   "shot": "closed-c",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "open-after-c",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "close-4",
+   "window": true
+  },
+  {
+   "keys": "r wait 600"
+  },
+  {
+   "shot": "nearest-hostile",
+   "window": true
+  },
+  {
+   "keys": "f wait 600"
+  },
+  {
+   "shot": "attack",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "attack-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "attack-1",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "attack-2",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "attack-3",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "attack-4",
+   "window": true
+  },
+  {
+   "keys": "d wait 600"
+  },
+  {
+   "shot": "defend",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "defend-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "defend-1",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "defend-2",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "defend-3",
+   "window": true
+  },
+  {
+   "keys": "v wait 600"
+  },
+  {
+   "shot": "hold",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 2500 up:Up"
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "hold-away-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "hold-away-1",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "hold-away-2",
+   "window": true
+  },
+  {
+   "keys": "c wait 600"
+  },
+  {
+   "shot": "formation",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "formation-0",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "formation-1",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "formation-2",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "formation-3",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "final-panel",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

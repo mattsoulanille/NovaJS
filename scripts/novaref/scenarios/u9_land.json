@@ -1,0 +1,47 @@
+{
+ "name": "u9_land",
+ "_comment": "U9 landing gate: fly out from Kit Port for 6 s, then l (clearance) and l (autopilot); the recording shows the distance and speed at the moment the game lands. Pilots w2_u9pa (Probe A, inertial) and w2_u9c200 (inertialess Crawler 200).",
+ "pilot": {
+  "as": "novaref-u9"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 6000 up:Up wait 300"
+  },
+  {
+   "shot": "out",
+   "window": true
+  },
+  {
+   "keys": "l wait 800"
+  },
+  {
+   "shot": "cleared",
+   "window": true
+  },
+  {
+   "keys": "l wait 15000"
+  },
+  {
+   "shot": "landed",
+   "window": true
+  },
+  {
+   "record": "stop"
+  }
+ ],
+ "pull": false
+}

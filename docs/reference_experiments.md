@@ -345,6 +345,68 @@ lead while accelerating.
 holds `recording.mp4`, `discs.csv` (per frame), `discs.json` and
 `windows.json`.
 
+### F1b: does escort slot spacing scale with hull size? (2026-11-23, wave 2)
+
+**Setup.** The same rig as F1: the player leads four hired disc escorts in
+Kit Range. Leaders and escorts are disc hulls with different rlëD frame
+sizes (kit shïp 740-755). Every disc reuses the Shuttle's shän unchanged,
+so only the sprite differs. Offsets are measured in lossless screenshots
+after about 9 s at rest and at cruise, using connected components
+(`analysis/disc_shot.mjs`; the recording tracker is noisy when a small
+white leader overlaps the planet). Scenarios are `formation_player.json`
+and `formation_rest.json`; pilots are `pilots/f1b_*.json`.
+
+**Finding.** Rank k sits at (-k·a astern, ±k·a lateral): a 45° V, first
+escort left, then right. The per-axis offset a depends only on **S, the
+largest rlëD frame width among the leader and all its escorts**:
+
+    a ≈ clamp(0.59 × S, 23.5, 59.5) px    (within 0.8 px of every point)
+
+| run | leader frame | escort frames | group S | a (rank 1, per axis) | rank-1 / rank-2 distance |
+|---|---|---|---|---|---|
+| h | 12 | 24 | 24 | 23.1 | 32.6 / 66.6 |
+| d | 24 (shïp Length 200) | 24 | 24 | 23.5 | 33.2 / 66.9 |
+| wave 1 | 24 | 24 | 24 | 23.3 | 33.0 / 66.9 |
+| j | 36 | 24 | 36 | 23.5 | 33.2 / 67.6 |
+| e | 48 | 24 | 48 | 27.5 | 38.8 / 78.5 |
+| k | 64 | 24 | 64 | 37.7 | 53.3 / 107.0 |
+| l | 72 | 24 | 72 | 42.1 | 59.5 / 120.5 |
+| a | 96 | 24 | 96 | 56.6 | 80.1 / 160.3 |
+| b | 24 | 96 | 96 | about 56.6 | 80 / 161 (screenshot) |
+| c | 96 | 96 | 96 | 56.6 | 80.1 / 160.7 |
+| g | 24 | 96, 24, 96, 24 | 96 | 56.6 for **all four** | 80 / 160.4 |
+| i | 96 frame, 22 px disc | 24 | 96 | 56.8 | 80.3 / 160.6 |
+| m | 112 | 24 | 112 | 59.5 | 84.2 / 168.4 |
+| n | 128 | 24 | 128 | 59.1 | 83.6 / 168.6 |
+| f | 160 | 24 | 160 | about 60 (escort partly hidden) | 86 / 169 |
+| o | 200 | 24 | 200 | rank 1 entirely hidden under the leader | - / 168.7 |
+
+- **Frame, not visible size:** a 22 px disc in a 96 px frame (i) spaces
+  like a full 96 px disc. The shän frame-size fields can't be the
+  source, because they're identical in every run.
+- **Group maximum:** two 96 px escorts push the 24 px escorts out to the
+  96 px spacing too (g).
+- **Not used:** shïp Length (d) and speed. Cruise shots at 135 px/s show
+  the same offsets to 0.1 px.
+- Rank 2 is always 2a within 1.5 px.
+- Above S ≈ 100 the V stops growing, so a 200 px leader's rank-1
+  escorts sit entirely under its sprite.
+
+**NovaJS today:** fixed rows 60 px astern and ±27.5 px cells
+(`N/nova_plugin/npc/npc_formation.ts:18-23`), plus the lookahead (F1).
+**Proposed fix (not applied):**
+- Slot k = (-k·a, ±k·a) in the leader's frame, with a from the formula
+  above.
+- S = max rlëD frame width over the formation's members (the shän base
+  sprite size).
+- No lookahead.
+
+Untested:
+- non-square or PICT sprites, and whether the frame's height counts;
+- NPC fleets (F1n is queued).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-f1b/{a..o}/*/`.
+
 ### #321: does the pilot's priceFlux set the trade tier multiplier? (2026-11-23)
 
 **Setup.**
@@ -489,8 +551,9 @@ AllyLo (CrimeTol 10).
 | c5 | Owner | Unrel (3) | Unrel's home system | no |
 | c15 | Owner | Unrel (4, interceptor) | this system | no |
 | c16 | Owner | Unrel (4) | Unrel's home system | no |
-| c6 | Owner | Nosy (3) | this system | **yes** (see note) |
-| c7 | Owner | Nosy (3) | Nosy's home system | no |
+| c6 | Owner | Nosy (3) | this system | **yes** (twice; see note) |
+| c7 | Owner | Nosy (3) | Nosy's home system | no (twice) |
+| c18 | Owner | Nosy (4) | this system | **yes** |
 | c17 | Owner | Nosy (4) | Nosy's home system | no |
 | c8 | Owner (CrimeTol 10) | AllyHi (3), CrimeTol 10000 | this system | no |
 | c9 | Owner (CrimeTol 10) | NosyHi (3), CrimeTol 10000 | this system | no |
@@ -505,8 +568,8 @@ AllyLo (CrimeTol 10).
 1. **G enforces in the current system.** G owns it, G is allied with
    its owner, or G has gövt flag 0x0002 (nosy). Nosy also applies in
    independent systems. A govt with no tie to the system ignores the
-   player however criminal he is there (c4, c10), and AI 4 interceptors
-   follow the same rule (c15).
+   player however criminal he is there (c4, c10). AI 4 interceptors
+   follow the same rule (c15 no, c18 nosy yes).
 2. **The player's record IN THE CURRENT SYSTEM is below -G.CrimeTol.**
    - Only this system's record counts. A criminal record in another
      system of the same govt (c2), or in G's own home system (c5, c7,
@@ -523,12 +586,14 @@ Wave 1 found the always-attacks flag 0x0004 overrides all of this
 
 Notes and limits:
 
-- **c6.** The two nosy warships present at arrival sat on the planet
-  for about 25 s without attacking, then left. Two that jumped in later
-  attacked at once. Every other "yes" cell attacked within 10 s. A
-  repeat of c6/c7 is queued.
-- Every cell ran once. The yes/no split is clean: every "no" cell kept
-  a full shield for 85 s, and every "yes" cell lost 30-90% of it.
+- **c6.** In the first run, the two nosy warships present at arrival sat
+  on the planet for about 25 s without attacking, then left; two that
+  jumped in later attacked at once. The repeat attacked from 8 s, like
+  every other "yes" cell, so the first run's delay was incidental. c7
+  was repeated too, with the same result (no attack).
+- The other cells ran once each. The yes/no split is clean: every "no"
+  cell kept a full shield for 85 s, and every "yes" cell lost 30-90% of
+  it.
 - Alliances here were mutual (each govt lists the other's class).
   One-way alliances are untested.
 - How a crime spreads across systems (which systems' records a kill
@@ -575,6 +640,125 @@ simplification, not a new error.
 Each holds `recording.mp4`, `recording.events.json`, `hostility.json`, the
 Tab shots, `01-map.png` (legal status) and `pilot-after`.
 
+### E-view: the escort command panel (`e`) (2026-11-23, wave 2)
+
+**Setup.**
+- `scenarios/esc_explore.json`, run with pilots `w2_esc` (3 hired disc
+  escorts, 1 captured Kit Fighter, a 4-fighter bay) and `w2_esc0` (no
+  escorts).
+- `scenarios/esc_view.json`, run with pilot `w2_esc2`: one hired escort
+  per shïp EscortType 0/1/2/3 (kit shïp 756-759), a hired disc with
+  EscortType -1, a captured Kit Fighter, and a Kit Fighter Bay with 4
+  fighters.
+- Every key and click is followed by a lossless shot. Key times are in
+  `log.jsonl` frame-sync and `recording.events.json`.
+
+Key bindings in this install (from the prefs): `escortMenuKey` = e,
+`escortCmdKey0-3` = f, d, v, c.
+
+**Layout** (832x604 window; space view x 0-637):
+- A floating panel with a 1 px outline of RGB (8,8,8) (cölr
+  FloatingMap, the same as the minimap's), **no background** (stars
+  show through). Its outer box is x 15-174, y 150-269 (160x120).
+- The title "Escort Commands" is centred at the top. Then five rows,
+  18 px apart:
+  `1) All Ships`, `2) Fighters`, `3) Medium Ships`, `4) Warships`,
+  `5) Freighters`.
+- The text is white, in a small Geneva-like bitmap font. A row whose
+  category has no escorts is drawn grey (with w2_esc, Warships and
+  Freighters were grey).
+- Rows 2-5 show their category's current order right-aligned: one of
+  `Formation`, `Hold Position`, `Defend`, `Attack`. Row 1 shows none.
+- The selected row has a filled bar of RGB (132,0,0) (cölr
+  EscortHilite) at x 19-171 and 13 px tall. Row 1's bar is y 180-192;
+  row 5's is y 252-264.
+- Categories come from shïp EscortType: 0 Fighter, 1 Medium, 2 Warship,
+  3 Freighter. Where EscortType -1 ships are placed is not identified.
+- Brand-new escorts start on `Formation`.
+
+**Behaviour:**
+
+| input | effect |
+|---|---|
+| `e` | Toggles the panel. It opens with row 1 selected. |
+| `e` with no escorts | No panel. The status line (bottom left) says "You don't have any escorts." |
+| `1`-`5` | Selects that row. |
+| click on a row | Selects it. Hovering does nothing. |
+| `f` / `d` / `v` / `c` | Gives the selected category the order Attack / Defend / Hold Position / Formation. On row 1 it applies to every category. Example: `2` then `v` turned only Fighters to Hold Position. |
+| Left/Right arrows | Turn the ship as usual. **The game does not pause**: escorts and the ship keep moving. |
+| Up/Down arrows | Thrust or reverse as usual, **and close the panel**. |
+| Tab, Return | Do nothing to the panel; they don't open it either. |
+| Escape | In space this always quits to the title screen (pause key), panel or not. |
+| no input | The panel stays open; there is no timeout over at least 4 s. |
+
+- `f` with no target still sets the order to Attack.
+- Bay fighters: with the Kit Fighter Bay as secondary (`w`), four taps
+  of the secondary fire key (Control) launched all four (the bay
+  counter went 4 to 0), with no target selected. One 1.5 s hold of
+  Control in the first run launched none.
+
+**Not pinned down:**
+- whether `f/d/v/c` work with the panel closed;
+- whether the selection persists between openings;
+- what each order makes the escorts do. The recording holds that data
+  but it is not analysed. After `v` the escorts stopped following;
+  after `c`, 4 s was not enough to see them return.
+
+**NovaJS today:**
+- `controls.json` binds `escorts: KeyE`, but no panel exists.
+- The orders are implemented as attack/defend/formation/holdPosition/
+  returnToBay (`N/nova_plugin/escorts/escort_command_plugin.ts`), with
+  no per-category targeting. The original has no "return to bay" row.
+
+**Evidence:**
+- `~/.local/share/novaref/evidence/20261123-escorts/explore/*/` and
+  `explore0/*/` (first pass; it also shows that Escape quits to the
+  title);
+- `view/*/` (35 shots plus `recording.mp4`).
+
+### K9: what bracket colour do non-attacking ships of a hostile govt get? (2026-11-23, wave 2)
+
+**Setup.** sÿst 2129 Kit IFF Range is owned by govt 370, and the player
+has a -500 record there. Four dudes spawn at once (`scenarios/
+k9_observe.json`, pilot `w2_k9`, player has an IFF):
+
+- AI 1 green discs of always-attacks-player govt 362;
+- AI 3 red A14 Warships of 362;
+- AI 1 blue discs of 370, hostile by record;
+- AI 3 magenta armed discs of 370.
+
+Tab every 2.5 s for 16 shots.
+
+**Finding.**
+- The warships of both kinds (red, magenta) attacked: the player's shield
+  went from 140 px to 0 and armor started dropping. Their brackets were
+  **red** in every shot.
+- The AI 1 traders of the same two hostile govts (green and blue) had
+  **yellow** (neutral) brackets every time they were targeted. This
+  holds whether the hostility comes from gövt flag 0x0004 or from the
+  player's criminal record.
+
+So the bracket colour follows whether the ship will fight the player,
+not the government's attitude alone. This matches wave 1's Q2b/Q2c
+traders.
+
+**NovaJS mismatch:** `N/nova_plugin/reputation/iff_plugin.ts:101-112`
+(`shipDisposition`) returns 'hostile' for any ship of an
+always-attacks, xenophobic, enemy or record-hostile govt, whatever its
+AI type. `combat/hostility.ts styleForTarget` paints that red.
+
+**Proposed fix (not applied).** The political tier of styleForTarget
+(and the radar) should make AI 1/2 freighters (non-warships) neutral
+unless they are actually attacking the player. The behavioural tier
+already catches that case. Two things are untested:
+- AI 2 (brave trader) that has been provoked: it should go red through
+  the behavioural tier;
+- AI 4 interceptors of a hostile govt.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-k9/*/`: `02-17
+obs-*.png` (the target panel names the ship; the brackets are in the
+space view) and `hostility.json`.
+
 ### U3: do outfit speed/accel/turn mods use the hull scale? (2026-11-23, wave 2)
 
 **Setup.** `scenarios/unit_probe.json` (14 s turn, 6 s thrust) with kit
@@ -601,6 +785,83 @@ No change needed. Confidence: high (two pilots, 1x and 2x mods).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-u3/{u3a,u3b}/*/`
 (`recording.mp4`, `motion.json`, `world_motion.json`).
+
+### R8: UI rendering, original vs NovaJS (2026-11-23, wave 2, partial)
+
+**How.**
+- NovaJS: the `packages/nova/visual_compare` harness was run headless
+  on port 8217 against Matthew's 1920x1080 original-hardware captures.
+  It now passes `--mute-audio`, and a scenario that times out no longer
+  aborts the whole run (`visual_compare/run.mjs`).
+- Original: the wave-2 shots of the 832x604 game window filled in what
+  those captures lack (escort panel, minimap at this window size, the
+  test kit's map region).
+- Output: `packages/nova/visual_compare/output/` (git-ignored) and the
+  scratch logs.
+- Region percentages are only a guide. Several scenarios differ in DATA,
+  not rendering, and were set aside:
+  - the outfitter/shipyard lists (the NovaJS server loads the canonical
+    plug-ins);
+  - hail portraits (a different ship);
+  - bar fuel levels.
+
+Concrete differences, most important first:
+
+1. **Escort command panel missing.** See "E-view" above for its full
+   spec. NovaJS binds `e` but draws nothing.
+2. **Set Prefs dialog** (prefs_modal about 60% different).
+   - **Original:** a native window titled "Preferences", 663x305, at a
+     fixed y 194-498 over the title art. Five tabs (Game Settings,
+     Navigation/Battle/Escort/Misc Controls). Two centred columns of
+     enabled blue checkboxes (x about 786 and 998), with Sound Volume
+     as a stepper under the right column.
+   - **Ours:** vertically centred at y 358-722
+     (`N/title/title_dialogs.ts:43`, alignItems center), 626 wide, with
+     an extra "Display" tab (`title_dialogs.ts:700`, deliberate). The
+     checkboxes look disabled (grey) and the columns are left-aligned.
+     Sound Volume is a dropdown at the bottom left.
+3. **Map Find dialog** (find panel 24%, buttons 32%).
+   - **Original:** an Aqua alert with the EV Nova icon at top left, text
+     indented about 65 px, a 205 px field, a white rounded Cancel button
+     and a blue default Find button.
+   - **Ours:** a plain white panel with no icon, the text at the left
+     edge, a full-width field and grey square buttons
+     (`N/spaceport/find_dialog.ts:8-17`).
+4. **Star map button row** (16-18%).
+   - The original's zoom controls are two round icon buttons (⊖ ⊕).
+     Ours are small rectangular pills labelled "-" and "+"
+     (`N/spaceport/starmap.ts:155`).
+   - Find and Done sit 2-6 px off.
+5. **Title-screen pilot block.**
+   - The original's date reads "Nov. 27th, 1177 NC" (the map uses the
+     same format, "June 23rd, 1177 NC"). Ours reads "Fri, 24 Jun 1177"
+     (`N/title/title_screen.ts:444`).
+   - The original wraps the ship class onto two lines ("Heavy Shuttle /
+     Version A").
+   - The original's font is a smaller bitmap face.
+6. **Mission info header.** The original has thin grey "Currently active
+   missions :" (with a space before the colon). Ours is bold white with
+   no space (`N/spaceport/mission_info.ts:69`).
+7. **Comm/hail button labels.** Ours are heavier and brighter than the
+   original's light face (`N/spaceport/hail_layout.ts`).
+8. **Minimap at another window size.** In the 832x604 window the
+   original's minimap is a 208x206 box at (414, 151): top at y 151 and
+   16 px clear of the status bar (x 638), the same as at 1920x1080
+   (top 150, gap 16). But its size is 208, not 480, and the scale is
+   still about 1.77 px per map unit.
+   - NovaJS hard-codes 480
+     (`N/spaceport/mini_map.ts:37-54`).
+   - The original shrinks the box with the window, keeping the top and
+     the gap. Two data points don't pin the rule.
+9. **Harness drift.** 15 harness scenarios time out in `waitForContainer`
+   (trade center, mission BBS, bar, the Sigma mission popups) and
+   produced no comparison. Their selectors need updating before those
+   screens can be compared again.
+
+Untouched so far:
+- the shops, trade and BBS screens (blocked by item 9);
+- a fullscreen 1920x1080 capture of the original for the screens
+  Matthew's set lacks.
 
 ### Reliability notes (for anyone running the reference)
 

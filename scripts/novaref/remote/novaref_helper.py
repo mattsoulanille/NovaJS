@@ -261,21 +261,40 @@ def cmd_move(x, y):
     out({'ok': True, 'cmd': 'move', 'x': x, 'y': y})
 
 
-def cmd_click(x, y, button='left', count=1, hold_ms=60):
+def cmd_click(x, y, button='left', count=1, hold_ms=60, mods=''):
+    """Click; `mods` ("shift", "ctrl+opt", ...) holds those modifier keys
+    down as real key events around the click and sets their flags on the
+    mouse events, so a polling game sees them too."""
     down_t, up_t, _, btn = BUTTONS[button]
+    flags = 0
+    mod_codes = []
+    for m in [m for m in mods.split('+') if m]:
+        code, flag = MOD_KEYS[m.lower()]
+        flags |= flag
+        mod_codes.append(code)
     Quartz.CGEventPost(TAP, mouse(Quartz.kCGEventMouseMoved, x, y, btn))
     sleep_ms(40)
+    for mc in mod_codes:
+        post_key(mc, True, flags)
+    if mod_codes:
+        sleep_ms(60)
     for i in range(count):
         for kind in (down_t, up_t):
             ev = mouse(kind, x, y, btn)
             Quartz.CGEventSetIntegerValueField(
                 ev, Quartz.kCGMouseEventClickState, i + 1)
+            if flags:
+                Quartz.CGEventSetFlags(ev, flags)
             if kind == down_t:
-                stamp('click', '%s,%s' % (x, y))
+                stamp('click', '%s%s,%s' % (mods + '-' if mods else '', x, y))
             Quartz.CGEventPost(TAP, ev)
             sleep_ms(hold_ms if kind == down_t else 40)
+    if mod_codes:
+        sleep_ms(60)
+    for mc in reversed(mod_codes):
+        post_key(mc, False, 0)
     out({'ok': True, 'cmd': 'click', 'x': x, 'y': y, 'button': button,
-         'count': count})
+         'count': count, 'mods': mods})
 
 
 def cmd_drag(x1, y1, x2, y2, steps=20, ms=400):
@@ -381,7 +400,8 @@ def main(argv):
             cmd_click(float(args[0]), float(args[1]),
                       args[2] if len(args) > 2 else 'left',
                       int(args[3]) if len(args) > 3 else 1,
-                      int(args[4]) if len(args) > 4 else 60)
+                      int(args[4]) if len(args) > 4 else 60,
+                      args[5] if len(args) > 5 else '')
         elif cmd == 'drag':
             cmd_drag(float(args[0]), float(args[1]), float(args[2]),
                      float(args[3]),

@@ -388,9 +388,10 @@ async function cmdClick(args) {
     const right = takeFlag(args, "--right");
     const dbl = takeFlag(args, "--double");
     const anyApp = takeFlag(args, "--any-app");
-    if (args.length < 2) throw new NovarefError("usage: novaref click x y [--win] [--right] [--double]");
+    const mods = takeOpt(args, "--mods") ?? "";
+    if (args.length < 2) throw new NovarefError("usage: novaref click x y [--win] [--right] [--double] [--mods shift+ctrl]");
     const [x, y] = toScreen(args.slice(0, 2).map(Number), rel);
-    const res = helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1"],
+    const res = helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1", "60", mods],
         { front: anyApp ? null : cfg.bundleId });
     return { ok: true, cmd: "click", screen: [x, y], win: rel, button: right ? "right" : "left",
         t_host: res.t_host, events_t: res.events_t };
@@ -1081,7 +1082,8 @@ async function runStep(step, ctx) {
         return t === undefined ? r : { ...r, events_t: [[t, "shot", base]] };
     }
     if (step.click) return cmdClick([...step.click.map(String), ...(step.win ? ["--win"] : []),
-        ...(step.right ? ["--right"] : []), ...(step.double ? ["--double"] : [])]);
+        ...(step.right ? ["--right"] : []), ...(step.double ? ["--double"] : []),
+        ...(step.mods ? ["--mods", [].concat(step.mods).join("+")] : [])]);
     if (step.drag) return cmdDrag([...step.drag.map(String), ...(step.win ? ["--win"] : [])]);
     // {"move": [x, y]} moves the mouse; {"move": true} parks it at (40, 40),
     // outside the game window, so it never shows up in shots/recordings.

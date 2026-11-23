@@ -1,0 +1,138 @@
+{
+ "name": "f1n_jump",
+ "_comment": "F1 for NPC fleets, second try: start at Kit Fleet Gate (s\u00ffst 2133), fly out, jump to Kit Fleet Range (2128, avgShips 6, only the disc fl\u00ebt) so it is populated on arrival; record. Pilot w2_f1n2.",
+ "pilot": {
+  "as": "novaref-f1n"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "down:Up wait 4000 up:Up wait 500"
+  },
+  {
+   "keys": "\\ wait 600"
+  },
+  {
+   "shot": "hypersel",
+   "window": true
+  },
+  {
+   "keys": "j wait 2000"
+  },
+  {
+   "shot": "jumping",
+   "window": true
+  },
+  {
+   "wait": 8000
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "shot": "arrived",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-00",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-01",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-02",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-03",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-04",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-05",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-06",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-07",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-08",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-09",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-10",
+   "window": true
+  },
+  {
+   "wait": 4000
+  },
+  {
+   "shot": "obs-11",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

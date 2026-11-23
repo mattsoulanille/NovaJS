@@ -1,0 +1,47 @@
+{
+  "name": "novaref-esc3",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9002": true
+    },
+    "escorts": [
+      {
+        "ship": 756,
+        "hired": true
+      },
+      {
+        "ship": 757,
+        "hired": true
+      },
+      {
+        "ship": 758,
+        "hired": true
+      },
+      {
+        "ship": 759,
+        "hired": true
+      }
+    ],
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "esc3"
+  }
+}

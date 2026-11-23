@@ -1,0 +1,295 @@
+{
+ "name": "esc_view",
+ "_comment": "Escort command view (e), deep run: every row/command key/click with shots, pause check, bay fighters. Pilot w2_esc2 (one escort per shïp EscortType 0-3, an auto-typed disc, a captured Kit Fighter, a 4-fighter bay); mission 965 puts the Kit Target at Kit Market.",
+ "pilot": {
+  "as": "novaref-esc"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3000"
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "menu-open",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "menu-open-2s",
+   "window": true
+  },
+  {
+   "keys": "2 wait 600"
+  },
+  {
+   "shot": "sel-2",
+   "window": true
+  },
+  {
+   "keys": "3 wait 600"
+  },
+  {
+   "shot": "sel-3",
+   "window": true
+  },
+  {
+   "keys": "4 wait 600"
+  },
+  {
+   "shot": "sel-4",
+   "window": true
+  },
+  {
+   "keys": "5 wait 600"
+  },
+  {
+   "shot": "sel-5",
+   "window": true
+  },
+  {
+   "keys": "1 wait 600"
+  },
+  {
+   "shot": "sel-1",
+   "window": true
+  },
+  {
+   "keys": "v wait 700"
+  },
+  {
+   "shot": "cmd-v",
+   "window": true
+  },
+  {
+   "keys": "c wait 700"
+  },
+  {
+   "shot": "cmd-c",
+   "window": true
+  },
+  {
+   "keys": "d wait 700"
+  },
+  {
+   "shot": "cmd-d",
+   "window": true
+  },
+  {
+   "keys": "f wait 700"
+  },
+  {
+   "shot": "cmd-f",
+   "window": true
+  },
+  {
+   "keys": "2 wait 400 v wait 700"
+  },
+  {
+   "shot": "sel-2-v",
+   "window": true
+  },
+  {
+   "move": [
+    60,
+    222
+   ],
+   "win": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "shot": "hover-row3",
+   "window": true
+  },
+  {
+   "click": [
+    60,
+    222
+   ],
+   "win": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "click-row3",
+   "window": true
+  },
+  {
+   "click": [
+    60,
+    186
+   ],
+   "win": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "click-row1",
+   "window": true
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "Left@400 wait 500"
+  },
+  {
+   "shot": "menu-turn",
+   "window": true
+  },
+  {
+   "keys": "Up@400 wait 600"
+  },
+  {
+   "shot": "menu-thrust",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "e-close",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "e-reopen",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 700"
+  },
+  {
+   "shot": "menu-tab",
+   "window": true
+  },
+  {
+   "keys": "Return wait 700"
+  },
+  {
+   "shot": "menu-return",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "e-after",
+   "window": true
+  },
+  {
+   "keys": "v wait 1500"
+  },
+  {
+   "shot": "nomenu-v",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "nomenu-v-4s",
+   "window": true
+  },
+  {
+   "keys": "c wait 1500"
+  },
+  {
+   "shot": "nomenu-c",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "nomenu-c-4s",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 400 Tab wait 400 Tab wait 400"
+  },
+  {
+   "shot": "targeted",
+   "window": true
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "bay-selected",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 1500"
+  },
+  {
+   "shot": "launched",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "menu-with-fighters",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "menu-with-fighters-2",
+   "window": true
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "menu-closed-end",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

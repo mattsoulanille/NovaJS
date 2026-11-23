@@ -1,0 +1,422 @@
+{
+ "name": "map_follow",
+ "_comment": "M1-M7 follow-up: Tab order with link order != id order, D-U-U-D pins, unroutable pins, minimap clicks/modifier clicks/drag/keys, minimap across map, landing and a jump. Never presses Escape in space (it returns to the title screen). Pilot w2_map.",
+ "pilot": {
+  "as": "novaref-map"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-1",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-2",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-3",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-4",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-5",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-6",
+   "window": true
+  },
+  {
+   "click": [
+    330,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "clear-route",
+   "window": true
+  },
+  {
+   "click": [
+    424,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "shift-east-U",
+   "window": true
+  },
+  {
+   "click": [
+    495,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "shift-void-U",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "shift-far-D",
+   "window": true
+  },
+  {
+   "click": [
+    459,
+    388
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "shift-lone-unlinked",
+   "window": true
+  },
+  {
+   "click": [
+    330,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "clear-route-2",
+   "window": true
+  },
+  {
+   "click": [
+    459,
+    388
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "plain-lone-unlinked",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "plain-far-nonneighbour",
+   "window": true
+  },
+  {
+   "click": [
+    648,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "done",
+   "window": true
+  },
+  {
+   "keys": "h wait 1000"
+  },
+  {
+   "shot": "mini",
+   "window": true
+  },
+  {
+   "click": [
+    429,
+    342
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "mini-click-SW",
+   "window": true
+  },
+  {
+   "click": [
+    588,
+    254
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "mini-click-East-U",
+   "window": true
+  },
+  {
+   "click": [
+    468,
+    237
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "mini-shift-click-WSW",
+   "window": true
+  },
+  {
+   "click": [
+    468,
+    237
+   ],
+   "win": true,
+   "mods": "ctrl"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "mini-ctrl-click-WSW",
+   "window": true
+  },
+  {
+   "drag": [
+    517,
+    254,
+    470,
+    300
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "mini-drag",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "mini-tab",
+   "window": true
+  },
+  {
+   "keys": "Up@600 wait 400"
+  },
+  {
+   "shot": "mini-thrust",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "mini-then-map",
+   "window": true
+  },
+  {
+   "click": [
+    648,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "map-done-back",
+   "window": true
+  },
+  {
+   "keys": "h wait 800"
+  },
+  {
+   "shot": "mini-h-close",
+   "window": true
+  },
+  {
+   "keys": "h wait 800"
+  },
+  {
+   "shot": "mini-h-reopen",
+   "window": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "landed",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "after-takeoff",
+   "window": true
+  },
+  {
+   "keys": "h wait 800"
+  },
+  {
+   "shot": "mini-before-jump",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 3000 up:Up wait 300"
+  },
+  {
+   "keys": "j wait 2000"
+  },
+  {
+   "shot": "jumping",
+   "window": true
+  },
+  {
+   "wait": 9000
+  },
+  {
+   "shot": "arrived",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
