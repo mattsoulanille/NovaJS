@@ -52,10 +52,14 @@ export function deriveIff(outfits: OutfitsState,
 }
 
 /**
- * A ship's disposition toward the player, used to colour its IFF radar blip.
- *  - 'hostile': the ship's government attacks the player (its enemies include
- *    one of the player's govt classes, or a govt flag makes it hostile).
- *  - 'friendly': the ship's government is allied with the player's.
+ * A ship's disposition toward the player: hostile, friendly or neutral.
+ * shipDisposition below fills it from the GOVERNMENT's stance alone; the IFF
+ * colour (target brackets and radar blips) fills it from how the SHIP stands
+ * toward the player (combat/hostility.ts's styleForTarget and its
+ * onSightDisposition tier), so a trader of a hostile government is
+ * 'neutral' there until it attacks.
+ *  - 'hostile': hostile to the player.
+ *  - 'friendly': allied with the player's government.
  *  - 'neutral': neither — the default for a govt-less ship or one with no
  *    relationship to the player.
  */
@@ -67,9 +71,19 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
 }
 
 /**
- * Computes a ship's disposition toward the player from the ship's government
- * and the player's government (both optional GovtData; undefined = no
- * government). Pure and total.
+ * Computes a ship's GOVERNMENT's stance toward the player from the ship's
+ * government and the player's government (both optional GovtData;
+ * undefined = no government). Pure and total.
+ *
+ * This is the government's attitude, NOT the IFF colour. It decides what a
+ * ship of that government will do for the player — answer a hail
+ * (hail.ts's canRequestAssistance), offer a mission (ship_mission_offer) —
+ * whatever the individual ship is doing. The brackets and radar ask a
+ * different question, whether THIS ship is hostile (Matthew, 2026-11-23:
+ * "IFF bracket colors correspond to hostility regardless of govt's
+ * stance"), and answer it in combat/hostility.ts's onSightDisposition from
+ * the NPC brain's own predicate: an AI 1 trader of a government this
+ * function calls hostile is yellow there until it attacks (reference K9).
  *
  * Hostility, in priority order:
  *  1. The ship's govt flags mark it hostile to the player
@@ -78,8 +92,7 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
  *  2. The ship's govt `enemies` classes intersect the player's govt classes.
  *  3. The player's legal record with the ship's govt is below -CrimeTol
  *     (the Bible's warships-attack-criminals threshold) — the same rule
- *     the sim's target selection uses (govtDispositionTo), so the radar
- *     and corners flip hostile exactly when the warships do.
+ *     the sim's target selection uses (govtDispositionTo).
  * Friendliness (only if not hostile): the ship's govt `allies` classes
  * intersect the player's govt classes, or ship and player share a government.
  * Everything else is neutral.
@@ -277,7 +290,7 @@ export function planetBlipColor(disposition: PlanetDisposition,
  *     posture (NpcComponent mode 'attack', or the legacy dev-enemy
  *     ShootAllWeapons marker). A ship merely *fleeing* the player keeps its
  *     political corners.
- *  3. Political: shipDisposition(target govt, player govt) — hostile and
+ *  3. Political: hostility.ts's onSightDisposition — hostile and
  *     friendly map to their corner sets.
  *  4. Everything else: neutral.
  *

@@ -25,8 +25,8 @@ import { applyHail } from '../encounters/index.js';
 import {
     isHostileTarget, selectNearestHostile, styleForTarget,
 } from './hostility.js';
-import { IffComponent } from '../reputation/index.js';
-import { makeShip } from '../ship/index.js';
+import { IffComponent, LegalRecordsComponent } from '../reputation/index.js';
+import { makeShip, ShipDataComponent } from '../ship/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
 } from '../ncb/index.js';
@@ -43,6 +43,17 @@ const PIRATES = 'test:pirates';
 
 function govt(over: Partial<GovtData>): GovtData {
     return { ...getDefaultGovtData(), ...over };
+}
+
+/**
+ * A WARSHIP (AI 3) whose brain never runs. The pirates here are hostile by
+ * politics because a warship hunts its govt's enemies on sight
+ * (on_sight.ts), so the IFF paints it red (reference K9: a TRADER of the
+ * same govt stays yellow), while the far-future nextDecision keeps it
+ * parked where the spec put it.
+ */
+function parkedWarship() {
+    return { aiType: 3, nextDecision: Number.MAX_SAFE_INTEGER };
 }
 
 /**
@@ -97,6 +108,7 @@ async function makeStandardWorld() {
     await built.addShip('neutral', 50);
     await built.addShip('pirate', 400, ship => {
         ship.components.set(GovtComponent, { id: PIRATES });
+        ship.components.set(NpcComponent, parkedWarship());
     });
     built.world.step();
     return built;
@@ -175,6 +187,71 @@ function advance(world: World, ms: number) {
     }
 }
 
+/**
+ * Reference K9 and Matthew's ruling (2026-11-23): "IFF bracket colors
+ * correspond to hostility regardless of govt's stance". The corners read the
+ * NPC brain's own on-sight predicate (on_sight.ts), so with the real AI
+ * running, the ship that goes hunting the player is exactly the one painted
+ * red, and a trader of the same hostile government stays neutral.
+ */
+describe('the brain and the brackets agree on who is hostile (K9)', () => {
+    const LAWFUL = 'test:lawful';
+
+    async function liveWorld(criminal: boolean) {
+        const built = await makeWorld();
+        const lawful = govt({ id: LAWFUL, crimeTol: 10 });
+        built.gameData.data.Govt.map.set(LAWFUL, lawful);
+        const govtId = criminal ? LAWFUL : PIRATES;
+        await built.addShip('player', 0, ship => {
+            ship.components.set(ControlledByComponent, { peerId: PEER });
+            if (criminal) {
+                ship.components.set(LegalRecordsComponent,
+                    new Map([[LAWFUL, -500]]));
+            }
+        });
+        await built.addShip('trader', 300, ship => {
+            ship.components.set(GovtComponent, { id: govtId });
+            ship.components.set(NpcComponent, { aiType: 1 });
+        });
+        const warship = await built.addShip('warship', 600, ship => {
+            ship.components.set(GovtComponent, { id: govtId });
+            ship.components.set(NpcComponent, { aiType: 3 });
+        });
+        // Strong enough that MaxOdds lets it engage (a zero-strength hull
+        // never likes its odds).
+        warship.components.set(ShipDataComponent, {
+            ...warship.components.get(ShipDataComponent)!, strength: 1000,
+        });
+        // Long enough for every NPC to have thought at least once.
+        advance(built.world, 1500);
+        return built.world;
+    }
+
+    for (const [label, criminal] of [
+        ['a xenophobic govt', false],
+        ['a govt the player is criminal with', true],
+    ] as const) {
+        it(`${label}: the warship hunts the player and is red; the trader `
+            + 'does not and is neutral', async () => {
+                const world = await liveWorld(criminal);
+                const warship = world.entities.get('warship')!
+                    .components.get(NpcComponent)!;
+                expect(warship.mode).toBe('attack');
+                expect(world.entities.get('warship')!.components
+                    .get(TargetComponent)?.target).toBe('player');
+                expect(cornerStyle(world, 'warship')).toBe('hostile');
+
+                const trader = world.entities.get('trader')!
+                    .components.get(NpcComponent)!;
+                expect(trader.mode).not.toBe('attack');
+                expect(cornerStyle(world, 'trader')).toBe('neutral');
+                // And 'r' agrees: the warship, though the trader is nearer.
+                press(world, 'nearestTarget');
+                expect(playerTarget(world)).toBe('warship');
+            });
+    }
+});
+
 describe("the 'r' key targets the nearest HOSTILE ship", () => {
     it('skips a nearer neutral for a more distant pirate', async () => {
         const { world } = await makeStandardWorld();
@@ -186,6 +263,7 @@ describe("the 'r' key targets the nearest HOSTILE ship", () => {
         const { world, addShip } = await makeStandardWorld();
         await addShip('near pirate', 100, ship => {
             ship.components.set(GovtComponent, { id: PIRATES });
+            ship.components.set(NpcComponent, parkedWarship());
         });
         world.step();
         press(world, 'nearestTarget');
@@ -287,6 +365,7 @@ describe("the 'r' filters are preserved", () => {
             world.entities.delete('pirate');
             await addShip('escort', 30, ship => {
                 ship.components.set(GovtComponent, { id: PIRATES });
+                ship.components.set(NpcComponent, parkedWarship());
                 ship.components.set(FormationComponent,
                     { leader: 'player', slot: 0 });
             });
@@ -323,9 +402,11 @@ describe('nearest-hostile selection is deterministic', () => {
         });
         await built.addShip(first, 200, ship => {
             ship.components.set(GovtComponent, { id: PIRATES });
+            ship.components.set(NpcComponent, parkedWarship());
         });
         await built.addShip(second, -200, ship => {
             ship.components.set(GovtComponent, { id: PIRATES });
+            ship.components.set(NpcComponent, parkedWarship());
         });
         built.world.step();
         return built.world;

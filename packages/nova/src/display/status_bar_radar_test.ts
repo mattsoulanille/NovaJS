@@ -1,5 +1,8 @@
 import 'jasmine';
+import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
+import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
+import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getDefaultStatusBarData } from 'novadatainterface/status_bar_data';
 import { Entity } from 'nova_ecs/entity';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -8,9 +11,16 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import { styleForTarget } from '../nova_plugin/combat/index.js';
+import { GovtComponent, SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import { FormationComponent, NpcComponent } from '../nova_plugin/npc/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { TargetComponent } from '../nova_plugin/ship/index.js';
+import {
+    IFF_FRIENDLY_COLOR, IFF_HOSTILE_COLOR, IFF_NEUTRAL_COLOR, LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
+import {
+    OutfitsStateComponent, ShipDataComponent, TargetComponent,
+} from '../nova_plugin/ship/index.js';
 import {
     PlanetComponent, PlanetDataComponent,
 } from '../nova_plugin/travel/index.js';
@@ -388,5 +398,141 @@ describe('DrawRadar cadence', () => {
         const planetColors = drawRadar.calls.mostRecent().args[6] as
             ReadonlyMap<string, number> | undefined;
         expect(planetColors?.get('earth')).toBeUndefined();
+    });
+});
+
+/**
+ * The IFF radar paints every ship exactly as the target brackets would
+ * (hostility.ts's styleForTarget), so a blip and the corners around the same
+ * ship cannot disagree. Reference K9 and Matthew's ruling (2026-11-23):
+ * "IFF bracket colors correspond to hostility regardless of govt's stance" —
+ * an AI 1 trader of an always-attacks govt is yellow on the original while
+ * that govt's warships are red.
+ */
+describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
+    const IFF_OUTFIT = 'test:iff';
+    const alwaysAttacks = { ...getDefaultGovtData(), id: 'test:362' };
+    alwaysAttacks.flags = { ...alwaysAttacks.flags, alwaysAttacksPlayer: true };
+    const lawful = { ...getDefaultGovtData(), id: 'test:370', crimeTol: 10 };
+    const govts: { [id: string]: GovtData } = {
+        'test:362': alwaysAttacks, 'test:370': lawful,
+    };
+    const gameData = {
+        data: {
+            Outfit: {
+                getCached: (id: string) => id === IFF_OUTFIT
+                    ? { ...getDefaultOutfitData(), id, iff: true }
+                    : undefined,
+            },
+            Govt: { getCached: (id: string) => govts[id] },
+            SpriteSheet: {
+                getCached: () => undefined,
+                get: () => Promise.resolve(undefined),
+            },
+        },
+    } as unknown as SimulationGameDataInterface;
+
+    function radarWorld(records?: Map<string, number>) {
+        const world = new World('radar iff test');
+        const time = { time: 0, delta_ms: 16, delta_s: 0.016 };
+        world.resources.set(TimeResource, time as never);
+        world.resources.set(SimulationTimeResource, time as never);
+        world.resources.set(SimulationGameDataResource, gameData);
+        const drawRadar = jasmine.createSpy('drawRadar');
+        world.resources.set(StatusBarResource, {
+            radar: { drawRadar, range: new Vector(3000, 3000) },
+        } as unknown as StatusBar);
+        world.addSystem(DrawRadar);
+        const player = new Entity('player');
+        player.components.set(PlayerShipSelector, undefined);
+        player.components.set(MovementStateComponent,
+            { position: new Position(0, 0) } as MovementState);
+        player.components.set(OutfitsStateComponent,
+            new Map([[IFF_OUTFIT, { count: 1 }]]));
+        if (records) {
+            player.components.set(LegalRecordsComponent, records);
+        }
+        world.entities.set('player', player);
+        return { drawRadar, world, player };
+    }
+
+    function addShip(world: World, uuid: string, govtId: string,
+        aiType: number, configure: (e: Entity) => void = () => { }) {
+        const ship = new Entity(uuid);
+        ship.components.set(MovementStateComponent,
+            { position: new Position(100, 0) } as MovementState);
+        ship.components.set(ShipDataComponent, getDefaultShipData());
+        ship.components.set(GovtComponent, { id: govtId });
+        ship.components.set(NpcComponent, { aiType, mode: 'travel' });
+        configure(ship);
+        world.entities.set(uuid, ship);
+        return ship;
+    }
+
+    /** The blip colours DrawRadar handed the pane on its last refresh. */
+    function blipColors(drawRadar: jasmine.Spy) {
+        return drawRadar.calls.mostRecent().args[3] as
+            ReadonlyMap<string, number>;
+    }
+
+    /** The brackets' verdict, as a blip colour. */
+    function bracketColor(world: World, player: Entity, uuid: string) {
+        const style = styleForTarget(uuid, world.entities.get(uuid)!,
+            'player', player, gameData, u => world.entities.get(u), 0);
+        return style === 'hostile' ? IFF_HOSTILE_COLOR
+            : style === 'friendly' ? IFF_FRIENDLY_COLOR : IFF_NEUTRAL_COLOR;
+    }
+
+    it('gövt 0x0004: the trader is a yellow blip, the warship red, and '
+        + 'the trader goes red when it attacks', () => {
+            const { drawRadar, world, player } = radarWorld();
+            addShip(world, 'trader', 'test:362', 1);
+            addShip(world, 'warship', 'test:362', 3);
+            addShip(world, 'attacker', 'test:362', 2, ship => {
+                ship.components.set(NpcComponent,
+                    { aiType: 2, mode: 'attack' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            });
+            world.step();
+            const colors = blipColors(drawRadar);
+            expect(colors.get('trader')).toBe(IFF_NEUTRAL_COLOR);
+            expect(colors.get('warship')).toBe(IFF_HOSTILE_COLOR);
+            expect(colors.get('attacker')).toBe(IFF_HOSTILE_COLOR);
+            for (const uuid of ['trader', 'warship', 'attacker']) {
+                expect(colors.get(uuid)).withContext(uuid)
+                    .toBe(bracketColor(world, player, uuid));
+            }
+        });
+
+    it('a criminal record: the trader is yellow, the warship and the '
+        + 'interceptor red', () => {
+            const { drawRadar, world, player } =
+                radarWorld(new Map([['test:370', -500]]));
+            addShip(world, 'trader', 'test:370', 1);
+            addShip(world, 'warship', 'test:370', 3);
+            addShip(world, 'interceptor', 'test:370', 4);
+            world.step();
+            const colors = blipColors(drawRadar);
+            expect(colors.get('trader')).toBe(IFF_NEUTRAL_COLOR);
+            expect(colors.get('warship')).toBe(IFF_HOSTILE_COLOR);
+            expect(colors.get('interceptor')).toBe(IFF_HOSTILE_COLOR);
+            for (const uuid of ['trader', 'warship', 'interceptor']) {
+                expect(colors.get(uuid)).withContext(uuid)
+                    .toBe(bracketColor(world, player, uuid));
+            }
+        });
+
+    it('the player\'s own escort is green, as its brackets are', () => {
+        const { drawRadar, world, player } = radarWorld();
+        const escort = new Entity('escort');
+        escort.components.set(MovementStateComponent,
+            { position: new Position(50, 0) } as MovementState);
+        escort.components.set(ShipDataComponent, getDefaultShipData());
+        escort.components.set(FormationComponent,
+            { leader: 'player', slot: 0 });
+        world.entities.set('escort', escort);
+        world.step();
+        expect(blipColors(drawRadar).get('escort')).toBe(IFF_FRIENDLY_COLOR);
+        expect(bracketColor(world, player, 'escort')).toBe(IFF_FRIENDLY_COLOR);
     });
 });

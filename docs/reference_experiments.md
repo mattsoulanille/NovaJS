@@ -872,13 +872,29 @@ traders.
 always-attacks, xenophobic, enemy or record-hostile govt, whatever its
 AI type. `combat/hostility.ts styleForTarget` paints that red.
 
-**Proposed fix (not applied).** The political tier of styleForTarget
-(and the radar) should make AI 1/2 freighters (non-warships) neutral
-unless they are actually attacking the player. The behavioural tier
-already catches that case. Two things are untested:
-- AI 2 (brave trader) that has been provoked: it should go red through
-  the behavioural tier;
-- AI 4 interceptors of a hostile govt.
+**Fix (applied, wave 3; Matthew's ruling 2026-11-23: "IFF bracket
+colors correspond to hostility regardless of govt's stance").** The
+political tier of styleForTarget is now `onSightDisposition`
+(`combat/hostility.ts`): red only for a ship that would attack the
+player on sight, read from the NPC brain's own predicate
+(`npc/on_sight.ts`'s `attacksOnSight`: AI 3/4 and
+`govtDispositionTo(...) === 'enemy'`), which NpcDecisionSystem now calls
+to build its hostiles list. A brainless bay fighter takes its carrier's
+AI type. The radar reads styleForTarget whole, so blips match brackets
+(own flock green, attackers red). The 'r' key, the comm channel's
+Status line, point defense and the escort brains (`isHostileTo`) follow,
+since they read the same rule. `shipDisposition` stays the government's
+stance for hails and ship mission offers. The two untested cases were
+chosen as:
+- AI 2 (brave trader) that has been provoked: red through the
+  behavioural tier (it is in mode 'attack' targeting the player);
+- AI 4 interceptors of a hostile govt: treated as warships (red), as
+  A14 c15/c18 showed they follow the same attack rule.
+
+Specs: `display/target_corners_test.ts` (K9 block),
+`display/status_bar_radar_test.ts` (radar matches brackets),
+`combat/hostile_targeting_test.ts` (live AI and brackets agree),
+`escorts/escort_hostility_agreement_test.ts` (K9 rows).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-k9/*/`: `02-17
 obs-*.png` (the target panel names the ship; the brackets are in the
@@ -1768,7 +1784,7 @@ cosmetic or rare.
 | M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. **Mismatch** for the unlandable corner | M |
 | M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
 | M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
-| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/reputation/iff_plugin.ts:101-112` | **answered (wave 2)**: AI 1 traders are yellow, warships red. **Mismatch** | M |
+| K9 | Bracket colour of non-attacking ships of a hostile govt | `N/nova_plugin/combat/hostility.ts` (onSightDisposition) | **answered (wave 2)**: AI 1 traders are yellow, warships red. Mismatch **fixed (wave 3)** | M |
 
 ### UI navigation and hotkeys (Matthew's category)
 

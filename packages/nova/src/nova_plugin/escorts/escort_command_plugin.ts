@@ -27,7 +27,7 @@ import { isInFlock } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
-import { shipDisposition } from '../reputation/index.js';
+import { onSightDisposition } from '../combat/index.js';
 import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import { NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
@@ -400,10 +400,15 @@ export interface EscortHostilityContext {
  *    drops pacifiedFrom when the briber hurts it) and restarts the fight
  *    the money had ended. Exactly the failure the point-defense prey
  *    filter was fixed for.
- *  - POLITICS (tier 4): shipDisposition over the owner's govt and legal
- *    records, with the owner's ränk 0x0100 suppression set folded in the
- *    way the corners fold it (the baked synced component; the sim cannot
- *    read ränk data — see rank_logic.ts).
+ *  - POLITICS (tier 4): hostility.ts's onSightDisposition over the
+ *    owner's govt and legal records, with the owner's ränk 0x0100
+ *    suppression set folded in the way the corners fold it (the baked
+ *    synced component; the sim cannot read ränk data — see
+ *    rank_logic.ts). Hostile means the ship would attack the owner ON
+ *    SIGHT — a warship or interceptor of a govt hostile to them — so a
+ *    trader of a hostile govt is left alone until it actually attacks,
+ *    as reference Q2c's protecting escort left the always-attacks govt's
+ *    traders alone.
  *  - POSTURE (tier 3a): currently attacking the root or the escort itself.
  *    Two ways a ship can be flying an attack: an NPC brain in mode
  *    'attack' (or the legacy dev-enemy ShootAllWeapons marker), and — for
@@ -447,10 +452,11 @@ export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
     }
     const otherGovt =
         lookupGovt(ctx.gameData, other.components.get(GovtComponent));
-    const disposition = shipDisposition(otherGovt, ctx.rootGovt,
-        ctx.rootRecords,
+    const disposition = onSightDisposition(otherUuid, other, otherGovt,
+        ctx.rootGovt, ctx.rootRecords,
         ranksSuppressAggression(ctx.rootEntity?.components
-            .get(AggressionSuppressGovtsComponent), otherGovt?.id));
+            .get(AggressionSuppressGovtsComponent), otherGovt?.id),
+        ctx.getEntity);
     if (disposition === 'hostile') {
         return true;
     }

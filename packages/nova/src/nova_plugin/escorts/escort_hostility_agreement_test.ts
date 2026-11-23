@@ -74,9 +74,12 @@ const PIRATE = govt({ id: 'nova:137' });
 PIRATE.flags.xenophobic = true;
 const CIVILIAN = govt({ id: 'nova:157' });
 const FEDERATION = govt({ id: 'nova:128', classes: [1], allies: [1] });
+const BUREAU = govt({ id: 'nova:164' });
+BUREAU.flags.alwaysAttacksPlayer = true;
 
 const GOVTS: { [id: string]: GovtData } = {
     'nova:137': PIRATE, 'nova:157': CIVILIAN, 'nova:128': FEDERATION,
+    'nova:164': BUREAU,
 };
 
 /** The Govt.getCached both readers use, and nothing else. */
@@ -136,7 +139,8 @@ const ROWS: Row[] = [
             return {
                 other: new Entity(OTHER)
                     .addComponent(ShipComponent, { id: 'nova:1' })
-                    .addComponent(GovtComponent, { id: 'nova:900' }),
+                    .addComponent(GovtComponent, { id: 'nova:900' })
+                    .addComponent(NpcComponent, { aiType: 3 }),
                 root: new Entity(ROOT)
                     .addComponent(GovtComponent, { id: 'nova:128' }),
             };
@@ -160,7 +164,8 @@ const ROWS: Row[] = [
         build: () => ({
             other: new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
-                .addComponent(GovtComponent, { id: 'nova:157' }),
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 3 }),
             root: new Entity(ROOT)
                 .addComponent(LegalRecordsComponent,
                     new Map([['nova:157', -30_000]])),
@@ -172,11 +177,115 @@ const ROWS: Row[] = [
         build: () => ({
             other: new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
-                .addComponent(GovtComponent, { id: 'nova:137' }),
+                .addComponent(GovtComponent, { id: 'nova:137' })
+                .addComponent(NpcComponent, { aiType: 3 }),
             root: new Entity(ROOT)
                 .addComponent(AggressionSuppressGovtsComponent,
                     new Set(['nova:137'])),
         }),
+    },
+
+    // --- On sight: hostility is the SHIP's, not its govt's (K9) ---
+    // Reference K9 and Matthew's ruling (2026-11-23): "IFF bracket colors
+    // correspond to hostility regardless of govt's stance". A trader of a
+    // govt hostile to the owner does not hunt them, so it is not hostile
+    // until it actually attacks (the posture rows above).
+    {
+        name: 'a wimpy TRADER (AI 1) of a xenophobic govt',
+        hostile: false,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:137' })
+                .addComponent(NpcComponent, { aiType: 1, mode: 'travel' }),
+            root: new Entity(ROOT),
+        }),
+    },
+    {
+        name: 'a brave TRADER (AI 2) of an always-attacks-player govt',
+        hostile: false,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:164' })
+                .addComponent(NpcComponent, { aiType: 2, mode: 'travel' }),
+            root: new Entity(ROOT),
+        }),
+    },
+    {
+        name: 'a WARSHIP (AI 3) of an always-attacks-player govt',
+        hostile: true,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:164' })
+                .addComponent(NpcComponent, { aiType: 3, mode: 'patrol' }),
+            root: new Entity(ROOT),
+        }),
+    },
+    {
+        name: 'a TRADER of a govt the owner is CRIMINAL with',
+        hostile: false,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1, mode: 'travel' }),
+            root: new Entity(ROOT)
+                .addComponent(LegalRecordsComponent,
+                    new Map([['nova:157', -30_000]])),
+        }),
+    },
+    {
+        name: 'an INTERCEPTOR (AI 4) of a govt the owner is CRIMINAL with',
+        hostile: true,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 4, mode: 'patrol' }),
+            root: new Entity(ROOT)
+                .addComponent(LegalRecordsComponent,
+                    new Map([['nova:157', -30_000]])),
+        }),
+    },
+    {
+        name: 'a brainless bay fighter of a pirate WARSHIP carrier',
+        hostile: true,
+        build: () => {
+            const carrier = new Entity('carrier')
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:137' })
+                .addComponent(NpcComponent, { aiType: 3, mode: 'patrol' });
+            return {
+                other: new Entity(OTHER)
+                    .addComponent(ShipComponent, { id: 'nova:1' })
+                    .addComponent(GovtComponent, { id: 'nova:137' })
+                    .addComponent(FormationComponent,
+                        { leader: 'carrier', slot: 0 }),
+                root: new Entity(ROOT),
+                extra: [['carrier', carrier]],
+            };
+        },
+    },
+    {
+        name: 'a brainless bay fighter of a pirate TRADER carrier',
+        hostile: false,
+        build: () => {
+            const carrier = new Entity('carrier')
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:137' })
+                .addComponent(NpcComponent, { aiType: 2, mode: 'travel' });
+            return {
+                other: new Entity(OTHER)
+                    .addComponent(ShipComponent, { id: 'nova:1' })
+                    .addComponent(GovtComponent, { id: 'nova:137' })
+                    .addComponent(FormationComponent,
+                        { leader: 'carrier', slot: 0 }),
+                root: new Entity(ROOT),
+                extra: [['carrier', carrier]],
+            };
+        },
     },
 
     // --- Bought off (tier 2b) ---
@@ -479,6 +588,7 @@ describe('where the two readers legitimately differ', () => {
             const hulk = new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
                 .addComponent(GovtComponent, { id: 'nova:137' })
+                .addComponent(NpcComponent, { aiType: 3 })
                 .addComponent(DisabledComponent, { repairAt: null, hulk: true });
             const root = new Entity(ROOT);
             const entities = entitiesOf(hulk, root);

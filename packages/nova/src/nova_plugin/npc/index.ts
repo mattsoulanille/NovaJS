@@ -13,6 +13,7 @@ export * from './npc_component.js';
 export * from './npc_formation.js';
 export * from './npc_plunder.js';
 export * from './npc_targeting.js';
+export * from './on_sight.js';
 export * from './system_hold.js';
 export * from './npc_decision.js';
 export * from './npc_fire_control.js';

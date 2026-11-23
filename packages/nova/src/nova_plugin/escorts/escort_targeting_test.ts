@@ -12,7 +12,7 @@ import { GovtComponent } from '../core/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { ArmorComponent } from '../ship/index.js';
-import { FormationComponent } from '../npc/index.js';
+import { FormationComponent, NpcComponent } from '../npc/index.js';
 import { ShipDataComponent } from '../ship/index.js';
 import { applyControlEvents, ControlledByComponent } from '../player/index.js';
 import { applySetTarget } from '../combat/index.js';
@@ -75,6 +75,9 @@ async function makeTargetingWorld() {
     });
     await addShip('enemy', 400, ship => {
         ship.components.set(GovtComponent, { id: ENEMY_GOVT });
+        // A warship (AI 3) that never thinks: hostile on sight, parked.
+        ship.components.set(NpcComponent,
+            { aiType: 3, nextDecision: Number.MAX_SAFE_INTEGER });
     });
 
     world.step();

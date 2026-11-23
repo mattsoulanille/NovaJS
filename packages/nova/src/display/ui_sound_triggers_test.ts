@@ -21,6 +21,7 @@ import {
 import {
     JumpComponent, JumpRouteComponent, PlanetTargetComponent,
 } from '../nova_plugin/travel/index.js';
+import { NpcComponent } from "../nova_plugin/npc/index.js";
 import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { ExplosionPlugin } from "./explosion_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
@@ -247,6 +248,9 @@ describe('UI sound triggers (audio-layer spy)', () => {
         const enemy = new Entity('enemy');
         enemy.components.set(ShipComponent, {} as never);
         enemy.components.set(GovtComponent, { id: 'nova:hostile' });
+        // A warship (AI 3): hostile on sight. A trader of the same govt
+        // would read neutral (reference K9) and cue nothing.
+        enemy.components.set(NpcComponent, { aiType: 3 });
         world.entities.set('enemy-1', enemy);
         world.step();
         expect(played).toContain('nova:370');
@@ -256,6 +260,7 @@ describe('UI sound triggers (audio-layer spy)', () => {
         const enemy2 = new Entity('enemy2');
         enemy2.components.set(ShipComponent, {} as never);
         enemy2.components.set(GovtComponent, { id: 'nova:hostile' });
+        enemy2.components.set(NpcComponent, { aiType: 3 });
         world.entities.set('enemy-2', enemy2);
         world.step();
         expect(played).not.toContain('nova:370');

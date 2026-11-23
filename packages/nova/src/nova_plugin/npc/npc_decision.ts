@@ -33,6 +33,7 @@ import {
     NPC_PLUNDER_SEEK_RANGE, npcPlunderEligible, npcPlundersHulks,
 } from './npc_plunder.js';
 import { chooseNearest } from './npc_targeting.js';
+import { attacksOnSight, huntsOnSight } from './on_sight.js';
 import { ShootAllWeaponsAI } from './npc_plugin.js';
 import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
@@ -392,15 +393,22 @@ export const NpcDecisionSystem = new System({
             if (otherUuid === npc.aggressor) {
                 aggressorEntry = [otherUuid, distanceSquared, otherStrength];
             }
-            const disposition = govtDispositionTo(govtData,
-                lookupGovt(gameData, otherGovt), otherRecords,
+            // THE ON-SIGHT PREDICATE (on_sight.ts's attacksOnSight): the
+            // one the IFF colour reads too (hostility.ts's styleForTarget,
+            // tier 4), so a ship the brackets paint red is one this brain
+            // hunts and a trader of the same government, painted yellow,
+            // is not. Only the hunting cases (3 and 4) read `hostiles`, so
+            // gating the list on the AI type changes no decision; it is
+            // here so the colour and the brain share one call.
+            const otherGovtData = lookupGovt(gameData, otherGovt);
+            if (attacksOnSight(npc.aiType, govtData, otherGovtData,
+                otherRecords,
                 // ränk 0x0100 for THIS ship's government: its holder is not
                 // attacked on sight.
-                ranksSuppressAggression(otherSuppressGovts, govtData?.id));
-            if (disposition === 'enemy'
-                || (attackingProtectee(otherUuid)
-                    && govtDisposition(govtData,
-                        lookupGovt(gameData, otherGovt)) !== 'ally')) {
+                ranksSuppressAggression(otherSuppressGovts, govtData?.id))
+                || (huntsOnSight(npc.aiType)
+                    && attackingProtectee(otherUuid)
+                    && govtDisposition(govtData, otherGovtData) !== 'ally')) {
                 hostiles.push([otherUuid, distanceSquared] as const);
             }
         }

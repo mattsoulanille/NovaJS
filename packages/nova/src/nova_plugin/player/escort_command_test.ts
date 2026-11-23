@@ -204,6 +204,17 @@ function makeNpcEscort(world: World, uuid = 'escort') {
         .set(NpcComponent, { aiType: 1 });
 }
 
+/**
+ * A pirate WARSHIP (AI 3) whose brain never runs. Hostile on sight to the
+ * flagless player (on_sight.ts), so the corners and the escorts read it as
+ * hostile without a target lock — a pirate TRADER would read neutral
+ * (reference K9) — while the far-future nextDecision keeps it parked where
+ * the spec put it.
+ */
+function parkedWarship() {
+    return { aiType: 3, nextDecision: Number.MAX_SAFE_INTEGER };
+}
+
 function setPlayerTarget(world: World, target: string | undefined) {
     world.entities.get('player')!.components
         .set(TargetComponent, { target });
@@ -331,6 +342,7 @@ describe('escort commands', () => {
             const { world, addShip } = await makeWorld();
             await addShip('farPirate', DEFEND_RADIUS + 800, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             await addShip('meek', 300, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:meek' });
@@ -343,6 +355,7 @@ describe('escort commands', () => {
             // A pirate wanders into the bubble.
             await addShip('nearPirate', 400, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             world.step();
             world.step();
@@ -376,6 +389,7 @@ describe('escort commands', () => {
             const { world, addShip } = await makeWorld();
             await addShip('nearPirate', 400, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             press(world, 'defend');
             world.step();
@@ -462,6 +476,7 @@ describe('escort commands', () => {
             await addShip('pirate', position().x + ahead.x,
                 position().y + ahead.y, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
             // Re-place ahead of the CURRENT facing each tick so slow
             // formation turning can't move it out of the quadrant.
@@ -519,6 +534,7 @@ describe('escort commands', () => {
                 }
                 await addShip('pirate', 400, 400, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
                 const error = fireOffAxis(world, [['pirate', Math.PI / 6]]);
                 expect(error('pirate')).toBeLessThan(2);
@@ -531,6 +547,7 @@ describe('escort commands', () => {
             for (const uuid of ['pirateA', 'pirateB']) {
                 await addShip(uuid, 400, 400, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
             }
             press(world, 'escortRestrictFire');
@@ -549,6 +566,7 @@ describe('escort commands', () => {
             for (const uuid of ['pirate', 'decoy']) {
                 await addShip(uuid, -400, -400, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
             }
             setPlayerTarget(world, 'pirate');
@@ -601,9 +619,11 @@ describe('escort commands', () => {
             };
             await addShip('pirateA', 400, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             await addShip('pirateB', 450, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             // Restrict on; the player targets pirateB.
             press(world, 'escortRestrictFire');
@@ -664,6 +684,7 @@ describe('escort commands', () => {
             }
             await made.addShip('pirate', 400, 400, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             return made;
         }
@@ -732,6 +753,7 @@ describe('escort commands', () => {
                 const { world, addShip } = await turretWorld(false);
                 await addShip('pirateB', 400, 400, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
                 press(world, 'escortRestrictFire');
                 setPlayerTarget(world, 'pirateB');
@@ -757,6 +779,7 @@ describe('escort commands', () => {
                     { escortShip: BEAM_TURRET_SHIP });
                 await addShip('pirate', 400, 400, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
                 holdAt(world, 'pirate', Math.PI);
                 const weapons = weaponsOf(world);
@@ -876,6 +899,7 @@ describe('escort commands', () => {
                 makeNpcEscort(world);
                 await addShip('nearPirate', 400, 200, ship => {
                     ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent, parkedWarship());
                 });
                 press(world, 'defend');
                 world.step();
@@ -909,6 +933,7 @@ describe('escort commands', () => {
                     await addShip('pirate', 400, 200, ship => {
                         ship.components.set(GovtComponent,
                             { id: 'test:pirate' });
+                        ship.components.set(NpcComponent, parkedWarship());
                     });
                     press(world, 'formation');
                     world.step();
@@ -1077,6 +1102,7 @@ describe("an escort's hostility matches its owner's target corners", () => {
         const { world, addShip } = await makeWorld();
         await addShip('pirate', 400, 200, ship => {
             ship.components.set(GovtComponent, { id: 'test:pirate' });
+            ship.components.set(NpcComponent, parkedWarship());
         });
         press(world, 'defend');
         world.step();
@@ -1100,6 +1126,7 @@ describe("an escort's hostility matches its owner's target corners", () => {
             // and inside the front-quadrant turret's reach.
             await addShip('pirate', 400, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             // Formation is the default command; front-quadrant turrets
             // still shoot opportunistically at anything hostile in reach.
@@ -1164,6 +1191,7 @@ describe("an escort's hostility matches its owner's target corners", () => {
             const { world, addShip } = await makeWorld();
             await addShip('pirate', 400, 200, ship => {
                 ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent, parkedWarship());
             });
             press(world, 'defend');
             world.step();

@@ -20,6 +20,7 @@ import {
     OwnerComponent, VulnerableToPD, WeaponEntries, WeaponEntry,
 } from './fire_weapon_plugin.js';
 import { GovtComponent } from '../core/index.js';
+import { NpcComponent } from '../npc/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { TargetComponent } from '../ship/index.js';
@@ -133,6 +134,13 @@ describe('point defense against fighters', () => {
         ship.components.set(MultiplayerData, { owner: 'server' });
         if (govt) {
             ship.components.set(GovtComponent, { id: govt });
+            // A raider WARSHIP (AI 3) whose brain never runs: it, and the
+            // fighters it launches (on_sight.ts reads a bay fighter's
+            // carrier), are hostile on sight to the flagless shooter, so
+            // the hostility rule paints them red. A raider TRADER would
+            // read neutral (reference K9).
+            ship.components.set(NpcComponent,
+                { aiType: 3, nextDecision: Number.MAX_SAFE_INTEGER });
         }
         await completeEntity(world, ship);
         pin(ship, x, y);
@@ -192,8 +200,8 @@ describe('point defense against fighters', () => {
      * The shooter, a raider carrier out of point defense reach, and a
      * raider bay fighter parked 100 units off the shooter's +x side —
      * well inside the turret's 210. The shooter flies no flag, so the
-     * xenophobic Verge Raiders make the wing HOSTILE by the one
-     * hostility rule (hostility.ts), with no target lock needed.
+     * xenophobic Verge Raiders' warship carrier makes its wing HOSTILE
+     * by the one hostility rule (hostility.ts), with no target lock needed.
      */
     async function setUp() {
         const { gameData, world } = await makeBattlefield();

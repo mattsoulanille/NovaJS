@@ -10,6 +10,7 @@ import {
     FormationComponent, NpcComponent, ShootAllWeaponsComponent,
 } from '../nova_plugin/npc/index.js';
 import { EscortCommandComponent } from '../nova_plugin/player/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
     cornersSweepSystem, styleForTarget, TargetCorners,
 } from './target_corners_plugin.js';
@@ -210,9 +211,11 @@ describe('styleForTarget (target corner selection)', () => {
 
     it("an NPC fleet escort (someone else's flock) is not friendly", () => {
         const npcLeader = new Entity('npc leader')
-            .addComponent(GovtComponent, { id: 'nova:137' });
+            .addComponent(GovtComponent, { id: 'nova:137' })
+            .addComponent(NpcComponent, { aiType: 3, mode: 'patrol' });
         const npcEscort = new Entity('npc escort')
             .addComponent(GovtComponent, { id: 'nova:137' })
+            .addComponent(NpcComponent, { aiType: 3, mode: 'patrol' })
             .addComponent(FormationComponent,
                 { leader: 'npc leader', slot: 0 });
         expect(style('npc escort',
@@ -220,6 +223,106 @@ describe('styleForTarget (target corner selection)', () => {
             .toBe('hostile');
     });
 });
+
+/**
+ * Reference K9 (docs/reference_experiments.md) and Matthew's ruling
+ * (2026-11-23): "IFF bracket colors correspond to hostility regardless of
+ * govt's stance." On the original, the AI 1 traders of a govt hostile to
+ * the player — by gövt 0x0004 "always attacks player" or by the player's
+ * criminal record — have YELLOW brackets until they attack, while the same
+ * govt's warships, which do attack, are red. The brackets now read the NPC
+ * brain's own on-sight predicate (on_sight.ts's attacksOnSight).
+ */
+describe('styleForTarget: hostility is the ship\'s, not its govt\'s (K9)',
+    () => {
+        const alwaysAttacks = govt({ id: 'nova:362' });
+        alwaysAttacks.flags.alwaysAttacksPlayer = true;
+        const owner = govt({ id: 'nova:370', crimeTol: 10 });
+        const pirates = govt({ id: 'nova:137' });
+        pirates.flags.xenophobic = true;
+        const gameData = mockGameData({
+            'nova:362': alwaysAttacks, 'nova:370': owner,
+            'nova:137': pirates,
+        });
+        const plainPlayer = new Entity('player');
+        // -500 with govt 370, as in the K9 run: "Criminal" at CrimeTol 10.
+        const criminalPlayer = new Entity('player')
+            .addComponent(LegalRecordsComponent,
+                new Map([['nova:370', -500]]));
+
+        function ship(govtId: string, aiType: number,
+            mode: 'travel' | 'patrol' | 'attack' = 'travel') {
+            return new Entity('ship')
+                .addComponent(GovtComponent, { id: govtId })
+                .addComponent(NpcComponent, { aiType, mode });
+        }
+        function style(target: Entity, playerEntity: Entity,
+            extra: { [uuid: string]: Entity } = {}) {
+            const entities: { [uuid: string]: Entity } =
+                { target, ...extra };
+            return styleForTarget('target', target, PLAYER, playerEntity,
+                gameData, u => entities[u], 0);
+        }
+
+        it('gövt 0x0004: an AI 1 trader is neutral, a warship hostile', () => {
+            expect(style(ship('nova:362', 1), plainPlayer)).toBe('neutral');
+            expect(style(ship('nova:362', 3, 'patrol'), plainPlayer))
+                .toBe('hostile');
+        });
+
+        it('criminal record: an AI 1 trader is neutral, a warship hostile',
+            () => {
+                expect(style(ship('nova:370', 1), criminalPlayer))
+                    .toBe('neutral');
+                expect(style(ship('nova:370', 3, 'patrol'), criminalPlayer))
+                    .toBe('hostile');
+                // And with a clean record the warship is neutral again.
+                expect(style(ship('nova:370', 3, 'patrol'), plainPlayer))
+                    .toBe('neutral');
+            });
+
+        it('xenophobic: a pirate freighter is neutral, a pirate warship '
+            + 'hostile', () => {
+                expect(style(ship('nova:137', 2), plainPlayer)).toBe('neutral');
+                expect(style(ship('nova:137', 3, 'patrol'), plainPlayer))
+                    .toBe('hostile');
+            });
+
+        it('the same trader turns red the moment it attacks the player', () => {
+            for (const aiType of [1, 2]) {
+                const trader = ship('nova:362', aiType, 'attack')
+                    .addComponent(TargetComponent, { target: PLAYER });
+                expect(style(trader, plainPlayer))
+                    .withContext(`AI ${aiType}`).toBe('hostile');
+            }
+            // Including a provoked brave trader of a govt with no quarrel
+            // at all (untested on the original; the behavioural tier).
+            const provoked = ship('nova:370', 2, 'attack')
+                .addComponent(TargetComponent, { target: PLAYER });
+            expect(style(provoked, plainPlayer)).toBe('hostile');
+        });
+
+        it('AI 4 interceptors are treated as warships (chosen; untested on '
+            + 'the original)', () => {
+                expect(style(ship('nova:362', 4, 'patrol'), plainPlayer))
+                    .toBe('hostile');
+                expect(style(ship('nova:370', 4, 'patrol'), criminalPlayer))
+                    .toBe('hostile');
+            });
+
+        it('a brainless bay fighter takes its carrier\'s AI type', () => {
+            const fighter = new Entity('fighter')
+                .addComponent(GovtComponent, { id: 'nova:362' })
+                .addComponent(FormationComponent,
+                    { leader: 'carrier', slot: 0 });
+            expect(style(fighter, plainPlayer,
+                { carrier: ship('nova:362', 3, 'patrol') })).toBe('hostile');
+            expect(style(fighter, plainPlayer,
+                { carrier: ship('nova:362', 1) })).toBe('neutral');
+            // No carrier brain anywhere up the chain: hunts nobody.
+            expect(style(fighter, plainPlayer)).toBe('neutral');
+        });
+    });
 
 /**
  * The corner sweep: landing pulls the player's entity OUT of the display

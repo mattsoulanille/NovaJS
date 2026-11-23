@@ -1,13 +1,16 @@
 import { Entity } from 'nova_ecs/entity';
+import { GovtData } from 'novadatainterface/govt_data';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../ship/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { OwnerComponent } from '../ship/index.js';
-import { isAttackingPlayer, isInFlock } from '../npc/index.js';
+import { attacksOnSight, isAttackingPlayer, isInFlock, onSightAiType } from '../npc/index.js';
 import { GovtComponent } from '../core/index.js';
-import { shipDisposition, TargetCornerStyle, targetCornerStyle } from '../reputation/index.js';
+import {
+    Disposition, govtDisposition, LegalRecords, TargetCornerStyle, targetCornerStyle,
+} from '../reputation/index.js';
 import { isPacifiedToward, NpcComponent } from '../npc/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
@@ -112,8 +115,10 @@ export { isAttackingPlayer } from '../npc/index.js';
  *           brain, and it is also what keeps an attacker red for a
  *           moment after it breaks its lock instead of flickering
  *           neutral between volleys.
- *  4. Political: shipDisposition(target govt, player govt, records) —
- *     hostile and friendly map to their corner sets.
+ *  4. Political: onSightDisposition below — hostile when the ship would
+ *     attack the player ON SIGHT (a warship or interceptor of a govt
+ *     hostile to them; NOT a trader of one), friendly when its govt is
+ *     allied with the player's.
  *  5. Everything else: neutral.
  *
  * `now` is the SIMULATION clock in milliseconds (tier 3b compares
@@ -161,16 +166,62 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
         playerUuid, playerEntity, now);
 
     // The player's legal records (delta-synced): a govt the player is
-    // criminal with shows hostile corners, same rule as the sim.
+    // criminal with makes its HUNTERS hostile, same rule as the sim.
     const playerRecords = playerEntity.components.get(LegalRecordsComponent);
     return targetCornerStyle(
-        shipDisposition(targetGovt, playerGovt, playerRecords,
+        onSightDisposition(targetUuid, targetEntity, targetGovt, playerGovt,
+            playerRecords,
             // ränk 0x0100, read off the BAKED synced set rather than the
             // ränk table: the simulation shares this predicate and its
             // worker never loads Rank data (see rank_logic.ts).
             ranksSuppressAggression(playerEntity.components
-                .get(AggressionSuppressGovtsComponent), targetGovt?.id)),
+                .get(AggressionSuppressGovtsComponent), targetGovt?.id),
+            getEntity),
         attackingPlayer);
+}
+
+/**
+ * TIER 4 OF THE HOSTILITY RULE: how a ship that is not attacking the
+ * player right now stands toward them — HOSTILE when it would attack them
+ * on sight, not when its government merely dislikes them.
+ *
+ *  - 'hostile': the ship's NPC brain hunts the player on sight
+ *    (on_sight.ts's attacksOnSight: a warship or interceptor whose
+ *    government counts the player as an enemy, by gövt enemies classes,
+ *    the xenophobic or always-attacks flags, or a criminal record). It is
+ *    the SAME call NpcDecisionSystem makes to build its hostiles list, so
+ *    the brackets cannot paint red a ship the brain leaves alone, or the
+ *    other way round.
+ *  - 'friendly': the ship's government is allied with the player's
+ *    (govtDispositionTo 'ally': the same govt, or Ally classes naming one
+ *    of the player's).
+ *  - 'neutral': everything else, INCLUDING a trader (AI 1/2) of a
+ *    government that is hostile to the player. Reference K9 and Matthew's
+ *    ruling (2026-11-23): "IFF bracket colors correspond to hostility
+ *    regardless of govt's stance". On the original, AI 1 traders of an
+ *    always-attacks govt, and of a govt the player is criminal with, show
+ *    yellow brackets while that govt's warships show red. A trader that
+ *    does turn on the player (a provoked AI 2) goes red through the
+ *    behavioural tier, which is checked first.
+ *
+ * The AI type is the ship's own, or its flock root's for a bay fighter,
+ * which has no brain of its own (on_sight.ts's onSightAiType).
+ *
+ * The government's stance on its own — what decides whether its ships
+ * talk to the player, offer missions or come to help — is still
+ * iff_plugin's shipDisposition; this is only the IFF's reading of it.
+ */
+export function onSightDisposition(targetUuid: string, targetEntity: Entity,
+    targetGovt: GovtData | undefined, playerGovt: GovtData | undefined,
+    playerRecords: LegalRecords | undefined,
+    rankSuppressesAggression: boolean,
+    getEntity: (uuid: string) => Entity | undefined): Disposition {
+    if (attacksOnSight(onSightAiType(targetUuid, targetEntity, getEntity),
+        targetGovt, playerGovt, playerRecords, rankSuppressesAggression)) {
+        return 'hostile';
+    }
+    return govtDisposition(targetGovt, playerGovt) === 'ally'
+        ? 'friendly' : 'neutral';
 }
 
 /**

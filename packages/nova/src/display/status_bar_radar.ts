@@ -1,6 +1,6 @@
 import { PlanetData } from "novadatainterface/planet_data";
 import { StatusBarData } from "novadatainterface/status_bar_data";
-import { GetEntity, UUID } from "nova_ecs/arg_types";
+import { Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position, wrapNearestDelta } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
@@ -14,13 +14,13 @@ import {
     CloakActiveComponent, CloakActiveState, CloakCapability, CloakComponent, deriveCloakScanner,
     DisabledComponent, OutfitsStateComponent, sumOutfitField, ShipDataComponent, TargetComponent,
 } from '../nova_plugin/ship/index.js';
-import { SimulationGameDataResource, GovtComponent, landable } from '../nova_plugin/core/index.js';
+import { SimulationGameDataResource, landable } from '../nova_plugin/core/index.js';
 import {
     deriveIff, planetBlipColor, planetDisposition, shipBlipColor,
-    shipDisposition, LegalRecordsComponent,
+    Disposition, LegalRecordsComponent, TargetCornerStyle,
 } from '../nova_plugin/reputation/index.js';
 import { ActiveRanksComponent } from "../nova_plugin/ncb/index.js";
-import { isPacifiedToward, NpcComponent } from "../nova_plugin/npc/index.js";
+import { styleForTarget } from "../nova_plugin/combat/index.js";
 import { PlanetComponent, PlanetDataComponent, stellarClearanceFor, StellarBribesComponent } from "../nova_plugin/travel/index.js";
 import { PlayerShipSelector, MissionsComponent } from '../nova_plugin/player/index.js';
 import { SimulationTimeResource } from "./simulation_time.js";
@@ -516,20 +516,30 @@ export function radarHidesShip(cloakActive: CloakActiveState | undefined,
     return cloakActive?.active === true && (cloak?.hidesFromRadar ?? true);
 }
 
+/**
+ * The IFF blip disposition for a target-corner style (hostility.ts's
+ * styleForTarget). 'disabled' never reaches here in practice — DrawRadar
+ * reads DisabledComponent itself and greys the blip first, the same tier
+ * the corners check first — but it maps to the neutral fallback so the
+ * mapping is total.
+ */
+export function blipDisposition(style: TargetCornerStyle): Disposition {
+    return style === 'disabled' ? 'neutral' : style;
+}
+
 export const DrawRadar = new System({
     name: 'DrawRadar',
     args: [Optional(RadarTime), TimeResource, SimulationTimeResource,
         StatusBarResource, MovementStateComponent,
     new Query([UUID, MovementStateComponent, ShipDataComponent,
         Optional(CloakActiveComponent), Optional(CloakComponent),
-        Optional(GovtComponent), Optional(DisabledComponent),
-        Optional(NpcComponent)] as const),
+        Optional(DisabledComponent), GetEntity] as const),
     new Query([UUID, MovementStateComponent, PlanetDataComponent,
         PlanetComponent] as const),
-        SimulationGameDataResource, GetEntity, UUID,
+        SimulationGameDataResource, GetEntity, UUID, Entities,
         PlayerShipSelector] as const,
     step(radarTime, { time }, simTime, statusBar, { position }, ships, planets,
-        gameData, entity, playerUuid) {
+        gameData, entity, playerUuid, entities) {
         if (!radarTime) {
             radarTime = { lastRefresh: NaN };
             entity.components.set(RadarTime, radarTime);
@@ -561,46 +571,43 @@ export const DrawRadar = new System({
                     !radarHidesShip(cloakActive, cloak));
 
             // IFF (ModType 14): when the player owns an IFF outfit, colour
-            // each ship's blip by its disposition toward the player. Without
+            // each ship's blip by how it stands toward the player. Without
             // IFF, or before govt data caches, blips stay the flat dim colour.
             // The capability is derived here from the player's (delta-synced)
             // outfits rather than read off a component: the radar runs in the
             // display world, and IffComponent lives only in the sim worker.
             //
+            // THE COLOUR IS THE TARGET BRACKETS' (hostility.ts's
+            // styleForTarget), read whole, so a blip and the corners around
+            // the same ship cannot disagree: own flock green; a ship this
+            // player has BOUGHT OFF (beg for mercy) neutral until the
+            // reprieve lapses (Matthew: "its IFF should become neutral
+            // again"); a ship attacking the player red; and otherwise red
+            // only for a ship that would attack the player ON SIGHT — a
+            // warship or interceptor of a hostile govt, never a trader of
+            // one (reference K9; Matthew, 2026-11-23: "IFF bracket colors
+            // correspond to hostility regardless of govt's stance").
+            // Judged on the MIRRORED SIM CLOCK, which is what stamped
+            // pacifiedUntil and the aggression log; this world's
+            // TimeResource is wall-clock epoch ms and would call every
+            // reprieve and every aggression expired.
+            //
             // DISABLED ships (DisabledComponent — real, serializer-registered
             // sim state, so it is here in the display world) are GREY with or
             // without IFF, ahead of hostile red: dead in space is a fact about
             // the ship, not about the pilot, exactly as the gray corner set
-            // reads it (hostility.ts's styleForTarget).
+            // reads it.
             const playerOutfits = entity.components.get(OutfitsStateComponent);
             const hasIff = playerOutfits
                 ? deriveIff(playerOutfits, gameData)?.hasIff === true : false;
-            const playerGovtId = hasIff
-                ? entity.components.get(GovtComponent)?.id : undefined;
-            const playerGovt = playerGovtId
-                ? gameData.data.Govt.getCached(playerGovtId) : undefined;
-            // The player's legal records (delta-synced): a govt the
-            // player is criminal with shows hostile blips.
-            const playerRecords = hasIff
-                ? entity.components.get(LegalRecordsComponent) : undefined;
+            const getEntity = (id: string) => entities.get(id);
             const shipColors = new Map<string, number>();
-            for (const [uuid, , , , , shipGovt, disabled, npc]
-                of visibleShips) {
-                const govt = (hasIff && shipGovt)
-                    ? gameData.data.Govt.getCached(shipGovt.id) : undefined;
-                // A ship this player has BOUGHT OFF (beg for mercy) reads
-                // neutral until the reprieve lapses, the same tier the
-                // target corners and the point defense prey filter honour
-                // (hostility.ts's styleForTarget) — Matthew: "its IFF should
-                // become neutral again". A pirate's politics never soften,
-                // so without this the blip stayed red for a truce the player
-                // had already paid for. Judged on the MIRRORED SIM CLOCK,
-                // which is what stamped pacifiedUntil; this world's
-                // TimeResource is wall-clock epoch ms and would call every
-                // reprieve expired.
+            for (const [uuid, , , , , disabled, shipEntity] of visibleShips) {
                 const color = shipBlipColor(
-                    hasIff && !isPacifiedToward(npc, playerUuid, simTime.time)
-                        ? shipDisposition(govt, playerGovt, playerRecords)
+                    hasIff && disabled === undefined && uuid !== playerUuid
+                        ? blipDisposition(styleForTarget(uuid, shipEntity,
+                            playerUuid, entity, gameData, getEntity,
+                            simTime.time))
                         : 'neutral',
                     hasIff, disabled !== undefined);
                 if (color !== undefined) {
