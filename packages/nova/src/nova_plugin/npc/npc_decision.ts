@@ -20,6 +20,7 @@ import { EscortCommandComponent } from '../player/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from './hail_component.js';
+import { flockPlayer, isAttackingPlayer, isInFlock } from './allegiance.js';
 import { govtDispositionTo, effectiveStrength, oddsFavorable } from '../reputation/index.js';
 import { ShieldComponent } from '../ship/index.js';
 import { JumpComponent } from '../travel/index.js';
@@ -242,6 +243,46 @@ export const NpcDecisionSystem = new System({
         if (npc.aggressor && !entities.has(npc.aggressor)) {
             npc.aggressor = undefined;
         }
+
+        // THE PLAYER THIS SHIP PROTECTS, if it flies in a player's flock
+        // (allegiance.ts's flockPlayer): a mïsn ShipBehav 1 / escort-goal
+        // special ship, or a captured leader's fleet escort. The target
+        // brackets paint such a ship FRIENDLY ahead of every political tier
+        // (hostility.ts's styleForTarget, tier 2), so its own brain must
+        // agree, by the same flock walk:
+        //  - its OWN SIDE — the player and everything in their flock — is
+        //    never a hostile, whatever its government thinks of them. The
+        //    "Escort Moash Dignitary" report: the player's legal record with
+        //    the Moash was criminal, so the dignitary's warship counted the
+        //    player as an enemy and, flying in formation beside them, as
+        //    the NEAREST one — and attacked the ship it was escorting.
+        //  - nor is it ever an AGGRESSOR to retaliate against. Friendly
+        //    fire only connects with a flock member that is disabled
+        //    (firing_group.ts's carve-out), and a guided lock on one
+        //    provokes nothing (flock.ts), but however the record got there
+        //    a protector does not turn on its player.
+        //  - and whoever is ATTACKING the player (tier 3 of the same rule,
+        //    isAttackingPlayer) is a hostile, so "protect the player" means
+        //    defending them, not just holding formation.
+        // Everything read is synced state and the sim clock; no PRNG draw
+        // is added or skipped.
+        const getEntity = (id: string) => entities.get(id);
+        const protectee = flockPlayer(uuid, getEntity);
+        const protecteeEntity =
+            protectee !== undefined ? entities.get(protectee) : undefined;
+        const ownSide = (other: string) => protectee !== undefined
+            && (other === protectee || isInFlock(other, protectee, getEntity));
+        const attackingProtectee = (other: string) => {
+            if (protectee === undefined || protecteeEntity === undefined) {
+                return false;
+            }
+            const otherEntity = entities.get(other);
+            return otherEntity !== undefined && isAttackingPlayer(other,
+                otherEntity, protectee, protecteeEntity, time.time);
+        };
+        if (npc.aggressor !== undefined && ownSide(npc.aggressor)) {
+            npc.aggressor = undefined;
+        }
         // A bribe (hail beg-for-mercy) buys a reprieve: while it holds, the
         // briber is skipped as a hostile below and forgotten as an
         // aggressor; when it lapses, the ship resumes hunting a criminal.
@@ -301,6 +342,11 @@ export const NpcDecisionSystem = new System({
                 // Bribed to leave this ship alone (reprieve still active).
                 continue;
             }
+            if (ownSide(otherUuid)) {
+                // The player this ship protects, and their flock: never a
+                // target, nor (disabled) a prize to plunder.
+                continue;
+            }
             const distanceSquared = otherMovement.position
                 .subtract(position).lengthSquared;
             if (otherDisabled) {
@@ -341,7 +387,8 @@ export const NpcDecisionSystem = new System({
                 // ränk 0x0100 for THIS ship's government: its holder is not
                 // attacked on sight.
                 ranksSuppressAggression(otherSuppressGovts, govtData?.id));
-            if (disposition === 'enemy') {
+            if (disposition === 'enemy'
+                || attackingProtectee(otherUuid)) {
                 hostiles.push([otherUuid, distanceSquared] as const);
             }
         }

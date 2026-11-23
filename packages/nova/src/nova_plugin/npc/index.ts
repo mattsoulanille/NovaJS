@@ -6,6 +6,8 @@
  * plunder systems behind NpcAiPlugin, the system-hold component that pins
  * a ship in its system, and the assisting-hail component.
  */
+export * from './aggression.js';
+export * from './allegiance.js';
 export * from './hail_component.js';
 export * from './npc_component.js';
 export * from './npc_formation.js';

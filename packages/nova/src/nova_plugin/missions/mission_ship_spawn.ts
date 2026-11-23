@@ -54,7 +54,12 @@ import { TargetComponent } from '../ship/index.js';
  *  - 0 (always attack the player): spawns aggressed at the owner.
  *  - 1 (protect the player): flies in formation on the owner and
  *    shares the owner's firing group (like hired escorts). Escort-goal
- *    ships behave the same way.
+ *    ships behave the same way. That puts it in the owner's FLOCK, which
+ *    is what its own brain keys on (NpcDecisionSystem, through
+ *    npc/allegiance.ts's flockPlayer): it never counts the owner or their
+ *    flock as a hostile or an aggressor, whatever its government thinks
+ *    of the owner's legal record, and it engages whoever is attacking the
+ *    owner (mission_protector_test.ts).
  *  - 2 (destroy enemy stellars): planet bombardment isn't modeled;
  *    standard AI (documented gap).
  *

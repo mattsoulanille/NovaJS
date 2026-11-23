@@ -63,9 +63,13 @@ import { NpcAggressionSystem } from '../npc/index.js';
  * shots mark its leader, and a blast (which carries only the group)
  * still resolves — else the firing ship named by SourceComponent.
  *
- * NOTHING HERE CHANGES NPC BEHAVIOR: npc.aggressor and the NPC AI's
- * hostility rules are untouched. This layer only answers "how does the
- * player's own ship stand toward that one".
+ * NPC BEHAVIOR IS ALMOST UNTOUCHED: npc.aggressor and the NPC AI's
+ * political hostility are separate. This layer answers "how does the
+ * player's own ship stand toward that one" — and the one NPC that asks
+ * that question too is a ship PROTECTING the player (a mïsn ShipBehav 1
+ * special ship), which treats the player's recent aggressors as its own
+ * hostiles through tier 3 of the hostility rule (npc/allegiance.ts's
+ * isAttackingPlayer, from NpcDecisionSystem).
  */
 
 const DamagerQuery = new Query([Optional(FiringGroupComponent),

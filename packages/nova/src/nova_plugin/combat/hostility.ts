@@ -1,22 +1,26 @@
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { AggressionComponent, isRecentAggressor } from './aggression.js';
 import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../ship/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { OwnerComponent } from '../ship/index.js';
-import { isInFlock } from './flock.js';
+import { isAttackingPlayer, isInFlock } from '../npc/index.js';
 import { GovtComponent } from '../core/index.js';
 import { shipDisposition, TargetCornerStyle, targetCornerStyle } from '../reputation/index.js';
 import { isPacifiedToward, NpcComponent } from '../npc/index.js';
-import { EscortCommandComponent } from '../player/index.js';
-import { ShootAllWeaponsComponent } from '../npc/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { ShipComponent } from '../ship/index.js';
-import { TargetComponent } from '../ship/index.js';
+
+/**
+ * Tier 3 on its own (isAttackingPlayer) lives in npc/allegiance.ts, beside
+ * the flock walk, because the NPC decision step needs it too (a protecting
+ * special ship engages whoever is attacking its player); re-exported here,
+ * where the rest of the rule is.
+ */
+export { isAttackingPlayer } from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -36,7 +40,13 @@ import { TargetComponent } from '../ship/index.js';
  *    selectNearestHostile), and
  *  - the comm channel (isIffHostile: the hail dialog's Status line and
  *    Beg For Mercy offer, and the simulation's applyHail verdict — ruling
- *    #297), plus tier 3 alone (isAttackingPlayer) for the ship-offer gates.
+ *    #297), plus tier 3 alone (isAttackingPlayer) for the ship-offer gates,
+ *  - and the brain of an NPC in the player's flock (a mïsn ShipBehav 1
+ *    "protect the player" special ship): NpcDecisionSystem never counts
+ *    the player or their flock as a hostile (tier 2, the same isInFlock
+ *    walk) and does count whoever is attacking them (tier 3,
+ *    isAttackingPlayer), so a ship the corners paint friendly is never one
+ *    that hunts the player.
  *
  * so 'r' provably targets exactly the ships the corners paint red, and
  * the beep provably fires exactly when 'r' does nothing.
@@ -161,53 +171,6 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
             ranksSuppressAggression(playerEntity.components
                 .get(AggressionSuppressGovtsComponent), targetGovt?.id)),
         attackingPlayer);
-}
-
-/**
- * TIER 3 OF THE HOSTILITY RULE on its own: whether `targetEntity` is
- * attacking the player right now — the BEHAVIOURAL reading, no politics in
- * it. True when either
- *
- *  (a) its posture says so: its TargetComponent points at the player AND it
- *      is in NPC mode 'attack', OR it is another player's ESCORT engaging us
- *      (EscortCommandComponent 'attack' or 'defend'), OR it carries the
- *      legacy dev-enemy ShootAllWeapons marker; or
- *  (b) it is a RECENT AGGRESSOR (aggression.ts): it shot the player, or
- *      locked a guided missile on them, within the last
- *      AGGRESSION_WINDOW_MS.
- *
- * Exported so the ship-offer gates (display/ship_mission_offer_plugin's
- * "begins to attack the player") quote it rather than keeping a narrower
- * copy. Everything read is synced state, so the display and every peer's
- * simulation agree. `now` is the SIMULATION clock.
- */
-export function isAttackingPlayer(targetUuid: string, targetEntity: Entity,
-    playerUuid: string, playerEntity: Entity, now: number): boolean {
-    const targetsPlayer = targetEntity.components
-        .get(TargetComponent)?.target === playerUuid;
-    const npcMode = targetEntity.components.get(NpcComponent)?.mode;
-    // Another player's ESCORT engaging us — ordered onto us with 'f'
-    // (command 'attack') or holding its leader's perimeter against us
-    // (command 'defend') — is attacking us in every sense that matters,
-    // even before its first shot lands (which is when (b) would catch it).
-    // Escorts fly on the escort command, not on NpcComponent mode 'attack',
-    // so the posture reads from EscortCommandComponent; both commands point
-    // TargetComponent at the victim. Matthew: "when an escort is attacking
-    // another player (due to 'f' or due to defending), it should be IFF
-    // hostile from that player's perspective."
-    const escortCommand = targetEntity.components
-        .get(EscortCommandComponent)?.command;
-    const escortEngaging = escortCommand === 'attack'
-        || escortCommand === 'defend';
-    return (targetsPlayer && (npcMode === 'attack'
-        || escortEngaging
-        || targetEntity.components.has(ShootAllWeaponsComponent)))
-        // (b): what this ship has actually done to us lately — what keeps
-        // an attacker red after it breaks its lock or turns to flee, and
-        // the only reading that reaches another player's ship (no govt, no
-        // NPC brain).
-        || isRecentAggressor(playerEntity.components.get(AggressionComponent),
-            targetUuid, now);
 }
 
 /**
