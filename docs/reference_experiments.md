@@ -1845,6 +1845,105 @@ run holds `recording.mp4`, `recording.events.json`, `track.json` (per-frame
 planet centre), `track_summary.json` (every press: distance, speed and
 message id) and `msgs/` (one crop per distinct message).
 
+### Asteroids and seeker flags, with and without jamming (2026-11-23, wave 4)
+
+**Setup** (`kits/testkit.mjs` `wave4Rocks`; retired for it: wëap 378 JamM
+Parent and 380 JamM Plain, düde 607/608 with mïsn 967/968). The wave-2/3
+rig (`scenarios/jam_fire.json`: the player sits at the port, targets a
+100-armor 1-damage target on the marker 900 px east and holds the
+secondary trigger about 25 s, about 49 missiles; hits = 100 - armor %).
+Missiles: Speed 600, GuidedTurn 60, 10 s life, proximity 25 px.
+- sÿst 2132 Kit Rock Range (16 asteroids) and the new 2170 Kit Rock Range
+  4 (4 asteroids); the rocks drift fast, so where they are changes from
+  second to second.
+- Targets: J0 (no jammer), S50 / S100 (ONE +50 / +100 type-1 jammer).
+- wëap 379 JamM Decoy (Seeker 0x0002, JamVuln 0: never jammed), 378 JamM
+  Decoy V100 (0x0002, JamVuln1 100), 375 JamM V100 (no seeker flags), 380
+  JamM Pass V100 (0x0001, JamVuln1 100).
+- Paths: the per-pixel maximum of the play area over a few seconds of
+  the recording (README "Analysis helpers"): rocks leave wide streaks,
+  missiles thin purple trails, a hit a pink puff. Evidence `trail-*.png`.
+
+| cell | missile | target | rocks | hits / launched per run | lost |
+|---|---|---|---|---|---|
+| (a) decoy16 | 0x0002, V 0 | J0 | 16 | 14/48.7, 15/49.0, 22/48.8 | **65%** (71, 69, 55) |
+| (a) decoy4 | 0x0002, V 0 | J0 | 4 | 46/49.6, 24/49.3, 29/48.7 | **33%** (7, 51, 40) |
+| (b) decoyS50 | 0x0002, V 100 | S50 | 16 | 7/48.7, 14/49.7, 8/49.1 | **80%** (86, 72, 84) |
+| (b) decoyS100 | 0x0002, V 100 | S100 | 16 | 0/48.9, 0/48.9, 0/49.5 | **100%** |
+| (c) plainS100 | none, V 100 | S100 | 16 | 0/49.2, 0/48.5, 0/52.3 | **100%** |
+| (d) passS100 | 0x0001, V 100 | S100 | 16 | 2/50.2, 1/49.4, 0/49.0 | **98%** |
+
+Wave 2, same field, no jamming: plain V 0 lost 31% (rocks in the way),
+0x0002 V 0 41%, 0x0001 V 0 0%.
+
+**Findings.**
+1. **(a) The 0x0002 decoy works with no jamming at all** (JamVuln 0,
+   unjammed target): 65% of the missiles were lost in the 16-rock field
+   (wave 2: 41%; a plain missile there loses about 31% to rocks in its way)
+   and 33% with 4 rocks. It depends on how many rocks are
+   near the missiles' paths, not on a fixed share: the 4-rock runs went
+   from 7% (no rock near the line of fire) to 51% (rocks kept crossing
+   it).
+   - **When:** at any time in flight, not only at launch. Trails show
+     missiles leaving the ship toward a rock that is near the launch point
+     (about 200-260 px away), and missiles already on their way to the
+     target turning sharply (up to 90°) onto a rock that drifted within
+     about 150-250 px of them.
+   - **Once on a rock it stays on it**: no trail was seen leaving a rock
+     for the target again; each ends in a puff on the rock.
+   - The exact capture range could not be pinned to better than "about
+     200-260 px" from these pictures (fast-moving rocks, many missiles).
+2. **(b) Jammed 0x0002 missiles go for the rocks** instead of flying
+   straight: against S100 (every V100 missile jammed) 100% were lost in all three runs; their
+   trails curve onto a nearby rock and end in puffs. The hit count can't
+   split "went to a rock" from "flew off" (both miss the target); in the
+   4 s trail of decoyS100 run 1 every trail ended on a rock, while the
+   plain jammed missiles of (c) all flew straight. Against S50 (half of
+   them jammed) 80% were lost, i.e. about the jammed half plus about the same
+   share of the unjammed half that the no-jamming decoy lost.
+3. **(c) A plain jammed missile just flies straight** along its launch
+   heading (as in wave 3) and only hits a rock that happens to be on that
+   line: 100% lost in all three runs, the trails straight lines off the
+   screen with an occasional puff where a rock crossed them.
+4. **(d) 0x0001 still passes over rocks when jammed**: the jammed missiles
+   fly straight through the field with no puffs; 98% lost (the few hits came
+   from launches that happened to point at the target).
+
+**NovaJS (main c9fc116c).**
+- `N/nova_plugin/combat/jamming_plugin.ts:303-318` (`decideJamReaction`)
+  decoys a missile **only if it is jammed**, and then only with
+  `DECOY_RETARGET_PROBABILITY` = 0.1 (line 84), onto the nearest decoy
+  within `DECOY_DISTRACTION_RANGE` = 1000 px (line 134; `retargetDecoy`,
+  lines 490-496). Asteroids carry `DecoyTargetComponent`
+  (`asteroid_plugin.ts:372`).
+- **Mismatch (a):** the original decoys unjammed 0x0002 missiles too, and
+  heavily (30-70% lost in a dense field). NovaJS never does.
+- **Mismatch (b):** a jammed 0x0002 missile in the original goes to a rock
+  (nearly all of them when one is around); NovaJS sends only 10% to a
+  decoy and flies the rest straight.
+- **Matches (c)** (jammed plain missiles fly straight, `projectile_plugin.ts:429-432`
+  lets guided missiles hit asteroids) and **(d)** (0x0001 passes over
+  asteroids, same lines), and the decision being made once for the jam.
+- **Proposed (not applied):** treat 0x0002 as its own per-tick check,
+  independent of jamming: while a missile has the flag, whenever an
+  asteroid is within about 200-250 px of it, retarget onto that asteroid
+  for good.
+  For a jammed 0x0002 missile, do the same check at launch with no
+  distance limit beyond the field (i.e. "jammed: go for the nearest rock
+  if any is near, else fly straight"). The capture range and whether it
+  is a certainty or a per-tick chance need a finer experiment (one missile
+  at a time, a single slow rock).
+
+Confidence: high that the decoy works without jamming and that jammed
+decoy missiles go to rocks (three runs per cell, clean trails); medium for
+the capture range; the per-cell shares vary a lot with where the rocks
+happen to be.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w4/rocks/{decoy16,decoy4,decoyS50,decoyS100,plainS100,passS100}/*/`
+(`panel.png` armor before/after, `trail-2s.png`, `trail-mid.png`,
+`recording.mp4`, `recording.events.json`). `decoy16/*102227*` is a launch
+that died while loading (retried as `*-retry1`).
+
 ### E-fight wave 4: fixed-gun and rear-turret escorts in Formation (2026-11-23)
 
 **Setup.** `scenarios/efight_formation.json` as in wave 3 (Kit Fight

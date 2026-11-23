@@ -535,6 +535,11 @@ apply.
   when a rect holds white text (an overlay is open): every lit/unlit flip
   with the key events before it. The default rect is the escort panel's
   rows; wave 4 timed the panel's 8.3 s self-close with it.
+- Missile paths as one picture (wave 4 asteroid runs): the per-pixel
+  maximum of the play area over a few seconds,
+  `ffmpeg -ss <t> -t 3 -i recording.mp4 -vf "crop=636:604:0:0,lagfun=decay=1" -update 1 trail.png`
+  (t from the trigger's `down` stamp in `recording.events.json`). Rocks
+  leave wide streaks, missiles thin purple trails, hits a pink puff.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).
