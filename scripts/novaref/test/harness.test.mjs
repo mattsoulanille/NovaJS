@@ -156,6 +156,28 @@ test("the test kit stays inside the game's id limits", async () => {
     assert.equal(new Set(keys).size, keys.length, "duplicate kit resource");
 });
 
+test("expandSteps unrolls repeat blocks and numbers labels", async () => {
+    const { expandSteps } = await import("../steps.mjs");
+    const got = expandSteps([
+        { keys: "e" },
+        { repeat: 2, steps: [{ keys: "l wait 150" }, { shot: "pass-{i}", window: true }] },
+        { repeat: 0, steps: [{ keys: "x" }] },
+        { shot: "end" },
+    ]);
+    assert.deepEqual(got, [
+        { keys: "e" },
+        { keys: "l wait 150" }, { shot: "pass-00", window: true },
+        { keys: "l wait 150" }, { shot: "pass-01", window: true },
+        { shot: "end" },
+    ]);
+    // Nested: the inner repeat substitutes its own {i}.
+    const nested = expandSteps([{ repeat: 2, steps: [{ repeat: 2, steps: [{ shot: "s{i}" }] }] }]);
+    assert.deepEqual(nested.map((s) => s.shot), ["s00", "s01", "s00", "s01"]);
+    assert.throws(() => expandSteps([{ repeat: 2 }]), /steps/);
+    assert.throws(() => expandSteps([{ repeat: -1, steps: [] }]), /non-negative/);
+    assert.deepEqual(expandSteps(undefined), []);
+});
+
 test("stepEntersShip spots a bare e key", () => {
     assert.equal(stepEntersShip({ keys: "e wait 4000" }), true);
     assert.equal(stepEntersShip({ keys: "Tab e@200" }), true);

@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFfmpegStart, probeFramePts, stepEntersShip, syncEvents } from "./frame_sync.mjs";
+import { expandSteps } from "./steps.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HELPER_LOCAL = path.join(HERE, "remote", "novaref_helper.py");
@@ -1258,7 +1259,7 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
             // over whatever real pilot the title screen had.
             if (!r.ok) throw new NovarefError("open_pilot failed", r);
         }
-        for (const [i, step] of (sc.steps ?? []).entries()) {
+        for (const [i, step] of expandSteps(sc.steps).entries()) {
             const r = await runStep(step, ctx);
             const sync = frameSyncStep(i, step, r, ctx, record);
             record({ phase: "step", i, step, result: r, ...sync });
@@ -1275,6 +1276,9 @@ async function runOnce(file, sc, { outRoot, pilotOverride, attempt }) {
         // A game that vanished while the scenario still needed it (not
         // quit by a step) is the retryable kind of failure.
         if (ctx.launched && !ctx.quitByStep && !novaPids().length) failed.game_exited = true;
+        // Wave 4: the game can also die while loading (launch saw no
+        // window and no process is left). Same flake, same retry.
+        if (!ctx.launched && failed.cmd === "launch" && !novaPids().length) failed.game_exited = true;
         record({ phase: "error", ...failed });
         try { await runStep({ shot: "error" }, ctx); } catch { /* best effort */ }
         // Never leave a recording running (the next run's pre-flight would
