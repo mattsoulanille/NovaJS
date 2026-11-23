@@ -347,7 +347,7 @@ function wave3Resources() {
     out.push(...tgt(982, "Kit J near J100", 9023, 2150, 619), ...tgt(983, "Kit J far J100", 9024, 2152, 619),
         ...tgt(984, "Kit J far J0", 9025, 2152, 615), ...tgt(985, "Kit J near J0", 9026, 2150, 615));
     out.push(govt(364, "Kit Jam Govt", { inhJam: [100, 0, 0, 0] }));
-    // AI 3 since 06:54 wave 3: the first run (inh_v100) used AI 1 and lost nothing.
+    // AI 3 from run inh_v50 on; the first run (inh_v100) used AI 1 and lost nothing.
     out.push(dude(635, "Jam Target InhJam", 3, 364, 732));
     out.push(...tgt(986, "Kit J InhJam100", 9027, 2100, 635));
     out.push(...discShip(762, "AI Tank Disc", 1977, DISC_COLOURS.yellow, {
@@ -478,15 +478,17 @@ function jammingKit() {
     jammer.set = { ...jammer.set, modType: 33, modVal: 25, max: 8 };
     out.push(jammer);
     // Wave 3: Jam Target J75 (shïp 735, mïsn 974, bit 9015) was turned into
-    // "J100 single", carrying ONE Kit Jammer 100 (oütf 626, +100) instead
-    // of three Kit Jammer 25s, to test whether jammer outfits stack. Wave 2's
-    // single v100_j75 run used the old hull.
-    const jammer100 = gun(626, "Kit Jammer 100", 0);
-    jammer100.set = { ...jammer100.set, modType: 33, modVal: 100, max: 8 };
-    out.push(jammer100);
+    // a "single" target carrying ONE jammer outfit (oütf 626) instead of
+    // three Kit Jammer 25s, to test whether jammer outfits stack. Wave 2's
+    // single v100_j75 run used the old hull. oütf 626 was +100 for the
+    // runs single_v100 / single_v50 and +75 from single75_* on.
+    const SINGLE_JAM = 75;
+    const jammerSingle = gun(626, `Kit Jammer ${SINGLE_JAM}`, 0);
+    jammerSingle.set = { ...jammerSingle.set, modType: 33, modVal: SINGLE_JAM, max: 8 };
+    out.push(jammerSingle);
     for (let k = 0; k <= 4; k++) {
         const single = k === 3;
-        const tname = single ? "Jam Target J100 single" : `Jam Target J${25 * k}`;
+        const tname = single ? `Jam Target J${SINGLE_JAM} single` : `Jam Target J${25 * k}`;
         out.push(...ship(732 + k, tname, 136, {
             armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1,
             outfits: [single ? 626 : k ? 623 : -1, -1, -1, -1], outfitCounts: [single ? 1 : k, 0, 0, 0],
