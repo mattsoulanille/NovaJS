@@ -3,7 +3,9 @@ import { JammingStrengths } from 'novadatainterface/outfit_data';
 import { SeekerFlags, JammingVulnerabilities, ProjectileWeaponData }
     from 'novadatainterface/weapon_data';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
@@ -66,17 +68,20 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *     parent with the reaction roll's odds (ATTACK_PARENT_IF_JAMMED_PROBABILITY),
  *     decided at the same moment, and otherwise falls through to the rules
  *     below. A jammed decoyedByAsteroids missile goes for the nearest rock
- *     within DECOY_DISTRACTION_RANGE, always (the original lost every one of
- *     them to rocks against a full jammer), and flies straight (or veers)
- *     only when there is none. A retargeted missile then tracks its new
+ *     ahead of it (the capture cone of rule 4) within
+ *     DECOY_DISTRACTION_RANGE, always (the original lost every one of them
+ *     to rocks against a full jammer), and flies straight (or veers) only
+ *     when there is none. A retargeted missile then tracks its new
  *     target with no further roll.
  *  4. decoyedByAsteroids (Seeker 0x0002) is ALSO its own per-tick check,
  *     independent of jamming ("Asteroids and seeker flags, with and without
- *     jamming (wave 4)"): the first tick an asteroid is within
- *     ASTEROID_DECOY_CAPTURE_RANGE of a guided 0x0002 missile whose target
- *     is not an asteroid (tracked or jammed off), the missile retargets onto
- *     it for good. The original lost 65% of unjammed 0x0002 missiles in a
- *     16-rock field and 33% with 4 rocks.
+ *     jamming (wave 4)"): the first tick an asteroid AHEAD of a guided 0x0002
+ *     missile (within ASTEROID_DECOY_CAPTURE_HALF_ANGLE of its heading) is
+ *     within ASTEROID_DECOY_CAPTURE_RANGE, and the missile's target is not
+ *     an asteroid (tracked or jammed off), the missile retargets onto it for
+ *     good. The original lost 65% of unjammed 0x0002 missiles in a 16-rock
+ *     field and 33% with 4 rocks, and ignored rocks beside or behind a
+ *     missile even 60-85 px away ("Asteroid decoy capture, finer (wave 5)").
  *
  * The decision lives in JamDecisionComponent, which is serializer-registered:
  * it rides in snapshots, the wire and the desync hash, so a rollback replays it
@@ -122,9 +127,10 @@ export const SystemInterferenceResource =
  * be lured onto. The entity MUST also carry a MovementStateComponent (so the
  * missile has a position to steer toward). A missile whose weapon has the
  * `decoyedByAsteroids` seeker flag switches its TargetComponent to a decoy
- * that comes within ASTEROID_DECOY_CAPTURE_RANGE of it, jammed or not; a
- * jammed one goes for the nearest decoy within DECOY_DISTRACTION_RANGE at its
- * jam decision instead of applying the veer/straight-fly behaviour.
+ * ahead of it (ASTEROID_DECOY_CAPTURE_HALF_ANGLE) that comes within
+ * ASTEROID_DECOY_CAPTURE_RANGE of it, jammed or not; a jammed one goes for
+ * the nearest decoy ahead of it within DECOY_DISTRACTION_RANGE at its jam
+ * decision instead of applying the veer/straight-fly behaviour.
  *
  * `weight` biases selection: higher-weight decoys are more attractive. Use 1
  * for a plain decoy. (Asteroids can set this to model bigger rocks being more
@@ -150,22 +156,58 @@ const DecoyQuery = new Query([UUID, DecoyTargetComponent,
  * beyond the field"; it did not measure a range. JUDGMENT CALL: the 1000 px
  * kept from before stands for "the field around the launch point": about a
  * screen and a half, reachable within a missile's life, without sending a
- * missile across the system after a far rock.
+ * missile across the system after a far rock. Only rocks inside the capture
+ * cone (ASTEROID_DECOY_CAPTURE_HALF_ANGLE) count, as the wave-5 proposal
+ * asks ("keep the jammed case under the same cone"); that part is untested
+ * on the original.
  */
 export const DECOY_DISTRACTION_RANGE = 1000;
 
 /**
- * The distance (px) at which an asteroid captures a decoyedByAsteroids
- * (Seeker 0x0002) missile, jammed or not: the first tick a rock is this close,
- * the missile retargets onto it for good. The reference measured "about
- * 200-260 px" for captures near the launch point and 150-250 px for
- * mid-flight turns, and could not pin it finer (docs/reference_experiments.md,
- * "Asteroids and seeker flags, with and without jamming (wave 4)", finding
- * 1); 225 is about the middle of the 200-260 range. Whether it is a certainty
- * within range or a per-tick chance is unmeasured; certainty is the simpler
- * reading of the trails.
+ * The distance (px) at which an asteroid AHEAD of a decoyedByAsteroids
+ * (Seeker 0x0002) missile captures it, jammed or not: the first tick such a
+ * rock is this close, the missile retargets onto it for good.
+ *
+ * Measured in docs/reference_experiments.md, "Asteroid decoy capture, finer
+ * (wave 5)": one missile at a time, every encounter tracked. Captures came
+ * from up to about 190 px (175-197 px dead ahead from the launch point;
+ * 100-120 px for mid-flight turns), and the proposal there is "up to about
+ * 200 px". 200 keeps every capture seen. Wave 4's "200-260 px" (the 225 used
+ * before) came from trails of many missiles in a fast-drifting 16-rock field
+ * and could not tell bearing apart.
+ *
+ * A CERTAINTY within range and cone, as before: wave 5 also saw rocks
+ * 150-260 px ahead that did not capture, which fits either a range of
+ * 150-200 px with measurement scatter or a per-tick chance, and the
+ * experiment could not separate the two. Certainty is the simpler reading.
  */
-export const ASTEROID_DECOY_CAPTURE_RANGE = 225;
+export const ASTEROID_DECOY_CAPTURE_RANGE = 200;
+
+/**
+ * The half-width (radians) of the forward cone in which an asteroid can
+ * capture a decoyedByAsteroids missile: the rock's bearing from the missile
+ * must be within this of the missile's heading. 25 degrees.
+ *
+ * Measured ("Asteroid decoy capture, finer (wave 5)"): every capture had its
+ * rock within about 20 degrees of the heading; rocks 27-29 degrees off at
+ * about 80 px were not captured; five rocks 59-84 px to the side of the
+ * launch point (78-107 degrees off) were all ignored, as were rocks just
+ * behind it. The proposal there says "about 30 degrees"; 25 sits between
+ * the widest capture (20) and the narrowest miss (27), so it fits every
+ * measured encounter, where 30 would capture the 27-29 degree misses.
+ *
+ * The cone is also what makes a captured missile HIT its rock (the original
+ * never circled one): a rock within this half-angle of the heading at any
+ * distance lies at most r(1 - cos 25deg), about 0.09 r, inside the missile's
+ * turning circle of radius r, so even the worst placement is passed within
+ * about 10 px for an IR Missile (r about 110 px), inside a rock's hull.
+ * Without the cone a rock straight beside the missile, nearer than its
+ * turning diameter, could be circled until the missile expired.
+ *
+ * Exact arithmetic only (no trig at module load): it is compared against
+ * Angle differences in the sim, where Math is the deterministic one.
+ */
+export const ASTEROID_DECOY_CAPTURE_HALF_ANGLE = 25 * Math.PI / 180;
 
 /** The index of the radar jamming type (0-based) in the 4-tuple. */
 export const RADAR_JAM_INDEX = 1;
@@ -314,7 +356,7 @@ export function rollMissileJammed(vulnerabilities: JammingVulnerabilities,
 export type JamReaction =
     | { kind: 'none' }                       // not jammed: tracks its target
     | { kind: 'retargetParent' }             // attackParentIfJammed
-    // decoyedByAsteroids: the caller looks for the nearest decoy within
+    // decoyedByAsteroids: the caller looks for the nearest decoy ahead within
     // DECOY_DISTRACTION_RANGE and steers by `fallback` if there is none.
     | { kind: 'retargetDecoy', fallback: 'veerAway' | 'flyStraight' }
     | { kind: 'veerAway' }                   // turnsAwayIfJammed
@@ -354,14 +396,42 @@ export type DecoyCandidate =
     readonly [string, { weight: number }, { position: Position }];
 
 /**
- * Picks the best decoy within `range` of a position, deterministically.
+ * A forward field of view: only decoys whose bearing from the searching
+ * position is within `halfAngle` (radians) of `heading` qualify.
+ */
+export interface DecoyCone {
+    heading: Angle;
+    halfAngle: number;
+}
+
+/** The capture cone of a missile heading `heading` (rule 4). */
+export function captureCone(heading: Angle): DecoyCone {
+    return { heading, halfAngle: ASTEROID_DECOY_CAPTURE_HALF_ANGLE };
+}
+
+/**
+ * Whether `offset` (decoy position minus searching position) lies within
+ * `cone`. A decoy at the very position (zero offset) counts: the missile is
+ * already on it. Uses atan2, so call it only in the sim (deterministic Math).
+ */
+export function inCone(offset: Vector, cone: DecoyCone): boolean {
+    if (offset.x === 0 && offset.y === 0) {
+        return true;
+    }
+    return Math.abs(cone.heading.distanceTo(offset.angle).angle)
+        <= cone.halfAngle;
+}
+
+/**
+ * Picks the best decoy within `range` of a position (and, given a `cone`,
+ * inside it), deterministically.
  * "Best" = highest weight, ties broken by smallest distance, then by uuid for a
  * total order (so resimulation picks the same decoy whatever order `decoys`
  * comes in). Every asteroid has weight 1, so among rocks this is the nearest.
  * Returns the decoy uuid or undefined.
  */
 export function nearestDecoy(decoys: Iterable<DecoyCandidate>,
-    from: Position, range: number): string | undefined {
+    from: Position, range: number, cone?: DecoyCone): string | undefined {
     const rangeSq = range * range;
     let bestId: string | undefined;
     let bestWeight = -Infinity;
@@ -370,8 +440,12 @@ export function nearestDecoy(decoys: Iterable<DecoyCandidate>,
         // Position.subtract wraps around the toroidal ±BOUNDARY world, so this
         // is the true shortest-path distance (matching how point defense picks
         // its nearest target).
-        const distSq = movement.position.subtract(from).lengthSquared;
+        const offset = movement.position.subtract(from);
+        const distSq = offset.lengthSquared;
         if (distSq > rangeSq) {
+            continue;
+        }
+        if (cone && !inCone(offset, cone)) {
             continue;
         }
         const weight = decoy.weight;
@@ -391,11 +465,12 @@ export function nearestDecoy(decoys: Iterable<DecoyCandidate>,
 /**
  * nearestDecoy over a plain entity map (entities with a DecoyTargetComponent
  * and a MovementStateComponent), within `range` (default
- * DECOY_DISTRACTION_RANGE). For tests and tooling; the sim iterates its decoy
- * query instead.
+ * DECOY_DISTRACTION_RANGE) and `cone` if given. For tests and tooling; the
+ * sim iterates its decoy query instead.
  */
 export function findNearestDecoy(entities: Iterable<[string, Entity]>,
-    from: Position, range = DECOY_DISTRACTION_RANGE): string | undefined {
+    from: Position, range = DECOY_DISTRACTION_RANGE,
+    cone?: DecoyCone): string | undefined {
     const candidates: DecoyCandidate[] = [];
     for (const [id, entity] of entities) {
         const decoy = entity.components.get(DecoyTargetComponent);
@@ -404,22 +479,25 @@ export function findNearestDecoy(entities: Iterable<[string, Entity]>,
             candidates.push([id, decoy, movement]);
         }
     }
-    return nearestDecoy(candidates, from, range);
+    return nearestDecoy(candidates, from, range, cone);
 }
 
 /**
  * The asteroid that captures a decoyedByAsteroids missile this tick, if any
  * (rule 4 at the top of this file): only while the missile has a target that
  * is not itself a decoy (once on a rock it stays there), and only a decoy
- * within ASTEROID_DECOY_CAPTURE_RANGE. Independent of the jam decision. Pure.
+ * ahead of it (within ASTEROID_DECOY_CAPTURE_HALF_ANGLE of `heading`) and
+ * within ASTEROID_DECOY_CAPTURE_RANGE. Independent of the jam decision.
+ * Pure, given deterministic Math (it takes a bearing).
  */
 export function asteroidCapture(seeker: SeekerFlags,
     target: string | undefined, targetIsDecoy: boolean, from: Position,
-    decoys: Iterable<DecoyCandidate>): string | undefined {
+    heading: Angle, decoys: Iterable<DecoyCandidate>): string | undefined {
     if (!seeker.decoyedByAsteroids || !target || targetIsDecoy) {
         return undefined;
     }
-    return nearestDecoy(decoys, from, ASTEROID_DECOY_CAPTURE_RANGE);
+    return nearestDecoy(decoys, from, ASTEROID_DECOY_CAPTURE_RANGE,
+        captureCone(heading));
 }
 
 /**
@@ -517,7 +595,7 @@ export const MissileJammingSystem = new System({
  * JamDecisionComponent yet (see the system doc). Does nothing without a
  * target.
  */
-function decideJam(movement: { position: Position },
+function decideJam(movement: { position: Position, rotation: Angle },
     target: string | undefined, projectileData: ProjectileWeaponData,
     self: Entity, uuid: string, entities: EntityMap, random: Random,
     interference: number, decoys: Iterable<DecoyCandidate>) {
@@ -545,12 +623,12 @@ function decideJam(movement: { position: Position },
 }
 
 /**
- * Rule 4 (Seeker 0x0002 without or with jamming): the first tick a rock is
- * within ASTEROID_DECOY_CAPTURE_RANGE of the missile, and its target is not
- * already a rock, retarget onto the nearest such rock and track it for good,
- * whatever the jam decision said. Draws no random numbers.
+ * Rule 4 (Seeker 0x0002 without or with jamming): the first tick a rock ahead
+ * of the missile is within ASTEROID_DECOY_CAPTURE_RANGE, and its target is
+ * not already a rock, retarget onto the nearest such rock and track it for
+ * good, whatever the jam decision said. Draws no random numbers.
  */
-function captureByAsteroid(movement: { position: Position },
+function captureByAsteroid(movement: { position: Position, rotation: Angle },
     seeker: SeekerFlags, self: Entity, entities: EntityMap,
     decoys: Iterable<DecoyCandidate>) {
     // Read fresh: the jam decision may have just retargeted the missile.
@@ -558,7 +636,7 @@ function captureByAsteroid(movement: { position: Position },
     const targetIsDecoy = target !== undefined
         && entities.get(target)?.components.has(DecoyTargetComponent) === true;
     const rock = asteroidCapture(seeker, target, targetIsDecoy,
-        movement.position, decoys);
+        movement.position, movement.rotation, decoys);
     if (!rock) {
         return;
     }
@@ -572,7 +650,7 @@ function captureByAsteroid(movement: { position: Position },
  * decision stays pure and testable.
  */
 export function applyJamReaction(reaction: JamReaction, self: Entity,
-    uuid: string, movement: { position: Position },
+    uuid: string, movement: { position: Position, rotation: Angle },
     decoys: Iterable<DecoyCandidate>): JamSteer {
     switch (reaction.kind) {
         case 'none':
@@ -588,8 +666,9 @@ export function applyJamReaction(reaction: JamReaction, self: Entity,
             return 'veerAway';
         }
         case 'retargetDecoy': {
+            // Ahead of it only: the capture cone (rule 3).
             const decoy = nearestDecoy(decoys, movement.position,
-                DECOY_DISTRACTION_RANGE);
+                DECOY_DISTRACTION_RANGE, captureCone(movement.rotation));
             if (decoy) {
                 self.components.set(TargetComponent, { target: decoy });
                 return 'track';

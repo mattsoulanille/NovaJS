@@ -8,6 +8,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import {
     restoreWorld, snapshotWorld, SnapshotPoliciesResource,
 } from 'nova_ecs/plugins/snapshot_plugin';
+import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
@@ -18,9 +19,11 @@ import { makeSystem } from '../make_system.js';
 import { loadWeaponsGameData } from '../spawn/index.js';
 import { WeaponConstructors } from './fire_weapon_plugin.js';
 import {
-    ASTEROID_DECOY_CAPTURE_RANGE, DecoyTargetComponent, JamDecisionComponent,
-    JammingComponent,
+    ASTEROID_DECOY_CAPTURE_HALF_ANGLE, ASTEROID_DECOY_CAPTURE_RANGE,
+    DecoyTargetComponent, JamDecisionComponent, JammingComponent,
 } from './jamming_plugin.js';
+import { AsteroidComponent, loadAsteroidGameData, makeAsteroid }
+    from './asteroid_plugin.js';
 import { TargetComponent } from '../ship/index.js';
 
 /**
@@ -37,6 +40,10 @@ import { TargetComponent } from '../ship/index.js';
 
 const HARRIER = SYNTHETIC.weapons.missile;
 
+/** Stock IR Missile (wëap 134) GuidedTurn 70, as the parser converts it:
+ * 210 deg/s. */
+const IR_TURN_RATE = 70 * 3 * Math.PI / 180;
+
 type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
 describe('missile jamming in flight', () => {
@@ -49,6 +56,7 @@ describe('missile jamming in flight', () => {
         world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
         await loadWeaponsGameData(world, [HARRIER]);
+        await loadAsteroidGameData(gameData, SYNTHETIC.asteroid);
     });
 
     function step(ticks: number) {
@@ -72,7 +80,7 @@ describe('missile jamming in flight', () => {
     }
 
     /** A stand-in asteroid: a still decoy with a position (no hull, so
-     * nothing collides with it; a captured missile circles it). */
+     * nothing collides with it). addAsteroid makes a real one. */
     function addRock(uuid: string, x: number, y: number) {
         world.entities.set(uuid, new Entity(uuid)
             .addComponent(MovementStateComponent, {
@@ -258,15 +266,62 @@ describe('missile jamming in flight', () => {
         return track;
     }
 
-    it('turns an unjammed 0x0002 missile onto a rock it passes within range of, for good', async () => {
-        addTarget('target', 800, 0, [0, 0, 0, 0]);
-        // Off the launch point by more than the capture range, near the
-        // missile's curve toward the target.
-        addRock('rock', 400, -150);
+    /** A real asteroid (the synthetic Shoal rock: hull, collisions, damage),
+     * standing still at (x, y). */
+    async function addAsteroid(uuid: string, x: number, y: number) {
+        const data = await gameData.data.Asteroid.get(SYNTHETIC.asteroid);
+        world.entities.set(uuid, makeAsteroid(gameData, data,
+            world.resources.get(RandomResource)!, new Position(x, y),
+            new Vector(0, 0)));
+    }
+
+    function asteroidHealth(uuid: string) {
+        return world.entities.get(uuid)?.components.get(AsteroidComponent)
+            ?.health;
+    }
+
+    /** A launcher for a Harrier with an IR Missile's flight (stock wëap
+     * 134: 405 px/s, 210 deg/s, a 100-frame life), so its turning radius
+     * is the stock missile's, about 110 px. */
+    async function irLikeLauncher(seeker: Partial<SeekerFlags>) {
+        const harrier = await gameData.data.Weapon.get(HARRIER) as
+            ProjectileWeaponData;
+        const data: ProjectileWeaponData = {
+            ...harrier,
+            seeker: { ...harrier.seeker, ...seeker },
+            shotSpeed: 405,
+            shotDuration: 100 / 30 * 1000,
+            physics: {
+                ...harrier.physics,
+                speed: 405,
+                turnRate: IR_TURN_RATE,
+            },
+        };
+        const construct = world.resources.get(WeaponConstructors)!
+            .get('ProjectileWeaponData')!;
+        return new construct(data, world.resources.get(RunQuery)!);
+    }
+
+    /** Distance from `uuid` to `other` now. */
+    function distance(uuid: string, other: string) {
+        const a = world.entities.get(uuid)!.components
+            .get(MovementStateComponent)!.position;
+        const b = world.entities.get(other)!.components
+            .get(MovementStateComponent)!.position;
+        return a.subtract(b).length;
+    }
+
+    it('turns an unjammed 0x0002 missile onto a rock ahead once it is in range, and hits it', async () => {
+        // The target dead ahead (the missile heads -y), a rock just off
+        // the line of fire: ahead of the missile the whole way, but out of
+        // capture range at launch.
+        addTarget('target', 0, -900, [0, 0, 0, 0]);
+        await addAsteroid('rock', 40, -500);
+        const health = asteroidHealth('rock')!;
         step(5);
         const uuid = fire(await launcher([0, 0, 0, 0],
             { decoyedByAsteroids: true }), 'target');
-        const track = targetTrack(uuid, 'rock', 300);
+        const track = targetTrack(uuid, 'rock', 600);
         const captured = track.findIndex(p => p.target === 'rock');
         expect(captured).withContext('captured mid-flight')
             .toBeGreaterThan(0);
@@ -277,16 +332,83 @@ describe('missile jamming in flight', () => {
             && p.rockDistance > ASTEROID_DECOY_CAPTURE_RANGE)).toBeTrue();
         expect(track[captured].rockDistance)
             .toBeLessThanOrEqual(ASTEROID_DECOY_CAPTURE_RANGE);
-        // Stays on the rock, circling it, for the rest of its life.
-        expect(track.slice(captured).every(p => p.target === 'rock'))
-            .toBeTrue();
-        expect(track[track.length - 1].rockDistance).toBeLessThan(300);
+        // Then it hits the rock: gone well before the end of its life,
+        // and the rock took the damage.
+        expect(world.entities.has(uuid)).withContext('missile spent')
+            .toBeFalse();
+        expect(track.length).toBeLessThan(captured + 90);
+        expect(asteroidHealth('rock')).toBeLessThan(health);
+    });
+
+    it('ignores a rock beside the launch point and flies on to its target', async () => {
+        // The original's wave-5 case: rocks 59-84 px to the side of the
+        // launch point (78-107 degrees off the heading) never captured.
+        for (const [x, y] of [[70, 0], [-60, -15], [80, 20]]) {
+            addTarget('target', 0, -500, [0, 0, 0, 0]);
+            await addAsteroid('rock', x, y);
+            step(5);
+            const uuid = fire(await launcher([0, 0, 0, 0],
+                { decoyedByAsteroids: true }), 'target');
+            let closest = Infinity;
+            for (let i = 0; i < 300; i++) {
+                world.step();
+                if (!world.entities.has(uuid)) {
+                    break;
+                }
+                expect(targetOf(uuid)).toEqual('target');
+                closest = Math.min(closest, distance(uuid, 'target'));
+            }
+            expect(closest).withContext(`rock at (${x}, ${y})`)
+                .toBeLessThan(15);
+            world.entities.delete(uuid);
+            world.entities.delete('rock');
+        }
+    });
+
+    it('hits a rock captured anywhere in the cone with an IR Missile turn rate (no orbit)', async () => {
+        // The hardest rocks to reach sit at the edge of the cone, near the
+        // missile: at r sin(25 deg), about 46 px, the rock lies deepest
+        // inside the turning circle (radius r = 405 px/s / 3.665 rad/s,
+        // about 110 px). Every placement must end in a hit, not a circle.
+        const half = ASTEROID_DECOY_CAPTURE_HALF_ANGLE - 1e-6;
+        const radius = 405 / IR_TURN_RATE;
+        const placements = [
+            [half, radius * Math.sin(half)],
+            [-half, radius * Math.sin(half)],
+            [half, 80], [-half, 150], [half, ASTEROID_DECOY_CAPTURE_RANGE - 1],
+            [0.35, 120], [0, 190],
+        ];
+        for (const [angle, d] of placements) {
+            addTarget('target', 0, -900, [0, 0, 0, 0]);
+            await addAsteroid('rock', d * Math.sin(angle),
+                -d * Math.cos(angle));
+            const health = asteroidHealth('rock')!;
+            step(5);
+            const uuid = fire(await irLikeLauncher({ decoyedByAsteroids: true }),
+                'target');
+            let ticks = 0;
+            let onRock = false;
+            for (; ticks < 200 && world.entities.has(uuid); ticks++) {
+                world.step();
+                onRock ||= targetOf(uuid) === 'rock';
+            }
+            const context = `rock ${(angle * 180 / Math.PI).toFixed(1)} deg, `
+                + `${d.toFixed(0)} px`;
+            expect(onRock).withContext(context).toBeTrue();
+            expect(world.entities.has(uuid)).withContext(context).toBeFalse();
+            // Hit within about a second, not after a lap (one lap is
+            // 2 pi / 3.665 rad/s, about 1.7 s = 103 ticks) or a life of laps.
+            expect(ticks).withContext(context).toBeLessThan(60);
+            expect(asteroidHealth('rock')).withContext(context)
+                .toBeLessThan(health);
+            world.entities.delete('rock');
+        }
     });
 
     it('lets a plain or 0x0001 missile fly past the same rock onto its target', async () => {
         for (const seeker of [{}, { passOverAsteroids: true }]) {
-            addTarget('target', 800, 0, [0, 0, 0, 0]);
-            addRock('rock', 400, -150);
+            addTarget('target', 0, -900, [0, 0, 0, 0]);
+            addRock('rock', 40, -500);
             step(5);
             const uuid = fire(await launcher([0, 0, 0, 0], seeker), 'target');
             const track = targetTrack(uuid, 'rock', 300);
@@ -302,9 +424,12 @@ describe('missile jamming in flight', () => {
         // V 100 against J 50: about half jammed (those go for the nearest
         // rock in the field), the rest captured on the way if they pass a
         // rock within range.
-        addTarget('target', 800, 0, [50, 0, 0, 0]);
-        addRock('rock a', 400, -150);
-        addRock('rock b', -500, -300);
+        // Both rocks ahead of the launch (the missiles head -y), rock a the
+        // nearer; the target beyond rock a and to its right, so unjammed
+        // missiles fly past it.
+        addTarget('target', 300, -900, [50, 0, 0, 0]);
+        addRock('rock a', 100, -500);
+        addRock('rock b', -150, -700);
         step(5);
         const entry = await launcher([100, 0, 0, 0],
             { decoyedByAsteroids: true });

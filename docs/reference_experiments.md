@@ -2205,12 +2205,34 @@ what makes a missile circle a rock beside it; a jammed one goes for the
 nearest rock within `DECOY_DISTRACTION_RANGE` 1000 px (line 155). Against
 wave 5: the range is about right for rocks ahead, the missing direction
 limit is a **mismatch** (5 of 5 side rocks at 60-85 px ignored in the
-original). **Proposed (not applied):** capture only a rock whose bearing is within
+original). **Proposed:** capture only a rock whose bearing is within
 about 30° of the missile's heading (a forward field of view), at up to
 about 200 px; once captured, steer to it as to any target (it hits; with a
 forward cone the rock is always reachable, so no circling). Keep the jammed
 case of wave 4 (a jammed 0x0002 missile goes for a rock) under the same
 cone, untested.
+
+**Applied in "Seeker 0x0002: only rocks ahead capture a missile (25°
+cone, 200 px)"** (`N/nova_plugin/combat/jamming_plugin.ts`,
+`ASTEROID_DECOY_CAPTURE_HALF_ANGLE`, `ASTEROID_DECOY_CAPTURE_RANGE`):
+- The cone is **25°** either side of the heading, not 30°: it keeps every
+  capture seen (up to about 20°) and leaves out the 27-29° rocks at 80 px
+  that did not capture, which a 30° cone would take.
+- The range is **200 px** (was 225): every capture seen was at 197 px or
+  less.
+- Capture is still a **certainty** inside range and cone. These runs can't
+  tell a 150-200 px range with scatter from a per-tick chance (finding 4).
+- A jammed 0x0002 missile goes for the nearest rock inside the same cone,
+  within the 1000 px field.
+- With the cone the missile always hits: a rock within 25° of the heading
+  is never more than r (1 - cos 25°), about 0.09 r, inside the turning
+  circle of radius r. For an IR Missile (r about 110 px) the worst case
+  passes about 10 px from the rock's centre.
+- Specs (`jamming_test.ts`, `jamming_flight_integration_test.ts`):
+  - side and behind rocks at 30-84 px are ignored;
+  - a rock ahead is captured once in range;
+  - with an IR Missile's 405 px/s and 210°/s, rocks at the cone's edge
+    (46-199 px) and nearer the centre are all hit within 60 ticks.
 
 Confidence: high that side rocks at 60-85 px are ignored (5 of 5, clean
 pictures) and that captures hit; medium for the cone width (captures seen
@@ -2770,7 +2792,7 @@ first try is kept as `*-INVALID-o-too-early`.
 |---|---|---|
 | U9 | Landing and boarding speed/distance gates | **Landing answered (wave 4):** range about min(2 S, 240) px by sprite size S (11 planets), speed gate about 20 px/s, absolute. Still open: why a receding ship stays "too fast" far outside the range around big planets; boarding with a NON-mission disabled ship (not built in wave 5 either; "Boarding a non-mission disabled ship" says what the steering loop would take). |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Wave 5:** a hostile stock Fed Carrier in ordinary traffic DOES launch (Vipers, Anacondas); kit-fighter bays never launched. With blast-armed Vipers the carrier hung back and no blast reached it, so the question is still open: the fight must be brought to the carrier. |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (the 0x0002 capture applied in 818de7af has no cone). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 5:** Interference 100 confuses 68% of 0x0008 missiles even at JamVuln 0, and they circle; a few jammed 0x8000 missiles turn on the parent (consistent with NovaJS's 10%). Asteroid decoy: a forward cone, side rocks ignored (applied: 25° cone, 200 px). Open: range vs per-tick chance for rocks ahead. |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 5:** the 0x0010 retreat needs shield < 25% AND (losing on attacker Strength OR heavy fire); AI 1 traffic lands, lingers and jumps (unlike mission ships). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS (original frames recorded in wave 5, the NovaJS headless run is the hub's) | **Wave 5:** fixed guns hold fire in Formation, rear-quadrant turrets fire. Recall: full-speed dash through the slot, more than 300 px overshoot, settled after 18.5 s. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |

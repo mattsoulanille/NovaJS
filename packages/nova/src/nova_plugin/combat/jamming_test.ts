@@ -12,8 +12,10 @@ import { getDefaultProjectileWeaponData, getDefaultSeekerFlags, SeekerFlags }
     from 'novadatainterface/weapon_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import {
+    ASTEROID_DECOY_CAPTURE_HALF_ANGLE,
     ASTEROID_DECOY_CAPTURE_RANGE,
     ATTACK_PARENT_IF_JAMMED_PROBABILITY,
+    captureCone,
     decideJamReaction,
     DECOY_DISTRACTION_RANGE,
     deriveJamming,
@@ -327,6 +329,28 @@ describe('findNearestDecoy (decoy retargeting selection)', () => {
         expect(findNearestDecoy(entities, new Position(0, 0))).toEqual('heavy-far');
     });
 
+    it('keeps only decoys inside a given cone', () => {
+        const entities = new Map<string, Entity>([
+            ['beside', decoyEntity(50, 0)],
+            ['behind', decoyEntity(0, 40)],
+            ['ahead', decoyEntity(10, -300)],
+        ]);
+        const cone = captureCone(new Angle(0));
+        expect(findNearestDecoy(entities, new Position(0, 0))).toEqual('behind');
+        expect(findNearestDecoy(entities, new Position(0, 0),
+            DECOY_DISTRACTION_RANGE, cone)).toEqual('ahead');
+        // Turned to face +x, 'beside' is dead ahead.
+        expect(findNearestDecoy(entities, new Position(0, 0),
+            DECOY_DISTRACTION_RANGE, captureCone(new Angle(Math.PI / 2))))
+            .toEqual('beside');
+    });
+
+    it('counts a decoy at the very position as inside any cone', () => {
+        const entities = new Map<string, Entity>([['on', decoyEntity(5, 5)]]);
+        expect(findNearestDecoy(entities, new Position(5, 5),
+            DECOY_DISTRACTION_RANGE, captureCone(new Angle(1)))).toEqual('on');
+    });
+
     it('breaks exact ties by uuid for a total (deterministic) order', () => {
         const entities = new Map<string, Entity>([
             ['bbb', decoyEntity(10, 0)],
@@ -515,13 +539,15 @@ describe('MissileJammingSystem (one decision per missile)', () => {
         expect(outcomes(42)).not.toEqual(outcomes(43));
     });
 
-    it('sends every jammed decoyedByAsteroids missile to the nearest rock in the field', () => {
+    it('sends every jammed decoyedByAsteroids missile to the nearest rock ahead in the field', () => {
         const world = makeJammingWorld(1);
-        // J 50 against V 100: about half jammed. Rocks beyond the capture
-        // range but inside the field, so only the jammed ones go for them.
+        // J 50 against V 100: about half jammed. Rocks ahead (the missiles
+        // head -y), beyond the capture range but inside the field, so only
+        // the jammed ones go for them; a nearer rock behind is ignored.
         world.entities.set('ship', makeShip(0, -900, [50, 0, 0, 0]));
-        world.entities.set('rock near', makeRock(0, 600));
-        world.entities.set('rock far', makeRock(0, 800));
+        world.entities.set('rock near', makeRock(0, -600));
+        world.entities.set('rock far', makeRock(0, -800));
+        world.entities.set('rock behind', makeRock(0, 300));
         const steers = salvo(world, 200, 'ship', [100, 0, 0, 0],
             { decoyedByAsteroids: true });
         const targets = steers.map((_, i) => targetOf(world, missileId(i)));
@@ -534,12 +560,15 @@ describe('MissileJammingSystem (one decision per missile)', () => {
         expect(targets.filter(target => target === 'ship').length)
             .toEqual(200 - onRock);
         expect(targets).not.toContain('rock far');
+        expect(targets).not.toContain('rock behind');
     });
 
-    it('flies a jammed decoyedByAsteroids missile straight when no rock is in the field', () => {
+    it('flies a jammed decoyedByAsteroids missile straight when no rock is ahead in the field', () => {
         const world = makeJammingWorld(1);
         world.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
-        world.entities.set('rock', makeRock(0, DECOY_DISTRACTION_RANGE + 10));
+        // One rock ahead but beyond the field, one near but to the side.
+        world.entities.set('rock', makeRock(0, -(DECOY_DISTRACTION_RANGE + 10)));
+        world.entities.set('rock beside', makeRock(300, 0));
         expect(salvo(world, 20, 'ship', [100, 0, 0, 0],
             { decoyedByAsteroids: true })
             .every(steer => steer === 'flyStraight')).toBeTrue();
@@ -643,10 +672,11 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
         return world;
     }
 
-    it('captures an unjammed missile when a rock is within the capture range, on the launch tick', () => {
+    it('captures an unjammed missile when a rock ahead is within the capture range, on the launch tick', () => {
         const world = unjammedWorld({ decoyedByAsteroids: true });
+        // The missile heads -y (Angle 0).
         world.entities.set('rock',
-            makeRock(ASTEROID_DECOY_CAPTURE_RANGE - 1, 0));
+            makeRock(0, -(ASTEROID_DECOY_CAPTURE_RANGE - 1)));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock');
         expect(steerOf(world, 'missile')).toEqual('track');
@@ -655,24 +685,24 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
     it('does not capture beyond the capture range, and captures the first tick a rock comes within it', () => {
         const world = unjammedWorld({ decoyedByAsteroids: true });
         world.entities.set('rock',
-            makeRock(ASTEROID_DECOY_CAPTURE_RANGE + 1, 0));
+            makeRock(0, -(ASTEROID_DECOY_CAPTURE_RANGE + 1)));
         for (let i = 0; i < 30; i++) {
             world.step();
             expect(targetOf(world, 'missile')).toEqual('ship');
         }
         // The rock drifts (or the missile flies) within range mid-flight.
-        moveTo(world, 'rock', 0, ASTEROID_DECOY_CAPTURE_RANGE - 1);
+        moveTo(world, 'rock', 0, -(ASTEROID_DECOY_CAPTURE_RANGE - 1));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock');
     });
 
     it('is permanent: the missile stays on its rock whatever comes nearer', () => {
         const world = unjammedWorld({ decoyedByAsteroids: true });
-        world.entities.set('rock a', makeRock(200, 0));
+        world.entities.set('rock a', makeRock(0, -150));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock a');
         // A nearer rock, and the first one drifting far away: no switch.
-        world.entities.set('rock b', makeRock(10, 0));
+        world.entities.set('rock b', makeRock(0, -10));
         moveTo(world, 'rock a', 3000, 0);
         for (let i = 0; i < 30; i++) {
             world.step();
@@ -682,9 +712,13 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
 
     it('picks the nearest rock in range, and breaks a tie by uuid', () => {
         const world = unjammedWorld({ decoyedByAsteroids: true });
-        world.entities.set('rock far', makeRock(200, 0));
-        world.entities.set('rock z', makeRock(0, 100));
-        world.entities.set('rock a', makeRock(-100, 0));
+        // 'rock z' and 'rock a' mirror each other 10 degrees either side of
+        // the heading: exactly the same distance.
+        const x = 100 * Math.sin(10 * Math.PI / 180);
+        const y = -100 * Math.cos(10 * Math.PI / 180);
+        world.entities.set('rock far', makeRock(0, -190));
+        world.entities.set('rock z', makeRock(x, y));
+        world.entities.set('rock a', makeRock(-x, y));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock a');
     });
@@ -697,7 +731,7 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
         world.step();
         // No rock anywhere: the plain jammed behaviour.
         expect(steerOf(world, 'missile')).toEqual('flyStraight');
-        world.entities.set('rock', makeRock(150, 0));
+        world.entities.set('rock', makeRock(0, -150));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock');
         expect(steerOf(world, 'missile')).toEqual('track');
@@ -707,7 +741,7 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
         for (const seeker of [{}, { passOverAsteroids: true }]) {
             const world = makeJammingWorld(1);
             world.entities.set('ship', makeShip(0, -900, [100, 0, 0, 0]));
-            world.entities.set('rock', makeRock(20, 0));
+            world.entities.set('rock', makeRock(0, -20));
             const jammed = salvo(world, 20, 'ship', [100, 0, 0, 0], seeker);
             for (let i = 0; i < 30; i++) {
                 world.step();
@@ -719,7 +753,7 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
 
             const cleanWorld = makeJammingWorld(1);
             cleanWorld.entities.set('ship', makeShip(0, -900, [0, 0, 0, 0]));
-            cleanWorld.entities.set('rock', makeRock(20, 0));
+            cleanWorld.entities.set('rock', makeRock(0, -20));
             const clean = salvo(cleanWorld, 20, 'ship', [100, 0, 0, 0], seeker);
             for (let i = 0; i < 30; i++) {
                 cleanWorld.step();
@@ -731,12 +765,66 @@ describe('asteroid capture of decoyedByAsteroids (Seeker 0x0002) missiles', () =
         }
     });
 
+    /** A rock `distance` px from the origin, `degrees` clockwise of the
+     * missile's heading (-y). */
+    function rockAt(degrees: number, distance: number) {
+        const radians = degrees * Math.PI / 180;
+        return makeRock(distance * Math.sin(radians),
+            -distance * Math.cos(radians));
+    }
+
+    it('ignores a rock beside or behind the missile, however close', () => {
+        // The original's wave-5 side rocks: 59-84 px off the launch point,
+        // 78-107 degrees off the heading, never captured; and rocks just
+        // behind it.
+        for (const [degrees, distance] of [[78, 84], [-90, 59], [107, 70],
+            [180, 79], [-150, 30], [40, 60]]) {
+            const world = unjammedWorld({ decoyedByAsteroids: true });
+            world.entities.set('rock', rockAt(degrees, distance));
+            for (let i = 0; i < 30; i++) {
+                world.step();
+            }
+            expect(targetOf(world, 'missile'))
+                .withContext(`rock ${degrees} deg, ${distance} px`)
+                .toEqual('ship');
+        }
+    });
+
+    it('captures only inside the forward cone of ASTEROID_DECOY_CAPTURE_HALF_ANGLE', () => {
+        const edge = ASTEROID_DECOY_CAPTURE_HALF_ANGLE * 180 / Math.PI;
+        expect(edge).toBeCloseTo(25, 9);
+        for (const [degrees, captured] of [[0, true], [20, true], [-20, true],
+            [edge - 0.5, true], [-(edge - 0.5), true], [edge + 0.5, false],
+            [-(edge + 0.5), false], [29, false]] as const) {
+            const world = unjammedWorld({ decoyedByAsteroids: true });
+            world.entities.set('rock', rockAt(degrees, 150));
+            world.step();
+            expect(targetOf(world, 'missile'))
+                .withContext(`rock ${degrees} deg off the heading`)
+                .toEqual(captured ? 'rock' : 'ship');
+        }
+    });
+
+    it('follows the missile heading, not its target bearing', () => {
+        // A missile that has turned east (Angle pi/2): a rock east of it is
+        // ahead, one north of it (towards the ship) is beside.
+        const world = unjammedWorld({ decoyedByAsteroids: true });
+        world.entities.get('missile')!.components.get(MovementStateComponent)!
+            .rotation = new Angle(Math.PI / 2);
+        world.entities.set('rock north', makeRock(0, -120));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('ship');
+        world.entities.set('rock east', makeRock(150, 0));
+        world.step();
+        expect(targetOf(world, 'missile')).toEqual('rock east');
+    });
+
     it('draws no random numbers for a capture', () => {
         const world = unjammedWorld({ decoyedByAsteroids: true });
         world.step();
         const random = world.resources.get(RandomResource)!;
         const after = random.getState();
-        world.entities.set('rock', makeRock(100, 0));
+        world.entities.set('rock', makeRock(0, -100));
         world.step();
         expect(targetOf(world, 'missile')).toEqual('rock');
         expect(random.getState()).toEqual(after);
