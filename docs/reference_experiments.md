@@ -722,6 +722,11 @@ System".
     multi-jump pin from the minimap);
   - a drag starting on the current system cleared the destination
     ("No Destination").
+  NovaJS deliberately does NOT copy the hidden-click part (Matthew,
+  2026-11-23: "`h` map preview is clickable even when hidden. bug."):
+  the hidden minimap takes no pointer input and clicks there reach
+  space; the click rules above apply only while it is shown
+  (`N/spaceport/mini_map.ts`).
 - **Neither Tab nor thrust shows it.**
 - **The full map (`m`)** opens normally over it.
 - **No automatic display** after landing and taking off, or after `j`

@@ -5,8 +5,8 @@ import { SystemData } from 'novadatainterface/system_data';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import {
-    MINI_MAP_FRAME, MINI_MAP_PANE, MINI_MAP_PEEK_MS, MiniMap, MiniMapPeek,
-    miniMapPosition,
+    MINI_MAP_FADE_MS, MINI_MAP_FRAME, MINI_MAP_PANE, MINI_MAP_PEEK_MS,
+    MiniMap, MiniMapPeek, miniMapAlpha, miniMapPosition,
 } from './mini_map.js';
 import { SystemGraph } from './system_graph.js';
 
@@ -148,33 +148,119 @@ describe('the `h` hyperspace minimap', () => {
             expect(miniMap.container.visible).toBeFalse();
         });
 
-        it('takes clicks only on systems while hidden', () => {
+        /** What PIXI's event system would hit at a pane-local point, on a
+         * stage holding only the minimap at the origin. */
+        function hitAt(miniMap: MiniMap, x: number, y: number) {
+            const stage = new PIXI.Container();
+            stage.addChild(miniMap.container);
+            // +1: the pane sits inside the 1px outline.
+            const hit = new PIXI.EventBoundary(stage).hitTest(x + 1, y + 1);
+            stage.removeChild(miniMap.container);
+            return hit;
+        }
+        const centre = MINI_MAP_PANE.x / 2;
+
+        it('takes the whole pane\'s clicks while shown', () => {
             const miniMap = shown();
-            miniMap.update(true);
-            const hit = miniMap.current!.container.hitArea!;
-            const centre = MINI_MAP_PANE.x / 2;
-            // The current system sits in the middle of the pane.
-            expect(hit.contains(centre, centre)).toBeTrue();
-            // Empty space in a corner passes through to space.
-            expect(hit.contains(3, 3)).toBeFalse();
             miniMap.peek();
-            expect(hit.contains(3, 3)).toBeTrue();
+            miniMap.update(true);
+            expect(miniMap.takesInput).toBeTrue();
+            // The current system (in the middle of the pane) and empty
+            // space in a corner: both are the map's, never what is
+            // underneath.
+            expect(hitAt(miniMap, centre, centre))
+                .toBe(miniMap.current!.container);
+            expect(hitAt(miniMap, 3, 3)).toBe(miniMap.current!.container);
             // Never outside the pane.
+            const hit = miniMap.current!.container.hitArea!;
             expect(hit.contains(-1, centre)).toBeFalse();
             expect(hit.contains(MINI_MAP_PANE.x, centre)).toBeFalse();
         });
 
-        it('shows itself on a press where it sits', () => {
+        it('takes no pointer input while hidden', () => {
             const miniMap = shown();
             miniMap.update(true);
-            expect(miniMap.showing).toBeFalse();
+            // Never shown yet: nothing of it is hit, not even a system.
+            expect(miniMap.takesInput).toBeFalse();
+            expect(miniMap.container.eventMode).toBe('none');
+            expect(hitAt(miniMap, centre, centre)).toBeNull();
+            expect(hitAt(miniMap, 3, 3)).toBeNull();
+            // Shown, then hidden again.
+            miniMap.peek();
+            miniMap.update(true);
+            expect(hitAt(miniMap, centre, centre)).not.toBeNull();
+            clock += MINI_MAP_PEEK_MS;
+            miniMap.update(true);
+            expect(miniMap.container.visible).toBeFalse();
+            expect(miniMap.takesInput).toBeFalse();
+            expect(hitAt(miniMap, centre, centre)).toBeNull();
+            expect(miniMap.current!.container.hitArea!
+                .contains(centre, centre)).toBeFalse();
+        });
+
+        it('takes no input once a peek runs out, even before the next '
+            + 'frame', () => {
+                const miniMap = shown();
+                miniMap.peek();
+                miniMap.update(true);
+                clock += MINI_MAP_PEEK_MS;
+                // No update() yet: the hit area itself refuses.
+                expect(miniMap.current!.container.hitArea!
+                    .contains(centre, centre)).toBeFalse();
+            });
+
+        it('takes no input while inactive, even during a peek', () => {
+            const miniMap = shown();
+            miniMap.peek();
+            miniMap.update(false);
+            expect(miniMap.takesInput).toBeFalse();
+            expect(miniMap.container.eventMode).toBe('none');
+            expect(hitAt(miniMap, centre, centre)).toBeNull();
+        });
+
+        it('hides at once when the peek ends (no fade yet)', () => {
+            expect(MINI_MAP_FADE_MS).toBe(0);
+            const miniMap = shown();
+            miniMap.peek();
+            clock += MINI_MAP_PEEK_MS - 1;
+            miniMap.update(true);
+            expect(miniMap.container.alpha).toBe(1);
+            clock += 1;
+            miniMap.update(true);
+            expect(miniMap.container.alpha).toBe(0);
+            expect(miniMap.container.visible).toBeFalse();
+        });
+
+        it('can fade out over a set time, taking no input meanwhile', () => {
+            // The curve a nonzero MINI_MAP_FADE_MS would use.
+            expect(miniMapAlpha(999, 1000, 300)).toBe(1);
+            expect(miniMapAlpha(1000, 1000, 300)).toBe(1);
+            expect(miniMapAlpha(1150, 1000, 300)).toBeCloseTo(0.5);
+            expect(miniMapAlpha(1300, 1000, 300)).toBe(0);
+            expect(miniMapAlpha(1000, 1000, 0)).toBe(0);
+            // Input stops where the fade starts, whatever its length.
+            const miniMap = shown();
+            miniMap.peek();
+            miniMap.update(true);
+            clock += MINI_MAP_PEEK_MS;
+            expect(miniMap.takesInput).toBeFalse();
+        });
+
+        it('stays up for another peek on a press while shown', () => {
+            const miniMap = shown();
+            miniMap.peek();
+            miniMap.update(true);
+            clock += MINI_MAP_PEEK_MS - 100;
             const press = {
                 pointerId: 1,
                 global: new PIXI.Point(0, 0),
                 getLocalPosition: () => new PIXI.Point(0, 0),
             } as unknown as PIXI.FederatedPointerEvent;
             miniMap.current!.container.emit('pointerdown', press);
+            clock += 2000;
+            miniMap.update(true);
             expect(miniMap.showing).toBeTrue();
+            expect(miniMap.takesInput).toBeTrue();
         });
     });
 });

@@ -26,18 +26,25 @@
 // still running when the display world is rebuilt for the next system
 // runs out there — see StarmapPlugin.)
 //
-// CLICKS WORK WHILE IT IS HIDDEN. A click where it sits picks that system
-// as the single next jump and shows it for another 2.2 s; shift-click and
-// ctrl-click behave like a plain click; a drag that starts on the current
-// system clears the destination (SystemGraphOptions.miniMap has the click
-// rules). Hidden, only the systems' click spots take the pointer (see
-// MiniMap.setGraph) so the rest of that corner still taps ships and
-// planets; shown, the whole pane is UI, so a click on it never falls
-// through to tap-targeting whatever is underneath. A pick is committed the
-// moment it is made, through the very path the full map's Done takes
-// (StarmapPlugin.commitRoute -> SetJumpRouteEvent -> setPlayerJumpRoute
-// input record), so the route a peer simulates is the one this player's
-// minimap shows.
+// HIDDEN, IT TAKES NO INPUT (Matthew, 2026-11-23: "`h` map preview is
+// clickable even when hidden. bug."). This departs from the original on
+// purpose: there a click where the hidden map sits still picks a system
+// and shows it again (reference_experiments M1-M3). Here, between peeks
+// the minimap is not drawn and is out of the hit test altogether, so a
+// click there reaches whatever is underneath (tap-targeting a ship or
+// planet). Shown, the whole pane is UI, so a click on it never falls
+// through to what is underneath; a click on a neighbour picks it as the
+// single next jump and restarts the peek; shift-click and ctrl-click
+// behave like a plain click; a drag that starts on the current system
+// clears the destination (SystemGraphOptions.miniMap has the click
+// rules). A pick is committed the moment it is made, through the very
+// path the full map's Done takes (StarmapPlugin.commitRoute ->
+// SetJumpRouteEvent -> setPlayerJumpRoute input record), so the route a
+// peer simulates is the one this player's minimap shows.
+//
+// FADING OUT: when a peek ends, the map stops taking input at once and
+// then fades over MINI_MAP_FADE_MS (0 today: an instant hide, until the
+// original's fade is measured).
 //
 // It is an overlay, not a dialog: it binds no MenuControls, the simulation
 // keeps running, and every flight key still flies the ship.
@@ -73,6 +80,29 @@ export const MINI_MAP_TOP = 150;
 export const MINI_MAP_STATUS_BAR_GAP = 16;
 /** How long one peek lasts: the original's 66 frames at 30 fps. */
 export const MINI_MAP_PEEK_MS = 66 * 1000 / 30;
+/**
+ * How long the map takes to fade out once a peek ends, in ms: its alpha
+ * falls linearly from 1 to 0 over this long, and it takes no input from
+ * the moment the fade starts. 0 hides it at once. Not yet measured on the
+ * original (reference queue: "does it fade out when it closes"); set it
+ * (and the curve in {@link miniMapAlpha}, if it is not linear) from that.
+ */
+export const MINI_MAP_FADE_MS = 0;
+
+/**
+ * The map's opacity at `now` for a peek that ends (stops taking input)
+ * at `until`: 1 during the peek, then a fade over `fadeMs`, then 0.
+ */
+export function miniMapAlpha(now: number, until: number,
+    fadeMs = MINI_MAP_FADE_MS): number {
+    if (now < until) {
+        return 1;
+    }
+    if (now >= until + fadeMs) {
+        return 0;
+    }
+    return 1 - (now - until) / fadeMs;
+}
 
 /**
  * Where the frame's top-left corner goes, on a UI-logical screen of
@@ -104,6 +134,8 @@ export class MiniMap {
     private readonly frame = new PIXI.Graphics();
     private graph?: SystemGraph;
     private graphSubscription?: Subscription;
+    /** The last {@link update}'s `active`. */
+    private active = false;
 
     /**
      * @param now The display clock, in ms.
@@ -114,6 +146,8 @@ export class MiniMap {
         this.container.name = 'MiniMap';
         this.container.visible = false;
         this.container.alpha = 0;
+        this.container.eventMode = 'none';
+        this.container.interactiveChildren = false;
         // The outline only: the space view shows through the pane.
         this.frame.lineStyle(1, MINI_MAP_FRAME_COLOR, 1, 0);
         this.frame.drawRect(0, 0, MINI_MAP_FRAME, MINI_MAP_FRAME);
@@ -125,28 +159,45 @@ export class MiniMap {
         return this.graph;
     }
 
-    /** Whether a peek is running (the map is on screen when active). */
+    /** Whether a peek is running: the map is on screen at full strength
+     * and takes clicks (when active). A fade, if any, follows it. */
     get showing(): boolean {
         return this.now() < this.peekState.until;
     }
 
+    /** Whether the map takes pointer input right now: active, with a map,
+     * and a peek running. Never while hidden or fading out. */
+    get takesInput(): boolean {
+        return this.active && this.graph !== undefined && this.showing;
+    }
+
     /** Shows the map for {@link MINI_MAP_PEEK_MS} from now — `h`, or a
-     * click where it sits. A peek already running starts over. */
+     * click on it while it is up. A peek already running (or fading)
+     * starts over. */
     peek() {
         this.peekState.until = this.now() + MINI_MAP_PEEK_MS;
-        this.container.alpha = 1;
+        this.update(this.active);
     }
 
     /**
      * Per frame. `active`: whether the minimap may be used at all — in
      * flight with nothing modal up. Inactive, it neither shows nor takes
-     * clicks. Active and between peeks it is drawn fully transparent
-     * (alpha 0: PIXI skips drawing it but still hit-tests it), so its
-     * systems keep taking clicks.
+     * clicks. Active, it is drawn during a peek and its fade-out
+     * ({@link miniMapAlpha}) and takes clicks only during the peek; the
+     * rest of the time it is invisible to the pointer, so clicks reach
+     * what is underneath.
      */
     update(active: boolean) {
-        this.container.visible = active && this.graph !== undefined;
-        this.container.alpha = this.showing ? 1 : 0;
+        this.active = active;
+        const alpha = miniMapAlpha(this.now(), this.peekState.until);
+        this.container.alpha = alpha;
+        this.container.visible = active && this.graph !== undefined
+            && alpha > 0;
+        // 'none' takes it (and its children) out of PIXI's hit test even
+        // while it is still drawn, fading.
+        const input = this.takesInput;
+        this.container.eventMode = input ? 'passive' : 'none';
+        this.container.interactiveChildren = input;
     }
 
     /** Replaces the map inside the frame (undefined empties it). */
@@ -163,16 +214,18 @@ export class MiniMap {
             this.container.addChild(graph.container);
             this.graphSubscription = graph.routeChanged.subscribe(
                 () => this.picked.next(graph));
-            // Shown, the whole pane takes the pointer; hidden, only the
-            // spots a click on a system would land on.
+            // Shown, the whole pane takes the pointer; otherwise nothing
+            // does. (update() already takes the hidden map out of the hit
+            // test; this also covers a peek that ran out since the last
+            // frame.)
             graph.container.hitArea = {
                 contains: (x: number, y: number) =>
                     x >= 0 && y >= 0
                     && x < MINI_MAP_PANE.x && y < MINI_MAP_PANE.y
-                    && (this.showing || graph.hasSystemAt(x, y)),
+                    && this.takesInput,
             };
             // Any press that lands on it — a pick, a modified click, the
-            // start of a drag — shows it again.
+            // start of a drag — keeps it up for another peek.
             graph.container.on('pointerdown', () => this.peek());
         }
     }

@@ -542,15 +542,6 @@ export class SystemGraph {
     }
 
     /**
-     * Whether a pane-local point (the graph container's coordinates) is
-     * within clicking distance of a drawn system — where the hidden
-     * minimap still takes clicks (mini_map.ts).
-     */
-    hasSystemAt(viewX: number, viewY: number): boolean {
-        return this.systemAt(viewX, viewY) !== undefined;
-    }
-
-    /**
      * Acts as if the player began dragging on `systemId`: the same rule as
      * a pointer drag that started on it. For headless driving and specs;
      * ignored for a system not on this map.

@@ -54,6 +54,9 @@ export interface MiniMapHooks {
     press(): void;
     /** Whether a peek is running (on screen, unless something modal is). */
     readonly shown: boolean;
+    /** Whether it takes pointer input right now: only while shown, in
+     * flight with nothing modal up — never while hidden or fading out. */
+    readonly takesInput: boolean;
     /** The graph it shows (to click systems on), once built. */
     graph(): SystemGraph | undefined;
 }
@@ -102,9 +105,9 @@ interface MiniMapState {
 const MiniMapResource = new Resource<MiniMapState>('MiniMap');
 
 /**
- * Keeps the minimap's visibility and place current: usable (drawn during
- * a peek, clickable between peeks) only while it has a map to show and
- * nothing modal is up — a landed screen, or the full map in flight, owns
+ * Keeps the minimap's visibility and place current: usable (drawn and
+ * clickable during a peek, then neither) only while it has a map to show
+ * and nothing modal is up — a landed screen, or the full map in flight, owns
  * the screen (and the keyboard) then; and anchored beside the status bar
  * at whatever size the window is.
  */
@@ -330,8 +333,8 @@ export const StarmapPlugin: Plugin = {
         };
 
         // The `h` hyperspace minimap (spaceport/mini_map.ts). Built as soon
-        // as the player is here, not on the first `h`: its hidden area
-        // takes clicks.
+        // as the player is here, not on the first `h`, so the first press
+        // shows a map at once.
         const miniMap = new MiniMap(
             () => world.resources.get(TimeResource)?.time ?? 0, miniMapPeek);
         stage.addChild(miniMap.container);
@@ -381,8 +384,11 @@ export const StarmapPlugin: Plugin = {
                 }
                 const docked = world.resources.get(DockedShipResource)
                     ?.current !== undefined;
-                miniMap.update(MenuControls.focused === undefined && !docked);
-                if (!miniMap.container.visible) {
+                const active = MenuControls.focused === undefined && !docked;
+                miniMap.update(active);
+                // Placed whenever it may be used, hidden or not, so it is
+                // already in place on the frame a peek starts.
+                if (!active) {
                     return;
                 }
                 const statusBar = world.resources.get(StatusBarResource);
@@ -398,6 +404,9 @@ export const StarmapPlugin: Plugin = {
                 press: pressMiniMap,
                 get shown() {
                     return miniMap.showing;
+                },
+                get takesInput() {
+                    return miniMap.takesInput;
                 },
                 graph: () => miniMap.current,
             };
