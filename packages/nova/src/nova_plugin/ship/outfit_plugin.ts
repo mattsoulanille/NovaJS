@@ -150,6 +150,10 @@ function deriveWeaponsState(outfits: OutfitsState,
                     const weaponState = weaponsState.get(weaponId);
                     weaponState.count += count * state.count;
                     weaponState.fireGroup = weapon.fireGroup;
+                    const reach = weaponReach(weapon);
+                    if (Number.isFinite(reach)) {
+                        weaponState.reach = reach;
+                    }
                     if (weapon.destroyShipWhenFiring) {
                         weaponState.suicideReach = weaponReach(weapon);
                     }

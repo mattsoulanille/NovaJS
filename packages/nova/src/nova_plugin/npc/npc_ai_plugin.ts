@@ -37,7 +37,9 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *                   mission ship of AI 1 only passes through: it jumps
  *                   out 30-40 s after it appears.
  *  2 brave trader:  same, but fights its attacker back while the govt
- *                   MaxOdds calculation stays favorable, then flees.
+ *                   MaxOdds calculation stays favorable, then flees;
+ *                   it also flees once an attacker that had been
+ *                   within its longest weapon reach is beyond it.
  *  3 warship:       hunts govt enemies (disposition via GovtData
  *                   classes/allies/enemies); patrols waypoints when
  *                   there is nothing to hunt; jumps out eventually.

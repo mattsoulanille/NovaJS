@@ -310,6 +310,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    every jam decision now draws six numbers instead of five. No input
 //    kind or message kind changes. The derived wire schema fingerprint
 //    changes, and the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the gövt 0x0010 jump-or-stay draw and the AI 2
+//    "out of range" flight (reference A wave 7). Two OPTIONAL NpcComponent
+//    fields: `retreatJump` (npc/npc_retreat.ts: one PRNG draw the first
+//    time a flagged warship is losing under 25% shield, kept until its
+//    shield is back at 25%) and `reachedAggressor` (npc/npc_decision.ts:
+//    a brave trader's aggressor once it has been within the trader's
+//    longest weapon reach). One OPTIONAL WeaponState field, `reach`
+//    (ship/weapons_state.ts: the weapon's reach in px, copied from its
+//    data when the state derives; absent for bays), so every armed
+//    ship's WeaponsState hash input changes. Sim-rule changes alongside:
+//    the 16 s stand-off-then-jump timer is gone (a flagged warship that
+//    draws "stay" never jumps for it), and an AI 2 trader runs once its
+//    attacker is beyond its reach. No input kind or message kind changes.
+//    The derived wire schema fingerprint changes (88eeee94fd636d3b), and
+//    the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

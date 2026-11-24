@@ -28,6 +28,15 @@ const WeaponState = t.intersection([t.type({
      */
     suicideReach: t.number,
     /**
+     * How far a shot from this weapon can touch a target in px
+     * (weapon_range.ts weaponReach), copied from its game data when the
+     * state is derived, for the same reason as fireGroup and suicideReach:
+     * the NPC brain decides by it (a brave trader runs once its attacker
+     * is beyond its longest reach, npc_decision.ts) and must never read
+     * `getCached`. Absent for a bay, whose reach is unbounded.
+     */
+    reach: t.number,
+    /**
      * Simulation time of the last shot this weapon ACTUALLY emitted, set
      * by WeaponsSystem on the same branch that stamps the local
      * `lastFired` reload clock — i.e. only when `fireFromEntity` really

@@ -4,8 +4,8 @@ import {
     getDefaultProjectileWeaponData, WeaponData,
 } from 'novadatainterface/weapon_data';
 import {
-    shortestSuicideReach, shortestSuicideReachOfStates, suicideWeaponInReach,
-    suicideWeaponInReachState, weaponReach,
+    longestReachOfStates, shortestSuicideReach, shortestSuicideReachOfStates,
+    suicideWeaponInReach, suicideWeaponInReachState, weaponReach,
 } from './weapon_range.js';
 
 function projectile(over: Partial<ReturnType<
@@ -123,5 +123,33 @@ describe('synced-state forms (never getCached at decision time)', () => {
 
     it('suicideWeaponInReachState never restricts an ordinary weapon', () => {
         expect(suicideWeaponInReachState({}, Infinity)).toBeTrue();
+    });
+});
+
+describe('longestReachOfStates (a brave trader\'s "out of range")', () => {
+    it('picks the longest reach aboard, in any order', () => {
+        expect(longestReachOfStates([
+            ['a', { count: 1, reach: 300 }],
+            ['b', { count: 2, reach: 900 }],
+            ['c', { count: 1, reach: 450 }],
+        ])).toBe(900);
+        expect(longestReachOfStates([
+            ['c', { count: 1, reach: 450 }],
+            ['b', { count: 2, reach: 900 }],
+        ])).toBe(900);
+    });
+
+    it('skips bays (no reach) and weapons no longer aboard', () => {
+        expect(longestReachOfStates([
+            ['bay', { count: 1 }],
+            ['gone', { count: 0, reach: 5000 }],
+            ['gun', { count: 1, reach: 600 }],
+        ])).toBe(600);
+    });
+
+    it('is undefined for an unarmed or bay-only ship', () => {
+        expect(longestReachOfStates([])).toBeUndefined();
+        expect(longestReachOfStates([['bay', { count: 4 }]]))
+            .toBeUndefined();
     });
 });

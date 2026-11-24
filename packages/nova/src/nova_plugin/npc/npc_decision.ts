@@ -43,6 +43,7 @@ import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from '../ship/index.js';
+import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * The NPC think step: owns every mode transition (see the AI overview in
@@ -211,12 +212,13 @@ export const NpcDecisionSystem = new System({
         ShipDataComponent, Optional(FormationComponent),
         Optional(EscortCommandComponent), Optional(AssistingComponent),
         Optional(JumpComponent), Optional(SystemHoldComponent),
+        Optional(WeaponsStateComponent),
         NpcTargetsQuery,
         PlanetsQuery, TimeResource, RandomResource, Entities, UUID,
         SimulationGameDataResource, GetEntity] as const,
     step(npc, movement, target, govt, shield, shipData, formation,
-        escortCommand, assisting, jump, hold, ships, planets, time, random,
-        entities, uuid, gameData, entity) {
+        escortCommand, assisting, jump, hold, weapons, ships, planets, time,
+        random, entities, uuid, gameData, entity) {
         // Unfinished business here (a refuel offer on the table, a rescue
         // target waiting to be boarded): this ship never DECIDES to leave.
         // See system_hold.ts; the jump exits themselves are gated in
@@ -438,15 +440,47 @@ export const NpcDecisionSystem = new System({
         switch (npc.aiType) {
             case 2: // Brave trader: fight back while the odds hold.
                 if (aggressorEntry) {
+                    const [aggressorUuid, aggressorD2, aggressorStrength] =
+                        aggressorEntry;
+                    // "...but runs away when his attacker is out of range"
+                    // (Bible AIType 2). Reference "A wave 7: does an AI 2
+                    // trader run when its attacker is out of range?": once
+                    // the player that had been fighting it flew off past
+                    // its guns' reach, it ran directly away and left the
+                    // system about 20 s later. "Out of range" is beyond
+                    // its LONGEST weapon reach (synced WeaponState.reach),
+                    // and only after the attacker has been within it: a
+                    // trader provoked from afar closes in to fight first
+                    // (waves 2 and 4: tickled from up to 2250 px, it came
+                    // in and fought). Unarmed or bay-only, there is no
+                    // reach and the rule never fires. Not committed: an
+                    // attacker that comes back into reach is fought again.
+                    // Synced state and distances only; no PRNG draw.
+                    if (npc.reachedAggressor !== undefined
+                        && npc.reachedAggressor !== aggressorUuid) {
+                        delete npc.reachedAggressor;
+                    }
+                    const reach = weapons
+                        ? longestReachOfStates(weapons) : undefined;
+                    const inReach = reach !== undefined
+                        && aggressorD2 <= reach * reach;
+                    if (inReach) {
+                        npc.reachedAggressor = aggressorUuid;
+                    }
+                    const brokeOff = reach !== undefined && !inReach
+                        && npc.reachedAggressor === aggressorUuid;
                     const favorable = oddsFavorable(govtData?.maxOdds ?? 100,
-                        myStrength, aggressorEntry[2]);
-                    if (favorable) {
+                        myStrength, aggressorStrength);
+                    if (favorable && !brokeOff) {
                         npc.mode = 'attack';
-                        target.target = aggressorEntry[0];
+                        target.target = aggressorUuid;
                         return;
                     }
                     npc.mode = 'flee';
                     return;
+                }
+                if (npc.reachedAggressor !== undefined) {
+                    delete npc.reachedAggressor;
                 }
                 if (npc.mode === 'attack' || npc.mode === 'flee') {
                     // Attacker gone or lost: back to business.

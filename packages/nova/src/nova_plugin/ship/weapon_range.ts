@@ -129,6 +129,25 @@ export function shortestSuicideReachOfStates(
 }
 
 /**
+ * The longest reach among a ship's mounted weapons, read from its SYNCED
+ * weapon states (WeaponState.reach, copied from the data when the states
+ * derived), or undefined when it mounts none with a bounded reach (no
+ * weapons, or bays only). Weapons with a zero count are not aboard.
+ */
+export function longestReachOfStates(
+    weapons: Iterable<readonly [string, { count: number, reach?: number }]>):
+    number | undefined {
+    let longest: number | undefined;
+    for (const [, state] of weapons) {
+        if (state.count > 0 && state.reach !== undefined
+            && (longest === undefined || state.reach > longest)) {
+            longest = state.reach;
+        }
+    }
+    return longest;
+}
+
+/**
  * The synced-state form of suicideWeaponInReach: the fire trigger for a
  * suicide weapon from WeaponState.suicideReach (copied from the data at
  * derivation), so the decision never reads getCached — a cold cache on

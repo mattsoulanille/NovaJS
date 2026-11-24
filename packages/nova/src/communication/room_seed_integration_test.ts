@@ -191,11 +191,16 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // hull names the Raiders or the Compact hash differently. Both
             // Random states did not move: the draw count per jam decision
             // is unchanged.
+            //
+            // And again for the AI 2 "out of range" rule (reference A wave
+            // 7): every weapon state now carries its `reach`, so every armed
+            // ship hashes differently from genesis. Neither Random state
+            // moved: nothing in these 300 steps draws differently.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, 'b2f5c0fa', '8534ddd3',
+                [THESSALY, '54afcf19', '8fd14222',
                     [3151324470, 1269255679, 2221342106, 396450743]],
-                [SYNTHETIC.systems.kestrel, 'cc8bd060', '71a631e3',
+                [SYNTHETIC.systems.kestrel, '71fa40dd', '71d26b10',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

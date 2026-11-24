@@ -61,6 +61,11 @@ export const NpcState = t.intersection([t.type({
      * the shield stays under 25% and dropped once it is back at or above,
      * so each crossing draws once (npc_retreat.ts). */
     retreatJump: t.boolean,
+    /** A brave trader's (AI 2) current aggressor, once that aggressor has
+     * been within the trader's longest weapon reach. If it is then beyond
+     * that reach the trader runs (the Bible's "runs away when his attacker
+     * is out of range"; npc_decision.ts). Dropped with the aggressor. */
+    reachedAggressor: t.string,
     /** A mission special ship with no goal and AI 1 (mïsn ShipGoal -1,
      * ShipBehav -1; set at spawn by mission_ship_spawn.ts). It has no
      * business here: its departure roll uses the short PASS_THROUGH
