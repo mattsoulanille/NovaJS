@@ -214,6 +214,23 @@ describe('plunder dialog content', () => {
                 .enabledByAction['plunderCredits']).toBeFalse();
         });
 
+        it('reads None for credits and ammo once they are taken', () => {
+            const taken = plunderDialogContent(boardingState({
+                creditsAvailable: 591_000, creditsTaken: true,
+                ammoAvailable: 12, ammoTaken: true,
+            }), victim(), 100);
+            const text = taken.lines.join('\n');
+            expect(text).toContain('Credits:  None');
+            expect(text).toContain('Ammo:  None');
+            expect(text).not.toContain('591,000');
+            expect(taken.enabledByAction['plunderCredits']).toBeFalse();
+            const untaken = plunderDialogContent(boardingState({
+                creditsAvailable: 591_000, ammoAvailable: 12,
+            }), victim(), 100).lines.join('\n');
+            expect(untaken).toContain('591,000');
+            expect(untaken).toContain('Ammo:  12');
+        });
+
         it('greys Energy for a dry tank', () => {
             const dry = victim();
             dry.components.set(FuelComponent,

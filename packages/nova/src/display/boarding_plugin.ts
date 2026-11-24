@@ -239,10 +239,16 @@ export function plunderDialogContent(boarding: BoardingState,
     // `lines` keeps the flat rendering for specs and for the notes below it.
     const rows: PlunderRow[] = [
         { label: 'Cargo:', value: cargoText },
-        { label: 'Credits:', value: formatCredits(boarding.creditsAvailable) },
+        // Once taken, a row reads 'None' (Matthew, 2026-11-23: the money
+        // still showed after Credits had been taken).
+        {
+            label: 'Credits:',
+            value: !boarding.creditsTaken && boarding.creditsAvailable > 0
+                ? formatCredits(boarding.creditsAvailable) : 'None',
+        },
         {
             label: 'Ammo:',
-            value: boarding.ammoAvailable > 0
+            value: !boarding.ammoTaken && boarding.ammoAvailable > 0
                 ? `${boarding.ammoAvailable}` : 'None',
         },
         {
