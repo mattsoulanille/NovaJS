@@ -5884,7 +5884,7 @@ lived until the player's own burst.
 4. Brackets: the ShipBehav-0 duellist showed RED corners until disabled,
    grey after (matches K9 / K10).
 
-**NovaJS today (base 2b744c80): three mismatches.**
+**NovaJS today (base 621a94cf): three mismatches.**
 - (i) `N/nova_plugin/ship/firing_group.ts:181-184` `firingImmune`: a
   `victimDisabled` victim loses all immunity (passed from
   `N/nova_plugin/combat/projectile_plugin.ts:453` `disabledCancelsImmunity`),
@@ -6015,7 +6015,7 @@ at 70% armor and no record changed; take 2 is the row above.)
    disable alone was not read (two takes: no traffic in the system, then
    the trader out of the gun's reach).
 
-**NovaJS today (base 2b744c80; per-govt records, ruling #376): four
+**NovaJS today (base 621a94cf; per-govt records, ruling #376): four
 mismatches.**
 - `N/nova_plugin/reputation/reputation_plugin.ts:191-236`
   (`KillCreditSystem`) charges KillPenalty only, and
@@ -6116,7 +6116,7 @@ evidence folder, distances from the bar's centre along the line of fire).
    but side-on the original's fuse fires 4-14 px closer than NovaJS's for
    prox 12-30 (33.5-42 vs 37.7-55.7).
 
-**NovaJS (base 2b744c80).** `N/nova_plugin/combat/projectile_plugin.ts:619-624`:
+**NovaJS (base 621a94cf).** `N/nova_plugin/combat/projectile_plugin.ts:619-624`:
 the outcomes match; the side-on distances for larger fuses do not
 (cosmetic: where the starburst appears). No fix proposed; a fit would need
 more shapes than one bar.
@@ -6161,7 +6161,7 @@ shift between frames) and from shots (`bands.py`).
 | Mission BBS job text | Down, PageDown | nothing: the text is clipped at 8 lines, with no arrows (it never scrolls) |
 | arrows at either end | | drawn dark (disabled): the up arrow at the top, the down arrow at the bottom |
 
-**NovaJS (headless, PORT 8557, base 2b744c80, new pilot landed at nova:164;
+**NovaJS (headless, PORT 8557, run on 2b744c80 and again on 621a94cf with the same numbers but for the grid wheel, new pilot landed at nova:164;
 `showOfferPopup` with the same 60 lines; no console errors).**
 
 | widget | input | NovaJS | original |
@@ -6174,9 +6174,9 @@ shift between frames) and from shots (`bands.py`).
 | | wheel | nothing | nothing (matches) |
 | outfitter / shipyard grid | one click | **a PAGE (5 rows)** on the release | one ROW on the release |
 | | held | one page on the release | one row on the release (no repeat: matches in kind) |
-| | wheel / PageDown / End | nothing | nothing (matches) |
+| | wheel / PageDown / End | nothing on 2b744c80; since 621a94cf (d28c4b29) the wheel moves the grid by rows: a deliberate NovaJS Enhancement ("Scroll wheel in shops", `docs/novajs_enhancements.md`), which this run confirms the original lacks | nothing |
 
-Code: `N/spaceport/item_grid.ts:472-485` (`scrollUp` / `scrollDown` move
+Code: `N/spaceport/item_grid.ts:571-585` (`scrollUp` / `scrollDown` move
 `BOX_COUNT[1]` rows), `N/spaceport/offer_popup.ts:324-357`
 (`bindScrollButton`: a `POPUP_SCROLL_STEP` jump on press, then the hold),
 `N/spaceport/popup_layout.ts:94-98` (`POPUP_SCROLL_STEP` = a line,
@@ -6198,7 +6198,7 @@ that a real mouse's events differ).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w12/scroll/{explore,measure,wheel}/*/`
 (`measure`: the input stamps in `recording.events.json`); NovaJS:
-`scroll/novajs/` (`scroll.log`, `shots/`, the driver `scroll.mjs`).
+`scroll/novajs/` (`scroll.log`, `base621/scroll.log`, `shots/`, the driver `scroll.mjs`).
 
 ### Trade center at Schmoo, and the trade-in's outfits, wave 12 (2026-11-24)
 
@@ -6226,7 +6226,7 @@ Durknen Girns (BuyOn `b43`, SellOn empty); none of them is SoldAt there.
    b43 set, and then pushes Opals out. (SellOn presumably gates the SoldAt
    row; not tested.)
 
-**NovaJS (base 2b744c80): two mismatches.**
+**NovaJS (base 621a94cf): two mismatches.**
 `N/nova_plugin/economy/trade_logic.ts:185` `junkExchangeRows` keeps the
 two highest-id jünk rows of either tier (Schmoo: two High rows), and
 `:131` / `:141` gate a BoughtAt row with `sellOn` and a SoldAt row with
