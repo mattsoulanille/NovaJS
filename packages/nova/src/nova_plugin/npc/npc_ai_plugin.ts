@@ -17,6 +17,7 @@ import {
 import {
     ContrabandScannedComponent, ContrabandScannedType,
 } from './contraband_target.js';
+import { DistressCallEvent, DistressCallEventType } from './distress.js';
 
 /**
  * ============================================================================
@@ -61,11 +62,16 @@ import {
  *                   come within its engagement bubble. Where its govt
  *                   scans (a ScanMask, and it enforces the law here) it
  *                   "buzzes" a player ship carrying contraband and
- *                   scans it (contraband*.ts). The piracy-police
- *                   reaction is not modeled: no NPC reacts to an attack
- *                   on a third ship. (Boarding exists, for the player
+ *                   scans it (contraband*.ts). PIRACY POLICE: it turns
+ *                   on a player it watches attack another ship its govt
+ *                   defends (a nosy govt: any non-enemy, non-0x0020
+ *                   victim; any govt: its own or an ally's ship;
+ *                   piracy_police.ts). (Boarding exists, for the player
  *                   and for NPC plunder, npc_plunder.ts, which keeps AI
  *                   4 out of it.)
+ *
+ * Traders (AI 1/2) under NPC attack send DISTRESS CALLS to the status line
+ * unless their govt sets Flags2 0x0008 (distress.ts); nobody answers them.
  *
  * NPC DEPARTURE runs the real hyperspace jump sequence. A ship that is
  * departing or fleeing enters jump_plugin's JumpComponent state machine
@@ -115,6 +121,10 @@ import {
  *                           stellarEntries for the respawn's take-off
  *  npc_mining.ts            shïp Flags3 0x0001/0x0002 miners: who mines,
  *                           chooseMiningJob, which weapons fire at rocks
+ *  piracy_police.ts         AI 4 witnesses of an attack on a third ship:
+ *                           policeDefendVictim, piracyWitnesses
+ *  distress.ts              traders' distress calls: who calls, how often,
+ *                           DistressCallEvent, the line
  */
 
 export {
@@ -175,6 +185,9 @@ export const NpcAiPlugin: Plugin = {
         serializer?.addComponent(ContrabandScannedComponent,
             ContrabandScannedType);
         serializer?.addEvent(ContrabandScanEvent, ContrabandScanEventType);
+        // A trader's distress call (distress.ts): host -> display only, the
+        // status line of every player in the system.
+        serializer?.addEvent(DistressCallEvent, DistressCallEventType);
         world.addSystem(NpcAggressionSystem);
         world.addSystem(NpcDecisionSystem);
         world.addSystem(NpcSteeringSystem);

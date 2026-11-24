@@ -27,6 +27,8 @@ export * from './npc_plunder_board.js';
 export * from './contraband.js';
 export * from './contraband_target.js';
 export * from './contraband_scan.js';
+export * from './piracy_police.js';
+export * from './distress.js';
 export * from './npc_ai_plugin.js';
 export * from './npc_plugin.js';
 

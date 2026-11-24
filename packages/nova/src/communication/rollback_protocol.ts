@@ -438,6 +438,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    the derived wire schema fingerprint is unchanged (6ffbcaef16994bf3 on
 //    its own; de1618493c2c83ef together with the shuttle/mining note above).
 //    The build stamp gate keeps builds with different sim rules apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): piracy police and distress calls (reference "P1
+//    wave 14"). One OPTIONAL NpcState field, `distressAt` (npc/
+//    npc_component.ts: the sim time of a trader's last distress call), and
+//    one new serializer event, DistressCallEvent (`{ship, roll}`, npc/
+//    distress.ts; host -> display only, untargeted). Ships that never call
+//    carry no `distressAt`, so their hash inputs are unchanged. Sim-rule
+//    changes alongside: NpcAggressionSystem records a player-side attacker
+//    on every AI 4 witness whose govt defends the victim (npc/
+//    piracy_police.ts), and a trader under NPC attack draws one PRNG value
+//    for its call. No input kind or message kind changes. The derived wire
+//    schema fingerprint changes (de1618493c2c83ef -> 9812fe94442467ca), and
+//    the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

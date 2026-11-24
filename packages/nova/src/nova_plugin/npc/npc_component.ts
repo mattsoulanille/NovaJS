@@ -90,6 +90,10 @@ export const NpcState = t.intersection([t.type({
      * window (npc_decision.ts) and it leaves the moment that comes due,
      * whatever it is doing (reference A-series wave 4). */
     passingThrough: t.boolean,
+    /** Sim time (ms) of this trader's last distress call (npc/distress.ts):
+     * it sends no other for DISTRESS_CALL_INTERVAL_MS. Set only on ships
+     * that have called. */
+    distressAt: t.number,
 })]);
 export type NpcState = t.TypeOf<typeof NpcState>;
 export const NpcComponent = new Component<NpcState>('NpcComponent');

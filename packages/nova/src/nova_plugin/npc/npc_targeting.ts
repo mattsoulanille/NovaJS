@@ -1,12 +1,15 @@
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, UUID } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import {
     DamagedEvent, DisabledComponent, FiringGroupComponent, OwnerComponent,
-    ShieldComponent, ShipComponent, SourceComponent, TargetComponent,
+    ShieldComponent, ShipComponent, ShipDataComponent, SourceComponent,
+    TargetComponent,
 } from '../ship/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
@@ -17,6 +20,10 @@ import { NpcComponent, NpcState } from './npc_component.js';
 import { flockPlayer, sameFlock } from './allegiance.js';
 import { FormationComponent } from './npc_formation.js';
 import { addDamageLoad } from './npc_retreat.js';
+import { piracyWitnesses } from './piracy_police.js';
+import {
+    distressCallDue, DistressCallEvent, sendsDistressCalls,
+} from './distress.js';
 
 /**
  * Target selection primitives shared by the NPC decision step: the
@@ -233,6 +240,12 @@ function provoke(npc: NpcState, source: string,
 export const FleetFollowersQuery = new Query([FormationComponent,
     NpcComponent, UUID, Optional(EscortCommandComponent)] as const);
 
+/** Every NPC, with what piracy_police.ts's piracyWitnesses reads: the
+ * candidates for AI 4 witnesses of an attack on somebody else. */
+export const PiracyPoliceQuery = new Query([NpcComponent, UUID,
+    MovementStateComponent, Optional(GovtComponent),
+    Optional(EscortCommandComponent), Optional(DisabledComponent)] as const);
+
 /**
  * An attack on `leader` provokes its FLEET ESCORTS as if it had hit them
  * (reference "P1 wave 13", see NpcAggressionSystem): every NPC holding a
@@ -297,6 +310,21 @@ function provokeFleet(leader: string, source: string,
  * still recorded on the escort alone, its leader and fellow escorts do
  * not take it up.
  *
+ * PIRACY POLICE (npc/piracy_police.ts): an attack from a PLAYER's side is
+ * also recorded on every AI 4 WITNESS whose govt defends the victim: police
+ * of a nosy govt (gövt 0x0002) for any non-enemy victim whose govt does not
+ * set 0x0020, and any police for a ship of their own govt or an ally's.
+ * Reference "P1 wave 14": nosy police turned on the player for shooting an
+ * unrelated trader beside them, ignored it for a 0x0020 victim, and
+ * non-nosy police defended their ally's trader. Each witness's fleet
+ * escorts follow it, as for a hit on it.
+ *
+ * DISTRESS CALLS (npc/distress.ts): an attack on a trader (AI 1/2) by an NPC
+ * that is NOT on a player's side sends "<ship>: <STR# 5003 line>" to the
+ * players in the system (DistressCallEvent; one PRNG draw picks the line),
+ * at most once per DISTRESS_CALL_INTERVAL_MS per ship, unless its govt or
+ * hull sets Flags2 0x0008. Reference "P1 wave 14", the raid watch.
+ *
  * Never a ship of the victim's OWN FLOCK (allegiance.ts's sameFlock). Direct
  * hits pass through a flock, but damage from inside it still lands: a blast
  * whose weapon hurts its firing ship carries no firing group and splashes
@@ -317,9 +345,11 @@ export const NpcAggressionSystem = new System({
     events: [DamagedEvent],
     args: [DamagedEvent, NpcComponent, UUID, Entities,
         Optional(GovtComponent), Optional(ShieldComponent), TimeResource,
-        SimulationGameDataResource, FleetFollowersQuery] as const,
+        SimulationGameDataResource, FleetFollowersQuery, PiracyPoliceQuery,
+        Optional(ShipDataComponent), RandomResource, Emit] as const,
     step({ damager, damage, scale = 1 }, npc, uuid, entities,
-        govt, shield, time, gameData, followers) {
+        govt, shield, time, gameData, followers, police, shipData, random,
+        emit) {
         const getEntity = (id: string) => entities.get(id);
         const weapon = entities.get(damager);
         const source = responsibleShip(weapon, getEntity);
@@ -350,6 +380,26 @@ export const NpcAggressionSystem = new System({
             }
             provoke(npc, source, getEntity);
             provokeFleet(uuid, source, followers, getEntity);
+            if (isPlayerSideShip(source, getEntity)) {
+                const victim = entities.get(uuid);
+                const witnesses = victim ? piracyWitnesses(uuid, victim,
+                    source, getEntity, police,
+                    id => gameData.data.Govt.getCached(id), govtData,
+                    time.time) : [];
+                for (const witness of witnesses) {
+                    const witnessNpc = entities.get(witness)
+                        ?.components.get(NpcComponent);
+                    if (witnessNpc) {
+                        provoke(witnessNpc, source, getEntity);
+                        provokeFleet(witness, source, followers, getEntity);
+                    }
+                }
+            } else if (sendsDistressCalls(npc.aiType, govtData,
+                shipData?.inheritedNoGreetings)
+                && distressCallDue(npc.distressAt, time.time)) {
+                npc.distressAt = time.time;
+                emit(DistressCallEvent, { ship: uuid, roll: random.next() });
+            }
         }
     },
 });

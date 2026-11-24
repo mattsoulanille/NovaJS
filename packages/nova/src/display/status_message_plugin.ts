@@ -7,9 +7,12 @@ import { World } from "nova_ecs/world";
 import { BEEP_CANT_DO, UiSoundEvent } from "./ui_sound.js";
 import * as PIXI from "pixi.js";
 import {
-    SimulationGameDataResource, SystemIdResource, ProjectileAnimationProvider,
-    displayName,
+    DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
+    ProjectileAnimationProvider, displayName,
 } from '../nova_plugin/core/index.js';
+import { Entity } from "nova_ecs/entity";
+import { SingletonComponent } from "nova_ecs/world";
+import { DISTRESS_MESSAGES_STRING_TABLE } from "novadatainterface/string_table_data";
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
@@ -17,7 +20,10 @@ import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, carg
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
-import { ContrabandScanEvent, PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
+import {
+    ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
+    PlayerPlunderedEvent,
+} from "../nova_plugin/npc/index.js";
 import { MissionShipComponent } from '../nova_plugin/player/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import { loadPilotProfile } from '../title/client_prefs.js';
@@ -109,6 +115,10 @@ const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffi
  * is called. */
 const CargoNamesResource = new Resource<{ names: string[], lower: string[] }>(
     'StatusLineCargoNames');
+/** The scenario's distress lines (STR# 5003), fetched once at build; empty
+ * until they load (a call before then shows nothing). */
+const DistressLinesResource = new Resource<{ lines: string[] }>(
+    'StatusLineDistressLines');
 /** Marks that the arrival message has been shown for this system's world. */
 const ArrivalShownResource = new Resource<{ shown: boolean }>('StatusLineArrivalShown');
 
@@ -231,21 +241,24 @@ const ShowPlayerPlunderedMessage = new System({
 // a mission's own name, else the ship class), and the pilot by the
 // profile's name, as the original addressed "w11-scan-pod". No sound: the
 // reference recording has none to match (not checked).
+/** A ship's name as the target pane gives it (target_identity.ts: a
+ * përs's or a mission's own name, else the ship class). */
+function shipLabel(ship: Entity | undefined): string {
+    return targetIdentity({
+        persName: ship?.components.get(PersComponent)?.name,
+        missionName: ship?.components.get(MissionShipComponent)?.name,
+        shipClass: displayName(
+            ship?.components.get(ShipDataComponent)?.name ?? ''),
+    }).name;
+}
+
 const ShowContrabandScanMessage = new System({
     name: 'ShowContrabandScanMessage',
     events: [ContrabandScanEvent],
     args: [ContrabandScanEvent, StatusLineResource, TimeResource, Entities,
         PlayerShipSelector] as const,
     step(scan, statusLine, { time }, entities) {
-        const scanner = entities.get(scan.scanner);
-        const pers = scanner?.components.get(PersComponent);
-        const missionShip = scanner?.components.get(MissionShipComponent);
-        const name = targetIdentity({
-            persName: pers?.name,
-            missionName: missionShip?.name,
-            shipClass: displayName(
-                scanner?.components.get(ShipDataComponent)?.name ?? ''),
-        }).name;
+        const name = shipLabel(entities.get(scan.scanner));
         let pilot: string | undefined;
         try {
             pilot = loadPilotProfile()?.name || undefined;
@@ -258,6 +271,28 @@ const ShowContrabandScanMessage = new System({
         if (message !== '') {
             statusLine.setMessage(message, time);
         }
+    },
+});
+
+// A trader under NPC attack called for help (npc/distress.ts): "<ship>:
+// <STR# 5003 line>", on the status line of EVERY player in the system, as
+// the original showed it to a pilot only watching (reference "P1 wave 14").
+// The event is untargeted (one per call), so this runs once on the
+// singleton. The sim's PRNG draw picks the line, so every client shows the
+// same one. No sound (none noticed in the reference watch; not checked).
+const ShowDistressCallMessage = new System({
+    name: 'ShowDistressCallMessage',
+    events: [DistressCallEvent],
+    args: [DistressCallEvent, StatusLineResource, TimeResource, Entities,
+        DistressLinesResource, SingletonComponent] as const,
+    step({ ship, roll }, statusLine, { time }, entities, { lines }) {
+        const line = distressLine(lines, roll);
+        const caller = entities.get(ship);
+        if (line === undefined || caller === undefined) {
+            return;
+        }
+        statusLine.setMessage(distressCallMessage(shipLabel(caller), line),
+            time);
     },
 });
 
@@ -392,6 +427,14 @@ export const StatusMessagePlugin: Plugin = {
         world.resources.set(CargoNamesResource,
             { names: cargoNames, lower: cargoNamesLower });
         world.resources.set(ArrivalShownResource, { shown: false });
+        // The distress lines load in the background: a display asset the
+        // sim never reads (it carries only the draw).
+        const distressLines = { lines: [] as string[] };
+        world.resources.set(DistressLinesResource, distressLines);
+        void world.resources.get(DisplayAssetDataResource)?.data.StringTable
+            .get(DISTRESS_MESSAGES_STRING_TABLE)
+            .then(table => { distressLines.lines = [...table.strings]; })
+            .catch(e => console.warn('Failed to load distress lines:', e));
 
         const statusLine = new StatusLine();
         const screen = world.resources.get(ScreenSize);
@@ -406,6 +449,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowBoardingRepelledMessage);
         world.addSystem(ShowPlayerPlunderedMessage);
         world.addSystem(ShowContrabandScanMessage);
+        world.addSystem(ShowDistressCallMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.addSystem(ShowCargoRetrievedMessage);
@@ -420,6 +464,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowBoardingRepelledMessage);
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowContrabandScanMessage);
+        world.removeSystem(ShowDistressCallMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowCargoRetrievedMessage);
@@ -433,5 +478,6 @@ export const StatusMessagePlugin: Plugin = {
         world.resources.delete(DateSuffixResource);
         world.resources.delete(CargoNamesResource);
         world.resources.delete(ArrivalShownResource);
+        world.resources.delete(DistressLinesResource);
     },
 };

@@ -162,8 +162,10 @@ export interface GovtFlags {
      * Flags 0x0002, the "nosy" bit (EVN Bible ~:1055): "Ships of this govt
      * will attack the player in non-allied systems if he's a criminal
      * there" -- it enforces its own laws everywhere it goes, where a govt
-     * without it only cares about its home turf. Parsed, not yet read by
-     * the sim (docs/npc_behavior_gaps.md, "Nosy enforcement").
+     * without it only cares about its home turf. Read by nova's
+     * reputation/local_law.ts (who enforces the law here) and, as the
+     * "piracy police" bit, npc/piracy_police.ts: its AI 4s turn on a player
+     * they see attack a non-enemy ship of an unrelated govt.
      */
     attacksPlayerIfCriminal: boolean;
     alwaysAttacksPlayer: boolean;
@@ -173,9 +175,9 @@ export interface GovtFlags {
     warshipsRetreatAt25: boolean;
     /**
      * Flags 0x0020 (EVN Bible ~:1063): "Nosy ships of other non-allied
-     * governments ignore ships of this govt that are under attack". Parsed,
-     * not yet read by the sim (no piracy police; docs/npc_behavior_gaps.md,
-     * "Nosy-ignore").
+     * governments ignore ships of this govt that are under attack". Read
+     * by nova's npc/piracy_police.ts: a nosy govt's police ignore an attack
+     * on such a ship unless it is their own or an ally's.
      */
     ignoredByOtherNosyGovts: boolean;
     /** Never attacks player and the player can't hit them. */
@@ -204,7 +206,8 @@ export interface GovtFlags2 {
     minorMapBoundaries: boolean;
     /** Systems don't affect political map boundaries. */
     noMapBoundaries: boolean;
-    /** Ships don't send distress messages and don't greet when hailed. */
+    /** Ships don't send distress messages and don't greet when hailed
+     * (Flags2 0x0008; nova's npc/distress.ts and reputation/hail.ts). */
     noDistressMessages: boolean;
     /** Roadside Assistance: always repairs/refuels the player for free. */
     roadsideAssistance: boolean;

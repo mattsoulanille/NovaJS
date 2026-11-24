@@ -96,6 +96,19 @@ export async function loadLocalLaw(gameData: SimulationGameDataInterface,
     return { owner, recordGovtId, recordGovt: await load(recordGovtId) };
 }
 
+/**
+ * Whether two governments count as allies for the law: the same govt, or
+ * either one lists one of the other's classes as an ally. A ONE-WAY
+ * alliance is enough (reference "A14 wave 5" c19/c20, for who enforces;
+ * piracy police reuse it for whose ships they defend, where only a
+ * two-way alliance was measured: "P1 wave 14").
+ */
+export function alliedEitherWay(a: GovtData, b: GovtData): boolean {
+    return a.id === b.id
+        || intersects(a.allies, b.classes)
+        || intersects(b.allies, a.classes);
+}
+
 /** Whether ships of `self` enforce the law of a system owned by `owner`
  * (undefined: independent). Rule 1 above. */
 export function enforcesHere(self: GovtData,
@@ -103,12 +116,7 @@ export function enforcesHere(self: GovtData,
     if (self.flags.attacksPlayerIfCriminal) {
         return true;
     }
-    if (!owner) {
-        return false;
-    }
-    return self.id === owner.id
-        || intersects(self.allies, owner.classes)
-        || intersects(owner.allies, self.classes);
+    return owner !== undefined && alliedEitherWay(self, owner);
 }
 
 /**
