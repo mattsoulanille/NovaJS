@@ -63,8 +63,9 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *  4 interceptor:   orbits a home planet and engages govt enemies that
  *                   come within its engagement bubble. Where its govt
  *                   scans (a ScanMask, and it enforces the law here) it
- *                   "buzzes" a player ship carrying contraband and
- *                   scans it (contraband*.ts). PIRACY POLICE: it turns
+ *                   "buzzes" each player ship once a visit (again
+ *                   when it takes on new contraband), scans it and sits
+ *                   on it a while (contraband*.ts). PIRACY POLICE: it turns
  *                   on a player it watches attack another ship its govt
  *                   defends (a nosy govt: any non-enemy, non-0x0020
  *                   victim; any govt: its own or an ally's ship;
@@ -73,7 +74,10 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *                   4 out of it.)
  *
  * Traders (AI 1/2) under NPC attack send DISTRESS CALLS to the status line
- * unless their govt sets Flags2 0x0008 (distress.ts); nobody answers them.
+ * unless their govt sets Flags2 0x0008 or they are mission ships
+ * (distress.ts); nobody answers them. The help comes from the alliance:
+ * WARSHIPS of an NPC victim's own govt, and after 20 s of an allied govt,
+ * take on its NPC attacker (allied_defenders.ts).
  *
  * NPC DEPARTURE runs the real hyperspace jump sequence. A ship that is
  * departing or fleeing enters jump_plugin's JumpComponent state machine
@@ -127,6 +131,8 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *                           policeDefendVictim, piracyWitnesses
  *  distress.ts              traders' distress calls: who calls, how often,
  *                           DistressCallEvent, the line
+ *  allied_defenders.ts      own-govt and allied warships joining an NPC
+ *                           victim's fight: alliedDefenders
  *  npc_out_of_ammo.ts       shïp Flags2 0x0080: out of ammo, leave
  *  npc_afterburner.ts       shïp Flags 0x0040: NpcAfterburnerSystem, the AI
  *                           afterburner

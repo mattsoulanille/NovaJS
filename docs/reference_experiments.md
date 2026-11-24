@@ -8341,6 +8341,36 @@ contraband detection stayed at least 12.7 s.
   drop the status line's 4 s fade (`FADE_MS` 0).
 - `PIRACY_WATCH_RANGE` at least 2500 (or the whole system).
 
+**Applied (wave-16 fixes, 2026-11-24).**
+- 1: `N/nova_plugin/npc/allied_defenders.ts` (`alliedDefenders`), called
+  from `NpcAggressionSystem` for an attacker NOT on a player's side: every
+  AI 3 (and, GUESS, AI 4) of the victim's own govt in the system takes the
+  attacker as its aggressor at once, those of an allied govt
+  (`alliedEitherWay`) once the victim has been under that attacker
+  `ALLIED_DEFENCE_DELAY_MS` (20 s, the low end of the measured 20-25 s;
+  timed by the new optional `NpcState.aggressorSince`, set when the
+  aggressor changes); never a ship of the attacker's own or an allied
+  govt; no range; their fleet escorts follow. Unrelated warships and
+  police ignore it, as measured.
+- 2: `sendsDistressCalls` is false for a ship with `MissionShipComponent`;
+  `DISTRESS_CALL_INTERVAL_MS` 8000 (the life of one line; one ship calling
+  each time its line clears is the reading).
+- 3: the status line holds every message `STATUS_LINE_HOLD_MS` (8 s) and
+  clears it at once (`statusLineAlpha`, no fade). The 4.5 s take-off line
+  (NovaJS prints none) and the >= 12.7 s two-line contraband line are left
+  open.
+- 4: `PIRACY_WATCH_RANGE` 2500.
+- 7: the self-defence exemption (`piracy_police.ts`'s `selfDefence`) now
+  needs the victim to have SHOT the attacker (the player's
+  AggressionComponent, or an escort's recorded aggressor); its posture
+  (attack mode on the player) no longer excuses (GUESS for the
+  fired-first case).
+Schema: one optional NpcState field (protocol 8 note in
+`N/communication/rollback_protocol.ts`; fingerprint e730831c2453dc18 ->
+f50f3088ef5b4eff). Specs: `N/nova_plugin/npc/piracy_police_test.ts`
+("allied defenders", the 2500 px police, posture vs a shot, a mission
+ship's silence, the 8 s interval), `N/display/status_line_lifetime_test.ts`.
+
 Confidence: high for 2 (seven silent mission victims against a calling
 traffic one), 3 (eight 8 s lines, and wave 14's raid re-read) and 4-6 (hail status read before and
 after); medium for 1 (one run per candidate).
@@ -8635,6 +8665,22 @@ Confidence: high for 1-3 (19.5 minutes, every shuttle colour-tracked); high for 
   f9c86cd2** (`system_records.ts`'s `crimeRecordChange`; -76 / -49 / -20
   pinned in `system_records_test.ts`). A crime IN an unowned system is
   charged there by the same quarter at 0 jumps (a guess).
+
+**Applied (wave-16 fixes, 2026-11-24; 3 and 4 only, 1 belongs to the A14
+per-system records work).**
+- 3: `contraband_target.ts`'s `needsScan` is true for any ship not yet
+  scanned this visit, clean or not, so an AI 4 of a scanning govt comes to
+  a clean pilot, scans it and says nothing; after any scan it sits on the
+  ship (`holdingScan`, mode 'scan', settling within
+  `CONTRABAND_SIT_RADIUS`) until `CONTRABAND_SCAN_HOLD_MS` (30 s, GUESS:
+  the measured lower bound; what ended the original's sit was not seen)
+  after the scan, then returns to its patrol; it never comes back to that
+  pilot this visit unless he takes on new contraband.
+- 4: `applyContrabandScan` still takes min(ScanFine, cash) (`taken`), and
+  the line names the govt's whole ScanFine (`statedFine`) with a thousands
+  separator ("You have been fined 5,000 credits.").
+Specs: `N/nova_plugin/npc/contraband_scan_test.ts` (the clean ship's
+approach, silence, sit and release; `w16_bigfine`).
 
 Confidence: high for 1 (three exact values), 2 and 4 (pilot read back);
 medium for 3 (one cutter, one run).
