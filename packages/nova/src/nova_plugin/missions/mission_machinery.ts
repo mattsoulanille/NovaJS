@@ -1,4 +1,3 @@
-import { GovtData } from 'novadatainterface/govt_data';
 import { RankData } from 'novadatainterface/rank_data';
 import { MissionData } from 'novadatainterface/mission_data';
 import { Cargo } from '../ship/index.js';
