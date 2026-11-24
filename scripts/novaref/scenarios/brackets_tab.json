@@ -1,0 +1,29 @@
+{
+ "name": "brackets_tab",
+ "_comment": "Wave 9 target brackets: fly out from the start stellar (inertialess Kit Ring Crawler: Down stops it), then 30 times: Tab to the next ship, a window shot, and a short turn so escorts re-form and their sprites turn. Read the shots with analysis/brackets.mjs (box size per target, art bbox), the target panel for the class, and the recording for the frames right after each Tab (does the box zoom in?). Pilots w9_esc_a / w9_esc_b (six stock-art escorts each, Kit Range) and w9_sol (Sol traffic).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  { "keys": "e wait 3000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 500 },
+  { "keys": "down:Up wait 8000 up:Up down:Down wait 1200 up:Down wait 4000" },
+  { "shot": "out", "window": true },
+  {
+   "repeat": 30,
+   "steps": [
+    { "keys": "Tab wait 1200" },
+    { "shot": "tab-{i}", "window": true },
+    { "keys": "Left@300 wait 400" }
+   ]
+  },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w9-esc-a",
+  "_comment": "Wave 9 brackets: six stock-art escorts of frame 24 / 48 / 80 / 128 / 144 / 192 (Shuttle, Thunderhead, Fed Destroyer, Fed Carrier, Leviathan, Raven) around the Kit Ring Crawler in the sealed Kit Range; Tab through them for the friendly bracket at six sizes.",
+  "edits": {
+    "ship": 818,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": { "2100": 2 },
+    "missionBits": {},
+    "weapons": { "128": 0 },
+    "outfits": { "128": 0, "185": 1 },
+    "escorts": [
+      { "ship": 128, "hired": true },
+      { "ship": 157, "hired": true },
+      { "ship": 141, "hired": true },
+      { "ship": 143, "hired": true },
+      { "ship": 131, "hired": true },
+      { "ship": 164, "hired": true }
+    ],
+    "nickname": "Probe",
+    "shipName": "w9-esc-a"
+  }
+}

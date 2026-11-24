@@ -1,0 +1,31 @@
+{
+ "name": "brackets_click",
+ "_comment": "Wave 9 target brackets on the player's own escorts: Tab never selects them (brackets_tab with w9_esc_a: 30 x No Target), so loops/click_targets.mjs clicks each ship blob in a window shot and shoots the bracket it gets; after the first round `r` twice and Tab once, each with a shot (does r pick an escort?). Pilots w9_esc_a / w9_esc_b (six stock-art escorts each, Kit Range).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  { "keys": "e wait 3000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 500 },
+  { "keys": "down:Up wait 8000 up:Up down:Down wait 1200 up:Down wait 4000" },
+  { "shot": "out", "window": true },
+  {
+   "script": "../loops/click_targets.mjs",
+   "args": {
+    "rounds": 5,
+    "perRound": 7,
+    "settleMs": 600,
+    "turnKeys": "Left@400 wait 2500",
+    "keysShots": [["r wait 800", "r-key"], ["r wait 800", "r-key2"], ["Tab wait 800", "tab"]]
+   }
+  },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

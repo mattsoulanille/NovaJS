@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w9-sol",
+  "_comment": "Wave 9 brackets: the Kit Ring Crawler at Earth in stock Sol (sÿst 130, AvgShips 6, ship frames 24-144), Tab through the traffic for neutral brackets on moving, turning stock art.",
+  "edits": {
+    "ship": 818,
+    "stellar": 128,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": { "130": 2 },
+    "missionBits": {},
+    "weapons": { "128": 0 },
+    "outfits": { "128": 0, "185": 1 },
+    "nickname": "Probe",
+    "shipName": "w9-sol"
+  }
+}

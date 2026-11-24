@@ -360,3 +360,60 @@ test("runScriptStep: a closed-loop script runs ordinary steps and may not press 
     assert.deepEqual(logged, [{ phase: "script", script: "loop.mjs", n: 21 }]);
     await assert.rejects(runScriptStep({ script: "bad.mjs" }, ctx), /Escape/);
 });
+
+test("brackets: the four corner glyphs give the box, its glyph size and the art inside", async () => {
+    const { bracketsIn, findBox, components } = await import("../analysis/brackets.mjs");
+    const W = 636, H = 604;
+    const data = new Uint8Array(W * H * 4);
+    const put = (x, y, rgb) => { data.set([...rgb, 255], (y * W + x) * 4); };
+    // The original's 9 x 9 neutral glyph (top-left corner), wave 9.
+    const TL = ["#...#####", ".#...#...", "..#......", "...#.....", "#........", "##.......", "#........", "#........", "#........"];
+    const yellow = [255, 255, 0];
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
+        if (TL[r][c] !== "#") continue;
+        // A 24 px frame's box: 24 + 30 = 54 px, (100, 120) to (153, 173).
+        put(100 + c, 120 + r, yellow); put(153 - c, 120 + r, yellow);
+        put(100 + c, 173 - r, yellow); put(153 - c, 173 - r, yellow);
+    }
+    // The target: a 20 px grey square, off the box's centre by (2, 3).
+    for (let y = 139; y < 159; y++) for (let x = 118; x < 138; x++) put(x, y, [150, 150, 150]);
+    // A lone star and a stray yellow pixel must not matter.
+    put(400, 400, [255, 255, 255]); put(500, 50, yellow);
+    const found = bracketsIn(data, W, H, { colours: ["yellow"] });
+    assert.equal(found.length, 1);
+    const [box] = found;
+    assert.deepEqual([box.x0, box.y0, box.x1, box.y1], [100, 120, 153, 173]);
+    assert.deepEqual([box.w, box.h, box.cx, box.cy], [54, 54, 126.5, 146.5]);
+    assert.deepEqual([box.glyph.w, box.glyph.h, box.err], [9, 9, 0]);
+    assert.deepEqual([box.art.w, box.art.h, box.art.cx, box.art.cy], [20, 20, 127.5, 148.5]);
+    assert.deepEqual(box.glyphs.tl.rows, TL);
+    // The glyph's diagonal and its L are 1-2 px apart: one component at reach 2.
+    const mask = new Uint8Array(20 * 20);
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) if (TL[r][c] === "#") mask[(r + 2) * 20 + c + 2] = 1;
+    assert.equal(components(mask, 20, 20, 2).length, 1);
+    assert.ok(components(mask, 20, 20, 1).length > 1);
+    // One glyph alone is not a box.
+    assert.equal(findBox(components(mask, 20, 20, 2)), null);
+});
+
+test("click_targets: shipBlobs finds sprites away from the player and the edge, largest first", async () => {
+    const { shipBlobs } = await import("../loops/click_targets.mjs");
+    const W = 832, H = 604;
+    const data = Buffer.alloc(W * H * 4);
+    const rect = (x0, y0, w, h, v = 200) => {
+        for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) data.set([v, v, v, 255], (y * W + x) * 4);
+    };
+    rect(100, 100, 40, 30);     // a ship, 1200 px
+    rect(400, 300, 12, 10);     // a small ship, 120 px
+    rect(310, 295, 16, 14);     // the player at the centre: left out
+    rect(630, 200, 30, 30);     // across the play area's right edge: left out
+    rect(200, 400, 5, 5);       // too small
+    // A crescent: the click point must land on the sprite, not its empty middle.
+    for (let y = 450; y < 510; y++) for (let x = 450; x < 510; x++) {
+        if (Math.hypot(x - 480, y - 480) < 30 && Math.hypot(x - 492, y - 480) > 26) data.set([220, 220, 220, 255], (y * W + x) * 4);
+    }
+    const blobs = shipBlobs({ width: W, height: H, data }, { minN: 60 });
+    assert.deepEqual(blobs.map(b => b.x0).sort((a, b) => a - b), [100, 400, 451]);
+    assert.deepEqual(blobs.map(b => b.n), [...blobs.map(b => b.n)].sort((a, b) => b - a));
+    for (const b of blobs) assert.ok(data[(b.y * W + b.x) * 4] > 100, `click point ${b.x},${b.y} is on the sprite`);
+});

@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w9-esc-b",
+  "_comment": "Wave 9 brackets: six more stock-art escorts, frame 32 / 56 / 64 / 100 / 120 / 184 (Heavy Shuttle, Fed Patrol Boat, Pegasus, IDA Frigate, Aurora Cruiser, Aurora Carrier), as w9_esc_a.",
+  "edits": {
+    "ship": 818,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": { "2100": 2 },
+    "missionBits": {},
+    "weapons": { "128": 0 },
+    "outfits": { "128": 0, "185": 1 },
+    "escorts": [
+      { "ship": 129, "hired": true },
+      { "ship": 142, "hired": true },
+      { "ship": 132, "hired": true },
+      { "ship": 140, "hired": true },
+      { "ship": 154, "hired": true },
+      { "ship": 153, "hired": true }
+    ],
+    "nickname": "Probe",
+    "shipName": "w9-esc-b"
+  }
+}

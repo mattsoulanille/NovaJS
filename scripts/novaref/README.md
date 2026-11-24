@@ -549,6 +549,18 @@ target it can only see in screenshots, then boards it:
   the turret at the hulk). `scenarios/board_sweep.json`,
   `board_capture_{5,9}.json`; read them with `analysis/pointer.mjs --run`.
 
+## Click targeting (`loops/click_targets.mjs`, wave 9)
+
+Tab never selects the player's own escorts, but a click on a ship
+targets it. This `script` step (`scenarios/brackets_click.json`) shoots
+the window, takes the ship sprites in it (bright blobs of `minN`+ pixels
+away from the player and the play area's edge, largest first), and for up
+to `perRound` of them clicks the blob pixel nearest its centroid, parks
+the mouse outside the window, waits `settleMs` and shoots
+(`click-RR-K`); `turnKeys` between `rounds` let escorts re-form and turn.
+`keysShots` ([[keys, label], ...]) run once after the first round with a
+shot each. Read the shots with `analysis/brackets.mjs`.
+
 ## Minimal app (tested 2026-11-23: launches, enters space, lands)
 
 `/Applications/EV Nova/AbsoluteMinimum.rez` on the MacBook is the smallest
@@ -646,6 +658,13 @@ apply.
   (wave 7): the magenta Kit Hulk's offset from the player per frame (found
   by colour, so also under the player's sprite), its median speed, and its
   offset at every `b` press (read 4.5 frames after the stamp).
+- `brackets.mjs <shot.png>... [--colour blue|yellow|red|green|grey|any] [--corners] [--glyphs]`
+  or `--video rec.mp4 [--from F --to F --every N]` (wave 9): the target
+  brackets: per colour, the box through the four corner glyphs' outermost
+  pixels (size, centre, half extents), the glyph size, the largest
+  non-black blob inside the box (the target's art) and, with `--glyphs`,
+  each glyph as text rows with its colours. Stellars are blue, ships
+  yellow / red / green / grey by disposition.
 - `blob_offset.mjs <shot.png>...`: the largest bright blob's offset from
   the play-area centre (where the player is drawn) in a window shot: how far
   the planet or a target ship is (U9 gates).
