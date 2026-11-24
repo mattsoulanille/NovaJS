@@ -8065,6 +8065,36 @@ counts as "under attack" too. Specs: `N/display/hail_dialog_plugin_test.ts`
 Confidence: medium for 1 and 2 (one run each, clean numbers), low for 3,
 4, 6, 7 and 8.
 
+**When 0x0040 burns (a second look at the same recording,
+2026-11-24).** A frame-by-frame track of the lone magenta disc (every 2nd
+frame of `recording.mp4`): for its first 36 s it hung 30-140 px from the
+player at 1-3.3 px a frame, never above the control's top speed; from 37 s
+on it made strafing runs, accelerating from a stop 200-360 px out, through
+the player at 5.0-5.8 px a frame and coasting out to about 350 px before
+turning back, every run. The green control topped out at 3.5-3.6. So the
+boost is 1.6x top speed, used on attack runs from range, not while
+hanging close.
+
+**Applied (W1 0x0080 and 0x0040, C1 0x0800) in 14932504**, as first
+passes (`N/nova_plugin/npc/npc_out_of_ammo.ts`, `npc_afterburner.ts`,
+`npc_cloak.ts`; spec `npc_hull_ai_test.ts`):
+- 0x0080: a ship whose EVERY mounted weapon draws from an empty outfit
+  magazine departs (the ordinary jump-out) on its next think, whatever its
+  AI type; a gun, a beam, a fuel weapon or a bay keeps it fighting.
+- Flags 0x0040: an NPC burns a 1.6x afterburner (top speed and
+  acceleration, no fuel) while attacking and thrusting at its target,
+  which NovaJS does beyond its 250 px attack stand-off.
+- 0x0800: an AI 1/2 trader with a working cloak flies cloaked
+  (travelling, parked, departing), visible for 4 s after each stay ends
+  and whenever it flees, fights or is attacked. Warships are never
+  cloaked by it, which matches finding 5 (NovaJS warships already fought
+  uncloaked). Stock: the AI 2 "Wraith (nice)" düdes 143 / 187 now travel
+  cloaked.
+- 0x0001 / 0x0002 and the other cloak bits: no change.
+Every choice past the measurement is listed in docs/npc_behavior_gaps.md
+"Hull AI flags and NPC cloaking: guesses to measure". H1 is not part of
+this change.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{hull,cloak,assist,assist_good}/*/`
 (hull `recording.mp4` 30 fps, `hue_tracks.jsonl`, `trail_0_25.png`; cloak
 `hue_tracks.jsonl`, `*-w?.png`, `*-t?.png`; assist `*-asked2.png`,

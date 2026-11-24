@@ -137,10 +137,10 @@ inventory row); real landing for ordinary traffic is still open.
 | **Warship hunting and MaxOdds** (AI 3) | B:865-866, B:1005-1023 | **Done, simplified.** N/nova_plugin/npc/npc_decision.ts:558-662 compares strength per pair; the Bible sums friends against enemies. | A6 in the catalogue. | — |
 | **gövt 0x0010 retreat** | B:1061-1062 | **Done, fitted** (N/nova_plugin/npc/npc_retreat.ts:138; R: A waves 4-7). | The exact rule (A leftovers). | — |
 | **Interceptor patrol** ("parks in orbit around a planet if he can't find any" enemies) | B:867-868 | **Approximation:** AI 4 circles its nearest landable stellar at 400 px in 45° steps and engages within 1800 px of itself or that stellar (N/nova_plugin/npc/npc_decision.ts:66-72, 663-738). | Does it really "park" (sit still) or circle? At what distance? Does an AI 4 ever leave the system? (NovaJS sends it out after 120-300 s like any NPC.) Brief **I1**; cheap to add to S1. | S |
-| **Out of ammo: run away or dock** (shïp Flags2 0x0080) | B:2576-2577 | **Missing** (Flags2 not parsed apart from 0x0008/0x0020/0x0040: P/parsers/ship_parse.ts:344-397). 278 of 288 stock hulls set it. | "Dock" means land? Which ammo counts (all ammo weapons empty)? Brief **W1**. | S |
-| **Swarming** (Flags2 0x0001) and **prefers standoff** (Flags2 0x0002) | B:2569-2570 | **Missing.** Every attacker uses one approach (`ATTACK_STANDOFF` 250 px, N/nova_plugin/npc/npc_steering.ts:42). Stock: 155 hulls swarm, 142 prefer standoff. | The geometry of each (range, orbiting, passes). Brief **W1**. | M |
-| **AI afterburner** (shïp Flags 0x0040 "always has afterburner (for AIs only)"; përs 0x0002 "uses escape pod & has afterburner") | B:2521, B:2156 | **Missing:** neither flag is parsed for ships; NPCs never press afterburner. | When an AI uses it (pursuit, flight, always?). Brief **W1**. | S |
-| **NPC cloaking** (Flags2 0x0100-0x4000: cloak on burst reload, when running, when hyperspacing, when flying around, stay cloaked until close, when docking, when preemptively attacked; mïsn ShipStart 2 "appear randomly, cloaked") | B:2578-2585, B:1445 | **Missing.** Cloak control is player input only (N/nova_plugin/ship/cloak_plugin.ts:293-306); ShipStart 2 is a documented gap (N/nova_plugin/missions/mission_ship_spawn.ts:47-48). 45 stock hulls carry cloak bits (Wraiths, Zephyrs, the Rebel "Cloaking" variants); 6 missions use ShipStart 2. R: "J wave 6" saw a stock-Wraith-flagged target cloak within 5 s of being fired on (0x4000). | Timing and reveal distance for each bit; whether "docking" is landing. Brief **C1**. | M |
+| **Out of ammo: run away or dock** (shïp Flags2 0x0080) | B:2576-2577 | **Done, first pass (2026-11-24),** to R: "W1 / C1 / H1 wave 15" (a missile-only hull left after its five rounds; gun hulls stayed). N/nova_plugin/npc/npc_out_of_ammo.ts `outOfAmmo`, read in npc_decision.ts before the AI-type switch: a ship of such a hull whose EVERY mounted weapon draws from an outfit magazine and finds it empty departs (the ordinary jump-out) on its next think, whatever its AI type; not while held, already fleeing, or protecting a player. 278 of 288 stock hulls set it. | The **guesses** below ("Hull AI flags and NPC cloaking: guesses to measure"): the literal Bible reading (all missiles spent, guns or not), "dock", bays. | (done) |
+| **Swarming** (Flags2 0x0001) and **prefers standoff** (Flags2 0x0002) | B:2569-2570 | **Missing.** Every attacker uses one approach (`ATTACK_STANDOFF` 250 px, N/nova_plugin/npc/npc_steering.ts). Stock: 155 hulls swarm, 142 prefer standoff. R: "W1 / C1 / H1 wave 15" (first pass): the 0x0001 hull sat a little closer than the control (median 147 vs 175 px from the player; 35% vs 27% of the time under 100 px, one run); no 0x0002 ship was ever on screen in 6 minutes. Too weak to build on: no change. | The geometry of each (range, orbiting, passes); a second W1 run with more swarmers and a visible 0x0002 ship. | M |
+| **AI afterburner** (shïp Flags 0x0040 "always has afterburner (for AIs only)"; përs 0x0002 "uses escape pod & has afterburner") | B:2521, B:2156 | **Done for shïp 0x0040, first pass (2026-11-24),** to R: "W1 / C1 / H1 wave 15" (the frame track of the flagged hull: strafing runs at 1.6x the control's top speed, never over it while hanging close). N/nova_plugin/npc/npc_afterburner.ts: an NPC of such a hull burns while ATTACKING and thrusting at its target (beyond the 250 px stand-off), at `AI_AFTERBURNER_FACTOR` 1.6 on top speed and acceleration, no fuel; `NpcAfterburnerSystem` applies it after travel's EffectiveMovementPhysicsSystem. 67 stock hulls. përs 0x0002 and shïp 0x0020 (advanced rating) are not read. | The **guesses** below: fleeing and travelling burns, fuel, the acceleration boost, the player's own afterburner factor (U4: still the unmeasured 2x). | (done) |
+| **NPC cloaking** (Flags2 0x0100-0x4000: cloak on burst reload, when running, when hyperspacing, when flying around, stay cloaked until close, when docking, when preemptively attacked; mïsn ShipStart 2 "appear randomly, cloaked") | B:2578-2585, B:1445 | **0x0800 for traders done, first pass (2026-11-24);** the other bits missing. R: "W1 / C1 / H1 wave 15": the 0x0800 trader was seen only pulling away from the port (4-5 s each time), never parked or arriving; hostile 0x0800 + 0x1000 warships were VISIBLE the whole time they attacked; 0x0400 / 0x2000 / 0x4000 ships were never seen cloaked. N/nova_plugin/npc/npc_cloak.ts `updateNpcCloak` (run by NpcSteeringSystem every tick): an AI 1/2 ship of a 0x0800 hull with a working cloak is cloaked while travelling, parked ('dwell') and departing, visible for 4 s after each stay ends, and uncloaked while fleeing, fighting, mining, under attack or disabled. Warships are never cloaked by it (they fight visible, which NovaJS already did). Stock 0x0800 hulls are only the Wraith (Adult) and (Youth), shïp 168/169 (with the Wraith Cloaking Device): as AI 2 in the "Wraith (nice)" düdes 143 and 187 they now travel cloaked; as AI 4 in "Wraith (nasty)" 144 they are unchanged. ShipStart 2 is still a gap (N/nova_plugin/missions/mission_ship_spawn.ts). 45 stock hulls carry cloak bits; 6 missions use ShipStart 2. R: "J wave 6" saw a stock-Wraith-flagged target cloak within 5 s of being fired on (0x4000 or 0x0200). | The **guesses** below; the 0x4000 / 0x0200 cloak when attacked (J wave 6), 0x1000's reveal distance, 0x0400 / 0x2000 at a jump / landing. | M |
 | **përs traits:** grudge (0x0001), Aggress 1-3 (how close before attacking), Coward (flee % of shield), ShieldMod, extra weapons, escape pod (0x0002 / gövt 0x0100) | B:2094-2102, B:2129-2134, B:2153-2156; gövt 0x0100 B:1069 | **Spawning only.** N/nova_plugin/spawn/pers_plugin.ts:21-40 lists them as gaps (its "hailing and boarding do not exist" line is stale: both exist now). 148 of 516 stock përs hold grudges. | Aggress's ranges; whether Coward replaces gövt 0x0010; a grudge's memory across systems and saves (a per-player question in multiplayer). | M |
 | **Escape pods** (shïp PodCount, decorative) | B:2535-2539 | **Missing** (not parsed). | Cosmetic only. | S |
 
@@ -205,10 +205,15 @@ reference-Mac experiments to run first. Briefs follow.
    visit-long hostility already matched and are pinned; see the inventory
    rows). Still open: who answers a distress call. (Fleet escorts defending their leader is done:
    P1 wave 13.)
-5. **Hull AI flags** (W1, C1):
-   - **cheap, common:** out-of-ammo flee (278 hulls), AI afterburner;
-   - **bigger:** swarm (155) and standoff (142);
-   - **NPC cloaking** (45 hulls, 6 missions), with its own runtime rules.
+5. **Hull AI flags** (W1, C1), **first pass done 2026-11-24** (see the
+   inventory rows and "Hull AI flags and NPC cloaking: guesses to
+   measure"):
+   - **cheap, common:** out-of-ammo flee (278 hulls), AI afterburner:
+     done;
+   - **bigger:** swarm (155) and standoff (142): still open (one weak
+     swarm measurement, no standoff one);
+   - **NPC cloaking** (45 hulls, 6 missions): 0x0800 for traders done; the
+     other bits and ShipStart 2 open.
 6. **Battle assistance and hail info** (H1, plus one look at a stock
    trader's hail for InfoTypes). Both extend the existing hail dialog.
    H1's first pass is applied (a healthy player under attack is refused
@@ -325,6 +330,47 @@ reference run:
    flies the trader loop until it departs.
 10. **T1:** traders park about 45 s on the original (including the
     approach) against NovaJS's 12 s dwell; left alone after one run.
+
+### Hull AI flags and NPC cloaking: guesses to measure
+
+W1 and C1 were first passes on the reference (one run each). What they
+measured is applied (N/nova_plugin/npc/npc_out_of_ammo.ts,
+npc_afterburner.ts, npc_cloak.ts); everything below is marked GUESS in the
+code and wants a second run:
+
+1. **0x0080, which ammo counts:** a ship leaves only when EVERY weapon it
+   mounts draws from an empty outfit magazine. The Bible ("out of ammo for
+   all ammo-using weapons") could also mean "all its missiles are spent,
+   whatever guns it has", which would send most stock warships home after
+   their last missile. To measure: the red W1 hull with a gun added.
+2. **0x0080, where it goes:** it departs by the ordinary jump-out (flies
+   out from the system centre and jumps). The reference ship flew
+   straight off screen; whether it jumped or landed ("dock") was not seen.
+3. **0x0080, when:** on its next think after the last round (about 1 s);
+   the reference ship circled the player once more first. Bays never
+   count as spent (a carrier's fighters are out, not gone); a ship
+   protecting a player never leaves for it.
+4. **0x0040, when it burns:** only while attacking and thrusting at the
+   target (beyond NovaJS's 250 px attack stand-off). Fleeing, travelling
+   and patrolling never burn (not measured).
+5. **0x0040, how much:** 1.6x top speed (measured: 5.6 vs 3.5 px a
+   frame), and 1.6x acceleration (guess, as the player's afterburner
+   boosts both). No fuel is burned. The player's afterburner keeps its
+   unmeasured 2x (U4).
+6. **0x0800, who:** AI 1/2 traders only. Warships and interceptors with
+   0x0800 are never cloaked by it: the C1 hostiles fought visible, and J
+   wave 6's idle neutral AI 3 Wraith-flagged target was targetable until
+   fired on. Whether an idle, moving warship cloaks was not seen.
+7. **0x0800, when:** cloaked while travelling, parked at a stellar and
+   departing; visible for 4 s after each stay ends (fitted to the two
+   sightings of 4-5 s from the port to the screen edge), and whenever it
+   flees, fights, mines, has an aggressor or is disabled. A device that
+   drains fuel or shield is engaged only above half of that resource.
+8. **The other bits** (0x0100 burst reload, 0x0200 running away, 0x0400
+   hyperspacing, 0x1000 until close, 0x2000 docking, 0x4000 when attacked)
+   are not implemented: none was seen cloaking in C1 (0x4000 was not
+   provoked), and J wave 6's target with all of them cloaked within 5 s of
+   being fired on.
 
 ### Piracy police and distress calls: guesses to measure
 
