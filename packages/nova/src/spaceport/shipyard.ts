@@ -23,6 +23,8 @@ import { ShopSearchField } from './shop_search.js';
 import { enhancementEnabled } from '../enhancements.js';
 import { ShipInfoDialog } from './ship_info.js';
 import { HangarDialog } from './hangar_dialog.js';
+import { buyAndKeep, canBuyAndKeep } from './ship_storage.js';
+import { ButtonClick } from './button.js';
 import {
     HANGAR_BUTTON,
     SHIPYARD_BUTTONS,
@@ -58,6 +60,13 @@ import {
 /** The shop frame the shipyard draws in (PICT 8502, shared with the
  * outfitter). */
 export const SHIPYARD_PICT = 'nova:8502';
+
+/**
+ * The status line under a buyable ship while ship storage is on: how to buy
+ * without trading the current ship in (buyShip).
+ */
+export const KEEP_HINT =
+    'Option-click Buy Ship to keep your ship in storage (no trade-in).';
 
 export class Shipyard extends Menu<Entity> {
     private pictContainer = new PIXI.Container();
@@ -201,7 +210,7 @@ export class Shipyard extends Menu<Entity> {
         });
         // Option-click asks the same prompt and makes the same purchase
         // (wave 16, finding 4).
-        buttons.buy.click.subscribe(() => void this.buyShip());
+        buttons.buy.click.subscribe(click => void this.buyShip(click));
         buttons.done.click.subscribe(this.done.bind(this));
 
         this.shipInfo = new ShipInfoDialog(displayAssets, simulationData,
@@ -475,7 +484,8 @@ export class Shipyard extends Menu<Entity> {
         this.buttons.buy.state =
             (stockCheck.allowed && check.allowed) ? 'normal' : 'grey';
         if (stockCheck.allowed) {
-            this.text.status.text = check.allowed ? '' : check.message;
+            this.text.status.text = check.allowed
+                ? (enhancementEnabled('enhShipStorage') ? KEEP_HINT : '') : check.message;
         } else {
             this.text.status.text = stockCheck.message;
         }
@@ -597,9 +607,11 @@ export class Shipyard extends Menu<Entity> {
      * price against yet, the stock gate (tech, availability, require,
      * today's BuyRandom), or affordability. Re-quoted on every call rather
      * than trusted from the greyed button, since the keyboard shortcut
-     * reaches the buy path directly.
+     * reaches the buy path directly. `keep` is a buy-and-keep (ship
+     * storage): the full asking price, no trade-in (canBuyAndKeep).
      */
-    private purchaseCheck(newShip: ShipData): ShipPurchaseContext | undefined {
+    private purchaseCheck(newShip: ShipData,
+        keep = false): ShipPurchaseContext | undefined {
         if (!this.input.components.get(MultiplayerData)) {
             console.warn('Missing multiplayer data for prior ship.');
             return undefined;
@@ -615,7 +627,8 @@ export class Shipyard extends Menu<Entity> {
             this.text.status.text = stockCheck.message;
             return undefined;
         }
-        const check = canBuyShip(newShip, context);
+        const check = keep ? canBuyAndKeep(newShip, context)
+            : canBuyShip(newShip, context);
         if (!check.allowed) {
             // Affordability is already reflected in the greyed Buy
             // button; this covers the keyboard shortcut path too.
@@ -631,13 +644,21 @@ export class Shipyard extends Menu<Entity> {
      * is anything bought. Cancel buys nothing, as in the original (wave 16,
      * finding 1): no credits move, the hull stays, no set string runs.
      * Resolves once the purchase is done or abandoned.
+     *
+     * An OPTION-click while ship storage is on (enhShipStorage) buys and
+     * KEEPS: full price, no trade-in, the current hull put into storage
+     * under its own name (ship_storage.ts buyAndKeep), through the same
+     * name prompt, whose Cancel buys nothing here too. The keyboard's buy
+     * is always the ordinary trade-in.
      */
-    async buyShip(): Promise<void> {
+    async buyShip(click?: ButtonClick): Promise<void> {
         if (this.naming) {
             return;
         }
+        const keep = (click?.option ?? false)
+            && enhancementEnabled('enhShipStorage');
         const newShip = this.itemGrid?.selection;
-        if (!newShip || !this.purchaseCheck(newShip)) {
+        if (!newShip || !this.purchaseCheck(newShip, keep)) {
             return;
         }
         this.naming = true;
@@ -656,24 +677,34 @@ export class Shipyard extends Menu<Entity> {
         // nothing should have moved, but the purchase must never charge a
         // quote that is no longer true.
         const context = this.itemGrid?.selection === newShip
-            ? this.purchaseCheck(newShip) : undefined;
+            ? this.purchaseCheck(newShip, keep) : undefined;
         if (!context) {
             return;
         }
-        this.completePurchase(newShip, context, name);
+        this.completePurchase(newShip, context, name, keep);
     }
 
-    /** The purchase itself, once it is allowed and the ship is named. */
+    /**
+     * The purchase itself, once it is allowed and the ship is named; `keep`
+     * is a buy-and-keep (buyShip).
+     */
     private completePurchase(newShip: ShipData,
-        context: ShipPurchaseContext, shipName: string) {
+        context: ShipPurchaseContext, shipName: string, keep: boolean) {
         // Swapping this.input is how a ship purchase is communicated:
         // Menu.done() emits it, and the Spaceport re-runs the stat
         // providers on the entity it gets back (spaceport.ts).
-        this.input = buildPurchasedShip(this.input, newShip, context);
+        this.input = keep
+            ? buyAndKeep(this.input, newShip, context, this.stellarId ?? '', {
+                getShip: id => this.allShips.find(ship => ship.id === id)
+                    ?? this.simulationData.data.Ship.getCached(id),
+                getOutfit: id => this.allOutfits.get(id),
+            })
+            : buildPurchasedShip(this.input, newShip, context);
         // The new ship's name (player_names.ts), on the new hull: the
         // pilot's name carries over with the rest of the pilot's state
         // (CARRIED_COMPONENTS), and the record is replaced, not mutated,
-        // since the traded-in hull shares it by reference.
+        // since the traded-in hull shares it by reference. A KEPT hull
+        // took its own name into storage with it (ship_storage.ts).
         this.input.components.set(PlayerNamesComponent, {
             ...this.input.components.get(PlayerNamesComponent),
             ship: shipName,
@@ -681,9 +712,11 @@ export class Shipyard extends Menu<Entity> {
         // The traded-in class's OnRetire, then the bought class's
         // OnPurchase (EVN Bible ~:2598, ~:2639), on the new entity — the
         // `b8888` every stock hull sets, the bits arpia's upgrade outfits
-        // are gated on. See runShipTradeSetStrings.
+        // are gated on. See runShipTradeSetStrings. A kept hull was not
+        // sold, so its OnRetire does not run.
         const universe = MissionUniverse.shared(this.simulationData);
-        runShipTradeSetStrings(this.input, this.currentShipData, newShip, {
+        runShipTradeSetStrings(this.input,
+            keep ? undefined : this.currentShipData, newShip, {
             outfitExists: id => universe.hasOutfit(id),
             getRank: id => universe.getRank(id),
             systemExists: universe.systemsLoaded
@@ -707,7 +740,8 @@ export class Shipyard extends Menu<Entity> {
         // bought (see onShipPurchased). Announced BEFORE the debug
         // convenience below, so nothing the console hook does can come
         // between the trade and the money moving with it.
-        this.onShipPurchased?.(this.input);
+        this.onShipPurchased?.(this.input,
+            keep ? 'Bought (old ship stored)' : undefined);
         // For convenience. Guarded: the menus are driven headlessly by
         // their specs, where there is no window to hang it on.
         if (typeof window !== 'undefined') {

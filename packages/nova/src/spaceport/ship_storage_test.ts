@@ -17,7 +17,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import {
-    buildEscortFromRecord, escortToStorage, escortWingOut, exchangeHolds,
+    buildEscortFromRecord, buyAndKeep, canBuyAndKeep, escortToStorage, escortWingOut, exchangeHolds,
     setStoredShips, snapshotHull, StorageLookups, storableEscort, storedShipsOf,
     storedToEscort, swapWithEscort, swapWithStored,
 } from './ship_storage.js';
@@ -398,6 +398,56 @@ describe('ship storage rules', () => {
                 escortToStorage(hull, escort, HERE, lookups);
                 expect(storedShipsOf(hull)).toEqual([record]);
             });
+    });
+
+    describe('buying a ship and keeping the old one', () => {
+        function context(hull: Entity, credits: number) {
+            return {
+                currentShip: SHIPS.get(SHUTTLE)!,
+                outfits: new Map([...hull.components.get(OutfitsStateComponent)!]
+                    .map(([id, { count }]) => [id, count])),
+                getOutfit: (id: string) => OUTFITS.get(id),
+                credits,
+            };
+        }
+        const BIG = { ...SHIPS.get(FREIGHTER)!, price: 1000,
+            outfits: { [BLASTER]: 2 } };
+
+        it('charges the FULL price and puts the old hull at the end of the '
+            + 'list, the pilot\'s persistent outfits following them', () => {
+            const earlier = stored(FREIGHTER, { name: 'Earlier' });
+            const hull = pilot(SHUTTLE, {
+                outfits: [[LICENCE, 1], [BLASTER, 1]], fuel: 80,
+                cargo: [['cargo:0', 4]], stored: [earlier],
+            });
+            const ctx = context(hull, 1234);
+            expect(canBuyAndKeep(BIG, ctx).allowed).toBeTrue();
+            const bought = buyAndKeep(hull, BIG, ctx, HERE, lookups);
+            expect(bought.components.get(ShipComponent))
+                .toEqual({ id: FREIGHTER });
+            expect(bought.components.get(CreditsComponent))
+                .toEqual({ credits: 234 });
+            expect(bought.components.get(OutfitsStateComponent)).toEqual(
+                new Map([[BLASTER, { count: 2 }], [LICENCE, { count: 1 }]]));
+            expect(bought.components.get(CargoComponent))
+                .toEqual(new Map([['cargo:0', 4]]));
+            expect(storedShipsOf(bought)).toEqual([earlier, {
+                ship: SHUTTLE, name: 'Shuttle', outfits: [[BLASTER, 1]],
+                cargo: [], fuel: 80, storedAt: HERE,
+            }]);
+            expect(storedShipsOf(hull)).toEqual([earlier]);
+        });
+
+        it('refuses what the trade-in would make affordable but the full '
+            + 'price does not', () => {
+            const hull = pilot(SHUTTLE);
+            expect(canBuyAndKeep(BIG, context(hull, 999))).toEqual(
+                jasmine.objectContaining({ allowed: false, reason: 'credits' }));
+            expect(canBuyAndKeep(BIG, { ...context(hull, 5000),
+                deployedCounts: new Map([[BLASTER, 1]]) })).toEqual(
+                jasmine.objectContaining({ allowed: false,
+                    reason: 'fightersDeployed' }));
+        });
     });
 
     it('writes no component for an empty list, and a new array otherwise',

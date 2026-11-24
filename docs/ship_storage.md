@@ -68,11 +68,12 @@ both ships. (Seam: a bit that means "is flying an X" stays set while the X is
 stored. Running OnRetire on store and OnPurchase on take-out would be a small
 change in `ship_storage.ts` if that turns out to be wanted.)
 
-## The four operations
+## The operations
 
-All four are in `spaceport/ship_storage.ts`, as pure functions over the docked
+All of them are in `spaceport/ship_storage.ts`, as pure functions over the docked
 hull and the client's landed-escort roster. The hangar dialog (opened by the
-shipyard's **Your Ships** button) is their only caller.
+shipyard's **Your Ships** button) calls the first four; the shipyard's Buy
+Ship calls the fifth.
 
 1. **Swap with a stored ship.** The current hull is snapshotted into the
    stored ship's slot, and a new hull is built from the stored one (class,
@@ -86,6 +87,15 @@ shipyard's **Your Ships** button) is their only caller.
    the display world, the roster and this landing's hires, `MAX_ESCORTS` 6).
 4. **Escort to storage.** The escort leaves the roster and is snapshotted onto
    the end of the list.
+
+5. **Buy and keep** (Option-click *Buy Ship*, only while ship storage is
+   on). Without this the pilot could only get a second ship by capturing
+   one. The new hull costs its full asking price, with no trade-in, and the
+   hull being flown goes to the end of the stored list. The shipyard's status
+   line says how to do it whenever a buyable ship is selected. The bought
+   class's `OnPurchase` runs as in any purchase; the kept class's `OnRetire`
+   does not, because it was not sold. The keyboard's buy is always the
+   ordinary trade-in.
 
 **Which escorts.** Only captured escorts that have landed with the player (on
 the landed roster). A hired escort was never the pilot's ship. Bay fighters

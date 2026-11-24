@@ -18,7 +18,9 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
-    buildShipEntity, cargoForNewShip, isPersistent, newShipCargoCapacity,
+    buildShipEntity, cargoForNewShip, deployedUnitCount, isPersistent,
+    newShipCargoCapacity, outfitsForNewShip, partitionOutfits,
+    ShipPurchaseContext, ShipyardCheck, shipListPrice,
 } from './shipyard_rules.js';
 
 /**
@@ -356,6 +358,59 @@ export function escortToStorage(hull: Entity, escort: Entity, storedAt: string,
     const record = snapshotHull(escort, storedAt, lookups);
     setStoredShips(hull, [...storedShipsOf(hull), record]);
     return record;
+}
+
+// ── Buying a ship and keeping the old one ───────────────────────────────
+
+/**
+ * BUY AND KEEP (Option-click Buy Ship, while ship storage is on): the new
+ * hull at its full asking price — there is no trade-in, because nothing is
+ * traded — and the hull the pilot was flying goes into storage at the END of
+ * the list. Otherwise exactly a purchase: the bought class's stock loadout
+ * plus the pilot's persistent outfits (outfitsForNewShip), the pilot's state
+ * carried (buildShipEntity), and the hold handled as every storage swap
+ * handles it (exchangeHolds: what does not fit stays aboard the old hull,
+ * never jettisoned). The caller has checked {@link canBuyAndKeep} and runs
+ * the shïp OnPurchase as the shipyard does; the old class's OnRetire is NOT
+ * run, since it was not sold. `oldHull` is not changed.
+ */
+export function buyAndKeep(oldHull: Entity, newShip: ShipData,
+    context: ShipPurchaseContext, storedAt: string, lookups: StorageLookups):
+    Entity {
+    const outfits = outfitsForNewShip(newShip, context);
+    const { aboard, leftBehind } = exchangeHolds(
+        oldHull.components.get(CargoComponent) ?? new Map(), [],
+        newShipCargoCapacity(newShip, outfits, context));
+    const hull = buildShipEntity(oldHull, newShip, outfits,
+        context.credits - shipListPrice(newShip, context), context.getOutfit);
+    hull.components.set(CargoComponent, aboard);
+    const outgoing = snapshotHull(oldHull, storedAt, lookups, {
+        strip: partitionOutfits(context).kept, cargo: leftBehind,
+    });
+    setStoredShips(hull, [...storedShipsOf(oldHull), outgoing]);
+    return hull;
+}
+
+/**
+ * Whether the pilot can buy `newShip` and keep the one they fly: the
+ * trade-in's own rules (shipyard_rules canBuyShip — no fighters out, since
+ * the old hull is put away with its bays) against the FULL asking price.
+ */
+export function canBuyAndKeep(newShip: ShipData,
+    context: ShipPurchaseContext): ShipyardCheck {
+    if (deployedUnitCount(context) > 0) {
+        return {
+            allowed: false, reason: 'fightersDeployed',
+            message: STORAGE_REFUSAL_TEXT.fightersDeployed,
+        };
+    }
+    if (shipListPrice(newShip, context) > context.credits) {
+        return {
+            allowed: false, reason: 'credits',
+            message: "You can't afford this ship without a trade-in!",
+        };
+    }
+    return { allowed: true };
 }
 
 /** Why a storage operation is refused, if it is. */
