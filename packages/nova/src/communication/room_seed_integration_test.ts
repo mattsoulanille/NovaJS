@@ -215,9 +215,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // of the target's radius, so its missiles connect at
             // different moments. Genesis, Kestrel and both Random states
             // did not move.
+            //
+            // Thessaly's stepped hash was re-pinned for "P1 wave 16": an NPC
+            // under attack now records when its aggressor started
+            // (NpcState.aggressorSince; that alone moves the hash), and the
+            // warships of the victim's own govt join an NPC's fight against
+            // its attacker (npc/allied_defenders.ts), so they fly and fire
+            // differently. Genesis, Kestrel and both Random states did not
+            // move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '54afcf19', 'f06ef3e2',
+                [THESSALY, '54afcf19', '9c4f75d2',
                     [3151324470, 1269255679, 2221342106, 396450743]],
                 [SYNTHETIC.systems.kestrel, '71fa40dd', '3859c45c',
                     [1138059186, 670859187, 378276492, 1491742351]],

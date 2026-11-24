@@ -539,6 +539,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    fingerprint changes (90e66780d5561a8d -> 388761e4c9993a00 on its own; e730831c2453dc18 ->
 //    eb92bff5c7d72d2b on top of the ship-names note above), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-16 piracy-police and distress fixes
+//    (reference "P1 wave 16"). One OPTIONAL NpcState field,
+//    `aggressorSince` (npc/npc_component.ts: sim time the current
+//    aggressor was first recorded), written when an NPC's aggressor
+//    changes; NPCs nobody attacks never carry it. Sim-rule changes
+//    alongside: warships of an attacked NPC's own govt join the fight
+//    against a non-player attacker at once, an allied govt's after 20 s
+//    (npc/allied_defenders.ts); mission ships send no distress calls and a
+//    ship calls at most every 8 s; piracy police watch 2500 px and excuse
+//    only a victim that has shot the attacker; an AI 4 scans a clean ship
+//    too, once a visit, and sits on a scanned ship 30 s. No input kind or
+//    message kind changes. The derived wire schema fingerprint changes
+//    (eb92bff5c7d72d2b -> FINGERPRINT_TBD), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
