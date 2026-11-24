@@ -8738,7 +8738,7 @@ px, holding still there (it never closes); confirm with a Tab on it first.
 Flags 0x0040: burn whenever the ship is in attack mode and thrusting (not
 only beyond the stand-off), wants a frame-by-frame look first.
 
-**Applied (Flags 0x0040) in 2ffa3382**, revised to fit both waves:
+**Applied (Flags 0x0040) in 722fac6a**, revised to fit both waves:
 `npcAfterburning` (`N/nova_plugin/npc/npc_afterburner.ts`) now burns for
 the WHOLE attack, thrusting or coasting (top speed held at 1.6x, thrust
 boosted whenever it thrusts), so the ship closes, passes and swings back at
@@ -8823,7 +8823,7 @@ withdraws the offer with "If that's the way you feel ..."), refuelling
 about one jump on Accept. Which STR# 3000 rows these are, and how the price
 is drawn, want a look at the strings and more asks.
 
-**Applied (H1 findings 5 and 6) in 1d0b8fdf.** The strings: STR# 3000
+**Applied (H1 findings 5 and 6) in c3fa97d5.** The strings: STR# 3000
 115-119 (good mood, "You're in luck ..." is 116), 155-159 (Lower Price
 withdrawn, "If that's the way ..." is 156), 145-149 (accepted, "Hold on,
 I'll be right there." is 146), 95-99 (the refusal); the popup line is STR#
