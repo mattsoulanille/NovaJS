@@ -407,6 +407,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    input kind or message kind changes, so the derived wire schema
 //    fingerprint is unchanged (still 6ffbcaef16994bf3). The build stamp
 //    gate keeps builds with different sim rules apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): in-system shuttles and NPC mining (shïp Flags3
+//    0x0002 / 0x0001, npc/npc_shuttle.ts and npc/npc_mining.ts, reference
+//    N1/N2 wave 13). NpcComponent's `mode` gains 'mine' and 'scoop' and
+//    an OPTIONAL `mineTarget` field (the rock a miner is shooting or the
+//    debris box it is flying over). Ships that never mine carry none of
+//    it, so their components and hash inputs are unchanged. The Asteroid
+//    and Debris components moved from combat/ to core/ unchanged (same
+//    names and types; the fingerprint does not see the move). Sim-rule
+//    changes alongside: AI 1/2 miners shoot rocks and scoop debris;
+//    shuttles fly between non-enemy stellars, land instead of jumping
+//    out, and respawn on a stop instead of jumping in. No input kind or
+//    message kind changes. The derived wire schema fingerprint changes
+//    (6ffbcaef16994bf3 -> de1618493c2c83ef), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

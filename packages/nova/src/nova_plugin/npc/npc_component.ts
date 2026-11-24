@@ -15,7 +15,13 @@ export const NpcMode = t.union([
     t.literal('board'),
     /** An interceptor (AI 4) flying to a player ship to scan it for
      * contraband (npc/contraband_scan.ts). */
-    t.literal('scan')]);
+    t.literal('scan'),
+    /** A miner (AI 1/2 hull with shïp Flags3 0x0001) shooting an asteroid
+     * apart (npc/npc_mining.ts). */
+    t.literal('mine'),
+    /** A miner with a mining scoop (Flags3 0x0002 plus an oütf ModType
+     * 31) flying over asteroid debris to scoop it (npc/npc_mining.ts). */
+    t.literal('scoop')]);
 export type NpcMode = t.TypeOf<typeof NpcMode>;
 
 export const NpcState = t.intersection([t.type({
@@ -44,6 +50,11 @@ export const NpcState = t.intersection([t.type({
      * contraband (mode 'scan'; npc/contraband_scan.ts). Cleared the
      * moment the approach ends, however it ends. */
     scanTarget: t.string,
+    /** Uuid of the asteroid a miner is shooting (mode 'mine') or of the
+     * debris box it is flying over to scoop (mode 'scoop'); see
+     * npc/npc_mining.ts. Read only in those two modes, and dropped once
+     * the miner's mining branch finds nothing to do. */
+    mineTarget: t.string,
     /** Uuid of a ship this NPC has been bribed to leave alone (hail bribe /
      * beg-for-mercy). While `pacifiedUntil` has not lapsed, this ship is
      * skipped as a hostile and forgotten as an aggressor. */

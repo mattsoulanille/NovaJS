@@ -17,13 +17,17 @@ import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js
 import { FormationComponent } from './npc_formation.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
 import { CONTRABAND_SCAN_RANGE } from './contraband.js';
+import {
+    MINE_HOLD_SPEED, MINE_STANDOFF_FRACTION, miningReach, SCOOP_ARRIVE_RADIUS,
+    SCOOP_ARRIVE_SPEED,
+} from './npc_mining.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
 import {
     RETREAT_STANDOFF_HOLD_SPEED, RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN,
 } from './npc_retreat.js';
-import { TargetComponent } from '../ship/index.js';
+import { TargetComponent, WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * Executes the mode NpcDecisionSystem chose (see the AI overview in
@@ -294,6 +298,36 @@ export function steerStandoff(movement: MovementState, physics: {
 }
 
 /**
+ * Flies a miner to its rock and holds it there, nose on: within `reach`
+ * and slow, it stops thrusting and turns to face the rock (NpcFireControl
+ * fires); otherwise it arrives at a point MINE_STANDOFF_FRACTION of
+ * `reach` off the rock, on the line from the rock to itself. Rocks drift
+ * (10-50 px/s), so a rock that drifts out of reach is simply approached
+ * again. No PRNG.
+ */
+export function steerMine(movement: MovementState, physics: {
+    acceleration: number, turnRate: number, speed: number,
+}, rockUuid: string, rock: Position, reach: number) {
+    const fromRock = movement.position.subtract(rock);
+    const distance = fromRock.length;
+    if (distance <= reach
+        && movement.velocity.length <= 2 * MINE_HOLD_SPEED) {
+        movement.turnTo = rockUuid;
+        movement.turnBack = false;
+        movement.accelerating = 0;
+        return;
+    }
+    const standoff = MINE_STANDOFF_FRACTION * reach;
+    const offset = fromRock.lengthSquared > 1e-12
+        ? fromRock.normalize(standoff)
+        : movement.rotation.getUnitVector().scale(standoff);
+    if (steerArrive(movement, physics, rock.add(offset), standoff / 2,
+        MINE_HOLD_SPEED)) {
+        movement.turnTo = rockUuid;
+    }
+}
+
+/**
  * Executes the NPC's current mode every tick. Departing and fleeing
  * ships hand themselves to the hyperspace jump sequence (see the NPC
  * DEPARTURE section of npc_ai_plugin.ts's overview, and
@@ -305,9 +339,10 @@ export const NpcSteeringSystem = new System({
         TargetComponent, Optional(FormationComponent),
         Optional(EscortCommandComponent), Optional(EscortLandingComponent),
         Optional(DisabledComponent), Optional(JumpComponent),
+        Optional(WeaponsStateComponent),
         TimeResource, Entities, GetEntity, UUID] as const,
     step(npc, movement, physics, target, formation, escortCommand, landing,
-        disabled, jump, time, entities, entity, uuid) {
+        disabled, jump, weapons, time, entities, entity, uuid) {
         if (jump) {
             // Committed to the hyperspace jump: JumpSequenceSystem owns
             // this ship's controls until it leaves (it overrides them
@@ -433,6 +468,43 @@ export const NpcSteeringSystem = new System({
                 steerArrive(movement, physics,
                     Position.fromVectorLike(quarry.position),
                     CONTRABAND_SCAN_RANGE / 2, physics.speed);
+                break;
+            }
+            case 'mine': {
+                // A miner shooting a rock apart (npc_mining.ts). This arm
+                // only STEERS; NpcFireControlSystem pulls the trigger.
+                const rock = npc.mineTarget
+                    ? entities.get(npc.mineTarget)?.components
+                        .get(MovementStateComponent)
+                    : undefined;
+                const reach = weapons ? miningReach(weapons) : undefined;
+                if (!rock || reach === undefined) {
+                    // Broken up (or the guns are gone): the decision
+                    // system picks the debris or the next rock.
+                    npc.mode = undefined;
+                    delete npc.mineTarget;
+                    return;
+                }
+                steerMine(movement, physics, npc.mineTarget!,
+                    Position.fromVectorLike(rock.position), reach);
+                break;
+            }
+            case 'scoop': {
+                // A miner flying over a debris box; ScoopSystem takes it
+                // into the hold on contact (combat/asteroid_plugin.ts).
+                const box = npc.mineTarget
+                    ? entities.get(npc.mineTarget)?.components
+                        .get(MovementStateComponent)
+                    : undefined;
+                if (!box) {
+                    // Scooped, or faded away.
+                    npc.mode = undefined;
+                    delete npc.mineTarget;
+                    return;
+                }
+                steerArrive(movement, physics,
+                    Position.fromVectorLike(box.position),
+                    SCOOP_ARRIVE_RADIUS, SCOOP_ARRIVE_SPEED);
                 break;
             }
             case 'attack': {

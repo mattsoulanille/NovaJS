@@ -16,7 +16,10 @@ import { CloakActiveComponent, isTargetable } from '../ship/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { EscortCommandComponent } from '../player/index.js';
-import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
+import {
+    AsteroidComponent, DebrisComponent, SimulationGameDataResource,
+    SystemIdResource,
+} from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from './hail_component.js';
 import { flockPlayer, isAttackingPlayer, isInFlock } from './allegiance.js';
@@ -44,8 +47,14 @@ import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { ControlledByComponent } from '../player/index.js';
-import { ShipComponent, ShipDataComponent } from '../ship/index.js';
+import {
+    CargoComponent, cargoUsed, OutfitsStateComponent, ShipComponent,
+    ShipDataComponent, ShipPhysicsComponent,
+} from '../ship/index.js';
 import { SystemHoldComponent } from './system_hold.js';
+import {
+    chooseMiningJob, isMinerHull, miningReach, scoopsDebris,
+} from './npc_mining.js';
 import { isShuttle, shuttleStops } from './npc_shuttle.js';
 import { TargetComponent } from '../ship/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
@@ -115,6 +124,11 @@ export function rollDepartureTime(now: number, random: Random,
 const PlanetsQuery = new Query(
     [UUID, MovementStateComponent, PlanetComponent,
         PlanetDataComponent] as const);
+/** Asteroids and debris boxes, for miners (npc_mining.ts). */
+const AsteroidsQuery = new Query(
+    [UUID, MovementStateComponent, AsteroidComponent] as const);
+const DebrisQuery = new Query(
+    [UUID, MovementStateComponent, DebrisComponent] as const);
 const NpcTargetsQuery = new Query([UUID, MovementStateComponent, ShipComponent,
     ShipDataComponent, Optional(GovtComponent), Optional(ShieldComponent),
     Optional(CloakActiveComponent), Optional(DisabledComponent),
@@ -222,13 +236,16 @@ export const NpcDecisionSystem = new System({
         NpcTargetsQuery,
         PlanetsQuery, TimeResource, RandomResource, Entities, UUID,
         SimulationGameDataResource, GetEntity,
+        // Miners' rocks and boxes (npc_mining.ts).
+        AsteroidsQuery, DebrisQuery,
         // The world's own system: whose law a criminal record is judged
         // by (reference A14, local_law.ts). Optional only so a bare test
         // world still thinks; every makeSystem world sets it.
         Optional(SystemIdResource)] as const,
     step(npc, movement, target, govt, shield, shipData, formation,
         escortCommand, assisting, jump, hold, weapons, ships, planets, time,
-        random, entities, uuid, gameData, entity, systemId) {
+        random, entities, uuid, gameData, entity, asteroids, debrisBoxes,
+        systemId) {
         // Unfinished business here (a refuel offer on the table, a rescue
         // target waiting to be boarded): this ship never DECIDES to leave.
         // See system_hold.ts; the jump exits themselves are gated in
@@ -539,6 +556,56 @@ export const NpcDecisionSystem = new System({
                     && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
+                }
+                // MINING (npc_mining.ts; reference N1 wave 13): an AI 1/2
+                // hull with Flags3 0x0001 shoots rocks apart and, with
+                // Flags3 0x0002 and a scoop, flies over the debris; with
+                // nothing to mine it flies the trader loop below. Not
+                // while it holds a fleet formation slot (its leader's
+                // business comes first). Synced state and staged caches
+                // only; no PRNG draw.
+                const inFormation =
+                    formation !== undefined && entities.has(formation.leader);
+                if (!inFormation && isMinerHull(npc.aiType, shipData)
+                    && weapons !== undefined
+                    && miningReach(weapons) !== undefined) {
+                    const scoops = scoopsDebris(shipData,
+                        entity.components.get(OutfitsStateComponent),
+                        id => gameData.data.Outfit.getCached(id));
+                    const cargo = entity.components.get(CargoComponent);
+                    const physics =
+                        entity.components.get(ShipPhysicsComponent);
+                    // A scooping miner with a full hold has nothing left
+                    // to mine for: back to the trader loop (GUESS).
+                    const full = scoops && cargo !== undefined
+                        && physics !== undefined
+                        && cargoUsed(cargo) + 1 > physics.freeCargo;
+                    const distances = (rows: ReadonlyArray<
+                        readonly [string, MovementState, unknown]>) =>
+                        rows.map(([other, otherMovement]) => [other,
+                            otherMovement.position.subtract(position)
+                                .lengthSquared] as const);
+                    const job = full ? undefined : chooseMiningJob(npc,
+                        distances(asteroids),
+                        scoops ? distances(debrisBoxes) : [], scoops);
+                    if (job) {
+                        // Miners leave like other traffic (39 jump-outs in
+                        // the reference run), straight from mining.
+                        if (!held && time.time >= npc.departAt) {
+                            npc.mode = 'depart';
+                            delete npc.mineTarget;
+                            return;
+                        }
+                        npc.mode = job.mode;
+                        npc.mineTarget = job.target;
+                        return;
+                    }
+                }
+                if (npc.mode === 'mine' || npc.mode === 'scoop') {
+                    npc.mode = undefined;
+                }
+                if (npc.mineTarget !== undefined) {
+                    delete npc.mineTarget;
                 }
                 // SHUTTLES (npc_shuttle.ts; reference N2 wave 13): a hull
                 // with Flags3 0x0002 and no scoop flies between the

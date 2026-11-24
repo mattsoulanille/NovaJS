@@ -1,17 +1,20 @@
 import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
-import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { EntityMap } from 'nova_ecs/entity_map';
+import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { System } from 'nova_ecs/system';
 import { EscortCommandComponent, MissionShipComponent } from '../player/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { flockPlayer } from './allegiance.js';
+import { aimsWithHull, MINE_AIM_TOLERANCE, minesWith } from './npc_mining.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
 import { NpcPlunderBoardSystem } from './npc_plunder_board.js';
 import { TargetComponent } from '../ship/index.js';
 import { suicideWeaponInReachState } from '../ship/index.js';
-import { WeaponsStateComponent } from '../ship/index.js';
+import { WeaponsState, WeaponsStateComponent } from '../ship/index.js';
 
 /**
  * NPC trigger control: holds the weapons' `firing` flags for the mode and
@@ -20,6 +23,46 @@ import { WeaponsStateComponent } from '../ship/index.js';
 
 /** NPCs only fire within this range of their target. */
 const NPC_FIRE_RANGE = 1200;
+
+/**
+ * A miner's trigger (mode 'mine', npc_mining.ts): every weapon it mines
+ * with (minesWith) fires at the rock while the rock is within that
+ * weapon's reach and, for a fixed gun or beam, while the nose is within
+ * MINE_AIM_TOLERANCE of it; everything else holds. Weapon data comes from
+ * the same staged cache the attack branch reads. No PRNG.
+ */
+function fireAtRock(rockUuid: string | undefined,
+    weapons: WeaponsState, movement: MovementState, entities: EntityMap,
+    gameData: SimulationGameDataInterface) {
+    const rock = rockUuid === undefined ? undefined
+        : entities.get(rockUuid)?.components.get(MovementStateComponent);
+    const toRock = rock?.position.subtract(movement.position);
+    const distanceSquared = toRock?.lengthSquared ?? Infinity;
+    const aimed = toRock !== undefined && distanceSquared > 0 && Math.abs(
+        movement.rotation.distanceTo(toRock.angle).angle) <= MINE_AIM_TOLERANCE;
+    let minerWeaponsOnly = false;
+    for (const [id, weapon] of weapons) {
+        const data = gameData.data.Weapon.getCached(id);
+        if (weapon.count > 0 && data && 'asteroidMiner' in data
+            && data.asteroidMiner) {
+            minerWeaponsOnly = true;
+            break;
+        }
+    }
+    for (const [id, weapon] of weapons) {
+        const data = gameData.data.Weapon.getCached(id);
+        if (!rock || !data || weapon.count <= 0
+            || !minesWith(data, minerWeaponsOnly)
+            || weapon.reach === undefined
+            || distanceSquared > weapon.reach * weapon.reach
+            || (aimsWithHull(data) && !aimed)) {
+            weapon.firing = false;
+            continue;
+        }
+        weapon.target = rockUuid;
+        weapon.firing = true;
+    }
+}
 
 /**
  * Fires every weapon at the NPC's target while attacking and in range;
@@ -148,6 +191,10 @@ export const NpcFireControlSystem = new System({
             for (const [, weapon] of weapons) {
                 weapon.firing = false;
             }
+            return;
+        }
+        if (npc.mode === 'mine') {
+            fireAtRock(npc.mineTarget, weapons, movement, entities, gameData);
             return;
         }
         const other = npc.mode === 'attack' && target.target
