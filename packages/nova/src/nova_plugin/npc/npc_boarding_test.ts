@@ -509,7 +509,9 @@ describe('pirates plundering a disabled player', () => {
             expect(runUntilBoarded(world)).toBeTrue();
             const missions = hulk.components.get(MissionsComponent)!;
             expect(missions.get('test:courier')?.failed).toBeTrue();
+            expect(missions.get('test:courier')?.failCause).toBe('plundered');
             expect(missions.get('test:tour')?.failed).toBeUndefined();
+            expect(missions.get('test:tour')?.failCause).toBeUndefined();
         });
 
     it('will not touch a player who is still flying', async () => {

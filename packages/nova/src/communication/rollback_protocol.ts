@@ -480,6 +480,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    input kind or message kind changes. The derived wire schema
 //    fingerprint changes (0c6eeff124ceccf1 -> c6ab0bdc34e2addd), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): a scan failure costs no CompReward (reference
+//    "S1 and S2 wave 12", S2). One OPTIONAL ActiveMission field,
+//    `failCause` ('lost' | 'plundered' | 'scan', player/
+//    player_state_plugin.ts), written beside `failed` by the three sim
+//    systems that set it (the owner disabled or destroyed, boarded by
+//    pirates, a contraband scan). Missions the sim never fails carry
+//    none, so their components and hash inputs are unchanged; a saved
+//    mission without it reads as the old failure. Sim-rule change
+//    alongside (applied at the owner's date advance, not in the sim): a
+//    'scan' failure changes no record. No input kind or message kind
+//    changes. The derived wire schema fingerprint changes
+//    (c6ab0bdc34e2addd -> 4ba45ea2f8ce4634), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

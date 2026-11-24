@@ -19,8 +19,10 @@ import {
     stellarRecord,
     StellarInfo,
 } from './index.js';
-import { Missions } from '../player/index.js';
-import { LegalRecords } from '../reputation/index.js';
+import { isRight } from 'fp-ts/lib/Either.js';
+import { applyContrabandScan } from '../npc/index.js';
+import { ActiveMissionType, Missions } from '../player/index.js';
+import { LegalRecords, localLaw } from '../reputation/index.js';
 
 /**
  * Mission-layer reputation: AvailRecord/AvailRating gating,
@@ -249,8 +251,8 @@ describe('CompGovt/CompReward', () => {
     it('still costs half the reward (truncated) on an UNMEASURED failure: '
         + 'an Fxxx, or one the sim flagged', () => {
             const scripted = makeState();
-            let mission = makeMission({ compGovt: 128, compReward: 3 });
-            let machinery = makeMachinery(scripted, [mission]);
+            const mission = makeMission({ compGovt: 128, compReward: 3 });
+            const machinery = makeMachinery(scripted, [mission]);
             acceptOffer(machinery,
                 makeMissionOffer(mission, machinery.offerContext())!);
             failMission(machinery, mission.id);
@@ -258,18 +260,98 @@ describe('CompGovt/CompReward', () => {
             // The failure stays with the CompGovt (not measured to spread).
             expect(scripted.records!.size).toBe(1);
 
-            // Flagged by the sim, and past its deadline by the landing:
-            // still the flagged failure, not a timeout.
-            const flagged = makeState();
-            mission = makeMission({
-                compGovt: 128, compReward: 3, timeLimit: 1,
+            // Flagged by the sim (the owner disabled or destroyed under
+            // Flags2 0x0004, boarded by pirates under Flags 0x8000), and
+            // past its deadline by the landing: still the flagged
+            // failure, not a timeout.
+            for (const cause of ['lost', 'plundered'] as const) {
+                const flagged = makeState();
+                const timed = makeMission({
+                    compGovt: 128, compReward: 3, timeLimit: 1,
+                });
+                const flaggedMachinery = makeMachinery(flagged, [timed]);
+                acceptOffer(flaggedMachinery,
+                    makeMissionOffer(timed, flaggedMachinery.offerContext())!);
+                Object.assign(flagged.missions.get(timed.id)!,
+                    { failed: true, failCause: cause });
+                processLanding(flaggedMachinery, 'nova:999', 5000);
+                expect(flagged.records!.get('nova:128')).withContext(cause)
+                    .toBe(-1);
+            }
+        });
+
+    // Overturns the Bible's -R/2 for this failure kind too: reference "S1
+    // and S2 wave 12", S2 (a Flags 0x0020 mission with CompReward 10
+    // failed by a scan: "none changed").
+    describe('a Flags 0x0020 mission failed by a contraband SCAN', () => {
+        /** Accepts the mission and fails it the way the sim's scan does. */
+        function scanFailed(timeLimit = 0) {
+            const state = makeState();
+            const mission = makeMission({
+                compGovt: 128, compReward: 1000, timeLimit,
             });
-            machinery = makeMachinery(flagged, [mission]);
+            mission.flags = { ...mission.flags, failIfScanned: true };
+            const machinery = makeMachinery(state, [mission]);
             acceptOffer(machinery,
                 makeMissionOffer(mission, machinery.offerContext())!);
-            flagged.missions.get(mission.id)!.failed = true;
+            const result = applyContrabandScan({
+                smuggled: false, failMissions: [mission.id],
+                items: [`mission:${mission.id}`],
+            }, fed, localLaw(fed.id, getGovt), {
+                credits: state.credits, records: state.records,
+                missions: state.missions,
+            });
+            expect(result.missionFailed).toBeTrue();
+            expect(state.missions.get(mission.id)).toEqual(jasmine
+                .objectContaining({ failed: true, failCause: 'scan' }));
+            return { state, machinery, mission };
+        }
+
+        it('changes NO record at the next landing', () => {
+            const { state, machinery } = scanFailed();
+            processLanding(machinery, 'nova:999', 1000);
+            expect(state.records!.size).toBe(0);
+            expect(state.missions.size).toBe(0);
+            expect(state.events.some(e => e.type === 'failed')).toBe(true);
+        });
+
+        it('nor in flight (the date-advance sweep)', () => {
+            const { state, machinery } = scanFailed();
+            expect(failExpiredMissions(machinery, 1000)).toBe(1);
+            expect(state.records!.size).toBe(0);
+            expect(state.events.some(e => e.type === 'failed')).toBe(true);
+        });
+
+        it('nor once its deadline has passed as well', () => {
+            const { state, machinery } = scanFailed(1);
             processLanding(machinery, 'nova:999', 5000);
-            expect(flagged.records!.get('nova:128')).toBe(-1);
+            expect(state.records!.size).toBe(0);
+            expect(state.missions.size).toBe(0);
+        });
+    });
+
+    it('reads a sim-failed mission saved WITHOUT a failCause (an older '
+        + 'save) as the old -R/2 failure', () => {
+            const state = makeState();
+            const mission = makeMission({ compGovt: 128, compReward: 3 });
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            // What a pilot file written before failCause existed holds.
+            const { failCause: _absent, ...saved } = {
+                ...ActiveMissionType.encode(state.missions.get(mission.id)!),
+                failed: true,
+            };
+            const decoded = ActiveMissionType.decode(saved);
+            expect(isRight(decoded)).toBeTrue();
+            if (!isRight(decoded)) {
+                return;
+            }
+            expect(decoded.right.failCause).toBeUndefined();
+            state.missions.set(mission.id, decoded.right);
+            processLanding(machinery, 'nova:999', 1000);
+            expect(state.records!.get('nova:128')).toBe(-1);
+            expect(state.missions.size).toBe(0);
         });
 
     it('costs 5x on abort only under the 0x0040 flag', () => {

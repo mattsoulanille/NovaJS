@@ -41,6 +41,12 @@ export const CreditsType = t.type({
 export type Credits = t.TypeOf<typeof CreditsType>;
 export const CreditsComponent = new Component<Credits>('Credits');
 
+/** The fail conditions the shared sim observes (ActiveMission.failCause). */
+export const SimFailCauseType = t.union([
+    t.literal('lost'), t.literal('plundered'), t.literal('scan'),
+]);
+export type SimFailCause = t.TypeOf<typeof SimFailCauseType>;
+
 /**
  * The runtime state of one accepted mission. Static data stays in
  * MissionData (fetched by id); this records only what the player has
@@ -150,6 +156,17 @@ export const ActiveMissionType = t.intersection([t.type({
      * the shipObjective.failed marker for special-ship goals.
      */
     failed: t.boolean,
+    /**
+     * WHY the shared sim set `failed`, written beside it by the same
+     * system: 'lost' (the owner disabled or destroyed, mïsn Flags2
+     * 0x0004), 'plundered' (boarded by pirates, Flags 0x8000) or 'scan'
+     * (contraband scan, Flags 0x0020). The first cause wins: a mission
+     * already failed keeps its cause. Only 'scan' changes the outcome so
+     * far (it changes no record: simFailOutcome, compRewardDelta). ADDITIVE: absent in
+     * saves written before it existed and on imported original pilots,
+     * which keep the old -R/2 failure.
+     */
+    failCause: SimFailCauseType,
     /**
      * The special ships' name, drawn from the mïsn's ShipNameID STR#
      * list when the mission was accepted (mission_logic.ts). This is

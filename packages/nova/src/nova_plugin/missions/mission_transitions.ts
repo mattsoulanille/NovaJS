@@ -5,7 +5,7 @@ import { MissionMachineryContext } from './mission_machinery.js';
 import { applyOutcomeReputation, applyPayVal } from './mission_payval.js';
 import { runMissionSetString } from './mission_set_strings.js';
 import { ActiveMission } from '../player/index.js';
-import { decodePayVal } from '../reputation/index.js';
+import { decodePayVal, MissionOutcome } from '../reputation/index.js';
 
 /**
  * How an active mission ends: abort (Axxx / the abort button), fail (Fxxx
@@ -15,6 +15,20 @@ import { decodePayVal } from '../reputation/index.js';
  * imported back from mission_set_strings: importing them here made the
  * missions modules import each other in a cycle (#266).
  */
+
+/** How a failure counts for the CompReward (compRewardDelta). */
+export type FailOutcome =
+    Extract<MissionOutcome, 'fail' | 'timeout' | 'scanned'>;
+
+/**
+ * The outcome of a mission the shared sim marked failed (`active.failed`):
+ * 'scanned' when a contraband scan failed it, else 'fail'. A mark without
+ * a `failCause` (a save from before the field, an imported original pilot)
+ * reads as 'fail', the old behaviour.
+ */
+export function simFailOutcome(active: ActiveMission): FailOutcome {
+    return active.failCause === 'scan' ? 'scanned' : 'fail';
+}
 
 /** Axxx / the abort button: run OnAbort, drop cargo, remove. */
 export function abortMission(machinery: MissionMachineryContext,
@@ -76,14 +90,16 @@ function endByAbort(machinery: MissionMachineryContext,
  * Fxxx / deadline passed / sim-flagged: run OnFailure, drop cargo, remove.
  *
  * `cause` 'timeout' is a failure on the mission's TimeLimit (its deadline
- * passed), which changes no record (compRewardDelta: measured on the
- * original, reference "A14 / contraband wave 15" finding 2); every other
- * failure ('fail', the default: an Fxxx, a sim-flagged failure, a ship goal
- * made unachievable) still costs the CompGovt half the CompReward.
+ * passed) and 'scanned' a Flags 0x0020 mission failed by a contraband
+ * scan; neither changes a record (compRewardDelta: both measured on the
+ * original, reference "A14 / contraband wave 15" finding 2 and "S1 and S2
+ * wave 12"). Every other failure ('fail', the default: an Fxxx, the other
+ * sim-flagged failures, a ship goal made unachievable) still costs the
+ * CompGovt half the CompReward.
  */
 export function failMission(machinery: MissionMachineryContext,
     missionId: string, outfits?: Map<string, number>, depth = 0,
-    cause: 'fail' | 'timeout' = 'fail'): void {
+    cause: FailOutcome = 'fail'): void {
     const { state } = machinery;
     const active = state.missions.get(missionId);
     if (!active) {

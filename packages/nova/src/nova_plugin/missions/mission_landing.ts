@@ -6,7 +6,7 @@ import { applyPayVal } from './mission_payval.js';
 import { runMissionSetString } from './mission_set_strings.js';
 import { objectiveAllowsCompletion } from '../player/index.js';
 import {
-    autoAbortMission, completeMission, failMission,
+    autoAbortMission, completeMission, failMission, simFailOutcome,
 } from './mission_transitions.js';
 import { ActiveMission } from '../player/index.js';
 import { decodePayVal } from '../reputation/index.js';
@@ -206,7 +206,7 @@ export function failExpiredMissions(machinery: MissionMachineryContext,
             // A mission the sim already failed is not a timeout, even if
             // its deadline has passed since.
             failMission(machinery, active.id, outfits, 0,
-                active.failed ? 'fail' : 'timeout');
+                active.failed ? simFailOutcome(active) : 'timeout');
             failed++;
         }
     }
@@ -248,14 +248,17 @@ export function processLanding(machinery: MissionMachineryContext,
             // 'timeout'), unless the sim had already failed it for
             // another reason.
             failMission(machinery, active.id, outfits, 0,
-                active.failed || active.shipObjective?.failed
-                    ? 'fail' : 'timeout');
+                active.failed ? simFailOutcome(active)
+                    : active.shipObjective?.failed ? 'fail' : 'timeout');
             continue;
         }
         if (active.failed) {
             // The shared sim marked the mission failed (the owner was
-            // disabled or destroyed under Flags2 0x0004).
-            failMission(machinery, active.id, outfits);
+            // disabled or destroyed under Flags2 0x0004, boarded by
+            // pirates under Flags 0x8000, or scanned under Flags 0x0020:
+            // ActiveMission.failCause).
+            failMission(machinery, active.id, outfits, 0,
+                simFailOutcome(active));
             continue;
         }
         const objective = active.shipObjective;

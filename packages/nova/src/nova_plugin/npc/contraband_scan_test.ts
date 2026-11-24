@@ -258,6 +258,9 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(runUntilScanned(world, pilot)).toBeTrue();
             const missions = pilot.components.get(MissionsComponent)!;
             expect(missions.get('test:s2a')!.failed).toBeTrue();
+            // Marked as a scan failure, which costs no CompReward at the
+            // next date advance (mission_reputation_test.ts).
+            expect(missions.get('test:s2a')!.failCause).toBe('scan');
             expect(credits(pilot)).toBe(START_CREDITS);
             expect(record(pilot)).toBe(0);
             expect(scans.map(s => s.scan)).toEqual([{

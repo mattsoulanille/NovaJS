@@ -315,6 +315,7 @@ export function applyContrabandScan(findings: ContrabandFindings,
         const mission = pilot.missions?.get(id);
         if (mission && !mission.failed) {
             mission.failed = true;
+            mission.failCause = 'scan';
         }
     }
     let fine = 0;

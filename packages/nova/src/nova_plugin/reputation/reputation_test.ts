@@ -354,6 +354,12 @@ describe('compRewardDelta', () => {
             expect(compRewardDelta(-1000, 'timeout')).toBe(0);
         });
 
+    it('costs nothing when a contraband scan failed a 0x0020 mission '
+        + '(reference "S1 and S2 wave 12", S2)', () => {
+            expect(compRewardDelta(10, 'scanned')).toBe(0);
+            expect(compRewardDelta(-1000, 'scanned')).toBe(0);
+        });
+
     it('costs 5x on abort only under the 0x0040 flag', () => {
         expect(compRewardDelta(4, 'abort')).toBe(0);
         expect(compRewardDelta(4, 'abort', true)).toBe(-20);

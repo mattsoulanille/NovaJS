@@ -744,6 +744,7 @@ describe('mission ships in the shared simulation', () => {
             expect(world.entities.get(shipUuid)!.components
                 .has(DisabledComponent)).toBe(true);
             expect(activeMission()!.failed).toBe(true);
+            expect(activeMission()!.failCause).toBe('lost');
         }, 30_000);
 
         it('leaves the mission alone without the flag', async () => {

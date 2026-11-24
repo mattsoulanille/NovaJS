@@ -1555,6 +1555,7 @@ const MissionPlayerPlunderedSystem = new System({
         for (const active of missions.values()) {
             if (active.failIfBoardedByPirates && !active.failed) {
                 active.failed = true;
+                active.failCause = 'plundered';
             }
         }
     },

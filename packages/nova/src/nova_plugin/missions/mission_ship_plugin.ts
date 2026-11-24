@@ -468,6 +468,7 @@ function failPlayerMissionsOnLoss(missions: Missions): boolean {
     for (const active of missions.values()) {
         if (active.failIfPlayerDisabledOrDestroyed && !active.failed) {
             active.failed = true;
+            active.failCause = 'lost';
             changed = true;
         }
     }
