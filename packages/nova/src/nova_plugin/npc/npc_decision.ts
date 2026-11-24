@@ -479,7 +479,13 @@ export const NpcDecisionSystem = new System({
                     npc.mode = 'flee';
                     return;
                 }
-                if (npc.reachedAggressor !== undefined) {
+                // Dropped with the aggressor itself, not on every think
+                // its entry is missing: in a live game the aggressor was
+                // sometimes recorded as a PROJECTILE uuid for a moment
+                // (not in the ships query), and a cloaked attacker drops
+                // out too; neither should cost the trader its record.
+                if (npc.reachedAggressor !== undefined
+                    && npc.aggressor === undefined) {
                     delete npc.reachedAggressor;
                 }
                 if (npc.mode === 'attack' || npc.mode === 'flee') {

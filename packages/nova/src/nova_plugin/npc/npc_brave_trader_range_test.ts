@@ -9,6 +9,7 @@ import {
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
+import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import {
     restoreWorld, snapshotWorld, SnapshotPoliciesResource,
@@ -250,6 +251,21 @@ describe('AI 2 brave trader: runs when its attacker is out of range', () => {
         expect(npcOf(world)!.reachedAggressor).toBeUndefined();
         expect(npcOf(world)!.mode).not.toBe('flee');
     });
+
+    it('keeps the reach record while the aggressor is momentarily not a '
+        + 'ship (a projectile uuid, seen live)', async () => {
+            const world = await braveTraderWorld();
+            run(world, 3000);
+            expect(npcOf(world)!.reachedAggressor).toBe('attacker');
+            // A shot entity stands in for the projectile uuid.
+            world.entities.set('shot', new Entity('shot'));
+            npcOf(world)!.aggressor = 'shot';
+            run(world, 1500);
+            // (It went back to business meanwhile: with no planet in this
+            // test system that is 'depart'.)
+            expect(npcOf(world)!.mode).not.toBe('attack');
+            expect(npcOf(world)!.reachedAggressor).toBe('attacker');
+        });
 
     it('replays identically after a rollback', async () => {
         const world = await braveTraderWorld();
