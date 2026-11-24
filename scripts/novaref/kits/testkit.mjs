@@ -493,6 +493,12 @@ function wave13Resources() {
     const convoy = system(2094, "Kit Convoy Range", 220, -820, 363, [2094]);
     convoy.set = { ...convoy.set, dudes: [-303, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
     out.push(convoy, spob(2094, "Kit Convoy Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- P1 run 2: disable (not kill) a 3000 / 3000 Kit Shipping in two
+    // hits, then board it in view of the police: wëap 288 Kit Disable Gun
+    // (turret, 720 px, shield 3000 / armor 2100 a hit, one a second) + oütf 462.
+    out.push(weap(288, "Kit Disable Gun", 130, { reload: 30, duration: 60, armorDamage: 2100, shieldDamage: 3000, guidance: 4, speed: 1200, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(gun(462, "Kit Disable Gun", 288));
     return out;
 }
 
