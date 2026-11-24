@@ -28,19 +28,24 @@ export const AssistingComponent =
     new Component<Assisting>('AssistingComponent');
 
 /**
- * How many times each player has answered THIS ship's price for fuel with
- * Lower Price: player ship uuid -> withdrawn offers. Reference H1 wave 16:
- * Lower Price withdrew a neutral trader's 1,000-credit offer, and asking the
- * same trader again got 2,000 (hail.ts's fuelSalePrice doubles per
- * withdrawal).
+ * Where each player stands with THIS ship's price for fuel: player ship
+ * uuid -> { asks, countered } (reputation/hail.ts's FuelHaggleState).
+ * `asks` is how many of the ship's offers he has already answered (each
+ * adds 1,000 to the next one); `countered` is set while the ship's 3/4
+ * counter to a Lower Price is on the table (reference H1 wave 17: a second
+ * Lower Price then withdraws it, Accept Price pays it).
  *
  * Lives on the NPC, so it goes when the ship goes, and is keyed by player so
  * two pilots haggling with one trader do not share a price. Written only by
  * the deterministic input path (hail_plugin's applyHail, on the tick every
- * peer applies the lowerPrice record), delta-synced so the comm dialog
- * quotes the price the simulation will charge.
+ * peer applies the lowerPrice / requestAssistance record), delta-synced so
+ * the comm dialog quotes the price the simulation will charge.
  */
-export const FuelHaggleType = map(t.string, t.number);
+export const FuelHaggleEntryType = t.type({
+    asks: t.number,
+    countered: t.boolean,
+});
+export const FuelHaggleType = map(t.string, FuelHaggleEntryType);
 export type FuelHaggle = t.TypeOf<typeof FuelHaggleType>;
 export const FuelHaggleComponent =
     new Component<FuelHaggle>('FuelHaggle');

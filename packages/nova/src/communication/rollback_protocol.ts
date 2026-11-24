@@ -572,6 +572,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    attack, not only while thrusting. The derived wire schema
 //    fingerprint changes (8ef9af970d217153 -> 64a84723886ce8ba), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the fuel sale's measured price rule (reference
+//    "H1 wave 17"). The FuelHaggle component's value changes from a
+//    withdrawn-offer count to { asks, countered } per player ship uuid
+//    (npc/hail_component.ts's FuelHaggleEntryType): the offers answered,
+//    and whether the ship's 3/4 counter is on the table. No input kind or
+//    message kind changes (lowerPrice and requestAssistance keep their
+//    shape). Sim-rule changes alongside: the price is a per-ship base by
+//    mood (1,000 / 2,000 / 3,000, a hash of the ship's uuid) plus 1,000 an
+//    answered offer; Lower Price counters with floor(0.75 x P / 100) x 100
+//    or withdraws (a hash of ship, pilot and ask), and always withdraws a
+//    counter; an allied ship no longer helps for free (it refuses a
+//    disabled pilot and sells fuel); a ränk 0x0400 no longer makes a
+//    TRADER help. The derived wire schema fingerprint changes
+//    (64a84723886ce8ba -> 51a63184211e887b), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

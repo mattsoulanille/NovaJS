@@ -35,7 +35,7 @@ import {
     MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
-    JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX,
+    JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX, fuelSaleTerms,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -56,7 +56,8 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
-    assistAnswer, computeContext, hailIsUnanswerable, hailTargetIsDisabled,
+    assistAnswer, computeContext, fuelOffer, hailIsUnanswerable,
+    hailTargetIsDisabled,
     shipIdentityBlock,
     targetIsFighting,
 } from './hail_dialog_plugin.js';
@@ -717,32 +718,51 @@ describe('hail assistance answers (accept / busy / no need)', () => {
                 expect(answer.line).toBe(result!.replies.granted);
             });
 
-        it('and a ship whose govt\'s ränk 0x0400 the player holds keeps the '
-            + 'no-need line (battle assistance: unmeasured)', async () => {
-                const { world, gameData } = makeWorld(target => {
-                    target.components.set(NpcComponent, { aiType: 3 });
-                    target.components.set(GovtComponent, { id: 'test:navy' });
-                });
-                gameData.data.Govt.map.set('test:navy',
-                    { ...getDefaultGovtData(), id: 'test:navy' });
-                const base = getDefaultRankData();
-                gameData.data.Rank.map.set('test:rank', {
-                    ...base, id: 'test:rank', affilGovt: 'test:navy',
-                    rankFlags: {
-                        ...base.rankFlags, canRequestBattleAssistance: true,
-                    },
-                });
-                // Staged, as the sim stages every active rank (getCached).
-                await gameData.data.Rank.get('test:rank');
-                world.entities.get(PLAYER)!.components.set(
-                    ActiveRanksComponent, new Set(['test:rank']));
-                addRaider(world);
+        it('and a WARSHIP whose govt\'s ränk 0x0400 the player holds keeps '
+            + 'the no-need line (battle assistance: GUESS, unmeasured)',
+            async () => {
+                const { world, gameData } = await rankWorld(3);
                 const result = await computeContext(world, gameData,
                     fakeDisplayAssets());
                 expect(result!.replies.underFire).toBeUndefined();
                 expect(assistAnswer(world, TARGET, result!.replies).line)
                     .toBe(result!.replies.noNeed);
             });
+
+        it('but a TRADER of that govt turns him down flat (reference H1 '
+            + 'wave 17, finding 7: "Not a chance.")', async () => {
+                const { world, gameData } = await rankWorld(1);
+                const result = await computeContext(world, gameData,
+                    fakeDisplayAssets());
+                expect(result!.replies.underFire).toBeDefined();
+                expect(assistAnswer(world, TARGET, result!.replies).line)
+                    .toBe(result!.replies.underFire!);
+            });
+
+        /** Under raider fire, holding a ränk 0x0400 for the hailed ship's
+         * `test:navy`, whose ship has `aiType`. */
+        async function rankWorld(aiType: number) {
+            const built = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType });
+                target.components.set(GovtComponent, { id: 'test:navy' });
+            });
+            const { world, gameData } = built;
+            gameData.data.Govt.map.set('test:navy',
+                { ...getDefaultGovtData(), id: 'test:navy' });
+            const base = getDefaultRankData();
+            gameData.data.Rank.map.set('test:rank', {
+                ...base, id: 'test:rank', affilGovt: 'test:navy',
+                rankFlags: {
+                    ...base.rankFlags, canRequestBattleAssistance: true,
+                },
+            });
+            // Staged, as the sim stages every active rank (getCached).
+            await gameData.data.Rank.get('test:rank');
+            world.entities.get(PLAYER)!.components.set(
+                ActiveRanksComponent, new Set(['test:rank']));
+            addRaider(world);
+            return built;
+        }
     });
 });
 
@@ -2081,20 +2101,24 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
     });
 
 /**
- * Reference "W1 / C1 / H1 wave 16", H1: a NEUTRAL ship refuses a disabled
- * pilot ("Not a chance." / "No way.") and offers a fuelless one fuel —
- * "You're in luck, I'm in a good mood today." over a "Pay me 1,000
- * credits." popup with Lower Price / Accept Price; Lower Price withdraws the
+ * Reference "W1 / C1 / H1 wave 16" and "H1 wave 17", H1: a NEUTRAL ship
+ * refuses a disabled pilot ("Not a chance." / "No way.") and offers a
+ * fuelless one fuel — its mood line ("You're in luck, I'm in a good mood
+ * today." at 1,000; "I'll help you out if you pay me." at 2,000-3,000; "I'm
+ * in a bad mood today ..." at 3,000) over a "Pay me N credits." popup with
+ * Lower Price / Accept Price; Lower Price counters with 3/4 or withdraws the
  * offer ("If that's the way you feel, then you can sit here forever."), and
- * the next ask is 2,000; Accept Price: "Hold on, I'll be right there."
+ * the next ask costs 1,000 more; Accept Price: "Hold on, I'll be right
+ * there."
  */
-describe('a NEUTRAL ship\'s answers (reference H1 wave 16)', () => {
+describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
     /** STR# 3000 and STR# 2002 as the reference reads them. */
     function assets(): DisplayAssetDataInterface {
         const ship: string[] = [];
         ship[MERCY_REFUSED_FIRST_INDEX + 2] = 'No way.';
         ship[MERCY_REFUSED_FIRST_INDEX + 4] = 'Not a chance.';
         ship[116] = "You're in luck, I'm in a good mood today.";
+        ship[141] = "I'll help you out if you pay me.";
         ship[146] = "Hold on, I'll be right there.";
         ship[156] =
             "If that's the way you feel, then you can sit here forever.";
@@ -2138,41 +2162,84 @@ describe('a NEUTRAL ship\'s answers (reference H1 wave 16)', () => {
         expect(answer.line).toBe(result.replies.refusal!);
     });
 
-    it('offers a fuelless pilot fuel: the mood line, then "Pay me 1,000 '
-        + 'credits." on the popup; nothing dispatched yet', async () => {
+    // TARGET is a neutral-mood ship with a 2,000 base (hail.ts's
+    // fuelSaleTerms, pinned below).
+    it('the fixture ship\'s terms', () => {
+        expect(fuelSaleTerms(TARGET)).toEqual({ mood: 'neutral', base: 2000 });
+    });
+
+    it('offers a fuelless pilot fuel: the ship\'s mood line, then "Pay me '
+        + '2,000 credits." on the popup; nothing dispatched yet', async () => {
             const { world, gameData } = neutralWorld();
             const result = (await computeContext(world, gameData, assets()))!;
             const sale = result.replies.fuelSale!;
+            // The neutral mood's line (STR# 3000 140-144), not the good one.
+            expect(sale.mood).toBe("I'll help you out if you pay me.");
             const answer = assistAnswer(world, TARGET, result.replies);
             expect(answer.dispatch).toBeFalse();
             expect(answer.haggle).toBeTrue();
             expect(answer.line).toBe(sale.mood);
             expect(answer.offer).toEqual(jasmine.objectContaining({
-                amount: 1000, canAfford: true, purpose: 'fuel',
-                demand: 'Pay me 1,000 credits.',
+                amount: 2000, canAfford: true, purpose: 'fuel',
+                demand: 'Pay me 2,000 credits.',
                 accepted: sale.accepted, withdrawn: sale.withdrawn,
             }));
-            expect(haggleText(answer.offer)).toBe('Pay me 1,000 credits.');
+            expect(haggleText(answer.offer)).toBe('Pay me 2,000 credits.');
         });
 
-    it('quotes the doubled price after a Lower Price, from the synced count '
-        + 'or from a press the sim has not mirrored yet', async () => {
+    it('quotes 1,000 more an ask, or the counter on the table, from the '
+        + 'synced haggle or from presses the sim has not mirrored yet',
+        async () => {
             const { world, gameData } = neutralWorld();
             const result = (await computeContext(world, gameData, assets()))!;
-            expect(assistAnswer(world, TARGET, result.replies, 1).offer
-                ?.demand).toBe('Pay me 2,000 credits.');
+            const quote = (local?: { asks: number, countered: boolean }) =>
+                assistAnswer(world, TARGET, result.replies, local).offer;
+            expect(quote({ asks: 1, countered: false })?.demand)
+                .toBe('Pay me 3,000 credits.');
+            // A counter on the table: 3/4 of 4,000.
+            expect(quote({ asks: 2, countered: true })?.amount).toBe(3000);
             world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
-                new Map([[PLAYER, 2]]));
-            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
-                .toBe(4000);
-            // The larger of the two counts wins.
-            expect(assistAnswer(world, TARGET, result.replies, 1).offer
-                ?.amount).toBe(4000);
+                new Map([[PLAYER, { asks: 2, countered: false }]]));
+            expect(quote()?.amount).toBe(4000);
+            // The further-along of the two wins.
+            expect(quote({ asks: 1, countered: false })?.amount).toBe(4000);
+            expect(quote({ asks: 2, countered: true })?.amount).toBe(3000);
             // Another pilot's haggling is not ours.
             world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
-                new Map([['someone else', 5]]));
-            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
-                .toBe(1000);
+                new Map([['someone else', { asks: 5, countered: false }]]));
+            expect(quote()?.amount).toBe(2000);
+        });
+
+    it('fuelOffer: the popup for a counter (2,000 -> 1,500)', async () => {
+        const { world, gameData } = neutralWorld();
+        const result = (await computeContext(world, gameData, assets()))!;
+        const offer = fuelOffer(world, TARGET, result.replies.fuelSale!,
+            { asks: 0, countered: true });
+        expect(offer).toEqual(jasmine.objectContaining({
+            amount: 1500, canAfford: true, purpose: 'fuel',
+            demand: 'Pay me 1,500 credits.',
+        }));
+    });
+
+    it('an ALLIED ship refuses a disabled pilot too (reference H1 wave 17, '
+        + 'finding 6)', async () => {
+            const { world, gameData } = neutralWorld();
+            gameData.data.Govt.map.set('test:friend', {
+                ...getDefaultGovtData(), id: 'test:friend', classes: [17],
+            });
+            gameData.data.Govt.map.set('test:host', {
+                ...getDefaultGovtData(), id: 'test:host', allies: [17],
+            });
+            world.entities.get(PLAYER)!.components.set(GovtComponent,
+                { id: 'test:friend' });
+            world.entities.get(TARGET)!.components.set(GovtComponent,
+                { id: 'test:host' });
+            world.entities.get(PLAYER)!.components.set(DisabledComponent,
+                { repairAt: null });
+            const result = (await computeContext(world, gameData, assets()))!;
+            const answer = assistAnswer(world, TARGET, result.replies);
+            expect(answer.dispatch).toBeFalse();
+            expect(answer.line).toBe(result.replies.refusal!);
         });
 
     it('greys Accept Price for a pilot who cannot pay', async () => {
@@ -2233,6 +2300,27 @@ describe('a NEUTRAL ship\'s answers (reference H1 wave 16)', () => {
                     .toEqual(['greetings', 'assist', 'close']);
                 // Not on the main page, nor for another kind of price.
                 expect(hailPress(main, { kind: 'lowerPrice' })).toBe(main);
+            });
+
+        it('Lower Price COUNTERED (reference H1 wave 17): the popup stays '
+            + 'with the new price, the mood line in the well', () => {
+                const haggle = hailPress(main, {
+                    kind: 'assist', answer: mood, haggle: true, offer,
+                }) as HailPage;
+                const counter = {
+                    ...offer, amount: 700, demand: 'Pay me 700 credits.',
+                };
+                const next = hailPress(haggle,
+                    { kind: 'lowerPrice', counter }) as HailPage;
+                expect(next.phase).toBe('haggle');
+                expect(next.context.body).toBe(mood);
+                expect(next.context.bribe).toEqual(counter);
+                expect(haggleText(next.context.bribe))
+                    .toBe('Pay me 700 credits.');
+                // The second press withdraws.
+                const after = hailPress(next, { kind: 'lowerPrice' }) as HailPage;
+                expect(after.phase).toBe('main');
+                expect(after.context.body).toBe(offer.withdrawn!);
             });
 
         it('Accept Price: "Hold on, I\'ll be right there." on the main page',

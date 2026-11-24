@@ -354,11 +354,12 @@ export interface HailCallbacks {
     requestAssistance(): AssistPressAnswer;
     bribe(): void;
     /**
-     * Lower Price on a neutral ship's fuel price (reference H1 wave 16):
-     * routes to the deterministic input path; the ship withdraws the offer
-     * and its next one costs more.
+     * Lower Price on a ship's fuel price (reference H1 wave 17): routes to
+     * the deterministic input path, and returns the ship's COUNTER-offer
+     * (3/4 of the price) when it makes one, or undefined when it withdraws
+     * the offer (its next one then costs 1,000 more).
      */
-    lowerPrice(): void;
+    lowerPrice(): HailContext['bribe'] | undefined;
     /**
      * A press in a channel to another PLAYER's ship (#332): sends `message`
      * to their screen through the deterministic input path, and returns the
@@ -609,10 +610,11 @@ export type HailPress =
     /** Back out of the haggle page. */
     | { kind: 'cancel' }
     /**
-     * Lower Price on a fuel offer: the ship withdraws it, and says so in
-     * the well of the main page.
+     * Lower Price on a fuel offer: the ship COUNTERS (`counter`, the new
+     * offer, the popup stays) or withdraws it and says so in the well of
+     * the main page.
      */
-    | { kind: 'lowerPrice' }
+    | { kind: 'lowerPrice', counter?: HailContext['bribe'] }
     /**
      * The escort box's three management rows. The first two TOGGLE a
      * queued deal and leave the channel open; only Release ends the
@@ -700,12 +702,20 @@ export function hailPress(state: HailPage, press: HailPress,
         case 'cancel':
             return { phase: 'main', context };
         case 'lowerPrice':
-            // "If that's the way you feel, then you can sit here forever."
-            // (reference H1 wave 16): the offer is gone, Request Assistance
-            // stays, and asking again gets a new (dearer) price.
             if (phase !== 'haggle' || context.bribe?.purpose !== 'fuel') {
                 return state;
             }
+            // A COUNTER (reference H1 wave 17: 4,000 -> 3,000): the popup
+            // stays with the new price on it, the mood line in the well.
+            // GUESS: the well keeps the mood line (the captures read the
+            // popup).
+            if (press.counter?.purpose === 'fuel') {
+                return { phase: 'haggle',
+                    context: { ...context, bribe: press.counter } };
+            }
+            // "If that's the way you feel, then you can sit here forever."
+            // (reference H1 wave 16): the offer is gone, Request Assistance
+            // stays, and asking again gets a new (dearer) price.
             return { phase: 'main', context: {
                 ...context, body: context.bribe.withdrawn ?? context.body,
             } };
@@ -1331,17 +1341,18 @@ export class HailDialog {
         this.content.addChild(body);
 
         if (bribe?.purpose === 'fuel') {
-            // A neutral ship's fuel price (reference H1 wave 16): Lower
+            // A ship's fuel price (reference H1 waves 16 and 17): Lower
             // Price over Accept Price, the original's own captions (STR#
-            // 150 30 and 29). Lower Price withdraws the offer; Accept Price
-            // pays it and the ship comes. GUESS: a price the pilot cannot
-            // pay greys Accept Price (not measured).
+            // 150 30 and 29). Lower Price counters with 3/4 or withdraws
+            // the offer; Accept Price pays it and the ship comes. GUESS: a
+            // price the pilot cannot pay greys Accept Price (not measured).
             const lower =
                 this.placeButton('Lower Price', frame, originX, originY, 0);
             lower.click.subscribe(() => {
                 this.beep();
-                this.callbacks.lowerPrice();
-                this.apply({ kind: 'lowerPrice' });
+                const counter = this.callbacks.lowerPrice();
+                this.apply(counter ? { kind: 'lowerPrice', counter }
+                    : { kind: 'lowerPrice' });
             });
             this.content.addChild(lower.container);
             const accept =

@@ -28,7 +28,9 @@ import {
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
     shipDisposition, LegalRecordsComponent, loadLocalLaw, underFireRefusalText,
     MERCY_REFUSED_FALLBACK, assistNeed, disabledRefusalText, fuelSaleMoodText,
-    fuelOfferWithdrawnText, fuelSalePrice, payMeText,
+    fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
+    FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
+    NO_FUEL_HAGGLE, rankBattleAssistance,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -271,8 +273,10 @@ export interface AssistReplies {
     /**
      * "Yeah, right!" / "No way." (STR# 3000 95-99) — the player's ship is
      * fine but under attack (reference H1 wave 15; underFireRefusalText).
-     * Absent for a ship of a govt whose ränk 0x0400 the player holds (battle
-     * assistance, not measured): that ship keeps the no-need line.
+     * A TRADER of a govt whose ränk 0x0400 the player holds says it too
+     * ("Not a chance.", reference H1 wave 17, finding 7). Absent for such a
+     * govt's WARSHIP (battle assistance, GUESS: not measured), which keeps
+     * the no-need line.
      */
     underFire?: string;
     /**
@@ -294,25 +298,31 @@ export interface AssistReplies {
      */
     forPay?: string;
     /**
-     * "Not a chance." / "No way." (STR# 3000 95-99) — a NEUTRAL ship's
-     * answer to a disabled pilot (reference H1 wave 16). Present only for a
-     * ship that would not help him for free (hail.ts's assistWillingness
-     * 'refuse').
+     * "Not a chance." / "No way." (STR# 3000 95-99) — a non-hostile ship's
+     * answer to a disabled pilot, allies included (reference H1 waves 16
+     * and 17). Present only for a ship that would not help him for free
+     * (hail.ts's assistWillingness 'refuse').
      */
     refusal?: string;
     /**
-     * A NEUTRAL ship's fuel sale to a fuelless pilot (reference H1 wave 16;
-     * assistWillingness 'sellFuel'). Present only for such a ship; the
-     * price is read at the press, off the synced haggle count.
+     * A non-hostile ship's fuel sale to a fuelless pilot (reference H1
+     * waves 16 and 17; assistWillingness 'sellFuel'). Present only for such
+     * a ship; the price is read at the press, off the synced haggle.
      */
     fuelSale?: FuelSaleLines;
 }
 
-/** What a neutral ship selling fuel says, resolved when the channel opens. */
+/** What a ship selling fuel says, resolved when the channel opens. */
 export interface FuelSaleLines {
-    /** "You're in luck, I'm in a good mood today." (STR# 3000 115-119). */
+    /**
+     * The ship's opening line in its mood (hail.ts's fuelSaleTerms): "You're
+     * in luck, I'm in a good mood today." (STR# 3000 115-119), "All right,
+     * I'll give you some help, but it'll cost you." (140-144) or "I'm in a
+     * bad mood today, so it's going to cost extra." (120-124).
+     */
     mood: string;
-    /** "If that's the way you feel ..." (155-159), after Lower Price. */
+    /** "If that's the way you feel ..." (155-159), when Lower Price
+     * withdraws the offer. */
     withdrawn: string;
     /** "Hold on, I'll be right there." (145-149), after Accept Price. */
     accepted: string;
@@ -355,11 +365,11 @@ export const ASSIST_REPLIES_FALLBACK: AssistReplies = {
 export function assistAnswer(world: World, targetUuid: string | undefined,
     replies: AssistReplies,
     /**
-     * Lower Price presses on this ship the simulation may not have mirrored
-     * back yet (see {@link fuelHaggleCount}): the dialog never quotes less
-     * than this many withdrawals' worth.
+     * This ship's haggle as the dialog's own presses left it, which the
+     * simulation may not have mirrored back yet (see {@link fuelHaggleOf}):
+     * the dialog quotes the further-along of the two.
      */
-    localWithdrawals = 0):
+    localHaggle?: FuelHaggleState):
     {
         line: string, dispatch: boolean, haggle: boolean,
         /** A neutral ship's fuel price, for the haggle popup. */
@@ -389,44 +399,55 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
     if (replies.forPay !== undefined) {
         return { line: replies.forPay, dispatch: false, haggle: true };
     }
-    // A NEUTRAL ship (reference H1 wave 16): a disabled pilot is refused
-    // flat, a fuelless one is offered fuel at a price — the mood line in
-    // the well, "Pay me N credits." on the haggle popup. Nothing is
-    // dispatched until Accept Price.
+    // A NON-HOSTILE ship (reference H1 waves 16 and 17): a disabled pilot
+    // is refused flat, a fuelless one is offered fuel at a price — the
+    // ship's mood line in the well, "Pay me N credits." on the haggle
+    // popup. Nothing is dispatched until Accept Price.
     if (need === 'disabled' && replies.refusal !== undefined) {
         return { line: replies.refusal, dispatch: false, haggle: false };
     }
     if (need === 'fuel' && replies.fuelSale !== undefined && player
         && targetUuid) {
-        const sale = replies.fuelSale;
-        const price = fuelSalePrice(Math.max(localWithdrawals,
-            fuelHaggleCount(world, targetUuid, player.uuid)));
-        const credits = player.entity.components.get(CreditsComponent)
-            ?.credits ?? 0;
+        const haggle = laterFuelHaggle(localHaggle,
+            fuelHaggleOf(world, targetUuid, player.uuid));
         return {
-            line: sale.mood, dispatch: false, haggle: true,
-            offer: {
-                amount: price, canAfford: credits >= price,
-                purpose: 'fuel',
-                demand: payMeText(sale.miscStrings, price),
-                accepted: sale.accepted,
-                withdrawn: sale.withdrawn,
-            },
+            line: replies.fuelSale.mood, dispatch: false, haggle: true,
+            offer: fuelOffer(world, targetUuid, replies.fuelSale, haggle),
         };
     }
     return { line: replies.granted, dispatch: true, haggle: false };
 }
 
 /**
- * How many times this player has answered `targetUuid`'s fuel price with
- * Lower Price, as the simulation last mirrored it (FuelHaggleComponent on
- * the ship). A press made a moment ago may not be in it yet, which is what
- * assistAnswer's `localWithdrawals` covers.
+ * The haggle popup's offer for the price on the table: `targetUuid`'s base
+ * (hail.ts's fuelSaleTerms) and `haggle` (1,000 an earlier ask, or the 3/4
+ * counter), the same figure applyHail charges on Accept Price.
  */
-export function fuelHaggleCount(world: World, targetUuid: string,
-    playerUuid: string): number {
+export function fuelOffer(world: World, targetUuid: string,
+    sale: FuelSaleLines, haggle: FuelHaggleState):
+    NonNullable<HailContext['bribe']> {
+    const price = fuelSalePrice(fuelSaleTerms(targetUuid).base, haggle);
+    const credits = getPlayerShip(world)?.entity.components
+        .get(CreditsComponent)?.credits ?? 0;
+    return {
+        amount: price, canAfford: credits >= price,
+        purpose: 'fuel',
+        demand: payMeText(sale.miscStrings, price),
+        accepted: sale.accepted,
+        withdrawn: sale.withdrawn,
+    };
+}
+
+/**
+ * Where this player stands with `targetUuid`'s fuel price, as the
+ * simulation last mirrored it (FuelHaggleComponent on the ship). A press
+ * made a moment ago may not be in it yet, which is what assistAnswer's
+ * `localHaggle` covers.
+ */
+export function fuelHaggleOf(world: World, targetUuid: string,
+    playerUuid: string): FuelHaggleState {
     return world.entities.get(targetUuid)?.components
-        .get(FuelHaggleComponent)?.get(playerUuid) ?? 0;
+        .get(FuelHaggleComponent)?.get(playerUuid) ?? NO_FUEL_HAGGLE;
 }
 
 /**
@@ -900,6 +921,9 @@ export async function computeContext(world: World,
             gameData.data.Rank.getCached(id);
         const rankAlwaysAssists = ranksAllowAssistance(
             hailRanks, getHailRank, govt?.id);
+        // ...which only a WARSHIP of that govt honours (reference H1 wave
+        // 17, finding 7: a trader refused; hail.ts's rankBattleAssistance).
+        const rankHelps = rankBattleAssistance(rankAlwaysAssists, aiType);
         // THE BUTTON IS ALWAYS THERE for a ship that communicates (ruling
         // #297: "They just refuse to help you or make you pay") — only a
         // Flags2 0x0001 govt (the Dechtakar) has none. Whether the ship
@@ -909,9 +933,9 @@ export async function computeContext(world: World,
         const assist = canRequestAssistance({
             govt, iffHostile, ship: shipData, rankAlwaysAssists,
         }) ? { free } : undefined;
-        // The answer depends on WHAT the player needs (a neutral ship
-        // refuses a repair and sells fuel, reference H1 wave 16), which is
-        // read at the press; both answers are resolved here.
+        // The answer depends on WHAT the player needs (a non-hostile ship
+        // refuses a repair and sells fuel, reference H1 waves 16 and 17),
+        // which is read at the press; both answers are resolved here.
         const willingness = assistWillingness({
             disposition, govt, aiType, rankAlwaysAssists, free,
             need: 'disabled',
@@ -929,7 +953,7 @@ export async function computeContext(world: World,
         // "You're not in any trouble." / "All right, I'll help you."). Only
         // the lines are resolved here — the press decides which is used.
         const replies: AssistReplies = {
-            ...resolveAssistReplies(shipStrings, shipSeed, rankAlwaysAssists),
+            ...resolveAssistReplies(shipStrings, shipSeed, rankHelps),
             ...(escortLine !== undefined ? { escort: escortLine } : {}),
             // A ship another player owns can do nothing for us (applyHail
             // refuses it); an unfriendly government's ship that takes no
@@ -945,7 +969,10 @@ export async function computeContext(world: World,
             ...(!othersShip && fuelWillingness === 'sellFuel'
                 ? {
                     fuelSale: {
-                        mood: fuelSaleMoodText(shipStrings, shipSeed),
+                        // The ship's own mood, the same for every ask
+                        // (reference H1 wave 17, finding 2).
+                        mood: fuelSaleMoodText(shipStrings,
+                            fuelSaleTerms(shipTargetUuid).mood, shipSeed),
                         withdrawn: fuelOfferWithdrawnText(shipStrings,
                             shipSeed),
                         accepted: assistPaidText(shipStrings, shipSeed),
@@ -1123,11 +1150,16 @@ export const HailDialogPlugin: Plugin = {
         // clearance or help), so Pay sends the matching record.
         let currentBribePurpose: 'mercy' | 'landing' | 'assist' | 'fuel'
             | undefined;
-        // Lower Price presses per ship that the mirrored FuelHaggle count
-        // may not show yet (the record is applied a tick or more later), so
-        // asking again at once still quotes the doubled price the
-        // simulation will charge. Display-local; the sim is the authority.
-        const localWithdrawals = new Map<string, number>();
+        // Each ship's haggle as this dialog's own presses left it, which
+        // the mirrored FuelHaggle entry may not show yet (the record is
+        // applied a tick or more later), so a counter or a re-ask at once
+        // still quotes the price the simulation will charge.
+        // Display-local; the sim is the authority.
+        const localHaggle = new Map<string, FuelHaggleState>();
+        /** This ship's haggle: the further-along of ours and the sim's. */
+        const haggleWith = (target: string, playerUuid: string) =>
+            laterFuelHaggle(localHaggle.get(target),
+                fuelHaggleOf(world, target, playerUuid));
         const dialog = new HailDialog(displayAssets, controls, {
             requestAssistance: () => {
                 // ONE call decides and answers: the ship's line comes back
@@ -1136,7 +1168,8 @@ export const HailDialogPlugin: Plugin = {
                 // leaves the ship's behavior completely untouched.
                 const answer = assistAnswer(world, currentTarget,
                     currentReplies,
-                    currentTarget ? localWithdrawals.get(currentTarget) : 0);
+                    currentTarget ? localHaggle.get(currentTarget)
+                        : undefined);
                 if (answer.dispatch && currentTarget) {
                     world.emit(HailRequestEvent, {
                         action: {
@@ -1157,8 +1190,11 @@ export const HailDialogPlugin: Plugin = {
                     return;
                 }
                 // Paying for HELP (an unfriendly ship's price, ruling #297;
-                // a neutral ship's fuel, reference H1 wave 16) is the
+                // a ship's fuel, reference H1 waves 16 and 17) is the
                 // assistance request itself: applyHail charges it.
+                // (The haggle that payment ends is left to the simulation
+                // to mirror back: a payment it refuses must not move the
+                // dialog's quote ahead of what it will charge.)
                 world.emit(HailRequestEvent, {
                     action: currentBribePurpose === 'assist'
                         || currentBribePurpose === 'fuel'
@@ -1166,20 +1202,25 @@ export const HailDialogPlugin: Plugin = {
                         : { kind: 'bribe', target: currentTarget },
                 });
             },
-            // Lower Price on a neutral ship's fuel price: the offer is
-            // withdrawn, and its next one costs double (applyHail counts it).
+            // Lower Price on a ship's fuel price (reference H1 wave 17): a
+            // 3/4 counter, returned for the popup, or a withdrawal — the
+            // same pure draw applyHail makes from the record.
             lowerPrice: () => {
                 const target = currentTarget;
                 const player = getPlayerShip(world);
+                const sale = currentReplies.fuelSale;
                 if (!target || !player) {
-                    return;
+                    return undefined;
                 }
-                localWithdrawals.set(target, Math.max(
-                    localWithdrawals.get(target) ?? 0,
-                    fuelHaggleCount(world, target, player.uuid)) + 1);
+                const lowered = lowerFuelPrice(
+                    haggleWith(target, player.uuid), target, player.uuid);
+                localHaggle.set(target, lowered.haggle);
                 world.emit(HailRequestEvent, {
                     action: { kind: 'lowerPrice', target },
                 });
+                return lowered.outcome === 'counter' && sale
+                    ? fuelOffer(world, target, sale, lowered.haggle)
+                    : undefined;
             },
             // A press in a channel to another PLAYER (#332): the button goes
             // to their status line as a record — the sim notes it on OUR

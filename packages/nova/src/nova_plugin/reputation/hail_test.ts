@@ -10,7 +10,19 @@ import {
     fuelOfferWithdrawnText,
     fuelSaleMoodText,
     FUEL_OFFER_WITHDRAWN_FALLBACK,
+    FUEL_SALE_BAD_MOOD_FALLBACK,
     FUEL_SALE_MOOD_FALLBACK,
+    FUEL_SALE_PRICE_STEP,
+    fuelCounterPrice,
+    fuelHaggleAfterAccept,
+    fuelLowerPriceCounters,
+    fuelSalePrice,
+    fuelSaleTerms,
+    isTraderAiType,
+    laterFuelHaggle,
+    lowerFuelPrice,
+    NO_FUEL_HAGGLE,
+    rankBattleAssistance,
     LOW_FUEL_THRESHOLD,
     payMeText,
     ASSIST_FOR_PAY_FIRST_INDEX,
@@ -281,13 +293,18 @@ describe('canRequestAssistance', () => {
 
 describe('assistWillingness (ruling #297: "refuse to help you or make you '
     + 'pay")', () => {
-    it('helps an ALLIED player for free (GUESS: unmeasured, as before)',
-        () => {
-            for (const need of ['disabled', 'fuel'] as const) {
+    it('an ALLIED ship refuses a disabled pilot (reference H1 wave 17, '
+        + 'finding 6: the "allies help for free" guess is gone) and sells '
+        + 'fuel like a neutral one (GUESS)', () => {
+            for (const aiType of [1, 3]) {
                 expect(assistWillingness({
-                    disposition: 'friendly',
-                    govt: withFlags({ largerBribes: true }), aiType: 3, need,
-                })).toBe('willing');
+                    disposition: 'friendly', govt: govt(), aiType,
+                    need: 'disabled',
+                })).toBe('refuse');
+                expect(assistWillingness({
+                    disposition: 'friendly', govt: govt(), aiType,
+                    need: 'fuel',
+                })).toBe('sellFuel');
             }
         });
     it('a NEUTRAL ship refuses a disabled pilot and sells a fuelless one '
@@ -333,14 +350,25 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
         + '155-159; STR# 2002 186 + 32)', () => {
             const strings: string[] = [];
             strings[116] = "You're in luck, I'm in a good mood today.";
+            strings[140] =
+                "All right, I'll give you some help, but it'll cost you.";
+            strings[122] =
+                "I'm in a bad mood today, so it's going to cost extra.";
             strings[156] =
                 "If that's the way you feel, then you can sit here forever.";
-            expect(fuelSaleMoodText(strings, 1))
+            // The mood picks the group (reference H1 wave 17, finding 2).
+            expect(fuelSaleMoodText(strings, 'good', 1))
                 .toBe("You're in luck, I'm in a good mood today.");
+            expect(fuelSaleMoodText(strings, 'neutral', 0)).toBe(
+                "All right, I'll give you some help, but it'll cost you.");
+            expect(fuelSaleMoodText(strings, 'bad', 2)).toBe(
+                "I'm in a bad mood today, so it's going to cost extra.");
             expect(fuelOfferWithdrawnText(strings, 1)).toBe(
                 "If that's the way you feel, then you can sit here forever.");
-            expect(fuelSaleMoodText(undefined))
+            expect(fuelSaleMoodText(undefined, 'good'))
                 .toBe(FUEL_SALE_MOOD_FALLBACK);
+            expect(fuelSaleMoodText(undefined, 'bad'))
+                .toBe(FUEL_SALE_BAD_MOOD_FALLBACK);
             expect(fuelOfferWithdrawnText(undefined))
                 .toBe(FUEL_OFFER_WITHDRAWN_FALLBACK);
             expect(disabledRefusalText(undefined)).toBe('In your dreams, pal.');
@@ -372,11 +400,144 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
             disposition: 'hostile', govt: govt(), aiType: 3,
         })).toBe('unwilling');
     });
-    it('always helps under a ränk 0x0400 for its government', () => {
-        expect(assistWillingness({
-            disposition: 'hostile', govt: govt(), aiType: 3,
-            rankAlwaysAssists: true,
-        })).toBe('willing');
+    it('a ränk 0x0400 for its government makes a WARSHIP help (GUESS: '
+        + 'unmeasured) but not a TRADER (reference H1 wave 17, finding 7)',
+        () => {
+            for (const aiType of [3, 4, undefined]) {
+                expect(assistWillingness({
+                    disposition: 'hostile', govt: govt(), aiType,
+                    rankAlwaysAssists: true,
+                })).withContext(`AI ${aiType}`).toBe('willing');
+            }
+            for (const aiType of [1, 2]) {
+                expect(isTraderAiType(aiType)).toBeTrue();
+                expect(rankBattleAssistance(true, aiType)).toBeFalse();
+                expect(assistWillingness({
+                    disposition: 'neutral', govt: govt(), aiType,
+                    rankAlwaysAssists: true, need: 'disabled',
+                })).toBe('refuse');
+                expect(assistWillingness({
+                    disposition: 'neutral', govt: govt(), aiType,
+                    rankAlwaysAssists: true, need: 'fuel',
+                })).toBe('sellFuel');
+                expect(assistWillingness({
+                    disposition: 'hostile', govt: govt(), aiType,
+                    rankAlwaysAssists: true,
+                })).toBe('unwilling');
+            }
+            expect(rankBattleAssistance(false, 3)).toBeFalse();
+            expect(rankBattleAssistance(undefined, 3)).toBeFalse();
+        });
+});
+
+/**
+ * Reference "H1 wave 17" (docs/reference_experiments.md): a ship's price for
+ * a jump of fuel is a per-ship base set by its mood (good 1,000; neutral
+ * 2,000-3,000; bad 3,000) plus 1,000 for every repeated ask; Lower Price
+ * counters with floor(0.75 x P / 100) x 100 or withdraws, and always
+ * withdraws a counter.
+ */
+describe('the fuel sale\'s price (reference H1 wave 17)', () => {
+    it('counters with 3/4 rounded down to 100: all five measured counters',
+        () => {
+            expect(fuelCounterPrice(4000)).toBe(3000);
+            expect(fuelCounterPrice(2000)).toBe(1500);
+            expect(fuelCounterPrice(5000)).toBe(3700);
+            expect(fuelCounterPrice(1000)).toBe(700);
+            expect(fuelCounterPrice(3000)).toBe(2200);
+        });
+
+    it('adds 1,000 an ask to the base, and quotes the counter while it is '
+        + 'on the table', () => {
+            expect(FUEL_SALE_PRICE_STEP).toBe(1000);
+            // Trader A: 3,000 / 4,000 (-> 3,000) / 5,000.
+            expect(fuelSalePrice(3000, NO_FUEL_HAGGLE)).toBe(3000);
+            expect(fuelSalePrice(3000, { asks: 1, countered: false }))
+                .toBe(4000);
+            expect(fuelSalePrice(3000, { asks: 1, countered: true }))
+                .toBe(3000);
+            expect(fuelSalePrice(3000, { asks: 2, countered: false }))
+                .toBe(5000);
+            // Warship C's accepted counter: 5,000 -> 3,700.
+            expect(fuelSalePrice(3000, { asks: 2, countered: true }))
+                .toBe(3700);
+            // The record +2000 warship: 1,000 (-> 700) / 2,000.
+            expect(fuelSalePrice(1000, { asks: 0, countered: true }))
+                .toBe(700);
+            expect(fuelSalePrice(1000, { asks: 1, countered: false }))
+                .toBe(2000);
+            // Nonsense counts clamp rather than go negative or inexact.
+            expect(fuelSalePrice(1000, { asks: -3, countered: false }))
+                .toBe(1000);
+            expect(Number.isSafeInteger(fuelSalePrice(3000,
+                { asks: 1e12, countered: false }))).toBeTrue();
+        });
+
+    it('draws a mood and base per ship: good at 1,000, neutral at 2,000 or '
+        + '3,000, bad at 3,000 (finding 2)', () => {
+            const seen = new Set<string>();
+            for (let i = 0; i < 300; i++) {
+                const terms = fuelSaleTerms(`ship ${i}`);
+                seen.add(`${terms.mood} ${terms.base}`);
+                // The same ship, the same terms, every time.
+                expect(fuelSaleTerms(`ship ${i}`)).toEqual(terms);
+            }
+            expect([...seen].sort()).toEqual(
+                ['bad 3000', 'good 1000', 'neutral 2000', 'neutral 3000']);
+            // Pinned, so a change to the draw is a deliberate one.
+            expect(fuelSaleTerms('ship0')).toEqual({ mood: 'bad', base: 3000 });
+            expect(fuelSaleTerms('ship1')).toEqual({ mood: 'good', base: 1000 });
+            expect(fuelSaleTerms('ship2'))
+                .toEqual({ mood: 'neutral', base: 2000 });
+            expect(fuelSaleTerms('ship3'))
+                .toEqual({ mood: 'neutral', base: 3000 });
+        });
+
+    it('Lower Price: a counter or a withdrawal on the asking price, always a '
+        + 'withdrawal on a counter; a withdrawal ends the ask (finding 3)',
+        () => {
+            // 'target' / 'player' draw W, C, C, W for asks 0-3.
+            expect([0, 1, 2, 3].map(asks =>
+                fuelLowerPriceCounters('target', 'player', asks)))
+                .toEqual([false, true, true, false]);
+            expect(lowerFuelPrice(NO_FUEL_HAGGLE, 'target', 'player')).toEqual({
+                haggle: { asks: 1, countered: false }, outcome: 'withdraw',
+            });
+            const asked = { asks: 1, countered: false };
+            const countered = lowerFuelPrice(asked, 'target', 'player');
+            expect(countered).toEqual({
+                haggle: { asks: 1, countered: true }, outcome: 'counter',
+            });
+            expect(lowerFuelPrice(countered.haggle, 'target', 'player'))
+                .toEqual({
+                    haggle: { asks: 2, countered: false },
+                    outcome: 'withdraw',
+                });
+            // Pure: the argument is not touched.
+            expect(asked).toEqual({ asks: 1, countered: false });
+            // About 40% of first presses counter (5 of 13 measured).
+            let counters = 0;
+            for (let i = 0; i < 2000; i++) {
+                if (fuelLowerPriceCounters(`ship ${i}`, 'player', 0)) {
+                    counters++;
+                }
+            }
+            expect(counters / 2000).toBeGreaterThan(0.35);
+            expect(counters / 2000).toBeLessThan(0.45);
+        });
+
+    it('Accept ends the ask (GUESS); the further-along haggle wins', () => {
+        expect(fuelHaggleAfterAccept({ asks: 2, countered: true }))
+            .toEqual({ asks: 3, countered: false });
+        const a = { asks: 1, countered: false };
+        const b = { asks: 1, countered: true };
+        const c = { asks: 2, countered: false };
+        expect(laterFuelHaggle(a, b)).toBe(b);
+        expect(laterFuelHaggle(b, a)).toBe(b);
+        expect(laterFuelHaggle(c, b)).toBe(c);
+        expect(laterFuelHaggle(undefined, a)).toBe(a);
+        expect(laterFuelHaggle(a, undefined)).toBe(a);
+        expect(laterFuelHaggle(undefined, undefined)).toEqual(NO_FUEL_HAGGLE);
     });
 });
 

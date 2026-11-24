@@ -32,7 +32,12 @@ import {
     bribeAmount,
     canRequestAssistance,
     FUEL_SALE_AMOUNT,
+    fuelHaggleAfterAccept,
+    FuelHaggleState,
     fuelSalePrice,
+    fuelSaleTerms,
+    lowerFuelPrice,
+    NO_FUEL_HAGGLE,
     planetTakesBribes,
     shipHailResponse,
     shipIsFighting,
@@ -92,9 +97,10 @@ import { TargetComponent } from '../ship/index.js';
 export type HailAction =
     | { kind: 'requestAssistance', target: string }
     /**
-     * Lower Price on a neutral ship's price for fuel (reference H1 wave
-     * 16): the offer is withdrawn, and the next one from that ship costs
-     * double (hail.ts's fuelSalePrice). Accept Price is the
+     * Lower Price on a ship's price for fuel (reference H1 wave 17): the
+     * ship counters with 3/4 of it or withdraws the offer, and always
+     * withdraws a counter (hail.ts's lowerFuelPrice); a withdrawn offer's
+     * next one from that ship costs 1,000 more. Accept Price is the
      * `requestAssistance` record itself, as Pay is for an unfriendly ship's
      * price.
      */
@@ -470,10 +476,11 @@ export function applyHail(world: World, peerId: string | undefined,
         }
         // WHO HELPS, AND ON WHAT TERMS (hail.ts's assistWillingness): an
         // unfriendly government's ship refuses ("I'd rather not.") or makes
-        // the player pay (ruling #297); a NEUTRAL ship refuses a disabled
-        // pilot ("Not a chance.") and sells a fuelless one a jump of fuel
-        // (reference H1 wave 16); free help comes from an ally, a Roadside
-        // Assistance govt or a ränk. The dialog only sends a request to a
+        // the player pay (ruling #297); any other ship, allies included,
+        // refuses a disabled pilot ("Not a chance.") and sells a fuelless
+        // one a jump of fuel (reference H1 waves 16 and 17); free help
+        // comes only from a Roadside Assistance govt, a ränk 0x0800, or a
+        // ränk 0x0400's warship. The dialog only sends a request to a
         // ship with a price from its haggle page's Pay / Accept Price
         // button, so a request that arrives here for one IS the payment; the
         // price is re-derived from synced state, never taken from the
@@ -492,12 +499,14 @@ export function applyHail(world: World, peerId: string | undefined,
         const alreadyComing = target.components.get(AssistingComponent)
             ?.client === found.uuid;
         if (action.kind === 'lowerPrice') {
-            // LOWER PRICE withdraws a neutral ship's fuel offer, and its
-            // next one to this player costs double (hail.ts's
-            // fuelSalePrice). Only a ship that is offering fuel right now
-            // can withdraw an offer.
+            // LOWER PRICE: the ship counters with 3/4 or withdraws its
+            // offer, and always withdraws a counter (hail.ts's
+            // lowerFuelPrice, the same pure draw the dialog shows). Only a
+            // ship that is offering fuel right now can be haggled with.
             if (willingness === 'sellFuel' && !alreadyComing) {
-                lowerFuelPrice(target, found.uuid);
+                setFuelHaggle(target, found.uuid, lowerFuelPrice(
+                    fuelHaggleOf(target, found.uuid), action.target,
+                    found.uuid).haggle);
             }
             return;
         }
@@ -522,19 +531,24 @@ export function applyHail(world: World, peerId: string | undefined,
                 break;
             }
             case 'sellFuel': {
-                // ACCEPT PRICE: the price this ship is asking this player
-                // now, the fuel errand on its way. Credits move here and
-                // nowhere else (reference H1 wave 16: 2,000 taken at once).
+                // ACCEPT PRICE: the price on the table — this ship's base,
+                // 1,000 an earlier ask, or the counter to it — the fuel
+                // errand on its way. Credits move here and nowhere else
+                // (reference H1 wave 17: a 3,700 counter, 3,700 taken at
+                // once).
                 if (alreadyComing) {
                     return;
                 }
                 const credits = player.components.get(CreditsComponent);
-                const price = fuelSalePrice(target.components
-                    .get(FuelHaggleComponent)?.get(found.uuid) ?? 0);
+                const haggle = fuelHaggleOf(target, found.uuid);
+                const price = fuelSalePrice(
+                    fuelSaleTerms(action.target).base, haggle);
                 if (!credits || credits.credits < price) {
                     return;
                 }
                 credits.credits -= price;
+                setFuelHaggle(target, found.uuid,
+                    fuelHaggleAfterAccept(haggle));
                 target.components.set(AssistingComponent,
                     { client: found.uuid, fuel: FUEL_SALE_AMOUNT });
                 return;
@@ -649,18 +663,28 @@ function forgetMutualAggression(player: Entity, targetUuid: string,
     target.components.get(AggressionComponent)?.delete(playerUuid);
 }
 
+/** Where `playerUuid` stands with `target`'s fuel price
+ * (FuelHaggleComponent), or a fresh haggle. */
+function fuelHaggleOf(target: Entity, playerUuid: string): FuelHaggleState {
+    return target.components.get(FuelHaggleComponent)?.get(playerUuid)
+        ?? NO_FUEL_HAGGLE;
+}
+
 /**
- * Counts one more withdrawn fuel offer from `target` to `playerUuid`
- * (FuelHaggleComponent). Mutates the existing map when there is one, so the
- * delta stream sees the component it already knows about.
+ * Records where `playerUuid` now stands with `target`'s fuel price. A fresh
+ * entry object (never the shared NO_FUEL_HAGGLE); mutates the existing map
+ * when there is one, so the delta stream sees the component it already
+ * knows about.
  */
-function lowerFuelPrice(target: Entity, playerUuid: string) {
+function setFuelHaggle(target: Entity, playerUuid: string,
+    state: FuelHaggleState) {
+    const entry = { asks: state.asks, countered: state.countered };
     const haggle = target.components.get(FuelHaggleComponent);
     if (haggle) {
-        haggle.set(playerUuid, (haggle.get(playerUuid) ?? 0) + 1);
+        haggle.set(playerUuid, entry);
     } else {
         target.components.set(FuelHaggleComponent,
-            new Map([[playerUuid, 1]]));
+            new Map([[playerUuid, entry]]));
     }
 }
 
@@ -726,8 +750,8 @@ export const AssistBehaviorSystem = new System({
         }
         // Alongside: render assistance and depart.
         if (assisting.fuel !== undefined) {
-            // A FUEL SALE (a neutral ship's, reference H1 wave 16): the
-            // jump of fuel that was paid for, and nothing else.
+            // A FUEL SALE (reference H1 waves 16 and 17): the jump of fuel
+            // that was paid for, and nothing else.
             const fuel = client.components.get(FuelComponent);
             if (fuel) {
                 fuel.current = Math.min(fuel.max,
@@ -762,10 +786,10 @@ export const HailPlugin: Plugin = {
         const serializer = world.resources.get(SerializerResource);
         serializer?.addComponent(AssistingComponent, AssistingType);
         world.addComponent(AssistingComponent);
-        // A neutral ship's price for fuel depends on how often the player
-        // has answered it with Lower Price: synced so a rollback across a
-        // haggle converges, and delta-synced so the comm dialog quotes the
-        // price applyHail will charge.
+        // A ship's price for fuel depends on how many of its offers the
+        // player has answered and whether its counter is on the table:
+        // synced so a rollback across a haggle converges, and delta-synced
+        // so the comm dialog quotes the price applyHail will charge.
         world.addComponent(FuelHaggleComponent);
         serializer?.addComponent(FuelHaggleComponent, FuelHaggleType);
         world.resources.get(DeltaResource)?.addComponent(FuelHaggleComponent, {

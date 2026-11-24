@@ -19,8 +19,10 @@ import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
-    FUEL_SALE_AMOUNT, FUEL_SALE_BASE_PRICE, fuelSalePrice, LegalRecordsComponent,
+    FUEL_SALE_AMOUNT, fuelSaleTerms, LegalRecordsComponent,
 } from '../reputation/index.js';
+import { getDefaultRankData } from 'novadatainterface/rank_data';
+import { ActiveRanksComponent } from '../ncb/index.js';
 import { AssistingComponent, FuelHaggleComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
@@ -741,7 +743,7 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                 applyHail(world, PEER,
                     { kind: 'requestAssistance', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
-                    .toBe(100_000 - FUEL_SALE_BASE_PRICE);
+                    .toBe(100_000 - fuelSaleTerms('target').base);
                 expect(target(world).components.get(AssistingComponent))
                     .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
             });
@@ -1028,13 +1030,15 @@ describe('applyHail: an unfriendly ship refuses or charges; an escort '
 });
 
 /**
- * Reference "W1 / C1 / H1 wave 16", H1 (docs/reference_experiments.md): a
- * NEUTRAL ship (record 0, a neutral govt) refuses a disabled pilot flat and
- * SELLS a fuelless one fuel — "Pay me 1,000 credits.", Lower Price withdraws
- * the offer and the next ask costs 2,000, Accept Price takes the money at
- * once and the ship comes over with about one jump of fuel.
+ * Reference "W1 / C1 / H1 wave 16" and "H1 wave 17", H1
+ * (docs/reference_experiments.md): a NEUTRAL ship (a neutral govt, any
+ * record) refuses a disabled pilot flat and SELLS a fuelless one fuel — a
+ * per-ship base by mood plus 1,000 an ask, Lower Price a 3/4 counter or a
+ * withdrawal (always a withdrawal on a counter), Accept Price taking the
+ * price on the table at once, the ship coming over with about one jump of
+ * fuel. Wave 17 overturned wave 16's guessed doubling.
  */
-describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
+describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
     async function neutralWorld(aiType = 1) {
         const made = await makeWorld();
         await made.addShip('target', 150, 0, ship => {
@@ -1049,8 +1053,19 @@ describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
     function credits(world: World) {
         return player(world).components.get(CreditsComponent)!.credits;
     }
+    function haggle(world: World) {
+        return target(world).components.get(FuelHaggleComponent)
+            ?.get('player');
+    }
     const assist = { kind: 'requestAssistance', target: 'target' } as const;
     const lower = { kind: 'lowerPrice', target: 'target' } as const;
+
+    // The ship 'target' is in a good mood (base 1,000), and its first
+    // Lower Price draws for 'player' go withdraw, counter, counter, withdraw
+    // (hail_test pins both).
+    it('the fixture ship\'s terms', () => {
+        expect(fuelSaleTerms('target')).toEqual({ mood: 'good', base: 1000 });
+    });
 
     it('refuses a disabled pilot: no errand, no charge (trader and warship)',
         async () => {
@@ -1098,30 +1113,65 @@ describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
                 .toBeFalse();
         });
 
-    it('a warship sells fuel like the trader (GUESS: one rule)', async () => {
-        const { world } = await neutralWorld(3);
-        fuelless(world);
-        applyHail(world, PEER, assist);
-        expect(credits(world)).toBe(100_000 - 1000);
-    });
+    it('a warship sells fuel like the trader (reference H1 wave 17, '
+        + 'finding 4)', async () => {
+            const { world } = await neutralWorld(3);
+            fuelless(world);
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 1000);
+        });
 
-    it('Lower Price withdraws the offer and the next one costs double',
+    it('Lower Price withdraws or counters with 3/4, a second press always '
+        + 'withdraws, every withdrawn ask adds 1,000, and Accept takes the '
+        + 'counter (reference H1 wave 17, findings 1, 3 and 4)', async () => {
+            const { world } = await neutralWorld();
+            fuelless(world);
+            // Ask 1, 1,000: withdrawn. Nothing moves but the haggle.
+            applyHail(world, PEER, lower);
+            expect(credits(world)).toBe(100_000);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(haggle(world)).toEqual({ asks: 1, countered: false });
+            // Ask 2, 2,000: countered with 1,500, then withdrawn.
+            applyHail(world, PEER, lower);
+            expect(haggle(world)).toEqual({ asks: 1, countered: true });
+            applyHail(world, PEER, lower);
+            expect(haggle(world)).toEqual({ asks: 2, countered: false });
+            expect(credits(world)).toBe(100_000);
+            // Ask 3, 3,000: countered with 2,200, and accepted at that.
+            applyHail(world, PEER, lower);
+            expect(haggle(world)).toEqual({ asks: 2, countered: true });
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 2200);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
+            // The ask is over (GUESS: an accepted one counts like a
+            // withdrawn one).
+            expect(haggle(world)).toEqual({ asks: 3, countered: false });
+        });
+
+    it('the price of an uncountered later ask: base + 1,000 an ask',
         async () => {
             const { world } = await neutralWorld();
             fuelless(world);
             applyHail(world, PEER, lower);
-            // Withdrawn: nothing moves but the count.
-            expect(credits(world)).toBe(100_000);
-            expect(target(world).components.has(AssistingComponent))
-                .toBeFalse();
-            expect(target(world).components.get(FuelHaggleComponent)
-                ?.get('player')).toBe(1);
             applyHail(world, PEER, lower);
-            expect(target(world).components.get(FuelHaggleComponent)
-                ?.get('player')).toBe(2);
+            applyHail(world, PEER, lower);
+            // Ask 3 now on the table, uncountered: 1,000 + 2 x 1,000.
+            expect(haggle(world)).toEqual({ asks: 2, countered: false });
             applyHail(world, PEER, assist);
-            expect(credits(world)).toBe(100_000 - 4000);
+            expect(credits(world)).toBe(100_000 - 3000);
         });
+
+    it('two pilots haggle with one ship separately', async () => {
+        const { world } = await neutralWorld();
+        fuelless(world);
+        applyHail(world, PEER, lower);
+        target(world).components.get(FuelHaggleComponent)!
+            .set('someone else', { asks: 7, countered: false });
+        applyHail(world, PEER, assist);
+        expect(credits(world)).toBe(100_000 - 2000);
+    });
 
     it('Lower Price changes nothing where no fuel is on offer', async () => {
         // A healthy pilot, a disabled one, a free (roadside) helper, a ship
@@ -1151,9 +1201,10 @@ describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
         const coming = await neutralWorld();
         fuelless(coming.world);
         applyHail(coming.world, PEER, assist);
+        // The accepted ask is over; a Lower Price after it changes nothing.
+        expect(haggle(coming.world)).toEqual({ asks: 1, countered: false });
         applyHail(coming.world, PEER, lower);
-        expect(target(coming.world).components.has(FuelHaggleComponent))
-            .toBeFalse();
+        expect(haggle(coming.world)).toEqual({ asks: 1, countered: false });
     });
 
     it('sells nothing to a pilot who cannot pay', async () => {
@@ -1179,11 +1230,105 @@ describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
                 .toEqual({ client: 'player' });
         });
 
-    it('fuelSalePrice: 1,000, doubling per withdrawn offer', () => {
-        expect(fuelSalePrice(0)).toBe(FUEL_SALE_BASE_PRICE);
-        expect(fuelSalePrice(1)).toBe(2000);
-        expect(fuelSalePrice(3)).toBe(8000);
-        expect(fuelSalePrice(-1)).toBe(1000);
-        expect(fuelSalePrice(1000)).toBe(fuelSalePrice(20));
-    });
+    it('a +2000 record changes neither the refusal nor the price '
+        + '(reference H1 wave 17, findings 5 and 6)', async () => {
+            const { world } = await neutralWorld(3);
+            player(world).components.set(LegalRecordsComponent,
+                new Map([['test:system', 2000]]));
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            applyHail(world, PEER, assist);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            player(world).components.delete(DisabledComponent);
+            fuelless(world);
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 1000);
+        });
+
+    /** The player's hull is of `test:friend`, an ALLY of the hailed ship's
+     * `test:host` (the wave-17 Kit Fragile Ally of 317, beside 343). */
+    async function alliedWorld(aiType: number) {
+        const made = await makeWorld();
+        const gameData = made.world.resources.get(
+            SimulationGameDataResource) as unknown as MockGameData;
+        const friend = getDefaultGovtData();
+        friend.id = 'test:friend';
+        friend.classes = [17];
+        gameData.data.Govt.map.set('test:friend', friend);
+        await gameData.data.Govt.get('test:friend');
+        const host = getDefaultGovtData();
+        host.id = 'test:host';
+        host.allies = [17];
+        gameData.data.Govt.map.set('test:host', host);
+        await gameData.data.Govt.get('test:host');
+        player(made.world).components.set(GovtComponent, { id: 'test:friend' });
+        await made.addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:host' });
+            ship.components.set(NpcComponent, { aiType, mode: 'travel' });
+        });
+        return made;
+    }
+
+    it('an ALLIED ship refuses a disabled pilot too (reference H1 wave 17, '
+        + 'finding 6: "In your dreams, pal.", "Yeah, right!")', async () => {
+            for (const aiType of [1, 3]) {
+                const { world } = await alliedWorld(aiType);
+                player(world).components.set(DisabledComponent,
+                    { repairAt: null });
+                applyHail(world, PEER, assist);
+                expect(target(world).components.has(AssistingComponent))
+                    .withContext(`AI ${aiType}`).toBeFalse();
+                expect(credits(world)).toBe(100_000);
+            }
+        });
+
+    it('and sells an allied pilot fuel like a neutral one (GUESS)',
+        async () => {
+            const { world } = await alliedWorld(1);
+            fuelless(world);
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 1000);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
+        });
+
+    /** The player holds a ränk 0x0400 for `test:neutral`. */
+    async function rankWorld(aiType: number) {
+        const made = await neutralWorld(aiType);
+        const gameData = made.world.resources.get(
+            SimulationGameDataResource) as unknown as MockGameData;
+        const base = getDefaultRankData();
+        gameData.data.Rank.map.set('test:rank', {
+            ...base, id: 'test:rank', affilGovt: 'test:neutral',
+            rankFlags: { ...base.rankFlags, canRequestBattleAssistance: true },
+        });
+        await gameData.data.Rank.get('test:rank');
+        player(made.world).components.set(ActiveRanksComponent,
+            new Set(['test:rank']));
+        return made;
+    }
+
+    it('a ränk 0x0400 does not make a TRADER of its govt help (reference H1 '
+        + 'wave 17, finding 7); its WARSHIP still comes (GUESS)', async () => {
+            for (const aiType of [1, 2]) {
+                const { world } = await rankWorld(aiType);
+                player(world).components.set(DisabledComponent,
+                    { repairAt: null });
+                applyHail(world, PEER, assist);
+                expect(target(world).components.has(AssistingComponent))
+                    .withContext(`AI ${aiType}`).toBeFalse();
+            }
+            const trader = await rankWorld(1);
+            fuelless(trader.world);
+            applyHail(trader.world, PEER, assist);
+            expect(credits(trader.world)).toBe(100_000 - 1000);
+
+            const warship = await rankWorld(3);
+            player(warship.world).components.set(DisabledComponent,
+                { repairAt: null });
+            applyHail(warship.world, PEER, assist);
+            expect(target(warship.world).components.get(AssistingComponent))
+                .toEqual({ client: 'player' });
+            expect(credits(warship.world)).toBe(100_000);
+        });
 });

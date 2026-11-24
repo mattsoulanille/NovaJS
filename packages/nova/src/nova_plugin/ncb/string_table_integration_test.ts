@@ -28,6 +28,7 @@ import {
     rudeGreetingText, CREDITS_WORD_INDEX, FUEL_OFFER_WITHDRAWN_COUNT,
     FUEL_OFFER_WITHDRAWN_FALLBACK, FUEL_OFFER_WITHDRAWN_FIRST_INDEX,
     FUEL_SALE_MOOD_COUNT, FUEL_SALE_MOOD_FALLBACK, FUEL_SALE_MOOD_FIRST_INDEX,
+    FUEL_SALE_BAD_MOOD_FIRST_INDEX, FUEL_SALE_BAD_MOOD_FALLBACK,
     fuelOfferWithdrawnText, fuelSaleMoodText, PAY_ME_INDEX, payMeText,
 } from '../reputation/index.js';
 import {
@@ -299,8 +300,21 @@ describe('StringTable against real Nova data', () => {
                 FUEL_SALE_MOOD_COUNT);
             const withdrawn = slice(FUEL_OFFER_WITHDRAWN_FIRST_INDEX,
                 FUEL_OFFER_WITHDRAWN_COUNT);
-            // The three lines on the reference captures, verbatim.
+            // The lines on the reference captures, verbatim (waves 16
+            // and 17: the three moods and the three withdrawals).
             expect(mood).toContain("You're in luck, I'm in a good mood today.");
+            expect(mood).toContain("You're lucky - I'm in a good mood today.");
+            expect(slice(FUEL_SALE_BAD_MOOD_FIRST_INDEX, 5)).toContain(
+                "I'm in a bad mood today, so it's going to cost extra.");
+            expect(slice(ASSIST_FOR_PAY_FIRST_INDEX, 5)).toContain(
+                "All right, I'll give you some help, but it'll cost you.");
+            expect(slice(ASSIST_FOR_PAY_FIRST_INDEX, 5)).toContain(
+                "I'll help you out if you pay me.");
+            expect(withdrawn).toContain('Ha ha ha. What a comedian.');
+            expect(withdrawn).toContain(
+                "Fine, I guess you don't want my help.");
+            expect(slice(ASSIST_PAID_FIRST_INDEX, ASSIST_PAID_COUNT))
+                .toContain("Okay, I'm on my way.");
             expect(withdrawn).toContain(
                 "If that's the way you feel, then you can sit here forever.");
             expect(slice(ASSIST_PAID_FIRST_INDEX, ASSIST_PAID_COUNT))
@@ -309,12 +323,20 @@ describe('StringTable against real Nova data', () => {
             expect(withdrawn[0]).toBe(FUEL_OFFER_WITHDRAWN_FALLBACK);
             // Neighbours: the bad mood after the good one; the pirate's
             // "Die, cheapskate!" group before the withdrawal.
-            expect(strings[FUEL_SALE_MOOD_FIRST_INDEX + 5])
-                .toBe("I'm in a bad mood today, so it's going to cost you.");
+            expect(FUEL_SALE_BAD_MOOD_FIRST_INDEX)
+                .toBe(FUEL_SALE_MOOD_FIRST_INDEX + 5);
+            expect(strings[FUEL_SALE_BAD_MOOD_FIRST_INDEX])
+                .toBe(FUEL_SALE_BAD_MOOD_FALLBACK);
             expect(strings[FUEL_OFFER_WITHDRAWN_FIRST_INDEX - 4])
                 .toBe('Die, cheapskate!');
             for (const seed of [0, 1, 2, 3, 4, 987654]) {
-                expect(mood).toContain(fuelSaleMoodText(strings, seed));
+                expect(mood).toContain(fuelSaleMoodText(strings, 'good',
+                    seed));
+                expect(strings.slice(FUEL_SALE_BAD_MOOD_FIRST_INDEX,
+                    FUEL_SALE_BAD_MOOD_FIRST_INDEX + 5))
+                    .toContain(fuelSaleMoodText(strings, 'bad', seed));
+                expect(slice(ASSIST_FOR_PAY_FIRST_INDEX, 5))
+                    .toContain(fuelSaleMoodText(strings, 'neutral', seed));
                 expect(withdrawn)
                     .toContain(fuelOfferWithdrawnText(strings, seed));
             }

@@ -282,37 +282,47 @@ export function canRequestAssistance(opts: {
  * (iff_plugin's shipDisposition), not the ship's IFF — decides: a ship whose
  * government is hostile to the player asks to be paid when that government
  * takes bribes from a ship of its kind (the same bribe flags Beg For Mercy
- * reads, {@link shipTakesBribes}) and refuses otherwise. Every other ship is
- * willing.
+ * reads, {@link shipTakesBribes}) and refuses otherwise. Every other ship
+ * answers as below.
  *
  * ränk 0x0400 ("Player can always request battle assistance from ships of
- * the affiliated government") overrides the politics: always willing.
+ * the affiliated government") overrides the politics for a WARSHIP of that
+ * government: always willing ({@link rankBattleAssistance}). Not for a
+ * TRADER: reference "H1 wave 17", finding 7 — a trader of the affiliated
+ * govt, asked by a ränk 0x0400 holder under raider fire, said "Not a
+ * chance." GUESS for warships (none met on the reference): they keep the
+ * old always-willing answer.
  *
- * A NEUTRAL SHIP (its government neither hostile to the player nor allied
- * with him) helps nobody for free. Measured on the original (reference
- * "W1 / C1 / H1 wave 16", H1, record 0, a neutral govt):
+ * NOBODY ELSE HELPS FOR FREE, allies included. Measured on the original
+ * (reference "W1 / C1 / H1 wave 16" and "H1 wave 17", H1):
  *
  *  - 'refuse'    a DISABLED pilot is turned down flat by traders and
  *                warships alike, from the STR# 3000 95-99 group ("Not a
- *                chance.", "No way."; {@link disabledRefusalText}) — the
- *                same group a healthy pilot under fire gets (wave 15).
- *  - 'sellFuel'  a pilot OUT OF FUEL is offered fuel for money: "You're in
- *                luck, I'm in a good mood today." and "Pay me 1,000
- *                credits." with Lower Price / Accept Price
- *                ({@link fuelSalePrice}); once paid the ship comes over and
+ *                chance.", "Yeah, right!", "In your dreams, pal.";
+ *                {@link disabledRefusalText}) — at record 0, at record
+ *                +2000, and when his own hull is of a govt ALLIED with the
+ *                hailed ship's (wave 17, finding 6: two Kit Shipping
+ *                traders refused a Kit Fragile Ally pilot). So the old
+ *                "allies help for free" guess is gone: a 'friendly'
+ *                disposition answers like a neutral one.
+ *  - 'sellFuel'  a pilot OUT OF FUEL is offered fuel for money, by
+ *                traders and warships alike (wave 17, finding 4): a mood
+ *                line and "Pay me N credits." with Lower Price / Accept
+ *                Price ({@link fuelSaleTerms}, {@link fuelSalePrice},
+ *                {@link lowerFuelPrice}); once paid the ship comes over and
  *                puts one jump of fuel in the tank ({@link FUEL_SALE_AMOUNT}).
+ *                GUESS: an allied ship sells like a neutral one (only a
+ *                disabled ally was measured).
  *
  * Free help stays where the data says it is free: a Roadside Assistance govt
- * (Flags2 0x0010) and a ränk 0x0800 holder ({@link assistIsFree}), a ränk
- * 0x0400 holder (above), and — GUESS, not measured — a ship ALLIED with the
- * player ('friendly' disposition: his own govt or one of its allies), which
- * keeps the old free errand. GUESS: a disabled pilot who is also out of fuel
- * is refused (being disabled is the bigger need, and a neutral ship would not
- * repair him); a neutral WARSHIP sells fuel like the measured trader does
- * (one rule for every neutral ship, as the refusal is). The player's legal
- * record is not read (wave 15 refused a +1000 pilot under fire alike; the
- * table's "Okay, since your reputation is so good." group 160-164 is unused
- * until a run shows when it is said).
+ * (Flags2 0x0010) and a ränk 0x0800 holder ({@link assistIsFree}), and a
+ * ränk 0x0400 holder asking a warship (above). GUESS: a disabled pilot who
+ * is also out of fuel is refused (being disabled is the bigger need, and a
+ * neutral ship would not repair him). The player's legal record is not read:
+ * a +2000 record changed neither the refusal nor the fuel price nor the mood
+ * (wave 17, findings 5 and 6), and wave 15 refused a +1000 pilot under fire
+ * alike (the table's "Okay, since your reputation is so good." group
+ * 160-164 is unused until a run shows when it is said).
  *
  * `need` is what the player needs help with ({@link assistNeed}); a request
  * with no need never reaches this function (the "You're not in any trouble."
@@ -337,8 +347,8 @@ export function assistWillingness(opts: {
     /** Defaults to 'disabled' (the stricter answer). */
     need?: AssistNeed,
 }): AssistWillingness {
-    if (opts.rankAlwaysAssists || opts.free
-        || opts.disposition === 'friendly') {
+    if (opts.free
+        || rankBattleAssistance(opts.rankAlwaysAssists, opts.aiType)) {
         return 'willing';
     }
     if (opts.disposition === 'hostile') {
@@ -346,6 +356,24 @@ export function assistWillingness(opts: {
             ? 'forPay' : 'unwilling';
     }
     return opts.need === 'fuel' ? 'sellFuel' : 'refuse';
+}
+
+/** AI types 1 (wimpy trader) and 2 (brave trader): the freighters. */
+export function isTraderAiType(aiType: number | undefined): boolean {
+    return aiType === 1 || aiType === 2;
+}
+
+/**
+ * Whether a ränk 0x0400 ("Player can always request battle assistance from
+ * ships of the affiliated government", `rankAlwaysAssists`: ranksAllow-
+ * Assistance for the hailed ship's govt) makes THIS ship help. Not a trader
+ * (reference "H1 wave 17", finding 7: "Not a chance." from a trader of the
+ * affiliated govt); GUESS: a warship (AI 3 / 4, or a ship with no AI type)
+ * still does, as before — none was met on the reference.
+ */
+export function rankBattleAssistance(rankAlwaysAssists: boolean | undefined,
+    aiType: number | undefined): boolean {
+    return !!rankAlwaysAssists && !isTraderAiType(aiType);
 }
 
 /**
@@ -378,26 +406,171 @@ export const LOW_FUEL_THRESHOLD = 100;
 export const FUEL_SALE_AMOUNT = 100;
 
 /**
- * The first price a neutral ship asks for a jump of fuel. Reference H1 wave
- * 16: "Pay me 1,000 credits." to a pilot holding 1,000,000 credits — so not
- * a share of his cash, unlike a bribe. GUESS: a flat price for every ship
- * and every pilot (one trader, one pilot measured).
+ * A fuel seller's MOOD, drawn once per ship: it picks the line the ship
+ * opens its offer with and the base of its price ({@link fuelSaleTerms}).
  */
-export const FUEL_SALE_BASE_PRICE = 1000;
+export type FuelSaleMood = 'good' | 'neutral' | 'bad';
+
+/** What a ship selling fuel asks before any haggling: its mood and base. */
+export interface FuelSaleTerms {
+    mood: FuelSaleMood;
+    /** The first ask's price, in credits. */
+    base: number;
+}
+
+/** What every repeated ask to the same ship adds to its price, and the
+ * unit of every base (reference H1 wave 17, finding 1). */
+export const FUEL_SALE_PRICE_STEP = 1000;
 
 /**
- * A neutral ship's asking price for fuel after the player has pressed Lower
- * Price on it `withdrawals` times. Reference H1 wave 16: Lower Price
- * withdrew the 1,000 offer ("If that's the way you feel, then you can sit
- * here forever."), and asking the same ship again got "Pay me 2,000
- * credits." GUESS for the rule: the price DOUBLES with every withdrawn
- * offer, per ship and per player, and never comes back down (one doubling
- * seen). The doubling stops after 20 (a billion credits) so the figure
- * stays an exact integer.
+ * THE SHIP'S MOOD AND BASE PRICE. Reference "H1 wave 17" (six ships, two
+ * pilots, 1,000,000 credits each), findings 1, 2 and 5: every opening line
+ * stayed the same for its ship, and went with the base —
+ *
+ *  - good mood ("You're in luck, I'm in a good mood today.", STR# 3000
+ *    115-119): 1,000 (two ships);
+ *  - neutral ("All right, I'll give you some help, but it'll cost you.",
+ *    140-144): 2,000 or 3,000 (three ships: 3,000, 2,000, 3,000);
+ *  - bad mood ("I'm in a bad mood today, so it's going to cost extra.",
+ *    120-124): 3,000 (one ship);
+ *
+ * whatever the pilot's record (good and bad moods both at +2000).
+ *
+ * WHAT PICKS 2,000 OR 3,000 for a neutral ship was not settled by the
+ * data (no ship type or record separates them). The rule here draws the
+ * BASE first, 1,000 / 2,000 / 3,000 alike, and lets the base pick the
+ * mood: 1,000 is a good mood, 2,000 neutral, 3,000 neutral or bad alike.
+ * That reproduces every row (good only at 1,000, bad only at 3,000,
+ * neutral at both) and the frequencies seen, 2 good : 3 neutral : 1 bad
+ * of six (this rule's 1/3 : 1/2 : 1/6). GUESS for the draw itself.
+ *
+ * DETERMINISTIC without the PRNG: a salted hash of the ship's uuid, like
+ * every comm line here, so the dialog (which must quote the price before
+ * any record is applied) and applyHail (which charges it) agree on every
+ * peer, and the ship keeps its mood for every pilot and every ask.
  */
-export function fuelSalePrice(withdrawals: number): number {
-    const n = Math.max(0, Math.min(20, Math.floor(withdrawals)));
-    return FUEL_SALE_BASE_PRICE * 2 ** n;
+export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
+    const roll = hashString(`fuelSale:base:${shipUuid}`);
+    const base = FUEL_SALE_PRICE_STEP * (1 + roll % 3);
+    const mood: FuelSaleMood = base === FUEL_SALE_PRICE_STEP ? 'good'
+        : base === 2 * FUEL_SALE_PRICE_STEP ? 'neutral'
+            : hashString(`fuelSale:mood:${shipUuid}`) % 2 === 0
+                ? 'neutral' : 'bad';
+    return { mood, base };
+}
+
+/**
+ * Where one pilot stands with one fuel seller (npc/hail_component's
+ * FuelHaggle entry): how many of the ship's offers he has already
+ * answered (`asks`), and whether the offer on the table right now is the
+ * ship's 3/4 COUNTER rather than its asking price (`countered`).
+ */
+export interface FuelHaggleState {
+    asks: number;
+    countered: boolean;
+}
+
+/** A pilot who has not haggled with this ship yet. */
+export const NO_FUEL_HAGGLE: FuelHaggleState =
+    Object.freeze({ asks: 0, countered: false });
+
+/** Asks are clamped here so the price stays an exact integer. */
+const MAX_FUEL_ASKS = 1_000_000;
+
+/**
+ * The price on the table: the ship's base plus 1,000 for every offer the
+ * pilot has already answered (reference H1 wave 17, finding 1: one ship
+ * asked 3,000 / 4,000 / 5,000, another 2,000 / 3,000, another 1,000 /
+ * 2,000), or the 3/4 counter to it ({@link fuelCounterPrice}) while one is
+ * on the table. A +2000 record changed nothing (finding 5).
+ */
+export function fuelSalePrice(base: number, haggle: FuelHaggleState):
+    number {
+    const asks = Math.max(0, Math.min(MAX_FUEL_ASKS,
+        Math.floor(haggle.asks) || 0));
+    const asking = base + FUEL_SALE_PRICE_STEP * asks;
+    return haggle.countered ? fuelCounterPrice(asking) : asking;
+}
+
+/**
+ * Lower Price's counter-offer: 3/4 of the price, rounded DOWN to 100.
+ * Reference H1 wave 17, finding 3: 4,000 -> 3,000, 2,000 -> 1,500, 5,000
+ * -> 3,700, 1,000 -> 700, 3,000 -> 2,200 — all five counters fit exactly.
+ * Integer arithmetic, so no float rounding can move a figure.
+ */
+export function fuelCounterPrice(price: number): number {
+    return Math.floor((Math.floor(price) * 3) / 400) * 100;
+}
+
+/**
+ * Of five FIRST Lower Price presses, this many get a counter rather than a
+ * withdrawal: reference H1 wave 17 saw 5 counters in 13 first presses
+ * (about 40%).
+ */
+export const FUEL_COUNTER_IN_FIVE = 2;
+
+/**
+ * WHAT LOWER PRICE DOES (reference H1 wave 17, finding 3): on the ship's
+ * asking price it either COUNTERS with 3/4 of it ({@link fuelCounterPrice};
+ * the popup stays, the new price on it) or WITHDRAWS the offer (STR# 3000
+ * 155-159, "Ha ha ha. What a comedian." / "If that's the way you feel ..."
+ * / "Fine, I guess you don't want my help."); on a counter it ALWAYS
+ * withdraws (every second press did). A withdrawal ends that ask: the next
+ * one costs 1,000 more.
+ *
+ * Which first press counters is a draw the reference could only count (5
+ * of 13, no pattern by ship, mood, price or record): here a hash of the
+ * ship, the pilot and the ask, so it is the same on every peer and in the
+ * dialog that has to show it before the record is applied, never the
+ * PRNG. Pure.
+ */
+export function lowerFuelPrice(haggle: FuelHaggleState, shipUuid: string,
+    playerUuid: string):
+    { haggle: FuelHaggleState, outcome: 'counter' | 'withdraw' } {
+    if (!haggle.countered && fuelLowerPriceCounters(shipUuid, playerUuid,
+        haggle.asks)) {
+        return { haggle: { asks: haggle.asks, countered: true },
+            outcome: 'counter' };
+    }
+    return { haggle: { asks: haggle.asks + 1, countered: false },
+        outcome: 'withdraw' };
+}
+
+/** Whether the first Lower Price on ask number `asks` counters (see
+ * {@link lowerFuelPrice}). */
+export function fuelLowerPriceCounters(shipUuid: string, playerUuid: string,
+    asks: number): boolean {
+    return hashString(`fuelSale:lower:${shipUuid}:${playerUuid}:${asks}`)
+        % 5 < FUEL_COUNTER_IN_FIVE;
+}
+
+/**
+ * The haggle once Accept Price has been paid: that ask is over, so asking
+ * the same ship again (fuelless once more) costs 1,000 more. GUESS: an
+ * accepted offer counts as an ask like a withdrawn one (only withdrawn
+ * offers were followed by another ask on the reference).
+ */
+export function fuelHaggleAfterAccept(haggle: FuelHaggleState):
+    FuelHaggleState {
+    return { asks: haggle.asks + 1, countered: false };
+}
+
+/**
+ * The FURTHER-ALONG of two views of one haggle — the simulation's mirrored
+ * entry and the dialog's own presses it has not mirrored back yet. Every
+ * step moves forward (a counter, then the next ask), so the order is
+ * asks first, then countered.
+ */
+export function laterFuelHaggle(a: FuelHaggleState | undefined,
+    b: FuelHaggleState | undefined): FuelHaggleState {
+    const progress = (h: FuelHaggleState) => h.asks * 2 + (h.countered ? 1 : 0);
+    if (!a) {
+        return b ?? NO_FUEL_HAGGLE;
+    }
+    if (!b) {
+        return a;
+    }
+    return progress(b) > progress(a) ? b : a;
 }
 
 /**
@@ -586,25 +759,33 @@ export const ASSIST_PAID_COUNT = RESPONSE_GROUP_SIZE;
 export const ASSIST_PAID_FALLBACK = "Okay, I'm on my way.";
 
 /**
- * "You're in luck, I'm in a good mood today." (STR# 3000 115-119) — what a
- * neutral ship says as it offers a fuelless pilot fuel for a price (reference
- * H1 wave 16, index 116, shown in the comm's response well above the "Pay
- * me ..." popup). The neighbouring 120-124 ("I'm in a bad mood today, so
- * it's going to cost you extra.") is the dearer mood a hostile ship's mercy
- * price opens with on hail/beg_mercy.png; GUESS: the fuel sale is always in
- * the good mood (the only one seen, on both asks).
+ * The line a fuel seller opens its offer with, by MOOD ({@link
+ * fuelSaleTerms}), shown in the comm's response well above the "Pay me
+ * ..." popup and the same for every ask to that ship. Reference H1 waves 16
+ * and 17 (STR# 3000 0-based):
+ *
+ *   good    115-119 "You're in luck, I'm in a good mood today." (1,000)
+ *   neutral 140-144 "All right, I'll give you some help, but it'll cost
+ *                   you." / "I'll help you out if you pay me." (2,000-3,000;
+ *                   the group an unfriendly ship's price opens with too,
+ *                   {@link ASSIST_FOR_PAY_FIRST_INDEX})
+ *   bad     120-124 "I'm in a bad mood today, so it's going to cost
+ *                   extra." (3,000)
  */
 export const FUEL_SALE_MOOD_FIRST_INDEX = 115;
 export const FUEL_SALE_MOOD_COUNT = RESPONSE_GROUP_SIZE;
 export const FUEL_SALE_MOOD_FALLBACK =
     "You're lucky - I'm in a good mood today.";
+export const FUEL_SALE_BAD_MOOD_FIRST_INDEX = 120;
+export const FUEL_SALE_BAD_MOOD_FALLBACK =
+    "I'm in a bad mood today, so it's going to cost you.";
 
 /**
  * "If that's the way you feel, then you can sit here forever." (STR# 3000
- * 155-159; index 156 on the reference H1 wave 16 capture) — a ship whose
- * price for help the player answered with Lower Price: the offer is
- * withdrawn. (150-154, "Die, cheapskate!", is the pirate's answer to a
- * lowered mercy price.)
+ * 155-159; 155, 156 and 157 on the reference H1 wave 16 / 17 captures) —
+ * a ship whose price for fuel the player answered with Lower Price, when it
+ * withdraws the offer ({@link lowerFuelPrice}). (150-154, "Die,
+ * cheapskate!", is the pirate's answer to a lowered mercy price.)
  */
 export const FUEL_OFFER_WITHDRAWN_FIRST_INDEX = 155;
 export const FUEL_OFFER_WITHDRAWN_COUNT = RESPONSE_GROUP_SIZE;
@@ -800,11 +981,15 @@ export function underFireRefusalText(strings: readonly string[] | undefined,
 }
 
 /**
- * The refusal a DISABLED pilot gets from a neutral ship (STR# 3000 95-99,
- * the same flat "no" group as {@link underFireRefusalText}). Measured on the
- * original: a neutral trader answered "Not a chance." and a neutral warship
- * "No way." to a disabled pilot with record 0 (reference "W1 / C1 / H1 wave
- * 16", H1 finding 5). Nothing else happens: no ship comes to repair him.
+ * The refusal a DISABLED pilot gets from a ship that does not help for free
+ * (STR# 3000 95-99, the same flat "no" group as {@link
+ * underFireRefusalText}). Measured on the original: a neutral trader
+ * answered "Not a chance." and a neutral warship "No way." to a disabled
+ * pilot with record 0 (reference "W1 / C1 / H1 wave 16", H1 finding 5);
+ * "Yeah, right!" and "Not a chance." at record +2000, and "In your dreams,
+ * pal." / "Yeah, right!" from two traders of a govt ALLIED with the pilot's
+ * hull (reference "H1 wave 17", finding 6). Nothing else happens: no ship
+ * comes to repair him.
  */
 export function disabledRefusalText(strings: readonly string[] | undefined,
     seed = 0): string {
@@ -812,11 +997,20 @@ export function disabledRefusalText(strings: readonly string[] | undefined,
         MERCY_REFUSED_FALLBACK, seed);
 }
 
-/** A neutral ship offering fuel for a price (STR# 3000 115-119). */
+/** A ship offering fuel for a price, in its mood (STR# 3000 115-119,
+ * 140-144 or 120-124; see {@link FUEL_SALE_MOOD_FIRST_INDEX}). */
 export function fuelSaleMoodText(strings: readonly string[] | undefined,
-    seed = 0): string {
-    return responseText(strings, FUEL_SALE_MOOD_FIRST_INDEX,
-        FUEL_SALE_MOOD_FALLBACK, seed);
+    mood: FuelSaleMood, seed = 0): string {
+    switch (mood) {
+        case 'good':
+            return responseText(strings, FUEL_SALE_MOOD_FIRST_INDEX,
+                FUEL_SALE_MOOD_FALLBACK, seed);
+        case 'neutral':
+            return assistForPayText(strings, seed);
+        case 'bad':
+            return responseText(strings, FUEL_SALE_BAD_MOOD_FIRST_INDEX,
+                FUEL_SALE_BAD_MOOD_FALLBACK, seed);
+    }
 }
 
 /** A price for help answered with Lower Price (STR# 3000 155-159). */
@@ -873,9 +1067,9 @@ export function hostileResponseText(strings: readonly string[] | undefined,
  * the same-govt answer, which is the case every stock rank with 0x0800 is
  * written for. Documented, not silent.
  *
- * Free help is what {@link assistWillingness} grants a NEUTRAL ship's
- * request with: without it a neutral ship refuses a disabled pilot and sells
- * a fuelless one fuel (reference H1 wave 16).
+ * Free help is what {@link assistWillingness} grants a non-hostile ship's
+ * request with: without it a ship refuses a disabled pilot and sells a
+ * fuelless one fuel (reference H1 waves 16 and 17), allies included.
  */
 export function assistIsFree(govt: GovtData | undefined,
     rankFreeRepair = false): boolean {
