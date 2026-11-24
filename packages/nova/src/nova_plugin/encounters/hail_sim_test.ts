@@ -18,8 +18,10 @@ import { DisabledComponent } from '../ship/index.js';
 import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
-import { LegalRecordsComponent } from '../reputation/index.js';
-import { AssistingComponent } from '../npc/index.js';
+import {
+    FUEL_SALE_AMOUNT, FUEL_SALE_BASE_PRICE, fuelSalePrice, LegalRecordsComponent,
+} from '../reputation/index.js';
+import { AssistingComponent, FuelHaggleComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
     applyHail, BRIBE_PACIFY_MS, isSomeoneElsesEscort, SentHailComponent,
@@ -57,10 +59,20 @@ async function makeWorld() {
     pirate.flags.xenophobic = true;
     pirate.flags.largerBribes = true;
     gameData.data.Govt.map.set('test:pirate', pirate);
-    // A peaceful govt that will lend a hand.
+    // A peaceful govt that will lend a hand: Roadside Assistance (Flags2
+    // 0x0010, "always repair or refuel the player for free"). A plain
+    // neutral govt helps nobody for free (reference H1 wave 16): see
+    // 'test:neutral'.
     const meek = getDefaultGovtData();
     meek.id = 'test:meek';
+    meek.flags2.roadsideAssistance = true;
     gameData.data.Govt.map.set('test:meek', meek);
+    // A plain neutral govt: refuses a disabled pilot, sells a fuelless one
+    // a jump of fuel (reference H1 wave 16).
+    const neutral = getDefaultGovtData();
+    neutral.id = 'test:neutral';
+    gameData.data.Govt.map.set('test:neutral', neutral);
+    await gameData.data.Govt.get('test:neutral');
     // A politically NEUTRAL govt whose warships take bribes — used to test
     // behavioral hostility: only "currently attacking the player" makes one of
     // its ships bargain / refuse assistance, not its (neutral) politics.
@@ -712,16 +724,26 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                     .pacifiedFrom).toBe('player');
             });
 
-        it('where its law does not run: it helps, and takes no bribe',
-            async () => {
+        it('where its law does not run: it is NEUTRAL — takes no bribe, '
+            + 'refuses a repair and sells fuel (H1 wave 16)', async () => {
                 const { world } = await criminalWorld(null);
                 applyHail(world, PEER, { kind: 'bribe', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
                     .toBe(100_000);
+                // Disabled: a neutral ship's flat refusal.
                 applyHail(world, PEER,
                     { kind: 'requestAssistance', target: 'target' });
+                expect(target(world).components.has(AssistingComponent))
+                    .toBeFalse();
+                // Repaired but out of fuel: the neutral price, not a bribe.
+                player(world).components.delete(DisabledComponent);
+                player(world).components.get(FuelComponent)!.current = 0;
+                applyHail(world, PEER,
+                    { kind: 'requestAssistance', target: 'target' });
+                expect(player(world).components.get(CreditsComponent)!.credits)
+                    .toBe(100_000 - FUEL_SALE_BASE_PRICE);
                 expect(target(world).components.get(AssistingComponent))
-                    .toEqual({ client: 'player' });
+                    .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
             });
     });
 
@@ -1003,4 +1025,165 @@ describe('applyHail: an unfriendly ship refuses or charges; an escort '
             expect(isSomeoneElsesEscort(mine, 'player')).toBeFalse();
             expect(isSomeoneElsesEscort(new Entity(), 'player')).toBeFalse();
         });
+});
+
+/**
+ * Reference "W1 / C1 / H1 wave 16", H1 (docs/reference_experiments.md): a
+ * NEUTRAL ship (record 0, a neutral govt) refuses a disabled pilot flat and
+ * SELLS a fuelless one fuel — "Pay me 1,000 credits.", Lower Price withdraws
+ * the offer and the next ask costs 2,000, Accept Price takes the money at
+ * once and the ship comes over with about one jump of fuel.
+ */
+describe('applyHail: a NEUTRAL ship (reference H1 wave 16)', () => {
+    async function neutralWorld(aiType = 1) {
+        const made = await makeWorld();
+        await made.addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:neutral' });
+            ship.components.set(NpcComponent, { aiType, mode: 'travel' });
+        });
+        return made;
+    }
+    function fuelless(world: World) {
+        player(world).components.get(FuelComponent)!.current = 0;
+    }
+    function credits(world: World) {
+        return player(world).components.get(CreditsComponent)!.credits;
+    }
+    const assist = { kind: 'requestAssistance', target: 'target' } as const;
+    const lower = { kind: 'lowerPrice', target: 'target' } as const;
+
+    it('refuses a disabled pilot: no errand, no charge (trader and warship)',
+        async () => {
+            for (const aiType of [1, 3]) {
+                const { world } = await neutralWorld(aiType);
+                player(world).components.set(DisabledComponent,
+                    { repairAt: null });
+                applyHail(world, PEER, assist);
+                expect(target(world).components.has(AssistingComponent))
+                    .withContext(`AI ${aiType}`).toBeFalse();
+                expect(credits(world)).toBe(100_000);
+            }
+        });
+
+    it('refuses a disabled pilot even when he is out of fuel too (GUESS)',
+        async () => {
+            const { world } = await neutralWorld();
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            fuelless(world);
+            applyHail(world, PEER, assist);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(credits(world)).toBe(100_000);
+        });
+
+    it('sells a fuelless pilot one jump of fuel for 1,000 credits, '
+        + 'charged on Accept', async () => {
+            const { world } = await neutralWorld();
+            fuelless(world);
+            const armor = player(world).components.get(ArmorComponent)!;
+            armor.current = 1;
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 1000);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
+            // A second Accept while it is on its way charges nothing.
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 1000);
+            // Alongside (150 px): one jump of fuel, and NO repair.
+            world.step();
+            expect(player(world).components.get(FuelComponent)!.current)
+                .toBe(FUEL_SALE_AMOUNT);
+            expect(armor.current).toBe(1);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+        });
+
+    it('a warship sells fuel like the trader (GUESS: one rule)', async () => {
+        const { world } = await neutralWorld(3);
+        fuelless(world);
+        applyHail(world, PEER, assist);
+        expect(credits(world)).toBe(100_000 - 1000);
+    });
+
+    it('Lower Price withdraws the offer and the next one costs double',
+        async () => {
+            const { world } = await neutralWorld();
+            fuelless(world);
+            applyHail(world, PEER, lower);
+            // Withdrawn: nothing moves but the count.
+            expect(credits(world)).toBe(100_000);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            expect(target(world).components.get(FuelHaggleComponent)
+                ?.get('player')).toBe(1);
+            applyHail(world, PEER, lower);
+            expect(target(world).components.get(FuelHaggleComponent)
+                ?.get('player')).toBe(2);
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 4000);
+        });
+
+    it('Lower Price changes nothing where no fuel is on offer', async () => {
+        // A healthy pilot, a disabled one, a free (roadside) helper, a ship
+        // already on its way: no offer to withdraw.
+        const healthy = await neutralWorld();
+        applyHail(healthy.world, PEER, lower);
+        expect(target(healthy.world).components.has(FuelHaggleComponent))
+            .toBeFalse();
+
+        const disabled = await neutralWorld();
+        player(disabled.world).components.set(DisabledComponent,
+            { repairAt: null });
+        fuelless(disabled.world);
+        applyHail(disabled.world, PEER, lower);
+        expect(target(disabled.world).components.has(FuelHaggleComponent))
+            .toBeFalse();
+
+        const { world, addShip } = await makeWorld();
+        fuelless(world);
+        await addShip('target', 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:meek' });
+            ship.components.set(NpcComponent, { aiType: 1 });
+        });
+        applyHail(world, PEER, lower);
+        expect(target(world).components.has(FuelHaggleComponent)).toBeFalse();
+
+        const coming = await neutralWorld();
+        fuelless(coming.world);
+        applyHail(coming.world, PEER, assist);
+        applyHail(coming.world, PEER, lower);
+        expect(target(coming.world).components.has(FuelHaggleComponent))
+            .toBeFalse();
+    });
+
+    it('sells nothing to a pilot who cannot pay', async () => {
+        const { world } = await neutralWorld();
+        fuelless(world);
+        player(world).components.set(CreditsComponent, { credits: 999 });
+        applyHail(world, PEER, assist);
+        expect(credits(world)).toBe(999);
+        expect(target(world).components.has(AssistingComponent)).toBeFalse();
+    });
+
+    it('a Roadside Assistance govt still repairs and refuels for free',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            fuelless(world);
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+                ship.components.set(NpcComponent, { aiType: 1 });
+            });
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player' });
+        });
+
+    it('fuelSalePrice: 1,000, doubling per withdrawn offer', () => {
+        expect(fuelSalePrice(0)).toBe(FUEL_SALE_BASE_PRICE);
+        expect(fuelSalePrice(1)).toBe(2000);
+        expect(fuelSalePrice(3)).toBe(8000);
+        expect(fuelSalePrice(-1)).toBe(1000);
+        expect(fuelSalePrice(1000)).toBe(fuelSalePrice(20));
+    });
 });

@@ -106,7 +106,12 @@ export interface HailContext {
      */
     bribe?: {
         amount: number, canAfford: boolean,
-        purpose?: 'mercy' | 'landing' | 'assist',
+        /**
+         * 'fuel': a NEUTRAL ship selling a fuelless pilot one jump of fuel
+         * (reference H1 wave 16), reached through Request Assistance like
+         * 'assist', and haggled with Lower Price / Accept Price.
+         */
+        purpose?: 'mercy' | 'landing' | 'assist' | 'fuel',
         /**
          * What the hailed SHIP says once the demand is paid (STR# 3000
          * 135-139, "Okay, I'll leave you alone."; 145-149, "Okay, I'm on my
@@ -121,6 +126,17 @@ export interface HailContext {
          * the head of the haggle page. Help offers only.
          */
         offer?: string,
+        /**
+         * The popup's demand line as the ship words it ("Pay me 1,000
+         * credits.", STR# 2002 186 + 32). Fuel offers only.
+         */
+        demand?: string,
+        /**
+         * What the ship says when Lower Price withdraws its offer ("If
+         * that's the way you feel, then you can sit here forever.", STR#
+         * 3000 155-159). Fuel offers only.
+         */
+        withdrawn?: string,
     };
     /**
      * Beg For Mercy offered to an IFF-hostile ship that will NOT be bought
@@ -312,6 +328,12 @@ export function escortReadout(escort: EscortManagement): string {
 export interface AssistPressAnswer {
     answer: string;
     haggle: boolean;
+    /**
+     * The price named at the press, when it is only known then: a neutral
+     * ship's fuel (reference H1 wave 16), which rises with every Lower
+     * Price. Replaces the context's `bribe` on the haggle page.
+     */
+    offer?: HailContext['bribe'];
 }
 
 /** Callbacks the dialog fires. `requestAssistance`/`bribe` route to the
@@ -331,6 +353,12 @@ export interface HailCallbacks {
      */
     requestAssistance(): AssistPressAnswer;
     bribe(): void;
+    /**
+     * Lower Price on a neutral ship's fuel price (reference H1 wave 16):
+     * routes to the deterministic input path; the ship withdraws the offer
+     * and its next one costs more.
+     */
+    lowerPrice(): void;
     /**
      * A press in a channel to another PLAYER's ship (#332): sends `message`
      * to their screen through the deterministic input path, and returns the
@@ -542,6 +570,11 @@ export function haggleText(bribe: HailContext['bribe']): string {
     if (!bribe) {
         return 'They refuse to negotiate.';
     }
+    if (bribe.purpose === 'fuel') {
+        // The original's own popup line (reference H1 wave 16).
+        return bribe.demand
+            ?? `Pay me ${bribe.amount.toLocaleString('en-US')} credits.`;
+    }
     const what = bribe.purpose === 'landing' ? 'let you land'
         : bribe.purpose === 'assist' ? 'help you' : 'let you go';
     const demand = `They demand ${bribe.amount.toLocaleString()} credits to `
@@ -563,7 +596,10 @@ export type HailPress =
      * The offer slot for a non-hostile ship, carrying WHAT IT ANSWERED, and
      * whether that answer was a price (onto the haggle page).
      */
-    | { kind: 'assist', answer: string, haggle?: boolean }
+    | {
+        kind: 'assist', answer: string, haggle?: boolean,
+        offer?: HailContext['bribe'],
+    }
     /** A message to another player went (#332): the well says so. */
     | { kind: 'sent', answer: string }
     /** The offer slot for a hostile ship / a shut port: onto the haggle page. */
@@ -572,6 +608,11 @@ export type HailPress =
     | { kind: 'pay' }
     /** Back out of the haggle page. */
     | { kind: 'cancel' }
+    /**
+     * Lower Price on a fuel offer: the ship withdraws it, and says so in
+     * the well of the main page.
+     */
+    | { kind: 'lowerPrice' }
     /**
      * The escort box's three management rows. The first two TOGGLE a
      * queued deal and leave the channel open; only Release ends the
@@ -629,6 +670,13 @@ export function hailPress(state: HailPage, press: HailPress,
                 return { phase: 'haggle',
                     context: { ...context, body: press.answer } };
             }
+            // A price named at the press (a neutral ship's fuel): the mood
+            // line in the well, the price on the popup.
+            if (press.haggle && press.offer) {
+                return { phase: 'haggle',
+                    context: { ...context, body: press.answer,
+                        bribe: press.offer } };
+            }
             // The answer goes in the well and THE OFFER STAYS — asking again
             // re-asks, and the answer is recomputed from live state.
             return { phase, context: { ...context, body: press.answer } };
@@ -651,6 +699,16 @@ export function hailPress(state: HailPage, press: HailPress,
                 : state;
         case 'cancel':
             return { phase: 'main', context };
+        case 'lowerPrice':
+            // "If that's the way you feel, then you can sit here forever."
+            // (reference H1 wave 16): the offer is gone, Request Assistance
+            // stays, and asking again gets a new (dearer) price.
+            if (phase !== 'haggle' || context.bribe?.purpose !== 'fuel') {
+                return state;
+            }
+            return { phase: 'main', context: {
+                ...context, body: context.bribe.withdrawn ?? context.body,
+            } };
         case 'pay': {
             const accepted = context.bribe?.accepted;
             if (accepted === undefined) {
@@ -890,8 +948,8 @@ export class HailDialog {
         // the sim effect, if any, is already dispatched by the time it
         // returns, and what comes back is the line to show — or a price,
         // which moves onto the haggle page.
-        const { answer, haggle } = this.callbacks.requestAssistance();
-        this.apply({ kind: 'assist', answer, haggle });
+        const { answer, haggle, offer } = this.callbacks.requestAssistance();
+        this.apply({ kind: 'assist', answer, haggle, offer });
     }
 
     private close() {
@@ -928,7 +986,51 @@ export class HailDialog {
         if (!context) {
             return;
         }
+        if (this.phase === 'haggle') {
+            // THE HAGGLE POPUP IS DRAWN OVER THE COMM IT CAME FROM:
+            // hail/beg_mercy.png (the ship's "I'm in a bad mood today ..."
+            // still in its well under "Pay me 20,000 credits.") and the
+            // reference H1 wave 16 fuel sale ("You're in luck, I'm in a good
+            // mood today." above "Pay me 1,000 credits."). The comm below is
+            // inert — only the popup's two buttons answer — and a shield
+            // between them swallows clicks aimed at it.
+            const under = frameFor('main', context.variant);
+            const underOrigin = await this.drawFrame(under);
+            if (!underOrigin) {
+                return;
+            }
+            await this.renderMain(context, under, underOrigin.x,
+                underOrigin.y, true);
+            if (this.dismissed) {
+                return;
+            }
+            const shield = new PIXI.Graphics()
+                .beginFill(0x000000, 0.001)
+                .drawRect(underOrigin.x, underOrigin.y, under.width,
+                    under.height)
+                .endFill();
+            shield.interactive = true;
+            this.content.addChild(shield);
+            const popup = frameFor('haggle', context.variant);
+            const popupOrigin = await this.drawFrame(popup);
+            if (popupOrigin) {
+                this.renderHaggle(popup, popupOrigin.x, popupOrigin.y);
+            }
+            return;
+        }
         const frame = frameFor(this.phase, context.variant);
+        const origin = await this.drawFrame(frame);
+        if (origin) {
+            await this.renderMain(context, frame, origin.x, origin.y);
+        }
+    }
+
+    /**
+     * Draws a frame's art at its centred origin and returns that origin, or
+     * undefined when the dialog was dismissed while the art loaded.
+     */
+    private async drawFrame(frame: CommFrameLayout):
+        Promise<{ x: number, y: number } | undefined> {
         // Load the background so it is ready before anything is laid out on
         // it. Its size comes from hail_layout (measured off the art), not
         // from the sprite, so a slow/missing texture cannot shift the layout.
@@ -937,24 +1039,18 @@ export class HailDialog {
         // Dismissed and destroyed with its world while the art loaded (see
         // dismiss): a destroyed container has no child list to draw into.
         if (this.dismissed) {
-            return;
+            return undefined;
         }
         // Positioned by its top-left at the WHOLE-PIXEL origin the original
         // blits to (frameOrigin), not centred with anchor 0.5: an odd-width
         // frame centred that way lands on a half pixel, which blurs the art
         // and drags every glyph laid on it a pixel left.
-        const { x: originX, y: originY } =
-            frameOrigin(frame.width, frame.height);
+        const origin = frameOrigin(frame.width, frame.height);
         background.anchor.set(0);
-        background.position.set(originX, originY);
+        background.position.set(origin.x, origin.y);
         background.interactive = true;
         this.content.addChild(background);
-
-        if (this.phase === 'haggle') {
-            this.renderHaggle(frame, originX, originY);
-        } else {
-            await this.renderMain(context, frame, originX, originY);
-        }
+        return origin;
     }
 
     /** Places a Button by its frame-local sprite box (hail_layout's
@@ -972,7 +1068,9 @@ export class HailDialog {
     }
 
     private async renderMain(context: HailContext, frame: CommFrameLayout,
-        originX: number, originY: number) {
+        originX: number, originY: number,
+        /** Drawn under the haggle popup: its buttons answer nothing. */
+        inert = false) {
         // Layout comes from hail_layout.ts, measured off each frame's own
         // PICT art and its reference capture. The comm dialog is:
         //   - the hailed party's RESPONSE in the upper black well,
@@ -1036,7 +1134,7 @@ export class HailDialog {
             this.renderEscortButtons(context.escort, frame, originX, originY);
             return;
         }
-        this.renderCommButtons(context, frame, originX, originY);
+        this.renderCommButtons(context, frame, originX, originY, inert);
     }
 
     /**
@@ -1080,7 +1178,7 @@ export class HailDialog {
      * from the bottom and never drew Greetings at all.
      */
     private renderCommButtons(context: HailContext, frame: CommFrameLayout,
-        originX: number, originY: number) {
+        originX: number, originY: number, inert = false) {
         const slots = commButtonSlots(context.variant, context);
         slots.forEach((slot, row) => {
             let label: string;
@@ -1119,12 +1217,14 @@ export class HailDialog {
             }
             const button =
                 this.placeButton(label, frame, originX, originY, row);
-            if (onPress) {
-                button.click.subscribe(onPress);
-            } else {
+            if (!onPress) {
                 button.state = 'grey';
+            } else if (!inert) {
+                button.click.subscribe(onPress);
             }
-            if (slot === 'greetings') {
+            if (inert) {
+                // Under the popup: the letter keys belong to nothing.
+            } else if (slot === 'greetings') {
                 this.keyedButtons.greetings = button;
             } else if (slot !== 'close') {
                 this.keyedButtons.offer = button;
@@ -1229,6 +1329,35 @@ export class HailDialog {
         body.position.set(originX + frame.responseText.x,
             originY + frame.responseText.y);
         this.content.addChild(body);
+
+        if (bribe?.purpose === 'fuel') {
+            // A neutral ship's fuel price (reference H1 wave 16): Lower
+            // Price over Accept Price, the original's own captions (STR#
+            // 150 30 and 29). Lower Price withdraws the offer; Accept Price
+            // pays it and the ship comes. GUESS: a price the pilot cannot
+            // pay greys Accept Price (not measured).
+            const lower =
+                this.placeButton('Lower Price', frame, originX, originY, 0);
+            lower.click.subscribe(() => {
+                this.beep();
+                this.callbacks.lowerPrice();
+                this.apply({ kind: 'lowerPrice' });
+            });
+            this.content.addChild(lower.container);
+            const accept =
+                this.placeButton('Accept Price', frame, originX, originY, 1);
+            if (bribe.canAfford) {
+                accept.click.subscribe(() => {
+                    this.beep();
+                    this.callbacks.bribe();
+                    this.apply({ kind: 'pay' });
+                });
+            } else {
+                accept.state = 'grey';
+            }
+            this.content.addChild(accept.container);
+            return;
+        }
 
         // Two rows, as in beg_mercy.png (the original's are Lower Price /
         // Accept Price against a haggling pirate; ours pays or backs out).

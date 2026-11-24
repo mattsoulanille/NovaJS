@@ -25,7 +25,10 @@ import {
     ASSIST_PAID_FALLBACK, ASSIST_PAID_FIRST_INDEX, ASSIST_REFUSED_COUNT,
     ASSIST_REFUSED_FALLBACK, ASSIST_REFUSED_FIRST_INDEX, justAnEscortText,
     JUST_AN_ESCORT_COUNT, JUST_AN_ESCORT_FALLBACK, JUST_AN_ESCORT_FIRST_INDEX,
-    rudeGreetingText,
+    rudeGreetingText, CREDITS_WORD_INDEX, FUEL_OFFER_WITHDRAWN_COUNT,
+    FUEL_OFFER_WITHDRAWN_FALLBACK, FUEL_OFFER_WITHDRAWN_FIRST_INDEX,
+    FUEL_SALE_MOOD_COUNT, FUEL_SALE_MOOD_FALLBACK, FUEL_SALE_MOOD_FIRST_INDEX,
+    fuelOfferWithdrawnText, fuelSaleMoodText, PAY_ME_INDEX, payMeText,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -282,6 +285,48 @@ describe('StringTable against real Nova data', () => {
                 expect(slice(ASSIST_PAID_FIRST_INDEX, 5))
                     .toContain(assistPaidText(strings, seed));
             }
+        });
+
+    it('pins a neutral ship\'s fuel sale (reference H1 wave 16): STR# 3000 '
+        + '115-119 / 155-159 / 146, STR# 2002 "Pay me" + "credits", STR# 150 '
+        + 'Accept Price / Lower Price', async () => {
+            const gameData = await getIntegrationGameData();
+            const strings = (await gameData.data.StringTable
+                .get(HAIL_RESPONSE_TABLE)).strings;
+            const slice = (first: number, count: number) =>
+                strings.slice(first, first + count);
+            const mood = slice(FUEL_SALE_MOOD_FIRST_INDEX,
+                FUEL_SALE_MOOD_COUNT);
+            const withdrawn = slice(FUEL_OFFER_WITHDRAWN_FIRST_INDEX,
+                FUEL_OFFER_WITHDRAWN_COUNT);
+            // The three lines on the reference captures, verbatim.
+            expect(mood).toContain("You're in luck, I'm in a good mood today.");
+            expect(withdrawn).toContain(
+                "If that's the way you feel, then you can sit here forever.");
+            expect(slice(ASSIST_PAID_FIRST_INDEX, ASSIST_PAID_COUNT))
+                .toContain("Hold on, I'll be right there.");
+            expect(mood[0]).toBe(FUEL_SALE_MOOD_FALLBACK);
+            expect(withdrawn[0]).toBe(FUEL_OFFER_WITHDRAWN_FALLBACK);
+            // Neighbours: the bad mood after the good one; the pirate's
+            // "Die, cheapskate!" group before the withdrawal.
+            expect(strings[FUEL_SALE_MOOD_FIRST_INDEX + 5])
+                .toBe("I'm in a bad mood today, so it's going to cost you.");
+            expect(strings[FUEL_OFFER_WITHDRAWN_FIRST_INDEX - 4])
+                .toBe('Die, cheapskate!');
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(mood).toContain(fuelSaleMoodText(strings, seed));
+                expect(withdrawn)
+                    .toContain(fuelOfferWithdrawnText(strings, seed));
+            }
+            const misc = (await gameData.data.StringTable
+                .get(MISC_STRING_TABLE)).strings;
+            expect(misc[PAY_ME_INDEX]).toBe('Pay me');
+            expect(misc[CREDITS_WORD_INDEX]).toBe('credits');
+            expect(payMeText(misc, 1000)).toBe('Pay me 1,000 credits.');
+            const buttons = (await gameData.data.StringTable.get('nova:150'))
+                .strings;
+            expect(buttons[29]).toBe('Accept Price');
+            expect(buttons[30]).toBe('Lower Price');
         });
 
     it('pins the ship-comm busy responses (STR# 3000, indices 80-84)',

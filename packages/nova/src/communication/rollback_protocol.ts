@@ -554,6 +554,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    message kind changes. The derived wire schema fingerprint changes
 //    (eb92bff5c7d72d2b -> 8ef9af970d217153), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): a neutral ship sells a fuelless pilot fuel
+//    (reference "W1 / C1 / H1 wave 16", H1; nova_plugin/encounters/
+//    hail_plugin.ts). HailActionType (the `hail` input's action) gains
+//    the `lowerPrice` branch ({ kind: 'lowerPrice', target }: Lower Price
+//    on a ship's fuel price; Accept Price is the existing
+//    requestAssistance). The Assisting component gains an OPTIONAL `fuel`
+//    (a fuel-only errand of that many units), and a new serializer- and
+//    delta-registered NPC component, FuelHaggle (npc/hail_component.ts,
+//    a map of player ship uuid -> withdrawn offers), holds the haggle
+//    count the price doubles with. Errands without `fuel`, and ships
+//    nobody haggled with, encode and hash as before. Sim-rule changes
+//    alongside: a neutral ship (not allied, no Roadside Assistance, no
+//    ränk) refuses a disabled pilot and sells a fuelless one a jump of
+//    fuel; an AI afterburner hull (shïp Flags 0x0040) burns for its whole
+//    attack, not only while thrusting. The derived wire schema
+//    fingerprint changes (8ef9af970d217153 -> FINGERPRINT_TBD), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

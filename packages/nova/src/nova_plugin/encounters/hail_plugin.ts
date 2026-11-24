@@ -17,14 +17,22 @@ import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { AssistingComponent, AssistingType, isInFlock, NpcFireControlSystem } from '../npc/index.js';
+import {
+    AssistingComponent, AssistingType, FuelHaggleComponent, FuelHaggleType,
+    isInFlock, NpcFireControlSystem,
+} from '../npc/index.js';
 import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import { escortParent } from '../escorts/index.js';
 import {
+    assistIsFree,
+    assistNeed,
+    AssistWillingness,
     assistWillingness,
     bribeAmount,
     canRequestAssistance,
+    FUEL_SALE_AMOUNT,
+    fuelSalePrice,
     planetTakesBribes,
     shipHailResponse,
     shipIsFighting,
@@ -34,7 +42,7 @@ import {
     StellarBribesComponent, STELLAR_BRIBE_MS,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
-import { ranksAllowAssistance } from '../ncb/index.js';
+import { ranksAllowAssistance, ranksGiveFreeRepair } from '../ncb/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { ShipDataComponent } from '../ship/index.js';
 import { localLawIn, shipDisposition } from '../reputation/index.js';
@@ -83,6 +91,14 @@ import { TargetComponent } from '../ship/index.js';
  */
 export type HailAction =
     | { kind: 'requestAssistance', target: string }
+    /**
+     * Lower Price on a neutral ship's price for fuel (reference H1 wave
+     * 16): the offer is withdrawn, and the next one from that ship costs
+     * double (hail.ts's fuelSalePrice). Accept Price is the
+     * `requestAssistance` record itself, as Pay is for an unfriendly ship's
+     * price.
+     */
+    | { kind: 'lowerPrice', target: string }
     | { kind: 'bribe', target: string }
     /** A button pressed in a channel to ANOTHER PLAYER's ship (#332). */
     | { kind: 'message', target: string, message: PlayerHailMessage };
@@ -108,6 +124,7 @@ export const PlayerHailMessageType: t.Type<PlayerHailMessage> = t.union([
 
 export const HailActionType: t.Type<HailAction> = t.union([
     t.type({ kind: t.literal('requestAssistance'), target: t.string }),
+    t.type({ kind: t.literal('lowerPrice'), target: t.string }),
     t.type({ kind: t.literal('bribe'), target: t.string }),
     t.type({
         kind: t.literal('message'), target: t.string,
@@ -237,9 +254,6 @@ export const ASSIST_ARRIVAL_RANGE = 300;
 /** Assist: stop thrusting inside this range (coast the last stretch). */
 export const ASSIST_STANDOFF = 200;
 
-/** Under one jump's worth of fuel (FUEL_PER_JUMP = 100) counts as "low". */
-export const LOW_FUEL_THRESHOLD = 100;
-
 function lookupGovt(world: World, govtId: string | undefined):
     GovtData | undefined {
     if (govtId === undefined) {
@@ -253,14 +267,11 @@ function lookupGovt(world: World, govtId: string | undefined):
         ?.data.Govt.getCached(govtId);
 }
 
-/** Whether the player ship needs fuel/repair help (disabled or low fuel). */
-function playerNeedsHelp(player: Entity): boolean {
-    if (player.components.has(DisabledComponent)) {
-        return true;
-    }
-    const fuel = player.components.get(FuelComponent);
-    return !!fuel && fuel.current < fuel.max
-        && fuel.current < LOW_FUEL_THRESHOLD;
+/** What the player ship needs help with (hail.ts's assistNeed), if
+ * anything: a repair (disabled) or fuel (under a jump's worth). */
+function playerNeed(player: Entity) {
+    return assistNeed(player.components.has(DisabledComponent),
+        player.components.get(FuelComponent));
 }
 
 /**
@@ -403,13 +414,13 @@ export function applyHail(world: World, peerId: string | undefined,
         player, gameData, uuid => world.entities.get(uuid), now, systemId);
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
 
-    if (action.kind === 'requestAssistance') {
+    if (action.kind === 'requestAssistance' || action.kind === 'lowerPrice') {
         // ränk 0x0400: "Player can always request battle assistance from
         // ships of the affiliated government" (rank_logic.ts).
-        const rankAlwaysAssists = ranksAllowAssistance(
-            player.components.get(ActiveRanksComponent),
-            (id: string) => world.resources
-                .get(SimulationGameDataResource)?.data.Rank.getCached(id),
+        const getRank = (id: string) => world.resources
+            .get(SimulationGameDataResource)?.data.Rank.getCached(id);
+        const ranks = player.components.get(ActiveRanksComponent);
+        const rankAlwaysAssists = ranksAllowAssistance(ranks, getRank,
             targetGovt?.id);
         if (!canRequestAssistance({
             govt: targetGovt,
@@ -434,7 +445,8 @@ export function applyHail(world: World, peerId: string | undefined,
         // AssistBehaviorSystem never steers it. The same synced predicate the
         // dialog uses, so every peer reaches the same verdict on the tick the
         // record is applied.
-        if (!playerNeedsHelp(player)) {
+        const need = playerNeed(player);
+        if (need === undefined) {
             return;
         }
         // BUSY: a ship in the middle of a fight refuses ("I'm busy" — STR#
@@ -456,37 +468,79 @@ export function applyHail(world: World, peerId: string | undefined,
         })) {
             return;
         }
-        // AN UNFRIENDLY GOVERNMENT'S SHIP refuses ("I'd rather not.") or
-        // makes the player pay (ruling #297: "They just refuse to help you
-        // or make you pay"). The dialog only sends a request to a 'forPay'
-        // ship from its haggle page's Pay button, so a request that arrives
-        // here IS the payment; the price is re-derived from synced credits,
-        // never taken from the record.
-        const willingness = assistWillingness({
+        // WHO HELPS, AND ON WHAT TERMS (hail.ts's assistWillingness): an
+        // unfriendly government's ship refuses ("I'd rather not.") or makes
+        // the player pay (ruling #297); a NEUTRAL ship refuses a disabled
+        // pilot ("Not a chance.") and sells a fuelless one a jump of fuel
+        // (reference H1 wave 16); free help comes from an ally, a Roadside
+        // Assistance govt or a ränk. The dialog only sends a request to a
+        // ship with a price from its haggle page's Pay / Accept Price
+        // button, so a request that arrives here for one IS the payment; the
+        // price is re-derived from synced state, never taken from the
+        // record.
+        const willingness: AssistWillingness = assistWillingness({
             disposition, govt: targetGovt,
             aiType: target.components.get(NpcComponent)?.aiType,
             rankAlwaysAssists,
+            free: assistIsFree(targetGovt,
+                ranksGiveFreeRepair(ranks, getRank, targetGovt?.id)),
+            need,
         });
-        if (willingness === 'unwilling') {
+        // Already on its way to this player: the errand was paid for (or
+        // granted) once, and a second press must neither charge again nor
+        // haggle over a deal already struck.
+        const alreadyComing = target.components.get(AssistingComponent)
+            ?.client === found.uuid;
+        if (action.kind === 'lowerPrice') {
+            // LOWER PRICE withdraws a neutral ship's fuel offer, and its
+            // next one to this player costs double (hail.ts's
+            // fuelSalePrice). Only a ship that is offering fuel right now
+            // can withdraw an offer.
+            if (willingness === 'sellFuel' && !alreadyComing) {
+                lowerFuelPrice(target, found.uuid);
+            }
             return;
         }
-        if (willingness === 'forPay') {
-            // Already on its way to this player: the errand was paid for
-            // once, and a second Pay press must not charge again.
-            if (target.components.get(AssistingComponent)?.client
-                === found.uuid) {
+        switch (willingness) {
+            case 'unwilling':
+            case 'refuse':
+                return;
+            case 'forPay': {
+                if (alreadyComing) {
+                    return;
+                }
+                const credits = player.components.get(CreditsComponent);
+                if (!credits) {
+                    return;
+                }
+                const amount = bribeAmount(credits.credits,
+                    !!targetGovt?.flags.largerBribes);
+                if (amount <= 0 || credits.credits < amount) {
+                    return;
+                }
+                credits.credits -= amount;
+                break;
+            }
+            case 'sellFuel': {
+                // ACCEPT PRICE: the price this ship is asking this player
+                // now, the fuel errand on its way. Credits move here and
+                // nowhere else (reference H1 wave 16: 2,000 taken at once).
+                if (alreadyComing) {
+                    return;
+                }
+                const credits = player.components.get(CreditsComponent);
+                const price = fuelSalePrice(target.components
+                    .get(FuelHaggleComponent)?.get(found.uuid) ?? 0);
+                if (!credits || credits.credits < price) {
+                    return;
+                }
+                credits.credits -= price;
+                target.components.set(AssistingComponent,
+                    { client: found.uuid, fuel: FUEL_SALE_AMOUNT });
                 return;
             }
-            const credits = player.components.get(CreditsComponent);
-            if (!credits) {
-                return;
-            }
-            const amount = bribeAmount(credits.credits,
-                !!targetGovt?.flags.largerBribes);
-            if (amount <= 0 || credits.credits < amount) {
-                return;
-            }
-            credits.credits -= amount;
+            case 'willing':
+                break;
         }
         // The helper breaks off whatever it was doing and comes over. Marking
         // it is enough: NpcDecisionSystem yields to the AssistingComponent
@@ -595,6 +649,21 @@ function forgetMutualAggression(player: Entity, targetUuid: string,
     target.components.get(AggressionComponent)?.delete(playerUuid);
 }
 
+/**
+ * Counts one more withdrawn fuel offer from `target` to `playerUuid`
+ * (FuelHaggleComponent). Mutates the existing map when there is one, so the
+ * delta stream sees the component it already knows about.
+ */
+function lowerFuelPrice(target: Entity, playerUuid: string) {
+    const haggle = target.components.get(FuelHaggleComponent);
+    if (haggle) {
+        haggle.set(playerUuid, (haggle.get(playerUuid) ?? 0) + 1);
+    } else {
+        target.components.set(FuelHaggleComponent,
+            new Map([[playerUuid, 1]]));
+    }
+}
+
 /** Point-and-thrust steering toward a position (assist rendezvous). */
 function steerToward(movement: MovementState,
     targetPos: { x: number, y: number }) {
@@ -656,6 +725,17 @@ export const AssistBehaviorSystem = new System({
             return;
         }
         // Alongside: render assistance and depart.
+        if (assisting.fuel !== undefined) {
+            // A FUEL SALE (a neutral ship's, reference H1 wave 16): the
+            // jump of fuel that was paid for, and nothing else.
+            const fuel = client.components.get(FuelComponent);
+            if (fuel) {
+                fuel.current = Math.min(fuel.max,
+                    fuel.current + assisting.fuel);
+            }
+            entity.components.delete(AssistingComponent);
+            return;
+        }
         const armor = client.components.get(ArmorComponent);
         if (armor) {
             armor.current = armor.max;
@@ -682,6 +762,15 @@ export const HailPlugin: Plugin = {
         const serializer = world.resources.get(SerializerResource);
         serializer?.addComponent(AssistingComponent, AssistingType);
         world.addComponent(AssistingComponent);
+        // A neutral ship's price for fuel depends on how often the player
+        // has answered it with Lower Price: synced so a rollback across a
+        // haggle converges, and delta-synced so the comm dialog quotes the
+        // price applyHail will charge.
+        world.addComponent(FuelHaggleComponent);
+        serializer?.addComponent(FuelHaggleComponent, FuelHaggleType);
+        world.resources.get(DeltaResource)?.addComponent(FuelHaggleComponent, {
+            componentType: FuelHaggleType,
+        });
         // A player-to-player hail (#332) is synced player state: it must
         // reach the RECIPIENT's display through the delta stream, and ride
         // snapshots so a rollback across it converges (see SentHail).

@@ -288,21 +288,116 @@ export function canRequestAssistance(opts: {
  * ränk 0x0400 ("Player can always request battle assistance from ships of
  * the affiliated government") overrides the politics: always willing.
  *
+ * A NEUTRAL SHIP (its government neither hostile to the player nor allied
+ * with him) helps nobody for free. Measured on the original (reference
+ * "W1 / C1 / H1 wave 16", H1, record 0, a neutral govt):
+ *
+ *  - 'refuse'    a DISABLED pilot is turned down flat by traders and
+ *                warships alike, from the STR# 3000 95-99 group ("Not a
+ *                chance.", "No way."; {@link disabledRefusalText}) — the
+ *                same group a healthy pilot under fire gets (wave 15).
+ *  - 'sellFuel'  a pilot OUT OF FUEL is offered fuel for money: "You're in
+ *                luck, I'm in a good mood today." and "Pay me 1,000
+ *                credits." with Lower Price / Accept Price
+ *                ({@link fuelSalePrice}); once paid the ship comes over and
+ *                puts one jump of fuel in the tank ({@link FUEL_SALE_AMOUNT}).
+ *
+ * Free help stays where the data says it is free: a Roadside Assistance govt
+ * (Flags2 0x0010) and a ränk 0x0800 holder ({@link assistIsFree}), a ränk
+ * 0x0400 holder (above), and — GUESS, not measured — a ship ALLIED with the
+ * player ('friendly' disposition: his own govt or one of its allies), which
+ * keeps the old free errand. GUESS: a disabled pilot who is also out of fuel
+ * is refused (being disabled is the bigger need, and a neutral ship would not
+ * repair him); a neutral WARSHIP sells fuel like the measured trader does
+ * (one rule for every neutral ship, as the refusal is). The player's legal
+ * record is not read (wave 15 refused a +1000 pilot under fire alike; the
+ * table's "Okay, since your reputation is so good." group 160-164 is unused
+ * until a run shows when it is said).
+ *
+ * `need` is what the player needs help with ({@link assistNeed}); a request
+ * with no need never reaches this function (the "You're not in any trouble."
+ * answer comes first).
+ *
  * Pure over synced state, so the dialog's answer and applyHail's outcome
  * agree on every peer.
  */
-export type AssistWillingness = 'willing' | 'forPay' | 'unwilling';
+export type AssistWillingness =
+    'willing' | 'forPay' | 'unwilling' | 'refuse' | 'sellFuel';
+
+/** What a pilot asking for help needs: a repair, or only fuel. */
+export type AssistNeed = 'disabled' | 'fuel';
 
 export function assistWillingness(opts: {
     disposition: Disposition,
     govt: GovtData | undefined,
     aiType: number | undefined,
     rankAlwaysAssists?: boolean,
+    /** {@link assistIsFree}: Roadside Assistance, or a ränk 0x0800. */
+    free?: boolean,
+    /** Defaults to 'disabled' (the stricter answer). */
+    need?: AssistNeed,
 }): AssistWillingness {
-    if (opts.rankAlwaysAssists || opts.disposition !== 'hostile') {
+    if (opts.rankAlwaysAssists || opts.free
+        || opts.disposition === 'friendly') {
         return 'willing';
     }
-    return shipTakesBribes(opts.govt, opts.aiType) ? 'forPay' : 'unwilling';
+    if (opts.disposition === 'hostile') {
+        return shipTakesBribes(opts.govt, opts.aiType)
+            ? 'forPay' : 'unwilling';
+    }
+    return opts.need === 'fuel' ? 'sellFuel' : 'refuse';
+}
+
+/**
+ * WHAT A STRANDED PILOT NEEDS, or undefined when his ship is fine: a disabled
+ * ship needs a repair (whatever its fuel), one with less than a jump's worth
+ * of fuel ({@link LOW_FUEL_THRESHOLD}) and room for more needs fuel. Pure, so
+ * the dialog's answer and applyHail agree.
+ */
+export function assistNeed(disabled: boolean,
+    fuel: { current: number, max: number } | undefined):
+    AssistNeed | undefined {
+    if (disabled) {
+        return 'disabled';
+    }
+    return fuel && fuel.current < fuel.max
+        && fuel.current < LOW_FUEL_THRESHOLD ? 'fuel' : undefined;
+}
+
+/** Under one jump's worth of fuel (ship/health_plugin's FUEL_PER_JUMP =
+ * 100) counts as "out of fuel" for a request for help. */
+export const LOW_FUEL_THRESHOLD = 100;
+
+/**
+ * How much fuel a neutral ship SELLS a stranded pilot: one jump's worth
+ * (FUEL_PER_JUMP = 100), added to what is in the tank and capped at the
+ * tank. Reference H1 wave 16: the fuel bar went from 0 to about 3% of a Kit
+ * Lancer Heavy's 3000 within 30 s of Accept Price, i.e. about one jump (the
+ * amount was read off the bar: low confidence).
+ */
+export const FUEL_SALE_AMOUNT = 100;
+
+/**
+ * The first price a neutral ship asks for a jump of fuel. Reference H1 wave
+ * 16: "Pay me 1,000 credits." to a pilot holding 1,000,000 credits — so not
+ * a share of his cash, unlike a bribe. GUESS: a flat price for every ship
+ * and every pilot (one trader, one pilot measured).
+ */
+export const FUEL_SALE_BASE_PRICE = 1000;
+
+/**
+ * A neutral ship's asking price for fuel after the player has pressed Lower
+ * Price on it `withdrawals` times. Reference H1 wave 16: Lower Price
+ * withdrew the 1,000 offer ("If that's the way you feel, then you can sit
+ * here forever."), and asking the same ship again got "Pay me 2,000
+ * credits." GUESS for the rule: the price DOUBLES with every withdrawn
+ * offer, per ship and per player, and never comes back down (one doubling
+ * seen). The doubling stops after 20 (a billion credits) so the figure
+ * stays an exact integer.
+ */
+export function fuelSalePrice(withdrawals: number): number {
+    const n = Math.max(0, Math.min(20, Math.floor(withdrawals)));
+    return FUEL_SALE_BASE_PRICE * 2 ** n;
 }
 
 /**
@@ -483,10 +578,48 @@ export const ASSIST_FOR_PAY_COUNT = RESPONSE_GROUP_SIZE;
 export const ASSIST_FOR_PAY_FALLBACK =
     "All right, I'll give you some help, but it'll cost you.";
 
-/** "Okay, I'm on my way." — a 'forPay' ship once paid. */
+/** "Okay, I'm on my way." — a 'forPay' ship once paid, and a 'sellFuel'
+ * ship once its price is accepted ("Hold on, I'll be right there.", index
+ * 146, on the reference H1 wave 16 capture). */
 export const ASSIST_PAID_FIRST_INDEX = 145;
 export const ASSIST_PAID_COUNT = RESPONSE_GROUP_SIZE;
 export const ASSIST_PAID_FALLBACK = "Okay, I'm on my way.";
+
+/**
+ * "You're in luck, I'm in a good mood today." (STR# 3000 115-119) — what a
+ * neutral ship says as it offers a fuelless pilot fuel for a price (reference
+ * H1 wave 16, index 116, shown in the comm's response well above the "Pay
+ * me ..." popup). The neighbouring 120-124 ("I'm in a bad mood today, so
+ * it's going to cost you extra.") is the dearer mood a hostile ship's mercy
+ * price opens with on hail/beg_mercy.png; GUESS: the fuel sale is always in
+ * the good mood (the only one seen, on both asks).
+ */
+export const FUEL_SALE_MOOD_FIRST_INDEX = 115;
+export const FUEL_SALE_MOOD_COUNT = RESPONSE_GROUP_SIZE;
+export const FUEL_SALE_MOOD_FALLBACK =
+    "You're lucky - I'm in a good mood today.";
+
+/**
+ * "If that's the way you feel, then you can sit here forever." (STR# 3000
+ * 155-159; index 156 on the reference H1 wave 16 capture) — a ship whose
+ * price for help the player answered with Lower Price: the offer is
+ * withdrawn. (150-154, "Die, cheapskate!", is the pirate's answer to a
+ * lowered mercy price.)
+ */
+export const FUEL_OFFER_WITHDRAWN_FIRST_INDEX = 155;
+export const FUEL_OFFER_WITHDRAWN_COUNT = RESPONSE_GROUP_SIZE;
+export const FUEL_OFFER_WITHDRAWN_FALLBACK = 'Ha ha ha. What a comedian.';
+
+/**
+ * The haggle popup's demand, "Pay me 1,000 credits." (reference H1 wave 16),
+ * built the way the original builds it out of STR# 2002: "Pay me" (index
+ * 186), the price with thousands separators, "credits" (index 32), and a
+ * full stop.
+ */
+export const PAY_ME_INDEX = 186;
+export const PAY_ME_FALLBACK = 'Pay me';
+export const CREDITS_WORD_INDEX = 32;
+export const CREDITS_WORD_FALLBACK = 'credits';
 
 /**
  * A SHIP'S NO-RESPONSE GROUP (STR# 3000 indices 5-9): "No response." / "No
@@ -666,6 +799,49 @@ export function underFireRefusalText(strings: readonly string[] | undefined,
         MERCY_REFUSED_FALLBACK, seed);
 }
 
+/**
+ * The refusal a DISABLED pilot gets from a neutral ship (STR# 3000 95-99,
+ * the same flat "no" group as {@link underFireRefusalText}). Measured on the
+ * original: a neutral trader answered "Not a chance." and a neutral warship
+ * "No way." to a disabled pilot with record 0 (reference "W1 / C1 / H1 wave
+ * 16", H1 finding 5). Nothing else happens: no ship comes to repair him.
+ */
+export function disabledRefusalText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, MERCY_REFUSED_FIRST_INDEX,
+        MERCY_REFUSED_FALLBACK, seed);
+}
+
+/** A neutral ship offering fuel for a price (STR# 3000 115-119). */
+export function fuelSaleMoodText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, FUEL_SALE_MOOD_FIRST_INDEX,
+        FUEL_SALE_MOOD_FALLBACK, seed);
+}
+
+/** A price for help answered with Lower Price (STR# 3000 155-159). */
+export function fuelOfferWithdrawnText(
+    strings: readonly string[] | undefined, seed = 0): string {
+    return responseText(strings, FUEL_OFFER_WITHDRAWN_FIRST_INDEX,
+        FUEL_OFFER_WITHDRAWN_FALLBACK, seed);
+}
+
+/**
+ * The haggle popup's demand line, "Pay me 1,000 credits.", from STR# 2002's
+ * "Pay me" (186) and "credits" (32) (`miscStrings`, or their pinned
+ * literals). The figure is grouped with commas as on the reference capture,
+ * independent of the browser's locale.
+ */
+export function payMeText(miscStrings: readonly string[] | undefined,
+    price: number): string {
+    const payMe = miscString(miscStrings, PAY_ME_INDEX, PAY_ME_FALLBACK);
+    const credits = miscString(miscStrings, CREDITS_WORD_INDEX,
+        CREDITS_WORD_FALLBACK);
+    const figure = Math.floor(price).toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return `${payMe} ${figure} ${credits}.`;
+}
+
 /** The acceptance line for a granted assistance request (indices 75-79). */
 export function assistGrantedText(strings: readonly string[] | undefined,
     seed = 0): string {
@@ -697,10 +873,9 @@ export function hostileResponseText(strings: readonly string[] | undefined,
  * the same-govt answer, which is the case every stock rank with 0x0800 is
  * written for. Documented, not silent.
  *
- * Non-free assistance is currently also rendered for free (there is no
- * "charge for fuel" credit model yet); this helper still reports the
- * distinction so the dialog can word the offer, and so a future charge can
- * hook in here.
+ * Free help is what {@link assistWillingness} grants a NEUTRAL ship's
+ * request with: without it a neutral ship refuses a disabled pilot and sells
+ * a fuelless one fuel (reference H1 wave 16).
  */
 export function assistIsFree(govt: GovtData | undefined,
     rankFreeRepair = false): boolean {

@@ -5,6 +5,14 @@ import {
     assistPaidText,
     assistRefusedText,
     assistWillingness,
+    assistNeed,
+    disabledRefusalText,
+    fuelOfferWithdrawnText,
+    fuelSaleMoodText,
+    FUEL_OFFER_WITHDRAWN_FALLBACK,
+    FUEL_SALE_MOOD_FALLBACK,
+    LOW_FUEL_THRESHOLD,
+    payMeText,
     ASSIST_FOR_PAY_FIRST_INDEX,
     ASSIST_PAID_FIRST_INDEX,
     ASSIST_REFUSED_FIRST_INDEX,
@@ -273,14 +281,77 @@ describe('canRequestAssistance', () => {
 
 describe('assistWillingness (ruling #297: "refuse to help you or make you '
     + 'pay")', () => {
-    it('helps a player its government does not dislike', () => {
-        for (const disposition of ['neutral', 'friendly'] as const) {
+    it('helps an ALLIED player for free (GUESS: unmeasured, as before)',
+        () => {
+            for (const need of ['disabled', 'fuel'] as const) {
+                expect(assistWillingness({
+                    disposition: 'friendly',
+                    govt: withFlags({ largerBribes: true }), aiType: 3, need,
+                })).toBe('willing');
+            }
+        });
+    it('a NEUTRAL ship refuses a disabled pilot and sells a fuelless one '
+        + 'fuel (reference H1 wave 16)', () => {
+            for (const aiType of [1, 3]) {
+                expect(assistWillingness({
+                    disposition: 'neutral', govt: govt(), aiType,
+                    need: 'disabled',
+                })).toBe('refuse');
+                expect(assistWillingness({
+                    disposition: 'neutral', govt: govt(), aiType,
+                    need: 'fuel',
+                })).toBe('sellFuel');
+            }
+            // The stricter answer when the need is not given.
             expect(assistWillingness({
-                disposition, govt: withFlags({ largerBribes: true }),
-                aiType: 3,
-            })).toBe('willing');
-        }
-    });
+                disposition: 'neutral', govt: govt(), aiType: 1,
+            })).toBe('refuse');
+        });
+    it('free help (Roadside Assistance / ränk 0x0800) overrides the neutral '
+        + 'terms', () => {
+            for (const need of ['disabled', 'fuel'] as const) {
+                expect(assistWillingness({
+                    disposition: 'neutral', govt: govt(), aiType: 1, need,
+                    free: true,
+                })).toBe('willing');
+            }
+        });
+    it('assistNeed: disabled beats fuel; under a jump of fuel is fuel',
+        () => {
+            const tank = (current: number, max = 3000) => ({ current, max });
+            expect(assistNeed(true, tank(0))).toBe('disabled');
+            expect(assistNeed(false, tank(0))).toBe('fuel');
+            expect(assistNeed(false, tank(LOW_FUEL_THRESHOLD - 1)))
+                .toBe('fuel');
+            expect(assistNeed(false, tank(LOW_FUEL_THRESHOLD)))
+                .toBeUndefined();
+            // A full (tiny) tank needs nothing; no tank at all neither.
+            expect(assistNeed(false, tank(50, 50))).toBeUndefined();
+            expect(assistNeed(false, undefined)).toBeUndefined();
+        });
+    it('the fuel sale\'s lines and "Pay me N credits." (STR# 3000 115-119, '
+        + '155-159; STR# 2002 186 + 32)', () => {
+            const strings: string[] = [];
+            strings[116] = "You're in luck, I'm in a good mood today.";
+            strings[156] =
+                "If that's the way you feel, then you can sit here forever.";
+            expect(fuelSaleMoodText(strings, 1))
+                .toBe("You're in luck, I'm in a good mood today.");
+            expect(fuelOfferWithdrawnText(strings, 1)).toBe(
+                "If that's the way you feel, then you can sit here forever.");
+            expect(fuelSaleMoodText(undefined))
+                .toBe(FUEL_SALE_MOOD_FALLBACK);
+            expect(fuelOfferWithdrawnText(undefined))
+                .toBe(FUEL_OFFER_WITHDRAWN_FALLBACK);
+            expect(disabledRefusalText(undefined)).toBe('In your dreams, pal.');
+            const misc: string[] = [];
+            misc[186] = 'Pay me';
+            misc[32] = 'credits';
+            expect(payMeText(misc, 1000)).toBe('Pay me 1,000 credits.');
+            expect(payMeText(undefined, 2000)).toBe('Pay me 2,000 credits.');
+            expect(payMeText(undefined, 1_048_576_000))
+                .toBe('Pay me 1,048,576,000 credits.');
+        });
     it('makes the player PAY when its unfriendly govt takes bribes from a '
         + 'ship of its kind', () => {
         const pirate = withFlags({ xenophobic: true, largerBribes: true });

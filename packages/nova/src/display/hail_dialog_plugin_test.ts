@@ -12,9 +12,10 @@ import {
     AggressionComponent, AGGRESSION_WINDOW_MS, OwnerComponent, SourceComponent,
     styleForTarget,
 } from '../nova_plugin/combat/index.js';
-import { GovtComponent, SystemIdResource } from '../nova_plugin/core/index.js';
+import { GovtComponent, Stat, SystemIdResource } from '../nova_plugin/core/index.js';
 import {
-    FormationComponent, NpcComponent, ShootAllWeaponsComponent,
+    FormationComponent, FuelHaggleComponent, NpcComponent,
+    ShootAllWeaponsComponent,
 } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../nova_plugin/player/index.js';
 import {
     ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
+    FuelComponent,
 } from '../nova_plugin/ship/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -71,8 +73,16 @@ function shipData(overrides: Partial<ReturnType<typeof getDefaultShipData>> = {}
  * MockGameData carrying the target's govt / pers / ship records. computeContext
  * only reads world.entities and the game data, so no systems are needed.
  */
+/** A Roadside Assistance govt (Flags2 0x0010): free help, the one kind a
+ * plain neutral ship no longer gives (reference H1 wave 16). */
+const ROADSIDE = 'test:roadside';
+
 function makeWorld(configureTarget: (target: Entity) => void) {
     const gameData = new MockGameData();
+    gameData.data.Govt.map.set(ROADSIDE, {
+        ...getDefaultGovtData(), id: ROADSIDE,
+        flags2: { ...getDefaultGovtData().flags2, roadsideAssistance: true },
+    });
     // A ship record the target can resolve (its class name / pict).
     gameData.data.Ship.map.set('nova:128', shipData({
         id: 'nova:128', name: 'Target Class', pict: 'nova:3001',
@@ -468,9 +478,14 @@ describe('hail assistance answers (accept / busy / no need)', () => {
         } as unknown as DisplayAssetDataInterface;
     }
 
-    /** A world whose player needs help (disabled). */
+    /** A world whose player needs help (disabled), hailing a ship of a
+     * govt that helps for free (a neutral one refuses a disabled pilot:
+     * reference H1 wave 16). */
     function needyWorld(configureTarget: (target: Entity) => void) {
-        const built = makeWorld(configureTarget);
+        const built = makeWorld(target => {
+            target.components.set(GovtComponent, { id: ROADSIDE });
+            configureTarget(target);
+        });
         built.world.entities.get(PLAYER)!.components
             .set(DisabledComponent, { repairAt: null });
         return built;
@@ -687,7 +702,8 @@ describe('hail assistance answers (accept / busy / no need)', () => {
         });
 
         it('UNMEASURED cases keep their answers: a disabled player under '
-            + 'attack is still helped', async () => {
+            + 'attack is still helped by a ship that helps for free',
+            async () => {
                 const { world, gameData } = needyWorld(target => {
                     target.components.set(NpcComponent, { aiType: 3 });
                     target.components.set(TargetComponent,
@@ -2007,15 +2023,17 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
             });
 
         it('the same warship where its government\'s law does not run: '
-            + 'neutral, and it comes to help (A14: the home record never '
-            + 'counts elsewhere)', async () => {
+            + 'neutral (A14: the home record never counts elsewhere), so it '
+            + 'refuses the disabled pilot flat (H1 wave 16)', async () => {
                 const { world, gameData } = criminalWorld(ELSEWHERE);
                 const result = (await computeContext(world, gameData))!;
                 expect(result.context.heading).not.toContain('Status:');
                 expect(commButtonSlots('ship', result.context))
                     .toEqual(['greetings', 'assist', 'close']);
-                expect(assistAnswer(world, TARGET, result.replies).dispatch)
-                    .toBeTrue();
+                expect(assistAnswer(world, TARGET, result.replies)).toEqual({
+                    line: MERCY_REFUSED_FALLBACK, dispatch: false,
+                    haggle: false,
+                });
                 expect(corners(world, gameData)).toBe('neutral');
             });
 
@@ -2025,6 +2043,7 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
             const built = makeWorld(target => {
                 target.components.set(NpcComponent, { aiType: 3 });
                 target.components.set(MultiplayerData, { owner });
+                target.components.set(GovtComponent, { id: ROADSIDE });
             });
             const player = built.world.entities.get(PLAYER)!;
             player.components.set(ControlledByComponent, { peerId: MY_PEER });
@@ -2060,3 +2079,170 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
                     .toBeTrue();
             });
     });
+
+/**
+ * Reference "W1 / C1 / H1 wave 16", H1: a NEUTRAL ship refuses a disabled
+ * pilot ("Not a chance." / "No way.") and offers a fuelless one fuel —
+ * "You're in luck, I'm in a good mood today." over a "Pay me 1,000
+ * credits." popup with Lower Price / Accept Price; Lower Price withdraws the
+ * offer ("If that's the way you feel, then you can sit here forever."), and
+ * the next ask is 2,000; Accept Price: "Hold on, I'll be right there."
+ */
+describe('a NEUTRAL ship\'s answers (reference H1 wave 16)', () => {
+    /** STR# 3000 and STR# 2002 as the reference reads them. */
+    function assets(): DisplayAssetDataInterface {
+        const ship: string[] = [];
+        ship[MERCY_REFUSED_FIRST_INDEX + 2] = 'No way.';
+        ship[MERCY_REFUSED_FIRST_INDEX + 4] = 'Not a chance.';
+        ship[116] = "You're in luck, I'm in a good mood today.";
+        ship[146] = "Hold on, I'll be right there.";
+        ship[156] =
+            "If that's the way you feel, then you can sit here forever.";
+        const misc: string[] = [];
+        misc[186] = 'Pay me';
+        misc[32] = 'credits';
+        return {
+            data: {
+                StringTable: {
+                    get: async (id: string) => ({
+                        strings: id === HAIL_RESPONSE_TABLE ? ship
+                            : id === MISC_STRING_TABLE ? misc : [],
+                    }),
+                },
+            },
+        } as unknown as DisplayAssetDataInterface;
+    }
+
+    function neutralWorld(credits = 1_000_000) {
+        const built = makeWorld(target => {
+            target.components.set(NpcComponent, { aiType: 1 });
+            target.components.set(TargetComponent, { target: undefined });
+        });
+        const player = built.world.entities.get(PLAYER)!;
+        player.components.set(CreditsComponent, { credits });
+        player.components.set(FuelComponent,
+            new Stat({ current: 0, max: 3000, recharge: 0 }));
+        return built;
+    }
+
+    it('refuses a disabled pilot flat, dispatching nothing', async () => {
+        const { world, gameData } = neutralWorld();
+        world.entities.get(PLAYER)!.components.set(DisabledComponent,
+            { repairAt: null });
+        const result = (await computeContext(world, gameData, assets()))!;
+        const answer = assistAnswer(world, TARGET, result.replies);
+        expect(answer.dispatch).toBeFalse();
+        expect(answer.haggle).toBeFalse();
+        expect(['No way.', 'Not a chance.', MERCY_REFUSED_FALLBACK])
+            .toContain(answer.line);
+        expect(answer.line).toBe(result.replies.refusal!);
+    });
+
+    it('offers a fuelless pilot fuel: the mood line, then "Pay me 1,000 '
+        + 'credits." on the popup; nothing dispatched yet', async () => {
+            const { world, gameData } = neutralWorld();
+            const result = (await computeContext(world, gameData, assets()))!;
+            const sale = result.replies.fuelSale!;
+            const answer = assistAnswer(world, TARGET, result.replies);
+            expect(answer.dispatch).toBeFalse();
+            expect(answer.haggle).toBeTrue();
+            expect(answer.line).toBe(sale.mood);
+            expect(answer.offer).toEqual(jasmine.objectContaining({
+                amount: 1000, canAfford: true, purpose: 'fuel',
+                demand: 'Pay me 1,000 credits.',
+                accepted: sale.accepted, withdrawn: sale.withdrawn,
+            }));
+            expect(haggleText(answer.offer)).toBe('Pay me 1,000 credits.');
+        });
+
+    it('quotes the doubled price after a Lower Price, from the synced count '
+        + 'or from a press the sim has not mirrored yet', async () => {
+            const { world, gameData } = neutralWorld();
+            const result = (await computeContext(world, gameData, assets()))!;
+            expect(assistAnswer(world, TARGET, result.replies, 1).offer
+                ?.demand).toBe('Pay me 2,000 credits.');
+            world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
+                new Map([[PLAYER, 2]]));
+            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
+                .toBe(4000);
+            // The larger of the two counts wins.
+            expect(assistAnswer(world, TARGET, result.replies, 1).offer
+                ?.amount).toBe(4000);
+            // Another pilot's haggling is not ours.
+            world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
+                new Map([['someone else', 5]]));
+            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
+                .toBe(1000);
+        });
+
+    it('greys Accept Price for a pilot who cannot pay', async () => {
+        const { world, gameData } = neutralWorld(999);
+        const result = (await computeContext(world, gameData, assets()))!;
+        expect(assistAnswer(world, TARGET, result.replies).offer?.canAfford)
+            .toBeFalse();
+    });
+
+    it('a Roadside Assistance ship helps for free instead', async () => {
+        const { world, gameData } = neutralWorld();
+        world.entities.get(TARGET)!.components.set(GovtComponent,
+            { id: ROADSIDE });
+        const result = (await computeContext(world, gameData, assets()))!;
+        expect(result.replies.fuelSale).toBeUndefined();
+        expect(result.replies.refusal).toBeUndefined();
+        expect(assistAnswer(world, TARGET, result.replies).dispatch)
+            .toBeTrue();
+    });
+
+    describe('the page machine', () => {
+        const offer: NonNullable<HailContext['bribe']> = {
+            amount: 1000, canAfford: true, purpose: 'fuel',
+            demand: 'Pay me 1,000 credits.',
+            accepted: "Hold on, I'll be right there.",
+            withdrawn:
+                "If that's the way you feel, then you can sit here forever.",
+        };
+        const main: HailPage = {
+            phase: 'main',
+            context: {
+                variant: 'ship', heading: 'Class: Kit Assist Trader',
+                image: null, body: 'Channel open.', assist: { free: false },
+            },
+        };
+        const mood = "You're in luck, I'm in a good mood today.";
+
+        it('Request Assistance opens the popup with the price named at the '
+            + 'press', () => {
+                const next = hailPress(main, {
+                    kind: 'assist', answer: mood, haggle: true, offer,
+                }) as HailPage;
+                expect(next.phase).toBe('haggle');
+                expect(next.context.body).toBe(mood);
+                expect(next.context.bribe).toEqual(offer);
+                expect(next.context.assist).toEqual({ free: false });
+            });
+
+        it('Lower Price: back to the main page, the offer withdrawn in the '
+            + 'well, Request Assistance still there', () => {
+                const haggle = hailPress(main, {
+                    kind: 'assist', answer: mood, haggle: true, offer,
+                }) as HailPage;
+                const next = hailPress(haggle, { kind: 'lowerPrice' }) as HailPage;
+                expect(next.phase).toBe('main');
+                expect(next.context.body).toBe(offer.withdrawn!);
+                expect(commButtonSlots('ship', next.context))
+                    .toEqual(['greetings', 'assist', 'close']);
+                // Not on the main page, nor for another kind of price.
+                expect(hailPress(main, { kind: 'lowerPrice' })).toBe(main);
+            });
+
+        it('Accept Price: "Hold on, I\'ll be right there." on the main page',
+            () => {
+                const haggle = hailPress(main, {
+                    kind: 'assist', answer: mood, haggle: true, offer,
+                }) as HailPage;
+                const next = hailPress(haggle, { kind: 'pay' }) as HailPage;
+                expect(next.phase).toBe('main');
+                expect(next.context.body).toBe("Hold on, I'll be right there.");
+            });
+    });
+});
