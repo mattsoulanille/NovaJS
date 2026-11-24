@@ -6219,6 +6219,23 @@ release; arrow keys 10 px a press without repeat (drop up / down from
 `repeatableActions` on the popup); add PageUp / PageDown (250 px) and
 Home / End. (The BBS text not scrolling at all is not checked in NovaJS.)
 
+**Applied in 4fb861d2 (the text), 9391c012 (the grids) and 9c7d1272 (the
+BBS).** Offer / briefing text: the arrows glide at 60 px/s from the press
+(timed by the clock, so a slow frame catches up), a quick click moves 5 px
+in all, Up / Down move 10 px without repeat, PageUp / PageDown 250 px,
+Home / End the ends (read off the DOM: the control set has no page
+actions). The wheel scrolls text only under a new NovaJS Enhancement,
+"Scroll wheel in mission text" (`enhTextScrollWheel`, default ON, three
+lines a notch; off = the original's nothing). Grids: one row a click, on
+the release, no repeat. BBS: NovaJS never scrolled the job text; its pane
+clips after seven lines and the top of an eighth, as the original's.
+Headless check (PORT 8563, the same 60-line popup): click 5, held about 5
+s 300 (60 px/s), Down 10 / 20, Down + 10 OS repeats 10, PageDown 250 /
+468 (end), PageUp 218, End 468, Home 0, wheel 36 a notch (0 with the
+toggle off); outfitter and shipyard one row a click, held 3 s: nothing
+until the release, then one row; the BBS at Schmoo: Down / PageDown /
+End / wheel leave the text where it is. No console errors.
+
 Confidence: high for the step sizes and the release timing (frame
 counts); the 60 px/s glide is 2 px per 30 fps video frame, so the game's
 own rate is 1 px per rendered frame or 2 px per physics tick. The wheel
@@ -6262,6 +6279,9 @@ two highest-id jünk rows of either tier (Schmoo: two High rows), and
 `buyOn`. **Proposed fix (not applied):** one High slot (BoughtAt rows that
 pass `buyOn`) and one Low slot (SoldAt rows that pass `sellOn`), each the
 highest jünk id that qualifies, High listed above Low.
+**Applied in a284218b** (supersedes 9b0c62de's two-slot model). Headless
+check at Schmoo (bit 43 clear): Food Med 75, Medical Supplies Med 750,
+Luxury Goods High 1125, three blank slots, Opals High 1500, nothing else.
 
 **Trade-in (wave 11's 27,500 vs NovaJS's 26,250).** Pilots on Kit Mass
 Roomy 100 (100,000), each buying Kit Mass Roomy 300 at Kit Port
@@ -6280,6 +6300,10 @@ resale value, the hull at a quarter. Wave 11's 27,500 is the same sum.
 25% of hull + outfits = 26,250. Mismatch. Proposed fix (not applied):**
 `floor(0.25 x hull + 0.5 x outfits)` (the rounding of each part not
 measured).
+**Applied in df31a558** (the sum floored once; Player Info's "Ship
+trade-in value" line uses the same fractions). Headless check: a new pilot
+in the Shuttle (10,000) with its Light Blaster (5,000) is quoted a 5,000
+Trade-In on the Viper (2,500 + 2,500).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w12/trade/{schmoo,schmoo43*,tradein,tradein_plain,tradein_keep}/*/`.
 
@@ -6500,7 +6524,7 @@ still open, and this one should be repeated with a hit that registers.
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. |
 | Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 | Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
-| Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, the BBS in NovaJS, a real mouse's wheel. Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) |
+| Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, a real mouse's wheel (the BBS in NovaJS: checked, 9c7d1272). Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) |
 
 ## Catalogue
 
