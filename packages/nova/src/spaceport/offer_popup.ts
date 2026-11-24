@@ -144,7 +144,8 @@ export class OfferPopup {
     /**
      * Keyboard: up/down arrows scroll a long text 10 px a press and do not
      * repeat while held (the original's, wave 12); PageUp / PageDown /
-     * Home / End page it (listenPageKeys); 'accept' presses the accept
+     * Home / End page it (listenPageKeys); 'accept' and Return (the
+     * default button, MenuControls.defaultButton) press the accept
      * button. 'depart' (Escape / 'd', the landed UI's universal
      * "close this") dismisses a NOTICE — a popup with only an accept
      * button, such as the bar's "There are no ships available for hire."
@@ -195,6 +196,11 @@ export class OfferPopup {
             // A held Up / Down moves the text once: no key repeat.
             this.controls.repeatableActions.delete('up');
             this.controls.repeatableActions.delete('down');
+            // Return presses the accept button, the original's default:
+            // Yes on a mission offer (K2, wave 5) and Okay on a notice
+            // (wave 16: the empty BBS's Okay takes the next Return). Plain
+            // Return only, no repeat (MenuControls.pressDefaultButton).
+            this.controls.defaultButton = () => this.choice.next('accept');
         }
         // The wheel scrolls the text only with the "Scroll wheel in text"
         // enhancement on; the original's wheel does nothing here. Bound on
