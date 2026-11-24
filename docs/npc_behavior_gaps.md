@@ -46,9 +46,10 @@ been fined", "Have a nice day." In the stock data **every gövt has ScanFine
   CrimeTol (B:977-980).
 
 AI 4 düdes are 50 of 147 and appear as traffic in 483 of 545 systems, so
-scanning would be everywhere. NovaJS has **none of it**: no scan event, no
-fine, SmugPenalty unused, mission flag 0x0020 inert, and jünk/oütf ScanMask
-dropped at parse. Size **L**.
+scanning would be everywhere. NovaJS had **none of it** when this was
+written (no scan event, no fine, SmugPenalty unused, mission flag 0x0020
+inert). **Since 2026-11-24 it has** (see the inventory row below and
+"Contraband scan: guesses to measure"). Size **L**.
 
 **Mining.** The original documents it, as hull flags rather than an AI type:
 
@@ -102,9 +103,9 @@ take-off.
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 373-382, 389 (data) | **Missing.** N/nova_plugin/npc/npc_ai_plugin.ts:49-53 says so. Govt fields are parsed (D/govt_data.ts:60-72). jünk ScanMask is read (P/resource_parsers/junk_resource.ts:62) but not in D/junk_data.ts. oütf ScanMask is read (P/resource_parsers/outf_resource.ts:196) but not in OutfitData. Mission ScanMask is in D/mission_data.ts:78. | Every step: which ships are buzzed (only arrivals? only the player? NPC traffic too?); approach and range; how long a scan takes; whether the player must hold position; the message sequence; repeat scans per visit; what a clean scan says; whether a non-matching scanner still scans; whether ScanFine 0 is a warning only; whether SmugPenalty applies to jünk/oütf or only to mission cargo as B:987-988 says; whether a scan makes the scanner hostile. Brief **S1-S3**. | L |
-| **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Parsed, inert:** N/nova_plugin/missions/mission_ship_plugin.ts:428-433. 75 stock missions carry it. | Does ANY scan fail it, or only one whose govt's ScanMask matches the mission's? (B:1550 just says "if you're scanned".) Brief **S2**. | S, after the scan |
-| **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Not wired:** N/nova_plugin/reputation/reputation.ts:21. | Which record moves (this system's, as A14 found for crimes?), and for which contraband. Brief **S2**. | S, after the scan |
+| **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements (R: "S1 / I1 wave 11", "S1 and S2 wave 12"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty off this system's record. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. A clean ship is never approached. Per player: each pilot is scanned, charged and told separately. | The **guesses** below ("Contraband scan: guesses to measure"); briefs **S1** run 5-7, **S2** ScanFine 0, **S3**. | (done) |
+| **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Done:** a scan that finds the mission's cargo illegal fails it ("Your ship has been scanned - mission failed."), no fine, no record (R: "S1 and S2 wave 12"). ScanMask and the flag are frozen onto the ActiveMission at accept (mission_accept_offer.ts). | Does ANY scan fail it, or only a matching one? (S3.) **51 stock 0x0020 missions have ScanMask 0**, so they can never fail by scan under the current reading. | (done) |
+| **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT only, as measured: the record of the system the scan happened in (its status govt), not the scanner's own. Not for mission cargo (measured) or jünk (guess). | Jünk; a scanner that is not the system's owner (whose record moves?). | (done) |
 | **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Missing.** An NPC remembers only its OWN attacker (`npc.aggressor`, N/nova_plugin/npc/npc_targeting.ts:64). Nobody reacts to an attack on a third ship. N/nova_plugin/npc/npc_plunder.ts:21-25 keeps AI 4 out of plundering for this reason. | "Watching" range; whether it covers NPC-on-NPC fights (raiders vs traders); whose "non-enemy" counts (the victim must not be the police govt's enemy?); whether the culprit's record changes; how long the police stay on it. Brief **P1**. | M |
 | **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Not read** (parsed as `ignoredByOtherNosyGovts`, used nowhere). 27 stock govts set it, including Federation, Auroran, Pirate and Krypt. | What "nosy" means here: gövt 0x0002 ships, or AI 4 police generally? It exempts victims of these govts from rescue by others. Brief **P1** variant. | S, with police |
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Not read in the sim** (`attacksPlayerIfCriminal` is parsed: P/parsers/govt_parse.ts:62). R: "A14" found the rule (current system's record; owner, allies and nosy govts enforce) and called NovaJS a mismatch: N/nova_plugin/reputation/govt_disposition.ts:99-104 tests the record kept per govt. | Answered by A14. Reputation work is in progress in parallel; scanning should reuse the same "who enforces here" rule. | (reputation backlog) |
@@ -213,6 +214,42 @@ reference-Mac experiments to run first. Briefs follow.
 9. **Last:** hypergate/wormhole preferences, nav-default ShipStart,
    ShipBehav 2, fleet Quote and the zero-speed perimeter. Stock data barely
    uses them.
+
+### Contraband scan: guesses to measure
+
+The scan (N/nova_plugin/npc/contraband*.ts) follows S1/S2 where they
+measured something. Everything below is a sensible default, marked GUESS
+in the code, and wants a reference run:
+
+1. **Who scans:** any AI 4 of a govt with a non-zero ScanMask, only where
+   that govt ENFORCES (owns the system, is allied with the owner, or is
+   nosy: local_law.ts's enforcesHere). Measured only for the owner.
+2. **Who is scanned:** player ships only; NPCs and the player's escorts
+   are never scanned. A pilot who is already a criminal here is attacked,
+   not scanned (B:977-980).
+3. **Seek range 3000 px, scan range 150 px,** the approach at top speed,
+   the scan instant. Measured: "within about 3 s", "a cutter beside the
+   player".
+4. **Rescans:** once per system visit by anyone; a landing or a jump
+   starts a new visit. (Measured: one fine in 2.7 min with two cutters,
+   but the pilot was a criminal by then.)
+5. **ScanFine 0** (every stock gövt): the detection line without its fine
+   sentence, and SmugPenalty is still charged for an outfit. ScanFine -N:
+   N% of cash (Bible). A fine never takes more than the pilot has; the
+   fine is printed without a thousands separator.
+6. **Jünk** is cargo: the "attempt to smuggle illegal cargo" line,
+   ScanFine, no SmugPenalty (S3's "also" run).
+7. **S3:** a 0x0020 mission fails only on a scan that finds its cargo
+   illegal; a mission with no cargo at all is illegal while active, one
+   with cargo only once it is aboard.
+8. **Several finds in one scan:** every flagged mission fails, one fine is
+   charged, the line names the outfit (else the cargo; the mission line
+   only when nothing else was found).
+9. **A clean scan** (the hold emptied en route) marks the ship and says
+   nothing; STR# 2002 #389 "Have a nice day." may belong there.
+10. **The scanner's name** on the line is the target pane's (a përs's or
+    mission ship's own name, else the ship class); the pilot's is the
+    profile name.
 
 ## Reference-Mac briefs
 
