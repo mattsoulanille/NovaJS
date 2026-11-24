@@ -2,6 +2,7 @@ import 'jasmine';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { WeaponDamage } from 'novadatainterface/weapon_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -16,7 +17,8 @@ import { DamagedEvent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { GovtComponent } from '../core/index.js';
+import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
+import { LegalRecordsComponent } from '../reputation/index.js';
 import { AssistingComponent } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
@@ -656,6 +658,71 @@ describe('applyHail: a ship that does not answer hails', () => {
                 .toBeFalse();
         });
 });
+
+/**
+ * Ruling #297 (2026-11-23): the comm channel uses the shared hostility
+ * rule, its record tier included — and since ruling #376 that tier is the
+ * law of the CURRENT system (reference A14): a criminal is hunted, and so
+ * can only beg, where his record's government's law runs, and nowhere else.
+ */
+describe('applyHail: a criminal record counts by the local law (#297/A14)',
+    () => {
+        const LAWFUL = 'test:lawful';
+
+        /** A lawful, bribe-taking warship; the player (disabled) is -500
+         * with its govt; the system 'test:system' is owned by `owner`. */
+        async function criminalWorld(owner: string | null) {
+            const made = await makeWorld();
+            const { world, addShip } = made;
+            const gameData = world.resources.get(
+                SimulationGameDataResource) as unknown as MockGameData;
+            const lawful = getDefaultGovtData();
+            lawful.id = LAWFUL;
+            lawful.crimeTol = 10;
+            lawful.flags.warshipsTakeBribes = true;
+            gameData.data.Govt.map.set(LAWFUL, lawful);
+            await gameData.data.Govt.get(LAWFUL);
+            gameData.data.System.map.set('test:system',
+                { ...getDefaultSystemData(), id: 'test:system', govt: owner });
+            // Re-got, so the synchronous caches applyHail reads see it.
+            await gameData.data.System.get('test:system');
+            player(world).components.set(LegalRecordsComponent,
+                new Map([[LAWFUL, -500]]));
+            player(world).components.set(DisabledComponent, { repairAt: null });
+            await addShip('target', 150, 0, ship => {
+                ship.components.set(GovtComponent, { id: LAWFUL });
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(TargetComponent, { target: undefined });
+            });
+            return made;
+        }
+
+        it('in its government\'s own space: no help, and it takes a bribe',
+            async () => {
+                const { world } = await criminalWorld(LAWFUL);
+                applyHail(world, PEER,
+                    { kind: 'requestAssistance', target: 'target' });
+                expect(target(world).components.has(AssistingComponent))
+                    .toBeFalse();
+                applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+                expect(player(world).components.get(CreditsComponent)!.credits)
+                    .toBe(90_000);
+                expect(target(world).components.get(NpcComponent)!
+                    .pacifiedFrom).toBe('player');
+            });
+
+        it('where its law does not run: it helps, and takes no bribe',
+            async () => {
+                const { world } = await criminalWorld(null);
+                applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+                expect(player(world).components.get(CreditsComponent)!.credits)
+                    .toBe(100_000);
+                applyHail(world, PEER,
+                    { kind: 'requestAssistance', target: 'target' });
+                expect(target(world).components.get(AssistingComponent))
+                    .toEqual({ client: 'player' });
+            });
+    });
 
 /**
  * #332: applyHail resolved the hailer from the record's peer but took ANY

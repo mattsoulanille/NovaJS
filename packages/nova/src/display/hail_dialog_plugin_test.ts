@@ -3,6 +3,8 @@ import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import { getDefaultPersData } from 'novadatainterface/pers_data';
 import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
@@ -10,7 +12,7 @@ import {
     AggressionComponent, AGGRESSION_WINDOW_MS, OwnerComponent, SourceComponent,
     styleForTarget,
 } from '../nova_plugin/combat/index.js';
-import { GovtComponent } from '../nova_plugin/core/index.js';
+import { GovtComponent, SystemIdResource } from '../nova_plugin/core/index.js';
 import {
     FormationComponent, NpcComponent, ShootAllWeaponsComponent,
 } from '../nova_plugin/npc/index.js';
@@ -1769,3 +1771,128 @@ describe('computeContext on the synthetic data set (ruling #297)', () => {
                 .toBeTrue();
         });
 });
+
+/**
+ * Ruling #297 (Matthew, 2026-11-23): the comm channel uses the shared
+ * hostility rule, "as long as it still works for players". Two halves:
+ *
+ *  - the record-hostility tier is the shared one too, so a criminal is
+ *    judged by the law of the system the hail happens in (reference A14,
+ *    ruling #376), exactly as the brackets and the NPC brain judge him;
+ *  - "is this someone else's ship?" is the simulation's own predicate
+ *    (hailTargetBelongsToAnotherPlayer), so in multiplayer the dialog never
+ *    refuses a ship the sim would let help, or the other way round.
+ */
+describe('computeContext: the shared hostility rule, for players too (#297)',
+    () => {
+        const LAWFUL = 'test:lawful';
+        const LAWFUL_SPACE = 'test:lawful-space';
+        const ELSEWHERE = 'test:elsewhere';
+        const NOW = 60_000;
+        const MY_PEER = 'my peer';
+
+        /** A lawful (bribe-taking) warship; the player is -500 with its
+         * govt; the hail happens in `systemId`. */
+        function criminalWorld(systemId: string) {
+            const built = makeWorld(target => {
+                target.components.set(GovtComponent, { id: LAWFUL });
+                target.components.set(NpcComponent,
+                    { aiType: 3, mode: 'patrol' });
+            });
+            const { world, gameData } = built;
+            gameData.data.Govt.map.set(LAWFUL, {
+                ...getDefaultGovtData(), id: LAWFUL, crimeTol: 10,
+                flags: {
+                    ...getDefaultGovtData().flags, warshipsTakeBribes: true,
+                },
+            });
+            gameData.data.System.map.set(LAWFUL_SPACE, {
+                ...getDefaultSystemData(), id: LAWFUL_SPACE, govt: LAWFUL,
+            });
+            world.resources.set(SystemIdResource, systemId);
+            world.resources.set(SimulationTimeResource, {
+                time: NOW, delta_ms: 16, delta_s: 0.016, frame: 3600,
+            });
+            const player = world.entities.get(PLAYER)!;
+            player.components.set(LegalRecordsComponent,
+                new Map([[LAWFUL, -500]]));
+            player.components.set(CreditsComponent, { credits: 100_000 });
+            player.components.set(DisabledComponent, { repairAt: null });
+            return built;
+        }
+
+        function corners(world: World,
+            gameData: Parameters<typeof computeContext>[1]) {
+            return styleForTarget(TARGET, world.entities.get(TARGET)!, PLAYER,
+                world.entities.get(PLAYER)!, gameData,
+                uuid => world.entities.get(uuid), NOW,
+                world.resources.get(SystemIdResource));
+        }
+
+        it('a criminal hailing a warship in ITS government\'s space: '
+            + 'hostile, Beg For Mercy, a price — as red as its brackets',
+            async () => {
+                const { world, gameData } = criminalWorld(LAWFUL_SPACE);
+                const context = (await computeContext(world, gameData))!
+                    .context;
+                expect(context.heading).toContain('Status: Hostile');
+                expect(commButtonSlots('ship', context))
+                    .toEqual(['greetings', 'beg', 'close']);
+                expect(context.bribe?.purpose).toBe('mercy');
+                expect(corners(world, gameData)).toBe('hostile');
+            });
+
+        it('the same warship where its government\'s law does not run: '
+            + 'neutral, and it comes to help (A14: the home record never '
+            + 'counts elsewhere)', async () => {
+                const { world, gameData } = criminalWorld(ELSEWHERE);
+                const result = (await computeContext(world, gameData))!;
+                expect(result.context.heading).not.toContain('Status:');
+                expect(commButtonSlots('ship', result.context))
+                    .toEqual(['greetings', 'assist', 'close']);
+                expect(assistAnswer(world, TARGET, result.replies).dispatch)
+                    .toBeTrue();
+                expect(corners(world, gameData)).toBe('neutral');
+            });
+
+        /** A disabled player on peer MY_PEER, hailing a friendly ship that
+         * `owner` inserted. */
+        function peerOwnedWorld(owner: string) {
+            const built = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+                target.components.set(MultiplayerData, { owner });
+            });
+            const player = built.world.entities.get(PLAYER)!;
+            player.components.set(ControlledByComponent, { peerId: MY_PEER });
+            player.components.set(MultiplayerData, { owner: MY_PEER });
+            player.components.set(DisabledComponent, { repairAt: null });
+            return built;
+        }
+
+        it('a ship ANOTHER peer inserted refuses, as applyHail refuses it',
+            async () => {
+                const { world, gameData } = peerOwnedWorld('their peer');
+                const result = (await computeContext(world, gameData))!;
+                expect(assistAnswer(world, TARGET, result.replies)).toEqual({
+                    line: ASSIST_REFUSED_FALLBACK, dispatch: false,
+                    haggle: false,
+                });
+            });
+
+        it('a SERVER-owned ship helps, as applyHail lets it (the dialog used '
+            + 'to refuse every ship not stamped with our own peer)',
+            async () => {
+                const { world, gameData } = peerOwnedWorld('server');
+                const result = (await computeContext(world, gameData))!;
+                expect(assistAnswer(world, TARGET, result.replies).dispatch)
+                    .toBeTrue();
+            });
+
+        it('our OWN peer\'s ship (a mission ship we spawned) helps',
+            async () => {
+                const { world, gameData } = peerOwnedWorld(MY_PEER);
+                const result = (await computeContext(world, gameData))!;
+                expect(assistAnswer(world, TARGET, result.replies).dispatch)
+                    .toBeTrue();
+            });
+    });

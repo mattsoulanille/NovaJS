@@ -30,16 +30,16 @@ import {
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
-    HailAction, isSomeoneElsesEscort, PlayerHailMessage,
+    HailAction, hailTargetBelongsToAnotherPlayer, isSomeoneElsesEscort,
+    PlayerHailMessage,
 } from '../nova_plugin/encounters/index.js';
-import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
 import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
-    ControlledByComponent, PlayerEscortComponent,
+    ControlledByComponent,
     escortDealOf, escortProvenance,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
@@ -527,12 +527,15 @@ export async function computeContext(world: World,
         // the ship REFUSES in the well — "Sorry sir, I'm just an escort."
         // for an escort (#332), "I'd rather not." otherwise — rather than
         // promising help, or a truce, that never comes.
-        const escortOf = shipTarget.components.get(PlayerEscortComponent)?.player;
-        const owner = shipTarget.components.get(MultiplayerData)?.owner;
-        const myOwner = player.entity.components.get(MultiplayerData)?.owner;
-        const othersShip = (escortOf !== undefined && escortOf !== player.uuid)
-            || (owner !== undefined && myOwner !== undefined
-                && owner !== myOwner);
+        //
+        // THE SIMULATION'S OWN PREDICATE, with the peer the sim would stamp
+        // on our hail record (our ship's controller), so the dialog cannot
+        // refuse a ship the sim would let help — a server-owned one — or
+        // promise help from one the sim refuses. Ruling #297: "as long as
+        // it still works for players".
+        const othersShip = hailTargetBelongsToAnotherPlayer(world, shipTarget,
+            player.uuid,
+            player.entity.components.get(ControlledByComponent)?.peerId);
 
         // Is this the player's own direct escort? (one parent hop) Carrier-bay
         // fighters ALSO have a parent link pointed at the player, so they'd
