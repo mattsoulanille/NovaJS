@@ -134,15 +134,22 @@ describe('the original\'s jünk rows and the 8-row exchange (#321 wave 10)', () 
                 ]);
         });
 
-    it('gates each of the two rows on its own control-bit test', () => {
-        const gated = makeJunk({ ...doodads, buyOn: 'b7' });
-        expect(junkTradeGoods(gated, 'kit:port', new Set())
+    it('gates the High row on BuyOn and the Low row on SellOn', () => {
+        // Reference wave 12: the stellar is the one buying (BoughtAt,
+        // the High row) or selling (SoldAt, the Low row).
+        const buyGated = makeJunk({ ...doodads, buyOn: 'b7' });
+        expect(junkTradeGoods(buyGated, 'kit:port', new Set())
+            .map(row => row.tier)).toEqual(['low']);
+        expect(junkTradeGoods(buyGated, 'kit:port', new Set([7]))
+            .map(row => row.tier)).toEqual(['high', 'low']);
+        const sellGated = makeJunk({ ...doodads, sellOn: 'b7' });
+        expect(junkTradeGoods(sellGated, 'kit:port', new Set())
             .map(row => row.tier)).toEqual(['high']);
-        expect(junkTradeGoods(gated, 'kit:port', new Set([7]))
+        expect(junkTradeGoods(sellGated, 'kit:port', new Set([7]))
             .map(row => row.tier)).toEqual(['high', 'low']);
     });
 
-    it('lists at most two jünk rows below the six standard slots', () => {
+    it('lists two jünk slots below the six standard ones', () => {
         expect(EXCHANGE_JUNK_ROWS).toBe(2);
     });
 
@@ -176,6 +183,49 @@ describe('the original\'s jünk rows and the 8-row exchange (#321 wave 10)', () 
     it('is empty where no jünk trades', () => {
         expect(rows([widgets, gadgets, doodads], 'kit:elsewhere'))
             .toEqual([]);
+    });
+
+    it('gives a tier\'s slot to the next jünk when the highest is gated',
+        () => {
+            // Doodads (202) gated out of the High slot: Gadgets (201)
+            // takes it, and Doodads keeps the Low one.
+            const gatedDoodads = makeJunk({ ...doodads, buyOn: 'b9' });
+            expect(rows([widgets, gadgets, gatedDoodads], 'kit:port'))
+                .toEqual([
+                    ['Kit Gadgets', 'high', 187, false, true],
+                    ['Kit Doodads', 'low', 320, true, false],
+                ]);
+        });
+});
+
+describe('the original\'s Schmoo exchange (reference wave 12)', () => {
+    // docs/reference_experiments.md, "Trade center at Schmoo, and the
+    // trade-in's outfits, wave 12": stock spöb 322 is in the BoughtAt list
+    // of jünk 145 Seafood Delicacies, 146 Opals and 149 Durknen Girns
+    // (whose BuyOn is b43) and the SoldAt list of none. Base prices are
+    // the stock data's (550 / 1,200 / 3,000).
+    const seafood = makeJunk({
+        id: 'nova:145', name: 'Seafood Delicacies', basePrice: 550,
+        boughtAt: ['nova:322'],
+    });
+    const opals = makeJunk({
+        id: 'nova:146', name: 'Opals', basePrice: 1200,
+        boughtAt: ['nova:322'],
+    });
+    const girns = makeJunk({
+        id: 'nova:149', name: 'Durknen Girns', basePrice: 3000,
+        boughtAt: ['nova:322'], buyOn: 'b43',
+    });
+    const rows = (bits: number[]) =>
+        junkExchangeRows([seafood, opals, girns], 'nova:322', new Set(bits))
+            .map(row => [row.name, row.tier, row.price]);
+
+    it('shows Opals (High 1500) alone with bit 43 clear', () => {
+        expect(rows([])).toEqual([['Opals', 'high', 1500]]);
+    });
+
+    it('shows Durknen Girns (High 3750) alone once bit 43 is set', () => {
+        expect(rows([43])).toEqual([['Durknen Girns', 'high', 3750]]);
     });
 });
 
@@ -244,15 +294,26 @@ describe('junkTradeGoods', () => {
         expect(junkTradeGoods(junk, 'nova:400', new Set())).toEqual([]);
     });
 
-    it('gates buying on the BuyOn control-bit test', () => {
-        const gated = makeJunk({ ...junk, buyOn: 'b3' });
+    it('gates the player\'s buying (a SoldAt row) on SellOn', () => {
+        const gated = makeJunk({ ...junk, sellOn: 'b3' });
         expect(junkTradeGoods(gated, 'nova:200', new Set())).toEqual([]);
         expect(junkTradeGoods(gated, 'nova:200', new Set([3]))[0]?.canBuy)
+            .toBeTrue();
+        // BuyOn does not gate it.
+        const other = makeJunk({ ...junk, buyOn: 'b3' });
+        expect(junkTradeGoods(other, 'nova:200', new Set())[0]?.canBuy)
+            .toBeTrue();
+    });
+
+    it('gates the player\'s selling (a BoughtAt row) on BuyOn', () => {
+        const gated = makeJunk({ ...junk, buyOn: 'b3' });
+        expect(junkTradeGoods(gated, 'nova:300', new Set())).toEqual([]);
+        expect(junkTradeGoods(gated, 'nova:300', new Set([3]))[0]?.canSell)
             .toBeTrue();
     });
 
     it('fails closed on a malformed NCB test', () => {
-        const bad = makeJunk({ ...junk, sellOn: '((((' });
+        const bad = makeJunk({ ...junk, buyOn: '((((' });
         expect(junkTradeGoods(bad, 'nova:300', new Set())).toEqual([]);
     });
 });

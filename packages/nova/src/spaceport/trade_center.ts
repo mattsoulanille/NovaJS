@@ -62,8 +62,9 @@ const HEADER_PRICE = 'Price:';
  * Earth doesn't trade Equipment and leaves row 5 empty, putting its
  * Duranium Alloy jünk row on row 6, exactly where Port Kane (which
  * trades all six) puts its own jünk row. Jünk rows follow in list order
- * (junkExchangeRows: at most two). The two rows of a jünk in both of its
- * lists share a key, so a row is found by identity, not by key.
+ * (junkExchangeRows: one High slot, then one Low slot). The two rows of a
+ * jünk in both of its lists share a key, so a row is found by identity,
+ * not by key.
  */
 export function tradeSlot(good: TradeGood,
     goods: readonly TradeGood[]): number {
@@ -365,9 +366,9 @@ export class TradeCenter extends Menu<Entity> {
         this.goods = this.planet
             ? standardTradeGoods(this.planet, this.cargoNames) : [];
         // Jünk rows follow the standard commodities, as in the
-        // original's exchange listing: two rows for a jünk in both of its
-        // lists, and no more than the list's two jünk slots (#321 wave
-        // 10; junkExchangeRows has the order).
+        // original's exchange listing: one High (sell-here) slot and one
+        // Low (buy-here) slot, each the highest-id jünk that qualifies
+        // (reference wave 12, Schmoo; junkExchangeRows has the rule).
         this.goods.push(...junkExchangeRows(this.junks, this.planetId, bits));
         // Apply any active öops price events to the standard commodities.
         // Prices are keyed to the player's own game date, so this stays a

@@ -1892,8 +1892,11 @@ export const JUNKS: JunkDef[] = [
         buyOn: "", sellOn: "",
     },
     {
-        // The other way round, perishable, and only buyable once the gate
-        // survey is accepted; contraband to the Concord (scan mask bit 1).
+        // The other way round, perishable, and only bought by the port and
+        // Coldharbour once the gate survey is accepted (BuyOn gates the
+        // stellars that BUY a jünk, its BoughtAt list: reference "Trade
+        // center at Schmoo ... wave 12"); contraband to the Concord (scan
+        // mask bit 1).
         id: JUNK.alloy, name: "Gate Alloy", soldAt: [SPOB.refuge],
         boughtAt: [SPOB.port, SPOB.coldharbour],
         basePrice: 1200, flags: JUNK_FLAGS.decays, scanMask: 0x0001,
