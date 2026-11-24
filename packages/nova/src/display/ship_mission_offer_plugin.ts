@@ -382,11 +382,12 @@ async function acceptShipOffer(world: World,
                 accept.shipSource, player.uuid, systemId, gameData,
                 universe, {
                     replace,
-                    // Stellar refs resolve to the VISIBLE copy of a
-                    // stacked duplicate system, as on the per-system
-                    // sweep (mission_universe.ts systemIdOfPlanet).
-                    bits: player.entity.components
-                        .get(ControlBitsComponent),
+                    // The bits after OnAccept, as the per-system sweep
+                    // reads them off the player entity: stellar refs
+                    // resolve to the VISIBLE copy of a stacked duplicate
+                    // system (mission_universe.ts systemIdOfPlanet), and
+                    // the düde draws honour shïp AppearOn (#140).
+                    bits: accept.bits,
                 });
         } catch (e) {
             console.warn('Failed to build ship-offered mission ships:', e);

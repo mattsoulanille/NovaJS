@@ -12,7 +12,12 @@ import { EscortPayrollComponent } from '../player/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { MissionShipComponent } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
+import { ControlBitsComponent } from '../ncb/index.js';
 import {
+    buildAcceptedMissionShips,
     buildMissionShipSpawns,
     liveMissionShips,
     MISSION_SHIP_NO_DEPART_MS,
@@ -630,6 +635,132 @@ describe('buildMissionShipSpawns', () => {
             expect(classesOf(again)).toEqual(new Set([OTHER_SHIP]));
             expect(objective.shipId).toBeUndefined();
         });
+    });
+
+    describe('shïp AppearOn on the düde draw (#140)', () => {
+        // "Ships of this type will not show up in dude resources if this
+        // expression evaluates to false." (EVN Bible, shïp AppearOn.)
+        // Gated on the OWNER's bits: the ships are built on the owner's
+        // client and ride its own input record.
+        const GATED = 'nova:302';
+        const STORY_BIT = 102;
+        function gatedGameData(appearOn: string,
+            ships = [{ id: SHIP, weight: 50 }, { id: GATED, weight: 50 }]):
+            MockGameData {
+            const gameData = makeGameData();
+            gameData.data.Dude.map.get(DUDE)!.ships = ships;
+            gameData.data.Ship.map.set(GATED, {
+                ...getDefaultShipData(), id: GATED, name: 'Story Variant',
+                appearOn,
+            });
+            return gameData;
+        }
+        // pickWeighted over the two equal classes: 0.9 lands on the
+        // second (GATED); over SHIP alone every draw is SHIP.
+        const SECOND = () => 0.9;
+        const classesOf = (ships: Entity[]) => new Set(ships.map(
+            ship => ship.components.get(ShipComponent)?.id));
+        function playerWithBits(bits: number[], mission?: MissionData) {
+            const player = makePlayer(makeObjective({ total: 3 }), mission);
+            player.components.set(ControlBitsComponent, new Set(bits));
+            return player;
+        }
+
+        it('leaves out a class whose AppearOn fails under the owner\'s bits',
+            async () => {
+                const ships = await buildMissionShipSpawns(playerWithBits([]),
+                    OWNER, 'nova:128', gatedGameData(`b${STORY_BIT}`),
+                    makeUniverse(), 0, SECOND);
+                expect(ships.length).toBe(3);
+                expect(classesOf(ships)).toEqual(new Set([SHIP]));
+            });
+
+        it('draws it once the owner has the bit', async () => {
+            const ships = await buildMissionShipSpawns(
+                playerWithBits([STORY_BIT]), OWNER, 'nova:128',
+                gatedGameData(`b${STORY_BIT}`), makeUniverse(), 0, SECOND);
+            expect(classesOf(ships)).toEqual(new Set([GATED]));
+        });
+
+        it('reads a negated test the other way (the stock `!b333` hulls)',
+            async () => {
+                const gameData = gatedGameData(`!b${STORY_BIT}`);
+                expect(classesOf(await buildMissionShipSpawns(
+                    playerWithBits([]), OWNER, 'nova:128', gameData,
+                    makeUniverse(), 0, SECOND))).toEqual(new Set([GATED]));
+                expect(classesOf(await buildMissionShipSpawns(
+                    playerWithBits([STORY_BIT]), OWNER, 'nova:128', gameData,
+                    makeUniverse(), 0, SECOND))).toEqual(new Set([SHIP]));
+            });
+
+        it('treats an unparseable AppearOn as false', async () => {
+            const ships = await buildMissionShipSpawns(playerWithBits([]),
+                OWNER, 'nova:128', gatedGameData('b102 &'),
+                makeUniverse(), 0, SECOND);
+            expect(classesOf(ships)).toEqual(new Set([SHIP]));
+        });
+
+        it('falls back to the whole düde when the bits admit no class, so '
+            + 'the goal still has ships', async () => {
+                const ships = await buildMissionShipSpawns(playerWithBits([]),
+                    OWNER, 'nova:128', gatedGameData(`b${STORY_BIT}`,
+                        [{ id: GATED, weight: 100 }]),
+                    makeUniverse(), 0, SECOND);
+                expect(ships.length).toBe(3);
+                expect(classesOf(ships)).toEqual(new Set([GATED]));
+            });
+
+        it('gates the aux ships too', async () => {
+            const mission: MissionData = {
+                ...getDefaultMissionData(), id: MISSION_ID,
+                auxShipCount: 2, auxShipDude: 240, auxShipDudeId: DUDE,
+                auxShipSyst: -1,
+            };
+            const player = makePlayer(undefined, mission);
+            player.components.set(ControlBitsComponent, new Set());
+            const ships = await buildMissionShipSpawns(player, OWNER,
+                'nova:129', gatedGameData(`b${STORY_BIT}`), makeUniverse(mission),
+                0, SECOND);
+            expect(ships.length).toBe(2);
+            expect(classesOf(ships)).toEqual(new Set([SHIP]));
+        });
+
+        it('freezes (Flags 0x0800) a class the bits admit', async () => {
+            const mission: MissionData = {
+                ...getDefaultMissionData(), id: MISSION_ID,
+                flags: { ...getDefaultMissionData().flags,
+                    freezeShipTypesAtStart: true },
+            };
+            const player = playerWithBits([], mission);
+            await buildMissionShipSpawns(player, OWNER, 'nova:128',
+                gatedGameData(`b${STORY_BIT}`), makeUniverse(mission), 0,
+                SECOND);
+            expect(player.components.get(MissionsComponent)!.get(MISSION_ID)!
+                .shipObjective!.shipId).toBe(SHIP);
+        });
+
+        it('keeps a përs replacement\'s own class even when it is gated out '
+            + '(the hull never morphs)', async () => {
+                const mission: MissionData = {
+                    ...getDefaultMissionData(), id: MISSION_ID,
+                };
+                const objective = makeObjective({ total: 1 });
+                const ships = await buildAcceptedMissionShips(MISSION_ID, {
+                    shipObjective: objective,
+                    travelPlanet: null, returnPlanet: null,
+                }, OWNER, 'nova:128', gatedGameData(`b${STORY_BIT}`),
+                makeUniverse(mission), {
+                    random: () => 0.1,
+                    bits: new Set(),
+                    replace: {
+                        position: new Position(0, 0),
+                        rotation: new Angle(0),
+                        velocity: new Vector(0, 0),
+                        preferShipId: GATED,
+                    },
+                });
+                expect(classesOf(ships)).toEqual(new Set([GATED]));
+            });
     });
 
     it('respawns the same name on every system entry', async () => {

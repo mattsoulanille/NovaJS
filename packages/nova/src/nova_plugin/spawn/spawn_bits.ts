@@ -113,6 +113,12 @@
  * own records), shïp/oütf Availability, jünk BuyOn/SellOn and öops
  * ActivateOn (the landed venues), nëbu ActiveOn (map art) and crön
  * EnableOn (news and events). düde itself has no NCB test.
+ *
+ * MISSION SHIPS are düde draws too, so shïp AppearOn gates them — but
+ * under the mission OWNER's bits, not the room's: they are built on the
+ * owner's client and inserted as finished entities on its own input
+ * record, so no peer evaluates the test (missions/mission_ship_spawn.ts's
+ * appearingDudeShips, which reuses spawnTestPasses below).
  */
 import {
     evaluateParsedNCBTest, NCBTestExpression, parseNCBTest,

@@ -18,6 +18,7 @@ import {
     jumpInState,
     makeNpcShip,
     pickWeighted,
+    spawnTestPasses,
 } from '../spawn/index.js';
 import {
     MissionsComponent, PendingAutoAbortShipsComponent,
@@ -162,8 +163,9 @@ interface SpawnContext {
     /** Next free formation slot on the owner. */
     nextSlot: number;
     /** The owner's control bits, for resolving stellars to the VISIBLE
-     * copy of a stacked duplicate system (mission_universe.ts). An owner
-     * with no ControlBitsComponent holds none: the empty set. */
+     * copy of a stacked duplicate system (mission_universe.ts) and for
+     * the düde draws' shïp AppearOn (appearingDudeShips). An owner with
+     * no ControlBitsComponent holds none: the empty set. */
     bits: ReadonlySet<number>;
 }
 
@@ -215,10 +217,63 @@ async function freezeShipType(ctx: SpawnContext,
     dudeId: string): Promise<string | undefined> {
     try {
         const dude = await ctx.gameData.data.Dude.get(dudeId);
-        return pickWeighted(dude.ships, { next: ctx.random })?.id;
+        const ships = await appearingDudeShips(ctx, dude.ships);
+        return pickWeighted(ships, { next: ctx.random })?.id;
     } catch {
         return undefined;
     }
+}
+
+/**
+ * shïp AppearOn on a MISSION'S düde draw (#140). The Bible puts the gate
+ * on the ship class, not on where the düde is used: "Ships of this type
+ * will not show up in dude resources if this expression evaluates to
+ * false." So mïsn ShipDude and AuxShipDude draws are gated exactly like a
+ * sÿst DudeTypes draw (npc_spawn_plugin / spawn_bits.ts) — the same test
+ * evaluator (spawnTestPasses: control bits only, an unparseable test
+ * fails), the same "drop the failing classes, draw from the rest by
+ * weight". Stock relies on it: 356 mïsn ShipDude/AuxShipDude references
+ * point at a düde holding a gated class — the `!b333` Fed and Auroran
+ * capital ships, the Polaris hulls that change with b1301-b1309, the
+ * `b8888` advanced pirates.
+ *
+ * WHOSE BITS. The OWNER'S — the player whose mission it is — not the
+ * room's. That is safe for determinism where a system's traffic is not:
+ * these ships are built on the owner's client and enter the simulation
+ * as finished entities on the owner's own input record (the module
+ * comment above), so no peer ever re-evaluates the test. It is also the
+ * only sensible reading: the mission, its OnAccept bits and the story
+ * beat the variant belongs to are all that player's.
+ *
+ * A DÜDE THE BITS EMPTY falls back to its full table. The NPC table drops
+ * such a düde (its weight goes to the rest of the system's traffic), but a
+ * mission has nothing else to spawn — dropping it would leave a destroy or
+ * escort goal with no ship to satisfy it. Stock has single-class düdes a
+ * mission names (nova:182 / 271 `b1307`, 254 / 243 `!b333`, 268 `!b334`),
+ * presumably authored for missions whose bits admit them; the original's
+ * answer for a düde the bits empty is unconfirmed (a reference-Mac
+ * experiment could settle it).
+ *
+ * Not gated: a përs replacement's own class (preferShipId — the Bible
+ * keeps it "regardless of the probabilities in the düde resource", so the
+ * hull you hailed never morphs) and a class frozen by Flags 0x0800 (drawn
+ * through this gate at the first spawn, and "kept the same ... until the
+ * mission ends").
+ */
+async function appearingDudeShips<T extends { id: string }>(
+    ctx: SpawnContext, ships: readonly T[]): Promise<readonly T[]> {
+    // A class whose data will not load cannot be built either way; it
+    // is left out here and reported by buildShip if nothing else is left.
+    const passes = await Promise.all(ships.map(async ship => {
+        try {
+            const { appearOn } = await ctx.gameData.data.Ship.get(ship.id);
+            return spawnTestPasses(appearOn || undefined, ctx.bits);
+        } catch {
+            return false;
+        }
+    }));
+    const appearing = ships.filter((_, index) => passes[index]);
+    return appearing.length > 0 ? appearing : ships;
 }
 
 /** Builds one mission ship from a dude draw; null if data is missing. */
@@ -247,7 +302,8 @@ async function buildShip(ctx: SpawnContext, missionId: string,
                 && producible.some(s => s.id === id));
         const choice = prefer !== undefined
             ? { id: prefer }
-            : pickWeighted(producible, { next: ctx.random });
+            : pickWeighted(await appearingDudeShips(ctx, producible),
+                { next: ctx.random });
         if (!choice) {
             return null;
         }

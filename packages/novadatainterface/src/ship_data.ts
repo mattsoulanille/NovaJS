@@ -131,10 +131,11 @@ export interface ShipData extends SpaceObjectData {
      * negated story bits (every Aur Cruiser variant, nova:247-255, is
      * `!b333`), plus positive-bit story variants (the Polaris cloaking
      * hulls nova:257-273, the `b8888` pirate variants nova:398-404).
-     * Read by npc_spawn_plugin's buildNpcSpawnTable, which filters each
-     * düde's ship list on it under the same shared-world constraint on
-     * per-player bits that flët AppearOn has (see its module comment):
-     * evaluated at genesis against an empty bit set.
+     * Read at every düde draw (#140): a system's traffic
+     * (npc_spawn_plugin's buildNpcSpawnTable + spawn/spawn_bits.ts, under
+     * the ROOM's spawn bits — its first entrant's) and a mission's
+     * ShipDude / AuxShipDude ships (missions/mission_ship_spawn.ts's
+     * appearingDudeShips, under the mission OWNER's bits).
      */
     appearOn: string;
     /**

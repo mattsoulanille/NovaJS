@@ -252,6 +252,14 @@ export interface ShipMissionAccept {
     /** What the accept produced for the player to read (the briefing,
      * or the auto-abort's own notice). */
     events: MissionEvent[];
+    /**
+     * The player's control bits AFTER the accept (its OnAccept applied):
+     * what buildAcceptedMissionShips must read, so the ships of a mission
+     * taken in flight see the same bits as the ones the per-entry sweep
+     * builds from the player entity later — shïp AppearOn on the düde
+     * draw, and the visible copy of a stacked system.
+     */
+    bits: ReadonlySet<number>;
 }
 
 function missionsAfter(copy: Entity, missionId: string) {
@@ -460,6 +468,7 @@ export async function buildShipMissionAccept(player: Entity,
     return {
         active,
         events,
+        bits: new Set(after.components.get(ControlBitsComponent) ?? []),
         shipSource: active ?? {
             shipObjective: offer.shipObjective,
             travelPlanet: offer.travelPlanet,

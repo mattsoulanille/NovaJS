@@ -390,6 +390,12 @@ describe('buildShipMissionAccept (the input record)', () => {
             expect(accept).not.toBeNull();
             expect(accept!.record.autoAborted).toBeTrue();
             expect(accept!.record.bitsSet).toEqual([801]);
+            // The bits the in-flight ships are built under are the ones
+            // AFTER the accept (shïp AppearOn, #140), and the mirror's
+            // own set is untouched.
+            expect(accept!.bits.has(801)).toBeTrue();
+            expect(player.components.get(ControlBitsComponent)!.has(801))
+                .toBeFalse();
             expect(accept!.record.ranksGranted).toEqual(['nova:152']);
             expect(accept!.record.ranksRevoked).toEqual(['nova:138']);
         });
