@@ -1,0 +1,19 @@
+{
+ "name": "w13_space_board",
+ "_comment": "Wave 13 item 3 (P1 with registered hits, run 2: disable and board in view of the police): Enter Ship in Kit Police Range with the Kit Long Beam (pilot w13_p1_beam), recording from the start; hand-driven steps (loops/interactive.mjs) until {done}: target a Kit Shipping, beam it (registered hits on the target panel), watch the police; then loops/board.mjs walks to the DISABLED ship by its grey brackets and boards it (the plunder dialog's Abort is clicked); then hand-driven again (land, leave, pull).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "script": "../loops/board.mjs", "args": { "locateBy": "bracket", "bracketColours": ["grey"], "speedPxS": 360, "turnDegS": 174.2, "near": 200, "stepMs": 50, "maxSteps": 40, "maxLegs": 10, "calMs": 300, "fineBelowPx": 40, "fineStepMs": 25, "retarget": 0, "dialogClicks": [[418, 380, "abort"]], "sweep": { "atPx": 14, "startOnSilent": true, "repeat": 2, "turnMs": 40, "presses": 30, "stopAfter": 1 } } },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

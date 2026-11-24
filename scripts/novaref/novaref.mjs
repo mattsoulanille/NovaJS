@@ -1132,7 +1132,7 @@ async function runStep(step, ctx) {
     // outside the game window, so it never shows up in shots/recordings.
     if (step.move) return cmdMove(step.move === true ? ["40", "40"] : [...step.move.map(String), ...(step.win ? ["--win"] : [])]);
     if (step.open_pilot) return openPilot(step.open_pilot);
-    if (step.record === "start") return cmdRecord(["start", ...(step.window ? ["--window"] : [])]);
+    if (step.record === "start") return cmdRecord(["start", ...(step.window ? ["--window"] : []), ...(step.fps ? ["--fps", String(step.fps)] : [])]);
     if (step.record === "stop") {
         ctx.recN = (ctx.recN ?? 0) + 1;
         const base = step.label ? `recording-${step.label}.mp4` : ctx.recN === 1 ? "recording.mp4" : `recording-${ctx.recN}.mp4`;

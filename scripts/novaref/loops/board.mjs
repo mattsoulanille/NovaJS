@@ -26,6 +26,7 @@
  */
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { bracketsIn } from "../analysis/brackets.mjs";
 import { statusText } from "../analysis/pointer.mjs";
 import { RADAR, blipsIn } from "../analysis/radar_blips.mjs";
 
@@ -260,7 +261,14 @@ export default async function board(api, args = {}) {
     };
     /** Target offset from the player: on screen exact, else from the radar. */
     const locate = (png) => {
-        const d = findColour(png, isMagenta, 12); // 12: a disc half under the player still counts (wave 7)
+        // Wave 13: a stock (not kit-coloured) target is found by its target
+        // brackets instead (`args.locateBy: "bracket"`, colours in
+        // `args.bracketColours`, default grey: a disabled ship).
+        if (args.locateBy === "bracket") {
+            const b = bracketsIn(png.data, png.width, png.height, { colours: args.bracketColours ?? ["grey"] })[0];
+            if (b) return { on: true, o: [b.cx - CX, b.cy - CY] };
+        }
+        const d = args.locateBy === "bracket" ? null : findColour(png, isMagenta, 12); // 12: a disc half under the player still counts (wave 7)
         if (d) return { on: true, o: [d.x - CX, d.y - CY] };
         const st = [-pos[0] / WORLD_PER_RADAR_PX, -pos[1] / WORLD_PER_RADAR_PX];
         // The player's own blip sits at the centre; a stellar is a bigger

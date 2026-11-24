@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w13-ndis-escort2",
+  "edits": {
+    "ship": 839,
+    "stellar": 2047,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2047": 2
+    },
+    "missionBits": {
+      "9139": true,
+      "9140": true
+    },
+    "nickname": "Probe",
+    "shipName": "w13-ndis-escort2"
+  }
+}

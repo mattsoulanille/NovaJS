@@ -284,8 +284,217 @@ export default {
         ...wave10Resources(),
         ...wave11Resources(),
         ...wave12Resources(),
+        ...wave13Resources(),
     ].map(withoutRunningLights),
 };
+
+/**
+ * Wave-13 experiments (docs/reference_experiments.md, "... wave 13").
+ * Nothing retired; ids above wave 12's (shïp 871+, wëap 285+, düde 357+,
+ * gövt 339 and 344-349, sÿst/spöb 2081+, flët 303, mïsn 1064+, bits 9117+;
+ * the blocks marked "added during the wave" are listed in the README row).
+ *
+ *  X   In-flight Abort from the `i` dialog. mïsn 1064 (bit 9117): the
+ *      wave-11 Kit Ally Pointer (düde 330) as a ShipBehav 1 / ShipGoal 3
+ *      escort at Kit Port; mïsn 1065 (9121): two Kit Abort Raiders (shïp
+ *      871: the magenta pointer on a mobile AI 3 hull, 1000 / 1000, the
+ *      1-damage Kit FF Pea; düde 357, gövt 363) with ShipBehav 0, ShipGoal 0
+ *      (destroy). Both CompGovt 360 / 363, CompReward 10, OnAbort / OnFailure
+ *      / OnSuccess bits 9118-9120 and 9122-9124.
+ *  N   An NPC DISABLES a mission ship (no kill). In Kit FF Range: the
+ *      spaceport offer mïsn 1066 (9125) puts shïp 872 Kit Disabler (red
+ *      disc, anchored, gövt 362) on the far mark; it fires wëap 285 Kit
+ *      Disabler (one 1200-damage turret bolt, reload 30000 frames: one
+ *      shot) at the player, through the victim on the near mark. Victims
+ *      (Mission BBS jobs, armor 1500, shield 0, so the hit leaves 300:
+ *      disabled, alive): the wave-12 goal-1 duellist mïsn 1053 (9103), or
+ *      mïsn 1067 (9126) shïp 873 Kit Ally Anchored (the magenta pointer,
+ *      gövt 360 via düde 359, unarmed) as a ShipBehav 1 / ShipGoal 3 escort
+ *      (OnFailure b9127, OnSuccess b9128).
+ *  G   A guided missile locked on a same-govt ship: gövt 344 Kit Xeno
+ *      (0x0001, xenophobic: "attack everyone except their allies"). In
+ *      Kit FF Range: mïsn 1068 (9129) shïp 874 Kit Xeno Shooter (red disc,
+ *      anchored, wëap 286 Kit Xeno Missile: guided, reach about 210 px) on
+ *      the far mark; mïsn 1069 (9130, BBS job) shïp 875 Kit Xeno Victim
+ *      (blue disc, anchored, shield 1000 no recharge, unarmed) on the near
+ *      mark, 150 px away; düde 360 / 361.
+ *  A   A14 third data point: gövt 345 Kit Odd Owner (Disab 11, Board 3,
+ *      Kill 25: per-term halving gives 5 + 12 = 17, halving the sum 18)
+ *      owns sÿst/spöb 2082 Kit Odd Traffic (traffic: düde 344, gövt 350's
+ *      bare traders, unrelated to 345) and 2083 Kit Odd Home, linked to
+ *      it, so the player can jump there and read `p` / the map.
+ *  T   Traffic life cycle (npc_behavior_gaps.md T1): gövt 346 Kit Life
+ *      Traders and 347 Kit Life Hostile (mutual enemies). sÿst 2085 Kit
+ *      Life Range (owner 346): spöb 2085 Life Port (0,0), 2086 Life Market
+ *      (1000,0), both 346; 2087 Life Marker (0,1000) uninhabited; 2088 Life
+ *      Hostile Port (-1000,0) of 347. Traffic: düde 362, AI 1 shïp 876 Kit
+ *      Life Trader (green disc), avgShips 6.
+ *  S   Shuttles (N2): sÿst 2089 Kit Shuttle Range, the same layout
+ *      (spöb 2089-2092), traffic düde 363: AI 1 shïp 877 Kit Life Shuttle
+ *      (blue disc, Flags3 0x0002, no scoop), avgShips 6.
+ *  M   Mining (N1): sÿst/spöb 2093 Kit Mine Range (16 metal asteroids),
+ *      traffic düde 364: AI 1 shïp 878 Kit Miner (cyan disc, Flags3 0x0003,
+ *      the stock Asteroid Scoop oütf 271 and four of the stock miner gun
+ *      wëap 181, as the stock Asteroid Miner shïp 379), avgShips 3.
+ */
+function wave13Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const anchored = { accel: 0, speed: 0, turn: 60, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, shieldRecharge: 0, armorRecharge: 0 };
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+
+    // --- X: aborting in flight.
+    out.push(...misn(1064, "Kit X abort escort", 9117, { shipCount: 1, shipDude: 330, shipGoal: 3, shipBehav: 1, shipStart: -1,
+        compGovt: 360, compReward: 10, onAccept: "!b9117", onAbort: "b9118", onSuccess: "b9119", onFailure: "b9120", returnStel: 2100 }));
+    out.push(...shareRled(871, "Kit Abort Raider", 1959, 24, { ...mobile, ai: 3, armor: 1000, shield: 1000, shieldRecharge: 0, armorRecharge: 0, ...armed(267) }));
+    out.push(dude(357, "Kit Abort Raider", 3, 363, 871));
+    out.push(...misn(1065, "Kit X abort raiders", 9121, { shipCount: 2, shipDude: 357, shipGoal: 0, shipBehav: 0, shipStart: -1,
+        compGovt: 363, compReward: 10, onAccept: "!b9121", onAbort: "b9122", onSuccess: "b9123", onFailure: "b9124", returnStel: 2100 }));
+
+    // --- N: an NPC disables a mission ship with one shot.
+    out.push(weap(285, "Kit Disabler", 131, { reload: 30000, duration: 90, armorDamage: 1200, shieldDamage: 1200, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(...shareRled(872, "Kit Disabler", 1971, 24, { ...anchored, armor: 30000, shield: 30000, ...armed(285) }));
+    out.push(dude(358, "Kit Disabler", 3, 362, 872));
+    out.push(...misn(1066, "Kit N disabler", 9125, { availStel: 2047, shipCount: 1, shipDude: 358, shipGoal: -1, shipBehav: 0, shipStart: -3, onAccept: "!b9125" }));
+    out.push(...shareRled(873, "Kit Ally Anchored", 1959, 24, { ...anchored, armor: 1500, shield: 0 }));
+    out.push(dude(359, "Kit Ally Anchored", 3, 360, 873));
+    out.push(...misn(1067, "Kit N escort ally", 9126, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 359, shipGoal: 3, shipBehav: 1, shipStart: -2,
+        returnStel: 2047, onAccept: "!b9126", onSuccess: "b9128", onFailure: "b9127", dispWeight: 30000 }));
+
+    // Added during the wave: the ShipBehav-1 ally does not stay on the
+    // near mark (it took a formation slot beside the player, off the line
+    // of fire). So the disabler HUNTS it instead: gövt 348 Kit Ally Class
+    // (class 348) for the ally, gövt 349 Kit Ally Hater (enemy of class 348,
+    // neutral to the player) for the disabler. mïsn 1074 (bit 9139) the
+    // disabler (düde 365, far mark) as the spaceport offer; mïsn 1075 (bit
+    // 9140) the ally (düde 366, shïp 873) as the BBS job, ShipGoal 3,
+    // ShipBehav 1, OnFailure b9141, OnSuccess b9142.
+    out.push(govt(348, "Kit Ally Class", { classes: [348, -1, -1, -1] }));
+    out.push(govt(349, "Kit Ally Hater", { classes: [349, -1, -1, -1], enemies: [348, -1, -1, -1] }));
+    // Take 2 (the one-shot Kit Disabler spent its bolt on the player during
+    // takeoff: its brackets were red, the ally's enemies are the player's):
+    // shïp 879 Kit Hater, the same anchored red disc with wëap 287 Kit Hater
+    // Gun (50 damage a second, 540 px reach), so the ally goes Disabled
+    // after about 20 hits and dies after 30: is the failure at the disable?
+    out.push(weap(287, "Kit Hater Gun", 131, { reload: 30, duration: 90, armorDamage: 50, shieldDamage: 50, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(...shareRled(879, "Kit Hater", 1971, 24, { ...anchored, armor: 30000, shield: 30000, ...armed(287) }));
+    out.push(dude(365, "Kit Ally Hater", 3, 349, 879));
+    out.push(dude(366, "Kit Ally Classed", 3, 348, 873));
+    out.push(...misn(1074, "Kit N ally hater", 9139, { availStel: 2047, shipCount: 1, shipDude: 365, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9139" }));
+    out.push(...misn(1075, "Kit N escort ally classed", 9140, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 366, shipGoal: 3, shipBehav: 1, shipStart: -1,
+        returnStel: 2047, onAccept: "!b9140", onSuccess: "b9142", onFailure: "b9141", dispWeight: 30000 }));
+
+    // --- R: stock mïsn 394 "Rescue Raczak" moved to Kit Port (added during
+    // the wave: in Heraan Astra the Moash fleet killed the UFS Excalibur
+    // before the player found it). Every field as the stock resource but
+    // AvailStel / AvailLoc 3 / AvailBits / ReturnStel / OnSuccess and no aux
+    // ships: the stock Raczak düde 258 (the UFS Excalibur, ShipNameID
+    // 25002), ShipGoal 5, ShipBehav -1, cargo 27 picked up on boarding the
+    // special ship (PickupMode 2), Flags 0x1214, Flags2 0x0001, ShipSyst -1
+    // (Kit Range). mïsn 1070 (bit 9131) keeps ShipStart 2 ("appear
+    // randomly, cloaked"); mïsn 1071 (bit 9133) has ShipStart -1 (on
+    // Kit Port, where the player takes off).
+    const raczak = { shipCount: 1, shipSyst: -1, shipDude: 258, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
+        cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
+    out.push(...misn(1070, "Kit R Raczak ShipStart 2", 9131, { ...raczak, shipStart: 2, onAccept: "!b9131", onSuccess: "b9132" }));
+    out.push(...misn(1071, "Kit R Raczak at Kit Port", 9133, { ...raczak, shipStart: -1, onAccept: "!b9133", onSuccess: "b9134" }));
+    // 1071 boarded ("You retrieved Admiral Raczak from this ship."), where
+    // wave 11's kit rescues were refused. Which difference? mïsn 1072 (bit
+    // 9135) = 1071 without the mission cargo (CargoType -1, PickupMode -1);
+    // mïsn 1073 (bit 9137) = 1072 with the kit's düde 330 (Kit Ally Pointer,
+    // gövt 360) instead of the stock Raczak düde.
+    const noCargo = { cargoType: -1, cargoQty: 0, pickupMode: -1, dropoffMode: -1 };
+    out.push(...misn(1072, "Kit R Raczak no cargo", 9135, { ...raczak, ...noCargo, shipStart: -1, onAccept: "!b9135", onSuccess: "b9136" }));
+    out.push(...misn(1073, "Kit R kit dude no cargo", 9137, { ...raczak, ...noCargo, shipDude: 330, shipStart: -1, onAccept: "!b9137", onSuccess: "b9138" }));
+
+    // --- G: a xenophobe's guided missile at its own govt.
+    out.push(govt(344, "Kit Xeno", { flags: 0x0001, classes: [344, -1, -1, -1] }));
+    out.push(weap(286, "Kit Xeno Missile", 134, { reload: 30, duration: 70, armorDamage: 10, shieldDamage: 10, guidance: 1, speed: 300, guidedTurn: 60, proxRadius: 0, blastRadius: 0, flags: 0, seekerFlags: 0, jamVuln: zero4 }));
+    out.push(...shareRled(874, "Kit Xeno Shooter", 1971, 24, { ...anchored, armor: 30000, shield: 30000, ...armed(286) }));
+    out.push(...shareRled(875, "Kit Xeno Victim", 1973, 24, { ...anchored, armor: 30000, shield: 1000 }));
+    out.push(dude(360, "Kit Xeno Shooter", 3, 344, 874));
+    out.push(dude(361, "Kit Xeno Victim", 3, 344, 875));
+    out.push(...misn(1068, "Kit G xeno shooter", 9129, { availStel: 2047, shipCount: 1, shipDude: 360, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9129" }));
+    out.push(...misn(1069, "Kit G xeno victim", 9130, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 361, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9130", dispWeight: 30000 }));
+
+    // Added during the wave: the xenophobe never fired at its own govt's
+    // ship (80 s, its brackets red at the player, out of its reach). A
+    // govt that lists its OWN class as an enemy: gövt 339 Kit Self Hater
+    // (class 339, enemies 339), düde 367 / 368 (the same shooter / victim
+    // hulls), mïsn 1076 (bit 9143, the spaceport offer, far mark) / 1077
+    // (bit 9144, the BBS job, near mark).
+    out.push(govt(339, "Kit Self Hater", { classes: [339, -1, -1, -1], enemies: [339, -1, -1, -1] }));
+    out.push(dude(367, "Kit Self Hater Shooter", 3, 339, 874));
+    out.push(dude(368, "Kit Self Hater Victim", 3, 339, 875));
+    out.push(...misn(1076, "Kit G self hater shooter", 9143, { availStel: 2047, shipCount: 1, shipDude: 367, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9143" }));
+    out.push(...misn(1077, "Kit G self hater victim", 9144, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 368, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9144", dispWeight: 30000 }));
+
+    // --- A: the A14 reward rule with odd owner penalties.
+    out.push(govt(345, "Kit Odd Owner", { disabPenalty: 11, boardPenalty: 3, killPenalty: 25, classes: [345, -1, -1, -1] }));
+    const odd = system(2082, "Kit Odd Traffic", 100, -780, 345, [2082]);
+    odd.set = { ...odd.set, links: [2083, ...none16.slice(1)], dudes: [344, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 3 };
+    const oddHome = system(2083, "Kit Odd Home", 140, -780, 345, [2083]);
+    oddHome.set = { ...oddHome.set, links: [2082, ...none16.slice(1)] };
+    // Added during the wave: the kill gave 2082 +17 AND the linked 2083
+    // (same owner) +11. Does the change spread to every LINKED system?
+    // sÿst/spöb 2084 Kit Odd Neighbour (owned by the neutral gövt 363),
+    // linked to 2082 as well; 2081 Kit Odd Far, owned by 345, linked only
+    // to 2083 (two jumps from the kill).
+    odd.set.links = [2083, 2084, ...none16.slice(2)];
+    oddHome.set.links = [2082, 2081, ...none16.slice(2)];
+    const oddNeighbour = system(2084, "Kit Odd Neighbour", 100, -740, 363, [2084]);
+    oddNeighbour.set = { ...oddNeighbour.set, links: [2082, ...none16.slice(1)] };
+    const oddFar = system(2081, "Kit Odd Far", 180, -780, 345, [2081]);
+    oddFar.set = { ...oddFar.set, links: [2083, ...none16.slice(1)] };
+    out.push(oddNeighbour, spob(2084, "Kit Odd Neighbour Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(oddFar, spob(2081, "Kit Odd Far Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(odd, spob(2082, "Kit Odd Traffic Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(oddHome, spob(2083, "Kit Odd Home Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- T / S / M: traffic life cycle, shuttles, miners.
+    out.push(govt(346, "Kit Life Traders", { classes: [346, -1, -1, -1], enemies: [347, -1, -1, -1] }));
+    out.push(govt(347, "Kit Life Hostile", { classes: [347, -1, -1, -1], enemies: [346, -1, -1, -1] }));
+    out.push(...shareRled(876, "Kit Life Trader", 1972, 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0 }));
+    out.push(...shareRled(877, "Kit Life Shuttle", 1973, 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0002 }));
+    out.push(...shareRled(878, "Kit Miner", 1976, 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0003, cargo: 100,
+        weapons: [181, -1, -1, -1], weaponCounts: [4, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], outfits: [271, -1, -1, -1], outfitCounts: [1, 0, 0, 0] }));
+    out.push(dude(362, "Kit Life Traders", 1, 346, 876));
+    out.push(dude(363, "Kit Life Shuttles", 1, 346, 877));
+    out.push(dude(364, "Kit Miners", 1, 363, 878));
+    const lifeLayout = (sid, name, x, did) => {
+        const s = system(sid, name, x, -820, 346, [sid, sid + 1, sid + 2, sid + 3]);
+        s.set = { ...s.set, dudes: [did, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 6 };
+        const tag = name.replace("Kit ", "").replace(" Range", "");
+        out.push(s,
+            spob(sid, `${tag} Port`, 0, 0, 138, { flags: 0x43, govt: 346 }),
+            spob(sid + 1, `${tag} Market`, 1000, 0, 138, { flags: 0x43, govt: 346 }),
+            spob(sid + 2, `${tag} Marker`, 0, 1000, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }),
+            spob(sid + 3, `${tag} Hostile Port`, -1000, 0, 138, { flags: 0x43, govt: 347 }));
+    };
+    lifeLayout(2085, "Kit Life Range", 100, 362);
+    lifeLayout(2089, "Kit Shuttle Range", 140, 363);
+    const mine = system(2093, "Kit Mine Range", 180, -820, 363, [2093]);
+    mine.set = { ...mine.set, asteroids: 16, asteroidTypes: 0x000F, dudes: [364, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 3 };
+    out.push(mine, spob(2093, "Kit Mine Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- P1 run 6: do fleet escorts defend their leader? flët 303 Kit
+    // Convoy (gövt 343 Kit Shipping, neutral to the player): lead shïp 880
+    // Kit Convoy Lead (green disc, AI 1, 3000 / 3000, unarmed), two shïp 881
+    // Kit Convoy Guard (yellow disc, AI 3, 3000 / 3000, one Kit Escort Gun),
+    // the only traffic of sÿst/spöb 2094 Kit Convoy Range (gövt 363).
+    out.push(...shareRled(880, "Kit Convoy Lead", 1972, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }));
+    out.push(...shareRled(881, "Kit Convoy Guard", 1974, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) }));
+    out.push({ type: "flët", id: 303, name: "Kit Convoy", clone: "flët:128",
+        set: { "@0:i16": 880, "@2:i16x4": [881, -1, -1, -1], "@10:i16x4": [2, 0, 0, 0], "@18:i16x4": [2, 0, 0, 0], "@26:i16": 343, "@28:i16": 2094, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const convoy = system(2094, "Kit Convoy Range", 220, -820, 363, [2094]);
+    convoy.set = { ...convoy.set, dudes: [-303, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+    out.push(convoy, spob(2094, "Kit Convoy Port", 0, 0, 138, { flags: 0x43 }));
+    return out;
+}
 
 /**
  * Wave-12 experiments (docs/reference_experiments.md, "... wave 12").

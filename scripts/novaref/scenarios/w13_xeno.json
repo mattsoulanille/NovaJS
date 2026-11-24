@@ -1,0 +1,28 @@
+{
+ "name": "w13_xeno",
+ "_comment": "Wave 13 item 3: a guided missile locked on a SAME-govt ship. Kit FF Range: mïsn 1068 (the spaceport offer) puts Kit Xeno Shooter (gövt 344, xenophobic 0x0001, anchored, guided missile with about 210 px reach) on the far mark; mïsn 1069 (Mission BBS job) puts Kit Xeno Victim (the same govt, anchored, shield 1000 without recharge, unarmed) on the near mark, 150 px from it; the player sits at the port, 260 px from the shooter (out of the missile's reach). Does the xenophobe fire at its own govt's ship at all, and does a missile locked on it hit or pass through? Pilot w13_xeno. Tab panels (the victim's shield) every 2 s for about 45 s.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer1", "window": true },
+  { "keys": "Return wait 2500" },
+  { "click": [182, 430], "win": true },
+  { "wait": 2500 },
+  { "move": true },
+  { "shot": "bbs", "window": true },
+  { "click": [213, 238], "win": true },
+  { "wait": 600 },
+  { "move": true },
+  { "click": [476, 384], "win": true },
+  { "wait": 2500 },
+  { "move": true },
+  { "shot": "bbs-accepted", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 2500" },
+  { "repeat": 22, "steps": [ { "keys": "Tab wait 1400" }, { "shot": "obs-{i}", "window": true } ] },
+  { "record": "stop" }
+ ]
+}

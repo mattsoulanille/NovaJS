@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w13-a14-odd2",
+  "edits": {
+    "ship": 703,
+    "stellar": 2082,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2081": 2,
+      "2082": 2,
+      "2083": 2,
+      "2084": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w13-a14-odd2",
+    "weapons": {
+      "128": 0,
+      "283": 1
+    },
+    "outfits": {
+      "128": 0,
+      "460": 1
+    }
+  }
+}

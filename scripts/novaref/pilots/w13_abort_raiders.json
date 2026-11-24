@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w13-abort-raiders",
+  "edits": {
+    "ship": 839,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9121": true
+    },
+    "nickname": "Probe",
+    "shipName": "w13-abort-raiders"
+  }
+}

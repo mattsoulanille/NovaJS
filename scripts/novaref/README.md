@@ -234,7 +234,7 @@ Step types:
 - `{"launch": true}`
 - `{"quit": true}`
 - `{"move": [x, y], "win": true}`. `{"move": true}` parks the mouse at (40, 40), outside the game window.
-- `{"record": "start", "window": true}` crops the recording. `{"record": "stop", "label": "x"}` writes `recording-x.mp4`.
+- `{"record": "start", "window": true}` crops the recording; `"fps": 10` (wave 13) lowers the frame rate for long watches. `{"record": "stop", "label": "x"}` writes `recording-x.mp4`.
 - `{"pull": "label"}` pulls the scenario pilot mid-run into `pilot-<label>/`. The game writes the pilot when the player LEAVES the spaceport (the date advances then), not on landing: pull after `Return` (Leave), wave 5.
 - `{"script": "../loops/x.mjs", "args": {...}}` (wave 6) runs a closed-loop
   step: the module (resolved against the scenario's folder) default-exports
@@ -499,6 +499,7 @@ list it in a scenario's `"plugins"`.
 | wave 10 additions (`wave10Resources`; nothing retired) | Submunitions: sÿst/spöb 2045 Kit Sub Range (port) + 2046 Kit Sub Mark (150 px north), shïp 836 Kit Sub Target (24 px magenta disc) / 843 the 96 px one, düde 319 / 328, mïsn 1023 / 1033 (bits 9064 / 9075); wëap 251 Kit Sub Star (the sub: planet-type, passes through ships) and test parents 252-262, 268-276 (secondaries). Friendly fire: sÿst 2047 Kit FF Range (port, marks 2048 / 2049 at 110 / 260 px north), shïp 837 / 840 / 841 / 842 Kit FF Shooter (bolt / beam / missile / blast, wëap 263-266), 838 Kit FF Victim (wëap 267 pea), 839 Kit Ring Tank (player), gövt 358 / 359 (mutual allies), düde 320-327, mïsn 1024-1031 (bits 9065-9072; shooters offered on landing, victims are Mission BBS jobs). jünk 202 Kit Doodads (both lists at Kit Port). #324: sÿst/spöb 2052 Kit BBS Dest, 2054 Kit BBS Shown (Visibility b9074), mïsn 1032 (BBS job, bit 9073, OnAccept b9074), 1034 (bit 9074). Negative penalties: gövt 369, sÿst/spöb 2060, düde 329, mïsn 1035 (bit 9076). Auto-abort: mïsn 1036 / 1037 (bits 9077 / 9080). Mass-scaled outfits: oütf 452-455, shïp 844-848 Kit Mass Hull 100 / 300 / 37 / 155 / 50 (25 t free). |
 | wave 11 additions (`wave11Resources`; nothing retired) | **Running lights off on every kit shän** (`withoutRunningLights`: LightImage / LightMask -1, BlinkMode 0; until wave 11 most kit hulls blinked the stock lights). Revive: shïp 849 Kit Ally Pointer (pointer-hulk sprite, AI 3, shield 1000 / armor 3000, no recharge), wëap 277 Kit Blast 600 + oütf 456, düde 330 / 331, mïsn 1038 (b9081, ShipBehav 1 / goal 3), 1039 (b9082, neutral, no goal), 1040 / 1041 / 1046 (b9083 / 9087 / 9092: goal-5 rescues, 1040 with 0x0001). Mass: oütf 457 Kit Mass Keep (0x0404), shïp 850 / 851 Kit Mass Roomy 100 / 300 (first in the shipyard). Subs: wëap 278 Sub Beam Short, 279 Sub Beam Fixed, shïp 852 Kit Sub Target 48 (rlëD 1963), düde 332, mïsn 1042 (b9088). A14: gövt 350-353, sÿst/spöb 2061 / 2064 / 2067 (in sÿst 2062) / 2070, sÿst 2062 / 2063 / 2065 / 2066, düde 333 / 334 / 337, mïsn 1043 / 1044 / 1047 / 1048 (b9089 / 9090 / 9093 / 9094). AppearOn: shïp 853 / 854, düde 335, mïsn 1045 (b9091). S1: gövt 354 Kit Customs, shïp 855 Kit Customs Cutter (red disc, AI 4), düde 336, sÿst/spöb 2068 Kit Scan Gate -> 2069 Kit Scan Range, oütf 458 Kit Contraband Pod (ScanMask 0x0001). The wave-11 missions clear their own availability bit on accept. |
 | wave 12 additions (`wave12Resources`; nothing retired) | Duel (D): gövt 355 Kit Duellist (stock 175's 0x0002, no penalties), in Kit FF Range: shooters as the spaceport offer (ShipBehav 0, far mark) mïsn 1049 / 1050 / 1051 (bits 9097-9099: Kit FF Shooter bolt, shïp 858 + wëap 281 Kit Duel Blast, shïp 857 + wëap 280 Kit Duel Beam, one 5000-damage frame); the duellist as a BBS job (ShipGoal 1, ShipBehav 0, near mark, OnSuccess b9101 / OnFailure b9102): mïsn 1052 (9100, shïp 856, shield 200 / armor 1500) and 1053 (9103, shïp 865, shield 0); wëap 282 Kit Duel Gun + oütf 459; düde 338-341, 350. **BBS jobs carry DispWeight 30000** so they list first (a stock job took the Accept once). IFF (H): gövt 356 Kit Hunter / 357 Kit Prey (mutual enemies), shïp 859 / 860 (yellow / cyan discs), düde 342 / 343, traffic of sÿst 2071 Kit Hunt Range; sÿst/spöb 2077 Kit Hunt Arena with mïsn 1054 / 1059 (bits 9104 / 9105); anchored copies shïp 866 / 867, düde 352 / 353, mïsn 1060 / 1061 (bits 9110 / 9111) on Kit FF Range's marks. A14 (A): shïp 861 Kit Bare Trader (AI 1, shield 0), traffic systems sÿst/spöb 2072 Kit Owner Traffic (351 owns, 350's traders, düde 344), 2073 Kit Law Traffic (352, 353's: düde 345), 2074 Kit Victim Traffic (350, its own), 2075 Kit Negative Traffic (369, düde 346), 2078 Kit Ally Traffic (gövt 340 owns, allied 341's traders: düde 351); wëap 283 Kit One Shot (10000) + oütf 460, wëap 284 Kit Gun 300 + oütf 461. Escort vs trader (W): sÿst/spöb 2076 Kit Brave Range, AI 2 shïp 862 (green disc), düde 347. Subs (S): shïp 863 / 864 Kit Sub Bar Side / End (rlëD 1965 / 1967: a 76 x 14 bar, the same on all frames), düde 348 / 349, mïsn 1055 / 1056 (bits 9106 / 9107). Scrolling (U): mïsn 1057 (9108, a 60-line offer text at Kit Port), 1058 (9109, the same as a BBS job). S2: mïsn 1062 / 1063 (bits 9112 / 9113: 1 t of ScanMask 0x0001 food from Kit Scan Port, with / without Flags 0x0020; OnFailure b9114 / b9115). P1: gövt 342 Kit Police / 343 Kit Shipping, shïp 868 / 869, düde 354 / 355, sÿst/spöb 2079 Kit Police Range. |
+| wave 13 additions (`wave13Resources`; nothing retired) | Abort (X): mïsn 1064 (b9117, the Kit Ally Pointer as a ShipBehav 1 / goal 3 escort), 1065 (b9121, two shïp 871 Kit Abort Raiders, düde 357, ShipBehav 0 / goal 0). NPC disables (N), in Kit FF Range: wëap 285 Kit Disabler (one 1200-damage bolt, reload 30000) on shïp 872, düde 358, mïsn 1066 (b9125, far mark); shïp 873 Kit Ally Anchored + düde 359 / mïsn 1067 (b9126, BBS, goal 3); gövt 348 Kit Ally Class / 349 Kit Ally Hater (enemy of 348), düde 365 (shïp 879 Kit Hater: wëap 287, 50 damage a second) / 366, mïsn 1074 (b9139) / 1075 (b9140, goal 3, ShipBehav 1). Same-govt missile (G): gövt 344 Kit Xeno (0x0001), 339 Kit Self Hater (its own class an enemy), wëap 286 Kit Xeno Missile, shïp 874 / 875, düde 360 / 361 / 367 / 368, mïsn 1068 / 1069 (b9129 / 9130), 1076 / 1077 (b9143 / 9144). Rescue (R): stock mïsn nova:394 moved to Kit Port, mïsn 1070 (b9131, ShipStart 2), 1071 (b9133, ShipStart -1), 1072 (b9135, no mission cargo), 1073 (b9137, the kit düde 330). A14: gövt 345 Kit Odd Owner (11 / 3 / 25), sÿst/spöb 2082 Kit Odd Traffic (linked to 2083 / 2084), 2083 Kit Odd Home (345, linked to 2082 / 2081), 2084 Kit Odd Neighbour (363), 2081 Kit Odd Far (345). Traffic (T / S / M): gövt 346 Kit Life Traders / 347 Kit Life Hostile (mutual enemies), shïp 876 Kit Life Trader (green), 877 Kit Life Shuttle (blue, Flags3 0x0002), 878 Kit Miner (cyan, Flags3 0x0003, stock scoop oütf 271 + four wëap 181), düde 362-364; sÿst 2085 Kit Life Range and 2089 Kit Shuttle Range (a port and a market of 346, an uninhabited marker, a port of 347; avgShips 6), 2093 Kit Mine Range (16 metal rocks, avgShips 3). P1 run 6: flët 303 Kit Convoy (shïp 880 lead, two 881 guards, gövt 343) in sÿst/spöb 2094 Kit Convoy Range. |
 | wave 2 and 3 additions | A14 hostility cells, the map region, the jamming kit, the AI subjects, F1b disc sizes and the wave-3 resources (jamming at 450/1800 px, long-life and turn-away missiles, InhJam target, AI tank discs, Kit Lancer Heavy, armed blue disc escorts and Kit Fight Range, flët 300 in Kit Fleet Range, Kit Prize, Map B border systems). Each block's doc comment in `kits/testkit.mjs` lists its ids. |
 
 ## Boarding loop (`loops/board.mjs`, wave 6)
@@ -557,6 +558,33 @@ target it can only see in screenshots, then boards it:
 ## Disabling a target (`loops/disable.mjs`, wave 11)
 
 A `script` step that targets a magenta pointer / disc ship (`target: "tab"`, or `"click"` for the player's own escorts, which Tab skips) and taps `fireKeys` (default a 100 ms Space) every `waitMs` until the target panel reads **Disabled** (`board.mjs` `disabledWord`: the white word left of x 690 with nothing white past x 705, so "Shields Down" and "No Shields" do not count; the older `targetDisabledShown` also fires on "Shield: 100%"). `board.mjs` takes `stopWhenEnabled: true` (walk and sweep) to stop at the first press after which the target is no longer Disabled: boarding one's own escort repairs it with "Escort repaired." and no dialog. `scenarios/revive_*.json`, `rescue.json`.
+
+## Hand-driven steps (`loops/interactive.mjs`, wave 13)
+
+A `script` step `{"script": "../loops/interactive.mjs", "args": {"inbox":
+"~/.local/share/novaref/inbox/w13.jsonl"}}` keeps the run alive (its
+lock, plug-ins, recording and frame stamps) and executes ordinary steps
+appended to the inbox, one JSON step per line, so a driver can look at a
+shot before choosing the next click or key. Each result is appended to
+`<inbox>.out` (`{"i", "step", "result"}`; a shot's result has its local
+`path`); the first line it writes is `{"ready": true, "dir"}`. Only lines
+appended after the step starts run; `{"done": true}` ends it (back to the
+scenario's next step), as does `args.maxMs` (default 20 min). A failed
+step is reported and does not end the loop; the usual script rules hold
+(no Escape, no nested scripts). A removed or truncated inbox starts over
+(a second queue must still never delete a live run's inbox). Wave 13 used
+it for the in-flight Abort, the A14 kills, P1 and the stock Raczak run
+(`scenarios/w13_*_interactive.json`, `w13_offer_board.json`,
+`w13_space_board.json`, `rescue_raczak.json`).
+
+## Board a stock ship (`board.mjs` `locateBy: "bracket"`, wave 13)
+
+`board.mjs` finds its target by colour (the kit's magenta hulks). With
+`args.locateBy: "bracket"` it finds it by its TARGET BRACKETS instead
+(`analysis/brackets.mjs`, colours `args.bracketColours`, default
+`["grey"]`, a disabled ship), so it can walk to and board a stock hull;
+off screen it still falls back to the radar. A 24 px target hidden under
+the player's sprite loses its brackets (wave 13's kit-düde rescue run).
 
 ## Tab to a colour (`loops/tab_to.mjs`, wave 12)
 

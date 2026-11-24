@@ -1,0 +1,17 @@
+{
+ "name": "w13_space_interactive",
+ "_comment": "Wave 13: Enter Ship, recording from the start, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w13.jsonl) until {\"done\":true}; the pilot is pulled at the end (land and leave inside the hand-driven part so it is written). A14 odd owner (w13_a14_odd), the A14 disable alone (w13_a14_dis_beam), P1 with registered hits (w13_p1_beam).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

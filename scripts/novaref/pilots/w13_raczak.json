@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w13-raczak",
+  "edits": {
+    "ship": 703,
+    "stellar": 360,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "344": 2,
+      "346": 2
+    },
+    "missionBits": {
+      "192": true
+    },
+    "nickname": "Probe",
+    "shipName": "w13-raczak"
+  }
+}

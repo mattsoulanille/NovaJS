@@ -1,0 +1,13 @@
+{
+ "name": "w13_watch",
+ "_comment": "Wave 13 item 5 (npc_behavior_gaps.md T1 / N2 / N1): Enter Ship at the system's port and sit still for 10 minutes, recording the window at 10 fps (radar_blips.mjs --tracks) with a window shot every 20 s. Pilots w13_life (sÿst 2085 Kit Life Range: AI 1 traders, two friendly ports, an uninhabited marker, a hostile port), w13_shuttle (2089 Kit Shuttle Range: the same with Flags3 0x0002 shuttles), w13_mine (2093 Kit Mine Range: Flags3 0x0003 miners among 16 metal rocks).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "repeat": 30, "steps": [ { "shot": "w-{i}", "window": true }, { "wait": 18000 } ] },
+  { "record": "stop" }
+ ]
+}

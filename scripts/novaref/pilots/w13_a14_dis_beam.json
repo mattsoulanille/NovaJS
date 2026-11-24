@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w13-a14-dis-beam",
+  "edits": {
+    "ship": 703,
+    "stellar": 2080,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2080": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w13-a14-dis-beam",
+    "weapons": {
+      "128": 0,
+      "246": 1
+    },
+    "outfits": {
+      "128": 0,
+      "450": 1
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+ "name": "rescue_raczak",
+ "_comment": "Wave 13 item 2: stock mïsn nova:394 'Rescue Raczak' (bar of Heraan, spöb 360; ShipGoal 5, no përs, no auto-abort; the special ship appears in Heraan Astra, sÿst 346, cloaked). Pilot w13_raczak: Kit Lancer (the kit is loaded only for the hull) at Heraan with b192. Hand-driven (loops/interactive.mjs): land, bar, accept, leave, jump to Heraan Astra, find and target the disabled ship; {done} hands over to loops/board.mjs, which steers by the target's GREY brackets and presses b (sweep); then hand-driven again (land back at Heraan, leave, pull).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "script": "../loops/board.mjs", "args": { "locateBy": "bracket", "bracketColours": ["grey"], "speedPxS": 360, "turnDegS": 174.2, "near": 260, "stepMs": 60, "maxSteps": 40, "maxLegs": 10, "calMs": 400, "fineBelowPx": 60, "fineStepMs": 25, "dialogClicks": [], "sweep": { "atPx": 30, "startOnSilent": true, "repeat": 2, "turnMs": 40, "presses": 40, "stopAfter": 1 } } },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

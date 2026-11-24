@@ -1,0 +1,23 @@
+{
+ "name": "w13_offer_board",
+ "_comment": "Wave 13 item 2: the stock 'Rescue Raczak' mission moved to Kit Port (mïsn 1070 ShipStart 2 / 1071 ShipStart -1; pilots w13_raczak_kit_a / _b, Kit Lancer). Land, accept the offer, take off recording; hand-driven steps (loops/interactive.mjs) until {done}, then loops/board.mjs steers by the target's brackets (any colour) and presses b (sweep: turn in place between presses until a dialog or 40 presses); then hand-driven again (land, leave, pull).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 3500" },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "script": "../loops/board.mjs", "args": { "locateBy": "bracket", "bracketColours": ["grey", "yellow", "green", "red"], "speedPxS": 360, "turnDegS": 174.2, "near": 200, "stepMs": 50, "maxSteps": 40, "maxLegs": 10, "calMs": 300, "fineBelowPx": 60, "fineStepMs": 25, "retarget": 3, "sweep": { "atPx": 25, "startOnSilent": true, "repeat": 2, "turnMs": 40, "presses": 40, "stopAfter": 1, "dialogClicks": [], "clickTimes": 0 } } },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w13.jsonl" } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

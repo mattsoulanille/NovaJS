@@ -442,3 +442,38 @@ test("click_targets: shipBlobs finds sprites away from the player and the edge, 
     assert.deepEqual(blobs.map(b => b.n), [...blobs.map(b => b.n)].sort((a, b) => b - a));
     for (const b of blobs) assert.ok(data[(b.y * W + b.x) * 4] > 100, `click point ${b.x},${b.y} is on the sprite`);
 });
+
+test("interactive: runs only lines appended after it starts, reports failures, ends on done", async () => {
+    const { default: interactive, readNewLines } = await import("../loops/interactive.mjs");
+    assert.deepEqual(readNewLines('{"a":1}\n{"b"', 0), { steps: [{ a: 1 }], next: 8 });
+    assert.deepEqual(readNewLines('{"a":1}\n', 8), { steps: [], next: 8 });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "novaref-inbox-"));
+    const inbox = path.join(dir, "in.jsonl");
+    fs.writeFileSync(inbox, '{"keys":"old"}\n');
+    const seen = [];
+    const api = { dir, log: () => {}, step: async (s) => { seen.push(s); if (s.keys === "bad") throw new Error("boom"); return { ok: true }; } };
+    setTimeout(() => fs.appendFileSync(inbox, '{"keys":"a"}\n{"keys":"bad"}\nnot json\n'), 50);
+    setTimeout(() => fs.appendFileSync(inbox, '{"done":true}\n{"keys":"after"}\n'), 300);
+    const r = await interactive(api, { inbox, pollMs: 20 });
+    assert.deepEqual(r, { ok: true, steps: 3, ended: "done" });
+    assert.deepEqual(seen, [{ keys: "a" }, { keys: "bad" }]);
+    const out = fs.readFileSync(`${inbox}.out`, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(out[0].ready, true);
+    assert.equal(out[2].result.ok, false);
+    assert.match(out[3].result.error, /not JSON/);
+    assert.equal(out.at(-1).done, true);
+});
+
+test("brackets: a grey (disabled) box is found for board.mjs locateBy bracket", async () => {
+    const { bracketsIn } = await import("../analysis/brackets.mjs");
+    const W = 832, H = 604;
+    const data = Buffer.alloc(W * H * 4);
+    // Four grey 9 x 9 corner glyphs (L shapes) around a box centred on (400, 200).
+    const px = (x, y) => data.set([150, 150, 150, 255], (y * W + x) * 4);
+    for (const [cx, cy, sx, sy] of [[360, 160, 1, 1], [440, 160, -1, 1], [360, 240, 1, -1], [440, 240, -1, -1]]) {
+        for (let i = 0; i < 9; i++) { px(cx + sx * i, cy); px(cx, cy + sy * i); }
+    }
+    const b = bracketsIn(data, W, H, { colours: ["grey"] })[0];
+    assert.ok(b, "found the grey box");
+    assert.ok(Math.abs(b.cx - 400) <= 1 && Math.abs(b.cy - 200) <= 1, `centre ${b.cx},${b.cy}`);
+});
