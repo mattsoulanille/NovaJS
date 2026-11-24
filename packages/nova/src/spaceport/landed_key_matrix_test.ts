@@ -16,7 +16,8 @@ import { Spaceport } from './spaceport.js';
  * The landed screens' global keys, against the original's wave-11 matrix
  * (docs/reference_experiments.md, "The UI screen x key matrix, wave 11"):
  * `m` opens the star map over the spaceport AND over the outfitter,
- * shipyard, trade center and bar (closing it lands back in the venue).
+ * shipyard, trade center and bar (closing it lands back in the venue);
+ * `i` is ignored in the spaceport (no dialog, no message).
  */
 describe('landed key matrix (wave 11)', () => {
     beforeAll(() => installHeadlessPixi());
@@ -54,13 +55,10 @@ describe('landed key matrix (wave 11)', () => {
         const gameData = await getSyntheticGameData();
         const controlEvents = new Subject<ControlEvent>();
         const mapOpens: (OpenStarmapOptions | undefined)[] = [];
-        const missionOpens: Entity[] = [];
         const spaceport = new Spaceport(
             stubAssets(), gameData,
             SYNTHETIC.planets.port, controlEvents,
-            async options => { mapOpens.push(options); },
-            undefined,
-            async entity => { missionOpens.push(entity); });
+            async options => { mapOpens.push(options); });
         await spaceport.buildPromise;
         const venues = spaceport as unknown as
             Record<VenueName, Menu<Entity> | undefined>;
@@ -77,8 +75,7 @@ describe('landed key matrix (wave 11)', () => {
         const press = (action: ControlAction) =>
             controlEvents.next({ action, state: 'start' });
         return {
-            spaceport, venues, press, departed, mapOpens, missionOpens,
-            controlEvents,
+            spaceport, venues, press, departed, mapOpens, controlEvents,
         };
     }
 
@@ -91,6 +88,19 @@ describe('landed key matrix (wave 11)', () => {
         const { press, departed, mapOpens } = await dock();
         press('map');
         expect(mapOpens.length).toBe(1);
+        press('depart');
+        await departed;
+    });
+
+    it('ignores i in the spaceport, and keeps it from flight', async () => {
+        const { spaceport, press, departed } = await dock();
+        press('missions');
+        await settle();
+        // Nothing opened over it, and it is still the spaceport's
+        // keyboard: the in-flight 'i' handler (mission_info_plugin)
+        // stands down while a menu is focused (mission_info_key_test).
+        expect(spaceport.onMainScreen).toBeTrue();
+        expect(focusedIs(spaceport)).toBeTrue();
         press('depart');
         await departed;
     });
@@ -130,6 +140,10 @@ describe('landed key matrix (wave 11)', () => {
             press('map');
             expect(mapOpens.length).withContext('under an overlay').toBe(1);
             overlay.unbind();
+            press('missions');
+            await settle();
+            expect(focusedIs(venue)).withContext(`i in the ${name}`)
+                .toBeTrue();
             press('depart');
             await settle();
             expect(spaceport.onMainScreen).withContext('back').toBeTrue();

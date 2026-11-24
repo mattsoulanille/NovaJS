@@ -180,10 +180,11 @@ export const Display: Plugin = {
         // SimulationTimeResource, and AnimationGraphicPlugin for the
         // graphic component and ObjectDrawSystem, which it overrides.
         await world.addPlugin(ProjectileSpinPlugin);
-        // The starmap, player info, and mission info must precede the
-        // spaceport: SpaceportProvider consumes their OpenStarmapResource
-        // / OpenPlayerInfoResource / OpenMissionInfoResource (the docked
-        // 'm', 'p', and 'i' keys).
+        // The starmap and player info must precede the spaceport:
+        // SpaceportProvider consumes their OpenStarmapResource /
+        // OpenPlayerInfoResource (the docked 'm' and 'p' keys). Mission
+        // info is in-flight only ('i' is ignored docked, as on the
+        // original); it is added here with them all the same.
         await world.addPlugin(StarmapPlugin);
         await world.addPlugin(PlayerInfoPlugin);
         await world.addPlugin(MissionInfoPlugin);

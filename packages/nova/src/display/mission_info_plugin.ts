@@ -1,4 +1,3 @@
-import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
@@ -10,7 +9,6 @@ import {
 } from '../nova_plugin/core/index.js';
 import type { AbortedMission } from '../nova_plugin/missions/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
-import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     listedMissions, MissionInfoDialog, NO_MISSIONS, NO_MISSIONS_STRING_INDEX,
@@ -37,19 +35,6 @@ export const AbortMissionEvent = new EcsEvent<{
 }>('AbortMissionEvent');
 const MissionInfoControlsSubscription =
     new Resource<Subscription>('MissionInfoControlsSubscription');
-/**
- * Opens the mission-info dialog ('i') over whatever is on screen and
- * resolves when it closes. Landed menus (the spaceport) call this for
- * their 'missions' key, passing the docked ship entity — while docked
- * the player's entity is out of the world (the spaceport holds it), so
- * it can't be looked up — and the landing's transaction, which the
- * dialog's Abort edits. In flight the plugin's own subscription below
- * opens it for the world's player ship. No-ops while already open.
- */
-export const OpenMissionInfoResource =
-    new Resource<(entity?: Entity, planetId?: string,
-        transaction?: LandedTransaction) => Promise<void>>('OpenMissionInfo');
-
 function getPlayerShip(world: World) {
     for (const entity of world.entities.values()) {
         if (entity.components.has(PlayerShipSelector)) {
@@ -93,52 +78,48 @@ export const MissionInfoPlugin: Plugin = {
         // while open (CentredUiResource).
         keepCentred(world, dialog.container);
         world.resources.set(MissionInfoResource, dialog);
-        // A planetId marks a DOCKED open: it enables the functional
-        // Abort button (session-backed, spaceport commit pattern).
-        const openMissionInfo = async (entity?: Entity,
-            planetId?: string, transaction?: LandedTransaction):
-            Promise<void> => {
+        // Abort goes through the simulation: resolved against the CURRENT
+        // mirror of the player, as the button is clicked, and sent as an
+        // input record (mission_accept.ts AbortedMissionType).
+        const abortMission = async (missionId: string) => {
+            const player = getPlayerShip(world);
+            if (!player) {
+                return false;
+            }
+            const abort = await buildMissionAbort(player, missionId,
+                simulationData, universe,
+                { systemId: world.resources.get(SystemIdResource) });
+            if (!abort) {
+                return false;
+            }
+            world.emit(AbortMissionEvent, { record: abort.record });
+            return true;
+        };
+        // Opens the dialog for the world's player ship and resolves when
+        // it closes; no-ops while already open. In flight only: the
+        // original ignores 'i' in the spaceport and its venues (the
+        // wave-11 UI key matrix), and so does every landed screen here.
+        const openMissionInfo = async (): Promise<void> => {
             if (dialog.container.visible || opening) {
                 return;
             }
-            const ship = entity ?? getPlayerShip(world);
+            const ship = getPlayerShip(world);
             if (!ship) {
                 return;
             }
-            // In flight (no planetId) Abort goes through the simulation:
-            // resolved against the CURRENT mirror of the player, as the
-            // abort is clicked, and sent as an input record.
-            const inFlightAbort = async (missionId: string) => {
-                const player = getPlayerShip(world);
-                if (!player) {
-                    return false;
-                }
-                const abort = await buildMissionAbort(player, missionId,
-                    simulationData, universe,
-                    { systemId: world.resources.get(SystemIdResource) });
-                if (!abort) {
-                    return false;
-                }
-                world.emit(AbortMissionEvent, { record: abort.record });
-                return true;
-            };
             opening = true;
             try {
-                // Re-adding moves the dialog to the top of the stage, so
-                // it opens over the spaceport (whose container is added
-                // after this plugin's).
+                // Re-adding moves the dialog to the top of the stage, over
+                // anything added after this plugin.
                 stage.addChild(dialog.container);
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
-                await dialog.show(ship, planetId
-                    ? { gameData: simulationData, planetId, transaction }
-                    : inFlightAbort);
+                await dialog.show(ship, abortMission);
             } finally {
                 opening = false;
                 // dialog.show resolves when the dialog closes.
                 playUiSound(world, { id: BEEP_MISSION_CLOSE });
             }
         };
-        world.resources.set(OpenMissionInfoResource, openMissionInfo);
         // The original's in-flight 'i' with nothing to list prints "You have
         // no active missions." on the status line and opens no dialog (the
         // wave-11 UI key matrix; with a mission it opens the dialog). The
@@ -179,8 +160,8 @@ export const MissionInfoPlugin: Plugin = {
                     return;
                 }
                 // While a landed menu owns the keyboard, 'i' belongs to
-                // that menu (the spaceport opens the dialog itself;
-                // deeper screens reserve the key but don't act on it).
+                // that menu (every landed screen ignores it, as the
+                // original does: the wave-11 UI key matrix).
                 if (MenuControls.focused) {
                     return;
                 }
@@ -206,6 +187,5 @@ export const MissionInfoPlugin: Plugin = {
         dialog?.container.destroy({ children: true });
         world.resources.delete(MissionInfoControlsSubscription);
         world.resources.delete(MissionInfoResource);
-        world.resources.delete(OpenMissionInfoResource);
     }
 }

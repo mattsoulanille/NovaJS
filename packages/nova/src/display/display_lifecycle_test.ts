@@ -25,9 +25,7 @@ import { BoardingDisplayPlugin } from './boarding_plugin.js';
 import { CursorPlugin } from './cursor_plugin.js';
 import { GateMapPlugin } from './gate_map_plugin.js';
 import { HailDialogPlugin, HailDialogResource } from './hail_dialog_plugin.js';
-import {
-    MissionInfoPlugin, MissionInfoResource, OpenMissionInfoResource,
-} from './mission_info_plugin.js';
+import { MissionInfoPlugin, MissionInfoResource } from './mission_info_plugin.js';
 import {
     MissionShipDonePlugin, ShipDonePopupResource,
 } from './mission_ship_done_plugin.js';
@@ -209,7 +207,6 @@ describe('display world UI lifecycle', () => {
             world.resources.set(ControlsSubject, controls());
             world.resources.set(OpenStarmapResource, async () => []);
             world.resources.set(OpenPlayerInfoResource, async () => undefined);
-            world.resources.set(OpenMissionInfoResource, async () => undefined);
             for (const id of planetIds) {
                 world.entities.set(`planet ${id}`,
                     new Entity().addComponent(PlanetComponent, { id }));

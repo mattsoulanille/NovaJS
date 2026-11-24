@@ -128,6 +128,20 @@ describe('in-flight mission info key (wave 11)', () => {
         expect(dialog.container.visible).toBeFalse();
     });
 
+    it('stands down while a landed menu holds the keyboard', async () => {
+        const courier = SYNTHETIC.missions.courier;
+        const { lines, dialog, pressI } =
+            await flight([[courier, active(courier)]]);
+        // The spaceport (or a venue) binds its controls on landing.
+        const landed = new MenuControls(new Subject<ControlEvent>());
+        landed.bind();
+        pressI();
+        await settle();
+        expect(dialog.container.visible).toBeFalse();
+        expect(lines).toEqual([]);
+        landed.unbind();
+    });
+
     /** The dialog's Abort button and description, from inside. */
     function parts(dialog: unknown) {
         return dialog as {

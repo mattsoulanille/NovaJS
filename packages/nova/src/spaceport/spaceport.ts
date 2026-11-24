@@ -190,13 +190,7 @@ export class Spaceport extends Menu<Entity> {
          * key) — it works both in flight and docked. The docked ship
          * entity is passed explicitly: while docked it is out of the
          * world, held by this menu. */
-        private openPlayerInfo?: (entity: Entity) => Promise<unknown>,
-        /** Opens the mission-info dialog over the spaceport (the 'i'
-         * key). Like the player-info dialog, the docked ship entity is
-         * passed explicitly (it is out of the world while docked), and
-         * with it the landing's transaction, which its Abort edits. */
-        private openMissionInfo?: (entity: Entity, planetId?: string,
-            transaction?: LandedTransaction) => Promise<unknown>) {
+        private openPlayerInfo?: (entity: Entity) => Promise<unknown>) {
         super(displayAssets, simulationData, SPACEPORT_PICT, controlEvents);
         this.container.name = 'Spaceport';
 
@@ -387,11 +381,12 @@ export class Spaceport extends Menu<Entity> {
             // overlay.
             map: () => this.openDockedMap(),
             properties: () => void this.openPlayerInfo?.(this.input),
-            // The planetId enables the dialog's docked-only Abort, which
-            // runs on the landing's transaction so the next venue does not
-            // flush a copy that still holds the aborted mission.
-            missions: () => void this.openMissionInfo?.(this.input, this.id,
-                this.transaction),
+            // No 'missions' ('i'): the original ignores it in the
+            // spaceport — no dialog, no message (the wave-11 UI key
+            // matrix) — and so does this. The in-flight handler stands
+            // down while a menu holds the keyboard, so the key does not
+            // fall through to it either. The missions dialog, and its
+            // Abort, are in-flight only (mission_info_plugin.ts).
             depart: () => void this.leave(),
         });
     }
@@ -524,7 +519,7 @@ export class Spaceport extends Menu<Entity> {
         // way. The VENUE keys read it — which venues exist, the outfitter's
         // and shipyard's tech level — and each stands down until it is in
         // (see showOutfitter and friends); the keys that don't need it
-        // ('p', 'i', 'm', depart) are live from the first frame, as above.
+        // ('p', 'm', depart) are live from the first frame, as above.
         // Quick — the stellar has been in the display world all along, so
         // its record is cached — unlike the mission-universe load below.
         await this.buildPromise;
@@ -623,7 +618,7 @@ export class Spaceport extends Menu<Entity> {
     /**
      * Hands the keyboard to a venue: false (and nothing opens) unless the
      * spaceport is on screen. The controls are bound before super.show()
-     * reveals the frame — from the moment of landing, so 'p'/'i' work while
+     * reveals the frame — from the moment of landing, so 'p'/'m' work while
      * the mission universe loads — and during that gap a venue key used to
      * open its venue INVISIBLY over the landing processing (two sessions
      * committing absolute maps over the same entity), whose exit then
