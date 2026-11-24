@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w10-bbs",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2052": 2,
+      "2054": 2,
+      "2100": 2
+    },
+    "missionBits": {
+      "9073": true
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w10-bbs"
+  }
+}

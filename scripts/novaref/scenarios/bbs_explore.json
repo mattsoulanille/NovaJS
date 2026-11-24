@@ -1,0 +1,31 @@
+{
+ "name": "bbs_explore",
+ "_comment": "Wave 10 item 4 (#324), exploration: at Kit Port open the Mission BBS (button at window 182,430 as at Kit Sub Port; checked by the spaceport shot), shoot it, press Return (Accept?) and shoot each stage, then the star map from the BBS (m) and back. Pilot w10_bbs (bit 9073 offers mïsn 1032 on the BBS; Kit BBS Dest and Kit BBS Shown explored, Shown visible only once the accept sets b9074).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "spaceport", "window": true },
+  { "keys": "m wait 2500" },
+  { "move": true },
+  { "shot": "map-before", "window": true },
+  { "keys": "m wait 2000" },
+  { "shot": "map-closed", "window": true },
+  { "click": [182, 430], "win": true },
+  { "wait": 2500 },
+  { "move": true },
+  { "shot": "bbs", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "bbs-return1", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "bbs-return2", "window": true },
+  { "keys": "m wait 2500" },
+  { "move": true },
+  { "shot": "bbs-m", "window": true },
+  { "keys": "m wait 2000" },
+  { "shot": "bbs-m-closed", "window": true }
+ ],
+ "pull": false
+}

@@ -1,0 +1,39 @@
+{
+ "name": "outfit_mass_buy",
+ "_comment": "Wave 10 item 11: oütf Flags 0x0200 / 0x0400 on Kit Mass Hulls (Mass 100 / 300 / 37, 25 t free). In Kit Port's outfitter (cells at window y 180: Kit Mass Price 84, Kit Mass Mass 167, Kit Mass Both 250, Kit Plain Mass 333; Buy 371,443; Sell 476,443): select Kit Mass Both and shoot its Item Price, select Kit Mass Price, Buy and Sell it (charged vs refunded), then select Kit Mass Mass (0x0400, Mass 10) and press Buy 9 times with a shot after each: the credits show every accepted unit, and the count that fits in 25 t reads the per-unit mass (Mass x 10 / 100, rounded how?). Pilots w10_mass_100 / _300 / _37.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "keys": "o wait 2500" },
+  { "click": [250, 180], "win": true },
+  { "move": true },
+  { "wait": 600 },
+  { "shot": "both", "window": true },
+  { "click": [84, 180], "win": true },
+  { "move": true },
+  { "wait": 600 },
+  { "shot": "price", "window": true },
+  { "click": [371, 443], "win": true },
+  { "move": true },
+  { "wait": 800 },
+  { "shot": "price-bought", "window": true },
+  { "click": [476, 443], "win": true },
+  { "move": true },
+  { "wait": 800 },
+  { "shot": "price-sold", "window": true },
+  { "click": [167, 180], "win": true },
+  { "move": true },
+  { "wait": 600 },
+  { "shot": "mass", "window": true },
+  { "repeat": 9, "steps": [
+   { "click": [371, 443], "win": true },
+   { "move": true },
+   { "wait": 800 },
+   { "shot": "mass-buy-{i}", "window": true }
+  ] }
+ ],
+ "pull": false
+}

@@ -1,0 +1,18 @@
+{
+ "name": "trade_junk",
+ "_comment": "Wave 10 item 1 (#321): land and shoot the Trade Center's rows. Pilots w10_trade_port (Kit Port: Kit Widgets SoldAt, Kit Gadgets BoughtAt, Kit Doodads both) and w10_trade_market (Kit Market: the reverse for Widgets and Gadgets).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "spaceport", "window": true },
+  { "keys": "t wait 2500" },
+  { "move": true },
+  { "shot": "trade", "window": true },
+  { "keys": "Escape wait 1500" },
+  { "shot": "back", "window": true }
+ ],
+ "pull": false
+}

@@ -1,0 +1,36 @@
+{
+  "name": "novaref-w10-sub2-small",
+  "edits": {
+    "ship": 818,
+    "stellar": 2045,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2045": 2
+    },
+    "missionBits": {
+      "9064": true
+    },
+    "weapons": {
+      "128": 0,
+      "255": 1,
+      "268": 1,
+      "269": 1,
+      "270": 1,
+      "271": 1,
+      "272": 1,
+      "273": 1,
+      "274": 1,
+      "275": 1,
+      "276": 1
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w10-sub2-small"
+  }
+}

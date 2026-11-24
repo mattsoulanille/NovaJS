@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w10-ff-neutral-bolt",
+  "edits": {
+    "ship": 839,
+    "stellar": 2047,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2047": 2
+    },
+    "missionBits": {
+      "9065": true,
+      "9071": true
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w10-ff-neutral-bolt"
+  }
+}

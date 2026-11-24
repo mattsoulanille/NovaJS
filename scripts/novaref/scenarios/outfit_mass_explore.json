@@ -1,0 +1,27 @@
+{
+ "name": "outfit_mass_explore",
+ "_comment": "Wave 10 item 11, exploration: open Kit Port's outfitter (o) on a Kit Mass Hull and shoot the list with the first kit mass item (oütf 452-455, DispWeight 9990+) selected; then Down and a shot per row (the item panel shows the price and mass); then Return (Buy?) and a shot. Pilots w10_mass_100 / w10_mass_300.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "keys": "o wait 2500" },
+  { "move": true },
+  { "shot": "outfitter", "window": true },
+  { "keys": "Down wait 800" },
+  { "shot": "down1", "window": true },
+  { "keys": "Down wait 800" },
+  { "shot": "down2", "window": true },
+  { "keys": "Down wait 800" },
+  { "shot": "down3", "window": true },
+  { "keys": "Up wait 400 Up wait 400 Up wait 800" },
+  { "shot": "back-top", "window": true },
+  { "keys": "Return wait 1500" },
+  { "shot": "after-return", "window": true },
+  { "keys": "Escape wait 1500" },
+  { "shot": "closed", "window": true }
+ ],
+ "pull": false
+}

@@ -1,0 +1,96 @@
+{
+ "name": "sub_fire2",
+ "_comment": "Wave 10 item 0, take 2: the prox threshold. Same rig as sub_fire.json (pilots/w10_sub2_small.json: the 24 px target; w10_sub2_big.json: the 96 px one). Fires Sub P60 (255), then the slow parents 268-275 (Speed 200, prox 0/8/12/16/20/30, 89 px sprite prox 0/20), then drops the target (Tab) and fires the beam copy 276 untargeted.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "shot": "sel-p60",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 150 up:ctrl wait 3500"
+  },
+  {
+   "repeat": 8,
+   "steps": [
+    {
+     "keys": "w wait 500"
+    },
+    {
+     "shot": "sel-{i}",
+     "window": true
+    },
+    {
+     "keys": "down:ctrl wait 150 up:ctrl wait 6000"
+    }
+   ]
+  },
+  {
+   "keys": "Tab wait 600 w wait 500"
+  },
+  {
+   "shot": "sel-beam-free",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 150 up:ctrl wait 2500"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": false
+}

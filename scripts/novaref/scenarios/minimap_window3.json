@@ -1,0 +1,27 @@
+{
+ "name": "minimap_window3",
+ "_comment": "Wave 10 item 7, take 3: narrow the click window found by minimap_fade.json (works 4.4 s after the fade) and minimap_window.json (dead 7.4 s after): h, then clicks about 5.5, 6.5 and 6 s after each hide (an answered click re-shows the map and restarts the clock). Pilot w2_map at Map Hub.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 3000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 1000 },
+  { "keys": "h wait 8000" },
+  { "click": [430, 342], "win": true },
+  { "move": true },
+  { "shot": "click-5.5s-SW", "window": true },
+  { "wait": 7700 },
+  { "click": [562, 178], "win": true },
+  { "move": true },
+  { "shot": "click-6.5s-NE", "window": true },
+  { "wait": 7200 },
+  { "click": [468, 236], "win": true },
+  { "move": true },
+  { "shot": "click-6s-WSW", "window": true },
+  { "wait": 3000 },
+  { "record": "stop" }
+ ],
+ "pull": false
+}

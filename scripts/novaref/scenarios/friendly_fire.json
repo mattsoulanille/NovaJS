@@ -1,0 +1,37 @@
+{
+ "name": "friendly_fire",
+ "_comment": "Wave 10 item 0b: NPC friendly fire. In Kit FF Range the player (Kit Ring Tank, 30000/30000) takes off from the port; an anchored shooter (red disc) sits 260 px north and a victim (blue disc, shield 1000, no recharge, a 1-damage pea turret) 110 px north, on the line of fire. The original offers only ONE main-spaceport (AvailLoc 3) mission per landing (a bar mission did not show up and a second landing offered nothing), so the shooter is the spaceport offer and the victim a Mission BBS job (BBS button at window 182,430, Accept at 476,384, Leave at 579,384). Tab cycles victim / shooter / none with a window shot after each press (the target panel reads the victim's shield). Pilots: pilots/w10_ff_*.json.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer1", "window": true },
+  { "keys": "Return wait 2500" },
+  { "click": [182, 430], "win": true },
+  { "wait": 2500 },
+  { "move": true },
+  { "shot": "bbs", "window": true },
+  { "click": [476, 384], "win": true },
+  { "wait": 2500 },
+  { "move": true },
+  { "shot": "bbs-accepted", "window": true },
+  { "keys": "Return wait 2000" },
+  { "shot": "bbs-after-return", "window": true },
+  { "click": [579, 384], "win": true },
+  { "wait": 2000 },
+  { "move": true },
+  { "shot": "spaceport", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "space", "window": true },
+  { "repeat": 18, "steps": [
+   { "keys": "Tab wait 300" },
+   { "shot": "obs-{i}", "window": true }
+  ] },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

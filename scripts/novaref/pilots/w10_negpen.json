@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w10-negpen",
+  "edits": {
+    "ship": 703,
+    "stellar": 2060,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": { "2060": 2 },
+    "missionBits": { "9076": true },
+    "weapons": { "128": 0, "360": 1 },
+    "outfits": { "128": 0, "600": 1 },
+    "nickname": "Probe",
+    "shipName": "w10-negpen"
+  }
+}

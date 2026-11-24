@@ -1,0 +1,24 @@
+{
+  "name": "novaref-w10-probe-regular",
+  "edits": {
+    "ship": 700,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "Probe regular",
+    "strictPlay": false
+  }
+}

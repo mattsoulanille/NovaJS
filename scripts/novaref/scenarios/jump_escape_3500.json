@@ -1,0 +1,92 @@
+{
+ "name": "jump_escape_3500",
+ "_comment": "Wave 10 item 3 (#344): Escape 3500 ms after j during a real jump (pilot w2_map at Map Hub, route to Map SW as in map_jump.json). Shots follow; then e (Enter Ship if the game is at the title, the escort menu if still in flight) shows where the pilot resumes. The pilot is pulled after the quit.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "route",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "keys": "down:Up wait 2000 up:Up wait 500"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "keys": "j wait 3500 Escape wait 300"
+  },
+  {
+   "shot": "esc-0",
+   "window": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "esc-1",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "esc-2",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "esc-3",
+   "window": true
+  },
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "shot": "after-e",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after-e2",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -281,8 +281,187 @@ export default {
         ...wave6Resources(),
         ...wave7Resources(),
         ...wave8Resources(),
+        ...wave10Resources(),
     ],
 };
+
+/**
+ * Wave-10 experiments (docs/reference_experiments.md, "Submunitions wave
+ * 10", "NPC friendly fire wave 10", "#321 / #324 wave 10"). Nothing
+ * retired; ids above wave 8's (shïp 836+, wëap 251+, düde 319+, sÿst/spöb
+ * 2045+, mïsn 1023+, bits 9064+, gövt 358/359, jünk 202).
+ *
+ *  S   When does a shot fire its submunitions? sÿst 2045 Kit Sub Range
+ *      (spöb 2045 Kit Sub Port at 0,0, a 15 x 21 station; spöb 2046 Kit
+ *      Sub Mark, uninhabited, 150 px north). shïp 836 Kit Sub Target (an
+ *      immobile 24 px magenta disc, 30000 armor), düde 319 (AI 1, gövt
+ *      363), mïsn 1023 (bit 9064) puts it on the mark. wëap 251 Kit Sub
+ *      Star is the submunition every test parent fires: 4 in a 90°
+ *      starburst, Medium Blaster sprite, 2 s life, 0 damage, Flags2 0x0400
+ *      (planet-type: passes through ships, so it stays visible at the
+ *      target). Parents (secondaries, no ammo, reload 2 s, speed 600, 1
+ *      damage, turret aim unless said): 252 prox 0 small sprite (Fusion
+ *      Pulse, 16 px), 253 prox 0 big sprite (Superheavy Blaster, 89 px),
+ *      254 prox 5, 255 prox 60, 256 life 15 frames (expires about 90 px
+ *      out, short of the target), 257 = 256 + Flags2 0x0020, 258 = 252 +
+ *      Flags2 0x0020, 259 guided prox 0, 260 guided prox 30, 261 a
+ *      turreted beam (300 px) with subs, 262 = 255 + ProxSafety 30.
+ *  F   NPC friendly fire: sÿst 2047 Kit FF Range (spöb 2047 port at 0,0;
+ *      2048 / 2049 marks 110 / 260 px north). Anchored disc hulls: shïp
+ *      837 Kit FF Shooter (red, 30000/30000) firing wëap 263 Kit FF Bolt
+ *      (turret, 10 damage), 840 with 264 Kit FF Beam, 841 with 265 Kit FF
+ *      Missile (guided), 842 with 266 Kit FF Blast (turret, 150 px blast);
+ *      shïp 838 Kit FF Victim (blue, shield 1000 without recharge, armor
+ *      30000, wëap 267 Kit FF Pea: a 1-damage turret, so whom it shoots
+ *      shows). Shooters on the far mark (ShipStart -3): mïsn 1024 bolt /
+ *      gövt 362 (bit 9065), 1025 beam / 362 (9066), 1026 missile / 362
+ *      (9067), 1027 bolt / gövt 358 (9068), 1031 blast / 362 (9072).
+ *      Victims on the near mark (ShipStart -2), Mission BBS jobs: mïsn 1028 gövt 362 (9069),
+ *      1029 gövt 359 (9070), 1030 gövt 363 (9071). gövt 358 / 359 always
+ *      attack the player and list each other's class as allies. Player
+ *      hull shïp 839 Kit Ring Tank (Ring 24 sprite, 30000/30000).
+ *  T   jünk 202 Kit Doodads (base 400), both sold and bought at Kit Port.
+ *  M   #324: mïsn 1032 (bit 9073), a Mission BBS job (AvailLoc 0) at Kit
+ *      Port to Kit BBS Dest (sÿst/spöb 2052), OnAccept b9074; sÿst 2054
+ *      Kit BBS Shown (spöb 2055) is visible only while b9074 is set.
+ */
+function wave10Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const anchored = { accel: 0, speed: 0, turn: 60, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, shieldRecharge: 0, armorRecharge: 0 };
+    const armed = (wid) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+
+    // --- S: submunitions.
+    out.push(system(2045, "Kit Sub Range", -560, -700, 363, [2045, 2046]));
+    out.push(spob(2045, "Kit Sub Port", 0, 0, 264, { flags: 0x43 }));
+    out.push(spob(2046, "Kit Sub Mark", 0, -150, 264, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(...shareRled(836, "Kit Sub Target", 1975, 24, { ...anchored, ai: 1, turn: 0, armor: 30000, shield: 0, strength: 1, crew: 1 }));
+    out.push(dude(319, "Kit Sub Target", 1, 363, 836));
+    out.push(...misn(1023, "Kit S sub target", 9064, { availStel: 2045, shipCount: 1, shipDude: 319, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    out.push(weap(251, "Kit Sub Star", 130, {
+        reload: 30, duration: 60, armorDamage: 0, shieldDamage: 0, guidance: -1, speed: 400, graphic: 1,
+        proxRadius: 0, blastRadius: 0, flags: 0, flags2: 0x0400, explosion: -1,
+    }));
+    const parent = { reload: 60, duration: 45, armorDamage: 1, shieldDamage: 1, guidance: 4, speed: 600, graphic: 9,
+        proxRadius: 0, blastRadius: 0, flags: 0x0002, flags2: 0, subCount: 4, subType: 251, subTheta: -90, subLimit: 0 };
+    out.push(weap(252, "Sub P0", 130, parent));
+    out.push(weap(253, "Sub P0 Big", 130, { ...parent, graphic: 18 }));
+    out.push(weap(254, "Sub P5", 130, { ...parent, proxRadius: 5 }));
+    out.push(weap(255, "Sub P60", 130, { ...parent, proxRadius: 60 }));
+    out.push(weap(256, "Sub Expire", 130, { ...parent, duration: 15 }));
+    out.push(weap(257, "Sub Expire 20", 130, { ...parent, duration: 15, flags2: 0x0020 }));
+    out.push(weap(258, "Sub P0 20", 130, { ...parent, flags2: 0x0020 }));
+    out.push(weap(259, "Sub Missile P0", 134, { ...parent, guidance: 1, guidedTurn: 60, graphic: 3, duration: 90, seekerFlags: 0, jamVuln: zero4 }));
+    out.push(weap(260, "Sub Missile P30", 134, { ...parent, guidance: 1, guidedTurn: 60, graphic: 3, duration: 90, proxRadius: 30, seekerFlags: 0, jamVuln: zero4 }));
+    out.push(weap(261, "Sub Beam", 170, { ...parent, guidance: 3, speed: 0, duration: 8, beamLength: 300, graphic: -1 }));
+    out.push(weap(262, "Sub P60 Safe", 130, { ...parent, proxRadius: 60, proxSafety: 30 }));
+    // Added during the wave (prox threshold): slow parents (Speed 200, 2 px
+    // a frame, 5 s life) so the detonation point resolves to 2 px:
+    // 268-273 small sprite prox 0 / 8 / 12 / 16 / 20 / 30, 274 / 275 the
+    // 89 px sprite prox 0 / 20, 276 a copy of the beam (fired untargeted).
+    // shïp 843 Kit Sub Target Big (the 96 px magenta disc, rlëD 1979, shän
+    // 96 x 96), düde 328, mïsn 1033 (bit 9075) on the same mark.
+    const slow = { ...parent, speed: 200, duration: 150 };
+    [0, 8, 12, 16, 20, 30].forEach((p, i) => out.push(weap(268 + i, `Sub Slow P${p}`, 130, { ...slow, proxRadius: p })));
+    out.push(weap(274, "Sub Slow Big P0", 130, { ...slow, graphic: 18 }));
+    out.push(weap(275, "Sub Slow Big P20", 130, { ...slow, graphic: 18, proxRadius: 20 }));
+    out.push(weap(276, "Sub Beam Free", 170, { ...parent, guidance: 3, speed: 0, duration: 8, beamLength: 300, graphic: -1 }));
+    out.push(...shareRled(843, "Kit Sub Target Big", 1979, 96, { ...anchored, ai: 1, turn: 0, armor: 30000, shield: 0, strength: 1, crew: 1 }));
+    out.push(dude(328, "Kit Sub Target Big", 1, 363, 843));
+    out.push(...misn(1033, "Kit S sub target big", 9075, { availStel: 2045, shipCount: 1, shipDude: 328, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+
+    // --- F: NPC friendly fire.
+    out.push(system(2047, "Kit FF Range", -520, -700, 363, [2047, 2048, 2049]));
+    out.push(spob(2047, "Kit FF Port", 0, 0, 264, { flags: 0x43 }));
+    // Only ONE main-spaceport (AvailLoc 3) mission is offered per landing
+    // (a bar mission did not show up, and a second landing offered nothing),
+    // so the victims are Mission BBS jobs (AvailLoc 0).
+    out.push({ type: "dësc", id: 10000 + 2047 - 128, text: "Kit FF Port bar (novaref test kit)." });
+    out.push(spob(2048, "Kit FF Near", 0, -110, 264, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(spob(2049, "Kit FF Far", 0, -260, 264, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(weap(263, "Kit FF Bolt", 131, { reload: 20, duration: 90, armorDamage: 10, shieldDamage: 10, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(weap(264, "Kit FF Beam", 170, { reload: 20, duration: 6, armorDamage: 10, shieldDamage: 10, guidance: 3, beamLength: 500, flags: 0 }));
+    out.push(weap(265, "Kit FF Missile", 134, { reload: 30, duration: 150, armorDamage: 10, shieldDamage: 10, guidance: 1, speed: 600, guidedTurn: 60, proxRadius: 0, blastRadius: 0, flags: 0, seekerFlags: 0, jamVuln: zero4 }));
+    out.push(weap(266, "Kit FF Blast", 131, { reload: 30, duration: 90, armorDamage: 10, shieldDamage: 10, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 150, flags: 0 }));
+    out.push(weap(267, "Kit FF Pea", 130, { reload: 20, duration: 90, armorDamage: 1, shieldDamage: 1, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    const shooter = { ...anchored, armor: 30000, shield: 30000 };
+    out.push(...shareRled(837, "Kit FF Shooter", 1971, 24, { ...shooter, ...armed(263) }));
+    out.push(...shareRled(840, "Kit FF Shooter Beam", 1971, 24, { ...shooter, ...armed(264) }));
+    out.push(...shareRled(841, "Kit FF Shooter Missile", 1971, 24, { ...shooter, ...armed(265) }));
+    out.push(...shareRled(842, "Kit FF Shooter Blast", 1971, 24, { ...shooter, ...armed(266) }));
+    out.push(...shareRled(838, "Kit FF Victim", 1973, 24, { ...anchored, armor: 30000, shield: 1000, ...armed(267) }));
+    out.push(...shareRled(839, "Kit Ring Tank", 1955, 24, { accel: 2000, speed: 100, turn: 30, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 }));
+    out.push(govt(358, "Kit FF Ally A", { flags: 0x0004, classes: [358, -1, -1, -1], allies: [359, -1, -1, -1] }));
+    out.push(govt(359, "Kit FF Ally B", { flags: 0x0004, classes: [359, -1, -1, -1], allies: [358, -1, -1, -1] }));
+    [[320, "Bolt 362", 362, 837], [321, "Beam 362", 362, 840], [322, "Missile 362", 362, 841], [323, "Bolt 358", 358, 837], [324, "Blast 362", 362, 842]]
+        .forEach(([did, name, g, sid]) => out.push(dude(did, `Kit FF Shooter ${name}`, 3, g, sid)));
+    [[325, 362], [326, 359], [327, 363]].forEach(([did, g]) => out.push(dude(did, `Kit FF Victim ${g}`, 3, g, 838)));
+    const ff = { availStel: 2047, shipCount: 1, shipGoal: -1, shipBehav: -1 };
+    out.push(...misn(1024, "Kit F shooter bolt 362", 9065, { ...ff, shipDude: 320, shipStart: -3 }));
+    out.push(...misn(1025, "Kit F shooter beam 362", 9066, { ...ff, shipDude: 321, shipStart: -3 }));
+    out.push(...misn(1026, "Kit F shooter missile 362", 9067, { ...ff, shipDude: 322, shipStart: -3 }));
+    out.push(...misn(1027, "Kit F shooter bolt 358", 9068, { ...ff, shipDude: 323, shipStart: -3 }));
+    out.push(...misn(1031, "Kit F shooter blast 362", 9072, { ...ff, shipDude: 324, shipStart: -3 }));
+    out.push(...misn(1028, "Kit F victim 362", 9069, { ...ff, shipDude: 325, shipStart: -2, availLoc: 0 }));
+    out.push(...misn(1029, "Kit F victim 359", 9070, { ...ff, shipDude: 326, shipStart: -2, availLoc: 0 }));
+    out.push(...misn(1030, "Kit F victim 363", 9071, { ...ff, shipDude: 327, shipStart: -2, availLoc: 0 }));
+
+    // --- T: a jünk both sold and bought at Kit Port.
+    out.push({ type: "jünk", id: 202, name: "Kit Doodads", clone: "jünk:128", set: { soldAt: [2100, ...none8.slice(1)], boughtAt: [2100, ...none8.slice(1)], basePrice: 400, flags: 0, scanMask: 0, lcName: "kit doodads", abbrev: "Doodads", buyOn: "", sellOn: "" } });
+
+    // --- M: #324, the Mission BBS map after an accept.
+    out.push(system(2052, "Kit BBS Dest", -560, -560, 363, [2052]));
+    out.push(spob(2052, "Kit BBS Dest Port", 0, 0, 138, { flags: 0x43 }));
+    const shown = system(2054, "Kit BBS Shown", -560, -640, 363, [2054]);
+    shown.set = { ...shown.set, visibility: "b9074" };
+    out.push(shown, spob(2054, "Kit BBS Shown Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(1032, "Kit M BBS job", 9073, { availLoc: 0, travelStel: 2052, payVal: 1000, onAccept: "b9074" }));
+    // Added during the wave: did the accept set b9074? mïsn 1034 is offered
+    // on landing at Kit Port only while b9074 is set.
+    out.push(...misn(1034, "Kit M b9074 is set", 9074, {}));
+
+    // --- #320 item 2: a gövt with NEGATIVE crime penalties. gövt 369 Kit
+    // Negative Govt (Disab/Board/Kill -100) owns sÿst 2060 Kit Negative
+    // Range (spöb 2060 port); mïsn 1035 (bit 9076) puts a Kit Trader of
+    // that govt (düde 329, AI 1) beside the player at the port.
+    out.push(govt(369, "Kit Negative Govt", { disabPenalty: -100, boardPenalty: -100, killPenalty: -100 }));
+    out.push(system(2060, "Kit Negative Range", -480, -700, 369, [2060]));
+    out.push(spob(2060, "Kit Negative Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(dude(329, "Kit Negative Trader", 1, 369, 708));
+    out.push(...misn(1035, "Kit N negative-penalty trader", 9076, { availStel: 2060, shipCount: 1, shipDude: 329, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+
+    // --- Item 9 (#320 item 3): an auto-aborting mission (Flags 0x0001,
+    // one Kit Escort special ship so the abort triggers, no goal) with
+    // CompGovt 360 / CompReward 20, OnAccept b9078, OnAbort b9079, offered
+    // on landing at Kit Port: mïsn 1036 (bit 9077) with Flags 0x0040
+    // ("Apply -5x CompReward reversal on abort"), mïsn 1037 (bit 9080)
+    // without it.
+    const aa = { shipCount: 1, shipDude: 600, shipGoal: -1, shipBehav: -1, shipStart: -1, compGovt: 360, compReward: 20, onAccept: "b9078", onAbort: "b9079" };
+    out.push(...misn(1036, "Kit C auto-abort 0x40", 9077, { ...aa, flags: 0x0041 }));
+    out.push(...misn(1037, "Kit C auto-abort plain", 9080, { ...aa, flags: 0x0001 }));
+
+    // --- Item 11: outfits whose price / mass scale with the ship's Mass
+    // (oütf Flags 0x0200 / 0x0400), sold at Kit Port at the top of the
+    // list (DispWeight 9990+): oütf 452 Kit Mass Price (0x0200, Cost 100),
+    // 453 Kit Mass Mass (0x0400, Mass 10, Cost 1000), 454 Kit Mass Both
+    // (0x0600, Cost 100, Mass 10), 455 Kit Plain Mass (no flag, Mass 10,
+    // Cost 1000). ModType 12 (+1 fuel), harmless. Player hulls shïp 844 /
+    // 845 / 846 Kit Mass Hull 100 / 300 / 37 (Mass 100 / 300 / 37, 25 t
+    // free; 25 t so a buy-until-refused count reads the mass); added
+    // during the wave: 847 / 848 at Mass 155 / 50.
+    [[452, "Kit Mass Price", 0x0200, 100, 0], [453, "Kit Mass Mass", 0x0400, 1000, 10],
+        [454, "Kit Mass Both", 0x0600, 100, 10], [455, "Kit Plain Mass", 0, 1000, 10]].forEach(([id, name, flags, cost, mass], i) => {
+        const o = gun(id, name, 0);
+        o.set = { ...o.set, displayWeight: 9993 - i, modType: 12, modVal: 1, max: 20, flags, cost, mass };
+        out.push(o);
+    });
+    [[844, 100], [845, 300], [846, 37], [847, 155], [848, 50]].forEach(([id, mass]) =>
+        out.push(...ship(id, `Kit Mass Hull ${mass}`, 128, { mass, freeMass: 25, cargo: 20, armor: 300, shield: 300, maxGuns: 4, maxTurrets: 4, ai: 1, strength: 10, cost: 100000 })));
+    return out;
+}
 
 /**
  * A 36-frame "pointer" sprite whose heading can be read off a screenshot
