@@ -9,12 +9,16 @@ import {
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
-import { MissionInfoDialog } from '../spaceport/mission_info.js';
+import {
+    listedMissions, MissionInfoDialog, NO_MISSIONS, NO_MISSIONS_STRING_INDEX,
+    NO_MISSIONS_STRING_TABLE,
+} from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
+import { showStatusMessage } from './status_message_plugin.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
 
 export const MissionInfoResource = new Resource<MissionInfoDialog>('MissionInfo');
@@ -105,6 +109,40 @@ export const MissionInfoPlugin: Plugin = {
             }
         };
         world.resources.set(OpenMissionInfoResource, openMissionInfo);
+        // The original's in-flight 'i' with nothing to list prints "You have
+        // no active missions." on the status line and opens no dialog (the
+        // wave-11 UI key matrix; with a mission it opens the dialog). The
+        // words are stock STR# 2002's; the built-in copy stands in until
+        // they load.
+        let noMissions = NO_MISSIONS;
+        void displayAssets.data.StringTable.get(NO_MISSIONS_STRING_TABLE)
+            .then(table => {
+                noMissions = table.strings[NO_MISSIONS_STRING_INDEX]?.trim()
+                    || NO_MISSIONS;
+            }).catch(() => { /* Keep the stock wording. */ });
+        const openInFlight = async () => {
+            const ship = getPlayerShip(world);
+            if (!ship || dialog.container.visible || opening) {
+                return;
+            }
+            try {
+                await universe.load();
+            } catch (e) {
+                // The dialog copes with an unloaded universe; so does
+                // the count (nothing is known to be invisible).
+                console.warn('Mission info failed to load universe:', e);
+            }
+            // Landed (or opened by another path) while the universe
+            // loaded: the key no longer belongs to flight.
+            if (MenuControls.focused || dialog.container.visible) {
+                return;
+            }
+            if (listedMissions(ship, universe).length === 0) {
+                showStatusMessage(world, noMissions);
+                return;
+            }
+            await openMissionInfo();
+        };
         world.resources.set(MissionInfoControlsSubscription,
             controls.subscribe(({ action, state }) => {
                 if (action !== 'missions' || state !== 'start') {
@@ -116,7 +154,7 @@ export const MissionInfoPlugin: Plugin = {
                 if (MenuControls.focused) {
                     return;
                 }
-                void openMissionInfo();
+                void openInFlight();
             }));
     },
     remove(world) {

@@ -74,7 +74,24 @@ const DESC_FONT: Partial<PIXI.ITextStyle> = {
  * missions_info.png), which our Geneva does not, so the space is written.
  */
 const HEADER_TEXT = 'Currently active missions :';
-const NO_MISSIONS = 'You have no active missions.';
+/** Stock STR# 2002 index 353: the dialog's empty-list text, and the
+ * status line's answer to an in-flight 'i' with nothing to list. */
+export const NO_MISSIONS = 'You have no active missions.';
+export const NO_MISSIONS_STRING_TABLE = 'nova:2002';
+export const NO_MISSIONS_STRING_INDEX = 353;
+
+/**
+ * The player's missions as the dialog lists them: mïsn Flags "invisible"
+ * ones are never listed. `universe` must be loaded.
+ */
+export function listedMissions(entity: Entity, universe: MissionUniverse):
+    [string, ActiveMission][] {
+    const missions = entity.components.get(MissionsComponent);
+    return missions
+        ? [...missions].filter(([id]) =>
+            !universe.getMission(id)?.flags.invisible)
+        : [];
+}
 
 /**
  * The Mission Info dialog ('i'): lists the player's active missions and
@@ -206,12 +223,7 @@ export class MissionInfoDialog {
         } catch (e) {
             console.warn('Mission info failed to load universe:', e);
         }
-        const missions = entity.components.get(MissionsComponent);
-        // Hide invisible missions (mïsn Flags "invisible": never listed).
-        this.missions = missions
-            ? [...missions].filter(([id]) =>
-                !this.universe.getMission(id)?.flags.invisible)
-            : [];
+        this.missions = listedMissions(entity, this.universe);
         const date = entity.components.get(GameDateComponent);
         this.currentDay = date ? dayNumber(date) : 0;
         this.date.text = date ? formatMapDate(date) : '';
