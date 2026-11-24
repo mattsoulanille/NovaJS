@@ -8917,7 +8917,395 @@ bisected; the 31-character cut read from one pilot).
 `10-empty.png`, `12-pinfo.png`, `13-optbuy.png`, `15-afterlong.png`,
 `17-len63.png`, `18-pinfo3.png`, `19-len64.png`, `pilot-after/`).
 
+### Stock traffic, wave 17: Arcturus and Tau Ceti freeze at AvgShips too; AI 4 interceptors and the Asteroid Miner never leave (2026-11-24)
+
+**Questions** (wave-17 brief item 1, the "Wave 16 leftovers" Sol row). Do
+AI 4 interceptors ever leave? Does the stock Asteroid Miner ever leave?
+Does arriving traffic stop once the system is "full", and what counts as
+full?
+
+**Rig.** No plug-in, Last Pilot parked (`scenarios/w17_stock_interactive.json`,
+as wave 16's Sol run). Pilots: `w17_arcturus` (a stock Leviathan, shïp 131,
+at Fermia, spöb 166) and `w17_tauceti` (a Leviathan at Tau Prime, spöb
+151); the player sat still (passive). A census every 1-3 minutes: 20 Tabs
+0.84 s apart, the target panel's name cut 6 frames after each press
+(`tools/tab_names.sh`), full panels at chosen presses (govt, subtitle,
+shield). Stock traffic (sÿst fields):
+- **sÿst 138 Arcturus**, avgShips 4, 4 asteroids, reinforcement flët 128
+  "Small Federation Fleet" (lead shïp 141 Fed Destroyer): düdes 133 Pirate
+  (AI 3) 5%, 134 Tough Trader (AI 2) 20%, 128 Lone Federation Ship (AI 4)
+  12%, 129 Trader (AI 1; the Asteroid Miner shïp 379 is 8% of its hulls)
+  20%, 202 Pirate (AI 3) 11%, 228 Association (AI 3) 11%, 231 Rogue fighters
+  (AI 4) 1%, 249 Civilian shuttle craft (AI 1, shïp 391-393) 20%.
+- **sÿst 143 Tau Ceti**, avgShips 4: 199 United Shipping (AI 2) 20%, 174
+  Civilian (AI 1) 17%, 129 Trader (AI 1) 22%, 128 Lone Federation Ship (AI 4)
+  32%, 228 Association (AI 3) 6%, 231-233 Rogue (AI 4) 1% each. No shuttles.
+
+**Result** (minutes after the recording started, about 5 s after Enter
+Ship; Tab order; govt as the panel shows it):
+
+| system | minutes | ships |
+|---|---|---|
+| Arcturus | 0.2-0.5 | Terrapin (Trader, **Disabled**), Pirate Starbridge (Pirate), Cargo Drone (Trader); a Fed Scout Ship (Trader govt: the AI 2 Tough Trader) came in and the Terrapin and Cargo Drone dropped out during the burst |
+| | 0.7 | Fed Destroyer, Pirate Starbridge, Pirate Enterprise (Assoc), Terrapin |
+| | 2.0 | Fed Destroyer (77%), Fed Carrier, Fed Destroyer, Fed Destroyer: a Fed group (the pirates gone) |
+| | 3.6 | Fed Destroyer, Shuttle, Shuttle, Heavy Shuttle |
+| | **5.0-26.0** (12 censuses) | **Fed Destroyer (Destroyer Class, Fed), Pegasus (12b Model, Trader), Shuttle (Version A, Trader), Heavy Shuttle (Version A, Trader)**, the same four in the same order every time |
+| Tau Ceti | 0.1 | Asteroid Miner (Prospector, Trader), Starbridge (Un Shp), Prydain (Trader), Terrapin (Trader) |
+| | 3.0 | Asteroid Miner, Fed Anaconda (Fed), Fed Viper (Fed), IDA Frigate |
+| | 5.9 | Asteroid Miner, Fed Anaconda, Fed Viper, Pirate Enterprise (Assoc) |
+| | **8.7-20.1** (5 censuses) | **Asteroid Miner, Fed Anaconda, Fed Viper, Fed Patrol Boat (Gunboat Class, Fed)**, unchanged |
+
+**Findings.**
+1. **Both systems froze at exactly AvgShips** (4 and 4; Sol, wave 16: 6 of
+   6), within 5-9 minutes, and stayed frozen to the end (21 and 11 more
+   minutes). The count never went above AvgShips in any census (3-4 early
+   on while ships came and went), so "full" is AvgShips ships, and arrivals
+   stop while the system holds that many: nothing new arrived in either
+   frozen stretch.
+2. **AI 4 interceptors never left:** Tau Ceti's Fed Anaconda and Fed Viper
+   stayed from minute 3 to minute 20 (17+ min), its Fed Patrol Boat (a hull
+   only düde 128 Lone Federation Ship, AI 4, carries) from minute 9 to 20;
+   with Sol's three (21+ min) that is five AI 4 ships in two systems, none
+   leaving. (The Anaconda / Viper could also be the roaming Small Federation
+   Fleet's escorts; the Patrol Boat cannot.)
+3. **The stock Asteroid Miner never left:** in Tau Ceti from the first
+   census to the last (20 min), as in Sol (21+ min). The kit miners'
+   3-4 minute stays (wave 15, AI 1 Kit Miner hulls with a scoop) did not
+   carry over to the stock hull.
+4. **More kinds of ship stay than the wave-16 rule ("AI 4 and shuttles")**:
+   Arcturus froze with an AI 3 Fed Destroyer (the reinforcement fleet's
+   lead hull; no Arcturus düde carries it) and a Pegasus of the Trader govt
+   (Arcturus's only Pegasus düde is the AI 2 Tough Trader) for 21 minutes,
+   beside two shuttles. What left: AI 1 / AI 2 traders that were travelling
+   (Terrapin, Cargo Drone, Starbridge, Prydain, IDA Frigate), the pirates
+   and the Association raider (AI 3) and most of the Fed group, all within
+   the first 6 minutes.
+
+**NovaJS today (main f7cc7e1e).**
+- Full: `rollPopulationTarget` (`N/nova_plugin/spawn/npc_spawn_plugin.ts:833-840`)
+  draws a target of round(AvgShips x (0.5 .. 1.5)) once per visit and
+  NpcRespawnSystem (`:1373-1377`) adds one ship every 15 s
+  (`NPC_RESPAWN_INTERVAL_MS`, `:140`) while below it. **Mismatch:** the
+  original's ceiling is AvgShips itself (three systems: 6 / 6, 4 / 4, 4 / 4,
+  never above), not a +-50% draw (Arcturus could get 6, Tau Ceti 2).
+- AI 4: departs at `departAt` (`N/nova_plugin/npc/npc_decision.ts:907`):
+  **mismatch** (the parallel fix agent's "AI 4 staying" covers this).
+- Miners: depart at `departAt` straight from mining (`npc_decision.ts:642`):
+  **mismatch** for the stock Asteroid Miner (it stayed 20+ min twice).
+- AI 3: departs (`npc_decision.ts:817`): matches the pirates and the
+  Association raider, but not the Fed Destroyer that stayed (one ship).
+
+**Proposed fixes (not applied).**
+- The population target is AvgShips exactly (no +-50% roll), capped by
+  MAX_NPC_POPULATION; keep the 15 s refill (the census spacing cannot time
+  arrivals finer).
+- AI 4 ships and Flags3-0x0001 miners of ordinary traffic do not depart
+  (as shuttles); keep AI 1/2 traders' one-stop visit and the AI 3
+  departure. The staying Pegasus and Fed Destroyer (one each) want a rig
+  before any rule: a kit system whose traffic is ONLY AI 2 traders, and one
+  with only AI 3 warships, watched for 20 minutes.
+
+Confidence: high for 1 (three systems, 17 frozen censuses in all), high for
+2 and 3 (two systems each, with Sol), low for 4 (one ship of each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w17/arcturus/` and
+`tauceti/` (`2026*/recording.mp4`, `names/cycle-NN.png`, `names/A1.png`,
+`A2.png`, `names/T1.png`, `panels_b*.png`, `panels_all.png`).
+
+### P1 wave 17: a hostile that fired first is still policed, the watch range is the whole system (9000 px), an AI 4 ally defends (2026-11-24)
+
+**Rigs** (`kits/testkit.mjs` `wave17Resources` "P"). sÿst 1585 Kit Self
+Defence (owner 326 Kit Police Nosy, no traffic): port at (0,0), markers 1586
+(300,0), 1587 (0,150), 1588 (5000,0), 1589 (-9000,0). Every ship under test
+is an anchored mission ship.
+- **Self-defence:** the anchored nosy police (düde 408, Kit Escort Gun) on
+  the 300 px marker (BBS 1112) and a ship of gövt 362 (0x0004 "always
+  attacks the player") on the 150 px marker. Take 1 / 2: shïp 454 Kit
+  Shooter Anchored (AI 3, the 1-damage Kit Tickler turret; offer 1111),
+  player a Kit Lancer, then the Strength-1 Kit Lancer Heavy Weak (shïp 778).
+  Take 3: wave 13's Kit Disabler (düde 358: AI 3, one 1200-damage bolt,
+  reload 30000; offer 1124), player a Kit Lancer (30000 shield) with the
+  Kit Long Beam turret.
+- **Watch range:** offer 1113 the anchored AI 1 victim of 343 at the port,
+  BBS 1114 / 1115 the anchored nosy police on the 5000 / 9000 px marker;
+  the player beams the victim 3 s; the police's disposition read from a hail
+  before and after.
+- **AI 4 ally:** wave 16's Kit Answer Range (1560) with the anchored victim
+  (offer 1088) and a Kit Raider P (BBS 1091) on the mark, and BBS 1116: an
+  AI 4 of gövt 317 (allied to the victim's 343; the blue shïp 433) at the
+  port. Player passive; the target panels read every 12-20 s.
+
+| run | what happened |
+|---|---|
+| self-defence take 1 / 2 (Kit Shooter) | the shooter's brackets were red (hostile) but it **never fired** in 25-60 s at either player hull (no bolt in nine shots; it fired only after the player's beam hit it): no self-defence case |
+| self-defence take 3 (Kit Disabler) | the disabler's bolt hit the player during take-off (the shield bar 821 -> 815 px, about 4%); hail of the police: no status, Request Assistance (**neutral**); the player beamed the disabler 3 s (98% shield), **72 s after its bolt** (it was still hostile, red brackets, its gun reloading); at once the police's bolts came at the player and the hail read **"Status: Hostile", Beg For Mercy** |
+| police 5000 px away | before: neutral; after the beam on the victim: **"Status: Hostile"**, Beg For Mercy, at the first hail (within 3 s) and again 12 s later |
+| police 9000 px away | before: neutral; after: **"Status: Hostile"**, Beg For Mercy, at the first hail |
+| AI 4 ally of 317 at the port | at 10 s after take-off the raider was at 76% and the ally at 84% (already fighting); raider 29% / Shields Down / Shields Down / Disabled / **gone** at about 30 / 55 / 75 / 100 / 120 s, the ally's shield 52%, 30%, 7%, down, down; the victim 99% throughout |
+
+**Findings.**
+1. **Firing at a hostile that had fired first is still piracy to a nosy
+   police**: a 0x0004 ship that hit the player once (1200 damage) and stayed
+   hostile was beamed 72 s later, and the 300 px police turned hostile at
+   once. (Not settled: a hostile that is firing continuously at that moment.
+   An anchored AI 3 0x0004 ship with a 1-damage turret never opened fire on
+   either player hull, so it could not be the first shooter.)
+2. **The watch range is the whole system:** police 5000 and 9000 px from the
+   victim and the player turned hostile at once, as at 300 / 2500 px (wave
+   16).
+3. **An AI 4 warship of an ALLY of the victim's govt defends it** (as wave
+   16's AI 3 ally did): it engaged the raider within 10 s and destroyed it
+   in under two minutes. So the ally's help is not limited to AI 3.
+
+**NovaJS today (main f7cc7e1e).**
+- 1: `piracyWitnesses` returns nobody when the victim "is attacking the
+  player" (`N/nova_plugin/npc/piracy_police.ts:139`, `isAttackingPlayer`,
+  `N/nova_plugin/npc/allegiance.ts:187-205`: targeting the player in attack
+  mode, or shot him within 30 s). A hostile AI 3 that fired and is still on
+  the player counts as attacking, so NovaJS calls this self-defence:
+  **mismatch** (the original policed it). With the 72 s gap the 30 s window
+  alone would not have excused it; the attack-mode test would.
+- 2: `PIRACY_WATCH_RANGE` 1800 (`piracy_police.ts:73`): **mismatch** (5000 and
+  9000 reacted).
+- 3: an NPC attack provokes the victim and its fleet only
+  (`N/nova_plugin/npc/npc_targeting.ts:381-382`); the wave-16 proposal (own
+  and allied warships join) stands and should include AI 4.
+
+**Proposed fixes (not applied).**
+- Drop the watch range: every AI 4 of a defending govt IN THE SYSTEM sees
+  the attack (`PIRACY_WATCH_RANGE` -> Infinity, or remove the test).
+- Narrow the self-defence exemption: the measured case (a hostile that fired
+  first and is still hostile) is policed, so `isAttackingPlayer`'s attack
+  posture alone should not excuse the player; keep at most the "shot the
+  player within the last few seconds" part until a continuously firing
+  hostile is measured (rig: a 0x0004 hull that fires every second at a weak
+  player, e.g. the Kit Disabler gun with reload 30).
+- An NPC-on-NPC attack provokes the victim's own and allied govts' AI 3 AND
+  AI 4 warships in the system (`alliedEitherWay`).
+
+Confidence: high for 2 (two distances, hail status read), medium for 3 (one
+run, clear panels), medium-low for 1 (one take, one bolt 72 s earlier).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w17/{selfdef,selfdef2,selfdef3,watch5000,watch9000,ally_ai4}/*/`
+(selfdef2 `f.png`; selfdef3 `05-t0.png` (shield bar), `11-hail0.png`,
+`14-after1.png`, `17-hail1.png`, `../g.png`; watch5000 `08-hail0.png`,
+`12-hail1.png`, `13-hail2.png`; watch9000 `08-hail0.png`, `12-hail1.png`;
+ally_ai4 `../a1.png`, `../a2b.png`, `../af.png`).
+
+### H1 wave 17: the price of fuel (a mood line, +1,000 an ask, Lower Price 3/4 or a refusal), a disabled pilot refused with a +2000 record and as an ally, a ränk 0x0400 trader refusing (2026-11-24)
+
+**Rigs.** Kit Assist Calm (1581: neutral 363 AI 3 warships and AI 1
+traders). Fuelless Kit Lancer Heavy pilots (fuel 0, 1,000,000 credits):
+`w17_fuel0` (no record) and `w17_fuel_pos` (record +2000 in 1581). Each ask:
+hail, Request Assistance (window 309,361), read the "Pay me N credits."
+sub-dialog, Lower Price (415,301), read the answer; then ask again (several
+asks per ship, several ships). Disabled pilots (the Kit Disabler offer at the
+port): `w17_disabled_pos` (shïp 451 Kit Fragile, record +2000 in 1581) and
+`w17_disabled_ally` (shïp 456 Kit Fragile Ally: InherentGovt 317, the ally
+of 343; in 1584 Kit Call Range B among Kit Shipping (343) traders, offer
+1123). ränk: ränk 200 Kit Assist Rank (AffilGovt 363, Flags 0x0400), given by
+offer 1118 (OnAccept K200) at Kit Assist Range (1545), the pilot under
+raider fire.
+
+**Results: the price** (STR# 3000 rows 1-based; every opening line came with
+the first "Pay me" of that ship and stayed the same for that ship):
+
+| pilot | ship | opening line | asks: price -> Lower Price |
+|---|---|---|---|
+| wave 16 (record 0) | trader | "You're in luck, I'm in a good mood today." (117) | 1,000 -> "If that's the way you feel ..." (157); 2,000 -> accepted |
+| record 0 | trader A | "All right, I'll give you some help, but it'll cost you." (141) | 3,000 -> "Ha ha ha. What a comedian." (156); 4,000 -> **3,000** -> "Ha ha ha"; 5,000 -> "Ha ha ha" |
+| record 0 | trader B | "I'll help you out if you pay me." (143) | 2,000 -> **1,500** -> "If that's the way you feel ..." (157); 3,000 -> "If that's the way ..." |
+| record 0 | **warship** C | 141 | 3,000 -> "Ha ha ha"; 4,000 -> "Ha ha ha"; 5,000 -> **3,700** -> Accept Price: "Okay, I'm on my way." (146), **3,700 taken** (1,000,000 -> 996,300), the warship flew over, fuel 0 -> about 3% of the bar (about 100 units, one jump) |
+| record +2000 | warship | "You're lucky - I'm in a good mood today." (116) | 1,000 -> **700** -> "Ha ha ha"; 2,000 -> "Ha ha ha" |
+| record +2000 | trader | "I'm in a bad mood today, so it's going to cost extra." (121) | 3,000 -> **2,200** -> "Fine, I guess you don't want my help." (158); 4,000 -> "Fine, ..." |
+
+**Results: disabled pilots and the ränk.**
+
+| pilot | hailed | Request Assistance |
+|---|---|---|
+| disabled, record +2000 | neutral warship | **"Yeah, right!"** (97) |
+| disabled, record +2000 | neutral trader | **"Not a chance."** (100) |
+| disabled, own hull of 317 (ally of 343) | Kit Shipping trader (343) | **"In your dreams, pal."** (96) |
+| disabled, own hull of 317 | a second Kit Shipping trader | **"Yeah, right!"** (97) |
+| ränk 200 (0x0400 for 363) active (Honors tab: "Kit Assist Rank"), under raider fire | neutral 363 trader | **"Not a chance."** (100) |
+
+(The ränk run met no 363 warship: two relaunches gave traders and raiders
+only, so a 0x0400 warship's answer is still open. The Kit Fragile Ally's
+InherentGovt took effect: the HUD switched to the Federation interface, the
+cloned gövt 128's.)
+
+**Findings.**
+1. **The fuel price is a per-ship base plus 1,000 for every repeated ask:**
+   one ship asked again and again named 3,000 / 4,000 / 5,000, another 2,000
+   / 3,000, another 1,000 / 2,000; the bases seen are 1,000, 2,000 and 3,000,
+   in round thousands.
+2. **The opening line goes with the base:** "good mood" (STR# 3000 116-120)
+   with 1,000 (two ships), "it'll cost you" / "help you out if you pay me"
+   (141-145) with 2,000-3,000 (three ships), "bad mood ... cost extra"
+   (121-125) with 3,000 (one ship). So the mood is drawn per ship and sets
+   the base (good 1,000; neutral 2,000-3,000; bad 3,000).
+3. **Lower Price counters with exactly 3/4 of the price, rounded down to
+   100** (4,000 -> 3,000, 2,000 -> 1,500, 5,000 -> 3,700, 1,000 -> 700, 3,000
+   -> 2,200: all five fit floor(0.75 x P / 100) x 100), **or withdraws the
+   offer** with a refusal line (STR# 3000 156-160: "Ha ha ha. What a
+   comedian.", "If that's the way you feel ...", "Fine, I guess you don't
+   want my help."); 5 counters in 13 first presses, and every second press
+   (after a counter) withdrew.
+4. **Accept Price takes the price at once** ("Okay, I'm on my way.",
+   146-150) and the ship refuels about one jump (100 units). Warships sell
+   fuel too, not only traders.
+5. **A +2000 record changed neither the price nor the mood** (good and bad
+   moods both at +2000) as far as two ships show.
+6. **A disabled pilot is refused even with a +2000 record and even when his
+   own hull is of an ALLY of the hailed ship's govt** (STR# 3000 96-100,
+   four refusals), as at record 0 (wave 16).
+7. **ränk 0x0400 did not make a TRADER of the affiliated govt help** a pilot
+   under fire ("Not a chance."). The Bible's "battle assistance" may be
+   meant for warships; untested.
+
+**NovaJS today (main f7cc7e1e).** `assistWillingness`
+(`N/nova_plugin/reputation/hail.ts:296-305`) returns 'willing' for every
+non-hostile ship and for any ship under a 0x0400 rank; 'forPay' only for a
+hostile bribe-taker; `assistIsFree` (`hail.ts:705`) and the comment above
+it: non-free help is rendered free ("no 'charge for fuel' credit model
+yet"). **Mismatch** on every row: the original charges a neutral ship's
+fuel (1,000-5,000), haggles (3/4 or a withdrawal), refuses a disabled pilot
+whatever his record or allegiance, and a 0x0400 trader refused. NovaJS's
+response groups (0-based, `hail.ts:455-489`: granted 75-79, refused 85-89,
+for-pay 140-144, paid 145-149) are not what the original printed for these
+cases: the disabled refusals came from 95-99 (0-based; "Yeah, right!",
+"Not a chance.", "In your dreams, pal."), the for-pay openers from 115-124
+and 140-144 by mood, the withdrawal from 155-159.
+
+**Proposed fixes (not applied).**
+- Request Assistance from a NEUTRAL ship when the player is fuelless (not
+  disabled): a per-ship mood draw, good (1,000, opener 115-119) / neutral
+  (2,000-3,000, 140-144) / bad (3,000, 120-124); the price is the base + 1,000
+  x the asks this ship has already answered; Lower Price either counters
+  with floor(0.75 x P / 100) x 100 (about 40%) or withdraws (155-159); a
+  second Lower always withdraws; Accept takes P at once (145-149) and the
+  ship comes over and adds about 100 fuel.
+- A disabled player asking a neutral or allied-govt ship (any record seen so
+  far): refused from 95-99. Keep free repair only for Roadside Assistance
+  govts and ränk 0x0800 (unmeasured).
+- ränk 0x0400: do not make traders willing; leave warships as they are until
+  measured.
+
+Confidence: high for 1-4 (screenshots of every price; the 3/4 rule fits all
+five counters exactly), medium for 2 (six ships), medium for 6 (two
+pilots, four ships), low for 7 (one ship, no warship met).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w17/{fuel0,fuel_pos,disabled_pos,disabled_ally,rank}/*/`
+(fuel0 `../A.png`, `../B.png`, `../acc.png`, `../fuelbar.png`; fuel_pos
+`../A.png`; disabled_pos `../ra.png`, `../d0.png`; disabled_ally `../ra.png`,
+`../d0.png`; rank `../honors.png`, `../ra.png`, `../pre.png`, `../u.png`,
+`../vl.png`).
+
+### W1 / C1 / contraband / the shipyard prompt, wave 17: the 0x0002 contact targeted ~450 px out, an anchored 0x4000 ship does not cloak, four cutters sit on a clean ship, the name limit is 64 (2026-11-24)
+
+**W1** (pilot `w17_hull3`, Kit Lancer Heavy, passive, in wave 16's 1579 Kit
+Hull Flags 2). After 40 s, seven Tabs listed five ships: green, magenta,
+red, magenta, **yellow** (the 0x0002 hull). **The targeted ship's radar
+blip is drawn white** (the others grey): with the red, a magenta, the yellow
+targeted in turn, the white blip moved to each. The yellow's blip sat still
+at (11, 9) radar px, about 14 radar px (about 450 px) south-east of the
+player, in every shot from 40 s to 120 s after Enter Ship while the other
+blips moved; it never came on screen (third run). **Finding 1: the 0x0002
+standoff contact is the 0x0002 hull, holding still about 450 px from its
+target** (confirms wave 16's reading from the radar). 0x0040: two magenta
+hulls were on screen at once most of the run, so the per-frame speed of
+one could not be followed (`_w15_ranges.mjs`, 10 fps: magenta median 5.6
+px a frame over the frames with a single magenta blob, green 8.5): not
+settled.
+
+**C1** (pilot `w17_cloak_anchor`, Kit Lancer + Kit Long Beam; sÿst 1590 Kit
+Cloak Anchor, offer 1119: shïp 455 = the yellow AI 3 0x4000 Wraith-cloak disc
+with Speed / Accel 0, on a marker 200 px east). The yellow was targeted
+(yellow brackets: neutral), then beamed 1.5 s. **At once the target panel
+read "No Target"**, but the ship stayed on screen, fully drawn, and began
+firing at the player; Tab targeted it again at once (red brackets: hostile,
+94% shield) and again 25 s later, still visible. **Finding 2: an anchored
+0x4000 ship provoked by the player did not cloak in 30 s; it turned
+hostile and fought.** **Finding 3: the player's target is cleared at the
+moment the target turns hostile** (here and in wave 16's run, which read
+that "No Target" as a cloak).
+
+**Contraband** (pilot `w17_scan_clean`, Kit Lancer, nothing illegal; sÿst
+1592 Kit Scan Clean, owner 313 Kit Customs Big, four cutters, avgShips 4).
+At Enter Ship three cutters were already within 30 px of the player and the
+fourth 220 px off; from 20 s to 60 s all **four** sat on the player (within
+about 40 px), and the status line stayed empty. **Finding 4: every cutter
+in the system goes to a clean ship and stays on it, silently** (wave 16's
+one cutter was not chance).
+
+**Shipyard name limit** (pilot `w17_shipyard`, Kit Port, Buy Ship on Kit
+Mass Roomy 100; one prompt, select all and type before each OK): **72, 68,
+66 and 65 characters refused** (the dialog stays, the text reselected),
+**64 accepted** (bought, 49.90M). **Finding 5: the field accepts exactly 64
+characters; 65 or more is refused at OK** (not cut while typing: the 72
+characters were all typed in).
+
+**NovaJS today (main f7cc7e1e).**
+- 1: `ATTACK_STANDOFF` 250 for every hull (`N/nova_plugin/npc/npc_steering.ts:77`);
+  0x0002 not read: **missing**.
+- 2: `N/nova_plugin/npc/npc_cloak.ts` implements 0x0800 only; 0x4000 not
+  cloaking **matches** what was seen (no cloak).
+- 3: not checked (the target clearing on a disposition change).
+- 4: `N/nova_plugin/npc/contraband_scan.ts:51` "a clean ship is never
+  approached": **mismatch** (four of four approached and stayed).
+- 5: `SHIP_NAME_FIELD_LENGTH` 64 (`N/spaceport/ship_name_prompt.ts:47`)
+  **matches**; its comment ("refused 80, not bisected") can now say 65.
+
+**Proposed fixes (not applied).**
+- 0x0002 hulls: an attack stand-off of about 450-500 px, holding still
+  there.
+- Contraband: every AI 4 customs ship of a scanning govt goes to an
+  unscanned player ship whether or not it carries anything, scans it within
+  150 px and then keeps station on it (no line on a clean scan).
+- `ship_name_prompt.ts` comment: 65 refused, 64 accepted (measured).
+- 0x4000: keep it uncloaked (two runs saw no cloak); drop the wave-16
+  "lost at once" reading.
+
+Confidence: high for 1 (white blip followed across three targets), medium
+for 2 (one anchored ship, 30 s), high for 4 (four cutters) and 5 (bisected
+in one prompt).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w17/{hull3,cloak_anchor,scan_clean,shipyard}/*/`
+(hull3 `../a.png`, `../y.png`, `03-a-1.png` .. `12-y2.png` with
+`tools/radar.mjs`; cloak_anchor `../c0.png`, `../p.png`, `../q.png`;
+scan_clean `../w.png`, `../t.png`; shipyard `../a.png`, `../ok68.png`,
+`../ok66.png`, `../ok65.png`, `../ok64.png`).
+
+### Rescue wave 17: the marker rescue was not reached (2026-11-24)
+
+mïsn 1121 (the kit düde 330, disabled, ShipGoal 5, no mission cargo, on Kit
+Range's marker 2102) was accepted and the target panel read "UFS Bismarck,
+Disabled", but `loops/board.mjs` (wave 13's Raczak arguments, brackets)
+never brought it on screen: the target stayed about 2,980 px away over ten
+legs ("target not on screen after the approach"). The ShipStart-2 reveal
+(mïsn 1122) and the 1080-style board were not run (time). Evidence:
+`~/.local/share/novaref/evidence/20261124-w17/rescue/20261124-113732-w17_rescue_board/`.
+
 ### Reliability notes (for anyone running the reference)
+
+- **The targeted ship's radar blip is white (wave 17)**, every other ship
+  grey: Tab to a ship off screen and read its blip from `tools/radar.mjs`
+  (the `W` blips) to place it.
+- **The target is cleared when the target turns hostile (wave 17):** a beam
+  on a neutral leaves "No Target" in the panel at once although the ship is
+  still there (wave 16's 0x4000 "lost at once" was this). Tab again.
+- **Anchored 0x0004 hulls may never fire first (wave 17):** the kit's
+  anchored AI 3 Kit Shooter (gövt 362, a 1-damage turret) stayed silent
+  beside a Kit Lancer and a Strength-1 hull; wave 13's Kit Disabler (same
+  govt, a 1200-damage bolt) fired at once. Check for the first bolt (a shield
+  bar drop) before reading anything as self-defence.
+- **The board loop cannot reach Kit Range's marker 2102 (wave 17):** it
+  stalled about 3,000 px out; rescue rigs need a marker within a screen or
+  two of the port.
+- **A stopped census loop can leave its next Tab burst queued (wave 17):**
+  TaskStop on a `sleep; census` loop killed `ask.mjs` after it had appended
+  its keys, so the run still pressed 20 Tabs before `{"done":true}`.
 
 - **Mission ships never send distress calls (wave 16).** Rigs that need
   calls must attack ordinary TRAFFIC (a mission raider at the port among
@@ -9173,7 +9561,8 @@ bisected; the 31-character cut read from one pilot).
 | Wave 13 leftovers | Abort: an aborted ship held in the system by its goal (a rescue hulk). Rescue: what "Waiting" means on the stock special ship (ShipStart 2), mïsn 1070 (stock fields, ShipStart 2) and 1073 (the kit düde with cargo) not run, how a goal-5 mission without cargo can complete, the CompReward spread across allies' / enemies' systems (+5 / -5). A14 spread: how far (2 jumps still +7), the exact factor (about 0.65), penalties (a kill of the owner's own ship) spreading, an ally / enemy owner of a neighbour. P1: runs 3-5 (raiders vs traders, 0x0020, Flags2 0x0008), a victim the police govt cares about; the guards' bracket colours in run 6. T1: landings at the other stellars (park at the Market; the Hostile Port watch was cut at 5.5 min by a network drop), stay times per ship. N1: AI 2 / AI 3 / AI 4 (Zephyr) miners, mining time before leaving. S1-S3, W1, C1, H1 untouched. | **Wave 13** (the "... wave 13" sections above) **Wave 14** answered: the abort of a held hulk (stays, disabled, renamed to its class), "Waiting" (a ShipStart-2 ship not yet revealed, apparently cloaked), the CompReward spread, the A14 spread (all four questions), P1 runs 3-5 and a victim the police care about, T1 at the Market, N1 AI 2 / 3 / 4, and S1-S3's guesses ("... wave 14" sections). |
 | Wave 14 leftovers | A14: the failure's -R/2 of CompReward (govt-wide like the success, or the CompGovt alone like the 0x0040 abort?); a system with no owner in the spread; the per-govt mapping (ruling #380). Contraband: an ALLY of the owner as the scanner (whose SmugPenalty); one scan finding several things; a clean scan's message. P1: who answers a distress call (the raid melee was not attributed); whether the player's own victims ever call; the 0x0020 / ally combination; what ends a nosy police's hostility besides landing. T1: stay times per ship (a single distinguishable trader); the destination rule (first stellar?). N1: one miner's mining time before leaving; whose bolts break the rocks (per-colour bolt attribution). Rescue: the ShipStart-2 ship's reveal condition (fly onto its blip at rest); boarding the kit düde with cargo (1080, the board loop lost the 24 px hulk); whether a goal-5 mission without cargo can complete at all. W1, C1, H1 untouched. | **Wave 14** (the "... wave 14" sections above) **Wave 15** answered: a TimeLimit failure costs NO CompReward (no -R/2); an Independent neighbour gets -20 (one point); an ally scanner charges its own SmugPenalty; several finds = one line naming the jünk, one fine, the 0x0020 mission failing silently; the player's own victims never call; 0x0020 does not stop an ally; a nosy police's hostility lasts the visit (60 s still hostile, gone after a jump); T1 park about 15 s, one stop per visit, evenly among the own and neutral govts' ports, never the enemy's port or the marker; N1 a miner stays 3-4 min ("... wave 15" sections). Not done: distress answerers, the ShipStart-2 reveal, boarding 1080 (the board loop failed again), the no-cargo goal-5 completion, whose bolts break the rocks. |
 | Wave 15 leftovers | Shuttles: why a shuttle keeps one lane (nearest stellar? the first leg's pair?) and what happens with one stop or none; whether a shuttle ever leaves in a longer watch (17.5 min: never); the düde's uneven hull odds (4 of 6 purple). A14: the Independent neighbour's -20 (a second victim govt to fit it); spread through co-located systems (a plug-in quirk). Contraband: the record change of a several-finds scan; a clean scan's message. P1: who answers a distress call (put the fight on screen with mission ships); does a hail of a provoked nosy police offer Beg For Mercy. Rescue: the ShipStart-2 reveal; boarding 1080 beside a planet (the board loop's colour walk failed over the port); a no-cargo goal-5 completion. W1: 0x0002 standoff (no ship seen), where the 0x0080 ship goes, when 0x0040 boosts. C1: provoke the 0x4000 ship; the 0x0400 / 0x2000 cloaks at a jump / landing. H1: a disabled or fuelless pilot's request; a ränk 0x0400. | **Wave 15** (the "... wave 15" sections above) **Wave 16** answered: the lane (a stellar and its nearest neighbour; a lane under about 150 px stands still), one stop (one 6 s visit, then out), no stop (never comes in), still no leaving; the unowned neighbour (minus a quarter of the victim's scaled fields, three exact values); several finds (one SmugPenalty), a clean scan (silent); who answers (allies of the victim, call or no call; mission ships never call), Beg For Mercy (offered, refused); W1 0x0002 (contacts about 500 px out, radar only), 0x0040 (burns most of the time); C1 0x4000 (lost at once, low confidence); H1 disabled (refused) and fuelless (fuel sold). Not done: rescue (all three), ränk 0x0400, the 0x0400 / 0x2000 cloaks. |
-| Wave 16 leftovers | P1: the self-defence case (a hostile that has FIRED on the player first, beside nosy police); whether the watch range is the whole system (5000+ px); stray hits, boards and one-way alliances (guesses 3, 4, 6, 7) untouched; whether the ally's help is limited to AI 3 (an AI 4 ally). Sol: Arcturus not watched; does the stock Asteroid Miner ever leave (21+ min here, the kit miners 3-4 min); do AI 4 interceptors ever leave (one run). Shuttles: the no-stop case on screen (radar only); the düde's uneven hull odds. A14: (done for the unowned neighbour). Contraband: whether a clean ship is approached on purpose (one cutter); the exact name limit (64 accepted, 80 refused) of the shipyard prompt. Rescue: the ShipStart-2 reveal, boarding 1080 away from planets, a no-cargo goal-5 completion (not run again). W1: confirm the 0x0002 standoff by targeting the ~500 px contacts; when 0x0040 burns. C1: see the 0x4000 cloak itself (an anchored ship); 0x0400 / 0x2000 at a jump / landing. H1: a ränk 0x0400; the fuel-sale price rule and the STR# rows; an ally's or a record-positive pilot's request when disabled. | **Wave 16** (the "... wave 16" sections above) |
+| Wave 16 leftovers | P1: the self-defence case (a hostile that has FIRED on the player first, beside nosy police); whether the watch range is the whole system (5000+ px); stray hits, boards and one-way alliances (guesses 3, 4, 6, 7) untouched; whether the ally's help is limited to AI 3 (an AI 4 ally). Sol: Arcturus not watched; does the stock Asteroid Miner ever leave (21+ min here, the kit miners 3-4 min); do AI 4 interceptors ever leave (one run). Shuttles: the no-stop case on screen (radar only); the düde's uneven hull odds. A14: (done for the unowned neighbour). Contraband: whether a clean ship is approached on purpose (one cutter); the exact name limit (64 accepted, 80 refused) of the shipyard prompt. Rescue: the ShipStart-2 reveal, boarding 1080 away from planets, a no-cargo goal-5 completion (not run again). W1: confirm the 0x0002 standoff by targeting the ~500 px contacts; when 0x0040 burns. C1: see the 0x4000 cloak itself (an anchored ship); 0x0400 / 0x2000 at a jump / landing. H1: a ränk 0x0400; the fuel-sale price rule and the STR# rows; an ally's or a record-positive pilot's request when disabled. | **Wave 16** (the "... wave 16" sections above) **Wave 17** answered: Arcturus and Tau Ceti froze at exactly AvgShips (full = AvgShips; no arrival while full), AI 4 interceptors and the stock Asteroid Miner never left (an AI 3 Fed Destroyer and a Trader-govt Pegasus stayed too); a hostile that fired first (72 s earlier) is still policed; the watch range is the whole system (5000 and 9000 px reacted); an AI 4 ally defends; the name limit is 64 (65 refused); the 0x0002 contact targeted (the 0x0002 hull, still, about 450 px out); four of four cutters sat on a clean ship; an anchored 0x4000 ship did not cloak (the "No Target" is the target clearing on hostility); the fuel price (mood base 1,000 / 2,000-3,000 / 3,000, +1,000 an ask, Lower Price 3/4 or a withdrawal); a disabled pilot refused at +2000 and as an ally; a 0x0400 ränk trader refused ("... wave 17" sections). |
+| Wave 17 leftovers | P1: self-defence against a hostile firing continuously at that moment (an anchored 0x0004 hull with a 1-damage turret never fired first; use a gun that fires every second); stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). Traffic: why an AI 3 Fed Destroyer and an AI 2 Pegasus stayed in frozen Arcturus (kit systems with only AI 2 traders / only AI 3 warships, 20 min); arrival timing below the census spacing. W1: when 0x0040 burns (two magenta hulls on screen at once; use one 0x0040 hull per system). H1: a 0x0400 ränk WARSHIP's answer (none met); ränk 0x0800; the fuel price at a negative record and with little cash (pilot `w17_fuel_poor`, 5,000 credits, built, not run); the shuttles' no-stop case on screen. C1: 0x0400 / 0x2000 at a jump / landing. Rescue: the ShipStart-2 reveal (mïsn 1122), boarding 1080 / 1121 away from planets (the board loop stalled about 3,000 px from marker 2102: use a nearer marker), a no-cargo goal-5 completion. Contraband: a cutter's station-keeping on a clean ship: how long, and whether it leaves. | **Wave 17** (the "... wave 17" sections above) |
 
 ## Catalogue
 
