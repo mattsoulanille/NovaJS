@@ -19,9 +19,10 @@
 import type * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import {
-    canEnterGame, canExitToTitle, closeRollback, closeTitleDialog,
+    canEnterGame, canExitToTitle, ClientState, closeRollback, closeTitleDialog,
     openRollback, openTitleDialog, TitleDialog,
 } from '../client/client_state.js';
+import { displayPlayerJumping } from '../client/frame_pump.js';
 import type { PlayerStartOptions } from '../client/player_start.js';
 import type { ClientRuntime } from '../client/runtime.js';
 import { isMuted } from '../client/mute.js';
@@ -458,6 +459,14 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
         }
     };
 
+    // Whether the game may be left for the title right now: the state
+    // machine's rule, told whether the player's ship is mid-jump in the
+    // system it is leaving (the original drops Escape for the whole jump,
+    // #344; client_state.ts canExitToTitle).
+    const exitAllowed = (current: ClientState) =>
+        canExitToTitle(current, current.kind === 'inSpace'
+            && displayPlayerJumping(current.system.world));
+
     // Escape while flying leaves the game and returns to the title:
     // save, remove the player's ship for every peer, tear the game
     // session down, and re-show the title. Re-entry (Enter Ship) then
@@ -466,7 +475,7 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
         // No teardown yet means startGame has not resolved: the entry is
         // still in flight and owns the session. Showing the title now
         // would leave it to mount the space view over the title art.
-        if (!canExitToTitle(state.state) || teardownGame === undefined) {
+        if (!exitAllowed(state.state) || teardownGame === undefined) {
             return;
         }
         try {
@@ -480,11 +489,12 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
 
     // Escape returns to the title, but ONLY while actually flying: a
     // landed menu / dialog / text field owns (or reserves) Escape, so
-    // stand down whenever one is up. The state machine knows the
+    // stand down whenever one is up. During a hyperspace jump the key is
+    // simply dropped (exitAllowed), not held for the arrival. The state machine knows the
     // spaceport dock; starmap/gate map/player info/hail/boarding set
     // MenuControls.focused; text inputs are caught by isTextEntryActive.
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape' || !canExitToTitle(state.state)
+        if (event.key !== 'Escape' || !exitAllowed(state.state)
             || teardownGame === undefined) {
             return;
         }

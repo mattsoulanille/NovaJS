@@ -256,8 +256,8 @@ describe('client state machine', () => {
                 .toBeTrue();
             expect(canExitToTitle(inSpaceA)).toBeTrue();
             expect(canExitToTitle(land(inSpaceA, ship()))).toBeTrue();
-            expect(canExitToTitle(beginTransit(inSpaceA, plan('A', 'B'))))
-                .toBeTrue();
+            expect(canExitToTitle(beginTransit(inSpaceA,
+                plan('A', 'B', 'gate')))).toBeTrue();
             expect(canExitToTitle(title)).toBeFalse();
             expect(canExitToTitle({ kind: 'entering' })).toBeFalse();
             expect(canExitToTitle({ kind: 'tearingDown' })).toBeFalse();
@@ -279,9 +279,10 @@ describe('client state machine', () => {
             expect(canExitToTitle(slot.state)).toBeFalse();
             slot.apply(s => arrive(s, system('A')));
             expect(canExitToTitle(slot.state)).toBeTrue();
-            // Every LATER transit stays interruptible (issue #30): the
-            // session's teardown exists by then and ends it cleanly.
-            for (const kind of ['hyper', 'gate', 'move'] as const) {
+            // Every LATER transit but a hyperspace jump stays
+            // interruptible (issue #30): the session's teardown exists by
+            // then and ends it cleanly.
+            for (const kind of ['gate', 'move'] as const) {
                 const away = beginTransit(slot.state, plan('A', 'B', kind));
                 expect(canExitToTitle(away)).withContext(kind).toBeTrue();
                 expect(canExitToTitle(claimSystem(away, { systemId: 'B' })))
@@ -289,6 +290,28 @@ describe('client state machine', () => {
             }
             const failed = beginTransit(slot.state, plan('A', 'B'));
             expect(canExitToTitle(beginTransit(failed,
+                plan(undefined, 'A', 'reenter')))).toBeTrue();
+        });
+
+        it('drops Escape for the whole hyperspace jump and admits it again '
+            + 'on arrival (#344)', () => {
+            // The original refuses Escape from the jump key until the
+            // arrival (reference #344 wave 10): during the departure
+            // stages, which run in the system being left...
+            expect(canExitToTitle(inSpaceA, true)).toBeFalse();
+            expect(canExitToTitle(inSpaceA, false)).toBeTrue();
+            // ...through the transit, claimed room or not...
+            const away = beginTransit(inSpaceA, plan('A', 'B', 'hyper'));
+            expect(canExitToTitle(away)).toBeFalse();
+            const claimed = claimSystem(away, { systemId: 'B' });
+            expect(canExitToTitle(claimed)).toBeFalse();
+            // ...and on arrival, flying again, it exits as from flight.
+            expect(canExitToTitle(arrive(claimed, system('B')))).toBeTrue();
+            // Docked stays refused, jump flag or not.
+            expect(canExitToTitle(dock(land(inSpaceA, ship())), false))
+                .toBeFalse();
+            // The re-entry after a failed jump stays interruptible.
+            expect(canExitToTitle(beginTransit(away,
                 plan(undefined, 'A', 'reenter')))).toBeTrue();
         });
 

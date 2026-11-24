@@ -10,7 +10,7 @@ import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.j
 import { serveInProcess } from '../test_support/serve_game_data_in_process.js';
 import { IdleScheduler, PrefetchBudget } from './background_prefetch.js';
 import { ClientState, LiveSystem } from './client_state.js';
-import { displayPlayerNextHop } from './frame_pump.js';
+import { displayPlayerJumping, displayPlayerNextHop } from './frame_pump.js';
 import { meterRoundTrips, RoundTripMeter } from './gamedata/round_trip_meter.js';
 import { SimulationGameData } from './gamedata/simulation_game_data.js';
 import {
@@ -299,4 +299,35 @@ describe('displayPlayerNextHop (#370)', () => {
             { stage: 'departing', direction: 0, to: '', vanish: true } as never);
         expect(displayPlayerNextHop(world(player))).toBeUndefined();
     });
+});
+
+describe('displayPlayerJumping (#344)', () => {
+    function world(player: Entity) {
+        const w = new World('jumping');
+        const npc = new Entity('npc');
+        // An NPC's jump is not the player's.
+        npc.components.set(JumpComponent,
+            { stage: 'spinup', direction: 0, to: kestrel });
+        w.entities.set('npc', npc);
+        w.entities.set('player', player);
+        return w;
+    }
+
+    it('is the departure stages of the player\'s own jump, not the arrival',
+        () => {
+            const player = new Entity('player');
+            player.components.set(PlayerShipSelector, undefined);
+            expect(displayPlayerJumping(world(player))).toBeFalse();
+            for (const stage of ['stopping', 'aligning', 'spinup',
+                'accelerating'] as const) {
+                player.components.set(JumpComponent,
+                    { stage, direction: 0, to: kestrel });
+                expect(displayPlayerJumping(world(player)))
+                    .withContext(stage).toBeTrue();
+            }
+            player.components.set(JumpComponent,
+                { stage: 'arriving', direction: 0, to: kestrel });
+            expect(displayPlayerJumping(world(player))).toBeFalse();
+            expect(displayPlayerJumping(new World('empty'))).toBeFalse();
+        });
 });

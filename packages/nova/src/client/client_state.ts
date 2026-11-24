@@ -308,7 +308,23 @@ export function isDockedForExit(state: ClientState): boolean {
 /**
  * Whether an exit to the title may start now: a game session is open
  * (which excludes the title), the startup entry is over, no teardown is
- * already running, and the player is not docked.
+ * already running, the player is not docked, and no hyperspace jump is
+ * under way.
+ *
+ * A HYPERSPACE JUMP IS NOT INTERRUPTIBLE either, as in the original
+ * (docs/reference_experiments.md, "#344 wave 10"): from the jump key
+ * until the arrival, Escape is DROPPED, not queued — it neither paused
+ * nor reached the title, not even after the arrival. That is the `hyper`
+ * transit here, and the stretch before it, while the player's ship is
+ * still in the system it is leaving running the departure stages
+ * (stopping, aligning, spin-up, the burn): `playerJumping` says so, read
+ * by the caller off the display world (frame_pump.ts
+ * displayPlayerJumping), since this pure machine holds no world state.
+ * The arrival itself is NOT part of it: an Escape on the arrival frame
+ * went to the title in the original, keeping the completed jump, and
+ * the arrival tick's JumpComponent ('arriving') does not count. Other
+ * transits (gate, Mxxx move, a failed jump's re-entry) stay
+ * interruptible (issue #30); the original was not measured on them.
  *
  * THE STARTUP ENTRY IS NOT INTERRUPTIBLE, exactly as the title's
  * `entering` flag had it before the state machine: that flag stayed up
@@ -319,9 +335,12 @@ export function isDockedForExit(state: ClientState): boolean {
  * re-show the title while the entry, which has no teardown to hand back
  * until it resolves, went on to mount the space view over it.
  */
-export function canExitToTitle(state: ClientState): boolean {
+export function canExitToTitle(state: ClientState,
+    playerJumping = false): boolean {
     return isInGame(state) && state.kind !== 'entering'
-        && !(state.kind === 'transit' && state.transit.kind === 'startup')
+        && !(state.kind === 'transit' && (state.transit.kind === 'startup'
+            || state.transit.kind === 'hyper'))
+        && !(state.kind === 'inSpace' && playerJumping)
         && state.kind !== 'tearingDown' && state.kind !== 'desynced'
         && !isDockedForExit(state);
 }

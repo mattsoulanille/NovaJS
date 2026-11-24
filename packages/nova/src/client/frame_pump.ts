@@ -191,6 +191,23 @@ export function displayPlayerNextHop(displayWorld: World): string | undefined {
     return undefined;
 }
 
+/**
+ * Whether the local player's ship is running a hyperspace jump's
+ * departure stages (stopping, aligning, spin-up, the burn) as the display
+ * sees it — what canExitToTitle refuses Escape for (#344). The arrival
+ * tick's 'arriving' stage is not: the jump is over by then.
+ */
+export function displayPlayerJumping(displayWorld: World): boolean {
+    for (const entity of displayWorld.entities.values()) {
+        if (!entity.components.has(PlayerShipSelector)) {
+            continue;
+        }
+        const jump = entity.components.get(JumpComponent);
+        return jump !== undefined && jump.stage !== 'arriving';
+    }
+    return false;
+}
+
 function routesEqual(a?: string[], b?: string[]): boolean {
     if (a === b) {
         return true;
