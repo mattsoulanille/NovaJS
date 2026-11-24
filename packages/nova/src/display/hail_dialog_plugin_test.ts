@@ -33,7 +33,7 @@ import {
     MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
-    JUST_AN_ESCORT_FALLBACK,
+    JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -43,7 +43,8 @@ import {
     commButtonSlots, escortButtonSlots,
 } from '../spaceport/hail_layout.js';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
-import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { getDefaultRankData } from 'novadatainterface/rank_data';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
     StellarBribesComponent,
@@ -452,6 +453,11 @@ describe('hail assistance answers (accept / busy / no need)', () => {
         strings[BUSY_RESPONSE_FIRST_INDEX + 2] = "I'm too busy to help you.";
         strings[BUSY_RESPONSE_FIRST_INDEX + 3] = 'I have other business.';
         strings[BUSY_RESPONSE_FIRST_INDEX + 4] = "I've got other things to do.";
+        strings[MERCY_REFUSED_FIRST_INDEX] = 'In your dreams, pal.';
+        strings[MERCY_REFUSED_FIRST_INDEX + 1] = 'Yeah, right!';
+        strings[MERCY_REFUSED_FIRST_INDEX + 2] = 'No way.';
+        strings[MERCY_REFUSED_FIRST_INDEX + 3] = 'You wish.';
+        strings[MERCY_REFUSED_FIRST_INDEX + 4] = 'Not a chance.';
         return {
             data: {
                 StringTable: {
@@ -594,7 +600,133 @@ describe('hail assistance answers (accept / busy / no need)', () => {
             granted: ASSIST_GRANTED_FALLBACK,
             busy: BUSY_RESPONSE_FALLBACK,
             noNeed: NO_NEED_RESPONSE_FALLBACK,
+            underFire: MERCY_REFUSED_FALLBACK,
         });
+    });
+
+    /**
+     * Reference "W1 / C1 / H1 wave 15", H1: a healthy pilot under raider
+     * fire asking a neutral warship or trader for help was refused from STR#
+     * 3000 95-99 ("Yeah, right!", "No way."), with record 0 and with record
+     * +1000 / rating 6400 alike — never 70-74's "You're not in any trouble."
+     */
+    describe('a HEALTHY player under attack (reference H1 wave 15)', () => {
+        const RAIDER = 'raider-uuid';
+        const REFUSALS = ['In your dreams, pal.', 'Yeah, right!', 'No way.',
+            'You wish.', 'Not a chance.'];
+
+        function addRaider(world: World) {
+            world.entities.set(RAIDER, new Entity()
+                .addComponent(NpcComponent, { aiType: 3, mode: 'attack' } as never)
+                .addComponent(TargetComponent, { target: PLAYER }));
+        }
+
+        for (const [kind, aiType] of [['warship', 3], ['trader', 1]] as const) {
+            it(`a neutral ${kind} refuses from 95-99 and dispatches nothing`,
+                async () => {
+                    const { world, gameData } = makeWorld(target => {
+                        target.components.set(NpcComponent, { aiType });
+                    });
+                    addRaider(world);
+                    const result = await computeContext(world, gameData,
+                        fakeDisplayAssets());
+                    const answer = assistAnswer(world, TARGET, result!.replies);
+                    expect(answer).toEqual({
+                        line: result!.replies.underFire!, dispatch: false,
+                        haggle: false,
+                    });
+                    expect(REFUSALS).toContain(answer.line);
+                });
+        }
+
+        it('whatever his record', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+                target.components.set(GovtComponent, { id: 'test:neutral' });
+            });
+            gameData.data.Govt.map.set('test:neutral',
+                { ...getDefaultGovtData(), id: 'test:neutral' });
+            world.entities.get(PLAYER)!.components.set(LegalRecordsComponent,
+                new Map([['test:neutral', 1000]]));
+            addRaider(world);
+            const result = await computeContext(world, gameData,
+                fakeDisplayAssets());
+            expect(REFUSALS).toContain(
+                assistAnswer(world, TARGET, result!.replies).line);
+        });
+
+        it('a recent hit counts as being under attack (the aggression '
+            + 'window)', async () => {
+                const { world, gameData } = makeWorld(target => {
+                    target.components.set(NpcComponent, { aiType: 3 });
+                });
+                // The raider broke off but hit the player a moment ago.
+                world.entities.set(RAIDER, new Entity()
+                    .addComponent(NpcComponent, { aiType: 3 } as never));
+                world.entities.get(PLAYER)!.components.set(
+                    AggressionComponent,
+                    new Map([[RAIDER, { at: 0, damage: 80, hostile: true }]]));
+                const result = await computeContext(world, gameData,
+                    fakeDisplayAssets());
+                expect(REFUSALS).toContain(
+                    assistAnswer(world, TARGET, result!.replies).line);
+            });
+
+        it('with nobody attacking, the no-need line as before', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            // A ship merely targeting the player, not attacking.
+            world.entities.set(RAIDER, new Entity()
+                .addComponent(NpcComponent, { aiType: 3 } as never)
+                .addComponent(TargetComponent, { target: PLAYER }));
+            const result = await computeContext(world, gameData,
+                fakeDisplayAssets());
+            expect(assistAnswer(world, TARGET, result!.replies).line)
+                .toBe(result!.replies.noNeed);
+        });
+
+        it('UNMEASURED cases keep their answers: a disabled player under '
+            + 'attack is still helped', async () => {
+                const { world, gameData } = needyWorld(target => {
+                    target.components.set(NpcComponent, { aiType: 3 });
+                    target.components.set(TargetComponent,
+                        { target: undefined });
+                });
+                addRaider(world);
+                const result = await computeContext(world, gameData,
+                    fakeDisplayAssets());
+                const answer = assistAnswer(world, TARGET, result!.replies);
+                expect(answer.dispatch).toBeTrue();
+                expect(answer.line).toBe(result!.replies.granted);
+            });
+
+        it('and a ship whose govt\'s ränk 0x0400 the player holds keeps the '
+            + 'no-need line (battle assistance: unmeasured)', async () => {
+                const { world, gameData } = makeWorld(target => {
+                    target.components.set(NpcComponent, { aiType: 3 });
+                    target.components.set(GovtComponent, { id: 'test:navy' });
+                });
+                gameData.data.Govt.map.set('test:navy',
+                    { ...getDefaultGovtData(), id: 'test:navy' });
+                const base = getDefaultRankData();
+                gameData.data.Rank.map.set('test:rank', {
+                    ...base, id: 'test:rank', affilGovt: 'test:navy',
+                    rankFlags: {
+                        ...base.rankFlags, canRequestBattleAssistance: true,
+                    },
+                });
+                // Staged, as the sim stages every active rank (getCached).
+                await gameData.data.Rank.get('test:rank');
+                world.entities.get(PLAYER)!.components.set(
+                    ActiveRanksComponent, new Set(['test:rank']));
+                addRaider(world);
+                const result = await computeContext(world, gameData,
+                    fakeDisplayAssets());
+                expect(result!.replies.underFire).toBeUndefined();
+                expect(assistAnswer(world, TARGET, result!.replies).line)
+                    .toBe(result!.replies.noNeed);
+            });
     });
 });
 

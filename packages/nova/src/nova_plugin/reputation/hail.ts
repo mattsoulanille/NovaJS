@@ -509,6 +509,12 @@ export const SHIP_NO_RESPONSE_FALLBACK = 'No response.';
  * Beg For Mercy. ASSUMPTION: the table does not label its groups; this one
  * is the flat "no" among them (85-89 is a polite "I'd rather not", and the
  * 15-19 taunts answer the hail itself rather than a plea).
+ *
+ * MEASURED for another moment ({@link underFireRefusalText}): a healthy
+ * pilot under raider fire who asks a neutral ship for assistance is refused
+ * from this group ("Yeah, right!", "No way."), whatever his record
+ * (reference "W1 / C1 / H1 wave 15", H1). The mercy-plea use is still the
+ * assumption above.
  */
 export const MERCY_REFUSED_FIRST_INDEX = 95;
 export const MERCY_REFUSED_COUNT = RESPONSE_GROUP_SIZE;
@@ -643,6 +649,21 @@ export function noNeedResponseText(strings: readonly string[] | undefined,
     seed = 0): string {
     return responseText(strings, NO_NEED_RESPONSE_FIRST_INDEX,
         NO_NEED_RESPONSE_FALLBACK, seed);
+}
+
+/**
+ * The refusal a HEALTHY player under attack gets for Request Assistance
+ * (STR# 3000 indices 95-99, the refused-plea group: "Yeah, right!", "No
+ * way."). Measured on the original: a neutral warship and a neutral trader,
+ * asked for help by a pilot under raider fire but far from disabled, both
+ * answered from this group, with record 0 and with record +1000 and combat
+ * rating 6400 alike; never "You're not in any trouble." (70-74) nor "I'd
+ * rather not." (85-89). Reference "W1 / C1 / H1 wave 15", finding 8.
+ */
+export function underFireRefusalText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, MERCY_REFUSED_FIRST_INDEX,
+        MERCY_REFUSED_FALLBACK, seed);
 }
 
 /** The acceptance line for a granted assistance request (indices 75-79). */

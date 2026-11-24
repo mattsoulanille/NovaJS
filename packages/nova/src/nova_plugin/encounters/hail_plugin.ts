@@ -426,7 +426,9 @@ export function applyHail(world: World, peerId: string | undefined,
         // NO NEED, NO ERRAND. The button is offered to every non-hostile ship
         // now, whatever shape the player's hull is in — the ship answers a
         // pointless request with "You're not in any trouble." (STR# 3000
-        // 70-74, rendered by the dialog) and is left completely alone here:
+        // 70-74, rendered by the dialog), or, when the player is under
+        // attack, turns him down flat ("Yeah, right!", 95-99: reference H1
+        // wave 15, no battle assistance), and is left completely alone here:
         // no AssistingComponent means NpcDecisionSystem keeps its brain and
         // AssistBehaviorSystem never steers it. The same synced predicate the
         // dialog uses, so every peer reaches the same verdict on the tick the

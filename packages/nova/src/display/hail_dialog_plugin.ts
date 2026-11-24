@@ -26,7 +26,8 @@ import {
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
-    shipDisposition, LegalRecordsComponent, loadLocalLaw,
+    shipDisposition, LegalRecordsComponent, loadLocalLaw, underFireRefusalText,
+    MERCY_REFUSED_FALLBACK,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -35,7 +36,9 @@ import {
 } from '../nova_plugin/encounters/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
-import { contrabandDetectedBy, NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
+import {
+    contrabandDetectedBy, isAttackingPlayer, NpcComponent, ShootAllWeaponsComponent,
+} from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
@@ -218,6 +221,32 @@ function playerNeedsHelp(entity: ReturnType<typeof getPlayerShip>): boolean {
 }
 
 /**
+ * Whether some other ship is ATTACKING the player's ship right now: the
+ * behavioural reading of the hostility rule (allegiance.ts's
+ * isAttackingPlayer: in attack posture on it, or it hit the player or
+ * locked a missile on it within the aggression window). Read off synced
+ * components and the simulation clock, like everything the press decides
+ * on.
+ *
+ * GUESS for who counts: the reference measured NPC raiders; another
+ * player's ship attacking us counts here too (the same rule paints it red).
+ */
+function playerUnderAttack(world: World,
+    player: ReturnType<typeof getPlayerShip>): boolean {
+    if (!player) {
+        return false;
+    }
+    const now = world.resources.get(SimulationTimeResource)?.time ?? 0;
+    for (const [uuid, entity] of world.entities) {
+        if (uuid !== player.uuid
+            && isAttackingPlayer(uuid, entity, player.uuid, player.entity, now)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Whether a hailed ship is busy fighting, read off the same synced components
  * the simulation's applyHail reads (hail_plugin.ts) and passed through the one
  * shared predicate, so the dialog's answer and the sim's refusal agree.
@@ -243,6 +272,13 @@ export interface AssistReplies {
     /** "You're not in any trouble." — the player's ship is fine. */
     noNeed: string;
     /**
+     * "Yeah, right!" / "No way." (STR# 3000 95-99) — the player's ship is
+     * fine but under attack (reference H1 wave 15; underFireRefusalText).
+     * Absent for a ship of a govt whose ränk 0x0400 the player holds (battle
+     * assistance, not measured): that ship keeps the no-need line.
+     */
+    underFire?: string;
+    /**
      * "Sorry sir, I'm just an escort." — SOMEONE ELSE'S ESCORT (ruling
      * #332). Present only for such a ship, and said to every request,
      * whatever shape the player is in: an escort does not decide.
@@ -267,6 +303,7 @@ export const ASSIST_REPLIES_FALLBACK: AssistReplies = {
     granted: ASSIST_GRANTED_FALLBACK,
     busy: BUSY_RESPONSE_FALLBACK,
     noNeed: NO_NEED_RESPONSE_FALLBACK,
+    underFire: MERCY_REFUSED_FALLBACK,
 };
 
 /**
@@ -278,6 +315,13 @@ export const ASSIST_REPLIES_FALLBACK: AssistReplies = {
  * hailed ship's combat state is left completely untouched. Need is checked
  * ahead of busy: asking for aid you don't need is pointless whatever the
  * other captain happens to be doing.
+ *
+ * A healthy player who is UNDER ATTACK is not told he is in no trouble: he
+ * is turned down flat, "Yeah, right!" / "No way." (STR# 3000 95-99), and
+ * nothing else happens — no ship comes to fight his attackers. Measured on
+ * the original, whatever his record (reference "W1 / C1 / H1 wave 15", H1).
+ * A disabled or fuelless player under attack (unmeasured) goes on to the
+ * busy / willingness answers below, as before.
  *
  * Evaluated at the moment of the press (not when the channel was opened) so a
  * ship that got into a fight, or a player who took a hit, while the dialog was
@@ -295,7 +339,10 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
     }
     const player = getPlayerShip(world);
     if (!playerNeedsHelp(player)) {
-        return { line: replies.noNeed, dispatch: false, haggle: false };
+        const line = replies.underFire !== undefined
+            && playerUnderAttack(world, player)
+            ? replies.underFire : replies.noNeed;
+        return { line, dispatch: false, haggle: false };
     }
     const target = targetUuid ? world.entities.get(targetUuid) : undefined;
     if (target && targetIsFighting(target)) {
@@ -320,11 +367,13 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
  * literal, exactly as noShipsForHire does (spaceport/hire_escort.ts).
  */
 function resolveAssistReplies(strings: readonly string[] | undefined,
-    seed: number): AssistReplies {
+    seed: number, rankAlwaysAssists = false): AssistReplies {
     return {
         granted: assistGrantedText(strings, seed),
         busy: busyResponseText(strings, seed),
         noNeed: noNeedResponseText(strings, seed),
+        ...(rankAlwaysAssists
+            ? {} : { underFire: underFireRefusalText(strings, seed) }),
     };
 }
 
@@ -802,7 +851,7 @@ export async function computeContext(world: World,
         // "You're not in any trouble." / "All right, I'll help you."). Only
         // the lines are resolved here — the press decides which is used.
         const replies: AssistReplies = {
-            ...resolveAssistReplies(shipStrings, shipSeed),
+            ...resolveAssistReplies(shipStrings, shipSeed, rankAlwaysAssists),
             ...(escortLine !== undefined ? { escort: escortLine } : {}),
             // A ship another player owns can do nothing for us (applyHail
             // refuses it); an unfriendly government's ship that takes no
