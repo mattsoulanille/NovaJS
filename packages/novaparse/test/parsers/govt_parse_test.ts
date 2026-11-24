@@ -5,6 +5,10 @@ import { StrNResource } from "../../src/resource_parsers/strn_resource.js";
 import { getEmptyNovaResources, NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { defaultIDSpace } from "../resource_parsers/default_id_space.js";
 import { ResourceBuilder } from "../resource_parsers/resource_builder.js";
+import { GovtData } from "novadatainterface/govt_data";
+import { NovaDataType } from "novadatainterface/nova_data_interface";
+import { NovaParse } from "../../src/nova_parse.js";
+import { STOCK_DATA_MISSING, stockNovaParse } from "../stock_data.js";
 import {
     buildFlagNamespaceMapFrom, FIRST_PRIVATE_PHYSICAL_BIT, FlagResourceRef,
 } from "../../src/flag_namespace.js";
@@ -271,5 +275,56 @@ describe("GovtParse status bar (gövt Interface)", () => {
 
     it("is null for values below 128 (the engine's default bar)", async () => {
         expect((await parseWithInterface(0, 0)).statusBar).toBeNull();
+    });
+});
+
+describe("GovtParse over the stock data (contraband and nosy fields)", () => {
+    let np: NovaParse | null;
+    let govts: GovtData[];
+
+    beforeAll(async () => {
+        np = await stockNovaParse();
+        if (!np) {
+            return;
+        }
+        govts = [];
+        for (const id of (await np.ids).Govt) {
+            govts.push(await np.data[NovaDataType.Govt].get(id));
+        }
+    });
+
+    function countWhere(test: (govt: GovtData) => boolean): number {
+        return govts.filter(test).length;
+    }
+
+    it("reads ScanMask, ScanFine and SmugPenalty", () => {
+        if (!np) {
+            pending(STOCK_DATA_MISSING);
+            return;
+        }
+        expect(govts.length).toBe(68);
+        const byId = (id: string) => govts.find(g => g.id === id)!;
+        // Federation: the 0x8000 that most illegal outfits carry.
+        expect(byId("nova:128").scanMask).toBe(0x8000);
+        // Pirate: 0x0800, the bit 18 of the 23 stock jünks share.
+        expect(byId("nova:137").scanMask).toBe(0x0800);
+        // "No fine, just a warning" everywhere in stock (Bible ~:983).
+        expect(countWhere(g => g.scanFine !== 0)).toBe(0);
+        expect(countWhere(g => g.smugglePenalty > 0)).toBe(40);
+    });
+
+    it("reads the two nosy flags (0x0002, 0x0020)", () => {
+        if (!np) {
+            pending(STOCK_DATA_MISSING);
+            return;
+        }
+        expect(countWhere(g => g.flags.attacksPlayerIfCriminal)).toBe(19);
+        expect(countWhere(g => g.flags.ignoredByOtherNosyGovts)).toBe(27);
+        const federation = govts.find(g => g.id === "nova:128")!;
+        expect(federation.flags.ignoredByOtherNosyGovts).toBe(true);
+        expect(federation.flags.attacksPlayerIfCriminal).toBe(false);
+        const pirate = govts.find(g => g.id === "nova:137")!;
+        expect(pirate.flags.ignoredByOtherNosyGovts).toBe(true);
+        expect(pirate.flags.attacksPlayerIfCriminal).toBe(true);
     });
 });

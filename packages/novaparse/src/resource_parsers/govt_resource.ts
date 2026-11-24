@@ -69,7 +69,10 @@ class GovtResource extends BaseResource {
 
     /** Skill multiplier for this govt's ships in percent; 100 = stock. */
     skillMult: number;
-    /** Matched against mïsn ScanMask to decide if mission cargo is illegal. */
+    /**
+     * Matched against mïsn, jünk and oütf ScanMask: any shared 1 bit makes
+     * that mission cargo, commodity or outfit illegal to this government.
+     */
     scanMask: number;
     /** Shown when ships of this government are hailed. */
     commName: string;

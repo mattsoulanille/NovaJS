@@ -62,13 +62,25 @@ export interface GovtData extends BaseData {
     /**
      * Scan Fine behaviour when caught carrying illegal cargo: >0 is a fixed
      * credit fine, 0 is a warning only, <0 is a percentage of the player's cash.
+     * Every stock gövt has 0 (EVN Bible ~:977-985).
      */
     scanFine: number;
 
-    /** 16-bit ScanMask, matched against a mïsn's ScanMask to decide illegality. */
+    /**
+     * 16-bit ScanMask (EVN Bible ~:1116): if any 1 bit matches one in a
+     * mïsn's ScanMask (MissionData.scanMask), a jünk's (JunkData.scanMask)
+     * or an oütf's (OutfitData.scanMask), this government considers that
+     * mission cargo, commodity or outfit illegal. 0 = unused. Data only:
+     * contraband scanning does not exist yet (docs/npc_behavior_gaps.md).
+     */
     scanMask: number;
 
-    /** Legal-record penalties for various crimes against this government. */
+    /**
+     * Legal-record penalties for various crimes against this government.
+     * smugglePenalty is the Bible's SmugPenalty (~:987), the record lost
+     * for being detected smuggling past this government's ships; nothing
+     * applies it yet (no scanning).
+     */
     smugglePenalty: number;
     disablePenalty: number;
     boardPenalty: number;
@@ -144,14 +156,25 @@ export interface GovtData extends BaseData {
 export interface GovtFlags {
     /** Warships attack everyone except allies (pirates and nasties). */
     xenophobic: boolean;
-    /** Nosy: attacks the player in non-allied systems where he's a criminal. */
+    /**
+     * Flags 0x0002, the "nosy" bit (EVN Bible ~:1055): "Ships of this govt
+     * will attack the player in non-allied systems if he's a criminal
+     * there" -- it enforces its own laws everywhere it goes, where a govt
+     * without it only cares about its home turf. Parsed, not yet read by
+     * the sim (docs/npc_behavior_gaps.md, "Nosy enforcement").
+     */
     attacksPlayerIfCriminal: boolean;
     alwaysAttacksPlayer: boolean;
     /** Player's shots won't hit ships of this government. */
     playerShotsPassThrough: boolean;
     /** Warships retreat when their shields drop below 25%. */
     warshipsRetreatAt25: boolean;
-    /** Nosy ships of other govts ignore this govt's ships under attack. */
+    /**
+     * Flags 0x0020 (EVN Bible ~:1063): "Nosy ships of other non-allied
+     * governments ignore ships of this govt that are under attack". Parsed,
+     * not yet read by the sim (no piracy police; docs/npc_behavior_gaps.md,
+     * "Nosy-ignore").
+     */
     ignoredByOtherNosyGovts: boolean;
     /** Never attacks player and the player can't hit them. */
     neverAttacksPlayer: boolean;
