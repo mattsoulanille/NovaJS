@@ -1,0 +1,45 @@
+{
+ "name": "w18_space_interactive",
+ "_comment": "Wave 18: Enter Ship, recording from the start at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w18.jsonl) until {\"done\":true}; the pilot is pulled at the end. P1 (w18_pest), H1 (w18_fuel_*, w18_rank*), A14 (w18_a14_*).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w18.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

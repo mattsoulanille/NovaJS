@@ -289,8 +289,116 @@ export default {
         ...wave15Resources(),
         ...wave16Resources(),
         ...wave17Resources(),
+        ...wave18Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-18 experiments (docs/reference_experiments.md, "... wave 18").
+ * Nothing retired; ids above wave 17's: sÿst 1593-1598, spöb 1593-1597,
+ * shïp 457-466, düde 421-424, gövt 312, ränk 201, bits 9210-9220. mïsn ids
+ * past 1124 run out at the game's 1127, so wave 18 uses the free ids
+ * between the stock missions (128-918) and the kit's 960: mïsn 919-924
+ * (offer text dësc 4791-4796). Map row y = -1140.
+ *
+ *  A14 Per-system records (docs/npc_behavior_gaps.md "Legal records per
+ *      system: guesses to measure" 1, 6, 11): gövt 312 Kit Spread Disab
+ *      (Disab 400 / Board 800 / Kill 2000, CrimeTol 30000) owns sÿst 1593
+ *      Kit Disab Owner (port spöb 1593) and 1594 Kit Disab One (no stellar);
+ *      sÿst 1595 Kit Disab Unowned (govt -1, port spöb 1594). Links 1595 -
+ *      1593 - 1594. Traffic of 1593 and 1595: gövt 312's AI 1 traders, the
+ *      magenta pointer hulk sprite with 3000 / 3000 (shïp 466, düde 424): two
+ *      Kit Disable Gun hits disable one, a third kills it.
+ *  T   Who stays: sÿst 1596 Kit Traffic AI2 (363, port spöb 1595): AI 2
+ *      traders of 363 with the Kit Escort Gun, red / orange / yellow / green
+ *      (shïp 457-460, düde 421); sÿst 1597 Kit Traffic AI3 (363, port spöb
+ *      1596): AI 3 warships of 363, azure / blue / purple / magenta (shïp
+ *      461-464, düde 422). avgShips 4 each, nothing else.
+ *  W1  sÿst 1598 Kit Burn One (363, port spöb 1597): wave 15's magenta
+ *      0x0040 hull (düde 397, hostile 362) alone, avgShips 1.
+ *  P   Self-defence against a hostile firing NOW: shïp 465 Kit Pest
+ *      Anchored (red, Speed 0, 30000 / 30000, gövt 362 via düde 423, AI 3,
+ *      the Kit Raider Gun turret: 20 damage every 20 frames, the gun the
+ *      W1 hostiles fire at once), offer 919 (b9210) on Kit Self Defence's
+ *      150 px marker 1587; with wave 17's BBS 1112 (b9194, the anchored
+ *      nosy police on 1586).
+ *  H   ränk 0x0400 against a WARSHIP: offer 920 (b9211) at Kit Assist Calm
+ *      (1581: neutral 363 AI 3 warships and AI 1 traders): OnAccept K200
+ *      and a Kit Raider (düde 602) at the port. ränk 201 Kit Free Repair
+ *      Rank (AffilGovt 363, Flags 0x0800 "allied ships repair / refuel for
+ *      free"): BBS 921 (b9212, OnAccept K201) at 1581, with wave 16's
+ *      disabler offer 1105 (b9187).
+ *  R   Rescues near the port: Kit Self Defence's marker 1586 (300 px):
+ *      offer 922 (b9213) = 1080 (the kit düde 330 with the Raczak cargo),
+ *      923 (b9215) = 1121 (no cargo), 924 (b9217) the kit düde with
+ *      ShipStart 2 (appear randomly, cloaked); ReturnStel 1585, OnSuccess
+ *      b9214 / b9216 / b9218.
+ */
+function wave18Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const anchored = { ...mobile, accel: 0, speed: 0, armor: 30000, shield: 30000 };
+    const armed = (wid, n = 1, ammo = 0) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [ammo, 0, 0, 0] });
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const RLED = { red: 1971, green: 1972, blue: 1973, yellow: 1974, magenta: 1975, orange: 1956, azure: 1958, purple: 1960, pointer: 1959 };
+    const shipMisn = (id, name, bit, availStel, dudeId, shipStart, bbs) => misn(id, name, bit, {
+        availStel, availLoc: bbs ? 0 : 3, shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart,
+        onAccept: `!b${bit}`, ...(bbs ? { dispWeight: 30000 } : {}) });
+    const multiDude = (id, name, ai, govtId, shipIds) => ({ type: "düde", id, name, clone: "düde:128",
+        set: { ai, govt: govtId, flags: 0, infoTypes: 0, ships: [...shipIds, ...none16].slice(0, 16),
+            probs: [...shipIds.map(() => Math.floor(100 / shipIds.length)), ...zero16].slice(0, 16) } });
+
+    // --- A14: a disable / boarding spreading, a crime inside an unowned system.
+    out.push(govt(312, "Kit Spread Disab", { disabPenalty: 400, boardPenalty: 800, killPenalty: 2000, crimeTol: 30000, classes: [312, -1, -1, -1] }));
+    out.push(...shareRled(466, "Kit Disab Trader", RLED.pointer, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }), dude(424, "Kit Disab Trader", 1, 312, 466));
+    const owner = traffic(system(1593, "Kit Disab Owner", -520, -1140, 312, [1593]), [[424, 100]], 3);
+    owner.set.links = links(1594, 1595);
+    const one = system(1594, "Kit Disab One", -480, -1140, 312, []);
+    one.set.links = links(1593);
+    const unowned = traffic(system(1595, "Kit Disab Unowned", -560, -1140, -1, [1594]), [[424, 100]], 3);
+    unowned.set.links = links(1593);
+    out.push(owner, port(1593, "Kit Disab Owner Port"), one, unowned, port(1594, "Kit Disab Unowned Port"));
+
+    // --- T: AI 2 traders only / AI 3 warships only.
+    const ai2 = [[457, "red"], [458, "orange"], [459, "yellow"], [460, "green"]];
+    const ai3 = [[461, "azure"], [462, "blue"], [463, "purple"], [464, "magenta"]];
+    ai2.forEach(([id, c]) => out.push(...shareRled(id, `Kit AI2 ${c}`, RLED[c], 24, { ...mobile, ai: 2, armor: 3000, shield: 3000, ...armed(365) })));
+    ai3.forEach(([id, c]) => out.push(...shareRled(id, `Kit AI3 ${c}`, RLED[c], 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) })));
+    out.push(multiDude(421, "Kit AI2 Traders", 2, 363, ai2.map((s) => s[0])), multiDude(422, "Kit AI3 Warships", 3, 363, ai3.map((s) => s[0])));
+    out.push(traffic(system(1596, "Kit Traffic AI2", -400, -1140, 363, [1595]), [[421, 100]], 4), port(1595, "Kit Traffic AI2 Port"));
+    out.push(traffic(system(1597, "Kit Traffic AI3", -360, -1140, 363, [1596]), [[422, 100]], 4), port(1596, "Kit Traffic AI3 Port"));
+
+    // --- W1: one 0x0040 hull.
+    out.push(traffic(system(1598, "Kit Burn One", -320, -1140, 363, [1597]), [[397, 100]], 1), port(1597, "Kit Burn One Port"));
+
+    // --- P: a hostile firing continuously.
+    out.push(...shareRled(465, "Kit Pest Anchored", RLED.red, 24, { ...anchored, ai: 3, ...armed(367) }), dude(423, "Kit Pest Anchored", 3, 362, 465));
+    out.push(...shipMisn(919, "Kit P pest as the first shooter", 9210, 1585, 423, -3, false));
+
+    // --- H: ränk 0x0400 and a warship; ränk 0x0800.
+    out.push(...misn(920, "Kit H assist rank and a raider", 9211, { availStel: 1581, shipCount: 1, shipDude: 602, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9211 K200" }));
+    out.push({ type: "ränk", id: 201, name: "Kit Free Repair Rank", clone: "ränk:128",
+        set: { "@0:i16": 1, "@2:i16": 363, "@4:i16": 100, "@6:i32": 0, "@10:i32": 0, "@22:i16": 0x0800 } });
+    out.push(...misn(921, "Kit H free repair rank", 9212, { availStel: 1581, availLoc: 0, dispWeight: 30000, onAccept: "!b9212 K201" }));
+
+    // --- R: rescues on the 300 px marker of Kit Self Defence.
+    const raczak = { shipCount: 1, shipSyst: -1, shipDude: 330, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
+        cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 1585, availShipType: 127, availStel: 1585 };
+    const noCargo = { cargoType: -1, cargoQty: 0, pickupMode: -1, dropoffMode: -1 };
+    out.push(...misn(922, "Kit R kit dude with cargo near", 9213, { ...raczak, shipStart: -2, onAccept: "!b9213", onSuccess: "b9214" }));
+    out.push(...misn(923, "Kit R kit dude no cargo near", 9215, { ...raczak, ...noCargo, shipStart: -2, onAccept: "!b9215", onSuccess: "b9216" }));
+    out.push(...misn(924, "Kit R kit dude ShipStart 2", 9217, { ...raczak, shipStart: 2, onAccept: "!b9217", onSuccess: "b9218" }));
+    return out;
+}
 
 /**
  * Wave-17 experiments (docs/reference_experiments.md, "... wave 17").

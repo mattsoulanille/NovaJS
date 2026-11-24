@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w18-rank800",
+  "edits": {
+    "ship": 451,
+    "stellar": 1581,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1581": 2
+    },
+    "missionBits": {
+      "9187": true,
+      "9212": true
+    },
+    "nickname": "Probe",
+    "shipName": "w18-rank800"
+  }
+}

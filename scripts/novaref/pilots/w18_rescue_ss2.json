@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w18-rescue-ss2",
+  "edits": {
+    "ship": 703,
+    "stellar": 1585,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1585": 2
+    },
+    "missionBits": {
+      "9217": true
+    },
+    "nickname": "Probe",
+    "shipName": "w18-rescue-ss2"
+  }
+}

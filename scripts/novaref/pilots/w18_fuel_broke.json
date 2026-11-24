@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w18-fuel-broke",
+  "edits": {
+    "ship": 763,
+    "stellar": 1581,
+    "credits": 300,
+    "fuel": 0,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1581": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w18-fuel-broke"
+  }
+}

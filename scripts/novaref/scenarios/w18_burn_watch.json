@@ -1,0 +1,50 @@
+{
+ "name": "w18_burn_watch",
+ "_comment": "Wave 18 W1: Enter Ship at Kit Burn One (one magenta 0x0040 hostile) and sit still for 4 minutes, recording at 30 fps (per-frame speed), a window shot every 20 s. Pilot w18_burn.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 30
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "repeat": 12,
+   "steps": [
+    {
+     "wait": 20000
+    },
+    {
+     "shot": "w-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,84 @@
+{
+ "name": "w18_a14_board",
+ "_comment": "Wave 18 A14: Enter Ship at Kit Disab Owner (1593) or Kit Disab Unowned (1595) recording at 10 fps; hand-driven steps (disable or kill a Kit Disab Trader with the Kit Disable Gun, land, leave, pull, take off, Tab to the disabled hulk) until {done}; then loops/board.mjs (brackets, grey) boards the hulk; hand-driven again (land, leave, pull; the map Legal Status of a selected system). Pilots w18_a14_disab, w18_a14_unowned.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w18.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "locateBy": "bracket",
+    "bracketColours": [
+     "grey",
+     "yellow",
+     "green",
+     "red"
+    ],
+    "speedPxS": 360,
+    "turnDegS": 174.2,
+    "near": 200,
+    "stepMs": 50,
+    "maxSteps": 40,
+    "maxLegs": 10,
+    "calMs": 300,
+    "fineBelowPx": 60,
+    "fineStepMs": 25,
+    "retarget": 3,
+    "sweep": {
+     "atPx": 25,
+     "startOnSilent": true,
+     "repeat": 2,
+     "turnMs": 40,
+     "presses": 40,
+     "stopAfter": 1,
+     "dialogClicks": [],
+     "clickTimes": 0
+    }
+   }
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w18.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

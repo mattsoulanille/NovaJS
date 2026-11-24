@@ -1,0 +1,53 @@
+{
+ "name": "w18_census_watch",
+ "_comment": "Wave 18 traffic: Enter Ship and sit still for about 20 minutes, recording at 10 fps; every 2 minutes a census of 20 Tabs 0.84 s apart (names cut later with tools/tab_names.sh) and a window shot. Pilots w18_traffic_ai2 (sÿst 1596, AI 2 traders only) and w18_traffic_ai3 (sÿst 1597, AI 3 warships only).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "repeat": 10,
+   "steps": [
+    {
+     "keys": "Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760"
+    },
+    {
+     "shot": "census-{i}",
+     "window": true
+    },
+    {
+     "wait": 101000
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

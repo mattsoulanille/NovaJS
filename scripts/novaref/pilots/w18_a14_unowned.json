@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w18-a14-unowned",
+  "edits": {
+    "ship": 703,
+    "stellar": 1594,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1593": 2,
+      "1594": 2,
+      "1595": 2,
+      "1596": 2,
+      "1597": 2,
+      "1598": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w18-a14-unowned",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    }
+  }
+}

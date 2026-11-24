@@ -1,0 +1,50 @@
+{
+ "name": "w18_plain_watch",
+ "_comment": "Wave 18: Enter Ship and sit still for 8 minutes, recording at 10 fps, a window shot every 30 s. Contraband station-keeping on a clean ship (pilot w17_scan_clean, Kit Scan Clean) and C1 0x0400 / 0x2000 at a jump / landing (pilot w18_cloak_watch, Kit Cloak Range).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "repeat": 16,
+   "steps": [
+    {
+     "wait": 30000
+    },
+    {
+     "shot": "w-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
