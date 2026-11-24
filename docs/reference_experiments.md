@@ -474,7 +474,7 @@ Untested:
 Two cases remain untested in the original:
 - öops price events (`price_events.ts`: base + PriceDelta, replacing the
   tier price);
-- a stellar in both a jünk's SoldAt and BoughtAt lists (NovaJS shows High).
+- a stellar in both a jünk's SoldAt and BoughtAt lists (NovaJS shows High; wave 10: the original shows two rows, High and Low, see "#321 wave 10").
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-price-flux/`:
 `{p100,a150,b150,c150,d150,a50}/*/02-trade.png` and `day2-{a150,a50}/`.
@@ -4584,6 +4584,596 @@ Side-by-side with headless NovaJS (same classes, port 8495):
 (`results.json`: corner sprites' bounds, every shän layer's size) in
 `novajs/nj_a`, `novajs/nj_b`, with the scripts that made them.
 
+### Submunitions wave 10: when does a shot fire its subs? (2026-11-23)
+
+**Question (Matthew, a long-standing NovaJS bug).** NovaJS fires a
+weapon's submunitions whenever its shot hits a ship. The Bible (wëap
+SubCount) says subs are created "when the shot reaches the end of its
+life or detonates because something wanders into its proximity radius",
+which leaves a direct hit out. Matthew suspected it depends on
+ProxRadius and the shot's size.
+
+**Rig.** `kits/testkit.mjs` wave 10: sÿst 2045 Kit Sub Range. The player
+(Kit Ring Crawler, at rest on Kit Sub Port) targets an immobile magenta
+disc 150 px north (shïp 836, 24 px, 30000 armor; or shïp 843, the 96 px
+disc, pilots `w10_sub2_big`) and fires one test parent at a time
+(secondaries; `w`, a shot of the selection, `ctrl`). Every parent
+carries 4 x wëap 251 Kit Sub Star (SubTheta -90, a Medium Blaster
+sprite, 2 s life, 0 damage, Flags2 0x0400 planet-type so the subs pass
+through the target and stay visible where they were born). Parents:
+turret aim, 1 damage, Speed 600 (6 px a frame) or, for the threshold,
+Speed 200 (2 px a frame), the 16 px Fusion Pulse sprite unless said.
+`scenarios/sub_fire.json`, `sub_fire2.json`; the detonation point is the
+parent's last position before it vanished and the centre of the
+starburst, read per frame from the recording.
+
+| parent (target 24 px unless said) | what happened | subs |
+|---|---|---|
+| prox 0, 16 px sprite | hit the body (vanished 19-20 px from the target's centre) | **none** |
+| prox 0, 89 px sprite | hit the body (65 px from the centre) | none |
+| prox 5 / 8 / 12 | hit the body at 19-20 px, like prox 0 | none |
+| prox 16 / 20 / 30 / 60 | detonated short of the body, 24 / 27 / 36.5 / about 66 px from the centre | **yes**, a starburst at that point |
+| prox 20, 89 px sprite | hit the body (65 px) | none |
+| life 15 frames (expires about 90 px out, short of the target) | expired | yes, where it expired |
+| the same with Flags2 0x0020 | expired | none (matches the Bible) |
+| prox 0 with Flags2 0x0020 | hit | none |
+| guided, prox 0 | hit the body edge (explosion on the rim) | none |
+| guided, prox 30 | detonated about 30 px off the rim, with its explosion | yes |
+| prox 60 with ProxSafety 30 | flew **through** the target untouched while the fuse was safe, detonated 32 px beyond it the moment the safety ran out | yes |
+| turreted beam (300 px) with subs, on the target | hit | none |
+| the same beam with no target selected | the player's turreted beam did not fire at all | (untested) |
+| **96 px target:** prox 0 / 8 / 12 / 16 / 20 | hit the body 54-56 px from the centre | none |
+| 96 px target: prox 30 / 60 | detonated 61.7 / 89.5 px from the centre | yes |
+| 96 px target: 89 px sprite, prox 0 / 20 | hit (62 px) | none |
+
+**Finding.**
+
+1. **A direct hit never fires submunitions.** Subs come from exactly two
+   events: the shot expires (unless Flags2 0x0020), or its proximity fuse
+   fires before it touches the body. The starburst is centred on the
+   shot's position at that moment (not the target's centre), with the
+   arms at ±SubTheta/2 and ±3·SubTheta/2 around the shot's heading for 4
+   subs (NovaJS's `getEvenlySpacedAngles` matches).
+2. **Which comes first is a race between the fuse and the body.** The
+   body is touched when the shot's centre is about the target's radius
+   plus half the shot's frame away (24 px disc: 19-20 px for the 16 px
+   shot; 96 px disc: 54-56 px); the 89 px sprite connects even earlier
+   (62-65 px). The fuse fires at about ProxRadius + 7 px from the centre
+   of the 24 px target and ProxRadius + 30 px from the 96 px one: the
+   bigger the target, the farther out it fires, by about two thirds of
+   the extra radius. So a small ProxRadius (here 12 or less on the 24 px
+   target, 20 or less on the 96 px one, 20 with the 89 px sprite) is
+   always beaten by the body and never subs; Matthew's guess (it depends
+   on ProxRadius and the shot's size) is right, and the target's size
+   counts too.
+3. **ProxSafety disarms collisions entirely**, body hits included: the
+   shot passes through ships until it expires (NovaJS's
+   `projectile_plugin.ts:438` skips every collision while safe:
+   matches).
+4. Beams: a turreted beam that hit fired no subs; whether a beam subs
+   when it ends untouched was not measured (an untargeted player turret
+   beam does not fire).
+
+**NovaJS today (base 69e8a400): mismatch.**
+- `N/nova_plugin/combat/projectile_plugin.ts:511` calls
+  `fireSubs(projectileData.id, uuid, false)` on EVERY collision, so a
+  direct hit subs. Expiry (`:264-266`) and 0x0020 (`sub.subIfExpire`,
+  `N/nova_plugin/combat/fire_weapon_plugin.ts:668`) match.
+- The prox fuse and the body are one collision: a weapon with ProxRadius
+  swaps its hurtbox for a circle of that radius
+  (`projectile_plugin.ts:164-169`), so there is no "body first" outcome
+  to tell apart.
+- `N/nova_plugin/combat/beam_plugin.ts:192-194` subs every beam at its
+  end when it expires (not measured either way).
+
+**Proposed fix (not applied).** Keep the sprite hitbox for every shot and
+add the prox circle (ProxRadius plus part of the target's radius, see 2)
+as a separate test; in `ProjectileCollisionSystem`, fire subs only when
+the prox test, not the hitbox overlap, triggered the detonation. A shot
+with ProxRadius 0 never subs on impact. Beams: leave until measured.
+
+Confidence: high for "no subs on a direct hit" (18 hits over three runs,
+none subbed; every prox detonation and every expiry did); medium for the
+fuse distances (2 px steps at Speed 200, 6 px at 600, two target sizes).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/sub/*/`
+(take 1: `tiles/w0-w10.png`, one per parent), `sub2-small/*-retry1/` and
+`sub2-big/*/` (take 2; `recording.mp4`, the `sel-*` shots name each
+parent).
+
+### NPC friendly fire wave 10: can an NPC's shots hurt its own or an allied govt's ships, and does the victim turn? (2026-11-23)
+
+**Question (Matthew).** In NovaJS an NPC that accidentally hits a
+same-govt ally turns hostile to it. On the original, can an NPC's bolts,
+missiles, beams and blasts damage a ship of its own govt or an allied
+govt at all, and does the victim retaliate?
+
+**Rig.** sÿst 2047 Kit FF Range (`kits/testkit.mjs` wave 10). The player
+(Kit Ring Tank, 30000/30000, no weapons) takes off from Kit FF Port and
+sits still. An anchored shooter (red disc, 30000/30000) sits 260 px north
+and fires at the player; an anchored victim (blue disc, shield 1000 with
+no recharge, armor 30000, a 1-damage pea turret) sits 110 px north,
+exactly on the line of fire. Both are mïsn ships: the original offers
+only ONE main-spaceport (AvailLoc 3) mission per landing (the second
+never showed, not even on a second landing, and a bar mission did not
+show up), so the shooter is the spaceport offer and the victim a Mission
+BBS job. `scenarios/friendly_fire.json`: Tab cycles victim / shooter /
+none with a window shot after each press for about 45 s (the target
+panel shows the victim's shield %); the recording shows where every shot
+goes. Shooter weapons: Kit FF Bolt (turret, 10 damage), Kit FF Beam
+(turreted beam), Kit FF Missile (guided), Kit FF Blast (the bolt with a
+150 px blast). gövt 362 always attacks the player; 358 and 359 both do
+and list each other's class as allies; 363 is neutral.
+
+| shooter -> victim | victim's shield over ~45 s | what the shots did |
+|---|---|---|
+| bolt, gövt 362 -> 362 (same govt) | **100% throughout** | every bolt flew **through** the victim and hit the player |
+| beam, 362 -> 362 | **Shields Down** within the first seconds | the beam stopped on the victim |
+| guided missile, 362 -> 362 | 100% | passed it (a guided shot hits only its target, Bible) |
+| blast bolt, 362 -> 362 | 89 -> 68% | the bolt passed through; its 150 px blast at the player reached the victim 110 px away |
+| bolt, 358 -> 359 (mutual allies) | 84 -> 53% | the bolts **hit** the victim (it shielded the player) |
+| bolt, 362 -> 363 (neutral) | 83 -> 52% | the bolts hit the victim |
+
+**Retaliation.** None, in any run. The victim never fired at the
+shooter: the bolts between the two discs moved down in 640-730 frames of
+every bolt run and up in 2-8 (noise: two bolts at once), the allied and
+same-govt victims kept firing their peas at the player, and the neutral
+victim (not hostile to the player) never fired at all while it lost half
+its shield. The shooter stayed at 100% throughout.
+
+**Finding.**
+1. **Same-govt immunity is real for projectiles, not for beams or
+   blasts.** A ship's unguided shots pass through ships of its OWN
+   government; its beams and blast damage do not (the beam stopped on the
+   victim and took its shield down; the blast splashed it).
+2. **Allies are not immune.** Mutually allied govts' bolts hit each
+   other like any third party's.
+3. **No retaliation** within about 45 s, from a victim of the same govt,
+   an ally or a neutral, while the shooter was attacking the player (not
+   the victim). A guided missile never touched a bystander.
+
+**NovaJS today (base 69e8a400): two mismatches.**
+- `N/nova_plugin/ship/firing_group.ts:75` `SAME_GOVT_FIRING_IMMUNITY =
+  false` (the clause in `firingImmune`, `:167-172`, is wired but off), so
+  same-govt bolts hit. The original: they pass through. Beams and blasts
+  must keep hitting the same govt (the clause should apply to
+  projectiles only; `beam_plugin.ts` and `blast_plugin.ts` share
+  `firingImmune`).
+- `N/nova_plugin/npc/npc_targeting.ts:72-74` (`NpcAggressionSystem`)
+  makes any damaging non-flock source the victim's `aggressor`, so a
+  stray hit from an ally, a neutral or (via beam/blast) its own govt turns
+  the victim on the shooter. The original: the victim ignored it.
+
+**Proposed fix (not applied).** Set the same-govt clause on for
+projectile collisions only (a `weaponKind` argument, or a separate check
+in `ProjectileCollisionSystem`), keep beams and blasts as they are; in
+`NpcAggressionSystem`, record an aggressor only when the source was
+TARGETING the victim (its TargetComponent names it), so stray fire aimed
+at someone else provokes nothing. Not measured: whether a victim turns
+when it is the shooter's own target but of the same govt, and longer
+than 45 s.
+
+Confidence: high for 1-3 in this geometry (one run each, 45 s, 100+
+shots per run).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/ff4/{same_bolt,same_beam,same_missile,same_blast,ally_bolt,neutral_bolt}/*/`
+(`NN-obs-NN.png` the Tab panels, `recording.mp4`). `ff/`, `ff2/`, `ff3/`
+are the attempts that showed the one-offer-per-landing limit.
+
+### #321 wave 10: jünk prices where it is sold and where it is bought, and a stellar in both lists (2026-11-23)
+
+**Setup.** The kit's jünk: 200 Kit Widgets (base 1000, SoldAt Kit Port,
+BoughtAt Kit Market), 201 Kit Gadgets (base 150, the reverse) and, new in
+wave 10, 202 Kit Doodads (base 400, in BOTH lists of Kit Port). Pilots
+`w10_trade_port` / `w10_trade_market` land and open the Trade Center
+(`scenarios/trade_junk.json`, `t`).
+
+| stellar | row | tier | price | vs base |
+|---|---|---|---|---|
+| Kit Market (Widgets' BoughtAt) | Kit Widgets | High | 1250 | x1.25 |
+| Kit Market (Gadgets' SoldAt) | Kit Gadgets | Low | 120 | x0.8 |
+| Kit Port (wave 1: Widgets' SoldAt) | Kit Widgets | Low | 800 | x0.8 |
+| Kit Port (wave 1: Gadgets' BoughtAt) | Kit Gadgets | High | 187 | x1.25 truncated |
+| Kit Port, both lists | Kit Doodads | High | 500 | x1.25 |
+| Kit Port, both lists | Kit Doodads (a second row) | Low | 320 | x0.8 |
+
+**Finding.**
+1. **Confirmed (wave 1 had the Kit Port half):** a jünk is priced at its
+   SoldAt stellars (where the player buys it) at the Low tier, base x 0.8,
+   and at its BoughtAt stellars (where the player sells it) at the High
+   tier, base x 1.25, truncated: the same tiers as the standard goods
+   (#321's 80% / 125% assumption holds for the kit's stellars, which have
+   no öops price events).
+2. **A stellar in both lists shows TWO rows** for that jünk, High and
+   Low.
+3. **The exchange lists at most 8 rows.** With Doodads' two rows, Kit
+   Port's list (6 standard goods + 3 jünk = 9 candidate rows, 10 with the
+   double) showed the 6 standard goods and the two Doodads rows only;
+   Widgets and Gadgets, which wave 1 saw there, were gone. The jünk rows
+   came in the order Doodads (202) before the others, so the 8-row cut
+   seems to keep the HIGHER jünk ids; one data point.
+
+**NovaJS (base 69e8a400).** 1 matches (`N/nova_plugin/economy/trade_logic.ts:36`
+`tierPrice`, `:126-136` `junkTradeGood`). 2 is a mismatch: `junkTradeGood`
+returns ONE row, High when the stellar is in BoughtAt (`:131`); the
+original shows a High row and a Low row. 3 is a mismatch:
+`N/spaceport/trade_center.ts:366-371` appends every jünk row with no cap.
+**Proposed fix (not applied):** return two rows for a stellar in both
+lists (High: sell only; Low: buy only) and cap the exchange at 8 rows,
+dropping jünk rows past the cap; which jünk wins needs one more run (two
+plain jünk and a double at one stellar, or ids in the other order).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/trade/{port,market}/*/02-trade.png`
+(wave 1's Kit Port table: `20261123-price-flux/`).
+
+### #316 wave 10: strict play vs regular play, and what was already measured (2026-11-23)
+
+**What #316 asked, and what earlier waves already have.** (b) wëap
+GuidedTurn: three values were measured in "#316b" (10 / 30 / 60 ->
+1.0 / 3.1 / 5.8 degrees a frame), so the two extra values the brief asks
+for exist. (c) shïp Turn ("Maneuver"): three values in "#316" (10 / 20 /
+30 -> 29.1 / 58.4 / 87.1 deg/s, 2.91 deg/s per unit). Both were measured
+with REGULAR-play pilots (the novaref base pilot has strict play off).
+New here: Matthew's note that strict play changes the player's speed.
+
+**Setup.** Kit Probe A (Speed 300, Accel 300, Turn 10), `scenarios/unit_probe.json`
+(turn in place 14 s, then thrust from rest 6 s), two pilots identical
+but for the pilot's strict-play flag (`w10_probe_strict`,
+`w10_probe_regular`; pilot-make `strictPlay`, globals offset 2). Speed
+from the stellars' on-screen motion (`analysis/world_motion.mjs`, summed
+over 20-frame windows; `analysis/motion.mjs` for the turn and the ramp).
+
+| | regular | strict | strict / regular |
+|---|---|---|---|
+| turn | 29.19 deg/s | 29.19 deg/s | 1 |
+| top speed | 4.2-4.5 px a video frame, about 130 px/s (wave 1: 130.65) | 2.9-3.0 px a frame, about 88 px/s | **about 0.68** |
+| ramp to top speed | 76 frames | 54 frames | 0.71 |
+| acceleration (motion.mjs ramp fit) | 59 px/s² | 64 px/s² | about 1 |
+
+**Finding.** Strict play cuts the player's **top speed to about two
+thirds** and leaves **acceleration and turn rate unchanged** (the ramp is
+shorter in proportion to the lower top speed). So #316's speed constant
+(0.45 x Speed px/s at 30 Hz) is the REGULAR-play value; a strict pilot
+flies at about 0.30 x Speed. The NPC comparison (is an NPC's speed
+affected?) was not run; NPCs are not part of the pilot's setting, and
+every earlier NPC speed reading (F1, A-series) matched regular-play
+constants.
+
+**NovaJS (base 69e8a400): mismatch.** Strict play only means permadeath
+(`N/title/client_prefs.ts:346-347`, the New Pilot checkbox in
+`N/title/title_dialogs.ts:219-252`); no physics reads it. **Proposed fix
+(not applied):** scale the player's max speed by 2/3 when the pilot is
+strict (one more run with a second hull would pin 2/3 against 0.68).
+
+Confidence: medium (one run each; the stellar tracking has 1 px steps and
+gaps, but both summaries agree on 0.64-0.71).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/probe/{strict,regular}/*/recording.mp4`.
+
+### #324 wave 10: the map after accepting a Mission BBS job while landed (2026-11-23)
+
+**Setup.** mïsn 1032 Kit M BBS job: a Mission BBS (AvailLoc 0) job at Kit
+Port to Kit BBS Dest (sÿst 2052, explored), OnAccept `b9074`. sÿst 2054
+Kit BBS Shown is explored but has Visibility `b9074`. Pilot `w10_bbs`.
+`scenarios/bbs_explore.json`, `bbs_accept.json`, `bbs_followup.json`:
+the star map (`m` in the spaceport) before, the BBS, Accept, the map
+again in the same visit, the BBS again, leave, the map in flight, land
+again, the map, leave, the map in flight.
+
+**What the original's BBS is.** A list on the left, the selected job's
+text on the right, and two buttons, **Accept** and **Leave**; there is
+**no map button**. Accept takes the job and closes the BBS at once (no
+briefing dialog for a job without one); reopening it says "There are no
+missions available here." with Okay. (Return in the BBS closed it;
+whether `m` does anything inside it was not tried.)
+
+| when | Kit BBS Dest (the job's destination) | Kit BBS Shown (Visibility b9074) |
+|---|---|---|
+| map before the accept | drawn, no mark | hidden |
+| spaceport map right after Accept, same visit | **red mission mark** | **hidden** |
+| after leaving, map in flight | mark | **hidden** |
+| landed again (same day), map | mark | **drawn** |
+| after the second takeoff, map in flight | mark | drawn |
+
+**Finding.** The mission's destination mark is live: it shows on the
+spaceport's map in the same visit as the accept. A system whose
+Visibility test the accept's OnAccept bit makes true does NOT appear on
+the map until the next landing: not in the same visit and not in flight
+after leaving. So the original's map reads NCB visibility from state
+that is refreshed on landing (probably on landing and on entering a
+system; the jump case was not run), not from the live bits. (Legal
+records were not part of this test. Side finding: a second landing on
+the same day offered no new main-spaceport mission, not even one whose
+only gate, b9074, was now set: offers look rolled once per day.)
+
+**NovaJS (base 69e8a400).** #324's fix (7b779a51) makes every docked
+map read the landing's working bits (`N/display/starmap_plugin.ts:207-209`
+via `playerComponent`), so Kit BBS Shown would appear right after the
+accept: the original is staler than that. NovaJS's BBS also has a map
+control (`N/spaceport/mission_board.ts:216`, `openMap` at `:251`) that the
+original's BBS does not. Marks: match. **For the maintainer:** whether
+to copy the stale visibility (refresh visible systems on landing / system
+entry only) is a design choice; the faithful behaviour is the stale one.
+
+Confidence: high for what is shown (three runs, the same picture each
+time); the exact refresh point (landing vs jump) is open.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/{bbs,bbs2,bbs3}/*/`.
+
+### #320 item 2 wave 10: a govt with NEGATIVE crime penalties (2026-11-23)
+
+**Setup.** gövt 369 Kit Negative Govt (DisabPenalty, BoardPenalty and
+KillPenalty all -100, CrimeTol 10) owns sÿst 2060 Kit Negative Range.
+The pilot (`w10_negpen`, record 0 everywhere, Kit Lancer with the Kit
+Beam Turret, 5000 damage) lands at Kit Negative Port, accepts mïsn 1035
+(a Kit Trader of gövt 369, AI 1, beside the port), takes off, targets it
+and fires until it is gone, lands again, reads the map's Legal Status,
+and leaves (the pilot is written). `scenarios/neg_penalty.json`.
+
+**Result.** The trader was destroyed within the first burst (the target
+panel went to "No Target"; the pulled pilot's combat rating went 0 -> 4,
+so the kill was credited). The record in sÿst 2060 stayed **0** in the
+pulled pilot, and the map read "Legal Status: No Record" before and
+after. (A14 wave 5's positive control: the same kind of kill with
+penalties 50 / 100 moved the record by -150.)
+
+**Finding.** A negative penalty is not applied in either direction: the
+crime neither lowers nor raises the record (no "reward for the crime",
+no absolute value). **NovaJS matches:** `N/nova_plugin/reputation/reputation.ts:131-140`
+`crimePenalty` returns 0 for a negative field (#108). Nothing to change.
+SmugPenalty was not tested.
+
+Side finding (UI matrix): in flight, `i` opens the "Currently active
+missions" dialog (Abort / Done), not a player-info screen, in this
+install.
+
+Confidence: high (one run, an unambiguous record).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/negpen/*/`
+(`pilot-after/`, `02-map-before.png`, `08-map-after.png`).
+
+### #344 wave 10: Escape (and Cmd-Q) during a hyperspace jump (2026-11-23)
+
+**Setup.** Pilot `w2_map` at Map Hub, as in "M2 leftover": the big map,
+Tab to Map SW, close it, thrust 2 s, `j`. The jump takes about 5.7 s
+from `j` to the arrival message (the white flash just before it).
+`scenarios/jump_escape_{1000,3500,5500}.json` press Escape 1.0 / 3.5 /
+5.5 s after `j` (stamps: 1.2, 3.7, 5.7 s); `jump_cmdq_3000.json` presses
+Cmd-Q at 3 s. Each then shoots, presses `e` (Enter Ship if at the title,
+the escort menu if still in flight), shoots, and the run quits and pulls
+the pilot. Escape in normal flight goes straight to the title screen
+(reliability notes).
+
+| key, when | what happened |
+|---|---|
+| Escape at 1.2 s (turning / accelerating out) | **ignored**: the jump went on, arrival in Map SW; no pause, no title, not even after arriving |
+| Escape at 3.7 s | **ignored** the same way |
+| Escape at 5.7 s (the frame of the arrival) | the game had just arrived ("Nav System Off" drawn) and went to the title screen 7 frames later, as from normal flight. The title showed the NEW date (June 24th); Enter Ship then put the pilot in **Map SW** ("Jumping into the Map SW system on June 24th"): the jump was kept |
+| Cmd-Q at 3 s | **deferred**: the jump finished ("Arriving in the Map SW system"), and about 1 s after the arrival the usual "Are you sure you want to quit?" (Cancel / OK) appeared |
+
+The pilot FILE was not written by any of this: every pulled pilot still
+had the pushed date and last stellar (the game writes it when the player
+leaves a spaceport, not on a jump or an exit to the title); the jump
+survives the exit to the title in memory, which is what Enter Ship
+resumed from.
+
+**Finding.** The original refuses Escape during a jump: it is dropped,
+not queued, for the whole sequence up to the arrival; the quit path is
+queued until the arrival. Once arrived, Escape behaves as in flight and
+the session keeps the completed jump. That supports Matthew's "likely
+block Escape during the jump" (#344 option c); an exit right after the
+arrival keeps the jump (option b's outcome, not option a's "jump undone").
+
+**NovaJS (base 69e8a400): mismatch.** `N/client/client_state.ts:322-327`
+`canExitToTitle` admits every transit except the startup one, so an
+Escape during a jump's transit exits to the title (with the last periodic
+save, up to 10 s old, standing: #344's description).
+**Proposed fix (not applied):** exclude jump transits in
+`canExitToTitle` (drop the key while `state.kind === 'transit'`), and
+make sure the save taken at the arrival includes the jump.
+
+Confidence: high (four runs, each unambiguous on video).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/jump/{esc1000,esc3500,esc5500,cmdq3000}/*/`
+(`recording.mp4`, `recording.events.json`, `pilot-after/`).
+
+### Route planning through unexplored systems, wave 10 (2026-11-23)
+
+**Question (Matthew).** D-U-D and D-U-U-D are allowed; NovaJS is being
+changed to route through any system the map draws. On the original: does
+ONE shift-click on a far explored system make the router itself go
+through unexplored systems? Does a D-U-U-U-D chain route? Can a system
+the map does not draw ever be routed through?
+
+**Setup.** The kit map region (M-batch): Hub - East (unexplored) - Void
+(unexplored, no stellar) - Far - Island. Pilot `w2_map` has Far and
+Island explored (D-U-U-D-D); pilot `w10_route_b` is the same without Far
+(Hub D - East U - Void U - Far U - Island D). `scenarios/route_unexplored.json`:
+the big map, ONE shift-click on Island, Clear Route, ONE shift-click on
+Far, Clear Route, then shift-click pins East, Void, Far, Island with a
+shot after each.
+
+| pilot | one shift-click on Island | one shift-click on Far | pins East, Void, Far, Island |
+|---|---|---|---|
+| D-U-U-D-D (Far explored) | **ignored** (no route, panel unchanged) | **ignored** | route grows hop by hop: Hub-East, -Void, -Far, -Island (as wave 2) |
+| D-U-U-U-D (Far unexplored) | ignored | ignored | Hub-East only: **Void is not drawn** (no explored neighbour), the click on its spot does nothing, and the later pins on Far (drawn: it neighbours Island) and Island add nothing |
+
+**Finding.**
+1. The original's router never plans through an unexplored system by
+   itself: a single shift-click on an explored system whose only path
+   crosses unexplored ones is ignored. Unexplored hops come only from
+   pins, one hop at a time.
+2. Pins only work on systems the map DRAWS; a system with no explored
+   neighbour is not drawn, so a D-U-U-U-D chain whose middle U touches no
+   explored system cannot be pinned through, and the route stops at the
+   last drawn, linked hop. A D-U-U-U-D chain with every U drawn (each
+   next to some explored system) was not available in the kit.
+3. So: an undrawn system can never be routed through; a drawn unexplored
+   one only by pinning it.
+
+**NovaJS (base 69e8a400).** `N/spaceport/route.ts:19-29` today refuses
+every route through an unexplored system (the D-U-U-D quirk is
+deliberately not reproduced). The planned change ("route through any
+system the map draws") matches 2 and 3 for pins; it must NOT make a
+single shift-click auto-route through unexplored systems (1). Not
+measured: whether the original auto-routes a single shift-click through
+EXPLORED intermediate systems (the kit region has no such path).
+
+Confidence: high (two runs, unambiguous shots).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/route/{dud,duuud}/*/`.
+
+### M1 wave 10: the `h` minimap's fade, and how long its hidden area stays clickable (2026-11-23)
+
+**Question (Matthew).** Wave 2 wrote "Clicks work while it is hidden"
+without saying how long after the hide the click came: "Are you sure you
+waited well past the fade out time?" Also: does it fade in and out, how
+long, linearly?
+
+**Setup.** Pilot `w2_map` at Map Hub. The minimap's box (window 414,151,
+208 x 206) is measured per frame from the recording: the summed
+brightness of the box and the count of lit pixels (the cursor, parked
+outside between steps, adds a 30-pixel blip in the frames a click sits
+on it). `scenarios/minimap_fade.json`: `h`, then clicks on alternating
+neighbours (NE 562,178; SW 430,342; WSW 468,236; East 589,254) at growing
+delays; `minimap_window.json` and `minimap_window3.json`: `h`, then clicks
+7.4 / 6.8 s after the hide and later. The nav panel names the pick.
+
+**The fade.** The map appears at full brightness within one frame of
+the key (no fade-in), stays fully lit for about **60 frames (2.0 s)**,
+then fades out **linearly over about 16 frames (0.53 s)** (the box's
+brightness falls by a near-constant 20-28 k per frame from 366 k to the
+background), so the last pixel goes about **2.5 s** after the key. The
+same for every re-show by a click. (Wave 2's "64-66 frames" ended
+mid-fade.)
+
+| take | click | after the last visible pixel | after that peek was shown | picked? re-shown? |
+|---|---|---|---|---|
+| 1 | NE | 0.6 s | 3.1 s | yes (Hyperspace Map NE), yes |
+| 1 | SW | 1.7 s | 4.2 s | yes, yes |
+| 1 | WSW | 4.4 s | 6.8 s | yes, yes |
+| 1 | East | 11.5 s | 14 s | **no** (still WSW), no |
+| 1 | NE | 22 s | | no, no |
+| 2 | SW | 7.4 s | 9.9 s | **no** (No Destination), no |
+| 2 | NE / WSW / SW | 20 s and more | | no, no |
+| 3 | SW | 6.8 s | 9.3 s | **no** (No Destination), no |
+| 3 | NE / WSW | 18 s and more | | no, no |
+
+**Finding.** The wave-2 claim is **confirmed for a few seconds and
+overturned for long waits**: the hidden minimap keeps taking clicks (a
+click picks the system and re-shows the map) for at least 4.4 s after
+its last pixel faded and at most 6.8 s (6.8 to 9.3 s after the peek
+began); after that its area is dead and clicks there do nothing. A
+plausible reading is a click window of a fixed time (about 7-9 s) from
+the show, longer than the 2.5 s the map is visible. Not tested: whether
+a ship or planet under the box can be clicked or targeted during that
+window (in flight a click on space did nothing visible in these runs).
+
+**NovaJS.** The persistent-toggle mismatch is M-batch item 2; the
+click-through fix being written in parallel should use: shown 2.0 s at
+full alpha, a linear fade over 0.53 s, no fade-in, and clicks accepted
+until somewhere between 4.4 and 6.8 s after the fade ends (6.8-9.3 s
+after the show; 8 s from the show is inside both bounds), not
+indefinitely.
+
+Confidence: high for the fade and for the bounds (three runs, 12
+clicks); the exact cut-off inside 6.8-9.3 s after the show is open.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/{minimap,minimap2,minimap3}/*/`
+(`recording.mp4`, the click shots).
+
+### #320 item 3 wave 10: CompReward on an auto-aborting mission (2026-11-23, immediate case only)
+
+**NovaJS first.** `N/nova_plugin/missions/mission_accept_offer.ts:111-135`:
+an auto-abort mission (Flags 0x0001) whose goal is not board/rescue
+(`deferredAutoAbort`, `mission_auto_abort.ts:41-45`) runs OnAccept then
+OnAbort AT ACCEPT and never becomes active; the 0x0040 "-5x CompReward
+reversal on abort" is deliberately NOT applied (the comment cites the
+stock enforcement squads), for the deferred kind too.
+
+**Setup.** mïsn 1036 (Flags 0x0041) and 1037 (0x0001): one Kit Escort
+special ship at ShipStart -1, no goal, CompGovt 360 (Kit Range's owner),
+CompReward 20, OnAccept b9078, OnAbort b9079, offered on landing at Kit
+Port. `scenarios/auto_abort.json`: accept, leave (the pilot is written:
+`pilot-leave1`), 3 s in flight, Tab, `i` (active missions), land, leave
+again (`pilot-leave2`). Pilots `w10_aa40` / `w10_aaplain`, record 0.
+
+**Result (0x0041; the plain mission's earlier runs agree as far as they
+went).**
+- At accept and in the spaceport: b9078 (OnAccept) set, the mission
+  ACTIVE (it is in the pilot written at the Leave).
+- In flight, 3 s after takeoff: the special ship exists (Tab: Kit
+  Escort) and `i` answers "You have no active missions.": the mission
+  aborted when its special ship was created, at takeoff, not at accept.
+- The pilot written at the next Leave: b9079 (OnAbort) set, the record
+  in sÿst 2100 still **0**: no CompReward (+20) and **no -5x reversal
+  (-100)** even with 0x0040. (The landing offered the mission again,
+  since its availability bit was still set.)
+
+**Finding.** An immediate auto-abort fires OnAccept at accept and
+OnAbort when the special ships appear; CompReward is neither granted nor
+reversed, 0x0040 or not. **NovaJS matches** on the record (no
+reversal) and the bits; it runs OnAbort at accept rather than at the
+special ships' creation (a timing difference only visible to a test that
+reads the bits while still landed). The DEFERRED case (a board/rescue
+goal, aborting when the ship is boarded) was **not run** (boarding needs
+the U9 loop; left for a later wave).
+
+Confidence: high for the immediate case (three runs; the final one
+read the mission list in flight and the record after the abort).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/autoabort3/flag40/*/`
+(`05-missions.png`, `pilot-leave1/`, `pilot-leave2/`); `autoabort/`,
+`autoabort2/` are the earlier attempts (their second Leave never happened).
+
+### Outfits that scale with the ship's mass (oütf Flags 0x0200 / 0x0400), wave 10 (2026-11-23)
+
+**Setup.** Kit outfits at the top of Kit Port's outfitter: oütf 452 Kit
+Mass Price (0x0200, Cost 100, Mass 0), 453 Kit Mass Mass (0x0400, Mass 10,
+Cost 1000), 454 Kit Mass Both (0x0600, Cost 100, Mass 10), 455 Kit Plain
+Mass (control). Player hulls Kit Mass Hull 37 / 50 / 100 / 155 / 300
+(shïp 846 / 848 / 844 / 847 / 845: that Mass, 25 t free, nothing else
+installed). `scenarios/outfit_mass_buy.json`: select Kit Mass Both (the
+panel shows Item Price and, for an item with mass, **Item Mass** and
+**Available**), buy and sell one Kit Mass Price, then press Buy on Kit
+Mass Mass nine times with a shot after each (a refused buy is silent: no
+dialog, nothing changes). Pilots `w10_mass_{37,50,100,155,300}`.
+
+| hull Mass | 0x0200 Item Price (Cost 100) | charged / refunded (same visit) | 0x0400 Item Mass (Mass 10) | units that fit in 25 t | Both (0x0600) |
+|---|---|---|---|---|---|
+| 37 | 3,700 | 3,700 / 3,700 | **10** (not 3.7 or 4) | 2 | 3,700, 10 t |
+| 50 | 5,000 | 5,000 / 5,000 | **10** (not 5) | 2 | 5,000, 10 t |
+| 100 | 10,000 | 10,000 / 10,000 | 10 | 2 | 10,000, 10 t |
+| 155 | 15,500 | 15,500 / 15,500 | **15** (15.5 truncated) | 1 | 15,500, 15 t |
+| 300 | 30,000 | 30,000 / 30,000 | 30 | 0 | 30,000, 30 t |
+
+**Finding.**
+1. **0x0200 price = hull Mass x Cost**, exactly, charged as shown; a unit
+   sold back in the same visit refunds the full price.
+2. **0x0400 mass = max(oütf Mass, floor(hull Mass x oütf Mass / 100))**:
+   proportional above Mass 100, truncated (155 -> 15), and never below
+   the item's own Mass (37 and 50 -> 10, not 3.7 / 5). Both flags
+   together combine the two rules independently.
+3. "Mass" is the hull's class Mass here: the hulls carried nothing else,
+   so whether a loaded ship's current mass would count, and what happens
+   to an installed 0x0400 item on a trade-in, were not measured; nor was
+   stock Carbon Fiber.
+
+**NovaJS (base 69e8a400).** Price matches
+(`N/spaceport/outfitter_rules.ts:447-452` `outfitPrice`). Mass is a
+mismatch: `N/nova_plugin/ship/outfit_plugin.ts:77-84`
+`installedOutfitMass` returns `Math.ceil(shipMass * mass / 100)`, so 37 ->
+4, 50 -> 5 and 155 -> 16 where the original gives 10, 10 and 15.
+**Proposed fix (not applied):** `Math.max(mass, Math.floor(shipMass * mass / 100))`.
+The same-visit refund is outside this test's NovaJS reading (resale is
+50% for a pre-owned unit, `outfitter_rules.ts:479-481`).
+
+Confidence: high (five hulls, every number read off the shop's own
+panel and the credit count).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w10/mass/{buy37,buy50,buy100,buy155,buy300}/*/`
+(and `explore100/`, the first look at the shop).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Tab never targets the player's own escorts (wave 9).** To target an
@@ -4624,6 +5214,19 @@ Side-by-side with headless NovaJS (same classes, port 8495):
 - **Several `run` queues wait on the lock unfairly**: whichever queue starts
   its next run the moment the lock frees wins every time, so a second
   queue can starve past its `--lock-wait`. Use one queue.
+- **One main-spaceport mission offer per landing, rolled per day (wave
+  10).** With two AvailLoc 3 missions available only the lower id was
+  offered; a second landing the same day offered nothing new (not even a
+  mission whose bit had just been set), and a bar (AvailLoc 1) mission
+  did not pop up. To place two mission ships, make the second a Mission
+  BBS job (AvailLoc 0: BBS button at window 182,430, Accept 476,384;
+  Accept closes the BBS).
+- **Keys in the spaceport (wave 10).** Return in the outfitter and in the
+  BBS closes them (it does not buy or accept); Escape in the spaceport
+  itself LEAVES (takes off). A pilot is written when the player leaves;
+  a scenario that needs the state after something in flight must land
+  and leave again, with generous waits (`l wait 1500 l wait 1500 l wait
+  10000`), and pull after that.
 
 - **Launch can die while loading (wave 4).** Once in about 90 wave-4 runs
   EV Nova never showed a window ("no EV Nova window within 30 s", no
@@ -4688,6 +5291,7 @@ Side-by-side with headless NovaJS (same classes, port 8495):
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). |
+| Wave 10 leftovers | Submunitions: does a beam sub when it ends untouched; the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 
 ## Catalogue
 
