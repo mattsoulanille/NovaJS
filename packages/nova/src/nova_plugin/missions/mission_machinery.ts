@@ -104,8 +104,9 @@ export interface MissionMachineryContext {
     random(): number;
     /**
      * Every govt (deterministic order), for ally/classmate scopes of
-     * the PayVal record-cleaning encodings. Optional; cleaning
-     * degrades to the named govt only when absent.
+     * the PayVal record-cleaning encodings and a completed mission's
+     * CompReward reaching the CompGovt's allies and enemies. Optional;
+     * both degrade to the named govt only when absent.
      */
     allGovts?(): Iterable<readonly [string, GovtData]>;
     /**

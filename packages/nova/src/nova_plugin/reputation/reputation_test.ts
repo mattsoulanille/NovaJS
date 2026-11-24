@@ -5,6 +5,7 @@ import { shipDisposition } from './iff_plugin.js';
 import { LocalLaw, localLaw } from './local_law.js';
 import {
     addRecord,
+    applyCompletionReward,
     applyCrime,
     availRatingOk,
     availRecordOk,
@@ -13,6 +14,7 @@ import {
     compRewardDelta,
     crimePenalty,
     decodePayVal,
+    govtRelation,
     DEFAULT_BOARD_PENALTY,
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
@@ -349,6 +351,88 @@ describe('compRewardDelta', () => {
     it('costs 5x on abort only under the 0x0040 flag', () => {
         expect(compRewardDelta(4, 'abort')).toBe(0);
         expect(compRewardDelta(4, 'abort', true)).toBe(-20);
+    });
+});
+
+describe('govtRelation', () => {
+    it('is allied or enemy when EITHER side lists the other', () => {
+        // fed lists bureau's class 0; bureau lists fed's class 1.
+        expect(govtRelation(fed, bureau)).toBe('ally');
+        expect(govtRelation(bureau, fed)).toBe('ally');
+        const oneWayAlly = makeGovt('nova:201', { classes: [12] });
+        expect(govtRelation(fed, oneWayAlly)).toBe('ally');
+        expect(govtRelation(oneWayAlly, fed)).toBe('ally');
+        // Only auroran lists fed (class 1) as an enemy; fed lists
+        // auroran's class 2 too.
+        expect(govtRelation(auroran, fed)).toBe('enemy');
+        const oneWayFoe = makeGovt('nova:202', { classes: [7], enemies: [1] });
+        expect(govtRelation(fed, oneWayFoe)).toBe('enemy');
+        expect(govtRelation(fed, bystander)).toBe('neutral');
+    });
+
+    it('prefers ally when both lists apply', () => {
+        const torn = makeGovt('nova:203', { classes: [5], allies: [1],
+            enemies: [1] });
+        expect(govtRelation(fed, torn)).toBe('ally');
+    });
+});
+
+describe('applyCompletionReward', () => {
+    const pirate = makeGovt('nova:137', { classes: [20] });
+    pirate.flags = { ...pirate.flags, xenophobic: true };
+    const friendlyXeno = makeGovt('nova:170', { classes: [21], allies: [1] });
+    friendlyXeno.flags = { ...friendlyXeno.flags, xenophobic: true };
+    const landscape: (readonly [string, GovtData])[] = [
+        ...allGovts, [pirate.id, pirate], [friendlyXeno.id, friendlyXeno]];
+
+    it('gives +R to the CompGovt, +R/2 to allies, -R/2 to enemies and '
+        + 'xenophobes, nothing to the unrelated', () => {
+            const records: LegalRecords = new Map();
+            applyCompletionReward(records, fed.id, fed, 1000, landscape);
+            expect(Object.fromEntries(records)).toEqual({
+                [fed.id]: 1000,
+                [bureau.id]: 500,
+                [auroran.id]: -500,
+                [pirate.id]: -500,
+                // A xenophobe allied to the CompGovt is an ally.
+                [friendlyXeno.id]: 500,
+            });
+            expect(records.has(bystander.id)).toBe(false);
+        });
+
+    it('truncates the half toward zero', () => {
+        const records: LegalRecords = new Map();
+        applyCompletionReward(records, fed.id, fed, 3, landscape);
+        expect(records.get(bureau.id)).toBe(1);
+        expect(records.get(auroran.id)).toBe(-1);
+
+        const negative: LegalRecords = new Map();
+        applyCompletionReward(negative, fed.id, fed, -51, landscape);
+        expect(negative.get(fed.id)).toBe(-51);
+        expect(negative.get(bureau.id)).toBe(-25);
+        expect(negative.get(auroran.id)).toBe(25);
+
+        // R = 1: the half truncates to 0 and touches no other record.
+        const one: LegalRecords = new Map();
+        applyCompletionReward(one, fed.id, fed, 1, landscape);
+        expect([...one]).toEqual([[fed.id, 1]]);
+    });
+
+    it('adds to existing records and starts absent ones from InitialRec',
+        () => {
+            const wary = makeGovt('nova:129', { classes: [2], enemies: [1],
+                initialRecord: -30 });
+            const records: LegalRecords = new Map([[bureau.id, 7]]);
+            applyCompletionReward(records, fed.id, fed, 10,
+                [[fed.id, fed], [bureau.id, bureau], [wary.id, wary]]);
+            expect(records.get(bureau.id)).toBe(12);
+            expect(records.get(wary.id)).toBe(-35);
+        });
+
+    it('changes only the CompGovt without its data', () => {
+        const records: LegalRecords = new Map();
+        applyCompletionReward(records, 'nova:999', undefined, 10, landscape);
+        expect([...records]).toEqual([['nova:999', 10]]);
     });
 });
 

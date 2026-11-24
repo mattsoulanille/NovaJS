@@ -3,7 +3,8 @@ import { MissionData } from 'novadatainterface/mission_data';
 import { setStringPrefix } from './mission_ids.js';
 import { MissionMachineryContext } from './mission_machinery.js';
 import {
-    addRecord, cleanRecords, compRewardDelta, PayValEffect,
+    addRecord, applyCompletionReward, cleanRecords, compRewardDelta,
+    PayValEffect,
 } from '../reputation/index.js';
 
 /**
@@ -50,6 +51,9 @@ function missionGovt(machinery: MissionMachineryContext,
  * Applies a mission outcome's CompGovt/CompReward record change
  * (Bible: complete grants CompReward; failure costs half — "that govt
  * will take it personally"; abort costs 5x under mïsn flag 0x0040).
+ * A completion also reaches the CompGovt's allies (+R/2), enemies and
+ * xenophobes (-R/2), as measured on the original
+ * (applyCompletionReward); the failure and abort stay with the CompGovt.
  */
 export function applyOutcomeReputation(machinery: MissionMachineryContext,
     mission: MissionData, outcome: 'complete' | 'fail' | 'abort'): void {
@@ -63,6 +67,11 @@ export function applyOutcomeReputation(machinery: MissionMachineryContext,
         return;
     }
     const govt = missionGovt(machinery, mission, mission.compGovt);
+    if (outcome === 'complete') {
+        applyCompletionReward(state.records, govt.id, govt.data, delta,
+            machinery.allGovts?.() ?? []);
+        return;
+    }
     addRecord(state.records, govt.id, govt.data, delta);
 }
 

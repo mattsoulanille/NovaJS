@@ -202,6 +202,17 @@ describe('CompGovt/CompReward', () => {
         expect(state.missions.size).toBe(0);
     });
 
+    it('reaches the CompGovt\'s allies (+R/2) and enemies (-R/2) on '
+        + 'completion (reference "A14 spread, wave 14")', () => {
+            const state = makeState();
+            runToCompletion(makeMission({
+                compGovt: 128, compReward: 10,
+            }), state);
+            expect(Object.fromEntries(state.records!)).toEqual({
+                'nova:128': 10, 'nova:153': 5, 'nova:129': -5,
+            });
+        });
+
     it('costs half the reward (truncated) on failure', () => {
         const state = makeState();
         const mission = makeMission({
@@ -213,6 +224,8 @@ describe('CompGovt/CompReward', () => {
         // Land far past the deadline: the mission fails.
         processLanding(machinery, 'nova:999', 5000);
         expect(state.records!.get('nova:128')).toBe(-1);
+        // The failure stays with the CompGovt (not measured to spread).
+        expect(state.records!.size).toBe(1);
         expect(state.events.some(e => e.type === 'failed')).toBe(true);
     });
 
@@ -233,6 +246,8 @@ describe('CompGovt/CompReward', () => {
             makeMissionOffer(mission, machinery.offerContext())!);
         abortMission(machinery, mission.id);
         expect(flagged.records!.get('nova:128')).toBe(-15);
+        // The CompGovt alone (reference "A14 spread, wave 14", finding 6).
+        expect(flagged.records!.size).toBe(1);
     });
 });
 

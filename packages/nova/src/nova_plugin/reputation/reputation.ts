@@ -454,6 +454,72 @@ export function compRewardDelta(compReward: number,
     }
 }
 
+/**
+ * How two govts stand for the record changes that reach past one govt
+ * (chär starting statuses, a completed mission's CompReward): allied
+ * when EITHER lists the other's class among its allies, else enemies
+ * when either lists the other's class among its enemies, else neutral.
+ * Symmetric, unlike govtDisposition (an acting ship's one-sided view).
+ *
+ * Either-direction is measured: with stock data, Rescue Raczak's
+ * CompReward 10 for gövt 144 Wild Geese changed +5 in exactly the 173
+ * systems this rule calls allied and -5 in exactly the 121 it calls
+ * enemy (reference "Boarding a rescue ship: stock "Rescue Raczak"
+ * (nova:394), wave 13", finding 4); 144's own ally and enemy lists
+ * alone would give 93 and 113.
+ */
+export function govtRelation(a: GovtData, b: GovtData):
+    'ally' | 'enemy' | 'neutral' {
+    if (intersects(a.allies, b.classes) || intersects(b.allies, a.classes)) {
+        return 'ally';
+    }
+    if (intersects(a.enemies, b.classes) || intersects(b.enemies, a.classes)) {
+        return 'enemy';
+    }
+    return 'neutral';
+}
+
+/**
+ * Applies a COMPLETED mission's CompReward R, which on the original is
+ * govt-wide (reference "A14 spread, wave 14", finding 5): +R with the
+ * CompGovt; +trunc(R / 2) with every govt allied to it (govtRelation);
+ * -trunc(R / 2) with every govt that is its enemy, or that is
+ * xenophobic (gövt Flags 0x0001: Pirate, Houseless Warriors) and not its
+ * ally. Unlike a crime it does not spread by jumps: every system of a
+ * govt took the same change however far away, which is exactly a
+ * per-govt record change.
+ *
+ * Only completion spreads. The 0x0040 abort's -5R was measured to hit
+ * the CompGovt alone (finding 6); a failure's -R/2 was not measured and
+ * stays with the CompGovt as the Bible words it ("that govt will take
+ * it personally"). Truncating the half (also for a negative R, which
+ * seven stock missions use) is the reference doc's proposal: R = 10 and
+ * 1000 measured +5 / +500, which no rounding rule tells apart.
+ *
+ * Without `compGovt` data (a number no loaded set defines) only the
+ * CompGovt's own record changes, as before.
+ */
+export function applyCompletionReward(records: LegalRecords,
+    compGovtId: string, compGovt: GovtData | undefined, reward: number,
+    allGovts: Iterable<readonly [string, GovtData]>): void {
+    addRecord(records, compGovtId, compGovt, reward);
+    const half = Math.trunc(reward / 2);
+    if (!compGovt || half === 0) {
+        return;
+    }
+    for (const [id, govt] of allGovts) {
+        if (id === compGovtId || id === compGovt.id) {
+            continue;
+        }
+        const relation = govtRelation(compGovt, govt);
+        if (relation === 'ally') {
+            addRecord(records, id, govt, half);
+        } else if (relation === 'enemy' || govt.flags.xenophobic) {
+            addRecord(records, id, govt, -half);
+        }
+    }
+}
+
 // --- chär starting statuses ---
 
 /**
@@ -476,11 +542,10 @@ export function initialRecordsFromGovtStatuses(
             if (id === govtId) {
                 continue;
             }
-            if (intersects(other.allies, named.classes)
-                || intersects(named.allies, other.classes)) {
+            const relation = govtRelation(named, other);
+            if (relation === 'ally') {
                 records.set(id, clampRecord(status));
-            } else if (intersects(other.enemies, named.classes)
-                || intersects(named.enemies, other.classes)) {
+            } else if (relation === 'enemy') {
                 records.set(id, clampRecord(-status));
             }
         }
