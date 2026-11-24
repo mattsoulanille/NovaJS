@@ -5771,6 +5771,11 @@ the bar.
 missions." instead of an empty mission list, and map Return to the
 default button (Leave / Done / Close) per screen rather than fullscreen
 (a fullscreen key could move to a modifier combination).
+**Fullscreen part applied in 46306f39** (Matthew 2026-11-24): fullscreen
+is Option+Return / Alt+Enter on every screen (`N/client/fullscreen.ts`),
+plus a Preferences > Display button; plain Return no longer toggles it.
+Return as the default button (Leave / Done / Close) is still open: plain
+Return now does nothing outside dialogs.
 
 Confidence: high for the cells shown (one shot each, unambiguous).
 
