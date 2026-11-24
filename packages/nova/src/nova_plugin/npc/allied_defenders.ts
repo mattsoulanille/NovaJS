@@ -29,13 +29,19 @@ import { PoliceCandidate } from './piracy_police.js';
  *    never call, distress.ts): the help comes from the alliance, call or
  *    no call.
  *
+ * And ("P1 wave 17: ... an AI 4 ally defends"): an AI 4 of the same allied
+ * 317, at the same port, was already fighting the raider at the first
+ * look, 10 s after take-off (raider 76%, the ally 84%), and destroyed it
+ * within two minutes.
+ *
  * So, when an NPC is ATTACKED (npc_targeting.ts's provoke rule) by a ship
- * that is NOT on a player's side, every warship (AI 3) of the victim's own
- * govt in the system takes the attacker as its aggressor at once, and
- * every warship of a govt allied with the victim's (local_law.ts's
- * alliedEitherWay, either direction) once the victim has been under that
- * attacker for ALLIED_DEFENCE_DELAY_MS. Their fleet escorts follow them, as
- * for a hit on them (provokeFleet).
+ * that is NOT on a player's side, every warship (AI 3) and interceptor
+ * (AI 4) of the victim's own govt in the system takes the attacker as its
+ * aggressor at once; so does every interceptor of a govt allied with the
+ * victim's (local_law.ts's alliedEitherWay, either direction), and every
+ * warship of one once the victim has been under that attacker for
+ * ALLIED_DEFENCE_DELAY_MS (alliedDefenceDelay). Their fleet escorts follow
+ * them, as for a hit on them (provokeFleet).
  *
  * Never a defender: a ship of the ATTACKER's own govt or one allied with it
  * (it would be choosing between two friends), a ship in the attacker's
@@ -45,14 +51,18 @@ import { PoliceCandidate } from './piracy_police.js';
  * govt has no defenders.
  *
  * GUESSES (unmeasured; docs/npc_behavior_gaps.md):
- *  - INTERCEPTORS (AI 4) of the own or an allied govt defend too: only
- *    unrelated AI 4s were in the rig, and the piracy police already
- *    defend their own and their allies' ships against the player;
+ *  - INTERCEPTORS (AI 4) of the victim's OWN govt defend too (an allied
+ *    govt's AI 4 was measured, wave 17; the own govt's was not);
+ *  - an allied AI 4 joins AT ONCE: measured only "within 10 s" (the first
+ *    look); an allied AI 3 after 20 s. One run each, so whether the two
+ *    delays differ by rule (an interceptor watches, as the piracy police
+ *    do; a warship hunts) or by chance is open;
  *  - NO RANGE: the candidates sat 160-300 px from the fight, so how far a
  *    warship notices is unknown; the whole system is the conservative
  *    reading of "the alliance rule";
- *  - the own govt joins at once and an ally after a delay: ONE run each;
- *    whether the delay is a rule, the ally's think rate, or chance is open;
+ *  - the own govt joins at once and an allied warship after a delay: ONE
+ *    run each; whether the delay is a rule, the ally's think rate, or
+ *    chance is open;
  *  - only NPC attackers: a PLAYER's attack on an own-govt or allied ship is
  *    left to the piracy police (AI 4, piracy_police.ts) and the legal
  *    record (A14), as before; whether AI 3s of the victim's govt join
@@ -61,15 +71,28 @@ import { PoliceCandidate } from './piracy_police.js';
 
 /**
  * How long a victim must have been under the same attacker before WARSHIPS
- * OF AN ALLIED GOVT join (the victim's own govt's join at once). The
- * reference ally joined about 20-25 s after the raider's first shots; the
- * low end, from one run.
+ * (AI 3) OF AN ALLIED GOVT join (the victim's own govt's join at once).
+ * The reference AI 3 ally joined about 20-25 s after the raider's first
+ * shots; the low end, from one run ("P1 wave 16").
  */
 export const ALLIED_DEFENCE_DELAY_MS = 20_000;
 
 /** Which AI types defend a ship of their own or an allied govt: warships
- * (measured) and interceptors (GUESS). Traders flee rather than fight. */
+ * and interceptors (an allied one of each measured, waves 16-17). Traders
+ * flee rather than fight. */
 export const DEFENDER_AI_TYPES: readonly number[] = [3, 4];
+
+/**
+ * How long a victim must have been under its attacker before an ALLIED
+ * govt's ship of AI type `aiType` joins: ALLIED_DEFENCE_DELAY_MS for a
+ * warship (AI 3, "P1 wave 16": 20-25 s), none for an interceptor (AI 4,
+ * "P1 wave 17": already fighting at the first look, 10 s in; "at once"
+ * is the GUESS inside that bound). The victim's own govt's ships join at
+ * once whatever their type.
+ */
+export function alliedDefenceDelay(aiType: number): number {
+    return aiType === 4 ? 0 : ALLIED_DEFENCE_DELAY_MS;
+}
 
 /**
  * The uuids of the warships that take `attacker` as their aggressor for
@@ -94,7 +117,6 @@ export function alliedDefenders(victim: string, attacker: string,
     const attackerGovtId = getEntity(attacker)?.components
         .get(GovtComponent)?.id;
     const attackerGovt = attackerGovtId ? getGovt(attackerGovtId) : undefined;
-    const alliesJoin = attackedFor >= ALLIED_DEFENCE_DELAY_MS;
     const defenders: string[] = [];
     for (const [npc, uuid, , govt, escortCommand, disabled] of candidates) {
         if (!DEFENDER_AI_TYPES.includes(npc.aiType)
@@ -104,7 +126,7 @@ export function alliedDefenders(victim: string, attacker: string,
             continue;
         }
         const own = govt.id === victimGovt.id;
-        if (!own && !alliesJoin) {
+        if (!own && attackedFor < alliedDefenceDelay(npc.aiType)) {
             continue;
         }
         const defenderGovt = getGovt(govt.id);

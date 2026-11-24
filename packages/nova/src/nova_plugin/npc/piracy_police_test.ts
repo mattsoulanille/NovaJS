@@ -33,10 +33,14 @@ import {
     sendsDistressCalls,
 } from './distress.js';
 import { AggressionComponent } from './aggression.js';
-import { ALLIED_DEFENCE_DELAY_MS } from './allied_defenders.js';
+import {
+    ALLIED_DEFENCE_DELAY_MS, alliedDefenceDelay,
+} from './allied_defenders.js';
 import { NpcComponent } from './npc_component.js';
 import { FormationComponent } from './npc_formation.js';
-import { PIRACY_WATCH_RANGE, policeDefendVictim } from './piracy_police.js';
+import {
+    policeDefendVictim, SELF_DEFENCE_WINDOW_MS,
+} from './piracy_police.js';
 
 /**
  * ============================================================================
@@ -57,6 +61,10 @@ import { PIRACY_WATCH_RANGE, policeDefendVictim } from './piracy_police.js';
  * interval), the watch range is at least 2500 px, a hostile's posture is
  * no excuse for shooting it, and a raider's victim is defended by the
  * warships of its own govt at once and of an allied govt about 20 s in.
+ *
+ * And "P1 wave 17": the watch range is the whole system (5000 and 9000 px),
+ * a hostile that hit the player 72 s earlier is no excuse either, and an
+ * allied govt's AI 4 defends the raider's victim within 10 s.
  */
 
 const HULL = 'test:hull';
@@ -176,9 +184,6 @@ describe('policeDefendVictim', () => {
             .toBeFalse();
     });
 
-    it('watches at least 2500 px (reference P1 wave 16)', () => {
-        expect(PIRACY_WATCH_RANGE).toBeGreaterThanOrEqual(2500);
-    });
 });
 
 describe('distress call rules', () => {
@@ -284,7 +289,7 @@ describe('piracy police and distress calls in the sim', () => {
         ship.components.set(ControlledByComponent, { peerId: 'peer' });
 
     /** The player beside a trader of `victimGovt`, a police ship of
-     * `policeGovt` 500 px off, and one more 6000 px away (out of sight). */
+     * `policeGovt` 500 px off, and one more 6000 px away. */
     async function scene(policeGovt: string, victimGovt: string,
         victimAi = 1) {
         await addShip('player', 0, 0, player);
@@ -357,20 +362,20 @@ describe('piracy police and distress calls in the sim', () => {
                 expect(style('police')).toBe('hostile');
             });
 
-        it('police out of sight (beyond PIRACY_WATCH_RANGE of both ships) '
-            + 'do not', async () => {
+        it('police anywhere in the system see it: 2500, 5000, 6000 and '
+            + '9000 px away (reference P1 waves 16 and 17)', async () => {
                 await scene(NOSY, SHIPPING);
+                await addShip('police2500', 2500, 0, npcShip(4, NOSY));
+                await addShip('police5000', 5000, 0, npcShip(4, NOSY));
+                await addShip('police9000', -9000, 0, npcShip(4, NOSY));
+                world.step();
                 hit('victim', 'player', { group: 'player', aimed: true });
-                expect(npc('farPolice').aggressor).toBeUndefined();
+                for (const uuid of ['police2500', 'police5000', 'farPolice',
+                    'police9000']) {
+                    expect(npc(uuid).aggressor).withContext(uuid)
+                        .toBe('player');
+                }
             });
-
-        it('police 2500 px away do (reference P1 wave 16)', async () => {
-            await scene(NOSY, SHIPPING);
-            await addShip('watchPolice', 2500, 0, npcShip(4, NOSY));
-            world.step();
-            hit('victim', 'player', { group: 'player', aimed: true });
-            expect(npc('watchPolice').aggressor).toBe('player');
-        });
 
         it('NON-nosy police ignore it (reference wave 13)', async () => {
             await scene(PLAIN, SHIPPING);
@@ -437,13 +442,71 @@ describe('piracy police and distress calls in the sim', () => {
             });
 
         it('self-defence is not piracy (GUESS): no witness for a victim '
-            + 'that has SHOT the player', async () => {
+            + 'that is FIRING on the player (hit him within '
+            + 'SELF_DEFENCE_WINDOW_MS)', async () => {
                 await scene(NOSY, ALWAYS, 3);
                 world.entities.get('player')!.components.set(
                     AggressionComponent, new Map([['victim',
                         { at: now(), damage: 0, hostile: true }]]));
                 hit('victim', 'player', { group: 'player', aimed: true });
                 expect(npc('police').aggressor).toBeUndefined();
+            });
+
+        it('an OLD hit is no excuse: a hostile that hit the player and is '
+            + 'still hostile, but not firing now, is policed (reference P1 '
+            + 'wave 17: 72 s)', async () => {
+                await scene(NOSY, ALWAYS, 3);
+                Object.assign(npc('victim'), { mode: 'attack' });
+                world.entities.get('victim')!.components.set(TargetComponent,
+                    { target: 'player' });
+                // Still within the 30 s bracket window, past the excuse.
+                world.entities.get('player')!.components.set(
+                    AggressionComponent, new Map([['victim', {
+                        at: now() - SELF_DEFENCE_WINDOW_MS - 1000,
+                        damage: 0, hostile: true,
+                    }]]));
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('police').aggressor).toBe('player');
+            });
+
+        it('the same for the player\'s escort: excused only while the '
+            + 'victim\'s hits on it are recent', async () => {
+                for (const [age, excused] of [[0, true],
+                    [SELF_DEFENCE_WINDOW_MS + 1000, false]] as const) {
+                    world = await makeSystem('test:system', gameData,
+                        undefined, { npcs: false });
+                    await scene(NOSY, ALWAYS, 3);
+                    await addShip('wing', -100, 0, ship => {
+                        ship.components.set(FormationComponent,
+                            { leader: 'player', slot: 0 });
+                        ship.components.set(FiringGroupComponent,
+                            { group: 'player' });
+                        ship.components.set(NpcComponent, {
+                            aiType: 3, nextDecision: ASLEEP, departAt: 1e12,
+                            aggressor: 'victim',
+                            aggressorHitAt: now() - age,
+                        });
+                    });
+                    world.step();
+                    hit('victim', 'wing', { group: 'player', aimed: true });
+                    expect(npc('police').aggressor).withContext(`${age} ms`)
+                        .toBe(excused ? undefined : 'wing');
+                }
+            });
+
+        it('a hit on an NPC stamps aggressorHitAt with each hit, and '
+            + 'aggressorSince only for a new attacker', async () => {
+                await scene(NOSY, SHIPPING);
+                hit('victim', 'player', { group: 'player', aimed: true });
+                const since = npc('victim').aggressorSince;
+                expect(npc('victim').aggressorHitAt).toBe(since);
+                advance(3000);
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('victim').aggressorSince).toBe(since);
+                expect(npc('victim').aggressorHitAt!).toBeGreaterThan(since!);
+                // A witness is provoked, not hit: no stamp.
+                expect(npc('police').aggressor).toBe('player');
+                expect(npc('police').aggressorHitAt).toBeUndefined();
             });
 
         it('a stray player hit counts as the victim\'s own rule does',
@@ -659,6 +722,23 @@ describe('piracy police and distress calls in the sim', () => {
             hit('victim', 'raider2', { group: 'raider2', aimed: true });
             expect(npc('ally').aggressor).toBe('raider2');
         });
+
+        it('an ALLIED govt\'s interceptor (AI 4) joins at once (reference '
+            + 'P1 wave 17: fighting within 10 s); its warship still waits',
+            async () => {
+                await raid([['allyPolice', 4, SHIPPING_ALLY],
+                    ['ally', 3, SHIPPING_ALLY]]);
+                expect(alliedDefenceDelay(4)).toBe(0);
+                expect(alliedDefenceDelay(3)).toBe(ALLIED_DEFENCE_DELAY_MS);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                expect(npc('allyPolice').aggressor).toBe('raider');
+                expect(npc('ally').aggressor).toBeUndefined();
+                wake('allyPolice');
+                advance(2000);
+                expect(npc('allyPolice').mode).toBe('attack');
+                expect(world.entities.get('allyPolice')!.components
+                    .get(TargetComponent)?.target).toBe('raider');
+            });
 
         it('unrelated warships and police, nosy or not, ignore the fight; '
             + 'so does a friend of both sides', async () => {

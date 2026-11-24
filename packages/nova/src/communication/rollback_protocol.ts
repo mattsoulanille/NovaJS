@@ -588,6 +588,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    TRADER help. The derived wire schema fingerprint changes
 //    (64a84723886ce8ba -> 51a63184211e887b), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-17 traffic and police fixes (reference
+//    "Stock traffic, wave 17", "P1 wave 17", "W1 / C1 / contraband / the
+//    shipyard prompt, wave 17"). One OPTIONAL NpcState field,
+//    `aggressorHitAt` (npc/npc_component.ts: sim time of the latest hit
+//    from the recorded aggressor), written on every provoking hit; NPCs
+//    nobody hits never carry it. Sim-rule changes alongside: a system's
+//    population target is AvgShips exactly (no roll, no PRNG draw); a
+//    miner with rocks to work no longer leaves on its departure roll; the
+//    piracy police watch the whole system and excuse only a victim that
+//    hit the attacker within the last 5 s; an allied govt's AI 4 joins a
+//    fight at once; a shïp Flags2 0x0002 hull holds 450 px off its target.
+//    No input kind or message kind changes. The derived wire schema
+//    fingerprint changes (51a63184211e887b -> 7110220773935a73), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

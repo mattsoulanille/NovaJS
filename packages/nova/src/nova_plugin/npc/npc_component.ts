@@ -51,6 +51,12 @@ export const NpcState = t.intersection([t.type({
      * `aggressor` is set; allied warships join the fight once it is
      * ALLIED_DEFENCE_DELAY_MS old (npc/allied_defenders.ts). */
     aggressorSince: t.number,
+    /** Sim time (ms) of the latest provoking hit from `aggressor`
+     * (npc_targeting.ts's provoke, every hit). Read by the piracy police's
+     * self-defence test (npc/piracy_police.ts selfDefence): a player-side
+     * NPC fighting back excuses itself only while its aggressor is still
+     * firing on it. */
+    aggressorHitAt: t.number,
     /** Sim time (ms) after which the NPC heads for a jump-out. */
     departAt: t.number,
     /** Uuid of the disabled hulk this NPC is flying to plunder (mode

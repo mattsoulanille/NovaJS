@@ -321,21 +321,23 @@ function provokeFleet(leader: string, source: string,
  * PIRACY POLICE (npc/piracy_police.ts): an attack from a PLAYER's side is
  * also recorded on every AI 4 WITNESS whose govt defends the victim: police
  * of a nosy govt (gövt 0x0002) for any non-enemy victim whose govt does not
- * set 0x0020, and any police for a ship of their own govt or an ally's.
- * Reference "P1 wave 14": nosy police turned on the player for shooting an
- * unrelated trader beside them, ignored it for a 0x0020 victim, and
- * non-nosy police defended their ally's trader. Each witness's fleet
+ * set 0x0020, and any police for a ship of their own govt or an ally's,
+ * anywhere in the system. Reference "P1 wave 14": nosy police turned on
+ * the player for shooting an unrelated trader beside them, ignored it for
+ * a 0x0020 victim, and non-nosy police defended their ally's trader;
+ * waves 16-17: police 300 to 9000 px away all saw it. Each witness's fleet
  * escorts follow it, as for a hit on it.
  *
  * ALLIED DEFENDERS (npc/allied_defenders.ts): an attack by an NPC that is
- * NOT on a player's side is also recorded on every warship (AI 3, and AI 4
- * as a guess) of the victim's OWN govt in the system at once, and on those
- * of a govt ALLIED with the victim's once the victim has been under that
- * attacker for ALLIED_DEFENCE_DELAY_MS (its `aggressorSince`). Reference
- * "P1 wave 16": an own-govt warship fought a raider attacking its govt's
- * ship from the start, an allied one joined about 20-25 s in, unrelated
- * warships and police (nosy or not) ignored the fight. Each defender's
- * fleet escorts follow it.
+ * NOT on a player's side is also recorded on every warship and
+ * interceptor (AI 3 / AI 4) of the victim's OWN govt in the system at
+ * once, on the interceptors of a govt ALLIED with the victim's at once,
+ * and on its warships once the victim has been under that attacker for
+ * ALLIED_DEFENCE_DELAY_MS (its `aggressorSince`). Reference "P1 wave 16":
+ * an own-govt warship fought a raider attacking its govt's ship from the
+ * start, an allied one joined about 20-25 s in, unrelated warships and
+ * police (nosy or not) ignored the fight; "P1 wave 17": an allied AI 4
+ * was fighting within 10 s. Each defender's fleet escorts follow it.
  *
  * DISTRESS CALLS (npc/distress.ts): an attack on a non-mission trader (AI
  * 1/2) by an NPC that is NOT on a player's side sends "<ship>: <STR# 5003
@@ -399,6 +401,9 @@ export const NpcAggressionSystem = new System({
             }
             const now = time.time;
             provoke(npc, source, getEntity, now);
+            // The hit itself (not a witness's or a wingman's provocation):
+            // piracy_police.ts's self-defence window reads it.
+            npc.aggressorHitAt = now;
             provokeFleet(uuid, source, followers, getEntity, now);
             const getGovt = (id: string) => gameData.data.Govt.getCached(id);
             const provokeAll = (ships: readonly string[]) => {
@@ -413,8 +418,8 @@ export const NpcAggressionSystem = new System({
             };
             const victim = entities.get(uuid);
             if (isPlayerSideShip(source, getEntity)) {
-                provokeAll(victim ? piracyWitnesses(uuid, victim,
-                    source, getEntity, police, getGovt, govtData, now) : []);
+                provokeAll(piracyWitnesses(uuid, source, getEntity, police,
+                    getGovt, govtData, now));
             } else {
                 provokeAll(alliedDefenders(uuid, source, govtData,
                     now - (npc.aggressorSince ?? now), getEntity, police,
