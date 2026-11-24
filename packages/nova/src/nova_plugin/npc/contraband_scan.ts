@@ -16,8 +16,8 @@ import {
     applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband,
 } from './contraband.js';
 import {
-    ContrabandScannedComponent, contrabandAboard, holdingScan, needsScan,
-    scannable, scannedMarker,
+    ContrabandScannedComponent, contrabandAboard, needsScan, scannable,
+    scannedMarker,
 } from './contraband_target.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcFireControlSystem } from './npc_fire_control.js';
@@ -49,9 +49,10 @@ import { NpcSteeringSystem } from './npc_steering.js';
  * Measured (reference S1 / S2, waves 11-12): the scan comes within about
  * 3 s of an arrival, by jump or not, from a cutter that comes up beside
  * the player; one fine only. A CLEAN ship is approached too, and the
- * cutter sits on it, saying nothing ("A14 / contraband wave 16",
- * `w16_clean_several`; wave 11 had read "a clean ship is never
- * approached"): see needsScan and CONTRABAND_SCAN_HOLD_MS.
+ * cutters sit on it for the rest of the visit, saying nothing ("A14 /
+ * contraband wave 16", `w16_clean_several`; "Contraband / W1 / C1, wave
+ * 18": four cutters, 8+ minutes; wave 11 had read "a clean ship is never
+ * approached"): see needsScan and holdingScan.
  */
 
 
@@ -117,11 +118,13 @@ registerSimulationBridgeEvent({ event: ContrabandScanEvent });
  * pilot; the stock "Have a nice day." line, STR# 2002 #389, was not shown).
  *
  * After the scan the interceptor STAYS on the ship (mode 'scan', steered
- * onto it) until CONTRABAND_SCAN_HOLD_MS after the scan (holdingScan), then
- * goes back to its business: the reference cutter sat on the clean pilot
- * for 30+ s; what ends it is a GUESS. A detection's hostility takes over at
- * the interceptor's next think (the decision step attacks before it
- * scans).
+ * onto it) for the rest of the visit (contraband_target.ts's
+ * holdingScan): the reference cutters sat on a clean pilot for 8+
+ * minutes. It lets go when the ship leaves the world (a landing or a
+ * jump: the sweep below gives up on a target that is gone) or when its
+ * decision step finds something better to do (an enemy, an aggressor, a
+ * ship still due a scan). A detection's hostility takes over at the
+ * interceptor's next think (the decision step attacks before it scans).
  *
  * Why a once-per-tick sweep in UUID order rather than an arm of the
  * steering system: two interceptors can reach the same ship on the same
@@ -174,11 +177,8 @@ export const ContrabandScanSystem = new System({
                 // Scanned this visit with nothing new aboard: this
                 // interceptor sitting on the ship it scanned, or one beaten
                 // to it by another interceptor (it sits too), or the new
-                // contraband went overboard en route. It stays
-                // until the hold runs out.
-                if (!holdingScan(target, time.time)) {
-                    giveUp();
-                }
+                // contraband went overboard en route. It stays for the
+                // visit (holdingScan); the decision step moves it on.
                 continue;
             }
             target.components.set(ContrabandScannedComponent,
@@ -193,7 +193,7 @@ export const ContrabandScanSystem = new System({
                 emit(ContrabandScanEvent, { scanner: uuid, ...line },
                     [npc.scanTarget!]);
             }
-            // No giveUp: it sits on the ship while holdingScan.
+            // No giveUp: it sits on the ship for the visit (holdingScan).
         }
     },
     // Pinned into the NPC chain right after the plunder claim, the other

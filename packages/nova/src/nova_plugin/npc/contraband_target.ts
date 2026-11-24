@@ -9,8 +9,8 @@ import {
     ExplodingComponent, isTargetable, OutfitsStateComponent,
 } from '../ship/index.js';
 import {
-    CONTRABAND_SCAN_HOLD_MS, CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings,
-    findContraband, isDetection, newContraband,
+    CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings, findContraband,
+    isDetection, newContraband,
 } from './contraband.js';
 import { chooseNearest } from './npc_targeting.js';
 
@@ -171,45 +171,71 @@ export function needsScan(ship: Entity, findings: ContrabandFindings):
 }
 
 /**
- * Whether an interceptor that is on `ship` for a scan stays there at sim
- * time `now`: the ship was scanned less than CONTRABAND_SCAN_HOLD_MS ago
- * (its marker's `at`). The reference cutter sat on the clean pilot it had
- * scanned (contraband.ts's CONTRABAND_SCAN_HOLD_MS; the end is a GUESS).
+ * Whether an interceptor that is on `ship` for a scan STAYS there: the
+ * ship has been scanned on this visit (it carries the marker), so the
+ * interceptor keeps station on it for the rest of the visit, until the
+ * ship lands or jumps out (it leaves the world: the scan sweep and the
+ * steering arm then drop it) or the interceptor has something better to
+ * do (the decision system: an enemy or an aggressor first, then a ship
+ * still due a scan; chooseScanTarget).
+ *
+ * MEASURED, reference "Contraband / W1 / C1, wave 18" (pilot
+ * `w17_scan_clean`, a clean Kit Lancer among four Kit Customs Big
+ * cutters): the cutters sat 23-51 px from the pilot, not moving at all,
+ * from 20 s to the end of an 8.5 min watch. Wave 16 had seen one cutter
+ * sit 30+ s and NovaJS let it go after 30 s; that guess is gone.
+ *
+ * GUESSES: the cutter FOLLOWS a pilot who flies off (it keeps station on
+ * the ship, wherever it goes in the system; unmeasured, the pilot sat
+ * still); a landing ends the sit and the cutters do not come back to the
+ * pilot when he takes off (the marker survives the landing, so he is not
+ * due a scan; also unmeasured).
  */
-export function holdingScan(ship: Entity, now: number): boolean {
-    const scanned = ship.components.get(ContrabandScannedComponent);
-    return scanned !== undefined
-        && now - scanned.at < CONTRABAND_SCAN_HOLD_MS;
+export function holdingScan(ship: Entity): boolean {
+    return ship.components.has(ContrabandScannedComponent);
 }
 
 /**
  * The player ship an interceptor of a scanning govt goes to scan, among
  * `candidates` ([uuid, distance²] of the player ships it may consider:
  * the decision system has already dropped its own side, a briber, the
- * disabled, the cloaked and every ship it is about to attack). One is
- * taken when it is within CONTRABAND_SCAN_SEEK_RANGE and is due a scan
- * by `govtMask` (needsScan: not scanned this visit, clean or not, or
- * carrying new contraband since). STICKY, like the plunder run: the ship
- * it is already flying to is kept while it still qualifies, or while the
- * interceptor is SITTING on it after the scan (holdingScan, at sim time
- * `now`); otherwise the nearest (uuid tie-break, chooseNearest). Reads
- * synced state and staged caches only; no PRNG.
+ * disabled, the cloaked and every ship it is about to attack).
+ *
+ *  1. A ship DUE a scan by `govtMask` within CONTRABAND_SCAN_SEEK_RANGE
+ *     (needsScan: not scanned this visit, clean or not, or carrying new
+ *     contraband since): the one it is already flying to while it still
+ *     qualifies (sticky, like the plunder run), else the nearest (uuid
+ *     tie-break, chooseNearest). A ship due a scan comes before sitting
+ *     on one already scanned, so a second pilot arriving in the system is
+ *     still buzzed by the cutters sitting on the first.
+ *  2. Else, when `mayHold`, the ship it is SITTING on (holdingScan: the
+ *     current target, scanned this visit, still scannable and still a
+ *     candidate), at any distance: it keeps station on that ship for the
+ *     visit, following it if it flies off (GUESS, see holdingScan).
+ *
+ * Reads synced state and staged caches only; no PRNG.
  */
 export function chooseScanTarget(current: string | undefined,
     candidates: ReadonlyArray<readonly [string, number]>, govtMask: number,
     getEntity: (uuid: string) => Entity | undefined,
-    gameData: SimulationGameDataInterface, now: number): string | undefined {
-    const inReach = candidates.filter(([uuid, d2]) =>
-        d2 <= CONTRABAND_SCAN_SEEK_RANGE * CONTRABAND_SCAN_SEEK_RANGE
-        && scannable(getEntity(uuid)));
-    const qualifying = inReach.filter(([uuid]) => {
-        const ship = getEntity(uuid)!;
-        return needsScan(ship, contrabandAboard(ship, govtMask, gameData));
+    gameData: SimulationGameDataInterface, mayHold = true):
+    string | undefined {
+    const qualifying = candidates.filter(([uuid, d2]) => {
+        const ship = getEntity(uuid);
+        return d2 <= CONTRABAND_SCAN_SEEK_RANGE * CONTRABAND_SCAN_SEEK_RANGE
+            && scannable(ship)
+            && needsScan(ship, contrabandAboard(ship, govtMask, gameData));
     });
-    if (current !== undefined && (qualifying.some(([u]) => u === current)
-        || (inReach.some(([u]) => u === current)
-            && holdingScan(getEntity(current)!, now)))) {
+    if (current !== undefined && qualifying.some(([u]) => u === current)) {
         return current;
     }
-    return chooseNearest(qualifying);
+    if (qualifying.length > 0) {
+        return chooseNearest(qualifying);
+    }
+    const sittingOn = current !== undefined ? getEntity(current) : undefined;
+    if (mayHold && candidates.some(([u]) => u === current)
+        && scannable(sittingOn) && holdingScan(sittingOn)) {
+        return current;
+    }
+    return undefined;
 }

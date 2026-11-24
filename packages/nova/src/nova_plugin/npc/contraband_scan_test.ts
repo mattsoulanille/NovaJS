@@ -33,7 +33,7 @@ import {
 import { completeEntity } from '../spawn/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
-    applyContrabandScan, CONTRABAND_SCAN_HOLD_MS, CONTRABAND_SCAN_RANGE,
+    applyContrabandScan, CONTRABAND_SCAN_RANGE,
     CONTRABAND_SIT_RADIUS,
     contrabandFine, ContrabandFindings, findContraband, hasContraband,
     missionIllegal, newContraband, scansHere, smugglingPenalty,
@@ -242,9 +242,10 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(scans.length).toBe(1);
         });
 
-    it('approaches a CLEAN ship too, says nothing, sits on it for '
-        + 'CONTRABAND_SCAN_HOLD_MS, then lets it be (A14 / contraband wave '
-        + '16, w16_clean_several)', async () => {
+    it('approaches a CLEAN ship too, says nothing, and sits on it for the '
+        + 'whole visit (A14 / contraband wave 16, w16_clean_several; '
+        + 'Contraband / W1 / C1 wave 18, w17_scan_clean: 8+ minutes)',
+        async () => {
             const { world, pilot, cutter, scans } = await scanWorld({
                 pilot: {
                     outfits: { [LEGAL_GUN]: 2 },
@@ -263,16 +264,19 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             const marker = pilot.components.get(ContrabandScannedComponent)!;
             expect(marker.found).toBeUndefined();
             expect(marker.hostile).toBeUndefined();
-            // It stays on the ship (the reference cutter sat on the pilot
-            // 0-10 px for 30+ s), in mode 'scan' the whole hold: once it
-            // has braked from its run in, within scan range, and settled
-            // close beside the pilot for the second half.
+            // It stays on the ship, in mode 'scan', for the whole visit:
+            // once it has braked from its run in, within scan range, and
+            // then settled close beside the pilot (the reference cutters sat
+            // 23-51 px off, not moving, from 20 s to the end of an 8.5 min
+            // watch; the old 30 s hold is gone).
+            const watch = 9 * 60_000;
             let settling = 0;
             let settled = 0;
-            while (now() < marker.at + CONTRABAND_SCAN_HOLD_MS - 100) {
+            while (now() < marker.at + watch) {
                 world.step();
                 expect(npc().mode).toBe('scan');
-                if (now() > marker.at + CONTRABAND_SCAN_HOLD_MS / 2) {
+                expect(npc().scanTarget).toBe(PILOT);
+                if (now() > marker.at + 20_000) {
                     settled = Math.max(settled, gap());
                 } else if (now() > marker.at + 5000) {
                     settling = Math.max(settling, gap());
@@ -280,21 +284,106 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             }
             expect(settling).toBeLessThanOrEqual(CONTRABAND_SCAN_RANGE);
             expect(settled).toBeLessThanOrEqual(4 * CONTRABAND_SIT_RADIUS);
-            // GUESS: the hold ends; it does not sit on him all visit.
-            const modes = new Set<string | undefined>();
-            run(world, 1200, () => modes.add(npc().mode));
-            expect(npc().mode).not.toBe('scan');
-            expect(npc().scanTarget).toBeUndefined();
-            // Nothing was ever said or charged.
+            // Nothing was ever said or charged, and it was scanned once.
             expect(credits(pilot)).toBe(START_CREDITS);
             expect(record(pilot)).toBe(0);
             expect(scans).toEqual([]);
-            // Not approached again this visit.
+            expect(pilot.components.get(ContrabandScannedComponent)!.at)
+                .toBe(marker.at);
+
+            // The ship LEAVES the world (a landing or a jump): the cutter
+            // lets go and goes back to its patrol.
+            world.entities.delete(PILOT);
+            run(world, 120);
+            expect(npc().mode).not.toBe('scan');
+            expect(npc().scanTarget).toBeUndefined();
+            // Back after a landing (the marker survives it): not due a
+            // scan, so not approached again (GUESS: unmeasured).
+            world.entities.set(PILOT, pilot);
             const later = new Set<string | undefined>();
             run(world, 1200, () => later.add(npc().mode));
             expect(later.has('scan')).toBeFalse();
-            expect(pilot.components.get(ContrabandScannedComponent)!.at)
-                .toBe(marker.at);
+        });
+
+    it('follows a scanned clean ship that flies off (GUESS: it keeps '
+        + 'station on the ship)', async () => {
+            const { world, pilot, cutter } = await scanWorld();
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            run(world, 600);
+            const movement = () =>
+                pilot.components.get(MovementStateComponent)!;
+            const gap = () => cutter.components.get(MovementStateComponent)!
+                .position.subtract(movement().position).length;
+            // The pilot crawls 4000 px off (beyond the 3000 px seek range
+            // of a fresh scan) at 120 px/s, then stops.
+            for (let i = 0; i < 2000; i++) {
+                const { position } = movement();
+                pilot.components.set(MovementStateComponent, {
+                    ...movement(),
+                    position: new Position(position.x + 2, position.y),
+                    velocity: new Vector(120, 0),
+                });
+                world.step();
+                expect(cutter.components.get(NpcComponent)!.mode)
+                    .toBe('scan');
+            }
+            pilot.components.set(MovementStateComponent, {
+                ...movement(), velocity: new Vector(0, 0),
+            });
+            run(world, 1800);
+            expect(cutter.components.get(NpcComponent)!.scanTarget)
+                .toBe(PILOT);
+            expect(gap()).toBeLessThanOrEqual(4 * CONTRABAND_SIT_RADIUS);
+        });
+
+    it('a sitting cutter still buzzes a second pilot due a scan, then sits '
+        + 'on him', async () => {
+            const { world, pilot, pilot2, cutter } = await scanWorld({
+                pilot2: {},
+            });
+            const npc = () => cutter.components.get(NpcComponent)!;
+            expect(runUntilScanned(world, pilot)
+                || pilot2!.components.has(ContrabandScannedComponent))
+                .toBeTrue();
+            const first = npc().scanTarget;
+            const second = first === PILOT ? pilot2! : pilot;
+            expect(runUntilScanned(world, second, 3600)).toBeTrue();
+            run(world, 1800);
+            expect(npc().mode).toBe('scan');
+            expect(npc().scanTarget).not.toBe(first);
+        });
+
+    it('an aggressor pulls a sitting cutter off the clean ship it sits on '
+        + '(piracy policing still wins)', async () => {
+            const { world, pilot, cutter } = await scanWorld({ pilot2: {} });
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            run(world, 600);
+            const npc = cutter.components.get(NpcComponent)!;
+            expect(npc.mode).toBe('scan');
+            // The second pilot shot a ship in front of this nosy police
+            // (piracy_police.ts's witness rule records him as its
+            // aggressor, exactly as a hit on it would).
+            npc.aggressor = PILOT_2;
+            npc.aggressorSince = world.resources.get(TimeResource)!.time;
+            run(world, 120);
+            expect(npc.mode).toBe('attack');
+            expect(cutter.components.get(TargetComponent)?.target)
+                .toBe(PILOT_2);
+        });
+
+    it('a cutter that is only passing through does not sit past its '
+        + 'departure time', async () => {
+            const { world, pilot, cutter } = await scanWorld();
+            const npc = cutter.components.get(NpcComponent)!;
+            npc.passingThrough = true;
+            npc.departAt = Number.MAX_SAFE_INTEGER;
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            run(world, 600);
+            expect(npc.mode).toBe('scan');
+            npc.departAt = world.resources.get(TimeResource)!.time;
+            const modes = new Set<string | undefined>();
+            run(world, 600, () => modes.add(npc.mode));
+            expect(modes.has('depart')).toBeTrue();
         });
 
     it('fails a 0x0020 mission whose cargo is illegal, with no fine and no '

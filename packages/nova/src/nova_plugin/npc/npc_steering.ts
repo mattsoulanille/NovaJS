@@ -519,10 +519,13 @@ export const NpcSteeringSystem = new System({
                 // within CONTRABAND_SCAN_RANGE. Flown at top speed
                 // ("buzzes"), so the ship closes fast and brakes only as
                 // it comes up on a slow target. Once the ship is scanned it
-                // SITS on it for the hold (contraband_target.ts's
-                // holdingScan; the reference cutter sat 0-10 px from the
-                // pilot): a slow, tight arrival that settles instead of
-                // sweeping through the ship at top speed.
+                // SITS on it for the rest of the visit
+                // (contraband_target.ts's holdingScan; the reference
+                // cutters sat 0-50 px from the pilot): a slow, tight
+                // arrival that settles instead of sweeping through the ship
+                // at top speed. A ship that flies off is chased at top
+                // speed again outside the slow radius (steerArrive), so the
+                // cutter follows it (GUESS).
                 const quarryShip = npc.scanTarget
                     ? entities.get(npc.scanTarget) : undefined;
                 const quarry = quarryShip?.components
@@ -532,7 +535,7 @@ export const NpcSteeringSystem = new System({
                     delete npc.scanTarget;
                     return;
                 }
-                const sitting = holdingScan(quarryShip, time.time);
+                const sitting = holdingScan(quarryShip);
                 steerArrive(movement, physics,
                     Position.fromVectorLike(quarry.position),
                     sitting ? CONTRABAND_SIT_RADIUS : CONTRABAND_SCAN_RANGE / 2,

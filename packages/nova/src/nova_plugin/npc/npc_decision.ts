@@ -903,19 +903,28 @@ export const NpcDecisionSystem = new System({
                 // nobody to fight, an interceptor of a govt that scans
                 // here flies to a player ship it has not scanned this
                 // visit (clean or not), or one carrying contraband its
-                // last scan did not find, and sits on it a while after the
-                // scan (chooseScanTarget, holdingScan). Ordered after the
-                // engagement decision (a criminal is attacked, not
-                // scanned: the Bible's ScanFine applies only to a pilot
-                // "not yet evil enough to attack") and before departure,
-                // so it does not leave with a scan pending. A clean ship
-                // is approached too (reference "A14 / contraband wave 16";
-                // wave 11 had read the opposite).
+                // last scan did not find, and then sits on it for the rest
+                // of the visit (chooseScanTarget, holdingScan; reference
+                // "Contraband / W1 / C1, wave 18": four cutters on a clean
+                // pilot for 8+ minutes). Ordered after the engagement
+                // decision (a criminal is attacked, not scanned: the
+                // Bible's ScanFine applies only to a pilot "not yet evil
+                // enough to attack"; and an enemy, or an aggressor such as
+                // a pirate the piracy police witnessed, pulls a sitting
+                // interceptor off at once) and before departure, so it
+                // does not leave with a scan pending. A clean ship is
+                // approached too (reference "A14 / contraband wave 16";
+                // wave 11 had read the opposite). The sit does NOT keep a
+                // ship that is only passing through (a released mission
+                // ship, a përs on its way) past its departure time: it
+                // still scans, then leaves on its clock below.
                 if (scans && govtData) {
                     const hostileSet = new Set(hostiles.map(([u]) => u));
+                    const mayHold = held || !npc.passingThrough
+                        || time.time < npc.departAt;
                     const scanTarget = chooseScanTarget(npc.scanTarget,
                         scanCandidates.filter(([u]) => !hostileSet.has(u)),
-                        govtData.scanMask, getEntity, gameData, time.time);
+                        govtData.scanMask, getEntity, gameData, mayHold);
                     if (scanTarget !== undefined) {
                         npc.mode = 'scan';
                         npc.scanTarget = scanTarget;

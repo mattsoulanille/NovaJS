@@ -44,7 +44,10 @@ import { Cargo, OutfitsState } from '../ship/index.js';
  *  - ScanFine 0 AND ScanFine -5 alike: the detection line without its
  *    fine sentence, no money taken, SmugPenalty still charged (see
  *    contrabandFine for the Bible's contrary reading of -N).
- *  - a clean ship is not approached, and nothing is said to it.
+ *  - a CLEAN ship is approached and scanned too, and nothing is said to
+ *    it; the cutters then sit on it for the rest of the visit (waves 16
+ *    to 18: one cutter, then four of four, for 8+ minutes without
+ *    moving; contraband_target.ts's holdingScan).
  *  - SEVERAL FINDS in one scan (wave 15, `w15_several`: the pod, 10 t of
  *    illegal jünk and a Flags 0x0020 mission's illegal cargo): ONE status
  *    line, which named the JÜNK, not the pod; ONE fine; the 0x0020
@@ -75,17 +78,8 @@ export const CONTRABAND_SCAN_SEEK_RANGE = 3000;
 /** The scan happens when the interceptor is within this distance of the
  * ship ("a cutter beside the player"). */
 export const CONTRABAND_SCAN_RANGE = 150;
-/**
- * How long an interceptor stays ON a ship it has scanned before it goes
- * back to its patrol (contraband_target.ts's holdingScan). Reference "A14 /
- * contraband wave 16", `w16_clean_several`: a cutter flew in from 300 px
- * to a CLEAN pilot sitting at the port and sat on it (0-10 px) for 30+ s,
- * until the watch ended; nothing was said. What ends the sit was not
- * measured: GUESS, a fixed time from the scan, the measured lower bound,
- * so an interceptor never sits on a pilot for the whole visit.
- */
-export const CONTRABAND_SCAN_HOLD_MS = 30_000;
-/** While it sits on a scanned ship, the interceptor holds within this
+/** While it sits on a scanned ship (for the rest of the visit,
+ * contraband_target.ts's holdingScan), the interceptor holds within this
  * many px of it (the reference cutter sat 0-10 px from the pilot)... */
 export const CONTRABAND_SIT_RADIUS = 10;
 /** ...matching its speed to within this many px/s, so it settles on the
