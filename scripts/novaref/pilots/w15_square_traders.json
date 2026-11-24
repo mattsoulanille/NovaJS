@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w15-square-traders",
+  "edits": {
+    "ship": 839,
+    "stellar": 1550,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1550": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-square-traders"
+  }
+}

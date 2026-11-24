@@ -1,0 +1,29 @@
+{
+ "name": "w15_offer_board",
+ "_comment": "Wave 15 item 3 (rescue): land, accept the offer, take off recording, Tab, loops/board.mjs in COLOUR mode (the kit düde 330's magenta pointer; wave 14's bracket mode lost the 24 px hulk), the mission list, land, leave, pull. Pilot w15_kitdude (mïsn 1080: the Raczak fields with the kit düde, cargo picked up by boarding).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 3500" },
+  { "keys": "Tab wait 600" },
+  { "shot": "space", "window": true },
+  { "script": "../loops/board.mjs", "args": { "speedPxS": 360, "turnDegS": 174.2, "near": 200, "stepMs": 50, "maxSteps": 40, "maxLegs": 10, "calMs": 300, "fineBelowPx": 60, "fineStepMs": 25, "retarget": 3, "sweep": { "atPx": 25, "startOnSilent": true, "repeat": 2, "turnMs": 40, "presses": 30, "stopAfter": 1, "dialogClicks": [], "clickTimes": 0 } } },
+  { "shot": "after-board", "window": true },
+  { "keys": "i wait 1200" },
+  { "shot": "missions", "window": true },
+  { "keys": "Return wait 800" },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "Return wait 4000" },
+  { "shot": "left", "window": true }
+ ],
+ "pull": true
+}

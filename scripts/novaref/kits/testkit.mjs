@@ -399,6 +399,17 @@ function wave15Resources() {
     for (const [id, c] of traders) out.push(...shareRled(id, `Kit Sq Trader ${c}`, RLED[c], 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0 }));
     for (const [id, c] of shuttles) out.push(...shareRled(id, `Kit Sq Shuttle ${c}`, RLED[c], 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0002 }));
     out.push(mixDude(383, "Kit Square Traders", 1, 346, traders.map((t) => t[0])), mixDude(384, "Kit Square Shuttles", 1, 346, shuttles.map((t) => t[0])));
+    // Added during the wave: the shuttles held every slot of 1500 after 2
+    // minutes, so the traders' destinations got only four visits. sÿst 1550
+    // Kit Square Traders Range: the same five stellars (spöb 1551 Hostile,
+    // 1552 Market, 1550 Port, 1553 Neutral, 1554 Marker, same list order and
+    // positions), traders only (düde 383), avgShips 6.
+    out.push(traffic(system(1550, "Kit Square Traders Range", 260, -900, 346, [1551, 1552, 1550, 1553, 1554]), [[383, 100]], 6),
+        spob(1551, "Square T Hostile", 220, 220, 138, { flags: 0x43, govt: 347 }),
+        spob(1552, "Square T Market", 220, 0, 138, { flags: 0x43, govt: 346 }),
+        spob(1550, "Square T Port", 0, 0, 138, { flags: 0x43, govt: 346 }),
+        spob(1553, "Square T Neutral", 0, 220, 138, { flags: 0x43, govt: 363 }),
+        spob(1554, "Square T Marker", -220, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
 
     // --- M: miners by colour.
     const miner = { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0003, cargo: 100, weapons: [181, -1, -1, -1], weaponCounts: [4, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], outfits: [271, -1, -1, -1], outfitCounts: [1, 0, 0, 0] };

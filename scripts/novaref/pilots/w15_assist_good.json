@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w15-assist-good",
+  "edits": {
+    "ship": 763,
+    "stellar": 1545,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1545": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-assist-good",
+    "legal": {
+      "1545": 1000
+    },
+    "rating": 6400
+  }
+}

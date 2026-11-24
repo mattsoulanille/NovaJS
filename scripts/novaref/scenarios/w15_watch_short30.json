@@ -1,0 +1,13 @@
+{
+ "name": "w15_watch_short30",
+ "_comment": "Wave 15: w15_watch_short at 30 fps (speeds). Pilot w15_hull (sÿst 1535 Kit Hull Flags Range, W1).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 30 },
+  { "repeat": 18, "steps": [ { "shot": "w-{i}", "window": true }, { "wait": 18000 } ] },
+  { "record": "stop" }
+ ]
+}
