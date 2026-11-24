@@ -9,7 +9,9 @@ import { GameDate } from 'novadatainterface/player_start_data';
 //     player shift-clicked. Gaps between consecutive pins (and between the
 //     current system and the first pin) are auto-filled with the shortest
 //     path. The original game had no auto-router — routes were built pin by
-//     pin — so auto-routing only engages through shift-click gap filling.
+//     pin — so auto-routing only engages through shift-click gap filling,
+//     and is a NovaJS Enhancement the player can turn off (canPin's
+//     `autoRoute`).
 //     Rendered as a STRONG green line.
 //   * The single-jump route: one adjacent system chosen with a plain click
 //     (or cycled with Tab). Rendered as a WEAKER green line.
@@ -207,19 +209,33 @@ export function expandRoute(adj: Adjacency, current: string,
  * would quietly start contributing the moment exploring one more system
  * drew the missing hop of a path — a route the player never saw being
  * plotted.
+ *
+ * `autoRoute` is the NovaJS Enhancements "Map auto-routing" toggle: true
+ * (NovaJS) fills the gap to the candidate with the shortest path; false
+ * (the original) takes only a candidate one jump past the route's end.
  */
 export function canPin(adj: Adjacency, current: string,
     pinned: readonly string[], candidate: string,
-    samePlace: SamePlace = sameId, passable: Passable = everywhere): boolean {
+    samePlace: SamePlace = sameId, passable: Passable = everywhere,
+    autoRoute = true): boolean {
     if (samePlace(candidate, current)) {
         return false;
     }
     const route = expandRoute(adj, current, [...pinned, candidate],
         samePlace, passable);
     const end = route[route.length - 1];
-    return end !== undefined && samePlace(end, candidate)
-        && expandRoute(adj, current, pinned, samePlace, passable).length
-        < route.length;
+    const before = expandRoute(adj, current, pinned, samePlace, passable)
+        .length;
+    if (end === undefined || !samePlace(end, candidate)
+        || before >= route.length) {
+        return false;
+    }
+    // Without auto-routing (the original's rule, NovaJS Enhancements OFF)
+    // a new pin must be ONE jump past the route's end: the original
+    // ignores a shift-click it would have to plot a path to
+    // (reference_experiments "Route planning through unexplored systems,
+    // wave 10"), so a route is built pin by pin.
+    return autoRoute || route.length === before + 1;
 }
 
 /** Toggles a system's membership in the pinned waypoint list. */

@@ -391,6 +391,44 @@ describe('routing through every drawn system', () => {
             .toEqual(['p', 'v', 'u1', 'u2', 'g']);
     });
 
+    describe('with auto-routing off (the original; NovaJS Enhancements)',
+        () => {
+            it('ignores a shift-click it would have to plot a path to', () => {
+                // D-U-U-D in one click: the original ignores it (wave 10).
+                expect(canPin(drawnAdj, 'h', [], 'g', same, passable, false))
+                    .toBeFalse();
+                expect(canPin(drawnAdj, 'h', [], 'k', same, passable, false))
+                    .toBeFalse();
+                // Explored intermediates are no different: q is two jumps.
+                expect(canPin(drawnAdj, 'h', [], 'q', same, passable, false))
+                    .toBeFalse();
+            });
+
+            it('takes a pin one jump past the route\'s end, unexplored or '
+                + 'not', () => {
+                expect(canPin(drawnAdj, 'h', [], 'u1', same, passable, false))
+                    .toBeTrue();
+                expect(canPin(drawnAdj, 'h', ['u1'], 'u2', same, passable,
+                    false)).toBeTrue();
+                expect(canPin(drawnAdj, 'h', ['u1', 'u2'], 'g', same,
+                    passable, false)).toBeTrue();
+                // ...measured from the END, not from where the ship is.
+                expect(canPin(drawnAdj, 'h', ['u1'], 'p', same, passable,
+                    false)).toBeFalse();
+            });
+
+            it('still never pins through an undrawn system', () => {
+                expect(canPin(drawnAdj, 'h', ['m', 'k', 's1'], 's3', same,
+                    passable, false)).toBeFalse();
+            });
+
+            it('defaults to auto-routing ON', () => {
+                expect(canPin(drawnAdj, 'h', [], 'g', same, passable))
+                    .toBe(canPin(drawnAdj, 'h', [], 'g', same, passable,
+                        true));
+            });
+        });
+
     it('never routes through a system the map does not draw', () => {
         // t is only reachable through the undrawn s2 (D-U-X-U-D).
         expect(shortestPath(drawnAdj, 'h', 't', passable)).toBeNull();

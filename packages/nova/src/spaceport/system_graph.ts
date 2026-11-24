@@ -12,6 +12,7 @@ import {
 } from "../nova_plugin/player/index.js";
 import { displayName } from "../nova_plugin/core/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
+import { enhancementEnabled } from "../enhancements.js";
 import {
     Adjacency, adjacentSystems, buildAdjacency, canPin, cycleSingle,
     effectiveRoute, expandRoute, Passable, RouteState, SamePlace,
@@ -593,15 +594,18 @@ export class SystemGraph {
             // with the shortest path when the route is expanded — the only
             // auto-routing there is (map/notes.txt). A NEW pin is only
             // taken when the route can reach it through systems the map
-            // draws, explored or not (route.ts canPin); otherwise the click
-            // just inspects the system, like a plain click on a
-            // non-neighbour. Unpinning is always allowed.
+            // draws, explored or not (route.ts canPin) — and, with the
+            // "Map auto-routing" enhancement off, only one jump past the
+            // route's end, as in the original; otherwise the click just
+            // inspects the system, like a plain click on a non-neighbour.
+            // Unpinning is always allowed.
             if (this.pinned.includes(system)) {
                 this.pinned = this.pinned.filter(p => p !== system);
                 this.routeChanged.next();
             } else if (system !== this.currentSystem
                 && canPin(this.adj, this.currentSystem, this.pinned, system,
-                    this.samePlace, this.passable)) {
+                    this.samePlace, this.passable,
+                    enhancementEnabled('enhMapAutoRoute'))) {
                 this.pinned = [...this.pinned, system];
                 this.routeChanged.next();
             }

@@ -18,6 +18,7 @@ import {
     FinishJump, FinishJumpEvent, JUMP_DISTANCE, JumpComponent,
     JumpRouteComponent,
 } from '../nova_plugin/travel/index.js';
+import { overrideEnhancements } from '../enhancements.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { SystemGraph } from './system_graph.js';
 
@@ -150,6 +151,35 @@ describe('the star map plots routes through every drawn system', () => {
         map.clickSystem(vael, true);
         expect(map.getRouteState().pinned).toEqual([thessaly]);
         expect(map.getEffectiveRoute()).toEqual([thessaly]);
+    });
+
+    describe('with "Map auto-routing" off (the original)', () => {
+        beforeEach(() => overrideEnhancements({ enhMapAutoRoute: false }));
+        afterEach(() => overrideEnhancements({}));
+
+        it('ignores a single shift-click on D-U-U-D', () => {
+            const map = graph([ossory, vael]);
+            let changes = 0;
+            map.routeChanged.subscribe(() => changes++);
+            map.clickSystem(vael, true);
+            expect(map.getRouteState().pinned).toEqual([]);
+            expect(map.getEffectiveRoute()).toEqual([]);
+            expect(changes).toBe(0);
+            // The click still inspects the system.
+            expect(map.infoSystem).toBe(vael);
+        });
+
+        it('builds the same route pin by pin', () => {
+            const map = graph([ossory, vael]);
+            map.clickSystem(thessaly, true);
+            map.clickSystem(vael, true);
+            expect(map.getRouteState().pinned).toEqual([thessaly]);
+            map.clickSystem(kestrel, true);
+            map.clickSystem(vael, true);
+            expect(map.getRouteState().pinned)
+                .toEqual([thessaly, kestrel, vael]);
+            expect(map.getEffectiveRoute()).toEqual([thessaly, kestrel, vael]);
+        });
     });
 
     it('always lets a pin be removed', () => {
