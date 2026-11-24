@@ -223,12 +223,19 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // its attacker (npc/allied_defenders.ts), so they fly and fire
             // differently. Genesis, Kestrel and both Random states did not
             // move.
+            //
+            // All three columns were re-pinned for "Stock traffic, wave
+            // 17": the population target is AvgShips itself, drawn from no
+            // PRNG (npc_spawn_plugin.ts populationTarget), so both systems'
+            // genesis populations (their size, and every draw after the
+            // removed roll) changed; and "P1 wave 17" stamps
+            // NpcState.aggressorHitAt on each hit.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '54afcf19', '9c4f75d2',
-                    [3151324470, 1269255679, 2221342106, 396450743]],
-                [SYNTHETIC.systems.kestrel, '71fa40dd', '3859c45c',
-                    [1138059186, 670859187, 378276492, 1491742351]],
+                [THESSALY, '995fb3e5', '62533f82',
+                    [2692022053, 1542226132, 2680743810, 396450618]],
+                [SYNTHETIC.systems.kestrel, '67bfe0b2', 'b8e7752c',
+                    [2312166265, 2407210324, 1413610751, 1491742322]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {
                 const world = await makeSystem(systemId, gameData, 'worker');
