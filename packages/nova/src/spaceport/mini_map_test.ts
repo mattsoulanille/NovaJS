@@ -102,15 +102,19 @@ describe('the `h` hyperspace minimap', () => {
                 && miniMap.container.alpha > 0;
         }
 
-        it('lasts the original\'s 66 frames at 30 fps, then hides', () => {
-            expect(MINI_MAP_PEEK_MS).toBe(2200);
+        it('stays lit the original\'s 60 frames at 30 fps, then fades and hides', () => {
+            expect(MINI_MAP_PEEK_MS).toBe(2000);
             const miniMap = shown();
             miniMap.update(true);
             expect(onScreen(miniMap)).toBeFalse();
             miniMap.peek();
             miniMap.update(true);
             expect(onScreen(miniMap)).toBeTrue();
-            clock += 2199;
+            expect(miniMap.container.alpha).toBe(1);
+            clock += 1999;
+            miniMap.update(true);
+            expect(miniMap.container.alpha).toBe(1);
+            clock += 1 + MINI_MAP_FADE_MS - 1;
             miniMap.update(true);
             expect(onScreen(miniMap)).toBeTrue();
             clock += 1;
@@ -125,10 +129,10 @@ describe('the `h` hyperspace minimap', () => {
             miniMap.peek();
             miniMap.update(true);
             expect(onScreen(miniMap)).toBeTrue();
-            clock += 2000;
+            clock += 1999;
             miniMap.update(true);
-            expect(onScreen(miniMap)).toBeTrue();
-            clock += 200;
+            expect(miniMap.container.alpha).toBe(1);
+            clock += 1 + MINI_MAP_FADE_MS;
             miniMap.update(true);
             expect(onScreen(miniMap)).toBeFalse();
         });
@@ -189,7 +193,7 @@ describe('the `h` hyperspace minimap', () => {
             miniMap.peek();
             miniMap.update(true);
             expect(hitAt(miniMap, centre, centre)).not.toBeNull();
-            clock += MINI_MAP_PEEK_MS;
+            clock += MINI_MAP_PEEK_MS + MINI_MAP_FADE_MS;
             miniMap.update(true);
             expect(miniMap.container.visible).toBeFalse();
             expect(miniMap.takesInput).toBeFalse();
@@ -218,14 +222,22 @@ describe('the `h` hyperspace minimap', () => {
             expect(hitAt(miniMap, centre, centre)).toBeNull();
         });
 
-        it('hides at once when the peek ends (no fade yet)', () => {
-            expect(MINI_MAP_FADE_MS).toBe(0);
+        it('fades out linearly over the original\'s 0.53 s once the peek ends', () => {
+            expect(MINI_MAP_PEEK_MS).toBeCloseTo(2000);
+            expect(MINI_MAP_FADE_MS).toBeCloseTo(533.3, 1);
             const miniMap = shown();
+            const start = clock;
             miniMap.peek();
             clock += MINI_MAP_PEEK_MS - 1;
             miniMap.update(true);
             expect(miniMap.container.alpha).toBe(1);
-            clock += 1;
+            expect(miniMap.takesInput).toBeTrue();
+            clock += 1 + MINI_MAP_FADE_MS / 2;
+            miniMap.update(true);
+            expect(miniMap.container.alpha).toBeCloseTo(0.5);
+            expect(miniMap.container.visible).toBeTrue();
+            expect(miniMap.takesInput).toBeFalse();
+            clock = start + MINI_MAP_PEEK_MS + MINI_MAP_FADE_MS;
             miniMap.update(true);
             expect(miniMap.container.alpha).toBe(0);
             expect(miniMap.container.visible).toBeFalse();
@@ -257,7 +269,7 @@ describe('the `h` hyperspace minimap', () => {
                 getLocalPosition: () => new PIXI.Point(0, 0),
             } as unknown as PIXI.FederatedPointerEvent;
             miniMap.current!.container.emit('pointerdown', press);
-            clock += 2000;
+            clock += MINI_MAP_PEEK_MS - 100;
             miniMap.update(true);
             expect(miniMap.showing).toBeTrue();
             expect(miniMap.takesInput).toBeTrue();

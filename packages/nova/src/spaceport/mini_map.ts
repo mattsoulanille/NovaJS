@@ -18,8 +18,9 @@
 //
 // WHEN IT SHOWS (reference_experiments M1-M3, measured frame by frame on
 // the original): it is a PEEK, not a toggle. Every `h` press shows it for
-// 64-66 frames at 30 fps — MINI_MAP_PEEK_MS — and then it hides itself; a
-// second `h` while it is up does not close it, it starts the 2.2 s over.
+// 60 frames (2.0 s) at full brightness — MINI_MAP_PEEK_MS — and then fades
+// out (MINI_MAP_FADE_MS); a second `h` while it is up does not close it, it
+// starts the peek over.
 // Neither Tab nor thrust shows it, and nothing shows it automatically after
 // landing and taking off. (Whether the original shows it by itself during
 // a real jump is untested; NovaJS shows nothing new for a jump, and a peek
@@ -27,9 +28,11 @@
 // runs out there — see StarmapPlugin.)
 //
 // HIDDEN, IT TAKES NO INPUT (Matthew, 2026-11-23: "`h` map preview is
-// clickable even when hidden. bug."). This departs from the original on
-// purpose: there a click where the hidden map sits still picks a system
-// and shows it again (reference_experiments M1-M3). Here, between peeks
+// clickable even when hidden. bug."; and after wave 10 measured it: "b
+// seems like a bug that I don't care about reproducing"). This departs from
+// the original on purpose: there a click where the hidden map sat still
+// picks a system and shows it again for about 5-7 s after the fade
+// (reference_experiments "M1 wave 10"). Here, between peeks
 // the minimap is not drawn and is out of the hit test altogether, so a
 // click there reaches whatever is underneath (tap-targeting a ship or
 // planet). Shown, the whole pane is UI, so a click on it never falls
@@ -43,8 +46,7 @@
 // peer simulates is the one this player's minimap shows.
 //
 // FADING OUT: when a peek ends, the map stops taking input at once and
-// then fades over MINI_MAP_FADE_MS (0 today: an instant hide, until the
-// original's fade is measured).
+// then fades linearly over MINI_MAP_FADE_MS, as the original's does.
 //
 // It is an overlay, not a dialog: it binds no MenuControls, the simulation
 // keeps running, and every flight key still flies the ship.
@@ -78,16 +80,17 @@ export const MINI_MAP_ZOOM = DEFAULT_ZOOM;
 export const MINI_MAP_TOP = 150;
 /** Clear pixels between the frame's right edge and the status bar. */
 export const MINI_MAP_STATUS_BAR_GAP = 16;
-/** How long one peek lasts: the original's 66 frames at 30 fps. */
-export const MINI_MAP_PEEK_MS = 66 * 1000 / 30;
+/** How long one peek stays fully lit: the original's 60 frames at 30 fps
+ * (reference_experiments "M1 wave 10"; wave 2's 66 frames ended mid-fade). */
+export const MINI_MAP_PEEK_MS = 60 * 1000 / 30;
 /**
  * How long the map takes to fade out once a peek ends, in ms: its alpha
- * falls linearly from 1 to 0 over this long, and it takes no input from
- * the moment the fade starts. 0 hides it at once. Not yet measured on the
- * original (reference queue: "does it fade out when it closes"); set it
- * (and the curve in {@link miniMapAlpha}, if it is not linear) from that.
+ * falls linearly from 1 to 0 over this long, as the original's does (about
+ * 16 frames at 30 fps, a near-constant brightness drop per frame;
+ * reference_experiments "M1 wave 10"). It takes no input from the moment
+ * the fade starts. It appears at full brightness at once: no fade-in.
  */
-export const MINI_MAP_FADE_MS = 0;
+export const MINI_MAP_FADE_MS = 16 * 1000 / 30;
 
 /**
  * The map's opacity at `now` for a peek that ends (stops taking input)
