@@ -13,7 +13,7 @@ import {
 } from '../ship/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
-    ControlledByComponent, EscortCommandComponent,
+    ControlledByComponent, EscortCommandComponent, MissionShipComponent,
 } from '../player/index.js';
 import { govtDisposition } from '../reputation/index.js';
 import { NpcComponent, NpcState } from './npc_component.js';
@@ -21,6 +21,7 @@ import { flockPlayer, sameFlock } from './allegiance.js';
 import { FormationComponent } from './npc_formation.js';
 import { addDamageLoad } from './npc_retreat.js';
 import { piracyWitnesses } from './piracy_police.js';
+import { alliedDefenders } from './allied_defenders.js';
 import {
     distressCallDue, DistressCallEvent, sendsDistressCalls,
 } from './distress.js';
@@ -216,7 +217,9 @@ export function aimedAt(victim: string, damager: Entity,
 
 /**
  * Records `source` as `npc`'s aggressor. It reacts at its next think, not
- * next frame: reaction time.
+ * next frame: reaction time. A NEW aggressor (not the one already
+ * recorded) also starts `aggressorSince` at `now`: how long the ship has
+ * been under this attacker (allied_defenders.ts's delay).
  *
  * A bribe (hail beg-for-mercy) only lasts "until the player provokes them
  * again": if the briber, or a ship of the briber's flock, is the one now
@@ -225,7 +228,10 @@ export function aimedAt(victim: string, damager: Entity,
  * reprieve did when an escort's hit was recorded as the player's.)
  */
 function provoke(npc: NpcState, source: string,
-    getEntity: (uuid: string) => Entity | undefined): void {
+    getEntity: (uuid: string) => Entity | undefined, now: number): void {
+    if (npc.aggressor !== source || npc.aggressorSince === undefined) {
+        npc.aggressorSince = now;
+    }
     npc.aggressor = source;
     if (npc.pacifiedFrom !== undefined
         && (npc.pacifiedFrom === source
@@ -240,8 +246,10 @@ function provoke(npc: NpcState, source: string,
 export const FleetFollowersQuery = new Query([FormationComponent,
     NpcComponent, UUID, Optional(EscortCommandComponent)] as const);
 
-/** Every NPC, with what piracy_police.ts's piracyWitnesses reads: the
- * candidates for AI 4 witnesses of an attack on somebody else. */
+/** Every NPC, with what piracy_police.ts's piracyWitnesses and
+ * allied_defenders.ts's alliedDefenders read: the candidates for AI 4
+ * witnesses of a player's attack on somebody else, and for the warships
+ * that defend an NPC's victim of their own or an allied govt. */
 export const PiracyPoliceQuery = new Query([NpcComponent, UUID,
     MovementStateComponent, Optional(GovtComponent),
     Optional(EscortCommandComponent), Optional(DisabledComponent)] as const);
@@ -267,13 +275,13 @@ export const PiracyPoliceQuery = new Query([NpcComponent, UUID,
 function provokeFleet(leader: string, source: string,
     followers: ReadonlyArray<readonly [{ leader: string }, NpcState, string,
         unknown]>,
-    getEntity: (uuid: string) => Entity | undefined): void {
+    getEntity: (uuid: string) => Entity | undefined, now: number): void {
     for (const [formation, followerNpc, followerUuid, command] of followers) {
         if (formation.leader !== leader || command !== undefined
             || followerUuid === source) {
             continue;
         }
-        provoke(followerNpc, source, getEntity);
+        provoke(followerNpc, source, getEntity, now);
     }
 }
 
@@ -319,11 +327,22 @@ function provokeFleet(leader: string, source: string,
  * non-nosy police defended their ally's trader. Each witness's fleet
  * escorts follow it, as for a hit on it.
  *
- * DISTRESS CALLS (npc/distress.ts): an attack on a trader (AI 1/2) by an NPC
- * that is NOT on a player's side sends "<ship>: <STR# 5003 line>" to the
- * players in the system (DistressCallEvent; one PRNG draw picks the line),
- * at most once per DISTRESS_CALL_INTERVAL_MS per ship, unless its govt or
- * hull sets Flags2 0x0008. Reference "P1 wave 14", the raid watch.
+ * ALLIED DEFENDERS (npc/allied_defenders.ts): an attack by an NPC that is
+ * NOT on a player's side is also recorded on every warship (AI 3, and AI 4
+ * as a guess) of the victim's OWN govt in the system at once, and on those
+ * of a govt ALLIED with the victim's once the victim has been under that
+ * attacker for ALLIED_DEFENCE_DELAY_MS (its `aggressorSince`). Reference
+ * "P1 wave 16": an own-govt warship fought a raider attacking its govt's
+ * ship from the start, an allied one joined about 20-25 s in, unrelated
+ * warships and police (nosy or not) ignored the fight. Each defender's
+ * fleet escorts follow it.
+ *
+ * DISTRESS CALLS (npc/distress.ts): an attack on a non-mission trader (AI
+ * 1/2) by an NPC that is NOT on a player's side sends "<ship>: <STR# 5003
+ * line>" to the players in the system (DistressCallEvent; one PRNG draw
+ * picks the line), at most once per DISTRESS_CALL_INTERVAL_MS per ship,
+ * unless its govt or hull sets Flags2 0x0008. Reference "P1 wave 14", the
+ * raid watch, and "P1 wave 16" (mission ships never call; 8 s per line).
  *
  * Never a ship of the victim's OWN FLOCK (allegiance.ts's sameFlock). Direct
  * hits pass through a flock, but damage from inside it still lands: a blast
@@ -378,27 +397,36 @@ export const NpcAggressionSystem = new System({
             if (!provokes) {
                 return;
             }
-            provoke(npc, source, getEntity);
-            provokeFleet(uuid, source, followers, getEntity);
-            if (isPlayerSideShip(source, getEntity)) {
-                const victim = entities.get(uuid);
-                const witnesses = victim ? piracyWitnesses(uuid, victim,
-                    source, getEntity, police,
-                    id => gameData.data.Govt.getCached(id), govtData,
-                    time.time) : [];
-                for (const witness of witnesses) {
-                    const witnessNpc = entities.get(witness)
+            const now = time.time;
+            provoke(npc, source, getEntity, now);
+            provokeFleet(uuid, source, followers, getEntity, now);
+            const getGovt = (id: string) => gameData.data.Govt.getCached(id);
+            const provokeAll = (ships: readonly string[]) => {
+                for (const ship of ships) {
+                    const shipNpc = entities.get(ship)
                         ?.components.get(NpcComponent);
-                    if (witnessNpc) {
-                        provoke(witnessNpc, source, getEntity);
-                        provokeFleet(witness, source, followers, getEntity);
+                    if (shipNpc) {
+                        provoke(shipNpc, source, getEntity, now);
+                        provokeFleet(ship, source, followers, getEntity, now);
                     }
                 }
-            } else if (sendsDistressCalls(npc.aiType, govtData,
-                shipData?.inheritedNoGreetings)
-                && distressCallDue(npc.distressAt, time.time)) {
-                npc.distressAt = time.time;
-                emit(DistressCallEvent, { ship: uuid, roll: random.next() });
+            };
+            const victim = entities.get(uuid);
+            if (isPlayerSideShip(source, getEntity)) {
+                provokeAll(victim ? piracyWitnesses(uuid, victim,
+                    source, getEntity, police, getGovt, govtData, now) : []);
+            } else {
+                provokeAll(alliedDefenders(uuid, source, govtData,
+                    now - (npc.aggressorSince ?? now), getEntity, police,
+                    getGovt));
+                if (sendsDistressCalls(npc.aiType, govtData,
+                    shipData?.inheritedNoGreetings,
+                    victim?.components.has(MissionShipComponent))
+                    && distressCallDue(npc.distressAt, now)) {
+                    npc.distressAt = now;
+                    emit(DistressCallEvent,
+                        { ship: uuid, roll: random.next() });
+                }
             }
         }
     },

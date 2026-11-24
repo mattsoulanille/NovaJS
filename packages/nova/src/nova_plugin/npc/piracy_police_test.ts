@@ -19,7 +19,9 @@ import {
     deriveEntityComponents, GovtComponent, SystemIdResource,
 } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
-import { ControlledByComponent } from '../player/index.js';
+import {
+    ControlledByComponent, MissionShipComponent,
+} from '../player/index.js';
 import {
     DamagedEvent, FiringGroupComponent, makeShip, SourceComponent,
     TargetComponent,
@@ -30,8 +32,9 @@ import {
     DistressCallEventData, distressCallMessage, distressLine,
     sendsDistressCalls,
 } from './distress.js';
+import { AggressionComponent } from './aggression.js';
+import { ALLIED_DEFENCE_DELAY_MS } from './allied_defenders.js';
 import { NpcComponent } from './npc_component.js';
-import { INTERCEPTOR_ENGAGE_RANGE } from './npc_decision.js';
 import { FormationComponent } from './npc_formation.js';
 import { PIRACY_WATCH_RANGE, policeDefendVictim } from './piracy_police.js';
 
@@ -49,10 +52,17 @@ import { PIRACY_WATCH_RANGE, policeDefendVictim } from './piracy_police.js';
  *  - non-nosy police defended their ALLY's trader;
  *  - traders under NPC attack sent "<ship>: <STR# 5003 line>", never those
  *    of a Flags2-0x0008 govt.
+ *
+ * And "P1 wave 16": mission ships never call, a line lasts 8 s (the call
+ * interval), the watch range is at least 2500 px, a hostile's posture is
+ * no excuse for shooting it, and a raider's victim is defended by the
+ * warships of its own govt at once and of an allied govt about 20 s in.
  */
 
 const HULL = 'test:hull';
 const QUIET_HULL = 'test:quiet-hull';
+/** A hull with a Strength, so a warship on it takes an even fight. */
+const WARSHIP_HULL = 'test:warship-hull';
 
 const NOSY = 'test:nosy';
 const PLAIN = 'test:plain';
@@ -61,6 +71,9 @@ const SHIPPING = 'test:shipping';
 const IGNORED = 'test:ignored';
 const QUIET = 'test:quiet';
 const RAIDER = 'test:raider';
+const ALWAYS = 'test:always-hostile';
+const SHIPPING_ALLY = 'test:shipping-ally';
+const BOTH_ALLY = 'test:both-ally';
 
 /** A govt with only these fields changed from the defaults. */
 function govt(id: string, classes: number[],
@@ -82,10 +95,17 @@ const GOVTS: GovtData[] = [
     // 323 Kit Police Allied and 324 Kit Police Friend).
     govt(PLAIN, [11], { allies: [12] }),
     govt(FRIEND, [12], { allies: [11] }),
-    govt(SHIPPING, [13]),
+    // MaxOdds 100: its warships take an even fight (the defenders).
+    govt(SHIPPING, [13], { maxOdds: 100 }),
     govt(IGNORED, [14], { flags: { ignoredByOtherNosyGovts: true } }),
     govt(QUIET, [15], { flags2: { noDistressMessages: true } }),
     govt(RAIDER, [16], { enemies: [13, 14, 15] }),
+    // gövt 0x0004: always attacks the player (wave 16's Kit Raider, 362).
+    govt(ALWAYS, [17], { flags: { alwaysAttacksPlayer: true } }),
+    // Allied (one way) with SHIPPING, as 317 with 343 in wave 16.
+    govt(SHIPPING_ALLY, [18], { allies: [13] }),
+    // Allied with SHIPPING and with the RAIDER: a friend of both sides.
+    govt(BOTH_ALLY, [19], { allies: [13, 16] }),
 ];
 const byId = new Map(GOVTS.map(g => [g.id, g]));
 const G = (id: string) => byId.get(id)!;
@@ -156,8 +176,8 @@ describe('policeDefendVictim', () => {
             .toBeFalse();
     });
 
-    it('watches over the interceptor\'s engagement range', () => {
-        expect(PIRACY_WATCH_RANGE).toBe(INTERCEPTOR_ENGAGE_RANGE);
+    it('watches at least 2500 px (reference P1 wave 16)', () => {
+        expect(PIRACY_WATCH_RANGE).toBeGreaterThanOrEqual(2500);
     });
 });
 
@@ -170,13 +190,21 @@ describe('distress call rules', () => {
         expect(sendsDistressCalls(1, undefined, undefined)).toBeTrue();
     });
 
+    it('mission ships never call (reference P1 wave 16)', () => {
+        expect(sendsDistressCalls(1, G(SHIPPING), false, true)).toBeFalse();
+        expect(sendsDistressCalls(2, G(SHIPPING), false, true)).toBeFalse();
+        expect(sendsDistressCalls(1, G(SHIPPING), false, false)).toBeTrue();
+    });
+
     it('Flags2 0x0008 silences a govt\'s ships, and a hull inheriting it',
         () => {
             expect(sendsDistressCalls(1, G(QUIET), false)).toBeFalse();
             expect(sendsDistressCalls(1, G(SHIPPING), true)).toBeFalse();
         });
 
-    it('one call per DISTRESS_CALL_INTERVAL_MS', () => {
+    it('one call per DISTRESS_CALL_INTERVAL_MS: 8 s, the life of one '
+        + 'status line (reference P1 wave 16)', () => {
+        expect(DISTRESS_CALL_INTERVAL_MS).toBe(8000);
         expect(distressCallDue(undefined, 0)).toBeTrue();
         expect(distressCallDue(1000, 1000 + DISTRESS_CALL_INTERVAL_MS - 1))
             .toBeFalse();
@@ -211,6 +239,8 @@ describe('piracy police and distress calls in the sim', () => {
         gameData.data.Ship.map.set(HULL, { ...hull, id: HULL });
         gameData.data.Ship.map.set(QUIET_HULL,
             { ...hull, id: QUIET_HULL, inheritedNoGreetings: true });
+        gameData.data.Ship.map.set(WARSHIP_HULL,
+            { ...hull, id: WARSHIP_HULL, strength: 100 });
         for (const g of GOVTS) {
             gameData.data.Govt.map.set(g.id, g);
         }
@@ -334,6 +364,14 @@ describe('piracy police and distress calls in the sim', () => {
                 expect(npc('farPolice').aggressor).toBeUndefined();
             });
 
+        it('police 2500 px away do (reference P1 wave 16)', async () => {
+            await scene(NOSY, SHIPPING);
+            await addShip('watchPolice', 2500, 0, npcShip(4, NOSY));
+            world.step();
+            hit('victim', 'player', { group: 'player', aimed: true });
+            expect(npc('watchPolice').aggressor).toBe('player');
+        });
+
         it('NON-nosy police ignore it (reference wave 13)', async () => {
             await scene(PLAIN, SHIPPING);
             hit('victim', 'player', { group: 'player', aimed: true });
@@ -387,12 +425,23 @@ describe('piracy police and distress calls in the sim', () => {
                 expect(npc('police').aggressor).toBeUndefined();
             });
 
-        it('self-defence is not piracy: no witness for a victim attacking '
-            + 'the player', async () => {
-                await scene(NOSY, SHIPPING, 2);
+        it('a hostile\'s POSTURE is no excuse: shooting an always-hostile '
+            + '(0x0004) ship that has not fired is piracy (reference P1 wave '
+            + '16)', async () => {
+                await scene(NOSY, ALWAYS, 3);
                 Object.assign(npc('victim'), { mode: 'attack' });
                 world.entities.get('victim')!.components.set(TargetComponent,
                     { target: 'player' });
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('police').aggressor).toBe('player');
+            });
+
+        it('self-defence is not piracy (GUESS): no witness for a victim '
+            + 'that has SHOT the player', async () => {
+                await scene(NOSY, ALWAYS, 3);
+                world.entities.get('player')!.components.set(
+                    AggressionComponent, new Map([['victim',
+                        { at: now(), damage: 0, hostile: true }]]));
                 hit('victim', 'player', { group: 'player', aimed: true });
                 expect(npc('police').aggressor).toBeUndefined();
             });
@@ -521,6 +570,23 @@ describe('piracy police and distress calls in the sim', () => {
             expect(calls).toEqual([]);
         });
 
+        it('a MISSION ship never calls, whoever attacks it (reference P1 '
+            + 'wave 16)', async () => {
+                await addShip('player', 0, 600, player);
+                await raid(SHIPPING);
+                world.entities.get('victim')!.components.set(
+                    MissionShipComponent, {
+                        mission: 'test:mission', owner: 'player',
+                        untethered: true,
+                    });
+                for (let i = 0; i < 4; i++) {
+                    hit('victim', 'raider', { group: 'raider', aimed: true });
+                    advance(DISTRESS_CALL_INTERVAL_MS);
+                }
+                expect(npc('victim').aggressor).toBe('raider');
+                expect(calls).toEqual([]);
+            });
+
         it('warships do not call', async () => {
             await raid(SHIPPING, 3);
             hit('victim', 'raider', { group: 'raider', aimed: true });
@@ -536,13 +602,109 @@ describe('piracy police and distress calls in the sim', () => {
         });
     });
 
+    describe('allied defenders (reference P1 wave 16)', () => {
+        /** A trader of SHIPPING under a RAIDER, and `defenders` placed
+         * around the port 200-500 px off. */
+        async function raid(defenders: Array<[string, number, string]>) {
+            await addShip('victim', 0, -150, npcShip(1, SHIPPING));
+            await addShip('raider', 0, -400, npcShip(3, RAIDER));
+            let x = 200;
+            for (const [uuid, aiType, govtId] of defenders) {
+                await addShip(uuid, x, 0, npcShip(aiType, govtId),
+                    WARSHIP_HULL);
+                x += 100;
+            }
+            world.step();
+        }
+
+        it('a warship of the victim\'s OWN govt takes on the raider at once',
+            async () => {
+                await raid([['guard', 3, SHIPPING]]);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                expect(npc('guard').aggressor).toBe('raider');
+                wake('guard');
+                advance(2000);
+                expect(npc('guard').mode).toBe('attack');
+                expect(world.entities.get('guard')!.components
+                    .get(TargetComponent)?.target).toBe('raider');
+            });
+
+        it('an ALLIED govt\'s warship joins once the victim has been under '
+            + 'the raider ALLIED_DEFENCE_DELAY_MS, not before', async () => {
+                await raid([['ally', 3, SHIPPING_ALLY]]);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                const since = npc('victim').aggressorSince;
+                expect(since).toBeDefined();
+                expect(npc('ally').aggressor).toBeUndefined();
+                advance(ALLIED_DEFENCE_DELAY_MS - 1000);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                expect(npc('victim').aggressorSince).toBe(since);
+                expect(npc('ally').aggressor).toBeUndefined();
+                advance(1000);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                expect(npc('ally').aggressor).toBe('raider');
+            });
+
+        it('the delay restarts with a NEW attacker', async () => {
+            await raid([['ally', 3, SHIPPING_ALLY]]);
+            await addShip('raider2', 0, -600, npcShip(3, RAIDER));
+            world.step();
+            hit('victim', 'raider', { group: 'raider', aimed: true });
+            advance(ALLIED_DEFENCE_DELAY_MS - 1000);
+            hit('victim', 'raider2', { group: 'raider2', aimed: true });
+            advance(1000);
+            hit('victim', 'raider2', { group: 'raider2', aimed: true });
+            expect(npc('ally').aggressor).toBeUndefined();
+            advance(ALLIED_DEFENCE_DELAY_MS);
+            hit('victim', 'raider2', { group: 'raider2', aimed: true });
+            expect(npc('ally').aggressor).toBe('raider2');
+        });
+
+        it('unrelated warships and police, nosy or not, ignore the fight; '
+            + 'so does a friend of both sides', async () => {
+                await raid([['bystander', 3, PLAIN], ['patrol', 4, PLAIN],
+                    ['nosy', 4, NOSY], ['friend', 3, BOTH_ALLY]]);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                advance(ALLIED_DEFENCE_DELAY_MS);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                for (const uuid of ['bystander', 'patrol', 'nosy', 'friend']) {
+                    expect(npc(uuid).aggressor).withContext(uuid)
+                        .toBeUndefined();
+                }
+            });
+
+        it('own-govt traders do not join (they are no warships)',
+            async () => {
+                await raid([['trader', 1, SHIPPING]]);
+                hit('victim', 'raider', { group: 'raider', aimed: true });
+                expect(npc('trader').aggressor).toBeUndefined();
+            });
+
+        it('a defender\'s fleet escorts follow it', async () => {
+            await raid([['guard', 3, SHIPPING], ['wingman', 3, PLAIN]]);
+            world.entities.get('wingman')!.components.set(FormationComponent,
+                { leader: 'guard', slot: 0 });
+            hit('victim', 'raider', { group: 'raider', aimed: true });
+            expect(npc('wingman').aggressor).toBe('raider');
+        });
+
+        it('a PLAYER\'s attack is left to the police: own-govt warships do '
+            + 'not join (GUESS)', async () => {
+                await addShip('player', 0, 0, player);
+                await raid([['guard', 3, SHIPPING]]);
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('guard').aggressor).toBeUndefined();
+            });
+    });
+
     it('replays identically from a snapshot taken before the attacks',
         async () => {
             await scene(NOSY, SHIPPING);
             await addShip('trader2', 400, -400, npcShip(1, SHIPPING));
             await addShip('raider', 600, -600, npcShip(3, RAIDER));
+            await addShip('guard', 800, -200, npcShip(3, SHIPPING));
             world.step();
-            wake('police', 'victim', 'trader2', 'raider');
+            wake('police', 'victim', 'trader2', 'raider', 'guard');
             const before = snapshotWorld(world);
             const record = () => {
                 calls = [];
@@ -556,6 +718,7 @@ describe('piracy police and distress calls in the sim', () => {
                 return {
                     hashes, calls: [...calls],
                     police: npc('police').aggressor,
+                    guard: npc('guard').aggressor,
                     distressAt: npc('trader2').distressAt,
                 };
             };
@@ -563,6 +726,7 @@ describe('piracy police and distress calls in the sim', () => {
             restoreWorld(world, before, deriveEntityComponents);
             const second = record();
             expect(first.police).toBe('player');
+            expect(first.guard).toBe('raider');
             expect(first.calls.length).toBe(1);
             expect(second).toEqual(first);
         });

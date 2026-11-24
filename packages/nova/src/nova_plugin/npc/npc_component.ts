@@ -45,6 +45,12 @@ export const NpcState = t.intersection([t.type({
     nextDecision: t.number,
     /** Uuid of the ship that most recently damaged this NPC. */
     aggressor: t.string,
+    /** Sim time (ms) `aggressor` was first recorded, i.e. how long this
+     * ship has been under its current attacker (set when the aggressor
+     * CHANGES, npc_targeting.ts's provoke). Meaningful only while
+     * `aggressor` is set; allied warships join the fight once it is
+     * ALLIED_DEFENCE_DELAY_MS old (npc/allied_defenders.ts). */
+    aggressorSince: t.number,
     /** Sim time (ms) after which the NPC heads for a jump-out. */
     departAt: t.number,
     /** Uuid of the disabled hulk this NPC is flying to plunder (mode

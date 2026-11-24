@@ -16,21 +16,31 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
  *
  *  - the lines came from the TRADERS under attack (AI 1, gövt 343), always
  *    as "Kit Shipping: <a random line of the list>", on the status line;
- *  - often: several a minute during a fight; a line stayed about 21-25 s
- *    unless a newer one replaced it;
+ *  - often: several a minute during a fight;
  *  - never from the Flags2-0x0008 traders (Kit Shipping Quiet), who were
  *    attacked as well;
  *  - none in five runs where the PLAYER was the attacker (waves 12-13 and
  *    "P1 wave 15", which watched 310 s of a player beaming traders): the
  *    player's own victims never call.
  *
- * So: a trader (AI 1 or 2) whose govt (or hull, ShipData's
+ * "P1 wave 16" settled the rest:
+ *  - MISSION SHIPS NEVER CALL: seven mission victims (AI 1, anchored or
+ *    mobile, 30000 or 300 shield, under a mission or a traffic raider)
+ *    stayed silent, while TRAFFIC traders attacked by a mission raider
+ *    called 9-10 times in 3.2 min;
+ *  - each line stays 8.0-8.2 s on the status line and then clears at once
+ *    (status_message_plugin), and the calls came in bursts, the next one
+ *    often the moment the previous line cleared (lines at 32.5, 62.1, 70.1,
+ *    99.6, 115.6, 147.3, 155.3, 186.0 and 194.0 s). Wave 14's "a line stays
+ *    21-25 s" was two or three such lines back to back;
+ *  - nobody answers a call: the help a victim gets comes from the
+ *    alliance rule, call or no call (npc/allied_defenders.ts).
+ *
+ * So: a non-mission trader (AI 1 or 2) whose govt (or hull, ShipData's
  * inheritedNoGreetings: the class's InherentGovt sets 0x0008) does not
  * silence it, hit in an ATTACK (npc_targeting.ts's provoke rule) by an NPC
  * that is not on a player's side, sends one call, and no other for
- * DISTRESS_CALL_INTERVAL_MS. Nobody answers it: who comes to help was not
- * measured (docs/npc_behavior_gaps.md, "Distress calls: guesses to
- * measure").
+ * DISTRESS_CALL_INTERVAL_MS.
  *
  * The simulation draws the line with the seeded PRNG and carries the draw
  * (`roll`) in the event; the display maps it onto the scenario's list, so
@@ -40,11 +50,17 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
 
 /**
  * The quiet time after a ship's call: it sends no other for this long.
- * GUESS: the measured life of one line on the status line (about 21-25 s;
- * the original's real rate is not known, only "several a minute" from
- * several ships at once).
+ * The life of one line on the status line ("P1 wave 16": 8.0-8.2 s): in the
+ * traffic run calls came 8.0 s apart within a burst (62.1 / 70.1, 147.3 /
+ * 155.3, 186.0 / 194.0 s), each the moment the previous line cleared, with
+ * quieter stretches of 30-48 s between bursts when the raider was not
+ * hitting anyone. The callers could not be told apart (every line read
+ * "Kit Shipping"), so ONE ship calling again each time its line clears
+ * while it is still being hit is the reading, not a measured per-ship
+ * rate. (The 20 s this replaced came from wave 14's "a line stays 21-25
+ * s", which was two or three of these lines back to back.)
  */
-export const DISTRESS_CALL_INTERVAL_MS = 20_000;
+export const DISTRESS_CALL_INTERVAL_MS = 8_000;
 
 /** Who calls: traders (AI 1 wimpy, AI 2 brave). The raid watch saw calls
  * only from AI 1 traders; GUESS for AI 2, and warships (AI 3/4) never call
@@ -76,12 +92,15 @@ registerSimulationBridgeEvent({
 /**
  * Whether a ship of AI type `aiType` and govt `govt` sends distress calls
  * at all: a trader whose govt does not set Flags2 0x0008 and whose hull
- * does not inherit it (`inheritedNoGreetings`, ShipData).
+ * does not inherit it (`inheritedNoGreetings`, ShipData), and that is not
+ * a MISSION ship (`missionShip`: it carries MissionShipComponent; "P1 wave
+ * 16", seven silent mission victims).
  */
 export function sendsDistressCalls(aiType: number,
-    govt: GovtData | undefined, inheritedNoGreetings: boolean | undefined)
-    : boolean {
+    govt: GovtData | undefined, inheritedNoGreetings: boolean | undefined,
+    missionShip = false): boolean {
     return DISTRESS_CALLER_AI_TYPES.includes(aiType)
+        && !missionShip
         && !govt?.flags2.noDistressMessages
         && !inheritedNoGreetings;
 }

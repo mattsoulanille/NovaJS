@@ -4,8 +4,9 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { GovtData } from 'novadatainterface/govt_data';
 import { GovtComponent } from '../core/index.js';
 import { alliedEitherWay, govtDisposition } from '../reputation/index.js';
-import { flockPlayer, isAttackingPlayer } from './allegiance.js';
-import { NpcState } from './npc_component.js';
+import { flockPlayer } from './allegiance.js';
+import { AggressionComponent, isRecentAggressor } from './aggression.js';
+import { NpcComponent, NpcState } from './npc_component.js';
 
 /**
  * ============================================================================
@@ -32,6 +33,15 @@ import { NpcState } from './npc_component.js';
  *  4. The hostility ended with the visit (yellow again after a landing),
  *     and lasted as long as the visit did: still red after 30 s and 60 s,
  *     gone after a jump out and back (wave 15).
+ *  5. The WATCH RANGE is at least 2500 px: a nosy police anchored 2500 px
+ *     from the victim and the player turned hostile at once (wave 16).
+ *  6. NPC raiders are NOT policed: a nosy police in its own system flew
+ *     round a raider attacking a non-enemy trader and never fired (wave
+ *     16). The victim's own and allied warships do join such a fight
+ *     (allied_defenders.ts), but that is the alliance, not policing.
+ *  7. Shooting a ship of an always-hostile govt (gövt 0x0004) that had NOT
+ *     fired at the player (it stood off about 500 px) is still piracy: the
+ *     nosy police turned hostile (wave 16, one run).
  *
  * So an AI 4 WITNESS takes the attacker as its own aggressor
  * (npc_targeting.ts's NpcAggressionSystem records it as if the witness had
@@ -42,22 +52,19 @@ import { NpcState } from './npc_component.js';
  *
  * GUESSES (unmeasured; docs/npc_behavior_gaps.md "Piracy police: guesses to
  * measure"):
- *  - the WATCHING range, PIRACY_WATCH_RANGE: the interceptor's engagement
- *    range, around the victim OR the attacker (the reference police sat
- *    within a few hundred px of both);
- *  - only a PLAYER-SIDE attacker (a player's ship or a ship of a player's
- *    flock) is policed. NPC-on-NPC fights (raiders on traders) could not be
- *    separated from the melee in the wave-14 raid watch, so raiders are
- *    left to the ordinary enemy rules;
+ *  - the WATCHING range beyond 2500 px, PIRACY_WATCH_RANGE: around the
+ *    victim OR the attacker; it may be the whole system (finding 5);
  *  - only FIRING counts: an attempt to board was never seen to provoke
  *    (wave 13's board drew nothing from non-nosy police; nosy police were
  *    not tested with a board);
  *  - every hit that provokes the victim provokes the witnesses, stray
  *    player-side hits included (the victim's own rule);
- *  - SELF-DEFENCE is not piracy: a victim that is itself attacking the
- *    attacker (allegiance.ts's isAttackingPlayer: in attack posture on it,
- *    or it shot the player within the last 30 s) is a combatant, and no
- *    witness reacts to hits on it;
+ *  - SELF-DEFENCE is not piracy: a victim that has itself SHOT the
+ *    attacker first is a combatant, and no witness reacts to hits on it
+ *    (selfDefence below). Only the half that finding 7 leaves open: a
+ *    hostile's POSTURE (in attack mode on the player, standing off) is no
+ *    excuse, measured; a hostile that has actually fired first was not
+ *    measured, so this half is kept as a guess;
  *  - a ONE-WAY alliance counts for 3 (local_law.ts's alliedEitherWay, the
  *    A14 enforcement rule), and gövt 0x0020 does not shield a victim from
  *    its OWN govt's police (the Bible's "non-allied"; the ally's police
@@ -66,11 +73,13 @@ import { NpcState } from './npc_component.js';
 
 /**
  * How far an interceptor watches: an attack whose victim or attacker is
- * within this many px of it is seen. GUESS: the interceptor's engagement
- * range (npc_decision.ts's INTERCEPTOR_ENGAGE_RANGE, 1800; a spec pins the
- * two together), the doc's proposal.
+ * within this many px of it is seen. MEASURED at least 2500 ("P1 wave 16":
+ * a nosy police anchored 2500 px from the victim, with the player beside
+ * the victim, turned hostile at once; it may be the whole system). The
+ * measured lower bound, the doc's proposal; no longer tied to the
+ * interceptor's 1800 px engagement range.
  */
-export const PIRACY_WATCH_RANGE = 1800;
+export const PIRACY_WATCH_RANGE = 2500;
 
 /**
  * Whether police of govt `police` defend a ship of govt `victim` against an
@@ -105,6 +114,31 @@ export function policeDefendVictim(police: GovtData | undefined,
     return govtDisposition(police, victim) !== 'enemy';
 }
 
+/**
+ * Whether the attacker is DEFENDING ITSELF against `victim`: the victim
+ * has attacked it, as the attacker's own records say. For a player's ship,
+ * its AggressionComponent: the victim shot it, or locked a guided missile
+ * on it, within the last AGGRESSION_WINDOW_MS (aggression.ts). For an NPC
+ * on a player's side (an escort, a protecting special ship), its
+ * NpcComponent's aggressor is the victim (an attack on it recorded by
+ * NpcAggressionSystem).
+ *
+ * NOT the victim's posture: a ship in attack mode on the player that has
+ * not fired is fair game to the police. Reference "P1 wave 16" finding 7:
+ * the player beamed a Kit Raider of an always-hostile govt (gövt 0x0004)
+ * that stood off about 500 px and had not fired, and the nosy police
+ * turned hostile. The case where the hostile HAS fired first is
+ * unmeasured: this exemption is a GUESS (the Bible's AI 4 polices ships
+ * that fire on "another, non-enemy ship", and one that is shooting at you
+ * is hardly that).
+ */
+export function selfDefence(victim: string, attackerEntity: Entity,
+    now: number): boolean {
+    return isRecentAggressor(
+        attackerEntity.components.get(AggressionComponent), victim, now)
+        || attackerEntity.components.get(NpcComponent)?.aggressor === victim;
+}
+
 /** One possible witness: an NPC's synced state as PiracyPoliceQuery reads
  * it (npc_targeting.ts). */
 export type PoliceCandidate = readonly [
@@ -123,7 +157,7 @@ export type PoliceCandidate = readonly [
  * command (its brain is the escort framework, not NpcComponent); a ship in
  * a player's flock (a protector follows its player, allegiance.ts); a
  * disabled ship; anything out of PIRACY_WATCH_RANGE of both. Nobody reacts
- * when the victim was itself attacking the attacker (self-defence).
+ * when the victim had itself shot the attacker (selfDefence).
  *
  * Reads synced components and game data only, and the answer is a set (the
  * caller writes the same value to each), so iteration order changes
@@ -136,8 +170,7 @@ export function piracyWitnesses(victim: string, victimEntity: Entity,
     victimGovt: GovtData | undefined, now: number): string[] {
     const attackerEntity = getEntity(attacker);
     if (!attackerEntity
-        || isAttackingPlayer(victim, victimEntity, attacker, attackerEntity,
-            now)) {
+        || selfDefence(victim, attackerEntity, now)) {
         return [];
     }
     const victimPosition = victimEntity.components
