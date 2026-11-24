@@ -111,10 +111,11 @@ traders, wave 15").
 |---|---|---|---|---|
 | **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements and waves 14-15 (R: "S1 / I1 wave 11", "S1 and S2 wave 12", "Contraband wave 14", "A14 / contraband wave 15"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty. Illegal jünk: "…your attempt to smuggle <LCName> through this system…", ScanFine, SmugPenalty. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. ScanFine 0 and below: no fine, no fine sentence (not the Bible's percent of cash; Matthew 2026-11-24: match the original). SmugPenalty by the A14 rule: the owner or its ally scanning costs the scanner's SmugPenalty, anyone else (nosy) raises the record by half the owner's; no spread. A detection turns the scanning govt's hunters on the pilot until he lands or leaves, whatever its CrimeTol. One scan per stay between arrivals by jump, unless the ship carries contraband its last scan did not find (the marker remembers what it found): a landing does not reset it, but taking off with new illegal cargo brings a rescan (wave 15). Several finds: one line naming the hold's cargo before an outfit (the jünk over the pod, measured), one fine, one record change; a 0x0020 mission among them fails silently. An ally of the owner scanning charges its own SmugPenalty (measured, wave 15). A 0x0020 mission fails only on a scan that finds its cargo illegal. A clean ship is never approached. Per player: each pilot is scanned, charged and told separately. Status bar: jünk shows on the "Special:" line by its Abbrev when no mission cargo is aboard, never as a commodity row (wave 15). | Guesses left below ("Contraband scan: guesses to measure"): plain mission cargo vs an outfit on the line, contraband gained in space, a clean scan's message, the unimplemented "prepare to be scanned" line. | (done) |
 | **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Done:** a scan that finds the mission's cargo illegal fails it ("Your ship has been scanned - mission failed."), no fine, no record (R: "S1 and S2 wave 12"), not even the CompGovt's -R/2 of CompReward (6b38f9bf: the sim marks the failure `failCause` 'scan', and compRewardDelta's 'scanned' outcome is 0). ScanMask and the flag are frozen onto the ActiveMission at accept (mission_accept_offer.ts). | Does ANY scan fail it, or only a matching one? (S3.) **51 stock 0x0020 missions have ScanMask 0**, so they can never fail by scan under the current reading. | (done) |
-| **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT and illegal JÜNK, as measured (waves 11-15): the record of the system the scan happened in (its status govt), by the A14 rule (the owner or its ally scanning: minus the scanner's SmugPenalty; a nosy scanner elsewhere: plus half the owner's). Not for mission cargo (measured). | A nosy scanner in an independent system (guess: no change). | (done) |
+| **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT and illegal JÜNK, as measured (waves 11-15): the record of the system the scan happened in (records are per system since ruling #380; no spread), by the A14 rule (the owner or its ally scanning: minus the scanner's SmugPenalty; a nosy scanner elsewhere: plus half the owner's). Not for mission cargo (measured). | A nosy scanner in an independent system (guess: no change). | (done) |
 | **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 within 1800 px of the victim or the attacker records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies): measured in "P1 wave 15" (still hostile after 60 s, gone after a jump out and back; pinned in 9e56b637). Non-nosy police ignore an unrelated victim (wave 13). No record change. | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
 | **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Done (2026-11-24)** with the piracy police: nosy police ignore an attack on a ship whose govt sets 0x0020 (R: "P1 wave 14", finding 2). "Nosy" is gövt 0x0002 (measured). It does not shield a victim from an ALLIED govt's police (measured: R "P1 wave 15", finding 2, pinned in 9e56b637), nor, by the Bible's "non-allied", from its own govt's (GUESS). | The own-govt case with 0x0020 (untested). | (done) |
-| **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Not read in the sim** (`attacksPlayerIfCriminal` is parsed: P/parsers/govt_parse.ts:62). R: "A14" found the rule (current system's record; owner, allies and nosy govts enforce) and called NovaJS a mismatch: N/nova_plugin/reputation/govt_disposition.ts:99-104 tests the record kept per govt. | Answered by A14. Reputation work is in progress in parallel; scanning should reuse the same "who enforces here" rule. | (reputation backlog) |
+| **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Done** (13567336, ruling #376; per-system records since ruling #380): N/nova_plugin/reputation/local_law.ts. A govt enforces where it owns the system, is allied with the owner either way, or is nosy; it attacks when the player's record IN THE CURRENT SYSTEM is below its own CrimeTol (R: "A14", "A14 wave 5": all 21 cells, c2 included). | — | (done) |
+| **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). | (done) |
 | **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Done (2026-11-24)** for the message, to "P1 wave 14" (R): a trader (AI 1/2) hit in an attack by an NPC that is not on a player's side sends "<ship name>: <random STR# 5003 line>" to the status line of every player in the system, at most once per 20 s per ship, never when its govt sets Flags2 0x0008 or its hull inherits it. N/nova_plugin/npc/distress.ts (rules, DistressCallEvent), NpcAggressionSystem (the trigger and the PRNG draw), N/display/status_message_plugin.ts `ShowDistressCallMessage` (the line). **Nobody answers** (not measured). The player's own victims never call: measured in five runs (R "P1 wave 15", finding 1; pinned in 9e56b637). | Who answers; the real rate; warships calling. Guesses below. | M if it summons help |
 | **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Parsed only:** D/system_data.ts:34-45. 344 of 545 stock systems have one. | R19 in the catalogue: trigger, delay (ReinfTime), cooldown (ReinfIntrval), the "Sensors detect xxx reinforcement fleet approaching." line. | M |
 | **Planet defence fleets and tribute** (spöb DefenseDude/DefCount, in waves) | B:2823-2836 | **Parsed only:** D/planet_data.ts:34-40 (tracker #353). 289 of 411 stock stellars have one; their düdes are mostly AI 3 (16), some AI 4 (4). | R18 in the catalogue. | L |
@@ -293,6 +294,60 @@ sensible default, marked GUESS in the code, and wants a reference run:
 10. **The scanner's name** on the line is the target pane's (a përs's or
     mission ship's own name, else the ship class); the pilot's is the
     profile name.
+
+### Legal records per system: guesses to measure
+
+The per-system records (N/nova_plugin/reputation/system_records.ts, ruling
+#380) follow the A14 sections of waves 2-15 where they measured something.
+Everything below is a choice the measurements did not make, marked as a
+guess in the code:
+
+1. **An independent system's share of a crime:** MEASURED for neighbours
+   (R: "A14 / contraband wave 16", finding 1; applied): minus a quarter of
+   the VICTIM's scaled fields, each halved twice and truncated (-76 / -49
+   / -20). Still a guess: a crime IN an independent system is charged
+   there by the same quarter at 0 jumps. Gövt 128 still gives an
+   independent system its InitialRec and CrimeTol (Bible, Appendix II).
+2. **"The owner's or an ally's ship"** counts an alliance in either
+   direction (local_law.ts's alliedEitherWay); only the owner listing the
+   victim's class was measured (wave 12's 340 / 341).
+3. **A zero penalty field** takes the engine default (DEFAULT_*_PENALTY)
+   in the owner's reward halves as well as in a victim's penalty.
+4. **A negative field** scales truncated toward zero (C integer
+   arithmetic); only the crime system's own +200 was measured.
+5. **The spread's walk** follows the parsed sÿst links (including the
+   backlinks the parser adds) and ignores sÿst Visibility: a hidden story
+   variant of a system is walked like any other, and every system stacked
+   on one map position (270 of 545 in stock) is that place's jump count
+   away, 0 for the crime system's own twins.
+6. **A disable alone and a boarding spread like a kill** (only their own
+   system's -30 / +50 were measured).
+7. **A CompReward never touches an independent system**, even with
+   CompGovt 128; a PayVal or oütf ModType 21 cleaning of a govt cleans the
+   systems that govt (and its allies / classmates) OWNS, never an
+   independent one; ModType 21 with -1 cleans every system.
+8. **chär Status1-4** set the systems a govt and its allies own, negated
+   in its enemies' (the Bible's wording); independent systems keep gövt
+   128's InitialRec.
+9. **mïsn AvailRecord** reads the record in the system of the stellar the
+   mission is offered at (Bible: "your legal record in this system").
+10. **spöb MinStatus** reads the current system's record whoever owns the
+    stellar (Bible: "the point on your record in the current system"); the
+    stellar's own govt still decides the travel permit and the ränk 0x0200
+    override.
+11. **The map's Legal Status** shows the record of the system the panel
+    describes: the current one (measured, wave 13) or a selected
+    destination (its own record; not measured). The `p` screen shows the
+    current system's (measured).
+12. **Hails and the comm dialog** judge hostility by the current system's
+    record (local_law.ts), as the AI does; the ränk and outfit / ship
+    requirements read no record.
+13. **A nosy scanner in an independent system** changes no record (kept
+    from the contraband work; unlike a crime's spread, which does reach
+    independent systems by gövt 128).
+14. **Old saves** (v5 and before) seed each system from the per-govt record
+    of its status govt; **imported original pilots** keep every per-system
+    value that differs from what an absent entry would read.
 
 ### Shuttles and miners: guesses to measure
 

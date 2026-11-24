@@ -654,6 +654,10 @@ here, c19/c20 from wave 5) are re-run as NovaJS specs in
 live world (NPC brain + brackets). 20 match the original; c2 is pinned as
 the known per-govt difference.
 
+**Per-system records, applied in f9c86cd2** (ruling #380): the record is
+keyed by sÿst, so c2 matches too; all 21 cells now match the original
+(`local_law_test.ts`; `LocalLaw.systemId`).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261123-a14/<cell>/<run>/`.
 Each holds `recording.mp4`, `recording.events.json`, `hostility.json`, the
 Tab shots, `01-map.png` (legal status) and `pilot-after`.
@@ -2397,6 +2401,9 @@ every non-zero record).
   **The propagation part is applied in 13567336** (ruling #376: `applyCrime`
   charges the victim's govt only; `PROPAGATION_DIVISOR` is gone). The
   Disab + Kill part is not applied.
+  **Superseded in f9c86cd2** (ruling #380): records are per system, and the
+  kit's "only this system changed" was its systems being unlinked (wave
+  13); a crime now spreads to linked systems by the wave-14 rule.
 
 Confidence: high for the one-way alliances (three runs, two clean) and for
 the single-system charge (a clean before/after diff); medium on the ally
@@ -6076,6 +6083,9 @@ applies a negative field signed (the derelict Wraith nova:159, -1
 everywhere, now raises its record by 2 per kill). **Not applied:**
 finding 2's reward; `applyCrime` carries a TODO pointing here, and every
 kill still charges the victim's govt.
+**Finding 2 applied in f9c86cd2** (rulings #379 and #380): per-system records,
+`reputation/system_records.ts`'s `crimeRecordChange`; +9 / +65 / -130 /
+-60 / +200 pinned in `system_records_test.ts`.
 
 Confidence: high for 1-4 (seven clean runs, each a single kill, read from
 the pulled pilot); the halving rule rests on two owners' penalty sets
@@ -6706,7 +6716,11 @@ in 2083 (the screen shows the CURRENT system's record; both values read
   nobody; NovaJS keeps one record per govt, so neither the per-system
   reward nor the jump falloff exists. **Mismatch.**
 
-**Proposed fix (not applied; it needs Matthew's ruling on how per-system
+**Applied in f9c86cd2** (ruling #380 option 1, per-system records): the
+rule below, refined by wave 14; +17 / +11 / +7 / +48 and the disable's -30
+pinned in `system_records_test.ts`.
+
+**Proposed fix (as written before the ruling; it needed Matthew's ruling on how per-system
 spreading maps onto NovaJS's per-govt records).** For a kill (or disable)
 in system S: for every system T within N jumps of S, with T's owner O_T,
 compute the change from O_T's view (O_T's own or allied victim: minus the
@@ -7083,6 +7097,15 @@ neighbour 32 -> 16, 65 -> 32: **48**. All match.
   than far from it). Matthew to choose between that, "kill system only"
   (today's charge to the victim plus the wave-12 reward to the owner, no
   spread), or per-system records.
+
+**Crimes applied in f9c86cd2** (ruling #380, per-system records:
+`reputation/system_records.ts`): the box above, field by field in exact
+integer arithmetic, no cut-off, hyperlinks only; all 13 cells and wave
+13's four pinned in `system_records_test.ts`. CompReward moved onto the
+systems too: +R in every CompGovt system, ±R/2 in its allies' /
+enemies' and xenophobes' (independent systems untouched), the failure /
+abort in every CompGovt system (`comp_reward_integration_test.ts` counts
+4 / 173 / 121 per system directly now).
 
 **Applied in 51d3dd35** (the CompReward part only; crimes still wait on
 ruling #380): `reputation.ts`'s `applyCompletionReward`, called from
@@ -7761,6 +7784,12 @@ place systems apart).
 - 1: `N/nova_plugin/reputation/reputation.ts:153-160` (`applyCrime`) has no
   spread and no per-system records (ruling #380 pending); nothing to
   compare. Noted for #380: an Independent system's record moves too.
+  **Applied in f9c86cd2** with wave 16's rule (minus a quarter of the
+  victim's scaled fields: -20 here), and the side finding (the walk by
+  map position: 2085 +48, 2082 +7, 2083 +4, 2084 +19, 2081 +2), both
+  pinned in `system_records_test.ts`. Stock data does stack systems: 270
+  of 545 sit on 128 shared positions (story variants), so the walk by
+  position matters for stock play, not only for plug-ins.
 - 2: `N/nova_plugin/missions/mission_payval.ts:54-67` with
   `reputation.ts:447-455` (`compRewardDelta`: 'fail' -> -trunc(R / 2))
   charges -500 to gövt 338 for this failure. **Mismatch.**
@@ -8550,7 +8579,10 @@ Confidence: high for 1-3 (19.5 minutes, every shuttle colour-tracked); high for 
   too), marking it scanned silently (low priority: no gameplay effect but
   the escort).
 - #380 (per-system records): an unowned system's spread share is minus
-  floor(floor(F x 0.65^n) / 2) / 2 per field of the victim.
+  floor(floor(F x 0.65^n) / 2) / 2 per field of the victim. **Applied in
+  f9c86cd2** (`system_records.ts`'s `crimeRecordChange`; -76 / -49 / -20
+  pinned in `system_records_test.ts`). A crime IN an unowned system is
+  charged there by the same quarter at 0 jumps (a guess).
 
 Confidence: high for 1 (three exact values), 2 and 4 (pilot read back);
 medium for 3 (one cutter, one run).
@@ -9003,7 +9035,7 @@ bisected; the 31-character cut read from one pilot).
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
-| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. **Wave 13:** per term (owner 345, 11 / 25: +17, not +18; four owners fit); a disable alone costs Disab; and every record change SPREADS to the linked systems at about 0.65 per jump, each computed with that system's own owner (+11 / +7 one / two jumps away in the owner's systems, +48 in a neutral owner's neighbour): see "A14 ... wave 13". **Wave 14:** the exact rule: each system n hyperlink jumps away scales the penalty FIELDS by 0.65^n (each floored) and then applies its own owner's view (own / allied victim: minus the victim's scaled fields; anyone else: plus half the owner's scaled fields); measured to six jumps (no cut-off), penalties spread the same way, ally / enemy owners compute from their own relation to the victim, hypergates and wormholes carry nothing; CompReward is govt-wide (+R the CompGovt's systems, +R/2 allies', -R/2 enemies' and xenophobes'), not by jumps: see "A14 spread, wave 14" (ruling #380). |
+| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. **Wave 13:** per term (owner 345, 11 / 25: +17, not +18; four owners fit); a disable alone costs Disab; and every record change SPREADS to the linked systems at about 0.65 per jump, each computed with that system's own owner (+11 / +7 one / two jumps away in the owner's systems, +48 in a neutral owner's neighbour): see "A14 ... wave 13". **Wave 14:** the exact rule: each system n hyperlink jumps away scales the penalty FIELDS by 0.65^n (each floored) and then applies its own owner's view (own / allied victim: minus the victim's scaled fields; anyone else: plus half the owner's scaled fields); measured to six jumps (no cut-off), penalties spread the same way, ally / enemy owners compute from their own relation to the victim, hypergates and wormholes carry nothing; CompReward is govt-wide (+R the CompGovt's systems, +R/2 allies', -R/2 enemies' and xenophobes'), not by jumps: see "A14 spread, wave 14" (ruling #380). **Waves 15-16:** an unowned neighbour takes minus a quarter of the victim's scaled fields; the walk goes by map position. **All applied in f9c86cd2** (ruling #380: per-system records, `reputation/system_records.ts`); the remaining choices are listed in docs/npc_behavior_gaps.md "Legal records per system: guesses to measure". |
 | Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 | Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
 | Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, a real mouse's wheel (the BBS in NovaJS: checked, 39f5805d). Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) **Wave 13** answered: the NPC disable of a goal-1 ship (completes it), a disable alone (-Disab), the same-govt missile (moot: no own-govt targeting), P1 run 1 with hits and a kill, P1 run 6, T1 / N2 / N1 first passes. |
@@ -9054,14 +9086,14 @@ cosmetic or rare.
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (waves 4-5)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9); AI 1 traffic lands, lingers about 20 s at a stellar and jumps (wave 5) | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
-| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; applied in 13567336 (ruling #376). | H |
+| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; applied in 13567336 (ruling #376); per-system records (c2 too) in f9c86cd2 (ruling #380). | H |
 
 ### Reputation, missions and economy
 
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
 | R1 | #321 trade tier multiplier k / priceFlux | `N/nova_plugin/economy/trade_logic.ts:33` | **answered above**: priceFlux has no effect, tiers are exact ×0.8/1/1.25, and öops disasters are the likely ×1.1 | H |
-| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | **partly (wave 5, A14 wave 5)**: a kill changed only the current system's record (-150 = Disab 50 + Kill 100); the ally's home (an ally listing the victim's class) got 0. The reverse alliance direction and enemies are untested. Propagation removed in 13567336 (ruling #376) | H |
+| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | **partly (wave 5, A14 wave 5)**: a kill changed only the current system's record (-150 = Disab 50 + Kill 100); the ally's home (an ally listing the victim's class) got 0. The reverse alliance direction and enemies are untested. Propagation removed in 13567336 (ruling #376). **Answered (waves 13-16) and applied in f9c86cd2** (ruling #380): no govt-wide propagation; a per-jump spread to linked systems, each by its own owner. | H |
 | R3 | #320.2 negative gövt penalty = none? | `reputation.ts:127-139` | CPg govt KillPenalty -5, PD | H |
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
