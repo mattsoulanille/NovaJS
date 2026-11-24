@@ -55,12 +55,28 @@ export interface PlayerStartData extends BaseData {
      * game-wide config resource; empty falls back to the built-in names.
      */
     cargoNames: string[];
+    /**
+     * The same table's lowercase variants, STR# 4001 (the Bible's
+     * "Lowercase cargo names", 'STR ' patch range 9100-9355): what the
+     * original puts into running text. The <CT> mission tag expands to
+     * it (the stock "Un. Shipping Delivery" briefing reads "1 ton of
+     * artwork", STR# 4000 being "Artwork"), and so does the player-info
+     * cargo list ("Space probe." for STR# 4001 "*space probe"). Indexed
+     * like cargoNames; empty (or a missing entry) falls back to the
+     * cargoNames entry.
+     */
+    cargoNamesLower: string[];
 }
 
 /** The stock scenario's standard cargo names (STR# 4000), the fallback
  * when the data provides none. */
 export const DEFAULT_CARGO_NAMES = ['Food', 'Industrial',
     'Medical Supplies', 'Luxury Goods', 'Metal', 'Equipment'];
+
+/** The stock scenario's lowercase standard cargo names (STR# 4001), the
+ * fallback when the data provides none. */
+export const DEFAULT_CARGO_NAMES_LOWER = ['food', 'industrial goods',
+    'medical supplies', 'luxury goods', 'metal', 'equipment'];
 
 export function getDefaultGameDate(): GameDate {
     // EV Nova's stock scenario starts in October 1177 NC; a neutral
@@ -83,5 +99,6 @@ export function getDefaultPlayerStartData(): PlayerStartData {
         isDefault: false,
         govtStatuses: [],
         cargoNames: [...DEFAULT_CARGO_NAMES],
+        cargoNamesLower: [...DEFAULT_CARGO_NAMES_LOWER],
     };
 }

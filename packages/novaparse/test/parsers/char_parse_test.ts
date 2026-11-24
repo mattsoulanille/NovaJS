@@ -59,6 +59,10 @@ function parseChar(withCargoNames = false) {
         idSpace["STR#"][4000] = {
             strings: ["Food", "Industrial", "Medical Supplies"],
         } as unknown as never;
+        // STR# 4001: their lowercase variants.
+        idSpace["STR#"][4001] = {
+            strings: ["food", "industrial goods", "medical supplies"],
+        } as unknown as never;
     }
 
     const resource = new CharResource(
@@ -115,8 +119,15 @@ describe("CharParse", () => {
             ["Food", "Industrial", "Medical Supplies"]);
     });
 
-    it("leaves cargo names empty when STR# 4000 is absent", async () => {
+    it("resolves the lowercase cargo names from STR# 4001", async () => {
+        const start = await parseChar(true);
+        expect(start.cargoNamesLower).toEqual(
+            ["food", "industrial goods", "medical supplies"]);
+    });
+
+    it("leaves cargo names empty when STR# 4000/4001 are absent", async () => {
         const start = await parseChar(false);
         expect(start.cargoNames).toEqual([]);
+        expect(start.cargoNamesLower).toEqual([]);
     });
 });
