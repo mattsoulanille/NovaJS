@@ -17,9 +17,9 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import {
-    buildEscortFromRecord, escortWingOut, exchangeHolds, setStoredShips,
-    snapshotHull, StorageLookups, storableEscort, storedShipsOf, swapWithEscort,
-    swapWithStored,
+    buildEscortFromRecord, escortToStorage, escortWingOut, exchangeHolds,
+    setStoredShips, snapshotHull, StorageLookups, storableEscort, storedShipsOf,
+    storedToEscort, swapWithEscort, swapWithStored,
 } from './ship_storage.js';
 
 /**
@@ -346,6 +346,57 @@ describe('ship storage rules', () => {
                     .toEqual({ id: FREIGHTER });
                 expect(prize.components.get(ShipComponent))
                     .toEqual({ id: SHUTTLE });
+            });
+    });
+
+    describe('between storage and the escort roster', () => {
+        const PLAYER = 'player-uuid';
+
+        it('sends a stored ship along as a captured escort, and takes it off '
+            + 'the list', () => {
+            const a = stored(SHUTTLE, { name: 'A', outfits: [[BLASTER, 1]] });
+            const b = stored(FREIGHTER, { name: 'B', fuel: 90 });
+            const hull = pilot(SHUTTLE, { stored: [a, b] });
+            const listBefore = hull.components.get(StoredShipsComponent);
+            const escort = storedToEscort(hull, 1, PLAYER, lookups);
+            expect(escort.components.get(ShipComponent))
+                .toEqual({ id: FREIGHTER });
+            expect(escort.components.get(FuelComponent)!.current).toBe(90);
+            expect(escort.components.get(PlayerEscortComponent)?.provenance)
+                .toBe('captured');
+            expect(storedShipsOf(hull)).toEqual([a]);
+            // A new array, not an edit of the old one.
+            expect(listBefore).toEqual([a, b]);
+
+            storedToEscort(hull, 0, PLAYER, lookups);
+            expect(hull.components.has(StoredShipsComponent)).toBeFalse();
+            expect(() => storedToEscort(hull, 0, PLAYER, lookups)).toThrow();
+        });
+
+        it('puts a captured escort into storage at the end of the list, '
+            + 'hold and all', () => {
+            const a = stored(SHUTTLE, { name: 'A' });
+            const hull = pilot(SHUTTLE, { stored: [a] });
+            const escort = buildEscortFromRecord(stored(FREIGHTER, {
+                outfits: [[BLASTER, 2]], cargo: [['cargo:4', 6]], fuel: 33,
+            }), PLAYER, lookups);
+            escortToStorage(hull, escort, HERE, lookups);
+            expect(storedShipsOf(hull)).toEqual([a, {
+                ship: FREIGHTER, name: 'Freighter', outfits: [[BLASTER, 2]],
+                cargo: [['cargo:4', 6]], fuel: 33, storedAt: HERE,
+            }]);
+        });
+
+        it('round-trips a ship from storage to the roster and back unchanged',
+            () => {
+                const record = stored(FREIGHTER, {
+                    name: 'Freighter', outfits: [[BLASTER, 2], [POD, 1]],
+                    cargo: [['cargo:1', 4]], fuel: 120, storedAt: HERE,
+                });
+                const hull = pilot(SHUTTLE, { stored: [record] });
+                const escort = storedToEscort(hull, 0, PLAYER, lookups);
+                escortToStorage(hull, escort, HERE, lookups);
+                expect(storedShipsOf(hull)).toEqual([record]);
             });
     });
 

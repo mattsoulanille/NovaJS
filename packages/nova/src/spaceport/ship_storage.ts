@@ -326,6 +326,38 @@ export function swapWithEscort(hull: Entity, escort: Entity, storedAt: string,
     };
 }
 
+/**
+ * A STORED SHIP SENT ALONG AS AN ESCORT: record `index` leaves the pilot's
+ * list (written onto `hull`, as a new array) and comes back as a captured
+ * escort for the caller to put on the landed roster. The escort cap is the
+ * caller's to check first (escortCapFull).
+ */
+export function storedToEscort(hull: Entity, index: number, player: string,
+    lookups: StorageLookups): Entity {
+    const list = storedShipsOf(hull);
+    const record = list[index];
+    if (!record) {
+        throw new Error(`No stored ship at ${index}`);
+    }
+    const escort = buildEscortFromRecord(record, player, lookups);
+    setStoredShips(hull, list.filter((_, i) => i !== index));
+    return escort;
+}
+
+/**
+ * A CAPTURED ESCORT PUT INTO STORAGE: its snapshot joins the END of the
+ * pilot's list (written onto `hull`, as a new array). The caller takes the
+ * escort off the landed roster, which is the whole of "it does not lift off
+ * with you". Whatever deal was queued against it is dropped with it: a
+ * stored ship is not an escort, and the deals are escorts' (escort_deals.ts).
+ */
+export function escortToStorage(hull: Entity, escort: Entity, storedAt: string,
+    lookups: StorageLookups): StoredShip {
+    const record = snapshotHull(escort, storedAt, lookups);
+    setStoredShips(hull, [...storedShipsOf(hull), record]);
+    return record;
+}
+
 /** Why a storage operation is refused, if it is. */
 export type StorageRefusal =
     | 'fightersDeployed'

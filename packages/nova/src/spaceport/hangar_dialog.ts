@@ -8,13 +8,18 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
-import { CarriedEscortEntry } from '../nova_plugin/escorts/index.js';
+import {
+    cappedEscortCount, CarriedEscortEntry, MAX_ESCORTS,
+} from '../nova_plugin/escorts/index.js';
 import { StoredShip } from '../nova_plugin/player/index.js';
 import {
     cargoUsed, deriveShipPhysics, FUEL_PER_JUMP, OutfitsState,
     OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
+import { v4 } from 'uuid';
 import { Button } from './button.js';
+import { requestCheckpoint } from './checkpoint_requests.js';
+import { PendingEscortsComponent } from './pending_escorts.js';
 import { HIRE } from './dialog_layout.js';
 import { HIRE_DIALOG_PICT } from './hire_escort.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
@@ -22,9 +27,9 @@ import { MenuControls } from './menu_controls.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import {
-    escortWingOut, snapshotHull, STORAGE_REFUSAL_TEXT, StorageLookups,
-    StorageRefusal, storableEscort, storedShipsOf, swapWithEscort,
-    swapWithStored,
+    escortToStorage, escortWingOut, snapshotHull, STORAGE_REFUSAL_TEXT,
+    StorageLookups, StorageRefusal, storableEscort, storedShipsOf,
+    storedToEscort, swapWithEscort, swapWithStored,
 } from './ship_storage.js';
 
 /**
@@ -98,6 +103,8 @@ export interface HangarContext {
     playerUuid?: string;
     /** The display world, where escorts still on approach are. */
     world?(): Iterable<[string, Entity]>;
+    /** Mints the roster uuid of an escort out of storage (default v4). */
+    mintUuid?(): string;
 }
 
 /** A caption's first line: the ship's ShortName without its subtitle. */
@@ -210,11 +217,18 @@ export class HangarDialog {
     private scrollDownArrow = new ScrollArrow('down');
     private text = {
         description: new PIXI.Text('', { ...FONT.normal, wordWrapWidth: 196 }),
-        statusLabel: new PIXI.Text('Ships:', FONT.normal),
-        statusValue: new PIXI.Text('', FONT.normal),
+        storedLabel: new PIXI.Text('Stored:', FONT.normal),
+        storedValue: new PIXI.Text('', FONT.normal),
+        escortsLabel: new PIXI.Text('Escorts:', FONT.normal),
+        escortsValue: new PIXI.Text('', FONT.normal),
         message: new PIXI.Text('', { ...FONT.normal, wordWrapWidth: 196 }),
     };
-    readonly buttons: { swap: Button, done: Button };
+    /**
+     * swap: fly the selected ship. move: the selection's other move — a
+     * stored ship goes along as an ESCORT, an escort goes into STORAGE (the
+     * caption follows the selection). done: back to the shipyard.
+     */
+    readonly buttons: { move: Button, swap: Button, done: Button };
     /** Rebuilds in flight, so a press cannot act on a stale grid. */
     private busy = false;
 
@@ -229,12 +243,16 @@ export class HangarDialog {
         this.container.addChild(background);
 
         this.buttons = {
+            // Where the shipyard's Info pill is (SHIPYARD_BUTTONS.info).
+            move: new Button(displayAssets, 'Escort', 63,
+                { x: -129, y: HIRE.button.y }),
             swap: new Button(displayAssets, 'Swap', HIRE.button.hireWidth,
                 { x: HIRE.button.hire, y: HIRE.button.y }),
             done: new Button(displayAssets, 'Done', HIRE.button.hireWidth,
                 { x: HIRE.button.done, y: HIRE.button.y }),
         };
         this.buttons.swap.click.subscribe(() => void this.swap());
+        this.buttons.move.click.subscribe(() => void this.move());
         this.buttons.done.click.subscribe(() => this.closed.next());
         for (const button of Object.values(this.buttons)) {
             this.container.addChild(button.container);
@@ -245,8 +263,13 @@ export class HangarDialog {
         this.pictContainer.position.set(174, -152.5);
         this.text.description.position.set(-27, -150);
         this.text.message.position.set(-27, 76);
-        this.text.statusLabel.position.set(HIRE.label.x, HIRE.label.y);
-        this.text.statusValue.position.set(HIRE.valueX, HIRE.label.y);
+        // The hire dialog's two-row pane ("Hiring Price:" / "You Have:").
+        this.text.storedLabel.position.set(HIRE.label.x, HIRE.label.y);
+        this.text.storedValue.position.set(HIRE.valueX, HIRE.label.y);
+        this.text.escortsLabel.position.set(HIRE.label.x,
+            HIRE.label.y + HIRE.labelPitch);
+        this.text.escortsValue.position.set(HIRE.valueX,
+            HIRE.label.y + HIRE.labelPitch);
         this.container.addChild(this.gridContainer, this.pictContainer);
         this.scrollUpArrow.container.position.set(-229, 138.5);
         this.scrollDownArrow.container.position.set(-199, 138.5);
@@ -366,10 +389,10 @@ export class HangarDialog {
         }
         grid.drawGrid();
         this.updateArrows();
-        const count = (kind: HangarEntryKind) =>
-            entries.filter(entry => entry.kind === kind).length;
-        this.text.statusValue.text =
-            `${count('stored')} stored, ${count('escort')} escorts`;
+        this.text.storedValue.text = String(
+            entries.filter(entry => entry.kind === 'stored').length);
+        this.text.escortsValue.text =
+            `${this.escortCount()} of ${MAX_ESCORTS}`;
         this.refreshButtons();
     }
 
@@ -403,10 +426,110 @@ export class HangarDialog {
         return undefined;
     }
 
+    /** What the move button would be refused for, for the selection. */
+    protected moveRefusal(entry: HangarEntry): StorageRefusal | undefined {
+        if (!this.lookups.getShip(entry.shipId)) {
+            return 'notLoaded';
+        }
+        if (entry.kind === 'stored' && this.escortCapFull()) {
+            return 'escortCap';
+        }
+        if (entry.kind === 'escort' && entry.uuid !== undefined
+            && escortWingOut(entry.uuid, this.context?.roster?.() ?? [],
+                this.context?.world?.())) {
+            return 'wingDeployed';
+        }
+        return undefined;
+    }
+
+    /**
+     * Whether the player already has MAX_ESCORTS escorts: the one count
+     * the bar's hire dialog and the plunder capture share (escort_cap.ts),
+     * over the display world, the landed roster and this landing's hires.
+     */
+    protected escortCapFull(): boolean {
+        return this.context?.playerUuid !== undefined
+            && this.escortCount() >= MAX_ESCORTS;
+    }
+
+    /** The player's escorts as the cap counts them (escortCapFull). */
+    protected escortCount(): number {
+        const context = this.context;
+        const pending = context?.hull().components
+            .get(PendingEscortsComponent)?.length ?? 0;
+        if (!context || context.playerUuid === undefined) {
+            return pending;
+        }
+        return cappedEscortCount(context.playerUuid, {
+            world: context.world?.(), carried: context.roster?.(), pending,
+        });
+    }
+
     protected refreshButtons() {
         const entry = this.itemGrid?.selection;
         this.buttons.swap.state = entry && entry.kind !== 'current'
             && this.swapRefusal(entry) === undefined ? 'normal' : 'grey';
+        this.buttons.move.setLabel(entry?.kind === 'escort' ? 'Store' : 'Escort');
+        this.buttons.move.state = entry && entry.kind !== 'current'
+            && this.moveRefusal(entry) === undefined ? 'normal' : 'grey';
+    }
+
+    /**
+     * ESCORT (a stored ship) / STORE (an escort): moves the selected ship
+     * between storage and the landed roster. The hull does not change, so
+     * nothing is adopted; the change is recorded as a checkpoint.
+     */
+    private async move() {
+        const entry = this.itemGrid?.selection;
+        const context = this.context;
+        if (!entry || !context || this.busy || entry.kind === 'current') {
+            return;
+        }
+        const refusal = this.moveRefusal(entry);
+        if (refusal) {
+            this.say(STORAGE_REFUSAL_TEXT[refusal]);
+            return;
+        }
+        let select = 'current:0';
+        await this.act(() => {
+            const roster = context.roster?.();
+            const player = context.playerUuid;
+            if (!roster || player === undefined) {
+                throw new Error('No landed roster to move escorts on');
+            }
+            const hull = context.hull();
+            if (entry.kind === 'stored' && entry.index !== undefined) {
+                const uuid = (context.mintUuid ?? v4)();
+                roster.push({
+                    player, uuid,
+                    entity: storedToEscort(hull, entry.index, player,
+                        this.lookups),
+                });
+                select = `escort:${uuid}`;
+                this.checkpoint(`Took ${entry.name} out of storage as an escort`);
+                this.say(`The ${entry.name} will fly escort when you lift off.`);
+            } else if (entry.kind === 'escort') {
+                const at = roster.findIndex(row => row.uuid === entry.uuid);
+                if (at < 0) {
+                    throw new Error(`Escort ${entry.uuid} left the roster`);
+                }
+                escortToStorage(hull, roster[at].entity, context.stellarId,
+                    this.lookups);
+                roster.splice(at, 1);
+                select = `stored:${storedShipsOf(hull).length - 1}`;
+                this.checkpoint(`Put escort ${entry.name} into storage`);
+                this.say(`The ${entry.name} is in storage.`);
+            }
+        }, () => select);
+    }
+
+    /** A pilot-history checkpoint for a change that keeps the hull. */
+    private checkpoint(label: string) {
+        const context = this.context!;
+        requestCheckpoint({
+            label, kind: 'purchase', entity: context.hull(),
+            stellar: context.stellarId,
+        });
     }
 
     /** Reports a refusal, or the result of a press, under the figures. */
@@ -465,7 +588,7 @@ export class HangarDialog {
      * reported, not swallowed into a half-drawn dialog.
      */
     protected async act(operation: () => Promise<void> | void,
-        select = 'current:0'): Promise<void> {
+        select: () => string = () => 'current:0'): Promise<void> {
         this.busy = true;
         try {
             await operation();
@@ -475,7 +598,7 @@ export class HangarDialog {
         } finally {
             this.busy = false;
         }
-        await this.refresh(select);
+        await this.refresh(select());
     }
 
     /** Shows the hangar over the shipyard until Done. */
