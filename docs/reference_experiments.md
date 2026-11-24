@@ -3209,7 +3209,8 @@ stand-off for the whole fire (85 s) without jumping, and the far-away cases
 holds, jump if the ship is farther than about 300 px from its attacker,
 else stand off and keep standing off while the fire lasts (no 16 s jump
 timer). One far run fought on instead, so a ruling may prefer to keep
-some randomness.
+some randomness. (Not applied: wave 7 showed distance does not decide it;
+a random draw at the crossing was applied instead, in a6c1143b.)
 
 Confidence: low-medium. Ten runs: near-at-the-crossing never jumped (5
 of 5 stood off), far jumped 4 of 5; distance and damage rate are not
@@ -3753,6 +3754,19 @@ to leave); otherwise stand off between passes (360-600 px, or just outside the
 attacker's reach if already that far) and do not jump while the fire
 lasts. Keep the Strength/odds trigger of wave 5. A ruling may prefer
 keeping the deterministic 16 s jump.
+**Applied in a6c1143b** ("gövt 0x0010 retreat: one jump-or-stay draw at
+the crossing, no 16 s timer"): `warshipRetreat` makes one PRNG draw the
+first think the condition (under 25% and losing, unchanged) holds, kept in
+the synced NpcState `retreatJump`. With `RETREAT_JUMP_CHANCE_FITTED` =
+13/28 (the jumps among every run of waves 4-7 where the condition held:
+wave 7 4 of 12, waves 4-6 9 of 16) it flees at once and jumps out;
+otherwise it stands off while losing and never jumps for it.
+`RETREAT_JUMP_MS` is gone. The draw is kept while the shield stays under
+25% (through stand-off / fight-on cycles) and dropped once it is back at
+or above 25%, so each crossing draws once. Held ships (mission goal) still
+never jump. Not done: the stand-off band stays 360-420 px (no beam-edge
+form), and in the spec rig a jumper is gone about 10 s after the decision
+(it starts nearer the no-jump edge than the reference's 18-24 s).
 
 Confidence: medium that the jump is not decided by distance or damage
 rate (twelve runs, both tanks, the counter-examples are clean); low on
@@ -3943,6 +3957,19 @@ chasing a player who flies off. **Mismatch.** **Proposed (not applied):**
 for AI 2, when the aggressor is farther than the ship's longest weapon
 reach (wëap speed x duration, or beam length), switch to 'flee' (run
 directly away, then depart by jump). One run per AI type.
+**Applied in ae475ef8** ("AI 2 brave trader runs once its attacker is out
+of reach"): case 2 goes to 'flee' (away from the aggressor, then the usual
+flee jump) when its aggressor is beyond its longest weapon reach (a new
+synced WeaponState `reach`, `weaponReach`: projectile speed x lifetime +
+proximity fuse, or beam length; bays have none), but only once that
+aggressor has been within the reach in this fight (NpcState
+`reachedAggressor`): waves 2 and 4 saw AI 2 traders tickled from far off
+(the Kit Tickler reaches about 2250 px) close in and fight, not run. Not
+committed: an attacker that comes back into reach is fought again (not
+measured). Unarmed and bay-only traders keep the old chase. In the spec
+rig the trader is gone about 9 s after the break (the original about 20 s;
+the spec ship starts near the no-jump edge). The AI 3 control's "broke
+off but stayed" is not modelled (NovaJS warships still chase).
 
 Confidence: medium (one run per AI type, clean radar track and panels).
 
@@ -4117,7 +4144,7 @@ the two edges and press `l` while creeping outward).
 | U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). **Wave 7:** boarding while moving needs under about 7.5-9 px/s (boarded at 3.4-7.3, refused at 9.2-11 with "not close enough", "too fast" from 16 px/s at any distance, checked before distance; NovaJS 54.8 px/s, after distance); money booty max(1,000, price / 40) from 2,000 to 100,000 (1,000 / 1,000 / 1,250 / 2,500), but 19,500 and 21,500 at 500,000; crew 500 still 0% capture; a 96 px hulk and a 2,000,000 one never opened the dialog (presses close in often get no answer). The receding "too fast" fits an approach state left only outside the UNCAPPED 1.7 W square (wave-4 re-read). Still open: money above 100,000, why capture is greyed (derelict govt?), the silent presses. |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (waves 6, 7): no.** Wave 6: a stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player. Wave 7: an anchored Kit Bomb Carrier lost 60% of its shield to its Kit Bombers' blasts in 15 s and never finished off the four bombers its blasts had disabled; with 1-damage blasts its bombers flew 110 s unharmed by it. The kit-bay rechecks: Q4 stands (a protector carrier with a working kit bay never launched) and the player's own bay launches real Kit Fighters (E-view). Open: the 1-damage carrier never fired its guns at the player (one run). |
 | J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS took the largest outfit and ignored InhJam: mismatch, applied in f20ecec2 (distinct outfits summed, plus the hull's InherentGovt InhJam). Asteroid range vs chance: not answerable (röid has no speed or position field). |
-| A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS keeps chasing (mismatch). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumps every 16 s stand-off (mismatch). |
+| A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
 
@@ -4156,7 +4183,7 @@ cosmetic or rare.
 | A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | **answered (waves 1, 7)**: protector carriers never launch: Q4b (the stock Fed Carrier) and, rerun with the fixed kit bay in wave 7, the Kit Carrier (16 panels, no fighter) | M |
 | A5 | Do NPCs of the same govt pass through each other's shots? | `N/nova_plugin/ship/firing_group.ts:62-67` | CPg crossfire, VID | M |
 | A6 | Warship (AI 3) vs interceptor (AI 4) engagement thresholds against a criminal player (MaxOdds, strength) | `npc_decision.ts` odds logic | CPg govt MaxOdds variants, CPl rating/strength | M |
-| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **mostly (waves 3, 7)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked; AI 2 whose attacker flies out of reach runs away and leaves the system (wave 7). **Mismatch** for the last (NovaJS chases) | M |
+| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **mostly (waves 3, 7)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked; AI 2 whose attacker flies out of reach runs away and leaves the system (wave 7). The last was a mismatch (NovaJS chased); applied in ae475ef8 | M |
 | A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
 | A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
