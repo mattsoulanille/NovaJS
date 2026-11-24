@@ -395,7 +395,8 @@ export const STATE_HASH_INTERVAL = 60;
 //    non-criminal player ship carrying contraband and fine / charge
 //    SmugPenalty / fail 0x0020 missions; every jünk is staged at genesis.
 //    No input kind or message kind changes. The derived wire schema
-//    fingerprint changes (25cd54bd844fc9ef), and the join gate keeps
+//    fingerprint changes (25cd54bd844fc9ef on its own; 6ffbcaef16994bf3
+//    together with the kill-penalty note above), and the join gate keeps
 //    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
