@@ -440,9 +440,9 @@ const MissionShipCleanupSystem = new System({
  * Player-loss mission failure (mïsn Flags2 0x0004,
  * failIfPlayerDisabledOrDestroyed). The disabled and destroyed cases
  * are wired below off the shared DisabledComponent / DeathEvent. The
- * sibling mïsn Flags 0x0020 flag, failIfScanned, is NOT modeled: the
- * engine has no cargo-scan mechanic, so there is no scan event to fail
- * on. It stays a parsed-but-inert flag until scanning exists.
+ * sibling mïsn Flags 0x0020 flag, failIfScanned, is applied by the AI 4
+ * contraband scan (npc/contraband_scan.ts), which marks the mission
+ * failed the same way.
  *
  * Marks every active mission with the failIfPlayerDisabledOrDestroyed
  * flag as failed. The flag was frozen onto the ActiveMission at accept

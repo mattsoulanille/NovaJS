@@ -11,6 +11,12 @@ import {
 import { NpcSteeringSystem } from './npc_steering.js';
 import { NpcAggressionSystem } from './npc_targeting.js';
 import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
+import {
+    ContrabandScanEvent, ContrabandScanEventType, ContrabandScanSystem,
+} from './contraband_scan.js';
+import {
+    ContrabandScannedComponent, ContrabandScannedType,
+} from './contraband_target.js';
 
 /**
  * ============================================================================
@@ -47,13 +53,14 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *                   losing, one draw decides: jump out at once, or
  *                   stand off while losing (npc_retreat.ts).
  *  4 interceptor:   orbits a home planet and engages govt enemies that
- *                   come within its engagement bubble. The Bible's
- *                   cargo-scanning "buzz" and piracy-police reactions
- *                   are not modeled: there is no scan, and no NPC
- *                   reacts to an attack on a third ship. (Boarding
- *                   exists, for the player and for NPC plunder,
- *                   npc_plunder.ts, which keeps AI 4 out of it; the
- *                   ScanMask data scanning needs is parsed.)
+ *                   come within its engagement bubble. Where its govt
+ *                   scans (a ScanMask, and it enforces the law here) it
+ *                   "buzzes" a player ship carrying contraband and
+ *                   scans it (contraband*.ts). The piracy-police
+ *                   reaction is not modeled: no NPC reacts to an attack
+ *                   on a third ship. (Boarding exists, for the player
+ *                   and for NPC plunder, npc_plunder.ts, which keeps AI
+ *                   4 out of it.)
  *
  * NPC DEPARTURE runs the real hyperspace jump sequence. A ship that is
  * departing or fleeing enters jump_plugin's JumpComponent state machine
@@ -95,6 +102,10 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *  npc_formation.ts         Formation / FormationComponent, slot
  *                           geometry, steerFormation, RCS tuning
  *  npc_formation_system.ts  FormationSystem
+ *  contraband.ts            the contraband rules: what a govt finds
+ *                           illegal, the fine, SmugPenalty, mission 0x0020
+ *  contraband_target.ts     ContrabandScannedComponent, chooseScanTarget
+ *  contraband_scan.ts       ContrabandScanSystem, ContrabandScanEvent
  */
 
 export {
@@ -149,10 +160,17 @@ export const NpcAiPlugin: Plugin = {
         // reader): a held ship never decides to leave and never begins a
         // departure jump. See system_hold.ts.
         serializer?.addComponent(SystemHoldComponent, SystemHoldType);
+        // The contraband scan (contraband_scan.ts): the scanned-this-visit
+        // marker on a player ship is real shared state (it decides who is
+        // buzzed), and the event tells the scanned pilot.
+        serializer?.addComponent(ContrabandScannedComponent,
+            ContrabandScannedType);
+        serializer?.addEvent(ContrabandScanEvent, ContrabandScanEventType);
         world.addSystem(NpcAggressionSystem);
         world.addSystem(NpcDecisionSystem);
         world.addSystem(NpcSteeringSystem);
         world.addSystem(NpcPlunderBoardSystem);
+        world.addSystem(ContrabandScanSystem);
         world.addSystem(NpcFireControlSystem);
         world.addSystem(FormationSystem);
     },

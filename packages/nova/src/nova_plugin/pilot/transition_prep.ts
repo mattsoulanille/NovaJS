@@ -1,7 +1,7 @@
 import { Entity } from 'nova_ecs/entity';
 import { clearCarriedAggressionForTransition } from '../combat/index.js';
 import { clearPlunderRecord } from '../ship/index.js';
-import { NpcComponent } from '../npc/index.js';
+import { clearContrabandScan, NpcComponent } from '../npc/index.js';
 import { PlanetTargetComponent } from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 
@@ -46,7 +46,8 @@ import { TargetComponent } from '../ship/index.js';
  */
 
 /** The uuid-bearing NPC-brain fields that name another ship. */
-const NPC_REFERENCE_FIELDS = ['aggressor', 'boardTarget', 'pacifiedFrom'] as const;
+const NPC_REFERENCE_FIELDS =
+    ['aggressor', 'boardTarget', 'pacifiedFrom', 'scanTarget'] as const;
 
 /**
  * Drops every reference on `entity` that names an entity outside `live`
@@ -94,8 +95,9 @@ export function clearPlayerTargetsForTransition(player: Entity): void {
 
 /**
  * THE GATE for everything crossing into a fresh world: the aggression
- * tables (aggression.ts), the player's reticles, and every escort's
- * out-of-batch references.
+ * tables (aggression.ts), the player's reticles, the player's
+ * scanned-this-visit marker (npc/contraband_target.ts), and every
+ * escort's out-of-batch references.
  */
 export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     playerUuid: string,
@@ -103,6 +105,9 @@ export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     const batch = [...escorts];
     clearCarriedAggressionForTransition(player, batch);
     clearPlayerTargetsForTransition(player);
+    // A new system is a new visit: the pilot may be scanned for
+    // contraband again (npc/contraband_target.ts's marker).
+    clearContrabandScan(player);
     const live = new Set<string>([playerUuid, ...batch.map(e => e.uuid)]);
     for (const escort of batch) {
         clearStaleReferences(escort.entity, live);

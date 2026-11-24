@@ -329,6 +329,48 @@ export function playerPlunderedMessage(credits: number): string {
 }
 
 /**
+ * The status line after an AI 4 contraband scan (npc/contraband_scan.ts),
+ * composed from stock STR# 2002's fragments exactly as the original
+ * printed them on the reference (docs/reference_experiments.md, "S1 / I1
+ * wave 11" and "S1 and S2 wave 12"):
+ *
+ *   "Kit Customs Cutter: w11-scan-pod, your posession of a kit contraband
+ *    pod has been detected. You have been fined 500 credits."
+ *   "Kit Customs Cutter: w12-s2b, your attempt to smuggle illegal cargo
+ *    through this system has been detected. You have been fined 500
+ *    credits."
+ *   "Your ship has been scanned - mission failed."
+ *
+ * The pieces are indices 374 "your posession of" (the stock misspelling,
+ * kept), 375-377 "your attempt to smuggle" / "illegal cargo" / "through
+ * this system", 378 "has been detected", 379 "You have been fined", 392
+ * / 393 "a" / "an", and 285 for the mission line. The fine is printed as
+ * the reference showed it ("500", no separator).
+ *
+ * GUESSES: with ScanFine 0 (every stock gövt; the Bible's "no fine, just
+ * a warning") the fine sentence is left off; when one scan both fails a
+ * mission and finds other contraband, the detection line wins the status
+ * line (the mission is failed all the same); with no pilot name the
+ * address is dropped ("<scanner>: your ...").
+ */
+export function contrabandScanMessage(scan: {
+    scanner: string, pilot?: string, outfit?: string, smuggled: boolean,
+    missionFailed: boolean, fine: number,
+}): string {
+    if (!scan.outfit && !scan.smuggled) {
+        return scan.missionFailed
+            ? 'Your ship has been scanned - mission failed.' : '';
+    }
+    const what = scan.outfit
+        ? `your posession of ${/^[aeiou]/i.test(scan.outfit) ? 'an' : 'a'} ${scan.outfit}`
+        : 'your attempt to smuggle illegal cargo through this system';
+    const address = scan.pilot ? `${scan.pilot}, ` : '';
+    const fined = scan.fine > 0
+        ? ` You have been fined ${Math.floor(scan.fine)} credits.` : '';
+    return `${scan.scanner}: ${address}${what} has been detected.${fined}`;
+}
+
+/**
  * What the target pane's government line reads for a ship belonging to
  * the player looking at it.
  *

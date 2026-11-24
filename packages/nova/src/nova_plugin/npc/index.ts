@@ -22,6 +22,9 @@ export * from './npc_departure.js';
 export * from './npc_retreat.js';
 export * from './npc_steering.js';
 export * from './npc_plunder_board.js';
+export * from './contraband.js';
+export * from './contraband_target.js';
+export * from './contraband_scan.js';
 export * from './npc_ai_plugin.js';
 export * from './npc_plugin.js';
 

@@ -46,8 +46,8 @@ import { GovtComponent } from '../core/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
-    formationsIn, FormationComponent, nextFormationSlot, NpcComponent,
-    PlayerPlunderedEvent,
+    clearContrabandScan, formationsIn, FormationComponent, nextFormationSlot,
+    NpcComponent, PlayerPlunderedEvent,
 } from '../npc/index.js';
 import {
     EscortLandingComponent, NO_DEAL, PlayerEscortComponent,
@@ -1439,6 +1439,10 @@ const BoardingActionSystem = new System({
  * The escort half of the same boundary is in player_escort_plugin (an
  * escort lands or is swept along by a jump or a gate transit), and the
  * jumping ship's own half is in jump_plugin's JumpFromSystem.
+ *
+ * The same landing also ends the ship's system VISIT for the AI 4
+ * contraband scan, so its scanned-this-visit marker goes too and it may be
+ * scanned again when it takes off (npc/contraband_target.ts; a guess).
  */
 const BoardingLandingResetSystem = new System({
     name: 'BoardingLandingResetSystem',
@@ -1446,6 +1450,7 @@ const BoardingLandingResetSystem = new System({
     args: [GetEntity] as const,
     step(entity) {
         clearPlunderRecord(entity);
+        clearContrabandScan(entity);
     },
     // #237 pin (shared: *): among the LandEvent handlers, after travel's
     // gate departure.

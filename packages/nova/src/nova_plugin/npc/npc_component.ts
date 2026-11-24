@@ -12,7 +12,10 @@ export const NpcMode = t.union([
     t.literal('travel'), t.literal('dwell'), t.literal('flee'),
     t.literal('attack'), t.literal('patrol'), t.literal('depart'),
     /** Flying to a disabled hulk to plunder it (gövt Flags 0x1000). */
-    t.literal('board')]);
+    t.literal('board'),
+    /** An interceptor (AI 4) flying to a player ship to scan it for
+     * contraband (npc/contraband_scan.ts). */
+    t.literal('scan')]);
 export type NpcMode = t.TypeOf<typeof NpcMode>;
 
 export const NpcState = t.intersection([t.type({
@@ -37,6 +40,10 @@ export const NpcState = t.intersection([t.type({
      * 'board'; gövt Flags 0x1000). Cleared the moment the approach ends,
      * however it ends. */
     boardTarget: t.string,
+    /** Uuid of the player ship this interceptor is flying to scan for
+     * contraband (mode 'scan'; npc/contraband_scan.ts). Cleared the
+     * moment the approach ends, however it ends. */
+    scanTarget: t.string,
     /** Uuid of a ship this NPC has been bribed to leave alone (hail bribe /
      * beg-for-mercy). While `pacifiedUntil` has not lapsed, this ship is
      * skipped as a hostile and forgotten as an aggressor. */

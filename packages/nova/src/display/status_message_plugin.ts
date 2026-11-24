@@ -13,10 +13,14 @@ import {
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
+import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
-import { PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
+import { ContrabandScanEvent, PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
+import { MissionShipComponent } from '../nova_plugin/player/index.js';
+import { PersComponent } from '../nova_plugin/spawn/index.js';
+import { loadPilotProfile } from '../title/client_prefs.js';
+import { targetIdentity } from './target_identity.js';
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { Stage } from "./stage_resource.js";
 import { DrawDockedStatus } from "./status_bar_docked.js";
@@ -213,6 +217,44 @@ const ShowPlayerPlunderedMessage = new System({
     },
 });
 
+// An AI 4 interceptor scanned the LOCAL PLAYER's ship and found
+// contraband (npc/contraband_scan.ts). Emitted in the sim targeted at the
+// scanned ship, re-emitted here, shown on that player's client only — in
+// multiplayer every pilot is scanned, and told, separately. The scanner
+// is named as the target pane names it (target_identity.ts: a përs's or
+// a mission's own name, else the ship class), and the pilot by the
+// profile's name, as the original addressed "w11-scan-pod". No sound: the
+// reference recording has none to match (not checked).
+const ShowContrabandScanMessage = new System({
+    name: 'ShowContrabandScanMessage',
+    events: [ContrabandScanEvent],
+    args: [ContrabandScanEvent, StatusLineResource, TimeResource, Entities,
+        PlayerShipSelector] as const,
+    step(scan, statusLine, { time }, entities) {
+        const scanner = entities.get(scan.scanner);
+        const pers = scanner?.components.get(PersComponent);
+        const missionShip = scanner?.components.get(MissionShipComponent);
+        const name = targetIdentity({
+            persName: pers?.name,
+            missionName: missionShip?.name,
+            shipClass: displayName(
+                scanner?.components.get(ShipDataComponent)?.name ?? ''),
+        }).name;
+        let pilot: string | undefined;
+        try {
+            pilot = loadPilotProfile()?.name || undefined;
+        } catch {
+            pilot = undefined;
+        }
+        const message = contrabandScanMessage({
+            ...scan, scanner: name, pilot,
+        });
+        if (message !== '') {
+            statusLine.setMessage(message, time);
+        }
+    },
+});
+
 // Success feedback when boarding repairs one of your own disabled flock
 // members (EscortRepairedEvent from the boarding gate). Like the blocked
 // messages it is emitted in the sim targeted at the boarding ship and
@@ -336,6 +378,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowBoardingBlockedMessage);
         world.addSystem(ShowBoardingRepelledMessage);
         world.addSystem(ShowPlayerPlunderedMessage);
+        world.addSystem(ShowContrabandScanMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.resources.set(SeenPlayerHailsResource, new Map());
@@ -348,6 +391,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowBoardingBlockedMessage);
         world.removeSystem(ShowBoardingRepelledMessage);
         world.removeSystem(ShowPlayerPlunderedMessage);
+        world.removeSystem(ShowContrabandScanMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowPlayerHailMessage);

@@ -381,6 +381,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    signed. No input kind or message kind changes. The derived wire
 //    schema fingerprint changes (4ff3c1a7ae09af99), and the join gate
 //    keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the AI 4 contraband scan (npc/contraband*.ts,
+//    reference S1/S2 waves 11-12). NpcComponent's `mode` gains 'scan' and
+//    an OPTIONAL `scanTarget` field (the player ship an interceptor is
+//    flying to scan); a new serializer-registered component,
+//    ContrabandScanned (`{at}`, the scanned-this-visit marker on a player
+//    ship), and a new serializer event, ContrabandScanEvent; two OPTIONAL
+//    ActiveMission fields, `scanMask` and `failIfScanned`, frozen at
+//    accept. Ships and missions that never touch a scan carry none of
+//    them, so their components and hash inputs are unchanged. Sim-rule
+//    change alongside: AI 4 interceptors of a govt with a ScanMask buzz a
+//    non-criminal player ship carrying contraband and fine / charge
+//    SmugPenalty / fail 0x0020 missions; every jünk is staged at genesis.
+//    No input kind or message kind changes. The derived wire schema
+//    fingerprint changes (25cd54bd844fc9ef), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

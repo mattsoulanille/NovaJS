@@ -243,6 +243,12 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // reads it). Only written when set, so the record stays additive.
         ...(mission.flags.failIfBoardedByPirates
             ? { failIfBoardedByPirates: true } : {}),
+        // The contraband scan's two mission inputs (npc/contraband.ts):
+        // the mïsn ScanMask and Flags 0x0020 "Mission fails if you're
+        // scanned". Frozen for the same reason, and likewise written only
+        // when set.
+        ...(mission.scanMask ? { scanMask: mission.scanMask } : {}),
+        ...(mission.flags.failIfScanned ? { failIfScanned: true } : {}),
         // Copied (not aliased) so re-showing the offer stays pristine.
         shipObjective: offer.shipObjective && {
             ...offer.shipObjective,

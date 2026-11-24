@@ -1357,6 +1357,23 @@ describe('accept / landing / completion flow', () => {
             .failIfPlayerDisabledOrDestroyed).toBe(true);
     });
 
+    it('freezes the contraband scan\'s ScanMask and Flags 0x0020 onto the '
+        + 'active mission, only when set', () => {
+        const flagged = makeMission({ id: 'nova:206', scanMask: 0x8000 });
+        flagged.flags = { ...flagged.flags, failIfScanned: true };
+        const plain = makeMission({ id: 'nova:207' });
+        const state = makeState();
+        const machinery = makeMachinery(state, [flagged, plain]);
+        acceptOffer(machinery,
+            makeMissionOffer(flagged, machinery.offerContext())!);
+        acceptOffer(machinery,
+            makeMissionOffer(plain, machinery.offerContext())!);
+        expect(state.missions.get('nova:206')!.scanMask).toBe(0x8000);
+        expect(state.missions.get('nova:206')!.failIfScanned).toBe(true);
+        expect('scanMask' in state.missions.get('nova:207')!).toBeFalse();
+        expect('failIfScanned' in state.missions.get('nova:207')!).toBeFalse();
+    });
+
     it('aborts a mission, dropping its cargo and running OnAbort', () => {
         const mission = makeMission({
             id: 'nova:203',

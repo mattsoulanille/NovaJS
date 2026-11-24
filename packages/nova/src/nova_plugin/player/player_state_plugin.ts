@@ -130,6 +130,19 @@ export const ActiveMissionType = t.intersection([t.type({
      */
     failIfBoardedByPirates: t.boolean,
     /**
+     * The mïsn ScanMask ("which governments consider your cargo
+     * illegal"), frozen at accept for the shared simulation's contraband
+     * scan (npc/contraband.ts), which never reads mission game data.
+     * ADDITIVE: absent on older records and on missions whose ScanMask is
+     * 0, which is "never illegal".
+     */
+    scanMask: t.number,
+    /**
+     * mïsn Flags 0x0020, "Mission fails if you're scanned", frozen at
+     * accept for the same reason. ADDITIVE, like the rest.
+     */
+    failIfScanned: t.boolean,
+    /**
      * Set true by the shared sim when a fail condition it can observe
      * has occurred (the owner was disabled or destroyed while
      * failIfPlayerDisabledOrDestroyed is set). Landing processing turns

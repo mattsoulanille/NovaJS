@@ -16,6 +16,7 @@ import {
 import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js';
 import { FormationComponent } from './npc_formation.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
+import { CONTRABAND_SCAN_RANGE } from './contraband.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
@@ -334,7 +335,8 @@ export const NpcSteeringSystem = new System({
         // must not be dragged back to its station).
         if (formation && entities.has(formation.leader)
             && npc.mode !== 'attack' && npc.mode !== 'flee'
-            && npc.mode !== 'depart' && npc.mode !== 'board') {
+            && npc.mode !== 'depart' && npc.mode !== 'board'
+            && npc.mode !== 'scan') {
             return;
         }
         switch (npc.mode) {
@@ -410,6 +412,27 @@ export const NpcSteeringSystem = new System({
                 steerArrive(movement, physics,
                     Position.fromVectorLike(prizeMovement.position),
                     NPC_BOARD_RADIUS, NPC_BOARD_SPEED);
+                break;
+            }
+            case 'scan': {
+                // Buzzing a player ship to scan it for contraband (AI 4,
+                // contraband_scan.ts). This arm only STEERS: the scan
+                // itself is ContrabandScanSystem's, in uuid order, once
+                // within CONTRABAND_SCAN_RANGE. Flown at top speed
+                // ("buzzes"), so the ship closes fast and brakes only as
+                // it comes up on a slow target.
+                const quarry = npc.scanTarget
+                    ? entities.get(npc.scanTarget)?.components
+                        .get(MovementStateComponent)
+                    : undefined;
+                if (!quarry) {
+                    npc.mode = undefined;
+                    delete npc.scanTarget;
+                    return;
+                }
+                steerArrive(movement, physics,
+                    Position.fromVectorLike(quarry.position),
+                    CONTRABAND_SCAN_RANGE / 2, physics.speed);
                 break;
             }
             case 'attack': {

@@ -159,6 +159,14 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // the granting peer's cache and nobody else's.
     const ranks = Promise.all([...allIds.Rank].sort().map(
         id => gameData.data.Rank.get(id)));
+    // Stage EVERY jünk, for the govts' reason: they are tiny (23 in stock
+    // data) and the contraband scan (npc/contraband_target.ts) reads a
+    // ship's jünk ScanMasks synchronously through `getCached`. A hold's
+    // jünk changes in flight (plunder, scooped debris) and those changes
+    // reach other peers as state carrying no game data, so per-entity
+    // staging would warm only the peer that made them.
+    const junks = Promise.all([...allIds.Junk].sort().map(
+        id => gameData.data.Junk.get(id)));
     // Stage the linked systems' metadata too: starting a hyperspace
     // jump reads the destination's map position synchronously
     // (getCached) to compute the travel heading, and every peer builds
@@ -187,7 +195,8 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     const npcTables = options.npcs !== false
         ? buildNpcSpawnTables(world, systemId, systemData) : undefined;
     const [govts, , , planetEntities] = await Promise.all(
-        [govtEntries, ranks, links, planets, asteroidTypes, npcTables]);
+        [govtEntries, ranks, links, planets, asteroidTypes, npcTables,
+            junks]);
 
     world.resources.set(GovtsResource, new Map(govts));
     // The system's inherent sensor interference confuses Seeker 0x0008 missiles

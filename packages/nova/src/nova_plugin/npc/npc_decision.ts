@@ -38,6 +38,8 @@ import { chooseNearest } from './npc_targeting.js';
 import { attacksOnSight, huntsOnSight } from './on_sight.js';
 import { warshipRetreat } from './npc_retreat.js';
 import { ShootAllWeaponsAI } from './npc_plugin.js';
+import { chooseScanTarget } from './contraband_target.js';
+import { scansHere } from './contraband.js';
 import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
@@ -366,7 +368,13 @@ export const NpcDecisionSystem = new System({
         // plunder candidate either.
         const hostiles: Array<readonly [string, number]> = [];
         const plunderable: Array<readonly [string, number]> = [];
+        // PLAYER ships an interceptor might scan for contraband (case 4,
+        // contraband_scan.ts): every live, visible one that is not on this
+        // ship's own side and not its briber. Gathered only by an AI 4 of
+        // a govt that scans here, so no other NPC pays for it.
+        const scanCandidates: Array<readonly [string, number]> = [];
         const law = localLawIn(gameData, systemId);
+        const scans = npc.aiType === 4 && scansHere(govtData, law);
         // Only a warship of a plundering government looks at hulks at all,
         // so the extra per-hulk entity lookups below cost nothing for
         // every other NPC in the system.
@@ -418,6 +426,9 @@ export const NpcDecisionSystem = new System({
                     }
                 }
                 continue;
+            }
+            if (scans && otherRecords !== undefined) {
+                scanCandidates.push([otherUuid, distanceSquared] as const);
             }
             const otherStrength = effectiveStrength(
                 otherData.strength, shieldFraction(otherShield));
@@ -698,6 +709,7 @@ export const NpcDecisionSystem = new System({
                 const chosen = chooseNearest(engageable);
                 if (chosen) {
                     npc.mode = 'attack';
+                    delete npc.scanTarget;
                     target.target = chosen;
                     return;
                 }
@@ -705,6 +717,31 @@ export const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                     target.target = undefined;
                 }
+                // CONTRABAND SCAN (Bible AI 4: "buzzes incoming ships to
+                // scan them for illegal cargo"; contraband_scan.ts). With
+                // nobody to fight, an interceptor of a govt that scans
+                // here flies to an unscanned player ship carrying
+                // something illegal to it. Ordered after the engagement
+                // decision (a criminal is attacked, not scanned: the
+                // Bible's ScanFine applies only to a pilot "not yet evil
+                // enough to attack") and before departure, so it does not
+                // leave with a scan pending. A clean ship is never
+                // approached (reference S1 wave 11).
+                if (scans && govtData) {
+                    const hostileSet = new Set(hostiles.map(([u]) => u));
+                    const scanTarget = chooseScanTarget(npc.scanTarget,
+                        scanCandidates.filter(([u]) => !hostileSet.has(u)),
+                        govtData.scanMask, getEntity, gameData);
+                    if (scanTarget !== undefined) {
+                        npc.mode = 'scan';
+                        npc.scanTarget = scanTarget;
+                        return;
+                    }
+                }
+                if (npc.mode === 'scan') {
+                    npc.mode = undefined;
+                }
+                delete npc.scanTarget;
                 if (!held && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
