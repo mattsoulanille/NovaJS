@@ -14,7 +14,7 @@ import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { DisabledComponent } from '../ship/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { AssistingComponent, AssistingType, NpcFireControlSystem } from '../npc/index.js';
@@ -37,7 +37,7 @@ import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance } from '../ncb/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { ShipDataComponent } from '../ship/index.js';
-import { shipDisposition } from '../reputation/index.js';
+import { localLawIn, shipDisposition } from '../reputation/index.js';
 import {
     isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
@@ -379,7 +379,15 @@ export function applyHail(world: World, peerId: string | undefined,
     const playerGovt = lookupGovt(world,
         player.components.get(GovtComponent)?.id);
     const playerRecords = player.components.get(LegalRecordsComponent);
-    const disposition = shipDisposition(targetGovt, playerGovt, playerRecords);
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        return;
+    }
+    // Both verdicts below judge a criminal record by the law of THIS
+    // system (reference A14, ruling #376), the one the brackets use too.
+    const systemId = world.resources.get(SystemIdResource);
+    const disposition = shipDisposition(targetGovt, playerGovt, playerRecords,
+        localLawIn(gameData, systemId));
 
     // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on #297),
     // not a narrower NPC-posture copy of it: the one predicate the target
@@ -389,12 +397,8 @@ export function applyHail(world: World, peerId: string | undefined,
     // brackets say. Every input is synced, so the display dialog reaches the
     // same verdict and every peer applies the same outcome.
     const now = world.resources.get(TimeResource)?.time ?? 0;
-    const gameData = world.resources.get(SimulationGameDataResource);
-    if (!gameData) {
-        return;
-    }
     const iffHostile = isIffHostile(action.target, target, found.uuid,
-        player, gameData, uuid => world.entities.get(uuid), now);
+        player, gameData, uuid => world.entities.get(uuid), now, systemId);
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
 
     if (action.kind === 'requestAssistance') {

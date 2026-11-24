@@ -11,7 +11,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
 import { styleForTarget } from '../combat/index.js';
-import { GovtComponent } from '../core/index.js';
+import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { ControlBitsComponent } from '../ncb/index.js';
 import { NpcComponent } from '../npc/index.js';
 import {
@@ -225,7 +225,8 @@ describe('a ShipBehav 1 ("protect the player") special ship', () => {
             const gameData = await getSyntheticGameData();
             expect(styleForTarget(protector, ship, PLAYER,
                 world.entities.get(PLAYER)!, gameData,
-                uuid => world.entities.get(uuid), 0)).toBe('friendly');
+                uuid => world.entities.get(uuid), 0,
+                world.resources.get(SystemIdResource))).toBe('friendly');
         });
 
     it('never targets or fires on the player, even when its government '

@@ -12,7 +12,9 @@ import { World } from 'nova_ecs/world';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { styleForTarget } from '../nova_plugin/combat/index.js';
-import { GovtComponent, SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import {
+    GovtComponent, SimulationGameDataResource, SystemIdResource,
+} from '../nova_plugin/core/index.js';
 import { FormationComponent, NpcComponent } from '../nova_plugin/npc/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import {
@@ -414,6 +416,7 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
     const alwaysAttacks = { ...getDefaultGovtData(), id: 'test:362' };
     alwaysAttacks.flags = { ...alwaysAttacks.flags, alwaysAttacksPlayer: true };
     const lawful = { ...getDefaultGovtData(), id: 'test:370', crimeTol: 10 };
+    const OWN_370_SYSTEM = 'test:2110';
     const govts: { [id: string]: GovtData } = {
         'test:362': alwaysAttacks, 'test:370': lawful,
     };
@@ -425,6 +428,12 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
                     : undefined,
             },
             Govt: { getCached: (id: string) => govts[id] },
+            // The radar's system is govt 370's own: a criminal record
+            // counts by the law of the system it is in (reference A14).
+            System: {
+                getCached: (id: string) => id === OWN_370_SYSTEM
+                    ? { govt: 'test:370' } : undefined,
+            },
             SpriteSheet: {
                 getCached: () => undefined,
                 get: () => Promise.resolve(undefined),
@@ -438,6 +447,7 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
         world.resources.set(TimeResource, time as never);
         world.resources.set(SimulationTimeResource, time as never);
         world.resources.set(SimulationGameDataResource, gameData);
+        world.resources.set(SystemIdResource, OWN_370_SYSTEM);
         const drawRadar = jasmine.createSpy('drawRadar');
         world.resources.set(StatusBarResource, {
             radar: { drawRadar, range: new Vector(3000, 3000) },
@@ -478,7 +488,8 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
     /** The brackets' verdict, as a blip colour. */
     function bracketColor(world: World, player: Entity, uuid: string) {
         const style = styleForTarget(uuid, world.entities.get(uuid)!,
-            'player', player, gameData, u => world.entities.get(u), 0);
+            'player', player, gameData, u => world.entities.get(u), 0,
+            OWN_370_SYSTEM);
         return style === 'hostile' ? IFF_HOSTILE_COLOR
             : style === 'friendly' ? IFF_FRIENDLY_COLOR : IFF_NEUTRAL_COLOR;
     }

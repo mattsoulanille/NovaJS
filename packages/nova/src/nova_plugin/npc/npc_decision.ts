@@ -17,11 +17,14 @@ import { CloakActiveComponent, isTargetable } from '../ship/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { EscortCommandComponent } from '../player/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AssistingComponent } from './hail_component.js';
 import { flockPlayer, isAttackingPlayer, isInFlock } from './allegiance.js';
-import { govtDisposition, govtDispositionTo, effectiveStrength, oddsFavorable } from '../reputation/index.js';
+import {
+    govtDisposition, govtDispositionTo, effectiveStrength, localLawIn,
+    oddsFavorable,
+} from '../reputation/index.js';
 import { ShieldComponent } from '../ship/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { landable } from '../core/index.js';
@@ -215,10 +218,14 @@ export const NpcDecisionSystem = new System({
         Optional(WeaponsStateComponent),
         NpcTargetsQuery,
         PlanetsQuery, TimeResource, RandomResource, Entities, UUID,
-        SimulationGameDataResource, GetEntity] as const,
+        SimulationGameDataResource, GetEntity,
+        // The world's own system: whose law a criminal record is judged
+        // by (reference A14, local_law.ts). Optional only so a bare test
+        // world still thinks; every makeSystem world sets it.
+        Optional(SystemIdResource)] as const,
     step(npc, movement, target, govt, shield, shipData, formation,
         escortCommand, assisting, jump, hold, weapons, ships, planets, time,
-        random, entities, uuid, gameData, entity) {
+        random, entities, uuid, gameData, entity, systemId) {
         // Unfinished business here (a refuel offer on the table, a rescue
         // target waiting to be boarded): this ship never DECIDES to leave.
         // See system_hold.ts; the jump exits themselves are gated in
@@ -346,9 +353,10 @@ export const NpcDecisionSystem = new System({
         // the lock again each tick, so re-choosing a fireball here left
         // the ship idling on a corpse — neither steering nor firing at
         // the next live enemy — for the victim's whole DeathDelay.
-        // Ships with legal records (players) whose record with this govt
-        // is below its crime tolerance are enemies too: crime has
-        // consequences.
+        // Ships with legal records (players) are enemies too when this
+        // govt enforces the law HERE and their record here is below its
+        // crime tolerance (reference A14, local_law.ts): crime has
+        // consequences, in the system where it counts.
         //
         // Disabled enemies are collected SEPARATELY as plunder candidates
         // (gövt Flags 0x1000; see npcPlunderEligible). They are still not
@@ -360,6 +368,7 @@ export const NpcDecisionSystem = new System({
         // plunder candidate either.
         const hostiles: Array<readonly [string, number]> = [];
         const plunderable: Array<readonly [string, number]> = [];
+        const law = localLawIn(gameData, systemId);
         // Only a warship of a plundering government looks at hulks at all,
         // so the extra per-hulk entity lookups below cost nothing for
         // every other NPC in the system.
@@ -388,7 +397,7 @@ export const NpcDecisionSystem = new System({
                 if (plunders && distanceSquared
                     <= NPC_PLUNDER_SEEK_RANGE * NPC_PLUNDER_SEEK_RANGE
                     && govtDispositionTo(govtData,
-                        lookupGovt(gameData, otherGovt), otherRecords,
+                        lookupGovt(gameData, otherGovt), otherRecords, law,
                         ranksSuppressAggression(otherSuppressGovts,
                             govtData?.id)) === 'enemy') {
                     const hulk = entities.get(otherUuid);
@@ -426,7 +435,7 @@ export const NpcDecisionSystem = new System({
             // here so the colour and the brain share one call.
             const otherGovtData = lookupGovt(gameData, otherGovt);
             if (attacksOnSight(npc.aiType, govtData, otherGovtData,
-                otherRecords,
+                otherRecords, law,
                 // ränk 0x0100 for THIS ship's government: its holder is not
                 // attacked on sight.
                 ranksSuppressAggression(otherSuppressGovts, govtData?.id))

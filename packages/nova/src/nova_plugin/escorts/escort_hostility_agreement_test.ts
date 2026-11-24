@@ -13,7 +13,7 @@ import { isHostileTarget, styleForTarget } from '../combat/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ShootAllWeaponsComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
-import { LegalRecordsComponent } from '../reputation/index.js';
+import { LegalRecordsComponent, localLawIn } from '../reputation/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 
@@ -82,9 +82,24 @@ const GOVTS: { [id: string]: GovtData } = {
     'nova:164': BUREAU,
 };
 
-/** The Govt.getCached both readers use, and nothing else. */
+/**
+ * The system every row stands in unless it names another: the Civvies'
+ * (nova:157) own space, so a criminal record with them is judged by the
+ * law in force there (reference A14, reputation/local_law.ts).
+ */
+const CIVVIE_SPACE = 'test:civvie-space';
+/** A system nobody owns. */
+const NOWHERE = 'test:nowhere';
+
+/** The Govt / System getCached both readers use, and nothing else. */
 const gameData = {
-    data: { Govt: { getCached: (id: string) => GOVTS[id] } },
+    data: {
+        Govt: { getCached: (id: string) => GOVTS[id] },
+        System: {
+            getCached: (id: string) => id === CIVVIE_SPACE
+                ? { govt: 'nova:157' } : { govt: null },
+        },
+    },
 } as never;
 
 const NOW = 100_000;
@@ -95,6 +110,8 @@ interface Row {
     /** Builds the ships. `other` is the candidate; `root` is the owner. */
     build(): { other: Entity, root: Entity, extra?: [string, Entity][] };
     hostile: boolean;
+    /** The system the ships meet in (default CIVVIE_SPACE). */
+    systemId?: string;
 }
 
 const ROWS: Row[] = [
@@ -161,6 +178,21 @@ const ROWS: Row[] = [
         name: 'a govt the owner is CRIMINAL with (legal record below '
             + '-CrimeTol)',
         hostile: true,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 3 }),
+            root: new Entity(ROOT)
+                .addComponent(LegalRecordsComponent,
+                    new Map([['nova:157', -30_000]])),
+        }),
+    },
+    {
+        name: 'a WARSHIP of a govt the owner is criminal with, OUTSIDE its '
+            + 'space (A14: its law does not run there)',
+        hostile: false,
+        systemId: NOWHERE,
         build: () => ({
             other: new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
@@ -530,21 +562,23 @@ describe('isHostileTo agrees with styleForTarget, tier for tier', () => {
             [OTHER, other], [ROOT, root], ...(extra ?? []),
         ]);
         const getEntity = (uuid: string) => entities.get(uuid);
+        const systemId = row.systemId ?? CIVVIE_SPACE;
         const ctx: EscortHostilityContext = {
             rootGovt: root.components.get(GovtComponent)
                 ? GOVTS[root.components.get(GovtComponent)!.id] : undefined,
             gameData,
             rootEntity: root,
             rootRecords: root.components.get(LegalRecordsComponent),
+            law: localLawIn(gameData, systemId),
             now: NOW,
             getEntity,
         };
         return {
             corners: styleForTarget(OTHER, other, ROOT, root, gameData,
-                getEntity, NOW),
+                getEntity, NOW, systemId),
             scan: isHostileTarget(OTHER, other, {
                 viewerUuid: ROOT, viewerEntity: root, entities,
-                gameData, now: NOW,
+                gameData, now: NOW, systemId,
             }),
             escorts: isHostileTo(other, OTHER, ROOT, ESCORT, ctx),
         };
@@ -578,7 +612,8 @@ describe('where the two readers legitimately differ', () => {
         EscortHostilityContext {
         return {
             rootGovt: undefined, gameData, rootEntity: root,
-            rootRecords: undefined, now: NOW,
+            rootRecords: undefined, law: localLawIn(gameData, CIVVIE_SPACE),
+            now: NOW,
             getEntity: (uuid: string) => entities.get(uuid),
         };
     }
@@ -595,10 +630,10 @@ describe('where the two readers legitimately differ', () => {
 
             // The HUD paints it gray, and 'r' never picks it.
             expect(styleForTarget(OTHER, hulk, ROOT, root, gameData,
-                u => entities.get(u), NOW)).toBe('disabled');
+                u => entities.get(u), NOW, CIVVIE_SPACE)).toBe('disabled');
             expect(isHostileTarget(OTHER, hulk, {
                 viewerUuid: ROOT, viewerEntity: root, entities, gameData,
-                now: NOW,
+                now: NOW, systemId: CIVVIE_SPACE,
             })).toBeFalse();
 
             // isHostileTo still calls the pirate a pirate — which is why
@@ -622,7 +657,7 @@ describe('where the two readers legitimately differ', () => {
             const entities = entitiesOf(attacker, root);
 
             expect(styleForTarget(OTHER, attacker, ROOT, root, gameData,
-                u => entities.get(u), NOW)).toBe('neutral');
+                u => entities.get(u), NOW, CIVVIE_SPACE)).toBe('neutral');
             // A deliberate superset: a ship shooting the escort is the
             // escort's business whether or not the owner has been touched.
             expect(isHostileTo(attacker, OTHER, ROOT, ESCORT,

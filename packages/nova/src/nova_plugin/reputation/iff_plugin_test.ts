@@ -20,6 +20,11 @@ import {
 } from './iff_plugin.js';
 import { OutfitsState } from '../ship/index.js';
 import { planetClearance } from './stellar_clearance.js';
+import { localLaw } from './local_law.js';
+
+/** An independent system: no record is passed below, so the law in force
+ * does not matter to any of these politics-only calls. */
+const NOWHERE = localLaw(undefined, () => undefined);
 
 function stellar(over: Partial<PlanetData> = {}): PlanetData {
     return { ...getDefaultPlanetData(), ...over };
@@ -79,56 +84,56 @@ describe('deriveIff', () => {
 
 describe('shipDisposition', () => {
     it('is neutral for a ship with no government', () => {
-        expect(shipDisposition(undefined, undefined)).toBe('neutral');
+        expect(shipDisposition(undefined, undefined, undefined, NOWHERE)).toBe('neutral');
     });
 
     it('is hostile when the ship govt always attacks the player', () => {
         const ship = govt({ id: 'nova:200' });
         ship.flags.alwaysAttacksPlayer = true;
-        expect(shipDisposition(ship, undefined)).toBe('hostile');
+        expect(shipDisposition(ship, undefined, undefined, NOWHERE)).toBe('hostile');
     });
 
     it('is hostile for a xenophobic govt', () => {
         const ship = govt({ id: 'nova:200' });
         ship.flags.xenophobic = true;
-        expect(shipDisposition(ship, undefined)).toBe('hostile');
+        expect(shipDisposition(ship, undefined, undefined, NOWHERE)).toBe('hostile');
     });
 
     it('neverAttacksPlayer overrides alwaysAttacksPlayer', () => {
         const ship = govt({ id: 'nova:200' });
         ship.flags.alwaysAttacksPlayer = true;
         ship.flags.neverAttacksPlayer = true;
-        expect(shipDisposition(ship, undefined)).toBe('neutral');
+        expect(shipDisposition(ship, undefined, undefined, NOWHERE)).toBe('neutral');
     });
 
     it('is hostile when the ship govt enemies intersect the player classes', () => {
         const ship = govt({ id: 'nova:200', enemies: [2, 10] });
         const player = govt({ id: 'nova:128', classes: [10] });
-        expect(shipDisposition(ship, player)).toBe('hostile');
+        expect(shipDisposition(ship, player, undefined, NOWHERE)).toBe('hostile');
     });
 
     it('is friendly when the ship govt allies intersect the player classes', () => {
         const ship = govt({ id: 'nova:200', allies: [1, 12] });
         const player = govt({ id: 'nova:128', classes: [12] });
-        expect(shipDisposition(ship, player)).toBe('friendly');
+        expect(shipDisposition(ship, player, undefined, NOWHERE)).toBe('friendly');
     });
 
     it('is friendly when ship and player share a government', () => {
         const ship = govt({ id: 'nova:128' });
         const player = govt({ id: 'nova:128', classes: [1] });
-        expect(shipDisposition(ship, player)).toBe('friendly');
+        expect(shipDisposition(ship, player, undefined, NOWHERE)).toBe('friendly');
     });
 
     it('prefers hostile over friendly when both would apply', () => {
         const ship = govt({ id: 'nova:200', enemies: [10], allies: [10] });
         const player = govt({ id: 'nova:128', classes: [10] });
-        expect(shipDisposition(ship, player)).toBe('hostile');
+        expect(shipDisposition(ship, player, undefined, NOWHERE)).toBe('hostile');
     });
 
     it('is neutral for an unrelated government', () => {
         const ship = govt({ id: 'nova:200', enemies: [2], allies: [3] });
         const player = govt({ id: 'nova:128', classes: [10] });
-        expect(shipDisposition(ship, player)).toBe('neutral');
+        expect(shipDisposition(ship, player, undefined, NOWHERE)).toBe('neutral');
     });
 });
 

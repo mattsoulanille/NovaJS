@@ -7,7 +7,7 @@ import { Subscription } from 'rxjs';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, GovtComponent,
-    SoundEvent, isPort, landable, displayName,
+    SoundEvent, isPort, landable, displayName, SystemIdResource,
 } from '../nova_plugin/core/index.js';
 import {
     DisabledComponent, SourceComponent, FuelComponent, OutfitsStateComponent, ShipDataComponent,
@@ -26,7 +26,7 @@ import {
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
-    shipDisposition, LegalRecordsComponent,
+    shipDisposition, LegalRecordsComponent, loadLocalLaw,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -452,7 +452,13 @@ export async function computeContext(world: World,
             ? await gameData.data.Pers.get(persComponent.id).catch(() => undefined)
             : undefined;
         const aiType = shipTarget.components.get(NpcComponent)?.aiType;
-        const disposition = shipDisposition(govt, playerGovt, playerRecords);
+        // The law of THIS system judges a criminal record (reference
+        // A14, ruling #376) — loaded before isIffHostile below, whose
+        // synchronous read of the same caches then agrees with it.
+        const systemId = world.resources.get(SystemIdResource);
+        const law = await loadLocalLaw(gameData, systemId);
+        const disposition = shipDisposition(govt, playerGovt, playerRecords,
+            law);
         // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on
         // #297): the one predicate the target corners paint with
         // (hostility.ts's isIffHostile) — recent aggression and another
@@ -464,7 +470,8 @@ export async function computeContext(world: World,
         const iffHostile = isIffHostile(shipTargetUuid, shipTarget,
             player.uuid, player.entity, gameData,
             uuid => world.entities.get(uuid),
-            world.resources.get(SimulationTimeResource)?.time ?? 0);
+            world.resources.get(SimulationTimeResource)?.time ?? 0,
+            systemId);
 
         const shipData = shipTarget.components.get(ShipDataComponent);
         // pers.hailPict is ALREADY a global id (the parser emits e.g.

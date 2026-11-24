@@ -7,7 +7,8 @@ import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { CloakDrainSystem, OutfitsState, OutfitsStateComponent } from '../ship/index.js';
-import { LegalRecords, recordHostile, recordWith } from './reputation.js';
+import { LegalRecords } from './reputation.js';
+import { criminalHere, LocalLaw } from './local_law.js';
 import { StellarClearance } from './stellar_clearance.js';
 
 /**
@@ -90,16 +91,19 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
  *     (alwaysAttacksPlayer, or xenophobic which "attacks everyone except
  *     allies"). neverAttacksPlayer overrides these to non-hostile.
  *  2. The ship's govt `enemies` classes intersect the player's govt classes.
- *  3. The player's legal record with the ship's govt is below -CrimeTol
- *     (the Bible's warships-attack-criminals threshold) — the same rule
- *     the sim's target selection uses (govtDispositionTo).
+ *  3. The ship's govt enforces the law of the CURRENT system and the
+ *     player's record there is below its -CrimeTol (local_law.ts's
+ *     criminalHere, reference A14 / ruling #376) — the same rule the
+ *     sim's target selection uses (govtDispositionTo). `law` is the law
+ *     in force where the player is (localLawIn for the world's system).
  * Friendliness (only if not hostile): the ship's govt `allies` classes
  * intersect the player's govt classes, or ship and player share a government.
  * Everything else is neutral.
  */
 export function shipDisposition(shipGovt: GovtData | undefined,
     playerGovt: GovtData | undefined,
-    playerRecords?: LegalRecords,
+    playerRecords: LegalRecords | undefined,
+    law: LocalLaw,
     /**
      * ränk 0x0100 for THIS ship's government ("Ships of the affiliated
      * government will not automatically attack the player when he has this
@@ -119,9 +123,7 @@ export function shipDisposition(shipGovt: GovtData | undefined,
         if (playerGovt && intersects(shipGovt.enemies, playerGovt.classes)) {
             return 'hostile';
         }
-        if (playerRecords && recordHostile(
-            recordWith(playerRecords, shipGovt.id, shipGovt),
-            shipGovt.crimeTol)) {
+        if (playerRecords && criminalHere(shipGovt, playerRecords, law)) {
             return 'hostile';
         }
     }

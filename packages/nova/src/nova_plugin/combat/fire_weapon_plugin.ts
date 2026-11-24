@@ -40,7 +40,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { applyExitPoint, closestExitPointIndex, ExitPointData, getExitPointData } from './exit_point.js';
 import { FiringGroup, FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from './flock.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { firstOrderWithFallback } from './guidance.js';
 import { isHostileTarget } from './hostility.js';
@@ -275,7 +275,8 @@ const SubsQuery = new Query([WeaponEntries, MovementStateComponent, Optional(Sub
 
 const ConstructorQuery = new Query([Entities, Emit, WeaponEntries,
     RandomResource, IdFactoryResource, TimeResource,
-    SimulationGameDataResource, SingletonComponent] as const);
+    SimulationGameDataResource, Optional(SystemIdResource),
+    SingletonComponent] as const);
 
 const PointDefenseQuery = new Query([MovementStateComponent, Optional(OwnerComponent),
     UUID, Optional(TargetComponent), GetEntity, VulnerableToPD] as const);
@@ -339,11 +340,18 @@ export abstract class WeaponEntry {
      * reads government data.
      */
     protected gameData: SimulationGameDataInterface;
+    /**
+     * The world's own system, for the same hostility question: a criminal
+     * record is judged by the law of the system it is in (reference A14,
+     * reputation/local_law.ts). Constant for the world's lifetime.
+     */
+    protected systemId: string | undefined;
     protected abstract pointDefenseRangeSquared: number;
     constructor(public data: WeaponData, protected runQuery: RunQueryFunction) {
         let weaponEntries: Gettable<WeaponEntry | undefined>;
         [this.entities, this.emit, weaponEntries, this.random, this.ids,
-            this.time, this.gameData] = runQuery(ConstructorQuery)[0];
+            this.time, this.gameData, this.systemId] =
+            runQuery(ConstructorQuery)[0];
         if ('submunitions' in this.data) {
             for (const sub of this.data.submunitions) {
                 weaponEntries.get(sub.id);
@@ -459,6 +467,7 @@ export abstract class WeaponEntry {
                     entities: this.entities,
                     gameData: this.gameData,
                     now: this.time.time,
+                    systemId: this.systemId,
                 }),
                 // Checked for MISSILES too, and deliberately: a shot
                 // fired by our escort carries that escort as its owner,

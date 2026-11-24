@@ -16,7 +16,7 @@ import { System } from 'nova_ecs/system';
 import SAT from "sat";
 import { CollisionSystem, CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent } from '../core/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { isInFlock } from './flock.js';
@@ -436,6 +436,7 @@ export const BeamCollisionSystem = new System({
                     hostile: isShip && isHostileTarget(collision.other, other, {
                         viewerUuid, viewerEntity, entities,
                         gameData, now: time.time,
+                        systemId: world.resources.get(SystemIdResource),
                     }),
                     inFlock: isInFlock(collision.other, viewerUuid, getEntity)
                         || (viewerUuid !== sourceUuid

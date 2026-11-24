@@ -16,14 +16,22 @@ import { GovtData } from 'novadatainterface/govt_data';
  * (the Bible's starting record), so fresh pilots need no per-govt
  * initialization pass.
  *
- * CRIME AND PROPAGATION (Bible, gövt): destroying a govt's ship adds
- * KillPenalty evilness with that govt, disabling adds DisabPenalty
- * (boarding/smuggling: BoardPenalty/SmugPenalty — not wired yet).
- * "Doing evil deeds to one government will improve your rating with
- * its enemies, and vice versa. Allied governments also communicate
- * your actions, so attacking one government will make its allies hate
- * you too." The Bible does not give the ally/enemy fractions; NovaJS
- * uses half the penalty, truncated (see PROPAGATION_DIVISOR).
+ * CRIME (Bible, gövt): destroying a govt's ship adds KillPenalty
+ * evilness with that govt, disabling adds DisabPenalty, boarding adds
+ * BoardPenalty (smuggling: SmugPenalty — not wired yet).
+ *
+ * NO PROPAGATION. The Bible says allies "communicate your actions" and
+ * enemies approve, but the original, measured, does not spread a crime
+ * at all: one kill changed ONLY the current system's record (-150 =
+ * DisabPenalty 50 + KillPenalty 100), leaving the owner's nine other
+ * systems and the ally's home system at 0 (docs/reference_experiments.md
+ * "A14 wave 5"). Ruling #376 (Matthew, 2026-11-23) applied that: the
+ * crime is charged to the victim's govt alone — which, with per-govt
+ * records, is "the record in the systems it owns" — and its allies and
+ * enemies are untouched (this superseded #320 item 1, the size of the
+ * propagated fraction, by removing it). The allies still CARE: they
+ * enforce the owner's record in its systems (local_law.ts), which is how
+ * the original makes an ally hostile to a criminal.
  *
  * Most stock gövts DO set their penalty fields (57 of the 68 stock
  * govts carry a non-zero KillPenalty — the Federation's is 5, the
@@ -65,14 +73,6 @@ export const DEFAULT_DISABLE_PENALTY = 2;
 /** Boarding/pirating a ship (boarding_plugin.ts) when the govt leaves
  * BoardPenalty at 0. */
 export const DEFAULT_BOARD_PENALTY = 3;
-
-/**
- * Ally/enemy propagation: allies of the wronged govt apply the penalty
- * divided by this (truncated); enemies credit the same amount. A
- * NovaJS judgment call — the Bible documents the propagation but not
- * its magnitude.
- */
-export const PROPAGATION_DIVISOR = 2;
 
 /** Records are int16 in the original pilot file; clamp to its range. */
 const RECORD_MIN = -32767;
@@ -122,7 +122,7 @@ export type Crime = 'kill' | 'disable' | 'board';
  * Wraith standing for shooting a derelict, and read as "unset -> engine
  * default" they would be charged as for a typical govt; neither is what
  * that author meant. So a negative field is "this govt does not care":
- * the crime costs nothing and propagates nothing (#108).
+ * the crime costs nothing (#108).
  */
 export function crimePenalty(govt: GovtData, crime: Crime): number {
     const field = crime === 'kill' ? govt.killPenalty
@@ -139,42 +139,16 @@ export function crimePenalty(govt: GovtData, crime: Crime): number {
 
 /**
  * Applies a crime against `victimGovt` to `records`: the full penalty
- * with the victim's govt, minus the propagated fraction with its
- * allies, plus the same fraction with its enemies (Bible: allies
- * communicate your actions; enemies approve). `allGovts` is iterated
- * in the given order — callers must supply a deterministically ordered
- * collection when this runs in the simulation.
+ * with the victim's govt, and nothing with any other govt (reference
+ * "A14 wave 5", ruling #376; see the module comment).
  */
 export function applyCrime(records: LegalRecords, victimGovt: GovtData,
-    crime: Crime,
-    allGovts: Iterable<readonly [string, GovtData]>): void {
+    crime: Crime): void {
     const penalty = crimePenalty(victimGovt, crime);
     if (penalty === 0) {
         return; // A govt that does not care (negative field): no entry.
     }
     addRecord(records, victimGovt.id, victimGovt, -penalty);
-    const propagated = Math.trunc(penalty / PROPAGATION_DIVISOR);
-    if (propagated === 0) {
-        return;
-    }
-    for (const [id, govt] of allGovts) {
-        if (id === victimGovt.id) {
-            continue;
-        }
-        let delta = 0;
-        // Relations are evaluated from the onlooker's side, like
-        // govtDisposition: an "ally of the victim" is a govt whose
-        // ally classes include one of the victim's classes.
-        if (intersects(govt.allies, victimGovt.classes)) {
-            delta -= propagated;
-        }
-        if (intersects(govt.enemies, victimGovt.classes)) {
-            delta += propagated;
-        }
-        if (delta !== 0) {
-            addRecord(records, id, govt, delta);
-        }
-    }
 }
 
 /**

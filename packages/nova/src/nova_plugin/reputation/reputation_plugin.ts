@@ -94,8 +94,9 @@ export const DamageAttributionComponent =
 /**
  * Every gövt in the scenario, keyed by global id in SORTED id order,
  * set by makeSystem before the world steps. Static data (never
- * mutated), staged up front so record propagation over allies/enemies
- * is synchronous and identical on every peer.
+ * mutated), staged up front so the record and rank checks that consult
+ * arbitrary govts (ränk revocation, the local-law hostility test) are
+ * synchronous and identical on every peer.
  */
 export const GovtsResource =
     new Resource<Map<string, GovtData>>('GovtsResource');
@@ -105,9 +106,9 @@ const DamagerQuery = new Query([Optional(FiringGroupComponent),
 
 /**
  * Charges a crime against `victimGovt` to the responsible root entity —
- * a player's ship — in full: the legal-record penalty with propagation
- * (reputation.ts's applyCrime) AND the ränk revocations the crime
- * triggers (rank_logic's revokeRanksForCrime, flags 0x0004 / 0x0040),
+ * a player's ship — in full: the legal-record penalty with the victim's
+ * govt (reputation.ts's applyCrime; no ally/enemy propagation) AND the
+ * ränk revocations the crime triggers (rank_logic's revokeRanksForCrime, flags 0x0004 / 0x0040),
  * re-baking the 0x0100 suppression set the NPC brains read whenever a
  * rank falls. One entry point for the kill, disable and boarding credit
  * systems, so a crime carries the same consequences however it was
@@ -123,7 +124,7 @@ export function chargeCrime(root: Entity, victimGovt: GovtData,
     govts: ReadonlyMap<string, GovtData> | undefined): void {
     const records = root.components.get(LegalRecordsComponent);
     if (records) {
-        applyCrime(records, victimGovt, crime, govts ?? []);
+        applyCrime(records, victimGovt, crime);
     }
     const ranks = root.components.get(ActiveRanksComponent);
     if (!ranks || ranks.size === 0) {
@@ -184,7 +185,7 @@ const DamageAttributionSystem = new System({
  * Credits a kill when a ship's armor reaches zero: the responsible
  * root's combat rating grows by the victim's shïp Strength (Appendix
  * I), and — when the victim has a government — the root's legal
- * records take that govt's kill penalty with ally/enemy propagation.
+ * records take that govt's kill penalty (no ally/enemy propagation).
  * Roots without the components (NPCs) are unaffected.
  */
 export const KillCreditSystem = new System({
@@ -233,7 +234,7 @@ export const KillCreditSystem = new System({
 /**
  * Applies the disable penalty once per disablement: when a govt ship
  * carries DisabledComponent and its last damager root has legal
- * records, that player takes the DisabPenalty (with propagation).
+ * records, that player takes the DisabPenalty.
  * The guard resets when the ship is repaired, so disabling it again
  * counts again. Dead ships (armor 0 — a hulk mid-explosion is
  * "below the disable threshold" too) charge the KILL penalty only.

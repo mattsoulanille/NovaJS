@@ -14,7 +14,9 @@ import {
     CloakActiveComponent, CloakActiveState, CloakCapability, CloakComponent, deriveCloakScanner,
     DisabledComponent, OutfitsStateComponent, sumOutfitField, ShipDataComponent, TargetComponent,
 } from '../nova_plugin/ship/index.js';
-import { SimulationGameDataResource, landable } from '../nova_plugin/core/index.js';
+import {
+    SimulationGameDataResource, SystemIdResource, landable,
+} from '../nova_plugin/core/index.js';
 import {
     deriveIff, planetBlipColor, planetDisposition, shipBlipColor,
     Disposition, LegalRecordsComponent, TargetCornerStyle,
@@ -537,9 +539,9 @@ export const DrawRadar = new System({
     new Query([UUID, MovementStateComponent, PlanetDataComponent,
         PlanetComponent] as const),
         SimulationGameDataResource, GetEntity, UUID, Entities,
-        PlayerShipSelector] as const,
+        PlayerShipSelector, Optional(SystemIdResource)] as const,
     step(radarTime, { time }, simTime, statusBar, { position }, ships, planets,
-        gameData, entity, playerUuid, entities) {
+        gameData, entity, playerUuid, entities, _player, systemId) {
         if (!radarTime) {
             radarTime = { lastRefresh: NaN };
             entity.components.set(RadarTime, radarTime);
@@ -607,7 +609,7 @@ export const DrawRadar = new System({
                     hasIff && disabled === undefined && uuid !== playerUuid
                         ? blipDisposition(styleForTarget(uuid, shipEntity,
                             playerUuid, entity, gameData, getEntity,
-                            simTime.time))
+                            simTime.time, systemId))
                         : 'neutral',
                     hasIff, disabled !== undefined);
                 if (color !== undefined) {

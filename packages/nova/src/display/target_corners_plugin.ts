@@ -1,4 +1,5 @@
 import { Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Resource } from "nova_ecs/resource";
@@ -6,7 +7,9 @@ import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
-import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/index.js";
+import {
+    DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
+} from "../nova_plugin/core/index.js";
 import { styleForTarget } from "../nova_plugin/combat/index.js";
 import { TargetCornerStyle } from "../nova_plugin/reputation/index.js";
 import { PlayerShipSelector } from "../nova_plugin/player/index.js";
@@ -156,9 +159,10 @@ export const DrawTargetCornersSystem = new System({
     name: "DrawTargetCornersSystem",
     args: [TargetComponent, TimeResource, SimulationTimeResource,
         TargetCornersResource, Entities, UUID, GetEntity,
-        SimulationGameDataResource, PlayerShipSelector] as const,
+        SimulationGameDataResource, PlayerShipSelector,
+        Optional(SystemIdResource)] as const,
     step({ target }, time, simulationTime, targetCorners, entities, playerUuid,
-        playerEntity, gameData) {
+        playerEntity, gameData, _player, systemId) {
         if (!target) {
             targetCorners.visible = false;
             targetCorners.targetUuid = undefined;
@@ -176,7 +180,7 @@ export const DrawTargetCornersSystem = new System({
 
         targetCorners.setStyle(styleForTarget(target, targetEntity,
             playerUuid, playerEntity, gameData, uuid => entities.get(uuid),
-            simulationTime.time));
+            simulationTime.time, systemId));
         targetCorners.step(time.time, target, targetGraphic.size);
         targetCorners.setPosition(targetGraphic.container.position);
         targetCorners.visible = true;

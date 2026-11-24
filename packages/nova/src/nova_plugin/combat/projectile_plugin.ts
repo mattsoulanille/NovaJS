@@ -35,7 +35,7 @@ import {
     FiringGroupComponent, firingImmune, victimFiringGroup,
 } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
 import { isHostileTarget } from './hostility.js';
 import { ShipComponent } from '../ship/index.js';
@@ -480,6 +480,7 @@ export const ProjectileCollisionSystem = new System({
                     hostile: isShip && isHostileTarget(collision.other, other, {
                         viewerUuid, viewerEntity, entities,
                         gameData, now: time.time,
+                        systemId: world.resources.get(SystemIdResource),
                     }),
                     inFlock: isInFlock(collision.other, viewerUuid, getEntity)
                         || (viewerUuid !== sourceUuid

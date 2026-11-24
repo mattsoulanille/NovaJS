@@ -20,7 +20,7 @@ import {
 } from '../combat/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { getQuadrant, styleForTarget } from '../combat/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { completeEntity } from '../spawn/index.js';
@@ -1172,7 +1172,8 @@ describe("an escort's hostility matches its owner's target corners", () => {
         return styleForTarget(uuid, world.entities.get(uuid)!, 'player',
             player, world.resources.get(SimulationGameDataResource)!,
             u => world.entities.get(u),
-            world.resources.get(TimeResource)!.time);
+            world.resources.get(TimeResource)!.time,
+            world.resources.get(SystemIdResource));
     }
 
     /** Marks `uuid` as having taken the player's bribe. */

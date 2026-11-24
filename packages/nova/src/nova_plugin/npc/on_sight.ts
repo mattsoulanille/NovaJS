@@ -1,6 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { GovtData } from 'novadatainterface/govt_data';
-import { govtDispositionTo, LegalRecords } from '../reputation/index.js';
+import { govtDispositionTo, LegalRecords, LocalLaw } from '../reputation/index.js';
 import { flockRoot } from './allegiance.js';
 import { NpcComponent } from './npc_component.js';
 
@@ -13,7 +13,8 @@ import { NpcComponent } from './npc_component.js';
  * two. WARSHIPS (AI 3) and INTERCEPTORS (AI 4) hunt every ship their
  * government counts as an enemy (govtDispositionTo 'enemy': the gövt
  * enemies classes, the xenophobic and always-attacks flags, and a legal
- * record below -CrimeTol). TRADERS (AI 1 wimpy, AI 2 brave) never do: they
+ * record in the CURRENT system below -CrimeTol when the government
+ * enforces that system's law — reference A14, local_law.ts). TRADERS (AI 1 wimpy, AI 2 brave) never do: they
  * only react to a ship that has actually shot at them (AI 1 runs, AI 2
  * fights back while the odds hold).
  *
@@ -39,10 +40,11 @@ export function huntsOnSight(aiType: number | undefined): boolean {
 /**
  * Whether a ship flying AI `aiType` for government `selfGovt` attacks a
  * ship of government `otherGovt` (with `otherRecords`, its legal records
- * when it is a player) on sight, before either has fired: it hunts
- * (huntsOnSight) and its government counts the other as an enemy
- * (govtDispositionTo — the same call, with the same ränk 0x0100
- * suppression, that NpcDecisionSystem makes for its hostiles list).
+ * when it is a player) on sight, before either has fired, in a system
+ * where `law` is in force: it hunts (huntsOnSight) and its government
+ * counts the other as an enemy (govtDispositionTo — the same call, with
+ * the same local law and ränk 0x0100 suppression, that NpcDecisionSystem
+ * makes for its hostiles list).
  *
  * Range and MaxOdds are deliberately not part of it. They decide WHEN a
  * hunter engages (an interceptor stays near its planet, a warship
@@ -50,9 +52,10 @@ export function huntsOnSight(aiType: number | undefined): boolean {
  */
 export function attacksOnSight(aiType: number | undefined,
     selfGovt: GovtData | undefined, otherGovt: GovtData | undefined,
-    otherRecords?: LegalRecords, otherRankSuppresses?: boolean): boolean {
+    otherRecords: LegalRecords | undefined, law: LocalLaw,
+    otherRankSuppresses?: boolean): boolean {
     return huntsOnSight(aiType) && govtDispositionTo(selfGovt, otherGovt,
-        otherRecords, otherRankSuppresses) === 'enemy';
+        otherRecords, law, otherRankSuppresses) === 'enemy';
 }
 
 /**

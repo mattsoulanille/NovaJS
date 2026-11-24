@@ -9,7 +9,8 @@ import { OwnerComponent } from '../ship/index.js';
 import { attacksOnSight, isAttackingPlayer, isInFlock, onSightAiType } from '../npc/index.js';
 import { GovtComponent } from '../core/index.js';
 import {
-    Disposition, govtDisposition, LegalRecords, TargetCornerStyle, targetCornerStyle,
+    Disposition, govtDisposition, LegalRecords, LocalLaw, localLawIn,
+    TargetCornerStyle, targetCornerStyle,
 } from '../reputation/index.js';
 import { isPacifiedToward, NpcComponent } from '../npc/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
@@ -126,6 +127,10 @@ export { isAttackingPlayer } from '../npc/index.js';
  * SimulationTimeResource, NOT the display world's wall-clock
  * TimeResource.
  *
+ * `systemId` is the system both ships are in (the world's
+ * SystemIdResource): tier 4's criminal-record test is the law of THAT
+ * system (reference A14, ruling #376, reputation/local_law.ts).
+ *
  * Planets use their own corner instance (planet_corners_plugin) and are
  * unaffected.
  */
@@ -133,7 +138,7 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     playerUuid: string, playerEntity: Entity,
     gameData: SimulationGameDataInterface,
     getEntity: (uuid: string) => Entity | undefined,
-    now: number): TargetCornerStyle {
+    now: number, systemId: string | undefined): TargetCornerStyle {
     // Disabled beats everything, own flock included: gray corners mean
     // "dead in space" whoever the hulk belongs to.
     if (targetEntity.components.has(DisabledComponent)) {
@@ -165,12 +170,13 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     const attackingPlayer = isAttackingPlayer(targetUuid, targetEntity,
         playerUuid, playerEntity, now);
 
-    // The player's legal records (delta-synced): a govt the player is
-    // criminal with makes its HUNTERS hostile, same rule as the sim.
+    // The player's legal records (delta-synced): a criminal record in
+    // THIS system makes the hunters of every govt that enforces its law
+    // hostile, same rule as the sim (reference A14).
     const playerRecords = playerEntity.components.get(LegalRecordsComponent);
     return targetCornerStyle(
         onSightDisposition(targetUuid, targetEntity, targetGovt, playerGovt,
-            playerRecords,
+            playerRecords, localLawIn(gameData, systemId),
             // ränk 0x0100, read off the BAKED synced set rather than the
             // ränk table: the simulation shares this predicate and its
             // worker never loads Rank data (see rank_logic.ts).
@@ -188,7 +194,8 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
  *  - 'hostile': the ship's NPC brain hunts the player on sight
  *    (on_sight.ts's attacksOnSight: a warship or interceptor whose
  *    government counts the player as an enemy, by gövt enemies classes,
- *    the xenophobic or always-attacks flags, or a criminal record). It is
+ *    the xenophobic or always-attacks flags, or a criminal record in the
+ *    system `law` governs, when that government enforces it). It is
  *    the SAME call NpcDecisionSystem makes to build its hostiles list, so
  *    the brackets cannot paint red a ship the brain leaves alone, or the
  *    other way round.
@@ -213,11 +220,12 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
  */
 export function onSightDisposition(targetUuid: string, targetEntity: Entity,
     targetGovt: GovtData | undefined, playerGovt: GovtData | undefined,
-    playerRecords: LegalRecords | undefined,
+    playerRecords: LegalRecords | undefined, law: LocalLaw,
     rankSuppressesAggression: boolean,
     getEntity: (uuid: string) => Entity | undefined): Disposition {
     if (attacksOnSight(onSightAiType(targetUuid, targetEntity, getEntity),
-        targetGovt, playerGovt, playerRecords, rankSuppressesAggression)) {
+        targetGovt, playerGovt, playerRecords, law,
+        rankSuppressesAggression)) {
         return 'hostile';
     }
     return govtDisposition(targetGovt, playerGovt) === 'ally'
@@ -242,9 +250,9 @@ export function isIffHostile(targetUuid: string, targetEntity: Entity,
     playerUuid: string, playerEntity: Entity,
     gameData: SimulationGameDataInterface,
     getEntity: (uuid: string) => Entity | undefined,
-    now: number): boolean {
+    now: number, systemId: string | undefined): boolean {
     return styleForTarget(targetUuid, targetEntity, playerUuid, playerEntity,
-        gameData, getEntity, now) === 'hostile';
+        gameData, getEntity, now, systemId) === 'hostile';
 }
 
 /** Everything selectNearestHostile needs to make its choice. */
@@ -257,6 +265,9 @@ export interface HostileScanContext {
     gameData: SimulationGameDataInterface;
     /** The SIMULATION clock, in milliseconds. */
     now: number;
+    /** The system the scan runs in (its world's SystemIdResource): whose
+     * law decides a criminal record (styleForTarget's `systemId`). */
+    systemId: string | undefined;
 }
 
 /**
@@ -273,7 +284,7 @@ export function isHostileTarget(targetUuid: string, targetEntity: Entity,
     ctx: HostileScanContext): boolean {
     return isIffHostile(targetUuid, targetEntity, ctx.viewerUuid,
         ctx.viewerEntity, ctx.gameData,
-        uuid => entityFrom(ctx.entities, uuid), ctx.now);
+        uuid => entityFrom(ctx.entities, uuid), ctx.now, ctx.systemId);
 }
 
 /**

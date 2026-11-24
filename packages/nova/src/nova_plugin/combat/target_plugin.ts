@@ -16,7 +16,7 @@ import { CloakActiveComponent, CloakScannerComponent, isTargetable } from "../sh
 import { DisabledComponent } from "../ship/index.js";
 import { OwnerComponent } from '../ship/index.js';
 import { isInFlock } from "./flock.js";
-import { SimulationGameDataResource } from "../core/index.js";
+import { SimulationGameDataResource, SystemIdResource } from "../core/index.js";
 import { selectNearestHostile } from "./hostility.js";
 import { PlayerShipSelector } from "../player/index.js";
 import { ShipComponent } from "../ship/index.js";
@@ -48,13 +48,13 @@ export const ChooseTargetSystem = new System({
     args: [ShipControlStateComponent, TargetComponent, TargetIndexComponent, UUID,
         TargetsQuery, Emit, MovementStateComponent, Entities,
         Optional(CloakScannerComponent), SimulationGameDataResource,
-        TimeResource] as const,
+        TimeResource, Optional(SystemIdResource)] as const,
     // MovementStateComponent is kept as a requirement rather than a
     // value: it gates the system on a ship that is actually in space,
     // and the nearest-hostile scan reads the position off the entity
     // itself (selectNearestHostile) so sim and display share one path.
     step(controlState, target, index, uuid, ships, emit, _movementState,
-        entities, myScanner, gameData, time) {
+        entities, myScanner, gameData, time, systemId) {
         // The ship's own flock — escorts and anything transitively
         // following them (see flock.ts) — is excluded from general
         // targeting (tab / r) and cycled by escortTarget instead.
@@ -124,6 +124,7 @@ export const ChooseTargetSystem = new System({
                 entities,
                 gameData,
                 now: time.time,
+                systemId,
             });
             if (closestUuid === undefined) {
                 // Nothing hostile in the system: LEAVE THE TARGET (or

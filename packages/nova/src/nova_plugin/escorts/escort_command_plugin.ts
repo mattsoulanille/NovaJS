@@ -22,7 +22,7 @@ import {
     EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersComponent,
 } from '../player/index.js';
 import { OwnerComponent } from '../ship/index.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { ExplodingComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
@@ -32,7 +32,9 @@ import { onSightDisposition } from '../combat/index.js';
 import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import { NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
-import { LegalRecordsComponent, LegalRecordsState } from '../reputation/index.js';
+import {
+    LegalRecordsComponent, LegalRecordsState, LocalLaw, localLawIn,
+} from '../reputation/index.js';
 import { EscortLandingComponent, PlayerEscortComponent } from '../player/index.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
@@ -389,6 +391,9 @@ export interface EscortHostilityContext {
     rootEntity?: Entity;
     /** The owner's legal records. */
     rootRecords?: LegalRecordsState;
+    /** The law in force in this system: whose record makes a govt's
+     * hunters hostile to a criminal owner (reference A14, local_law.ts). */
+    law: LocalLaw;
     /** The SIMULATION clock, in milliseconds (TimeResource.time). */
     now: number;
     /** Entity lookup, for the own-flock tier (flock.ts's isInFlock). */
@@ -479,7 +484,7 @@ export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
     const otherGovt =
         lookupGovt(ctx.gameData, other.components.get(GovtComponent));
     const disposition = onSightDisposition(otherUuid, other, otherGovt,
-        ctx.rootGovt, ctx.rootRecords,
+        ctx.rootGovt, ctx.rootRecords, ctx.law,
         ranksSuppressAggression(ctx.rootEntity?.components
             .get(AggressionSuppressGovtsComponent), otherGovt?.id),
         ctx.getEntity);
@@ -690,9 +695,11 @@ export const EscortCommandBehaviorSystem = new System({
         ShipPhysicsComponent, WeaponsStateComponent, TargetComponent,
         UUID, GetEntity, Entities, HostileCandidatesQuery, TimeResource,
         SimulationGameDataResource, Optional(EscortLandingComponent),
-        Optional(JumpComponent), Optional(DisabledComponent)] as const,
+        Optional(JumpComponent), Optional(DisabledComponent),
+        Optional(SystemIdResource)] as const,
     step(command, movement, physics, weapons, target, uuid, entity,
-        entities, candidates, time, gameData, landing, jump, disabled) {
+        entities, candidates, time, gameData, landing, jump, disabled,
+        systemId) {
         if (disabled) {
             // A hulk drifts and does not shoot. Same reasoning as the jump
             // bail below and as FormationSystem's disabled bail: steerHold
@@ -763,11 +770,13 @@ export const EscortCommandBehaviorSystem = new System({
         const rootGovt = lookupGovt(gameData,
             rootEntity?.components.get(GovtComponent));
         // The owner's legal records: govts hostile to a criminal owner
-        // are hostile to the escort's defend/patrol brain too.
+        // (by the law of THIS system) are hostile to the escort's
+        // defend/patrol brain too.
         const rootRecords =
             rootEntity?.components.get(LegalRecordsComponent);
         const hostility: EscortHostilityContext = {
-            rootGovt, gameData, rootEntity, rootRecords, now: time.time,
+            rootGovt, gameData, rootEntity, rootRecords,
+            law: localLawIn(gameData, systemId), now: time.time,
             getEntity: (id: string) => entities.get(id),
         };
 

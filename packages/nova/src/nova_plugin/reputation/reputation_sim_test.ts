@@ -21,12 +21,10 @@ import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/i
  * fallbacks: KillPenalty 20, DisabPenalty 5.
  */
 const MERIDIAN = SYNTHETIC.govts.meridian;
-/** Meridian's allies list names its class (1), so it takes half. */
+/** Meridian's allies list names its class (1). */
 const ALLY = SYNTHETIC.govts.compact;
-/** The Verge Raiders' enemies list names Meridian's class: they credit half. */
+/** The Verge Raiders' enemies list names Meridian's class. */
 const ENEMY = SYNTHETIC.govts.raiders;
-/** The Raiders' gövt InitialRec: every record with them starts here. */
-const RAIDER_INITIAL_RECORD = -10;
 const MERIDIAN_KILL_PENALTY = 20;
 const MERIDIAN_DISABLE_PENALTY = 5;
 
@@ -62,7 +60,7 @@ describe('reputation in a live world', () => {
         return player;
     }
 
-    it('credits a kill: record drop, propagation, and rating', async () => {
+    it('credits a kill: record drop (Meridian only) and rating', async () => {
         const { gameData, world } = await makeWorld();
         const player = await addPlayer(world, gameData);
 
@@ -97,16 +95,13 @@ describe('reputation in a live world', () => {
             .toEqual({ root: PLAYER, killCredited: true, disabledAtHit: false });
         const records = player.components.get(LegalRecordsComponent)!;
         expect(records.get(MERIDIAN)).toBe(-MERIDIAN_KILL_PENALTY);
-        // Ally (Amber Compact) and enemy (Verge Raiders) propagation,
-        // over the scenario's real relation map. A propagated record is
-        // applied on top of the govt's InitialRec: the Compact's is 0,
-        // the Raiders' is -10 (they think ill of everyone to begin
-        // with), so approving the kill lifts theirs from -10 to 0.
-        expect(records.get(ALLY))
-            .toBe(-Math.trunc(MERIDIAN_KILL_PENALTY / 2));
-        expect(records.get(ENEMY))
-            .toBe(RAIDER_INITIAL_RECORD
-                + Math.trunc(MERIDIAN_KILL_PENALTY / 2));
+        // No ally or enemy propagation (reference "A14 wave 5", ruling
+        // #376): the Amber Compact (Meridian's ally) and the Verge
+        // Raiders (its enemy) are untouched, over the scenario's real
+        // relation map.
+        expect(records.has(ALLY)).toBeFalse();
+        expect(records.has(ENEMY)).toBeFalse();
+        expect(records.size).toBe(1);
         expect(player.components.get(CombatRatingComponent)!.kills)
             .toBe(victimData.strength);
 

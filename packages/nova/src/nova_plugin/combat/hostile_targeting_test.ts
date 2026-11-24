@@ -3,6 +3,7 @@ import { isLeft } from 'fp-ts/lib/Either.js';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { WeaponDamage } from 'novadatainterface/weapon_data';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Entity } from 'nova_ecs/entity';
@@ -19,7 +20,7 @@ import { DamagedEvent, ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
-import { SimulationGameDataResource } from '../core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { applyHail } from '../encounters/index.js';
 import {
@@ -141,6 +142,7 @@ function displaySelection(world: World) {
         entities: world.entities,
         gameData: world.resources.get(SimulationGameDataResource)!,
         now: world.resources.get(TimeResource)!.time,
+        systemId: world.resources.get(SystemIdResource),
     });
 }
 
@@ -150,7 +152,8 @@ function cornerStyle(world: World, uuid: string) {
     return styleForTarget(uuid, world.entities.get(uuid)!, 'player', player,
         world.resources.get(SimulationGameDataResource)!,
         u => world.entities.get(u),
-        world.resources.get(TimeResource)!.time);
+        world.resources.get(TimeResource)!.time,
+        world.resources.get(SystemIdResource));
 }
 
 const NO_DAMAGE: WeaponDamage = {
@@ -201,6 +204,13 @@ describe('the brain and the brackets agree on who is hostile (K9)', () => {
         const built = await makeWorld();
         const lawful = govt({ id: LAWFUL, crimeTol: 10 });
         built.gameData.data.Govt.map.set(LAWFUL, lawful);
+        // The system is the lawful govt's own: a criminal record counts by
+        // the law of the system it is in (reference A14, local_law.ts).
+        // Re-got so the caches the sim reads synchronously see it.
+        built.gameData.data.System.map.set('test:system',
+            { ...getDefaultSystemData(), id: 'test:system', govt: LAWFUL });
+        await built.gameData.data.System.get('test:system');
+        await built.gameData.data.Govt.get(LAWFUL);
         const govtId = criminal ? LAWFUL : PIRATES;
         await built.addShip('player', 0, ship => {
             ship.components.set(ControlledByComponent, { peerId: PEER });
@@ -692,6 +702,7 @@ describe('a ship bought off with a bribe reads NEUTRAL to the briber', () => {
                 entities: world.entities,
                 gameData: world.resources.get(SimulationGameDataResource)!,
                 now: world.resources.get(TimeResource)!.time,
+                systemId: world.resources.get(SystemIdResource),
             }),
             inFlock: false,
         }, { owner: 'player', source: 'player', rangeSquared: 1_000_000 });
@@ -747,7 +758,8 @@ describe('a ship bought off with a bribe reads NEUTRAL to the briber', () => {
         expect(styleForTarget('pirate', world.entities.get('pirate')!,
             'rival', rival, world.resources.get(SimulationGameDataResource)!,
             u => world.entities.get(u),
-            world.resources.get(TimeResource)!.time)).toBe('hostile');
+            world.resources.get(TimeResource)!.time,
+            world.resources.get(SystemIdResource))).toBe('hostile');
     });
 
     it('goes hostile again the instant the reprieve lapses', async () => {

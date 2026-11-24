@@ -17,12 +17,24 @@ import {
 
 const PLAYER = 'player uuid';
 
-/** A gameData stub exposing only the Govt.getCached the rule reads. */
+/**
+ * A system owned by govt nova:370, the K9 run's lawful govt: a criminal
+ * record counts by the law of the system it is in (reference A14), so the
+ * record-hostility specs below stand in this one.
+ */
+const OWN_370_SYSTEM = 'nova:2110';
+
+/** A gameData stub exposing only the Govt / System getCached the rule
+ * reads. */
 function mockGameData(govts: { [id: string]: GovtData | undefined }) {
     return {
         data: {
             Govt: {
                 getCached: (id: string) => govts[id],
+            },
+            System: {
+                getCached: (id: string) => id === OWN_370_SYSTEM
+                    ? { govt: 'nova:370' } : undefined,
             },
         },
     } as never;
@@ -50,7 +62,7 @@ describe('styleForTarget (target corner selection)', () => {
     function style(uuid: string, entities: { [uuid: string]: Entity },
         playerEntity = player, now = 0) {
         return styleForTarget(uuid, entities[uuid], PLAYER, playerEntity,
-            gameData, u => entities[u], now);
+            gameData, u => entities[u], now, undefined);
     }
 
     it('shows neutral corners for a trader going about its business', () => {
@@ -261,7 +273,7 @@ describe('styleForTarget: hostility is the ship\'s, not its govt\'s (K9)',
             const entities: { [uuid: string]: Entity } =
                 { target, ...extra };
             return styleForTarget('target', target, PLAYER, playerEntity,
-                gameData, u => entities[u], 0);
+                gameData, u => entities[u], 0, OWN_370_SYSTEM);
         }
 
         it('gövt 0x0004: an AI 1 trader is neutral, a warship hostile', () => {

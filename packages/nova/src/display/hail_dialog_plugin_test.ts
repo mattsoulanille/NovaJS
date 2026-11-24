@@ -1344,7 +1344,7 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
             await computeContext(world, gameData);
             return styleForTarget(TARGET, world.entities.get(TARGET)!, PLAYER,
                 world.entities.get(PLAYER)!, gameData,
-                uuid => world.entities.get(uuid), NOW);
+                uuid => world.entities.get(uuid), NOW, undefined);
         }
 
         it('shows a fleeing RECENT AGGRESSOR as hostile, with Beg For Mercy '

@@ -6,7 +6,9 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
-import { ControlsSubject, SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import {
+    ControlsSubject, SimulationGameDataResource, SystemIdResource,
+} from '../nova_plugin/core/index.js';
 import {
     DisabledComponent, FuelComponent, FUEL_PER_JUMP, ShipComponent, ShipPhysicsComponent,
     TargetComponent, WeaponsStateComponent,
@@ -135,9 +137,9 @@ export const FirstHostileBeepSystem = new System({
     name: 'FirstHostileBeep',
     args: [Entities, SimulationGameDataResource, SimulationTimeResource,
         UiSoundTriggerStateResource, UUID, GetEntity, Emit,
-        PlayerShipSelector] as const,
+        PlayerShipSelector, Optional(SystemIdResource)] as const,
     step(entities, gameData, simulationTime, state, playerUuid, playerEntity,
-        emit) {
+        emit, _player, systemId) {
         let anyHostile = false;
         for (const [uuid, entity] of entities) {
             if (uuid === playerUuid || !entity.components.has(ShipComponent)) {
@@ -145,7 +147,7 @@ export const FirstHostileBeepSystem = new System({
             }
             if (styleForTarget(uuid, entity, playerUuid, playerEntity,
                 gameData, u => entities.get(u),
-                simulationTime.time) === 'hostile') {
+                simulationTime.time, systemId) === 'hostile') {
                 anyHostile = true;
                 break;
             }
@@ -254,6 +256,7 @@ function playerNearestHostileRefused(world: World): boolean {
             entities: world.entities,
             gameData,
             now,
+            systemId: world.resources.get(SystemIdResource),
         }) === undefined;
     }
     return false;

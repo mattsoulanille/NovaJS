@@ -30,8 +30,8 @@ import { ControlBitsComponent } from '../ncb/index.js';
 
 /**
  * Reputation against the REAL Nova game data: pins the stock govts'
- * penalty landscape, the ally/enemy propagation across the real
- * political map, and real missions' AvailRecord/AvailRating/PayVal
+ * penalty landscape (a crime charges the victim's govt alone, ruling
+ * #376), and real missions' AvailRecord/AvailRating/PayVal
  * encodings.
  *
  * NOTE: these tests parse base "Nova Files" only. An earlier version
@@ -157,27 +157,25 @@ describe('reputation against real Nova data', () => {
                 getGovt)).toBe('Minor Offender');
         });
 
-    it('killing a Federation ship propagates across the real map',
+    it('killing a Federation ship charges the Federation alone (A14 wave 5)',
         async () => {
             const govts = await allGovts();
             const fed = govts.find(([id]) => id === 'nova:128')![1];
             const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill', govts);
+            applyCrime(records, fed, 'kill');
 
             // The Federation's OWN KillPenalty (5), not the engine
             // default — the two happen to be the same number, so pin
             // the source explicitly.
             expect(fed.killPenalty).toBe(5);
             expect(records.get('nova:128')).toBe(-fed.killPenalty);
-            // The Bureau (allies include class 1, the Federation's):
-            // hates you half as much.
-            expect(records.get('nova:153'))
-                .toBe(-Math.trunc(fed.killPenalty / 2));
-            // The Auroran Empire (enemies include class 1): approves.
-            expect(records.get('nova:129'))
-                .toBe(Math.trunc(fed.killPenalty / 2));
-            // The Polaris have no relation to class 1: indifferent.
+            // No propagation (ruling #376): the Bureau (its ally), the
+            // Auroran Empire (its enemy) and the Polaris (unrelated) are
+            // all untouched.
+            expect(records.has('nova:153')).toBe(false);
+            expect(records.has('nova:129')).toBe(false);
             expect(records.has('nova:130')).toBe(false);
+            expect(records.size).toBe(1);
         });
 
     it('two Federation kills cross CrimeTol 6 and turn them hostile',
@@ -190,12 +188,12 @@ describe('reputation against real Nova data', () => {
             expect(fed.crimeTol).toBe(6);
 
             const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill', govts);
+            applyCrime(records, fed, 'kill');
             expect(records.get('nova:128')).toBe(-5);
             expect(recordHostile(records.get('nova:128')!, fed.crimeTol))
                 .toBe(false);
 
-            applyCrime(records, fed, 'kill', govts);
+            applyCrime(records, fed, 'kill');
             expect(records.get('nova:128')).toBe(-10);
             expect(recordHostile(records.get('nova:128')!, fed.crimeTol))
                 .toBe(true);
@@ -209,7 +207,7 @@ describe('reputation against real Nova data', () => {
             expect(vellos.crimeTol).toBe(9);
 
             const records: LegalRecords = new Map();
-            applyCrime(records, vellos, 'kill', govts);
+            applyCrime(records, vellos, 'kill');
             expect(records.get('nova:136')).toBe(-40);
             expect(recordHostile(records.get('nova:136')!, vellos.crimeTol))
                 .toBe(true);

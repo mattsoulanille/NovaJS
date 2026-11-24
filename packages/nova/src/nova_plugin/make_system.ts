@@ -111,8 +111,8 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     const [systemData, allIds] = await Promise.all([
         gameData.data.System.get(systemId), gameData.ids]);
     // Stage EVERY gövt (they are tiny) and publish them as a resource
-    // in sorted-id order: reputation record propagation and criminal-
-    // hostility checks consult arbitrary govts synchronously, and the
+    // in sorted-id order: ränk revocation and criminal-hostility
+    // checks consult arbitrary govts synchronously, and the
     // sorted order makes record-map materialization deterministic on
     // every peer regardless of the data source's id ordering.
     const govtEntries = Promise.all([...allIds.Govt].sort().map(

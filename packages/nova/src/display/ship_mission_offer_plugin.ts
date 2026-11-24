@@ -17,7 +17,9 @@ import {
     makeDescTextContext, playerGender, ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb/index.js';
 import { DisabledComponent, ShipComponent } from '../nova_plugin/ship/index.js';
-import { shipDisposition, LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
+import {
+    loadLocalLaw, shipDisposition, LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
 import {
     AcceptedMission, ShipOfferSpentComponent, MissionOffer, buildAcceptedMissionShips,
     expandMissionText, offerAutoAccepts, RefusedMission,
@@ -163,6 +165,10 @@ export async function shipOfferGates(world: World, target: Entity,
         ? await gameData.data.Govt.get(playerGovtId).catch(() => undefined)
         : undefined;
     const records = player?.entity.components.get(LegalRecordsComponent);
+    // A criminal record counts by the law of THIS system (reference A14,
+    // ruling #376), as in every other hostility verdict.
+    const law = await loadLocalLaw(gameData,
+        world.resources.get(SystemIdResource));
     // Tier 3 of the one hostility rule (hostility.ts's isAttackingPlayer),
     // not a narrower NPC-posture copy of it: recent aggression and another
     // player's escort engaging count too. Judged on the MIRRORED SIM CLOCK,
@@ -176,7 +182,7 @@ export async function shipOfferGates(world: World, target: Entity,
         attackingPlayer,
         holdsGrudge: attackingPlayer,
         likesPlayer:
-            shipDisposition(govt, playerGovt, records) !== 'hostile',
+            shipDisposition(govt, playerGovt, records, law) !== 'hostile',
     };
 }
 

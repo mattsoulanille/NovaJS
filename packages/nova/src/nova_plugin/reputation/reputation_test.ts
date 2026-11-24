@@ -2,6 +2,7 @@ import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { govtDispositionTo } from './govt_disposition.js';
 import { shipDisposition } from './iff_plugin.js';
+import { LocalLaw, localLaw } from './local_law.js';
 import {
     addRecord,
     applyCrime,
@@ -43,6 +44,19 @@ const bystander = makeGovt('nova:200', { classes: [9] });
 const allGovts: (readonly [string, GovtData])[] = [
     [fed.id, fed], [auroran.id, auroran], [bureau.id, bureau],
     [bystander.id, bystander]];
+
+/** The law in force in a system owned by `owner` (undefined:
+ * independent), over the little landscape above. */
+function lawOf(owner: GovtData | undefined,
+    extra: readonly GovtData[] = []): LocalLaw {
+    const govts = new Map<string, GovtData>(allGovts);
+    for (const govt of extra) {
+        govts.set(govt.id, govt);
+    }
+    return localLaw(owner?.id, id => govts.get(id));
+}
+/** The Federation's own space. */
+const FED_SPACE = lawOf(fed);
 
 describe('recordWith / addRecord', () => {
     it('reads absent entries as the govt InitialRec', () => {
@@ -98,44 +112,39 @@ describe('crimePenalty', () => {
             expect(crimePenalty(wraith, 'disable')).toBe(0);
             expect(crimePenalty(wraith, 'board')).toBe(0);
             const records: LegalRecords = new Map();
-            applyCrime(records, wraith, 'kill', [[wraith.id, wraith]]);
+            applyCrime(records, wraith, 'kill');
             expect(records.size).toBe(0);
         });
 });
 
 describe('applyCrime', () => {
-    it('penalizes the victim govt and propagates to allies and enemies',
+    /**
+     * Reference "A14 wave 5" and ruling #376: one kill changed ONLY the
+     * record of the system it happened in; the ally's home stayed at 0.
+     * There is no ally hatred and no enemy approval (this superseded
+     * #320 item 1, the size of that propagation).
+     */
+    it('penalizes the victim govt alone: no ally or enemy propagation',
         () => {
             const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill', allGovts);
-            // Full penalty with the wronged govt.
+            applyCrime(records, fed, 'kill');
+            // Full penalty with the wronged govt...
             expect(records.get(fed.id)).toBe(-6);
-            // Its ally hates you half as much (truncated)...
-            expect(records.get(bureau.id)).toBe(-3);
-            // ...its enemy approves by the same amount...
-            expect(records.get(auroran.id)).toBe(3);
-            // ...and bystanders don't care.
+            // ...and nothing anywhere else: not its ally, not its enemy,
+            // not a bystander.
+            expect(records.has(bureau.id)).toBe(false);
+            expect(records.has(auroran.id)).toBe(false);
             expect(records.has(bystander.id)).toBe(false);
+            expect(records.size).toBe(1);
         });
 
-    it('accumulates across repeated crimes', () => {
+    it('charges a disable and a kill separately, and accumulates', () => {
         const records: LegalRecords = new Map();
-        applyCrime(records, fed, 'kill', allGovts);
-        applyCrime(records, fed, 'kill', allGovts);
-        expect(records.get(fed.id)).toBe(-12);
-        expect(records.get(auroran.id)).toBe(6);
-    });
-
-    it('skips propagation when the truncated half is zero', () => {
-        const records: LegalRecords = new Map();
-        const petty = makeGovt('nova:300', {
-            classes: [5], killPenalty: 1,
-        });
-        const pettyAlly = makeGovt('nova:301', { allies: [5] });
-        applyCrime(records, petty, 'kill',
-            [[petty.id, petty], [pettyAlly.id, pettyAlly]]);
-        expect(records.get(petty.id)).toBe(-1);
-        expect(records.has(pettyAlly.id)).toBe(false);
+        applyCrime(records, fed, 'disable');
+        applyCrime(records, fed, 'kill');
+        applyCrime(records, fed, 'kill');
+        expect(records.get(fed.id)).toBe(-2 - 6 - 6);
+        expect(records.size).toBe(1);
     });
 });
 
@@ -362,30 +371,62 @@ describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
     it('flips a neutral govt to enemy exactly below -CrimeTol', () => {
         const atTol: LegalRecords = new Map([[fed.id, -10]]);
         const belowTol: LegalRecords = new Map([[fed.id, -11]]);
-        expect(govtDispositionTo(fed, undefined, atTol)).toBe('neutral');
-        expect(govtDispositionTo(fed, undefined, belowTol)).toBe('enemy');
+        expect(govtDispositionTo(fed, undefined, atTol, FED_SPACE))
+            .toBe('neutral');
+        expect(govtDispositionTo(fed, undefined, belowTol, FED_SPACE))
+            .toBe('enemy');
     });
 
     it('leaves ships without records (NPCs) politically judged', () => {
-        expect(govtDispositionTo(fed, auroran)).toBe('enemy');
-        expect(govtDispositionTo(fed, bureau)).toBe('ally');
-        expect(govtDispositionTo(fed, undefined)).toBe('neutral');
+        expect(govtDispositionTo(fed, auroran, undefined, FED_SPACE))
+            .toBe('enemy');
+        expect(govtDispositionTo(fed, bureau, undefined, FED_SPACE))
+            .toBe('ally');
+        expect(govtDispositionTo(fed, undefined, undefined, FED_SPACE))
+            .toBe('neutral');
     });
 
     it('never flips a neverAttacksPlayer govt', () => {
         const pacifist = makeGovt('nova:500', { crimeTol: 0 });
         pacifist.flags = { ...pacifist.flags, neverAttacksPlayer: true };
         const criminal: LegalRecords = new Map([[pacifist.id, -9999]]);
-        expect(govtDispositionTo(pacifist, undefined, criminal))
-            .toBe('neutral');
+        expect(govtDispositionTo(pacifist, undefined, criminal,
+            lawOf(pacifist, [pacifist]))).toBe('neutral');
     });
 
-    it('reads an absent record as the InitialRec', () => {
+    it("reads an absent record as the system owner's InitialRec", () => {
         const hated = makeGovt('nova:501',
             { crimeTol: 10, initialRecord: -50 });
-        expect(govtDispositionTo(hated, undefined, new Map()))
-            .toBe('enemy');
+        expect(govtDispositionTo(hated, undefined, new Map(),
+            lawOf(hated, [hated]))).toBe('enemy');
     });
+
+    // Reference A14 (docs/reference_experiments.md) and ruling #376: the
+    // record that counts is the one IN THIS SYSTEM, and only a govt that
+    // enforces this system's law acts on it.
+    it('judges the record in THIS system, not the one with its own govt',
+        () => {
+            // Criminal with the Federation, standing in Federation space:
+            // the Fed hunts (c1)...
+            const fedCriminal: LegalRecords = new Map([[fed.id, -500]]);
+            expect(govtDispositionTo(fed, undefined, fedCriminal, FED_SPACE))
+                .toBe('enemy');
+            // ...but not in a system it has no tie to (c5: the home
+            // record never counts elsewhere).
+            expect(govtDispositionTo(fed, undefined, fedCriminal,
+                lawOf(bystander))).toBe('neutral');
+            expect(govtDispositionTo(fed, undefined, fedCriminal,
+                lawOf(undefined))).toBe('neutral');
+            // An ALLY of the owner enforces the owner's record (c3), and
+            // its own record with the ally does not matter (c14).
+            expect(govtDispositionTo(bureau, undefined, fedCriminal,
+                FED_SPACE)).toBe('enemy');
+            expect(govtDispositionTo(bureau, undefined,
+                new Map([[bureau.id, -500]]), FED_SPACE)).toBe('neutral');
+            // An unrelated govt ignores a local criminal (c4).
+            expect(govtDispositionTo(bystander, undefined, fedCriminal,
+                FED_SPACE)).toBe('neutral');
+        });
 });
 
 describe('criminal hostility: display disposition (shipDisposition)', () => {
@@ -393,8 +434,9 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
         () => {
             const atTol: LegalRecords = new Map([[fed.id, -10]]);
             const belowTol: LegalRecords = new Map([[fed.id, -11]]);
-            expect(shipDisposition(fed, undefined, atTol)).toBe('neutral');
-            expect(shipDisposition(fed, undefined, belowTol))
+            expect(shipDisposition(fed, undefined, atTol, FED_SPACE))
+                .toBe('neutral');
+            expect(shipDisposition(fed, undefined, belowTol, FED_SPACE))
                 .toBe('hostile');
         });
 
@@ -402,13 +444,31 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
         // Sharing the Federation's government but wanted by it: the
         // record flip outranks the same-govt friendly rule.
         const criminal: LegalRecords = new Map([[fed.id, -999]]);
-        expect(shipDisposition(fed, fed, criminal)).toBe('hostile');
-        expect(shipDisposition(fed, fed, new Map())).toBe('friendly');
+        expect(shipDisposition(fed, fed, criminal, FED_SPACE))
+            .toBe('hostile');
+        expect(shipDisposition(fed, fed, new Map(), FED_SPACE))
+            .toBe('friendly');
     });
 
     it('does not change politics-only calls (no records passed)', () => {
-        expect(shipDisposition(fed, auroran)).toBe('hostile');
-        expect(shipDisposition(fed, undefined)).toBe('neutral');
+        expect(shipDisposition(fed, auroran, undefined, FED_SPACE))
+            .toBe('hostile');
+        expect(shipDisposition(fed, undefined, undefined, FED_SPACE))
+            .toBe('neutral');
+    });
+
+    it('agrees with the sim about whose law counts (A14)', () => {
+        const fedCriminal: LegalRecords = new Map([[fed.id, -500]]);
+        for (const [self, law] of [
+            [fed, FED_SPACE], [fed, lawOf(bystander)], [bureau, FED_SPACE],
+            [bystander, FED_SPACE], [fed, lawOf(undefined)],
+        ] as const) {
+            expect(shipDisposition(self, undefined, fedCriminal, law)
+                === 'hostile')
+                .withContext(`${self.id} in ${law.owner?.id}`)
+                .toBe(govtDispositionTo(self, undefined, fedCriminal, law)
+                    === 'enemy');
+        }
     });
 });
 

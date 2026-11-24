@@ -1,5 +1,6 @@
 import { GovtData } from "novadatainterface/govt_data";
-import { LegalRecords, recordHostile, recordWith } from "./reputation.js";
+import { LegalRecords } from "./reputation.js";
+import { criminalHere, LocalLaw } from "./local_law.js";
 
 /**
  * How one government regards another ship, per the EVN Bible's gövt
@@ -18,10 +19,12 @@ import { LegalRecords, recordHostile, recordWith } from "./reputation.js";
  * radar blip coloring.
  *
  * Reputation: ships that carry legal records (players) are judged
- * per-record on top of the political baseline — a govt whose record
- * with THAT player is below -CrimeTol treats the player as an enemy
- * (govtDispositionTo). Records are synced sim state, so every peer
- * draws the same conclusion about the same player.
+ * per-record on top of the political baseline — a govt that enforces
+ * the law of the CURRENT system and finds the player's record there
+ * below its own -CrimeTol treats the player as an enemy
+ * (govtDispositionTo, local_law.ts's criminalHere; reference A14).
+ * Records are synced sim state, so every peer draws the same
+ * conclusion about the same player.
  */
 export type Disposition = 'ally' | 'neutral' | 'enemy';
 
@@ -67,14 +70,21 @@ export function govtDisposition(self: GovtData | undefined,
 /**
  * The disposition of a ship of govt `self` toward a specific ship,
  * folding in the target's legal records when it has any (players):
- * a criminal record with `self` (record < -CrimeTol, the Bible's
- * warships-attack threshold) makes the target an enemy, unless the
- * govt never attacks the player. All other pairs fall back to the
- * political govtDisposition.
+ * a criminal record HERE (local_law.ts's criminalHere: `self` enforces
+ * the current system's law, and the record in this system is below
+ * `self`'s own -CrimeTol, the Bible's warships-attack threshold) makes
+ * the target an enemy, unless the govt never attacks the player. All
+ * other pairs fall back to the political govtDisposition.
+ *
+ * `law` is the law in force where the two ships meet (local_law.ts's
+ * localLawIn for the world's own system). Reference A14 and ruling
+ * #376: the record with `self`'s own government, or one held anywhere
+ * but here, never counts.
  */
 export function govtDispositionTo(self: GovtData | undefined,
     other: GovtData | undefined,
-    otherRecords?: LegalRecords,
+    otherRecords: LegalRecords | undefined,
+    law: LocalLaw,
     /**
      * ränk Flags 0x0100: "Ships of the affiliated government will not
      * automatically attack the player when he has this rank" — true when the
@@ -98,8 +108,7 @@ export function govtDispositionTo(self: GovtData | undefined,
     }
     if (base !== 'enemy' && self && otherRecords
         && !self.flags.neverAttacksPlayer
-        && recordHostile(recordWith(otherRecords, self.id, self),
-            self.crimeTol)) {
+        && criminalHere(self, otherRecords, law)) {
         return 'enemy';
     }
     return base;
