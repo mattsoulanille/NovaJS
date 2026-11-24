@@ -1219,14 +1219,18 @@ describe('boarding in a live world', () => {
             // No plunder session on either side.
             expect(boarder.components.has(BoardingComponent)).toBeFalse();
             expect(target.components.has(BoardedComponent)).toBeFalse();
-            // Repaired: no longer disabled, armor lifted above threshold,
-            // shields restored to full (hail-assist convention).
+            // Repaired: no longer disabled, armor lifted above threshold
+            // (threshold + REPAIR_MARGIN_FRACTION), and the shield NOT
+            // recharged: the original's repaired escort read "Shields
+            // Down" (reference "Reviving a disabled ally, wave 11").
             expect(target.components.has(DisabledComponent)).toBeFalse();
             const armor = target.components.get(ArmorComponent)!;
             expect(isBelowDisableThreshold(armor, shipData.disableArmorFraction))
                 .toBeFalse();
+            expect(armor.current).toEqual(
+                (shipData.disableArmorFraction + 0.10) * armor.max);
             const shield = target.components.get(ShieldComponent)!;
-            expect(shield.current).toEqual(shield.max);
+            expect(shield.current).toBeLessThan(0.01 * shield.max);
             // Status feedback fired at the boarder.
             expect(repairs).toEqual([BOARDER]);
         });
@@ -1292,8 +1296,9 @@ describe('boarding in a live world', () => {
                     armor, shipData.disableArmorFraction)).toBeFalse();
                 expect(armor.current).toEqual(
                     (shipData.disableArmorFraction + 0.10) * armor.max);
+                // The shield is left down (see the spec above).
                 const shield = target.components.get(ShieldComponent)!;
-                expect(shield.current).toEqual(shield.max);
+                expect(shield.current).toBeLessThan(0.01 * shield.max);
                 // Re-attached as a working escort.
                 expect(target.components.get(FormationComponent)?.leader)
                     .toEqual(BOARDER);

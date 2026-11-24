@@ -44,7 +44,6 @@ import { isInFlock } from '../combat/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { ArmorComponent } from '../ship/index.js';
-import { ShieldComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
     formationsIn, FormationComponent, nextFormationSlot, NpcComponent,
@@ -225,17 +224,25 @@ function applyBoardCrime(boarder: Entity, records: LegalRecords | undefined,
 
 /**
  * Brings a disabled hulk back online: armor to just above its disable
- * threshold (`repairedArmor`, the established threshold + 10% margin used
- * by self-repair, the hail assist, and capture), shields to full, and
- * DisabledComponent dropped so DisabledMovementSystem stops braking it and
- * the formation/escort brains can steer it again.
+ * threshold, the SHIELD LEFT WHERE IT WAS, and DisabledComponent dropped
+ * so DisabledMovementSystem stops braking it and the formation/escort
+ * brains can steer it again.
  *
- * Matthew's spec words item 5 as "its minimum un-disabled armor value",
- * which taken literally is the threshold itself with no margin. The margin
- * is kept deliberately: a ship parked exactly AT the threshold satisfies
- * `isBelowDisableThreshold` (the comparison is <=), so it would be
- * re-disabled by ShipDisableSystem on the next tick, and every other
- * repair path in the game already uses the margin.
+ * The original, measured ("Escort repaired.", docs/reference_experiments.md
+ * "Reviving a disabled ally, wave 11"): a hired escort of 1000 shield /
+ * 3000 armor (no recharge of either) came back reading "Shields Down" —
+ * its shield still 0 — and ONE more 600-damage blast disabled it again.
+ * So the repair restores armor only, and only to somewhere between the
+ * 33% threshold (1000) and about 53% (1600) of max.
+ *
+ * The fitted margin is REPAIR_MARGIN_FRACTION (`repairedArmor`, threshold
+ * + 10% of max armor = 43%, 1300 of 3000 on that hull), the one already
+ * used by self-repair, the hail assist and capture: it sits inside the
+ * measured 33%-53% bracket, and one 600 blast (to 700, under 1000)
+ * re-disables it exactly as the original's did. The margin is not zero
+ * because a ship parked exactly AT the threshold satisfies
+ * `isBelowDisableThreshold` (the comparison is <=), so ShipDisableSystem
+ * would re-disable it on the next tick.
  */
 function repairHulk(target: Entity): void {
     const shipData = target.components.get(ShipDataComponent);
@@ -243,10 +250,6 @@ function repairHulk(target: Entity): void {
     if (armor && shipData
         && isBelowDisableThreshold(armor, shipData.disableArmorFraction)) {
         armor.current = repairedArmor(armor.max, shipData.disableArmorFraction);
-    }
-    const shield = target.components.get(ShieldComponent);
-    if (shield) {
-        shield.current = shield.max;
     }
     target.components.delete(DisabledComponent);
 }
