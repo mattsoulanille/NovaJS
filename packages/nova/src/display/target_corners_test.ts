@@ -1,4 +1,9 @@
 import 'jasmine';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PNG } from 'pngjs';
+import * as PIXI from 'pixi.js';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { Entity } from 'nova_ecs/entity';
 import { Resource } from 'nova_ecs/resource';
@@ -12,7 +17,8 @@ import {
 import { EscortCommandComponent } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import {
-    cornersSweepSystem, styleForTarget, TargetCorners,
+    cornerAnchorOffset, cornersSweepSystem, FLY_IN_EXTRA_WIDTH, FLY_IN_MS,
+    GLYPH_INSET, styleForTarget, TargetCorners,
 } from './target_corners_plugin.js';
 
 const PLAYER = 'player uuid';
@@ -383,5 +389,159 @@ describe('cornersSweepSystem', () => {
             world.step();
             expect(corners.visible).toBeFalse();
             expect(corners.targetUuid).toBeUndefined();
+        });
+});
+
+/**
+ * Where the brackets sit (wave 9, K10, docs/reference_experiments.md): the
+ * box through the four glyphs' outermost lit pixels is square, side
+ * 2 * floor(S / 2) + 30 with S = max(w, h) of the BASE frame, centred on
+ * the target, for ships and stellars alike. Every row is a box the
+ * original drew, to the pixel.
+ */
+describe('TargetCorners geometry (wave 9 brackets)', () => {
+    const ORIGINAL: [string, number, number, number][] = [
+        // [target, frame w, frame h, box side the original drew]
+        ['Type 51 station', 15, 21, 50],
+        ['Type 53 station', 17, 31, 60],
+        ['Type 48 station', 35, 22, 64],
+        ['Type 3', 40, 40, 70],
+        ['Type 6', 72, 72, 102],
+        ['Type 16', 80, 80, 110],
+        ['Type 24', 88, 88, 118],
+        ['Type 9', 96, 96, 126],
+        ['Type 10', 112, 112, 142],
+        ['Type 0 (Kit Port)', 150, 150, 180],
+        ['Type 25', 250, 250, 280],
+        ['Type 18', 304, 134, 334],
+        ['Type 39 (station art)', 315, 200, 344],
+        ['Type 5 (Jupiter)', 325, 325, 354],
+        ['Shuttle', 24, 24, 54],
+        ['Heavy Shuttle / Fed Viper', 32, 32, 62],
+        ['Thunderhead', 48, 48, 78],
+        ['Fed Patrol Boat', 56, 56, 86],
+        ['Pegasus', 64, 64, 94],
+        ['Fed Destroyer', 80, 80, 110],
+        ['Kit Hulk Big', 96, 96, 126],
+        ['IDA Frigate', 100, 100, 130],
+        ['Aurora Cruiser', 120, 120, 150],
+        ['Fed Carrier', 128, 128, 158],
+        // Its glow layer is 180 px; the box comes from the 144 px base.
+        ['Leviathan', 144, 144, 174],
+        ['Aurora Carrier', 184, 184, 214],
+    ];
+
+    /** A TargetCorners whose cicns never load: only the geometry runs. */
+    function corners() {
+        return new TargetCorners({
+            data: { TargetCorners: { get: () => new Promise(() => undefined) } },
+        } as never);
+    }
+
+    /**
+     * The box through the glyphs' outermost lit pixels, relative to the
+     * target's centre: the pixel square at texture pixel
+     * (GLYPH_INSET, GLYPH_INSET), the outer corner of every corner glyph,
+     * carried through each sprite's own position and rotation.
+     */
+    function litBox(c: TargetCorners) {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const sprite of c.container.children as PIXI.Sprite[]) {
+            sprite.transform.updateLocalTransform();
+            const m = sprite.transform.localTransform;
+            for (const [tx, ty] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+                const p = m.apply(new PIXI.Point(
+                    GLYPH_INSET + tx, GLYPH_INSET + ty));
+                x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+                y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+            }
+        }
+        const round = (v: number) => Math.round(v * 1e6) / 1e6;
+        return { x0: round(x0), y0: round(y0), x1: round(x1), y1: round(y1) };
+    }
+
+    for (const [name, w, h, side] of ORIGINAL) {
+        it(`${name} (${w}x${h}) gets the original's ${side} x ${side} box`,
+            () => {
+                const c = corners();
+                c.step(0, 'target', { x: w, y: h });
+                c.step(10_000, 'target', { x: w, y: h });
+                const box = litBox(c);
+                expect(box.x1 - box.x0).toBe(side);
+                expect(box.y1 - box.y0).toBe(side);
+                // Centred on the target: the sprite of an even frame
+                // covers [-S/2, S/2), the box 15 px more on each side.
+                expect(box.x0).toBe(-Math.floor(Math.max(w, h) / 2) - 15);
+                expect(box.y0).toBe(box.x0);
+                expect(box.x1).toBe(-box.x0);
+                expect(box.y1).toBe(-box.y0);
+            });
+    }
+
+    it('flies in from FLY_IN_EXTRA_WIDTH wider, the same for every size, '
+        + 'and closes linearly over FLY_IN_MS', () => {
+            for (const size of [24, 112, 325]) {
+                const s = { x: size, y: size };
+                const rest = cornerAnchorOffset(s);
+                expect(cornerAnchorOffset(s, 0) - rest)
+                    .toBe(FLY_IN_EXTRA_WIDTH / 2);
+                expect(cornerAnchorOffset(s, FLY_IN_MS / 2) - rest)
+                    .toBeCloseTo(FLY_IN_EXTRA_WIDTH / 4, 9);
+                expect(cornerAnchorOffset(s, FLY_IN_MS)).toBe(rest);
+                expect(cornerAnchorOffset(s, FLY_IN_MS + 500)).toBe(rest);
+            }
+            // The original: 400-580 px wider at first sight, closed in
+            // 100-130 ms.
+            expect(FLY_IN_EXTRA_WIDTH).toBeGreaterThanOrEqual(400);
+            expect(FLY_IN_EXTRA_WIDTH).toBeLessThanOrEqual(580);
+            expect(FLY_IN_MS).toBeGreaterThanOrEqual(100);
+            expect(FLY_IN_MS).toBeLessThanOrEqual(130);
+        });
+
+    it('restarts the fly-in when the target changes, not otherwise', () => {
+        const c = corners();
+        const s = { x: 48, y: 48 };
+        c.step(1000, 'a', s);
+        const wide = litBox(c).x1;
+        c.step(1000 + FLY_IN_MS, 'a', s);
+        expect(litBox(c).x1).toBe(24 + 15);
+        expect(wide - litBox(c).x1).toBe(FLY_IN_EXTRA_WIDTH / 2);
+        c.step(5000, 'b', s);
+        expect(litBox(c).x1).toBe(wide);
+    });
+
+    it('every corner cicn has its outermost lit pixel at texture pixel '
+        + '(GLYPH_INSET, GLYPH_INSET), inside its 1 px outline', () => {
+            let dir = path.dirname(fileURLToPath(import.meta.url));
+            while (!fs.existsSync(path.join(dir, 'objects', 'CicnImage'))) {
+                const up = path.dirname(dir);
+                if (up === dir) {
+                    fail('objects/CicnImage not found above the spec');
+                    return;
+                }
+                dir = up;
+            }
+            const cicns = path.join(dir, 'objects', 'CicnImage');
+            for (const file of ['targetNeutral', 'targetHostile',
+                'targetFriendly', 'targetDisabled', 'planetNeutral']) {
+                const png = PNG.sync.read(fs.readFileSync(
+                    path.join(cicns, `${file}.png`)));
+                let minX = Infinity, minY = Infinity;
+                for (let y = 0; y < png.height; y++) {
+                    for (let x = 0; x < png.width; x++) {
+                        const i = (y * png.width + x) * 4;
+                        const d = png.data;
+                        // Lit = the glyph's colour, not the dark outline
+                        // (outline channel sums stay under 100, the glyphs'
+                        // over 200).
+                        if (d[i + 3] && d[i] + d[i + 1] + d[i + 2] > 150) {
+                            minX = Math.min(minX, x);
+                            minY = Math.min(minY, y);
+                        }
+                    }
+                }
+                expect([minX, minY]).withContext(file)
+                    .toEqual([GLYPH_INSET, GLYPH_INSET]);
+            }
         });
 });

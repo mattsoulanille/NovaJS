@@ -22,7 +22,46 @@ import { ZIndex } from "./z_index.js";
 
 
 const NUM_CORNERS = 4;
-const TIME_TO_TARGET = 100; // milliseconds
+
+/**
+ * Where the original draws the target brackets (wave 9, K10: 26 frame
+ * sizes from 15 to 325 px, ships and stellars alike, every shot on the
+ * rule to the pixel). The box through the glyphs' outermost lit pixels is
+ * SQUARE, centred on the object, with side 2 * floor(S / 2) + 30, where S
+ * is the larger dimension of the BASE frame (not a glow layer, not the
+ * visible art, no cap). It does not change with distance, rotation or
+ * animation, and the glyphs are fixed-size sprites.
+ */
+export const BRACKET_MARGIN = 15;
+/**
+ * The cicns carry a 1 px dark outline: the glyph's outermost LIT pixel is
+ * texture pixel (1, 1), not (0, 0), so each sprite's anchor sits one pixel
+ * outside the box edge. target_corners_test.ts checks every corner cicn.
+ */
+export const GLYPH_INSET = 1;
+/**
+ * The fly-in when a target is chosen: the box starts this much WIDER than
+ * its final size and closes linearly to it. An ADDITIVE offset, the same
+ * for every target size (the original: 400-580 px wider for a 24 px
+ * Shuttle and a 112 px planet alike, closed in 100-130 ms; fitted to the
+ * middle of both ranges).
+ */
+export const FLY_IN_EXTRA_WIDTH = 490; // px, whole box
+export const FLY_IN_MS = 115;
+
+/**
+ * Distance from the target's centre to each corner sprite's anchor, on
+ * both axes: the box's half side plus the glyph outline, plus what is left
+ * of the fly-in `timeSinceTarget` ms after the target was chosen.
+ */
+export function cornerAnchorOffset(baseSize: { x: number, y: number },
+    timeSinceTarget = Infinity): number {
+    const halfS = Math.floor(Math.max(baseSize.x, baseSize.y) / 2);
+    const timeLeft = Math.min(FLY_IN_MS,
+        Math.max(0, FLY_IN_MS - timeSinceTarget));
+    const flyIn = FLY_IN_EXTRA_WIDTH / 2 * timeLeft / FLY_IN_MS;
+    return halfS + BRACKET_MARGIN + GLYPH_INSET + flyIn;
+}
 
 export class TargetCorners {
     private targetTime = 0;
@@ -48,6 +87,10 @@ export class TargetCorners {
 
         for (let i = 0; i < NUM_CORNERS; i++) {
             const sprite = new PIXI.Sprite();
+            // The original draws the glyphs on whole pixels. The target's
+            // position is fractional, and a glyph drawn between pixels is
+            // smeared across two (and its 1 px lines go dim).
+            sprite.roundPixels = true;
 
             // The texture we have is the top left corner of a square. Unrotate it by
             // adding pi/4. Then re-rotate it by subtracting pi/NUM_CORNERS.
@@ -98,24 +141,27 @@ export class TargetCorners {
         }
     }
 
+    /**
+     * @param baseSize the target's BASE frame size
+     *     (AnimationGraphic.baseSize), not its largest layer.
+     */
     step(time: number, targetUuid: string | undefined,
-        targetSize: { x: number, y: number }) {
+        baseSize: { x: number, y: number }) {
 
         if (targetUuid !== this.targetUuid) {
             this.targetUuid = targetUuid;
             this.targetTime = time;
         }
 
-        const timeSinceStart = time - this.targetTime;
-        const timeLeft = Math.max(0, TIME_TO_TARGET - timeSinceStart)
-        const scale = 1 + timeLeft / 20;
-
+        const offset = cornerAnchorOffset(baseSize, time - this.targetTime);
+        // Corner i sits at angle (2i + 1) * pi / 4: bottom-right,
+        // bottom-left, top-left, top-right (y points down). Each sprite's
+        // rotation (constructor) turns the cicn's top-left outer corner onto
+        // its anchor, so the glyph extends inward from there.
         for (let i = 0; i < NUM_CORNERS; i++) {
             const sprite = this.sprites[i];
-            const angle = mod((i * 2 * Math.PI / NUM_CORNERS)
-                + (Math.PI / NUM_CORNERS), 2 * Math.PI);
-            sprite.position.x = Math.cos(angle) * targetSize.x / 2 * scale;
-            sprite.position.y = Math.sin(angle) * targetSize.y / 2 * scale;
+            sprite.position.x = (i === 0 || i === 3) ? offset : -offset;
+            sprite.position.y = (i === 0 || i === 1) ? offset : -offset;
         }
     }
 }
@@ -181,7 +227,7 @@ export const DrawTargetCornersSystem = new System({
         targetCorners.setStyle(styleForTarget(target, targetEntity,
             playerUuid, playerEntity, gameData, uuid => entities.get(uuid),
             simulationTime.time, systemId));
-        targetCorners.step(time.time, target, targetGraphic.size);
+        targetCorners.step(time.time, target, targetGraphic.baseSize);
         targetCorners.setPosition(targetGraphic.container.position);
         targetCorners.visible = true;
         targetCorners.drawnThisStep = true;

@@ -72,7 +72,15 @@ export class AnimationGraphic {
     builtAnimation?: Animation;
     readonly buildPromise: Promise<AnimationGraphic>;
     built = false;
+    /** The largest frame of ANY layer (glow, lights, weapon...). */
     size = { x: 0, y: 0 }
+    /**
+     * The frame size of the BASE layer alone (the shän base image, the
+     * spïn frame), or `size` when the animation has no base layer. The
+     * original sizes the target brackets from this: a glow layer bigger
+     * than the hull does not widen them (wave 9, K10).
+     */
+    baseSize = { x: 0, y: 0 }
     /**
      * The running-lights blink pattern for this animation, or null for a
      * steady light / no lights. Resolved once the graphic is built.
@@ -146,6 +154,9 @@ export class AnimationGraphic {
     private finishBuild(): AnimationGraphic {
         this.size.x = Math.max(0, ...[...this.sprites.values()].map(s => s.size.x));
         this.size.y = Math.max(0, ...[...this.sprites.values()].map(s => s.size.y));
+        const base = this.sprites.get('baseImage')?.size ?? this.size;
+        this.baseSize.x = base.x;
+        this.baseSize.y = base.y;
         this.rotation = this.rotation;
         // The weapon-effect overlay only shows while firing, so a freshly
         // built graphic starts transparent rather than flashing for the

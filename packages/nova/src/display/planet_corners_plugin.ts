@@ -33,7 +33,7 @@ export const DrawPlanetCornersSystem = new System({
             return;
         }
 
-        targetCorners.step(time.time, target, targetGraphic.size);
+        targetCorners.step(time.time, target, targetGraphic.baseSize);
         targetCorners.setPosition(targetGraphic.container.position);
         targetCorners.visible = true;
         targetCorners.drawnThisStep = true;
