@@ -88,8 +88,24 @@ describe('firingImmune (pair-immunity predicate)', () => {
             .toBeFalse();
     });
 
-    it('a disabled victim loses the govt immunity too', () => {
+    it('a disabled victim KEEPS the govt immunity (reference "The \'Fight '
+        + 'to be Thurokiir\' duel, wave 12")', () => {
+        // Bolts aimed at the player flew through a disabled duellist of
+        // the shooter's own govt for 52 s.
         expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:200',
+            true, 'projectile')).toBeTrue();
+        // Even inside one fleet: the group immunity is gone, the govt
+        // clause is not.
+        expect(firingImmune('fleet-1', 'fleet-1', 'nova:200', 'nova:200',
+            true, 'projectile')).toBeTrue();
+        // A beam or a blast hits it, as it hits a live one.
+        for (const kind of ['beam', 'blast'] as const) {
+            expect(firingImmune('fleet-1', 'fleet-1', 'nova:200', 'nova:200',
+                true, kind)).withContext(kind).toBeFalse();
+        }
+        // The player's flock carries no govt: its shots still finish off
+        // its own disabled member.
+        expect(firingImmune('player', 'player', undefined, undefined,
             true, 'projectile')).toBeFalse();
     });
 });

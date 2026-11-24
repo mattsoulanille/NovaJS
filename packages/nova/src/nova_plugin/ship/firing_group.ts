@@ -80,8 +80,11 @@ export type FiringWeaponKind = 'projectile' | 'beam' | 'blast';
  * its target anyway (proxHitAll), so the projectile row decides nothing
  * new for it.
  *
- * Not measured: whether the clause outlasts the victim being disabled
- * (firingImmune's carve-out cancels it with the group immunity).
+ * It outlasts the victim being DISABLED (reference "The 'Fight to be
+ * Thurokiir' duel, wave 12"): an NPC's bolts aimed at the player flew
+ * through a disabled duellist of the shooter's own govt for 52 s without
+ * a scratch, so firingImmune's disabled carve-out cancels only the group
+ * immunity, never this clause.
  */
 export const SAME_GOVT_FIRING_IMMUNITY: Readonly<Record<FiringWeaponKind, boolean>> = {
     projectile: true,
@@ -167,26 +170,30 @@ export function blastFriendlyFire(rule: BlastFlockRule,
  * undefined on both sides an ownerless weapon would otherwise match
  * every group-less victim and sail through e.g. asteroids.
  *
- * `victimDisabled` cancels immunity entirely: a DISABLED ship is dead in
- * space and loses its fleet/carrier friendly-fire protection, so a
+ * `victimDisabled` cancels the GROUP immunity: a DISABLED ship is dead
+ * in space and loses its fleet/carrier friendly-fire protection, so a
  * fleetmate's — and the player's own — shots connect (to finish it off,
- * or to keep it soft for boarding). The collision callers pass the
- * victim's DisabledComponent presence; other callers (e.g. the
- * guided-lock provocation in flock.ts) leave it at its false default so
- * their group semantics are unchanged.
+ * or to keep it soft for boarding). It does NOT cancel the same-govt
+ * projectile clause: on the original an NPC's bolts still pass through a
+ * disabled ship of the shooter's own govt (reference "The 'Fight to be
+ * Thurokiir' duel, wave 12"). The player's side is unaffected by that
+ * clause either way: the player has no govt and his escorts and bay
+ * fighters carry none (escort_action.ts strips it), so a player-side
+ * weapon's govt never matches. The collision callers pass the victim's
+ * DisabledComponent presence; other callers (e.g. the guided-lock
+ * provocation in flock.ts) leave it at its false default so their group
+ * semantics are unchanged.
  */
 export function firingImmune(
     weaponGroup: string | undefined, victimGroup: string | undefined,
     weaponGovt: string | undefined, victimGovt: string | undefined,
     victimDisabled = false, kind?: FiringWeaponKind): boolean {
-    if (victimDisabled) {
-        return false;
-    }
-    if (weaponGroup !== undefined && weaponGroup === victimGroup) {
+    if (!victimDisabled && weaponGroup !== undefined
+        && weaponGroup === victimGroup) {
         return true;
     }
     // Same-govt immunity, for the weapon effects that have it (see
-    // SAME_GOVT_FIRING_IMMUNITY).
+    // SAME_GOVT_FIRING_IMMUNITY); a disabled victim keeps it.
     if (kind !== undefined && SAME_GOVT_FIRING_IMMUNITY[kind]
         && weaponGovt !== undefined && weaponGovt === victimGovt) {
         return true;

@@ -261,6 +261,27 @@ describe('NPC friendly fire between same-govt / allied ships '
         expect(npcOf(ships.victim).aggressor).toBeUndefined();
     });
 
+    it('a blaster shot at the player flies through a DISABLED same-govt '
+        + 'ship too (reference "The \'Fight to be Thurokiir\' duel, wave '
+        + '12")', async () => {
+        // On the original a duellist's bolts passed through a disabled
+        // duellist of their own govt for 52 s; the disable cancels only
+        // the group immunity (firing_group.ts firingImmune).
+        const ships = await scene(RAIDERS, RAIDERS);
+        ships.victim.components.set(DisabledComponent,
+            { repairAt: null, hulk: true });
+        await strayBolt(ships);
+        expect(ships.victim.components.has(DisabledComponent)).toBeTrue();
+        expect(hitsOn('victim')).toEqual([]);
+    });
+
+    it('but a beam still hits the disabled same-govt ship', async () => {
+        const ships = await scene(RAIDERS, RAIDERS);
+        ships.victim.components.set(DisabledComponent,
+            { repairAt: null, hulk: true });
+        await strayBeam(ships);
+    });
+
     it('a blaster bolt AIMED at a same-govt ship passes through it too, so '
         + 'even a deliberate bolt provokes nothing', async () => {
         const ships = await scene(RAIDERS, RAIDERS);

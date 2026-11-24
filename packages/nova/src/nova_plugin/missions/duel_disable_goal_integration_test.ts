@@ -38,20 +38,21 @@ import { WeaponEntries } from '../combat/index.js';
  * ShipBehav 0 "always attack the player"): "Can you check on this mission
  * whether disabled enemies are able to hit each other? They did just now".
  *
- * They can. All the duellists share one government, so a duellist's BOLT
- * passes through a fellow duellist (SAME_GOVT_FIRING_IMMUNITY, measured)
- * — until that duellist is DISABLED: firingImmune's disabled carve-out
- * (ship/firing_group.ts) cancels the immunity, so the next bolt meant for
- * the player lands on the hulk. A BLAST never spared a same-govt ship, so
- * a splash catches a duellist whether it is disabled or not.
+ * Only with a beam or a blast. All the duellists share one government,
+ * so a duellist's BOLT passes through a fellow duellist
+ * (SAME_GOVT_FIRING_IMMUNITY), DISABLED or not: on the original a
+ * duellist's bolts aimed at the player flew through a disabled duellist
+ * for 52 s (reference "The 'Fight to be Thurokiir' duel, wave 12"), so
+ * firingImmune's disabled carve-out (ship/firing_group.ts) cancels only
+ * the group immunity. A BEAM or a BLAST never spared a same-govt ship, so
+ * it catches a duellist whether it is disabled or not.
  *
  * What these specs pin (synthetic stand-in: two Verge Raiders Corsairs as
  * the duellists, one government and no quarrel with each other, a third
  * Corsair as the player):
  *
- *  1. A duellist the PLAYER disabled, then destroyed by another duellist's
- *     bolt: the mission stands (the ship was already credited as
- *     disabled), and the kill is the SHOOTER's, not the player's.
+ *  1. A duellist the PLAYER disabled is not hit by another duellist's bolt
+ *     at the player.
  *  2. TODAY'S BEHAVIOUR, reference pending: a duellist that was NOT yet
  *     disabled and is destroyed by another duellist's splash fails the
  *     mission, though the player killed nobody. The goal bookkeeping
@@ -217,11 +218,10 @@ describe('a disable-goal duel where the duellists hit each other', () => {
         return deaths.includes(uuid);
     }
 
-    it('a duellist the player disabled is shot dead by another duellist\'s '
-        + 'bolt: the mission stands and the kill is not the player\'s',
-        async () => {
+    it('another duellist\'s bolt at the player passes through a duellist '
+        + 'the player disabled', async () => {
             const ships = await scene(IN_THE_LINE);
-            const { victim, shooter, player } = ships;
+            const { victim, shooter } = ships;
 
             // The player disables it (as the last to damage it).
             const victimStats = stats(victim);
@@ -233,31 +233,18 @@ describe('a disable-goal duel where the duellists hit each other', () => {
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             expect(missionObjective().satisfied).toBe(1);
 
-            // Barely holding together: one stray bolt finishes it.
-            victimStats.armor.current = 0.5;
-
             // The other duellist fires at the player, through the hulk.
             shooter.components.set(TargetComponent, { target: 'player' });
             pinScene(ships, IN_THE_LINE);
             hits = [];
             await fire(BLASTER, 'shooter');
             step(40);
-            expect(hits.filter(hit => hit.uuid === 'victim').length)
-                .withContext('the bolt stops on the disabled duellist '
-                    + '(the disabled carve-out cancels same-govt immunity)')
-                .toBe(1);
-            expect(victim.components.get(DamageAttributionComponent)?.root)
-                .toBe('shooter');
-            expect(stepUntilDead('victim', 600)).toBeTrue();
-
-            const objective = missionObjective();
-            expect(objective.failed).toBeFalse();
-            expect(objective.satisfied).toBe(1);
-            expect(objective.live.has('victim')).toBeFalse();
-            // Kill credit went to the shooter (an NPC: nothing to credit),
-            // not the player who disabled it.
-            expect(player.components.get(CombatRatingComponent)!.kills)
-                .toBe(0);
+            expect(hits.filter(hit => hit.uuid === 'victim'))
+                .withContext('a disabled ship keeps its same-govt bolt '
+                    + 'immunity')
+                .toEqual([]);
+            expect(deaths).not.toContain('victim');
+            expect(missionObjective().failed).toBeFalse();
         });
 
     it('TODAY\'S BEHAVIOUR (reference pending): a duellist NOT yet disabled '
