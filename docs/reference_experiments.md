@@ -6912,7 +6912,510 @@ directly in one stretch and consistent with the trails elsewhere).
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w13/watch/mine/*/`
 (`recording.mp4` 186-196 s, `radar_tracks.jsonl`, `cyan_count.jsonl`).
 
+### A14 spread, wave 14: the exact rule, how far, penalties, allied and enemy neighbours, gates, and CompReward (2026-11-24)
+
+**Questions (for ruling #380).** How far does a legal-record change
+spread, and with what exact factor? Does a PENALTY (a kill of the owner's
+own ship) spread the same way? What does a neighbour owned by an ALLY or
+an ENEMY of the kill-system's owner get? Jumps or hypergate / wormhole
+links? Does a mission's CompReward spread?
+
+**Rig** (`kits/testkit.mjs` `wave14Resources`, "A"). Large penalties so
+the factor shows to four digits:
+- **Reward chain.** gövt 338 Kit Spread Owner (Disab 2, Board 2, Kill
+  8000; ally 337, enemy 336) owns sÿst 2095 Kit Spread Kill, whose only
+  traffic is gövt 350's Kit Bare Traders (unrelated to 338), and the
+  chain 2096 - 2097 - 2098 - 2099 - 2108 - 2109 (one to six jumps).
+  Also linked to 2095: 2135 owned by the ALLY 337 (40 / 2 / 60), 2136 by
+  the ENEMY 336 (70 / 2 / 140), 2137 by the VICTIM's own govt 350 (30 / 5
+  / 100). 2138 (owner 338) is reached from 2095 only through a HYPERGATE
+  (spöb 2129 <-> 2138), 2139 (owner 338) only through a WORMHOLE (spöb
+  2146 <-> 2139). Pilot `w14_spread` (Kit Lancer + Kit One Shot), every
+  rig system explored.
+- **Penalty.** gövt 335 Kit Penalty Owner (2 / 2 / 8000; ally 334,
+  enemy 333) owns 2158 Kit Penalty Kill, whose traffic is its OWN bare
+  traders, and 2159 (one jump); 2050 (the ally 334, 40 / 2 / 60) and 2051
+  (the enemy 333, 70 / 2 / 140) are linked to 2158. Pilot `w14_penalty`.
+- **CompReward.** mïsn 1079 at Kit Port (Kit Range, unlinked): no goal,
+  CompGovt 338, CompReward 1000, ReturnStel Kit Port. Accept, take off,
+  land (completes), leave. Pilot `w14_comp`.
+
+Tab, the One Shot, land, map, leave, pull (`scenarios/w14_space_interactive.json`,
+`w14_offer_interactive.json`, hand-driven). In the reward run TWO traders
+died (an early shot with the target off the panel also killed one;
+combat rating +8, two kills), so its column is two kills; every value is
+exactly twice the one-kill value below.
+
+| system | owner (relation to the kill-system owner) | jumps | reward run (2 kills) | per kill | penalty run (1 kill) |
+|---|---|---|---|---|---|
+| kill system | the owner | 0 | 2095: **+8002** | +4001 | 2158: **-8002** |
+| chain | the owner | 1 | 2096: **+5200** | +2600 | 2159: **-5201** |
+| | | 2 | 2097: **+3380** | +1690 | |
+| | | 3 | 2098: **+2196** | +1098 | |
+| | | 4 | 2099: **+1428** | +714 | |
+| | | 5 | 2108: **+928** | +464 | |
+| | | 6 | 2109: **+602** | +301 | |
+| ally home | its ally | 1 | 2135: **+64** | +32 | 2050: **-5201** |
+| enemy home | its enemy | 1 | 2136: **+134** | +67 | 2051: **+67** |
+| victim home | the victim's govt 350 | 1 | 2137: **-168** | -84 | |
+| gate system | the owner, hypergate only | (gate) | 2138: 0 | 0 | |
+| worm system | the owner, wormhole only | (wormhole) | 2139: 0 | 0 | |
+
+**The rule that fits every value** (these 13 cells and all four of wave
+13's): a crime in system S changes the record of every system T up to n
+hyperlink jumps away (n = 0 for S), each from T's OWN owner's point of
+view, with the PENALTY FIELDS scaled first:
+
+- s = 0.65^n; scaled fields D' = floor(Disab x s), K' = floor(Kill x s)
+  (likewise Board' for a board);
+- if the victim's govt is T's owner or an ally of T's owner: T's record
+  changes by -(D'_victim + K'_victim), the VICTIM govt's scaled fields;
+- otherwise (unrelated, or an enemy of T's owner): it changes by
+  +(floor(D'_owner / 2) + floor(K'_owner / 2)), T's OWNER's scaled fields,
+  halved.
+
+Checks: 2096: floor(2 x 0.65) = 1, halved 0; floor(8000 x 0.65) = 5200,
+halved 2600: **2600**. 2099 (4 jumps): floor(8000 x 0.1785) = 1428, halved
+**714** (scaling the RESULT, 4001 x 0.65 per jump with a floor each time,
+would give 713). 2136: floor(70 x 0.65) = 45 -> 22, floor(140 x 0.65) = 91
+-> 45: **67** (68 if the 105 were scaled after halving). 2135: 26 -> 13,
+39 -> 19: **32**. 2137: -(floor(19.5) + floor(65)) = **-84**. 2159 and
+the penalty run's ally home 2050: -(1 + 5200) = **-5201**. Wave 13's Kit
+Odd Owner (11 / 3 / 25): one jump floor(7.15) = 7 -> 3, floor(16.25) = 16
+-> 8: **11**; two jumps 4 -> 2, 10 -> 5: **7**; the neutral 363
+neighbour 32 -> 16, 65 -> 32: **48**. All match.
+
+**Findings.**
+1. **The factor is 0.65 per jump** (the six chain values pin it to 0.6498
+   - 0.6501), applied to the PENALTY FIELDS before the halving, each
+   field floored. The spread reached all six jumps of the chain (+301 at
+   six); no cut-off was found (with these penalties the share would fall
+   below 1 only after about 20 jumps).
+2. **A penalty spreads the same way**: the kill of the owner's own ship
+   cost -8002 at home and -5201 one jump away.
+3. **Allied and enemy neighbours** compute their own change from their
+   own owner's relation to the VICTIM, not to the kill-system's owner: the
+   ally's home took the full scaled penalty when the victim was its ally
+   (-5201), and the ally's own halved reward when it was not (+32); the
+   enemy's home took its own halved reward both times (+67), even when the
+   victim (gövt 335) was its enemy. The victim govt's own home system was
+   charged the victim's scaled penalty (-84).
+4. **Hyperlinks only:** the systems reached only through a hypergate or a
+   wormhole did not change at all.
+5. **CompReward does NOT spread by jumps.** The completed mission (1000 for
+   gövt 338) changed: **+1000 in EVERY system 338 owns** (the whole chain,
+   the kill system and the gate / worm systems, however far), **+500 in
+   the ally 337's system**, **-500 in the enemy 336's**, and **-500 in eight
+   stock systems** owned by gövt 137 Pirate and 170 Houseless Warriors (both
+   Flags 0x0001, xenophobic: "enemies" of every govt); Kit Range, where it
+   was completed, the penalty rig and the victim's home did not change.
+   So CompReward is by GOVT: +R in the CompGovt's systems, +R / 2 in its
+   allies', -R / 2 in its enemies' and the xenophobes' (this explains
+   wave 13's Wild Geese +10 / +5 / -5).
+6. **The 0x0040 abort penalty does NOT spread:** aborting mïsn 1082
+   (CompGovt 338, CompReward 100, Flags 0x0040; pilot `w14_comp_abort`)
+   took **-500 (5 x 100) in every 338 system** and changed nothing else
+   (the ally's, the enemy's and the xenophobes' systems untouched).
+
+**NovaJS today (base e5105c80; per-govt records, ruling #376).**
+- `N/nova_plugin/reputation/reputation.ts:153-160` (`applyCrime`) charges
+  -(the victim govt's field) to the VICTIM govt's record only, for every
+  crime anywhere; no reward, no spread (the TODO at `:145-152`).
+  `N/nova_plugin/reputation/reputation_plugin.ts:130-136` (`chargeCrime`)
+  is the one entry point. **Mismatch** (the reward was wave 12's; the
+  spread is new).
+- `N/nova_plugin/missions/mission_payval.ts:54-67`
+  (`applyOutcomeReputation`) adds CompReward to the CompGovt's record
+  only. **Mismatch** for a success: the allies' +R / 2 and the enemies'
+  (and xenophobes') -R / 2 are missing; **matches** for the 0x0040 abort
+  (-5R to the CompGovt alone, `reputation.ts:447-455`). With per-govt records this one maps
+  cleanly: +R to the CompGovt, +trunc(R / 2) to every govt allied to it
+  (either direction, as `initialRecordsFromGovtStatuses`,
+  `reputation.ts:464-489`, already decides "ally" / "enemy"), -trunc(R /
+  2) to its enemies and to every xenophobic (0x0001) govt. The 0x0040 abort's -5R stays with the
+  CompGovt (finding 6); whether the failure's -R / 2 spreads was not
+  measured.
+
+**Proposed fix (not applied; the crime part needs ruling #380).**
+- CompReward (`mission_payval.ts:54-67`): apply the govt-wide spread
+  above. It needs no per-system records.
+- Crimes (`reputation.ts:153-160`): on the original's per-system records
+  the rule is the box above. On NovaJS's per-govt records the closest
+  reading is: for each govt G that owns a system within reach of S, take
+  the SMALLEST jump count n_G from S to any of G's systems and apply the
+  box's amount for that n_G once to G's record (own / allied victim: minus
+  the victim's scaled fields; otherwise plus G's own halved scaled
+  fields). That keeps the measured kill-system value for the owner and
+  gives an owner's distant systems no extra weight; what it loses is the
+  original's per-system gradient (a record that is worse near the crime
+  than far from it). Matthew to choose between that, "kill system only"
+  (today's charge to the victim plus the wave-12 reward to the owner, no
+  spread), or per-system records.
+
+Confidence: high (four runs read back from the pilot; every changed
+record fits one formula to the unit, plus wave 13's four values).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w14/{spread,penalty,comp,comp_abort}/*/`
+(`pilot-after/`; spread `13-map.png`; comp `04-missions.png`).
+
+### Contraband wave 14: ScanMask-0 missions, rescans, ScanFine 0 and -5, illegal jünk, a scanner that does not own the system (2026-11-24)
+
+**Questions** (docs/npc_behavior_gaps.md "Contraband scan: guesses to
+measure", S1 runs 5-7, S2, S3). Does ANY scan fail a mïsn Flags 0x0020
+mission, or only one that finds its cargo illegal? Rescans. ScanFine 0.
+SmugPenalty for illegal jünk. A scanner that is not the system's owner:
+whose record moves?
+
+**Rig** (`kits/testkit.mjs` `wave14Resources`, "S"). Customs govts, all
+ScanMask 0x0001 with two AI 4 Kit Customs Cutters as traffic: wave 11's
+354 Kit Customs (fine 500, Smug 50, CrimeTol 10) in Kit Scan Range; 332
+Kit Customs Tolerant (fine 500, Smug 50, **CrimeTol 30000**: a detection
+never makes the pilot a criminal) in 2053; 331 Kit Customs Free (**ScanFine
+0**, Smug 50) in 2055; 329 Kit Customs Percent (**ScanFine -5**, Smug 50) in
+2058; 330 Kit Customs Nosy (gövt 0x0002, fine 500, Smug 50), owner of 2056,
+whose cutters fly in **2057 (owned by the neutral 363, SmugPenalty 0)**,
+linked to 2056, and in **2029 (owned by 322 Kit Smug Owner: SmugPenalty 70,
+no ScanMask)**. mïsn 1078 / 1081: kit copies of stock mïsn 441 "Rebel Food
+Drop" (**Flags 0x0020 with ScanMask 0**, as 51 stock missions), 10 t of
+food aboard from the accept, offered at Kit Scan Port / Kit Scan Tolerant
+Port. jünk 203 Kit Contraband (ScanMask 0x0001) sold at Kit Scan Port.
+Pilots on a Kit Lancer, the pod (oütf 458, ScanMask 0x0001) where noted;
+`scenarios/w14_offer_interactive.json`, `w14_space_interactive.json`,
+`w14_scan_sit.json` / `w14_scan_sit_long.json` (sit beside the port, a
+shot every 3.5 s, land, leave, pull).
+
+| run | what was aboard / where | status line | credits | record | mission |
+|---|---|---|---|---|---|
+| `w14_s3_clean` | the 0x0020 / ScanMask-0 mission, nothing illegal; Kit Scan Range, 35 s | nothing (both cutters parked beside the player) | unchanged | none | active |
+| `w14_rescan` | pod + the same mission (1081); 2053 (CrimeTol 30000), first visit 5.5 min | about 12 s after takeoff: "Kit Customs Cutter: w14-rescan, your posession of a kit contraband pod has been detected. You have been fined 500 credits." Nothing more | -500 | **2053: -50** | **still active** after the scan, and after both landings |
+| | the same pilot: landed, took off, 70 s (second visit) | nothing | no further fine | no further change | active |
+| `w14_rescan_jump` | pod; 2053, then a jump to the linked 2031 Kit Scan Tolerant Gate (gövt 363) and back | the detection line about 10 s after Enter Ship; after the jump BACK the same line again within about 10 s of arrival | -500, then **-500 again** | (not landed: not read) | |
+| `w14_s3_pod` | pod; Kit Scan Range (CrimeTol 10); scanned before it could land, then the mission accepted | (scan before landing) | -500 once | 2069: -50 | active (accepted after the scan; no rescan on takeoff) |
+| `w14_free` | pod; 2055, ScanFine 0 | "...your posession of a kit contraband pod has been detected." (**no fine sentence**) | unchanged | **2055: -50** | |
+| `w14_percent` | pod; 2058, ScanFine -5, 100 s (the 40 s take had no scan) | "...has been detected." (**no fine sentence**) | **unchanged** (not 5%) | **2058: -50** | |
+| `w14_junk` | 10 t of Kit Contraband bought at Kit Scan Port (one Buy click buys 10 t), clean otherwise | "Kit Customs Cutter: w14-junk, **your attempt to smuggle kit contraband through this system** has been detected. You have been fined 500 credits." | -500 | **2069: -50** | |
+| `w14_foreign` | pod; 2057 (owner 363, Smug 0), scanned by the NOSY 330 | "...your posession of a kit contraband pod has been detected. You have been fined 500 credits." | -500 | **none** (2057 and 330's own 2056, linked, unchanged) | |
+| `w14_smug_owner` | pod; 2029 (owner 322, Smug 70, no ScanMask), scanned by 330 | the same | -500 | **2029: +35** | |
+
+Also seen: in the tolerant run the cutters **fired at the player for the
+rest of the first visit** after the detection (the shield bar fell about
+25% over 5 min against the Lancer's recharge, bolts in the shots) though
+the record (-50) was nowhere near -CrimeTol (-30000); after a landing
+they parked beside the player and never fired.
+
+**Findings.**
+1. **Only a scan that finds the mission's cargo illegal fails a 0x0020
+   mission.** A ScanMask-0 0x0020 mission survived a scan that found the
+   pod (fine and SmugPenalty charged), and a clean ship carrying it was
+   never fined or failed. The 51 stock 0x0020 / ScanMask-0 missions can
+   never fail by scan (NovaJS's reading; matches).
+2. **Rescans come with a new arrival by jump, not with a landing:** one
+   detection in a 5.5 min visit, none in 70 s after a landing and takeoff
+   (the date had advanced a day), and a pilot scanned before landing was
+   not rescanned on takeoff; but a jump out to the linked system and back
+   was fined again within about 10 s of the arrival.
+3. **A detection makes the scanning govt's ships attack the player for
+   the rest of that visit, independent of CrimeTol**; the next visit
+   (after a landing) they are peaceful again.
+4. **ScanFine 0: the detection line without its fine sentence, no fine,
+   SmugPenalty still charged** (matches the guess).
+5. **ScanFine -5 is NOT 5% of the cash:** the same as 0 (the line without
+   the fine sentence, no money, SmugPenalty charged). The Bible's
+   "-1 and below: fine this % of the player's cash" is not what 1.1.1
+   does.
+6. **Illegal jünk names the commodity** ("your attempt to smuggle kit
+   contraband through this system", the jünk's LCName where mission cargo
+   reads "illegal cargo") and **costs ScanFine AND SmugPenalty**, unlike
+   mission cargo (wave 12: fine only).
+7. **A scanner that does not own the system** (a nosy govt) scans and
+   fines all the same, and the record of the system follows the A14 rule
+   with the SCANNER as the "victim": the scanner is neither the owner nor
+   its ally, so the system's record RISES by half the OWNER's SmugPenalty
+   (2029: +35 = 70 / 2; 2057: +0, its owner 363 has SmugPenalty 0); in the
+   scanner's own system the scanner's SmugPenalty comes off (-50). The
+   scanner's home system linked to 2057 did not change: **smuggling does
+   not spread to linked systems** (the crime spread of the A14 section
+   does not apply to it).
+
+**NovaJS today (base e5105c80): matches for 1 and 4; mismatches for 2,
+3, 5, 6, 7.**
+- 2: `N/nova_plugin/npc/contraband_target.ts:24-45` clears the
+  scanned marker at every landing (`N/nova_plugin/encounters/boarding_plugin.ts:1447-1453`,
+  `BoardingLandingResetSystem`) and every system crossing
+  (`N/nova_plugin/pilot/transition_prep.ts:110`), so a pod pilot is fined
+  again after each landing.
+- 3: the cutters fire only through the criminal rule
+  (`N/nova_plugin/npc/contraband_scan.ts:162`, `local_law.ts`'s
+  `criminalHere`), so a CrimeTol-30000 customs govt never attacks.
+- 5: `N/nova_plugin/npc/contraband.ts:192-201` (`contrabandFine`) takes
+  N% of the cash for ScanFine -N.
+- 6: `N/nova_plugin/npc/contraband.ts:163-169` folds illegal jünk into
+  `smuggled` (the generic "illegal cargo" line, `N/display/status_bar_content.ts:356-371`)
+  and `applyContrabandScan` (`contraband.ts:234-262`) charges SmugPenalty
+  only for an outfit.
+- 7: `applyContrabandScan` charges the SCANNER's SmugPenalty to the
+  system's status govt whoever scans (`contraband.ts:250-254`), so a nosy
+  scanner in another govt's system costs that system's owner its record
+  instead of raising it by half the owner's SmugPenalty.
+
+**Proposed fixes (not applied).**
+- Keep the scanned marker across landings (drop the
+  `clearContrabandScan` call in `BoardingLandingResetSystem`); keep the
+  crossing reset (`transition_prep.ts:110`), which the jump-back run
+  confirmed.
+- After a detection, give the scanning govt's ships in the system the
+  player as an aggressor (or a visit-long "hostile to this pilot" mark)
+  until the player lands or leaves.
+- `contrabandFine`: ScanFine <= 0 is no fine (the line without its fine
+  sentence); drop the percentage branch.
+- Illegal jünk: its own finding with the jünk's LCName ("your attempt to
+  smuggle <lcName> through this system"), ScanFine and SmugPenalty;
+  mission cargo keeps "illegal cargo" and no SmugPenalty.
+- SmugPenalty by the A14 rule: scanner == the system's owner or its ally
+  -> minus the scanner's SmugPenalty; otherwise plus floor(owner's
+  SmugPenalty / 2) (on per-govt records: to the owner's govt); no spread.
+  Which govt's SmugPenalty applies when an ALLY of the owner scans was not
+  measured.
+
+Confidence: high for 1, 4, 6 and the fines / records of 5 and 7 (single
+runs, read back from the pilot, explicit status lines); medium for 2 (one
+second visit of 70 s, one jump back) and 3 (one run).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w14/{s3clean,s3pod,rescan,rescan_jump,free,percent,percent2,junk,foreign,smug_owner}/*/`
+(rescan `05-r01.png` the line, `32-missions.png`, `31-r27.png` the shield;
+junk `03-bought.png`, `05-w1.png`; `pilot-after/`).
+
+### P1 wave 14: piracy police are the NOSY govts, gövt 0x0020, police defending an ally, distress calls (2026-11-24)
+
+**Questions (wave-13 leftovers).** Runs 3-5 of the P1 brief (raiders vs
+traders while the player watches; a victim govt with gövt 0x0020; one with
+Flags2 0x0008), a victim the police govt cares about, and distress calls
+(STR# 5003): who sends them, how often, does anyone answer?
+
+**Rig** (`kits/testkit.mjs` `wave14Resources`, "P"; AI 4 police are red
+discs with one Kit Escort Gun, traders unarmed 3000 / 3000 AI 1 discs).
+- sÿst 2059 Kit Raid Range (owner 342 Kit Police, wave 13's non-nosy
+  police): police, 343 Kit Shipping (green), 327 Kit Shipping Quiet (blue,
+  **Flags2 0x0008**) and 328 Kit Raider P (yellow AI 3, Kit Raider Gun,
+  enemy of 343 and 327), avgShips 6. Pilot `w14_raid` (Kit Ring Tank,
+  unarmed) sits at the port for 527 s at 10 fps (`scenarios/w14_watch.json`).
+- sÿst 2001 Kit Nosy Range (owner 326 Kit Police Nosy, **gövt 0x0002**):
+  its police, 343 Kit Shipping (green) and 325 Kit Shipping Ignored
+  (cyan, **gövt 0x0020**). Pilot `w14_nosy` (Kit Lancer + Kit Long Beam),
+  hand-driven: Tab to a green beside the port, beam 3 s, shots, Tab through
+  the police; land, take off (until a cyan was in the system), the same
+  with a cyan.
+- sÿst 2008 Kit Friend Range (owner 323 Kit Police Allied, NOT nosy) with
+  traders of its ally 324 (blue). Pilot `w14_friend`: `tab_to` blue, beam
+  3 s, shots, Tab through (`scenarios/w14_friend.json`).
+
+| run | the player's attack | the police | the player | record |
+|---|---|---|---|---|
+| nosy, green victim (343, no flags) | a Kit Shipping to 92% shield | **brackets RED, they closed in and fired at the player** (bolts in 4 of 6 shots, the shield bar down a few %) | attacked | unchanged (hits only) |
+| (the same pilot after a landing) | none | yellow again | | |
+| nosy, cyan victim (325, **0x0020**) | a Kit Shipping Ignored to 88% | brackets **YELLOW**, beside the player, never fired (5 shots, 15 s) | not attacked | unchanged |
+| allied, blue victim (the owner's ALLY 324) | a Kit Police Friend to 86% | **brackets RED, firing at the player** | attacked | unchanged |
+| (wave 13, non-nosy 342, an unrelated 343 victim) | hits, a kill, a board | yellow, never fired | | |
+
+**Raid watch (no player involvement).** The Kit Raiders fought the
+traders around the port the whole time. **Distress lines appeared on the
+status line throughout**, always as "Kit Shipping: <line>", from the
+attacked green traders of gövt 343: "We're being attacked! Someone please
+help us!", "We're under attack! Anyone who can hear me, please assist
+us!" / "... please lend assistance!", "We're being attacked! Someone
+please assist us!", "Somebody help us! We're under attack!", "Our ship is
+under attack - anyone, please assist!", "... requesting immediate
+assistance!" (the stock list in Nova Data 5 that holds "Mayday, Mayday!
+..."). A line stays about 21-25 s unless a newer one replaces it; text
+was on the status line for about a third of the 527 s (six stretches of 10-73 s), and several different
+lines often came within 20 s (overlaid in the 20-s trail pictures). **Not
+one came from the Flags2-0x0008 Kit Shipping Quiet** (blue), which was
+also attacked. Whether the police (red) answered could not be separated
+from the general melee (police, raiders and bolts all around the port in
+the frames; no per-ship tracking).
+
+**Findings.**
+1. **The "piracy police" are the NOSY govts (gövt 0x0002):** a nosy
+   police govt's AI 4s turned on the player the moment the player shot a
+   third party of an unrelated govt in front of them, with no crime on the
+   record; wave 13's non-nosy police watched hits, a kill and a board and
+   did nothing. The hostility ended with the visit (yellow after a
+   landing).
+2. **gövt 0x0020 works as the Bible says:** the same nosy police ignored an
+   attack on a ship of a 0x0020 govt.
+3. **A non-nosy police govt defends its ALLY's ship:** shooting the owner's
+   ally's trader turned the owner's police on the player (with no record
+   change for shooting: ShootPenalty is ignored).
+4. **Distress calls** come from ships under NPC attack, often (several a
+   minute during a fight), as "<ship name>: <random line>" on everyone's
+   status line, and never from a Flags2-0x0008 govt. None was seen in four
+   wave-12/13 runs where the PLAYER was the attacker (P1 runs 1, 1b, 1c,
+   2), so the player's own victims may not call; to confirm. Who answers
+   was not measured.
+
+**NovaJS today (base e5105c80): mismatches.**
+- 1-3: `N/nova_plugin/npc/npc_ai_plugin.ts:59-62` "The piracy-police
+  reaction is not modeled: no NPC reacts to an attack on a third ship";
+  an NPC records an aggressor only for hits on itself
+  (`N/nova_plugin/npc/npc_targeting.ts:244`, `NpcAggressionSystem`).
+- 4: STR# 5003 is not read anywhere; gövt Flags2 0x0008 only silences
+  hail greetings (`N/nova_plugin/reputation/hail.ts:148`, `:199`).
+
+**Proposed fix (not applied).** In `NpcAggressionSystem`, when a ship V is
+hit by an attacker A (the player's ship or flock): every AI 4 within its
+engagement range whose govt is NOSY (0x0002) and is not allied to A's
+govt, or whose govt is V's own or allied to it, records A as its aggressor
+until A lands or leaves, unless V's govt has 0x0020 (ignored by nosy
+govts; the ally case was not tested with 0x0020). Distress: when an NPC
+without Flags2 0x0008 (own or inherent govt) is hit by an NPC, post "<ship
+name>: <random STR# 5003 line>" to the players in the system, at most one
+per ship every ~20 s (the measured line life; the original's real rate is
+not known).
+
+Confidence: high for 1-3 (single runs with unambiguous brackets and
+bolts, against wave 13's non-nosy runs); high for the distress lines and
+the 0x0008 silence (527 s, at least ten lines, none from the blue govt), low for "only NPC
+attackers".
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w14/{nosy,friend2,raid}/*/`
+(nosy `05-f1.png` .. `14-p4.png` the green case, `42-g1.png` .. `55-z5.png`
+the cyan case; friend2 `*-tab-04.png`; raid `recording.mp4`,
+`status_lit.json`).
+
+### T1 / N1 wave 14: traffic at the other stellar, and AI 2 / AI 3 / AI 4 miners (2026-11-24, second pass)
+
+**T1: the player at Life Market.** Wave 13's sÿst 2085 Kit Life Range
+(AI 1 green traders of gövt 346, avgShips 6; Life Port (0,0), Life Market
+(1000,0), the uninhabited Life Marker (0,1000), the enemy's Hostile Port
+(-1000,0)), pilot `w14_market` (Kit Ring Tank, unarmed) parked at Life
+Market for 526 s at 10 fps (`scenarios/w14_watch.json`). Read with
+`_w14_discevents.mjs` (green discs appearing / vanishing away from the
+screen edge) and `analysis/radar_blips.mjs --tracks` (77 tracks).
+- **Not one trader landed at, took off from, or stopped at Life Market**
+  in 526 s: no green disc appeared or vanished on screen away from the
+  edge; 19 discs crossed the screen edge to edge in 1-10 s.
+- The radar shows the traffic at **Life Port**: 28 tracks left it and 7
+  ended at it; 3 ended at the Marker, 1 at the Hostile Port, 1 at the
+  Market.
+
+So with wave 13: ordinary AI 1 traffic goes to (and parks beside) the
+system's main port, here the first stellar in the sÿst list; the second
+friendly stellar was not a destination in 526 s. Stay times per ship
+could not be separated (identical discs).
+
+**N1: AI 2 / AI 3 / AI 4 miners.** sÿst 2010 Kit Mine Mixed (16 metal
+rocks, gövt 363): the Kit Miner hull (Flags3 0x0003, the stock scoop and
+four stock miner guns) as AI 2 (green) and AI 3 (yellow) düdes, and an
+AI 4 copy with Flags3 0x0001 only and no scoop (red, the Zephyr case), a
+third each, avgShips 4. Pilot `w14_mixed`, 526 s at the port, 10 fps;
+per-colour disc counts (`_w14_disccount.mjs`) and 60-s trail pictures.
+
+| | first on screen | last on screen | on screen |
+|---|---|---|---|
+| AI 2 green (0x0003 + scoop) | 7 s | 292 s | 47% of frames |
+| AI 3 yellow (0x0003 + scoop) | 38 s | 512 s | 54% |
+| AI 4 red (0x0001, no scoop) | 327 s | 498 s | 36% |
+
+The trail pictures show every variant **looping among the rocks**, not
+flying straight legs, with hit puffs on rocks and debris clusters left
+behind (the AI 2 / AI 3 phase 0-300 s, the AI 4 pairs 330-500 s); a green
+and a yellow often flew together. Whose bolts broke which rock was not
+attributed, and how long one ship mines before leaving was not separated.
+
+**Findings (second pass).** All three AI types of the Flags3-0x0003 hull
+behave as miners (rock to rock among the asteroids), and so does the AI 4
+interceptor with Flags3 0x0001 only (no scoop): it patrolled the rocks
+rather than parking at the stellar as an idle AI 4 does (wave 11's
+cutters, wave 14's police). Green miners were gone after about 5 min,
+yellow ones stayed to the end.
+
+**NovaJS today:** no NPC mining at all (wave 13's N1 entry:
+`N/nova_plugin/combat/asteroid_plugin.ts:148-170`; the trader loop's
+`TRADER_DWELL_MS` 12 s at `N/nova_plugin/npc/npc_steering.ts:37` picks
+destinations among all landable stellars). **Proposed (not applied):**
+wave 13's mining mode for Flags3 0x0001 whatever the AI type (AI 1-3 with
+a scoop, and AI 4 with 0x0001 alone, which mines instead of parking);
+for AI 1 traffic, prefer the system's first friendly stellar as the
+destination (to check against a run with the player at the port and the
+traffic count per stellar).
+
+Confidence: medium (one run each; the Market result is clean, the miner
+behaviour is from trail pictures and counts).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w14/{market,mixed}/*/`
+(`recording.mp4`, `radar_tracks.jsonl`, `green_events.txt`,
+`{green,yellow,red}_count.txt`, `w-NN.png`).
+
+### Rescue / abort leftovers, wave 14 (2026-11-24)
+
+**Rig.** wave 13's kit Raczak copies at Kit Port (stock mïsn 394 fields:
+düde 258, ShipGoal 5, Flags 0x1214, Flags2 0x0001), hand-driven after
+`scenarios/w14_offer_interactive.json`: mïsn 1071 (ShipStart -1, with the
+PickupMode-2 cargo; pilot `w14_abort_rescue`), 1070 (ShipStart 2,
+`w14_shipstart2`), 1072 (no cargo, `w14_nocargo`), and the new 1080 (1071
+with the kit düde 330, `w14_kitdude_cargo`, `scenarios/w13_offer_board_auto.json`).
+
+| case | what happened |
+|---|---|
+| **Abort a rescue whose hulk the goal holds in the system** (1071) | `i`, Abort: the dialog closed, "You have no active missions."; the hulk **stayed where it was, still Disabled**, but its target-panel name changed from the mission's "UFS Enterprise" to the class name **"Fed Carrier"** (the special-ship name dropped); still there 22 s later; two `b` presses beside it got no answer (the alignment gate, not tested further). No record change. |
+| **"Waiting" on a ShipStart-2 ship** (1070) | Tab found "UFS Eisenhower, Heavy Fighter Variant", status **"Waiting"** (as wave 13's stock run), all the time (30 s and more); its blip was on the radar about 1100 px from the port, but when the player flew to that blip (dead-reckoned, about 300 px off by the radar afterwards) **no sprite and no brackets were seen** (cloaked, as ShipStart 2 says; not proven at close range); a hail answered **"No response."**; a `b` beside it: "You're moving too fast to board this ship." (the player was still drifting). |
+| **A goal-5 mission without cargo** (1072) | the hulk at the port, "Disabled"; a hail: **"No response."**; landing at ReturnStel: the mission stays active (as wave 13). No way to complete it was found. |
+| the kit düde WITH the cargo (1080) | not boarded: `board.mjs` (bracket mode) lost the 24 px hulk ("target not on screen after the approach"); the mission stayed active. |
+
+**Findings.**
+1. **An aborted mission's hulk stays in the system, disabled, as an
+   ordinary ship of its class** (it loses the special name). With wave
+   13's abort (escorts leave, attackers keep fighting): the original never
+   removes aborted special ships; they revert to their own AI and govt,
+   and a disabled one stays disabled.
+2. **"Waiting" is the target-panel status of a ShipStart-2 special ship
+   that has not appeared**: apparently cloaked (no sprite or brackets seen, a
+   radar blip), it does not answer hails, and it stays "Waiting" while the
+   player is near (the reveal condition was not found).
+3. A goal-5 mission without PickupMode-2 cargo has no completion path
+   that a hail or a landing offers.
+
+**NovaJS today.**
+- 1: `N/nova_plugin/missions/mission_ship_plugin.ts:408-433`
+  (`MissionShipCleanupSystem`) deletes the special ships when the mission
+  leaves the list (wave 13's proposal: untether them instead) and the
+  name stays whatever the spawn gave; **mismatch**. Proposed (adds to wave
+  13's): on abort, keep a disabled special ship disabled and show its
+  class name instead of the mission's ShipNameID name.
+- 2: `N/nova_plugin/missions/mission_ship_spawn.ts:44-51` documents
+  ShipStart 2 "spawning pre-cloaked is a documented gap"; the target pane
+  has no "Waiting" status. Proposed: spawn ShipStart-2 ships cloaked, with
+  the pane reading "Waiting" until they decloak; the decloak condition is
+  still to be measured.
+
+Confidence: high for 1 (one run, panel shots over 22 s); medium for 2
+(one run; the reveal condition is unknown).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w14/{abort_rescue,shipstart2,nocargo,kitdude}/*/`
+(abort_rescue `04-t1.png` before, `06-after.png` .. `09-a3.png` after;
+shipstart2 `04-t1.png`, `10-hail.png`, `13-g1.png`, `14-k1.png`; nocargo `05-hail.png`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **Count the kills from the pilot (wave 14).** In the A14 spread run a
+  press of Space while the panel read "No Target" (a Tab had cycled past
+  the last ship) still fired and killed a second trader; the combat
+  rating (+4 per kit kill) in the pulled pilot told. Check the panel
+  before each shot and read the rating.
+- **A contraband pilot that starts in a customs system is scanned before
+  it can land (wave 14)**, within the first seconds after Enter Ship, so
+  it cannot accept a mission first; with CrimeTol 10 the SmugPenalty then
+  makes it a criminal, and a criminal is attacked, not rescanned. Rigs
+  that need a scan with a mission aboard use a CrimeTol-30000 customs govt
+  (kit mïsn 1081 at Kit Scan Tolerant Port).
+- **A landing and takeoff re-rolls the system's traffic (wave 14)**: a
+  düde that was absent can be present after one or two relaunches (the
+  0x0020 shipping in Kit Nosy Range).
+- **One Buy click in the Trade Center buys 10 t (wave 14)**, not one.
+- **Status-line messages over a long watch (wave 14):**
+  `analysis/region_lit.mjs --rect 0,548,636,24 --level 170 --min 80`
+  finds the stretches with text; a frame from each (ffmpeg `select`)
+  shows the line. Consecutive messages merge into one stretch.
 
 - **The old Mac dropped off the network once (wave 13, about 03:05):**
   "ssh: connect to host 10.77.0.2 port 22: Operation timed out" ended a
@@ -7091,11 +7594,12 @@ directly in one stretch and consistent with the trails elsewhere).
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
-| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. **Wave 13:** per term (owner 345, 11 / 25: +17, not +18; four owners fit); a disable alone costs Disab; and every record change SPREADS to the linked systems at about 0.65 per jump, each computed with that system's own owner (+11 / +7 one / two jumps away in the owner's systems, +48 in a neutral owner's neighbour): see "A14 ... wave 13". |
+| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. **Wave 13:** per term (owner 345, 11 / 25: +17, not +18; four owners fit); a disable alone costs Disab; and every record change SPREADS to the linked systems at about 0.65 per jump, each computed with that system's own owner (+11 / +7 one / two jumps away in the owner's systems, +48 in a neutral owner's neighbour): see "A14 ... wave 13". **Wave 14:** the exact rule: each system n hyperlink jumps away scales the penalty FIELDS by 0.65^n (each floored) and then applies its own owner's view (own / allied victim: minus the victim's scaled fields; anyone else: plus half the owner's scaled fields); measured to six jumps (no cut-off), penalties spread the same way, ally / enemy owners compute from their own relation to the victim, hypergates and wormholes carry nothing; CompReward is govt-wide (+R the CompGovt's systems, +R/2 allies', -R/2 enemies' and xenophobes'), not by jumps: see "A14 spread, wave 14" (ruling #380). |
 | Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 | Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
 | Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, a real mouse's wheel (the BBS in NovaJS: checked, 39f5805d). Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) **Wave 13** answered: the NPC disable of a goal-1 ship (completes it), a disable alone (-Disab), the same-govt missile (moot: no own-govt targeting), P1 run 1 with hits and a kill, P1 run 6, T1 / N2 / N1 first passes. |
-| Wave 13 leftovers | Abort: an aborted ship held in the system by its goal (a rescue hulk). Rescue: what "Waiting" means on the stock special ship (ShipStart 2), mïsn 1070 (stock fields, ShipStart 2) and 1073 (the kit düde with cargo) not run, how a goal-5 mission without cargo can complete, the CompReward spread across allies' / enemies' systems (+5 / -5). A14 spread: how far (2 jumps still +7), the exact factor (about 0.65), penalties (a kill of the owner's own ship) spreading, an ally / enemy owner of a neighbour. P1: runs 3-5 (raiders vs traders, 0x0020, Flags2 0x0008), a victim the police govt cares about; the guards' bracket colours in run 6. T1: landings at the other stellars (park at the Market; the Hostile Port watch was cut at 5.5 min by a network drop), stay times per ship. N1: AI 2 / AI 3 / AI 4 (Zephyr) miners, mining time before leaving. S1-S3, W1, C1, H1 untouched. | **Wave 13** (the "... wave 13" sections above) |
+| Wave 13 leftovers | Abort: an aborted ship held in the system by its goal (a rescue hulk). Rescue: what "Waiting" means on the stock special ship (ShipStart 2), mïsn 1070 (stock fields, ShipStart 2) and 1073 (the kit düde with cargo) not run, how a goal-5 mission without cargo can complete, the CompReward spread across allies' / enemies' systems (+5 / -5). A14 spread: how far (2 jumps still +7), the exact factor (about 0.65), penalties (a kill of the owner's own ship) spreading, an ally / enemy owner of a neighbour. P1: runs 3-5 (raiders vs traders, 0x0020, Flags2 0x0008), a victim the police govt cares about; the guards' bracket colours in run 6. T1: landings at the other stellars (park at the Market; the Hostile Port watch was cut at 5.5 min by a network drop), stay times per ship. N1: AI 2 / AI 3 / AI 4 (Zephyr) miners, mining time before leaving. S1-S3, W1, C1, H1 untouched. | **Wave 13** (the "... wave 13" sections above) **Wave 14** answered: the abort of a held hulk (stays, disabled, renamed to its class), "Waiting" (a ShipStart-2 ship not yet revealed, apparently cloaked), the CompReward spread, the A14 spread (all four questions), P1 runs 3-5 and a victim the police care about, T1 at the Market, N1 AI 2 / 3 / 4, and S1-S3's guesses ("... wave 14" sections). |
+| Wave 14 leftovers | A14: the failure's -R/2 of CompReward (govt-wide like the success, or the CompGovt alone like the 0x0040 abort?); a system with no owner in the spread; the per-govt mapping (ruling #380). Contraband: an ALLY of the owner as the scanner (whose SmugPenalty); one scan finding several things; a clean scan's message. P1: who answers a distress call (the raid melee was not attributed); whether the player's own victims ever call; the 0x0020 / ally combination; what ends a nosy police's hostility besides landing. T1: stay times per ship (a single distinguishable trader); the destination rule (first stellar?). N1: one miner's mining time before leaving; whose bolts break the rocks (per-colour bolt attribution). Rescue: the ShipStart-2 ship's reveal condition (fly onto its blip at rest); boarding the kit düde with cargo (1080, the board loop lost the 24 px hulk); whether a goal-5 mission without cargo can complete at all. W1, C1, H1 untouched. | **Wave 14** (the "... wave 14" sections above) |
 
 ## Catalogue
 
