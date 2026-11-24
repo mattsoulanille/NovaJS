@@ -14,7 +14,7 @@ import {
     BoardingGovtLookup,
     boardingRange,
     captureChance,
-    CAPTURE_CHANCE_MAX,
+    CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN,
     creditBooty,
     creditBootyBase,
     creditBootyRandomSteps,
@@ -347,8 +347,16 @@ describe('captureChance (the original\'s odds, ruling #378)', () => {
             expect(chance).toBeLessThanOrEqual(CAPTURE_CHANCE_MAX);
             last = chance;
         }
-        expect(captureChance(10, 1000)).toBeGreaterThan(0);
-        expect(captureChance(10, 1000)).toBeLessThan(0.01);
+        expect(captureChance(10, 1000)).toEqual(CAPTURE_CHANCE_MIN);
+    });
+
+    it('never offers less than 1% to a crewed boarder (Matthew, 2026-11-23)', () => {
+        expect(CAPTURE_CHANCE_MIN).toEqual(0.01);
+        for (const defender of [1, 40, 1000, 1e6]) {
+            expect(captureChance(1, defender))
+                .toBeGreaterThanOrEqual(CAPTURE_CHANCE_MIN);
+        }
+        expect(Math.round(captureChance(1, 1e6) * 100)).toEqual(1);
     });
 
     it('is zero for a crewless boarder (Bible: cannot capture)', () => {

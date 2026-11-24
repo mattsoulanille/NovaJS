@@ -571,12 +571,20 @@ export function capturable(target: Entity,
  * and 500 against 1 also read 75%: the odds top out at CAPTURE_CHANCE_MAX.
  * No simple formula fits (a crew share would give 67 / 50 / 40 / 33 / 20%)
  * and the doc proposes interpolating the points until one is found, so
- * captureChance interpolates this table linearly in the ratio: down to 0
- * at ratio 0, and up to the cap at ratio 10 (between 2 and 10 nothing was
+ * captureChance interpolates this table linearly in the ratio: down to
+ * CAPTURE_CHANCE_MIN near ratio 0, and up to the cap at ratio 10 (between 2 and 10 nothing was
  * measured). The hulk's damage plays no part (7, 8 and 9 shots against
  * crew 20 read 17, 18, 17%), and nothing else enters here either.
  */
 export const CAPTURE_CHANCE_MAX = 0.75;
+/**
+ * The floor under every capture the table allows: "There should always be at
+ * least a 1% chance to capture a ship" (Matthew, 2026-11-23). A deliberate
+ * departure from the original, which reads 0% against overwhelming crews.
+ * It does not reach a derelict (capturable() refuses those before any odds)
+ * or a crewless boarder (the Bible's "cannot capture").
+ */
+export const CAPTURE_CHANCE_MIN = 0.01;
 export const CAPTURE_ODDS_BY_CREW_RATIO:
     ReadonlyArray<readonly [number, number]> = [
         [0, 0],
@@ -608,7 +616,8 @@ export function captureChance(attackerCrew: number,
         const [r1, odds1] = table[i];
         if (ratio <= r1) {
             const [r0, odds0] = table[i - 1];
-            return odds0 + (odds1 - odds0) * (ratio - r0) / (r1 - r0);
+            return Math.max(CAPTURE_CHANCE_MIN,
+                odds0 + (odds1 - odds0) * (ratio - r0) / (r1 - r0));
         }
     }
     return CAPTURE_CHANCE_MAX;
