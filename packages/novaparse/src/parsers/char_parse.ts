@@ -41,16 +41,18 @@ export async function CharParse(char: CharResource,
     }
 
     // The standard-cargo display names are STR# 4000 (the proper-case
-    // list) and STR# 4001 (the lowercase list running text uses; 4002 is
-    // the status-bar abbreviations, not read yet). A missing resource
-    // falls back to the built-in names.
+    // list), STR# 4001 (the lowercase list running text uses) and STR#
+    // 4002 (the abbreviations the status bar's "Special:" readout
+    // shows). A missing resource falls back to the built-in names.
     const cargoNames = char.idSpace["STR#"][4000]?.strings ?? [];
     const cargoNamesLower = char.idSpace["STR#"][4001]?.strings ?? [];
+    const cargoAbbrevs = char.idSpace["STR#"][4002]?.strings ?? [];
 
     return {
         ...base,
         cargoNames,
         cargoNamesLower,
+        cargoAbbrevs,
         credits: char.startingCredits,
         ship,
         systems,

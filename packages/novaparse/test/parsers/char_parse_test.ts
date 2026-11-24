@@ -63,6 +63,10 @@ function parseChar(withCargoNames = false) {
         idSpace["STR#"][4001] = {
             strings: ["food", "industrial goods", "medical supplies"],
         } as unknown as never;
+        // STR# 4002: their status-bar abbreviations.
+        idSpace["STR#"][4002] = {
+            strings: ["Food", "IndGds", "MedGds"],
+        } as unknown as never;
     }
 
     const resource = new CharResource(
@@ -125,9 +129,15 @@ describe("CharParse", () => {
             ["food", "industrial goods", "medical supplies"]);
     });
 
-    it("leaves cargo names empty when STR# 4000/4001 are absent", async () => {
+    it("resolves the cargo abbreviations from STR# 4002", async () => {
+        const start = await parseChar(true);
+        expect(start.cargoAbbrevs).toEqual(["Food", "IndGds", "MedGds"]);
+    });
+
+    it("leaves cargo names empty when STR# 4000-4002 are absent", async () => {
         const start = await parseChar(false);
         expect(start.cargoNames).toEqual([]);
         expect(start.cargoNamesLower).toEqual([]);
+        expect(start.cargoAbbrevs).toEqual([]);
     });
 });

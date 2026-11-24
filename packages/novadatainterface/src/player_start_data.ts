@@ -66,6 +66,17 @@ export interface PlayerStartData extends BaseData {
      * cargoNames entry.
      */
     cargoNamesLower: string[];
+    /**
+     * The same table's abbreviations, STR# 4002 (the Bible's "Cargo
+     * abbreviations for status display"): what the status bar's
+     * "Special:" readout shows for a mission's cargo ("Raczak" for STR#
+     * 4000 "*Admiral Raczak", "Probe" for "*Space Probe"). Indexed like
+     * cargoNames; empty (or a missing entry) falls back to the
+     * cargoNames entry. The manifest of standard commodities does NOT
+     * use it: the original's manifest reads "Ind" / "Med" / "LuxG"
+     * where STR# 4002 says "IndGds" / "MedGds" / "LuxGds".
+     */
+    cargoAbbrevs: string[];
 }
 
 /** The stock scenario's standard cargo names (STR# 4000), the fallback
@@ -77,6 +88,11 @@ export const DEFAULT_CARGO_NAMES = ['Food', 'Industrial',
  * fallback when the data provides none. */
 export const DEFAULT_CARGO_NAMES_LOWER = ['food', 'industrial goods',
     'medical supplies', 'luxury goods', 'metal', 'equipment'];
+
+/** The stock scenario's standard cargo abbreviations (STR# 4002), the
+ * fallback when the data provides none. */
+export const DEFAULT_CARGO_ABBREVS = ['Food', 'IndGds', 'MedGds', 'LuxGds',
+    'Metal', 'Equpt'];
 
 export function getDefaultGameDate(): GameDate {
     // EV Nova's stock scenario starts in October 1177 NC; a neutral
@@ -100,5 +116,6 @@ export function getDefaultPlayerStartData(): PlayerStartData {
         govtStatuses: [],
         cargoNames: [...DEFAULT_CARGO_NAMES],
         cargoNamesLower: [...DEFAULT_CARGO_NAMES_LOWER],
+        cargoAbbrevs: [...DEFAULT_CARGO_ABBREVS],
     };
 }
