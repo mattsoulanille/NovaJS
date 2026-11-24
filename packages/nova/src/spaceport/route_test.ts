@@ -399,7 +399,9 @@ describe('routing through every drawn system', () => {
                     .toBeFalse();
                 expect(canPin(drawnAdj, 'h', [], 'k', same, passable, false))
                     .toBeFalse();
-                // Explored intermediates are no different: q is two jumps.
+                // Explored intermediates are no different (wave 11: one
+                // shift-click two hops out over explored systems is
+                // ignored): q is two jumps, through the drawn p.
                 expect(canPin(drawnAdj, 'h', [], 'q', same, passable, false))
                     .toBeFalse();
             });

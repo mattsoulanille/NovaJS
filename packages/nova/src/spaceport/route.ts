@@ -232,9 +232,11 @@ export function canPin(adj: Adjacency, current: string,
     }
     // Without auto-routing (the original's rule, NovaJS Enhancements OFF)
     // a new pin must be ONE jump past the route's end: the original
-    // ignores a shift-click it would have to plot a path to
-    // (reference_experiments "Route planning through unexplored systems,
-    // wave 10"), so a route is built pin by pin.
+    // ignores a shift-click it would have to plot a path to, whether the
+    // systems on the way are unexplored (reference_experiments "Route
+    // planning through unexplored systems, wave 10") or all explored
+    // ("Multi-jump routes and the `j` key, wave 11"), so a route is built
+    // pin by pin.
     return autoRoute || route.length === before + 1;
 }
 
