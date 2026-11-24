@@ -188,6 +188,23 @@ export function hailIsUnanswerable(world: World): boolean {
     return !!planetData && !isPort(planetData.flags);
 }
 
+/**
+ * Whether the hail key is aimed at a DISABLED ship, which answers nothing:
+ * the original prints "No response." on the status line and opens no
+ * channel, for a disabled mission ally, a disabled hired escort, any
+ * disabled ship (reference "Reviving a disabled ally, wave 11"; the same
+ * escort had answered with a channel before it was disabled). Checked
+ * before a përs's hail-offered mission too, since a hulk offers nothing.
+ */
+export function hailTargetIsDisabled(world: World): boolean {
+    const player = getPlayerShip(world);
+    const shipTargetUuid = player?.entity.components.get(TargetComponent)
+        ?.target;
+    const shipTarget = shipTargetUuid
+        ? world.entities.get(shipTargetUuid) : undefined;
+    return !!shipTarget?.components.has(DisabledComponent);
+}
+
 /** Whether the player ship is disabled or low on fuel (assist gate). */
 function playerNeedsHelp(entity: ReturnType<typeof getPlayerShip>): boolean {
     if (!entity) {
@@ -1103,8 +1120,9 @@ export const HailDialogPlugin: Plugin = {
             if (dialog.container.visible || opening) {
                 return;
             }
-            // Nobody is home on a dead moon: no channel opens at all.
-            if (hailIsUnanswerable(world)) {
+            // Nobody is home on a dead moon, nor on a disabled ship: no
+            // channel opens at all, just "No response." (STR# 2002 #52).
+            if (hailIsUnanswerable(world) || hailTargetIsDisabled(world)) {
                 await refuseHail();
                 return;
             }

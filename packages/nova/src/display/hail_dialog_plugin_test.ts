@@ -53,7 +53,8 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
-    assistAnswer, computeContext, hailIsUnanswerable, shipIdentityBlock,
+    assistAnswer, computeContext, hailIsUnanswerable, hailTargetIsDisabled,
+    shipIdentityBlock,
     targetIsFighting,
 } from './hail_dialog_plugin.js';
 
@@ -1246,6 +1247,34 @@ describe('computeContext: hailing a STELLAR', () => {
                 .toBe('Communications channel open to Earth.\n'
                     + 'You are cleared to land.');
         });
+
+    describe('hailTargetIsDisabled (a hulk answers nothing)', () => {
+        // The original (reference "Reviving a disabled ally, wave 11"):
+        // a disabled mission ally and a disabled hired escort both
+        // answered the hail key with "No response." and no channel.
+        it('refuses a disabled ship, your own escort included', () => {
+            const { world } = makeWorld(target => {
+                target.components.set(FormationComponent,
+                    { leader: PLAYER, slot: 0 });
+                target.components.set(DisabledComponent, { repairAt: null });
+            });
+            expect(hailTargetIsDisabled(world)).toBeTrue();
+        });
+
+        it('lets the same ship answer while it is not disabled', () => {
+            const { world } = makeWorld(target => {
+                target.components.set(FormationComponent,
+                    { leader: PLAYER, slot: 0 });
+            });
+            expect(hailTargetIsDisabled(world)).toBeFalse();
+        });
+
+        it('is silent (not a refusal) when nothing is targeted', () => {
+            const { world } = makeWorld(() => undefined);
+            world.entities.get(PLAYER)!.components.delete(TargetComponent);
+            expect(hailTargetIsDisabled(world)).toBeFalse();
+        });
+    });
 
     describe('hailIsUnanswerable (the no-dialog refusal)', () => {
         it('refuses a hail at an uninhabited stellar', () => {
