@@ -17,6 +17,7 @@ export * from './hostility.js';
 export * from './blind_spots.js';
 export * from './guidance.js';
 export * from './fire_weapon_plugin.js';
+export * from './submunition_rule.js';
 export * from './exit_point.js';
 export * from './weapon_plugin.js';
 export * from './beam_plugin.js';

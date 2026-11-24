@@ -148,6 +148,46 @@ export class MultiFrameHull extends Hull {
     }
 }
 
+const hullRadii = new WeakMap<Hull, number>();
+
+/**
+ * The hull's reach from its centre: the farthest any of its shapes
+ * extends from the hull's origin, over EVERY animation frame of a
+ * MultiFrameHull, so it does not change as a ship turns. A sprite-mask
+ * disc of radius 12 reads 12; an elongated ship reads half its length.
+ * The target-size term of a proximity fuse (projectile_plugin.ts).
+ *
+ * Pure geometry (base polygon points are unrotated and relative to the
+ * hull's origin; a hull's circles are centred on it), so every peer
+ * computes the same value; memoized per hull object, which no snapshot
+ * sees.
+ */
+export function hullRadius(hull: Hull): number {
+    const cached = hullRadii.get(hull);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const frames: readonly Hull[] = hull instanceof MultiFrameHull
+        ? hull.hulls : [hull];
+    let radiusSquared = 0;
+    let circleRadius = 0;
+    for (const frame of frames) {
+        for (const shape of frame.shapes) {
+            if (shape instanceof SAT.Circle) {
+                circleRadius = Math.max(circleRadius, shape.r);
+                continue;
+            }
+            for (const point of shape.points) {
+                radiusSquared = Math.max(radiusSquared,
+                    point.x * point.x + point.y * point.y);
+            }
+        }
+    }
+    const radius = Math.max(Math.sqrt(radiusSquared), circleRadius);
+    hullRadii.set(hull, radius);
+    return radius;
+}
+
 export const HitboxHullComponent = new Component<Hull>('HitboxHullComponent');
 export const HurtboxHullComponent = new Component<Hull>('HurtboxHullComponent');
 

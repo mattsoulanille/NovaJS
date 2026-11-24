@@ -26,6 +26,7 @@ import { CreateTime, CreateTimeArgProvider } from '../core/index.js';
 import { DamagedEvent } from '../ship/index.js';
 import { applyExitPoint, ExitPointData } from './exit_point.js';
 import { FireSubs, liveTargetMovement, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { ShotEnd } from './submunition_rule.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { GovtComponent } from '../core/index.js';
@@ -55,6 +56,14 @@ export interface BeamState {
      * Bible exempts. Optional: beams from older snapshots have none.
      */
     aimOffset?: number;
+    /**
+     * Whether the previous tick's collision pass found a body on the ray
+     * (its targetHit, which BeamResetSystem clears before BeamSystem
+     * runs). A beam that ENDS this way ended in a direct hit and fires no
+     * submunitions (BeamSystem, submunition_rule.ts). Optional: absent
+     * means no hit, as on beams from older snapshots.
+     */
+    hitLastTick?: boolean;
 }
 
 export const BeamStateComponent = new Component<BeamState>('BeamState');
@@ -76,6 +85,7 @@ export const BeamStateType: t.Type<BeamState> = t.exact(t.partial({
     hitDist: t.number,
     targetHit: t.string,
     aimOffset: t.number,
+    hitLastTick: t.boolean,
 }));
 
 const BeamSubsQuery = new Query([MovementStateComponent] as const);
@@ -157,11 +167,11 @@ class BeamWeaponEntry extends WeaponEntry {
         return beam;
     }
 
-    override fireSubs(source: string, sourceExpired = false) {
+    override fireSubs(source: string, end: ShotEnd) {
         const [{ position, rotation }] = this.runQuery(BeamSubsQuery, source)[0];
         const endOfBeam = position.add(rotation.getUnitVector()
             .scale(this.data.beamAnimation.length)) as Position;
-        return super.fireSubs(source, sourceExpired, endOfBeam);
+        return super.fireSubs(source, end, endOfBeam);
     }
 }
 
@@ -191,7 +201,19 @@ export const BeamSystem = new System({
         const timeSinceFire = time - fireTime;
         if (intervalElapsed(timeSinceFire,
             beamData.onScreenDuration ?? beamData.shotDuration, delta_ms)) {
-            fireSubs(beamData.id, uuid, true);
+            // A beam that ends with its ray on a body (the last tick's
+            // BeamCollisionSystem hit, BeamState.hitLastTick) ended in a
+            // DIRECT HIT, and
+            // a direct hit never subs: measured on the original, a turreted
+            // beam held on its target fired no subs (docs/
+            // reference_experiments.md, "Submunitions wave 10"). A beam that
+            // ends untouched keeps NovaJS's long-standing behaviour, subs
+            // at the end of the ray subject to wëap Flags2 0x0020; the
+            // original's untouched case was NOT measured (an untargeted
+            // player turret beam does not fire), nor whether a beam that
+            // hit earlier in its life but not on its last frame subs.
+            fireSubs(beamData.id, uuid,
+                beamState.hitLastTick ? 'directHit' : 'expired');
             entities.delete(uuid);
             return;
         }
@@ -258,6 +280,10 @@ export const BeamResetSystem = new System({
     name: "BeamResetSystem",
     args: [BeamStateComponent] as const,
     step: (state) => {
+        // Kept across the reset for BeamSystem (which runs after this),
+        // whose end-of-life submunitions need to know whether the beam's
+        // last collision pass found a body.
+        state.hitLastTick = state.targetHit !== undefined ? true : undefined;
         state.hitDist = undefined;
         state.targetHit = undefined;
     },
@@ -471,7 +497,7 @@ export const BeamCollisionSystem = new System({
     }
 });
 
-const BeamDamageSystem = new System({
+export const BeamDamageSystem = new System({
     name: 'BeamDamageSystem',
     args: [BeamDataComponent, BeamStateComponent, CreateTimeArgProvider, EmitNow, TimeResource, UUID] as const,
     step(beamData, beamState, fireTime, emitNow, { time, delta_ms }, uuid) {

@@ -48,6 +48,7 @@ import { PointDefenseCandidate, selectPointDefenseTarget } from './point_defense
 import { ShipComponent, ShipDataComponent, ShipDataProvider } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
+import { ShotEnd, submunitionFires } from './submunition_rule.js';
 
 // Re-exported so the ~40 existing importers of these three keep working.
 export { OwnerComponent, SourceComponent, VulnerableToPD };
@@ -58,8 +59,13 @@ export const WeaponConstructors = new Resource<Map<WeaponData['type'],
 
 export const WeaponEntries = new Resource<Gettable<WeaponEntry | undefined>>('WeaponEntries');
 
-type FireSubs = (id: string, source: string, sourceExpired?: boolean) => Entity[];
-export const FireSubs = new Resource<FireSubs>('FireSubs');
+/**
+ * Fires weapon `id`'s submunitions from the shot `source`, which ended as
+ * `end` says; whether each submunition entry fires at all is
+ * submunitionFires' call (submunition_rule.ts).
+ */
+export type FireSubsFunction = (id: string, source: string, end: ShotEnd) => Entity[];
+export const FireSubs = new Resource<FireSubsFunction>('FireSubs');
 
 export const SubCounts = new Component<DefaultMap<string, number>>('SubCount');
 
@@ -626,7 +632,7 @@ export abstract class WeaponEntry {
         return spawned;
     }
 
-    fireSubs(source: string, sourceExpired = false, position?: Position): Entity[] {
+    fireSubs(source: string, end: ShotEnd, position?: Position): Entity[] {
         let [weaponEntries, movement, subCounts, owner, target, sourceEntity]
             = this.runQuery(SubsQuery, source)[0];
         if (!('submunitions' in this.data)) {
@@ -674,7 +680,9 @@ export abstract class WeaponEntry {
             if (!subWeapon) {
                 continue;
             }
-            if (!sub.subIfExpire && sourceExpired) {
+            // A direct hit never subs; an expiry only without wëap
+            // Flags2 0x0020 (submunition_rule.ts).
+            if (!submunitionFires(sub, end)) {
                 continue;
             }
 
@@ -863,12 +871,12 @@ export const FireWeaponPlugin: Plugin = {
         world.resources.set(WeaponEntries, weaponEntries);
 
         world.resources.set(FireSubs, (id: string, source: string,
-            sourceExpired?: boolean) => {
+            end: ShotEnd) => {
             const weaponEntry = weaponEntries.getCached(id);
             if (!weaponEntry) {
                 return [];
             }
-            return weaponEntry.fireSubs(source, sourceExpired);
+            return weaponEntry.fireSubs(source, end);
         });
     }
 }

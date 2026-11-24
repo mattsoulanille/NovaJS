@@ -208,9 +208,16 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // records its firing group's root, not the concrete firer):
             // a fleet escort's shot now names the fleet's leader. Genesis,
             // Kestrel and both Random states did not move.
+            //
+            // Thessaly's stepped hash was re-pinned for "Submunitions wave
+            // 10": a shot with a proximity fuse (the Harrier Missile, prox
+            // 12) keeps its sprite hurtbox and fuses at ProxRadius + 2/3
+            // of the target's radius, so its missiles connect at
+            // different moments. Genesis, Kestrel and both Random states
+            // did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '54afcf19', 'fab7c2ff',
+                [THESSALY, '54afcf19', 'f06ef3e2',
                     [3151324470, 1269255679, 2221342106, 396450743]],
                 [SYNTHETIC.systems.kestrel, '71fa40dd', '3859c45c',
                     [1138059186, 670859187, 378276492, 1491742351]],

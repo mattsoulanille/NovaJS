@@ -101,7 +101,7 @@ describe('submunition firing sound (real Nova data)', () => {
             world.step();
             sounds = [];
 
-            world.resources.get(FireSubs)!(MULTI_TORP, 'shooter');
+            world.resources.get(FireSubs)!(MULTI_TORP, 'shooter', 'proximity');
             world.step();
 
             // One sample, not five.
@@ -113,7 +113,7 @@ describe('submunition firing sound (real Nova data)', () => {
         world.step();
         const before = world.entities.size;
 
-        const spawned = world.resources.get(FireSubs)!(MULTI_TORP, 'shooter');
+        const spawned = world.resources.get(FireSubs)!(MULTI_TORP, 'shooter', 'proximity');
         world.step();
 
         // Silencing shots must not drop any of them.
@@ -130,9 +130,9 @@ describe('submunition firing sound (real Nova data)', () => {
             sounds = [];
 
             const fireSubs = world.resources.get(FireSubs)!;
-            fireSubs(MULTI_TORP, 'shooter');
+            fireSubs(MULTI_TORP, 'shooter', 'proximity');
             world.step();
-            fireSubs(MULTI_TORP, 'shooter');
+            fireSubs(MULTI_TORP, 'shooter', 'proximity');
             world.step();
 
             expect(sounds.filter(id => id === TORP_SOUND).length).toEqual(2);

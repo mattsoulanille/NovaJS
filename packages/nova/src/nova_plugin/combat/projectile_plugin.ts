@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { ProjectileWeaponData, WeaponData, WeaponDamage } from 'novadatainterface/weapon_data';
-import { Emit, EmitNow, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, EmitNow, Entities, GetEntity, GetWorld, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { EntityMap } from 'nova_ecs/entity_map';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position, PositionType } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -8,10 +9,13 @@ import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
+import { Query } from 'nova_ecs/query';
+import { ReadOnly } from 'nova_ecs/read_only';
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
+import { World } from 'nova_ecs/world';
 import SAT from "sat";
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { AnimationComponent } from '../core/index.js';
@@ -20,18 +24,19 @@ import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../sh
 import { IdFactoryResource } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin.js';
-import { CompositeHull, HitboxHullProvider, hullFromAnimation, HurtboxHullComponent } from '../core/index.js';
+import { CollisionSystem, CompositeHull, HitboxHullComponent, HitboxHullProvider, hullFromAnimation, hullRadius, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { CreateTime } from '../core/index.js';
 import { DamagedEvent, ZeroArmorEvent } from '../ship/index.js';
 import { ExitPointData } from './exit_point.js';
-import { FireSubs, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { FireSubs, FireSubsFunction, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { ShotEnd } from './submunition_rule.js';
 import { ActiveSecondaryProvider } from './weapon_plugin.js';
-import { BeamCollisionSystem } from './beam_plugin.js';
+import { BeamCollisionSystem, BeamDamageSystem } from './beam_plugin.js';
 import { KillCreditSystem } from '../reputation/index.js';
 import { OwnerComponent, SourceComponent, VulnerableToPD } from '../ship/index.js';
 import {
-    BLAST_FLOCK_RULE, blastFriendlyFire, disabledCancelsImmunity,
+    BLAST_FLOCK_RULE, blastFriendlyFire, disabledCancelsImmunity, FiringGroup,
     FiringGroupComponent, firingImmune, victimFiringGroup,
 } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
@@ -161,12 +166,11 @@ class ProjectileWeaponEntry extends WeaponEntry {
                 }));
             }
 
-            if (this.data.proxRadius) {
-                const proxHull = new CompositeHull([
-                    new SAT.Circle(new SAT.Vector(0, 0), this.data.proxRadius)
-                ]);
-                projectile.components.set(HurtboxHullComponent, proxHull);
-            }
+            // A shot with a proximity fuse keeps its SPRITE hurtbox
+            // (ProjectileHurtboxProvider) for direct hits: the fuse is a
+            // separate test with its own reach
+            // (ProjectileProximityFuseSystem), and which of the two fires
+            // first decides whether the shot subs (submunition_rule.ts).
 
             if (this.data.blastRadius) {
                 const blastHull = new CompositeHull([
@@ -263,7 +267,7 @@ const ProjectileLifespanSystem = new System({
         Entities, UUID, Emit, ProjectileComponent] as const,
     step(fireTime, { time }, projectileData, fireSubs, entities, uuid, emit) {
         if (time - fireTime > projectileData.shotDuration) {
-            fireSubs(projectileData.id, uuid, true);
+            fireSubs(projectileData.id, uuid, 'expired');
             const self = entities.get(uuid);
             if (!self) {
                 console.warn(`Missing projectile ${uuid} that is expiring`);
@@ -401,6 +405,144 @@ const ProjectileHurtboxProvider = ProvideFromCache({
     before: [ActiveSecondaryProvider],
 });
 
+/**
+ * Everything a projectile strike needs to know about the shot, for
+ * projectileMayStrike and strike below.
+ */
+interface ShotContext {
+    uuid: string,
+    projectileData: ProjectileWeaponData,
+    owner: { owner: string } | undefined,
+    firingGroup: FiringGroup | undefined,
+    target: { target?: string } | undefined,
+    source: string | undefined,
+    createTime: number,
+    time: { time: number },
+    entities: EntityMap,
+    world: World,
+}
+
+/**
+ * Whether the shot may strike `other` at all, by a direct hit or its
+ * proximity fuse: the rules every projectile hit passes, in one place so
+ * the body (ProjectileCollisionSystem) and the fuse
+ * (ProjectileProximityFuseSystem) never disagree.
+ */
+function projectileMayStrike(shot: ShotContext, otherUuid: string,
+    other: Entity): boolean {
+    const { uuid, projectileData, owner, firingGroup, target, source,
+        createTime, time, entities, world } = shot;
+    // Optional: a test world without game data can't judge hostility
+    // and keeps the plain collision rules.
+    const gameData = world.resources.get(SimulationGameDataResource);
+    // Friendly-fire immunity: don't collide with anything in our
+    // firing group — the firer itself, its fleet (leader+escorts),
+    // its carrier/fighters — see firing_group.ts. The owner uuid is the fallback group for weapons
+    // that predate group stamping; the predicate never matches when the
+    // weapon has neither (an ownerless projectile must not match every
+    // group-less entity and pass through e.g. asteroids).
+    const victimGroup = victimFiringGroup(
+        other.components.get(FiringGroupComponent),
+        other.components.get(OwnerComponent)?.owner,
+        otherUuid);
+    if (firingImmune(firingGroup?.group ?? owner?.owner, victimGroup,
+        firingGroup?.govt, other.components.get(GovtComponent)?.id,
+        disabledCancelsImmunity(otherUuid,
+            other.components.has(DisabledComponent), source))) {
+        return false;
+    }
+
+    if (projectileData.proxSafety * 1000 + createTime > time.time) {
+        // Prox safety is still active: the shot passes through
+        // everything, body included, until it runs out (measured on the
+        // original: a prox 60 / ProxSafety 30 shot flew through its
+        // target untouched; "Submunitions wave 10").
+        return false;
+    }
+
+    // A guided weapon only hits the ship it is TARGETING (so a
+    // homing missile weaves through a furball untouched), unless
+    // its wëap sets Flags2 0x0008 "Proximity detonator is triggered
+    // by ships other than the target" — parsed as proxHitAll, which
+    // is forced true for every non-guided weapon. A decoyed missile
+    // whose TargetComponent was retargeted (jamming_plugin) hits
+    // its new target through the same rule; a missile whose target
+    // cloaked keeps flying with the lock suspended and passes
+    // through everything else, which is correct per this rule.
+    if (!projectileData.proxHitAll
+        && otherUuid !== target?.target) {
+        // Asteroids are still fair game for guided weapons unless
+        // the Seeker 0x0001 'passes over asteroids' flag is set.
+        if (!other.components.has(AsteroidComponent)
+            || projectileData.seeker.passOverAsteroids) {
+            return false;
+        }
+    }
+
+    // A POINT DEFENSE round hurts only what the turret would have
+    // aimed at — a missile flying at us, a ship hostile to us
+    // (point_defense.ts). A stray PD burst crossing a neutral fighter
+    // or someone else's missile passes through rather than starting a
+    // war (Matthew's ruling).
+    if (projectileData.guidance === 'pointDefense' && gameData) {
+        const viewerUuid = owner?.owner ?? source ?? uuid;
+        const viewerEntity = entities.get(viewerUuid);
+        const isShip = other.components.has(ShipComponent);
+        const getEntity = (id: string) => entities.get(id);
+        const sourceUuid = source ?? viewerUuid;
+        const mayDamage = viewerEntity !== undefined
+            && pointDefenseMayDamage({
+                uuid: otherUuid,
+                kind: isShip ? 'fighter' : 'missile',
+                owner: other.components.get(OwnerComponent)?.owner
+                    ?? otherUuid,
+                target: other.components.get(TargetComponent)?.target,
+                hostile: isShip && isHostileTarget(otherUuid, other, {
+                    viewerUuid, viewerEntity, entities,
+                    gameData, now: time.time,
+                    systemId: world.resources.get(SystemIdResource),
+                }),
+                inFlock: isInFlock(otherUuid, viewerUuid, getEntity)
+                    || (viewerUuid !== sourceUuid
+                        && isInFlock(otherUuid, sourceUuid,
+                            getEntity)),
+            }, { owner: viewerUuid, source: sourceUuid });
+        if (!mayDamage) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** The shot's damage lands on `otherUuid`, decayed for its flight time. */
+function strikeDamage(shot: ShotContext, otherUuid: string, emitNow: EmitFunction) {
+    emitNow(DamagedEvent, {
+        damage: decayDamage(shot.projectileData.damage,
+            shot.projectileData.decay, shot.time.time - shot.createTime),
+        damager: shot.uuid,
+    }, [otherUuid]);
+}
+
+/**
+ * The shot detonates on `otherUuid` (already damaged by strikeDamage):
+ * submunitions as `end` and submunitionFires allow, then the shot is gone
+ * and its ProjectileCollisionEvent drives the explosion and blast
+ * (ProjectileExplodeSystem; the blast spares `otherUuid`, which took the
+ * direct damage).
+ */
+function detonate(shot: ShotContext, self: Entity, otherUuid: string,
+    end: ShotEnd, fireSubs: FireSubsFunction, emitNow: EmitFunction) {
+    fireSubs(shot.projectileData.id, shot.uuid, end);
+    shot.entities.delete(shot.uuid);
+    emitNow(ProjectileCollisionEvent, {
+        otherUuid,
+        position: Position.fromVectorLike(
+            self.components.get(MovementStateComponent)?.position ?? new Position(0, 0)
+        ),
+        projectileData: shot.projectileData,
+    }, [self]);
+}
+
 export const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
@@ -410,86 +552,16 @@ export const ProjectileCollisionSystem = new System({
         EmitNow, GetWorld, Optional(SourceComponent)] as const,
     step(collision, entities, uuid, projectileData, owner, firingGroup,
         target, fireSubs, time, createTime, emitNow, world, source) {
-        // Optional: a test world without game data can't judge hostility
-        // and keeps the plain collision rules.
-        const gameData = world.resources.get(SimulationGameDataResource);
         const other = entities.get(collision.other);
         if (!other) {
             return;
         }
-        // Friendly-fire immunity: don't collide with anything in our
-        // firing group — the firer itself, its fleet (leader+escorts),
-        // its carrier/fighters — see firing_group.ts. The owner uuid is
-        // the fallback group for weapons that predate group stamping;
-        // the predicate never matches when the weapon has neither (an
-        // ownerless projectile must not match every group-less entity
-        // and pass through e.g. asteroids).
-        const victimGroup = victimFiringGroup(
-            other.components.get(FiringGroupComponent),
-            other.components.get(OwnerComponent)?.owner,
-            collision.other);
-        if (firingImmune(firingGroup?.group ?? owner?.owner, victimGroup,
-            firingGroup?.govt, other.components.get(GovtComponent)?.id,
-            disabledCancelsImmunity(collision.other,
-                other.components.has(DisabledComponent), source))) {
+        const shot: ShotContext = {
+            uuid, projectileData, owner, firingGroup, target, source,
+            createTime, time, entities, world,
+        };
+        if (!projectileMayStrike(shot, collision.other, other)) {
             return;
-        }
-
-        if (projectileData.proxSafety * 1000 + createTime > time.time) {
-            // Prox safety is still active. Do not collide.
-            return;
-        }
-
-        // A guided weapon only hits the ship it is TARGETING (so a
-        // homing missile weaves through a furball untouched), unless
-        // its wëap sets Flags2 0x0008 "Proximity detonator is triggered
-        // by ships other than the target" — parsed as proxHitAll, which
-        // is forced true for every non-guided weapon. A decoyed missile
-        // whose TargetComponent was retargeted (jamming_plugin) hits
-        // its new target through the same rule; a missile whose target
-        // cloaked keeps flying with the lock suspended and passes
-        // through everything else, which is correct per this rule.
-        if (!projectileData.proxHitAll
-            && collision.other !== target?.target) {
-            // Asteroids are still fair game for guided weapons unless
-            // the Seeker 0x0001 'passes over asteroids' flag is set.
-            if (!other.components.has(AsteroidComponent)
-                || projectileData.seeker.passOverAsteroids) {
-                return;
-            }
-        }
-
-        // A POINT DEFENSE round hurts only what the turret would have
-        // aimed at — a missile flying at us, a ship hostile to us
-        // (point_defense.ts). A stray PD burst crossing a neutral fighter
-        // or someone else's missile passes through rather than starting a
-        // war (Matthew's ruling).
-        if (projectileData.guidance === 'pointDefense' && gameData) {
-            const viewerUuid = owner?.owner ?? source ?? uuid;
-            const viewerEntity = entities.get(viewerUuid);
-            const isShip = other.components.has(ShipComponent);
-            const getEntity = (id: string) => entities.get(id);
-            const sourceUuid = source ?? viewerUuid;
-            const mayDamage = viewerEntity !== undefined
-                && pointDefenseMayDamage({
-                    uuid: collision.other,
-                    kind: isShip ? 'fighter' : 'missile',
-                    owner: other.components.get(OwnerComponent)?.owner
-                        ?? collision.other,
-                    target: other.components.get(TargetComponent)?.target,
-                    hostile: isShip && isHostileTarget(collision.other, other, {
-                        viewerUuid, viewerEntity, entities,
-                        gameData, now: time.time,
-                        systemId: world.resources.get(SystemIdResource),
-                    }),
-                    inFlock: isInFlock(collision.other, viewerUuid, getEntity)
-                        || (viewerUuid !== sourceUuid
-                            && isInFlock(collision.other, sourceUuid,
-                                getEntity)),
-                }, { owner: viewerUuid, source: sourceUuid });
-            if (!mayDamage) {
-                return;
-            }
         }
 
         const self = entities.get(uuid);
@@ -498,30 +570,143 @@ export const ProjectileCollisionSystem = new System({
             return;
         }
 
-        emitNow(DamagedEvent, {
-            damage: decayDamage(projectileData.damage, projectileData.decay,
-                time.time - createTime),
-            damager: uuid,
-        }, [collision.other]);
+        strikeDamage(shot, collision.other, emitNow);
 
         if (!collision.initiator) {
             // We are hit by point defense
             return;
         }
 
-        fireSubs(projectileData.id, uuid, false);
-        entities.delete(uuid);
-        emitNow(ProjectileCollisionEvent, {
-            otherUuid: other.uuid,
-            position: Position.fromVectorLike(
-                self.components.get(MovementStateComponent)?.position ?? new Position(0, 0)
-            ),
-            projectileData,
-        }, [self]);
+        // The shot's sprite touched the body: a DIRECT HIT, which never
+        // subs (submunition_rule.ts) however wide its proximity fuse.
+        // CollisionSystem runs before ProjectileProximityFuseSystem, so
+        // when the body and the fuse connect on the same tick the body
+        // wins: on the original a prox 12 shot fused at the 24 px disc's
+        // body distance (19-20 px) hit it without subbing.
+        detonate(shot, self, collision.other, 'directHit', fireSubs,
+            emitNow);
     },
     // #237 pin (shared: *): among the CollisionEvent handlers, before
     // beam's.
     before: [BeamCollisionSystem],
+});
+
+/**
+ * How much of the target's radius (hullRadius: its sprite mask's reach
+ * from its centre) a proximity fuse adds to wëap ProxRadius: the fuse
+ * fires when the shot's centre comes within
+ * `ProxRadius + factor * targetRadius` of the target's centre.
+ *
+ * FITTED to the original (docs/reference_experiments.md, "Submunitions
+ * wave 10"): on a 24 px disc (radius 12) the fuse fired about ProxRadius
+ * + 7 px out (prox 16 / 20 / 30 / 60 detonated 24 / 27 / 36.5 / ~66 px
+ * from the centre), on a 96 px disc (radius 48) about ProxRadius + 30
+ * (prox 30 / 60 at 61.7 / 89.5): about two thirds of the extra radius.
+ * 2/3 puts the fuse at ProxRadius + 8 and + 32, which every measured
+ * detonation sits at or inside (the shots moved 2-6 px a frame, so a
+ * detonation reads at or a little inside the true reach), and keeps the
+ * body-first outcomes: prox 12 on the small disc (fuse 20, body 19-20:
+ * the body won the tie) and prox 20 on the big one (fuse 52, body 54-56).
+ * Unmeasured: other target shapes (non-disc ships), so the radius term
+ * for an elongated hull is an extrapolation.
+ */
+export const PROX_FUSE_TARGET_RADIUS_FACTOR_FITTED = 2 / 3;
+
+/** The centre-to-centre distance at which a proximity fuse fires. */
+export function proximityFuseReach(proxRadius: number,
+    targetRadius: number): number {
+    return proxRadius + PROX_FUSE_TARGET_RADIUS_FACTOR_FITTED * targetRadius;
+}
+
+const ProximityFuseCandidates = new Query([UUID, MovementStateComponent,
+    HitboxHullComponent, CollisionVulnerabilityComponent] as const,
+    'ProximityFuseCandidates');
+
+/**
+ * A shot's PROXIMITY FUSE (wëap ProxRadius > 0), separate from its body:
+ * the shot detonates — damaging the ship that tripped it and firing its
+ * submunitions, the one way besides expiry that a shot subs — once its
+ * centre comes within proximityFuseReach of something it may strike
+ * (projectileMayStrike: the same firing-group / same-govt / guided /
+ * point defense / ProxSafety rules as a direct hit). The body
+ * (ProjectileCollisionSystem, inside CollisionSystem) is judged first
+ * each tick, so this fires only when the fuse beats the body.
+ *
+ * Several candidates in reach on one tick: the one deepest inside its
+ * reach, then the smallest uuid — a total order, so the pick does not
+ * depend on query iteration order (determinism).
+ */
+export const ProjectileProximityFuseSystem = new System({
+    name: 'ProjectileProximityFuseSystem',
+    args: [ProjectileDataComponent, MovementStateComponent,
+        CollisionHitterComponent, CreateTime, TimeResource, UUID, Entities,
+        FireSubs, EmitNow, GetWorld, Optional(OwnerComponent),
+        Optional(FiringGroupComponent), Optional(TargetComponent),
+        Optional(SourceComponent), ReadOnly(ProximityFuseCandidates)] as const,
+    step(projectileData, movement, hitter, createTime, time, uuid, entities,
+        fireSubs, emitNow, world, owner, firingGroup, target, source,
+        candidates) {
+        if (!(projectileData.proxRadius > 0)) {
+            return;
+        }
+        if (projectileData.proxSafety * 1000 + createTime > time.time) {
+            return; // Cheap early out; projectileMayStrike says the same.
+        }
+        const shot: ShotContext = {
+            uuid, projectileData, owner, firingGroup, target, source,
+            createTime, time, entities, world,
+        };
+        const { x, y } = movement.position;
+        let best: { uuid: string, margin: number } | undefined;
+        for (const [otherUuid, otherMovement, hull, vulnerability] of candidates) {
+            if (otherUuid === uuid) {
+                continue;
+            }
+            let vulnerable = false;
+            for (const hitType of hitter.hitTypes) {
+                if (vulnerability.vulnerableTo.has(hitType)) {
+                    vulnerable = true;
+                    break;
+                }
+            }
+            if (!vulnerable) {
+                continue;
+            }
+            const dx = otherMovement.position.x - x;
+            const dy = otherMovement.position.y - y;
+            const distanceSquared = dx * dx + dy * dy;
+            const reach = proximityFuseReach(projectileData.proxRadius,
+                hullRadius(hull));
+            if (distanceSquared > reach * reach) {
+                continue;
+            }
+            const margin = Math.sqrt(distanceSquared) - reach;
+            if (best && (margin > best.margin
+                || (margin === best.margin && otherUuid > best.uuid))) {
+                continue;
+            }
+            const other = entities.get(otherUuid);
+            if (!other || !projectileMayStrike(shot, otherUuid, other)) {
+                continue;
+            }
+            best = { uuid: otherUuid, margin };
+        }
+        if (!best) {
+            return;
+        }
+        const self = entities.get(uuid);
+        if (!self) {
+            return;
+        }
+        strikeDamage(shot, best.uuid, emitNow);
+        detonate(shot, self, best.uuid, 'proximity', fireSubs, emitNow);
+    },
+    // After CollisionSystem, whose CollisionEvent handlers judge the body
+    // first (a tie goes to the direct hit). #237 pin (shared: *): before
+    // BeamDamageSystem, as the projectile collision handler runs before
+    // the beam's.
+    after: [CollisionSystem],
+    before: [BeamDamageSystem],
 });
 
 export const ProjectileExplodeEventType = t.intersection([
@@ -665,6 +850,7 @@ export const ProjectilePlugin: Plugin = {
         world.addSystem(ProjectileGuidanceSystem);
         world.addSystem(ProjectileLifespanSystem);
         world.addSystem(ProjectileCollisionSystem);
+        world.addSystem(ProjectileProximityFuseSystem);
         world.addSystem(ProjectileDeathSystem);
         world.addSystem(ProjectileHurtboxProvider);
         world.addSystem(ProjectileExplodeSystem);
