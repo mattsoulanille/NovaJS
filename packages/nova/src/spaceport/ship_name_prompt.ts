@@ -39,12 +39,21 @@ export function shipNamePromptText(shipType: string): string {
 }
 
 /**
- * How many characters the field takes. The original's took 64 and refused
- * 80 (the limit lies between, not bisected), but only the first 31 reach
- * the pilot file, which is what confirmedShipName keeps (wave 16, finding
- * 5).
+ * How many characters OK accepts. Measured (reference "W1 / C1 /
+ * contraband / the shipyard prompt, wave 17", finding 5, bisected in one
+ * prompt): 64 accepted; 65, 66, 68 and 72 refused at OK, the dialog
+ * staying up with the text reselected; and nothing was cut while typing
+ * (all 72 went in). Only the first 31 reach the pilot file, which is what
+ * confirmedShipName keeps (wave 16, finding 5).
  */
 export const SHIP_NAME_FIELD_LENGTH = 64;
+
+/**
+ * How many characters the field takes while typing, past the 64 OK
+ * accepts (72 were typed in on the reference). GUESS: 255, a Pascal
+ * string's limit; the original's own cap was not reached.
+ */
+export const SHIP_NAME_TYPING_LENGTH = 255;
 
 /**
  * The prefill's number: "<class name> <random 100-999>", a fresh three
@@ -71,17 +80,20 @@ export function confirmedShipName(entered: string): string {
  * The prompt itself. `ask` resolves with the name to give the new ship,
  * or undefined when the player cancelled — which aborts the whole
  * purchase: credits, hull and trade-in stay as they were (wave 16,
- * finding 1).
+ * finding 1). OK on more than {@link SHIP_NAME_FIELD_LENGTH} characters
+ * is refused and the prompt stays up (wave 17, finding 5).
  *
  * Measured in docs/reference_experiments.md, "The shipyard's \"Please
- * name your new <ship>:\" prompt, wave 16".
+ * name your new <ship>:\" prompt, wave 16" and "W1 / C1 / contraband /
+ * the shipyard prompt, wave 17".
  */
 export class ShipNamePrompt {
     private dialog: AlertPromptDialog;
 
     constructor(controlEvents: Observable<ControlEvent>) {
         this.dialog = new AlertPromptDialog(controlEvents, 'ShipNamePrompt',
-            SHIP_NAME_PROMPT_LAYOUT, SHIP_NAME_FIELD_LENGTH);
+            SHIP_NAME_PROMPT_LAYOUT, SHIP_NAME_TYPING_LENGTH,
+            SHIP_NAME_FIELD_LENGTH);
     }
 
     get container() {

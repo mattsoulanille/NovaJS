@@ -4,6 +4,7 @@ import { ControlEvent } from '../nova_plugin/core/index.js';
 import { isTextEntryActive } from '../input_focus.js';
 import {
     AlertPromptDialog, editPromptField, insertIntoField, PromptField,
+    promptAnswer,
 } from './alert_prompt.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
@@ -146,13 +147,39 @@ describe('the ship name prompt', () => {
         expect(await answer).toBe('Shuttle 550');
     });
 
-    it('takes up to 64 characters in the field', async () => {
-        const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
-        const answer = prompt.ask('Shuttle');
-        prompt.alert.type('x'.repeat(80));
-        expect(prompt.alert.value.text.length).toBe(64);
-        prompt.alert.confirm();
-        expect(await answer).toBe('x'.repeat(31));
+    it('takes 72 characters while typing but refuses 65 or more at OK, '
+        + 'the text reselected, and accepts 64 (wave 17, finding 5)',
+        async () => {
+            const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
+            const answer = prompt.ask('Shuttle');
+            let settled = false;
+            void answer.then(() => { settled = true; });
+            for (const n of [72, 68, 66, 65]) {
+                prompt.alert.type('x'.repeat(n));
+                expect(prompt.alert.value).toEqual(field('x'.repeat(n)));
+                prompt.alert.confirm();
+                await Promise.resolve();
+                expect(settled).withContext(`${n} characters`).toBeFalse();
+                expect(prompt.alert.shown).toBeTrue();
+                expect(prompt.alert.value)
+                    .toEqual(field('x'.repeat(n), true));
+            }
+            prompt.alert.type('x'.repeat(SHIP_NAME_FIELD_LENGTH));
+            prompt.alert.confirm();
+            expect(await answer).toBe('x'.repeat(31));
+            expect(prompt.alert.shown).toBeFalse();
+        });
+
+    it('refuses an over-long answer only where a limit is given', () => {
+        expect(promptAnswer(field('x'.repeat(65)), 64))
+            .toEqual({ refused: field('x'.repeat(65), true) });
+        expect(promptAnswer(field('x'.repeat(64)), 64))
+            .toEqual({ accepted: 'x'.repeat(64) });
+        expect(promptAnswer(field('x'.repeat(65))))
+            .toEqual({ accepted: 'x'.repeat(65) });
+        // Counted in characters, as the field counts them.
+        expect(promptAnswer(field('\u00e9'.repeat(64)), 64))
+            .toEqual({ accepted: '\u00e9'.repeat(64) });
     });
 
     it('draws as one alert container, named for headless driving', () => {

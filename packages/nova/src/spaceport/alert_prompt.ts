@@ -221,6 +221,22 @@ export function insertIntoField(field: PromptField, text: string,
     };
 }
 
+/**
+ * What the default button (or Return) does with the field: answers with
+ * its text, or, when the text is longer than `acceptLength` characters,
+ * REFUSES — the alert stays up with the whole text selected, as the
+ * original's ship name prompt does past 64 characters (reference "W1 /
+ * C1 / contraband / the shipyard prompt, wave 17", finding 5: 72, 68, 66
+ * and 65 refused, 64 accepted). No `acceptLength`, no refusal. Pure.
+ */
+export function promptAnswer(field: PromptField, acceptLength?: number):
+    { accepted: string } | { refused: PromptField } {
+    if (acceptLength !== undefined && length(field.text) > acceptLength) {
+        return { refused: { text: field.text, selected: field.text !== '' } };
+    }
+    return { accepted: field.text };
+}
+
 /** What one showing of the prompt asks. */
 export interface AlertPromptRequest {
     prompt: string;
@@ -258,8 +274,15 @@ export class AlertPromptDialog {
     private readonly left: number;
     private readonly top: number;
 
+    /**
+     * `maxLength` is how many characters the field TAKES (typing and
+     * pasting stop there); `acceptLength`, when given, is how many the
+     * default button ACCEPTS — a longer text is refused at OK rather than
+     * cut while typing ({@link promptAnswer}).
+     */
     constructor(controlEvents: Observable<ControlEvent>, name: string,
-        private layout: AlertPromptLayout, private maxLength: number) {
+        private layout: AlertPromptLayout, private maxLength: number,
+        private acceptLength?: number) {
         this.container.name = name;
         this.container.visible = false;
 
@@ -336,7 +359,7 @@ export class AlertPromptDialog {
             false, () => this.close(undefined));
         this.confirmButton = new AquaButton('OK', left + layout.confirmX,
             top + layout.buttonY, layout.buttonWidth, layout.buttonHeight,
-            true, () => this.close(this.field.text));
+            true, () => this.submit());
         this.container.addChild(cancel.container,
             this.confirmButton.container);
 
@@ -375,7 +398,7 @@ export class AlertPromptDialog {
         // field keeps, as the Find field always has).
         if (isReturnPress(event)) {
             event.preventDefault();
-            this.close(this.field.text);
+            this.submit();
             return;
         }
         if (event.key === 'Escape') {
@@ -413,6 +436,16 @@ export class AlertPromptDialog {
         this.result.next(value);
     }
 
+    /** The default button: answer, or refuse a text that is too long. */
+    private submit() {
+        const answer = promptAnswer(this.field, this.acceptLength);
+        if ('refused' in answer) {
+            this.setField(answer.refused);
+            return;
+        }
+        this.close(answer.accepted);
+    }
+
     /** Shows the prompt; resolves with the field's text, or undefined. */
     async show(request: AlertPromptRequest): Promise<string | undefined> {
         this.promptText.text = request.prompt;
@@ -443,9 +476,13 @@ export class AlertPromptDialog {
         }
     }
 
-    /** Answers the prompt as its default button would (headless driving). */
+    /**
+     * Presses the default button (headless driving): answers the prompt,
+     * or leaves it up with its text reselected when the text is longer
+     * than the button accepts.
+     */
     confirm() {
-        this.close(this.field.text);
+        this.submit();
     }
 
     /** Answers the prompt as its Cancel button would (headless driving). */
