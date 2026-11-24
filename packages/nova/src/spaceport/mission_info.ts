@@ -28,11 +28,19 @@ import {
 import { wrapIndex } from './list_selection.js';
 
 /**
+ * In-flight Abort: aborts mission `missionId` for the player through the
+ * simulation (the `abortMission` input record — mission_info_plugin.ts
+ * builds and dispatches it), resolving true once the record is on its
+ * way and false when there was nothing to abort.
+ */
+export type MissionInfoInFlightAbort = (missionId: string) => Promise<boolean>;
+
+/**
  * Docked context that makes the Abort button functional: aborting runs
  * on the landing's working copy — the transaction the spaceport opened
  * (landed_transaction.ts) — which is only sound while docked. In flight
- * the button stays greyed — an in-flight abort would need an
- * input-record path of its own.
+ * the abort goes through the simulation instead
+ * ({@link MissionInfoInFlightAbort}).
  *
  * `transaction` is the landing's; without one (a caller with no landing
  * in progress) the abort opens a transaction of its own over the entity
@@ -97,11 +105,13 @@ export function listedMissions(entity: Entity, universe: MissionUniverse):
  * The Mission Info dialog ('i'): lists the player's active missions and
  * shows the selected one's briefing text and the current date, on the
  * 8517 frame. Opens in flight and while docked, as a modal overlay on
- * the same focus stack as the starmap / player-info dialogs. Read-only:
- * the Abort button is functional while DOCKED (an abort context routes
- * it through a MissionSession over the held entity) and greyed in
- * flight, where an abort would bypass the deterministic mission
- * machinery.
+ * the same focus stack as the starmap / player-info dialogs. Its Abort
+ * button aborts the selected mission — in flight through an input record
+ * the simulation applies on every peer (MissionInfoInFlightAbort), while
+ * DOCKED through a MissionSession over the held entity — and is greyed
+ * for a mïsn with CanAbort 0. Like the original's, it acts at once: no
+ * "are you sure?" (the stock STR# resources hold a confirmation for
+ * jettisoning cargo and none for aborting a mission).
  */
 export class MissionInfoDialog {
     container = new PIXI.Container();
@@ -121,6 +131,7 @@ export class MissionInfoDialog {
     private currentDay = 0;
     private entity?: Entity;
     private abortContext?: MissionInfoAbortContext;
+    private inFlightAbort?: MissionInfoInFlightAbort;
     /** <PN>/<PSN>-style identity values, loaded per show(). */
     private identity: PlayerIdentitySubs = {};
     private aborting = false;
@@ -174,8 +185,8 @@ export class MissionInfoDialog {
         this.container.addChild(descMask);
         this.description.mask = descMask;
 
-        // Functional while docked (see class doc); greyed in flight or
-        // when the selected mission can't be aborted.
+        // Greyed with nothing to abort or when the selected mission can't
+        // be aborted (see refreshAbortState).
         this.abort = new Button(displayAssets, 'Abort',
             MISSION_INFO.button.width,
             { x: MISSION_INFO.button.abort, y: MISSION_INFO.button.y });
@@ -197,10 +208,6 @@ export class MissionInfoDialog {
     }
 
     /**
-     * Shows the dialog for a ship entity; resolves when dismissed.
-     * Passing an abort context (docked only) enables the Abort button.
-     */
-    /**
      * Closes the dialog from outside (its display world is being torn
      * down mid-jump), releasing the MenuControls binding. No-op when
      * not shown.
@@ -211,10 +218,17 @@ export class MissionInfoDialog {
         }
     }
 
+    /**
+     * Shows the dialog for a ship entity; resolves when dismissed.
+     * Abort works through `abort`: a docked context, or the in-flight
+     * dispatcher. Without one the button stays greyed.
+     */
     async show(entity: Entity,
-        abortContext?: MissionInfoAbortContext): Promise<void> {
+        abort?: MissionInfoAbortContext | MissionInfoInFlightAbort):
+        Promise<void> {
         this.entity = entity;
-        this.abortContext = abortContext;
+        this.abortContext = typeof abort === 'function' ? undefined : abort;
+        this.inFlightAbort = typeof abort === 'function' ? abort : undefined;
         this.identity = await playerIdentitySubs(this.universe,
             entity.components.get(ShipComponent)?.id, undefined,
             entity.components.get(ActiveRanksComponent));
@@ -348,20 +362,25 @@ export class MissionInfoDialog {
 
     private refreshAbortState() {
         const entry = this.missions[this.selectedIndex];
-        const canAbort = !!this.abortContext && !!entry
+        const canAbort = (!!this.abortContext || !!this.inFlightAbort)
+            && !!entry
             && (this.universe.getMission(entry[0])?.canAbort ?? true);
         this.abort.state = canAbort ? 'normal' : 'grey';
     }
 
     /**
-     * Aborts the selected mission (docked only): runs OnAbort, drops
-     * mission cargo and removes the mission on the landing's working copy
-     * under a savepoint released at once (so it is on the entity when
-     * this returns), then re-reads the entity's mission list.
+     * Aborts the selected mission. In flight: hands it to the in-flight
+     * dispatcher (an input record) and drops it from the list at once —
+     * the display's mirror of the player catches up when the simulation
+     * applies the record. Docked: runs OnAbort, drops mission cargo and
+     * removes the mission on the landing's working copy under a savepoint
+     * released at once (so it is on the entity when this returns), then
+     * re-reads the entity's mission list.
      */
     private async doAbort() {
         const entry = this.missions[this.selectedIndex];
-        if (!entry || !this.entity || !this.abortContext || this.aborting) {
+        if (!entry || !this.entity || this.aborting
+            || (!this.abortContext && !this.inFlightAbort)) {
             return;
         }
         const [id] = entry;
@@ -370,6 +389,25 @@ export class MissionInfoDialog {
             return;
         }
         this.aborting = true;
+        if (this.inFlightAbort) {
+            let sent = false;
+            try {
+                sent = await this.inFlightAbort(id);
+            } catch (e) {
+                console.warn(`Failed to abort mission ${id}:`, e);
+            } finally {
+                this.aborting = false;
+            }
+            if (sent) {
+                this.missions = this.missions.filter(([mid]) => mid !== id);
+                this.afterAbort();
+            }
+            return;
+        }
+        if (!this.abortContext) {
+            this.aborting = false;
+            return;
+        }
         try {
             const transaction = this.abortContext.transaction
                 ?? await LandedTransaction.open(this.entity,
@@ -385,11 +423,12 @@ export class MissionInfoDialog {
         } finally {
             this.aborting = false;
         }
-        const missions = this.entity.components.get(MissionsComponent);
-        this.missions = missions
-            ? [...missions].filter(([mid]) =>
-                !this.universe.getMission(mid)?.flags.invisible)
-            : [];
+        this.missions = listedMissions(this.entity, this.universe);
+        this.afterAbort();
+    }
+
+    /** Re-selects within the shortened list and redraws. */
+    private afterAbort() {
         this.selectedIndex = Math.min(this.selectedIndex,
             Math.max(0, this.missions.length - 1));
         this.refreshList();

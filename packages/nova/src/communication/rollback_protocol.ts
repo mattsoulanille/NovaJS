@@ -360,6 +360,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    wire schema fingerprint is back to 1f7350a5d5199574, the same as
 //    before d9e989c2. No input kind or message kind changes. The build
 //    stamp gate keeps builds with different sim rules apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): aborting a mission IN FLIGHT, from the 'i'
+//    dialog's Abort. The new `abortMission` input kind (the mission's
+//    OnAbort and the rest of abortMission, resolved on the owning client
+//    against a detached copy: mission_accept.ts AbortedMissionType) carries
+//    the mission id and the same OPTIONAL delta fields a refusal does. The
+//    sim removes the mission from the SENDER's list — a no-op when it is
+//    not there — and applies the deltas; its special ships follow through
+//    MissionShipCleanupSystem. New union member, so the derived wire schema
+//    fingerprint changes (55c212da798ebf7a); every existing kind and field
+//    is unchanged, and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

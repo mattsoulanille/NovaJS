@@ -4,7 +4,9 @@ import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { ControlEvent } from "../nova_plugin/core/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
-import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
+import {
+    AbortedMission, AcceptedMission, RefusedMission,
+} from "../nova_plugin/missions/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { SimulationBridgeHostApi } from "./simulation_bridge_api.js";
 import { SimulationFrame } from "./simulation_frame.js";
@@ -72,6 +74,10 @@ export class SimulationBridgeClient {
 
     refuseMission(refused: RefusedMission) {
         return this.host.refuseMission(structuredClone(refused));
+    }
+
+    abortMission(aborted: AbortedMission) {
+        return this.host.abortMission(structuredClone(aborted));
     }
 
     addEntity(uuid: string, entity: Entity) {

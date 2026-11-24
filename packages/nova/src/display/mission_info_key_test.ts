@@ -17,7 +17,14 @@ import {
 import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { NO_MISSIONS } from '../spaceport/mission_info.js';
-import { MissionInfoPlugin, MissionInfoResource } from './mission_info_plugin.js';
+import { MissionUniverse } from '../spaceport/mission_universe.js';
+import type { AbortedMission } from '../nova_plugin/missions/index.js';
+import { BITS } from 'novaparse/synthetic/universe';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { ShipComponent } from '../nova_plugin/ship/index.js';
+import {
+    AbortMissionEvent, MissionInfoPlugin, MissionInfoResource,
+} from './mission_info_plugin.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { StatusLineResource } from './status_message_plugin.js';
@@ -66,11 +73,15 @@ describe('in-flight mission info key (wave 11)', () => {
         await world.addPlugin(MissionInfoPlugin);
         world.entities.set('player', new Entity()
             .addComponent(PlayerShipSelector, undefined)
+            .addComponent(ShipComponent, { id: SYNTHETIC.ships.skiff })
             .addComponent(MissionsComponent, new Map(missions))
             .addComponent(GameDateComponent, { day: 1, month: 1, year: 1177 }));
         const dialog = world.resources.get(MissionInfoResource)!;
         const pressI = () => controls.next({ action: 'missions', state: 'start' });
-        return { world, lines, dialog, pressI };
+        const aborts: AbortedMission[] = [];
+        world.events.get(AbortMissionEvent).subscribe(({ data }) =>
+            aborts.push(data.record));
+        return { world, lines, dialog, pressI, aborts };
     }
 
     async function settle(turns = 200) {
@@ -115,5 +126,67 @@ describe('in-flight mission info key (wave 11)', () => {
         pressI();
         await settle();
         expect(dialog.container.visible).toBeFalse();
+    });
+
+    /** The dialog's Abort button and description, from inside. */
+    function parts(dialog: unknown) {
+        return dialog as {
+            abort: { state: string, click: { next(click: object): void } },
+            description: { text: string },
+        };
+    }
+
+    async function openWith(missions: [string, ActiveMission][]) {
+        const flown = await flight(missions);
+        flown.world.entities.get('player')!.components.set(
+            ControlBitsComponent, new Set([BITS.courierAccepted]));
+        flown.pressI();
+        for (let i = 0; i < 2000 && !flown.dialog.container.visible; i++) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        expect(flown.dialog.container.visible).toBeTrue();
+        return flown;
+    }
+
+    it('aborts in flight through an abortMission record', async () => {
+        const courier = SYNTHETIC.missions.courier;
+        const { dialog, aborts, pressI } =
+            await openWith([[courier, active(courier)]]);
+        const { abort, description } = parts(dialog);
+        expect(abort.state).withContext('Abort is live in flight')
+            .toBe('normal');
+        abort.click.next({});
+        for (let i = 0; i < 2000 && aborts.length === 0; i++) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        expect(aborts).toEqual([{
+            missionId: courier, bitsCleared: [BITS.courierAccepted],
+        }]);
+        // Off the list at once, without waiting for the simulation.
+        expect(description.text).toBe(NO_MISSIONS);
+        expect(abort.state).toBe('grey');
+        pressI();
+        await settle();
+        expect(dialog.container.visible).toBeFalse();
+    });
+
+    it('greys Abort for a CanAbort 0 mission', async () => {
+        const courier = SYNTHETIC.missions.courier;
+        const original = MissionUniverse.prototype.getMission;
+        spyOn(MissionUniverse.prototype, 'getMission').and.callFake(
+            function (this: MissionUniverse, id: string) {
+                const mission = original.call(this, id);
+                return mission && id === courier
+                    ? { ...mission, canAbort: false } : mission;
+            });
+        const { dialog, aborts, pressI } =
+            await openWith([[courier, active(courier)]]);
+        const { abort } = parts(dialog);
+        expect(abort.state).toBe('grey');
+        abort.click.next({});
+        await settle();
+        expect(aborts).toEqual([]);
+        pressI();
+        await settle();
     });
 });

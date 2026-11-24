@@ -1,11 +1,14 @@
 import { Entity } from 'nova_ecs/entity';
+import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
+    SystemIdResource,
 } from '../nova_plugin/core/index.js';
+import type { AbortedMission } from '../nova_plugin/missions/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
@@ -14,6 +17,7 @@ import {
     NO_MISSIONS_STRING_TABLE,
 } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
+import { buildMissionAbort } from '../spaceport/ship_mission_accept.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
@@ -22,6 +26,15 @@ import { showStatusMessage } from './status_message_plugin.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
 
 export const MissionInfoResource = new Resource<MissionInfoDialog>('MissionInfo');
+/**
+ * A mission the player aborted from the in-flight dialog, on its way to
+ * the simulation bridge (game_session.ts -> bridge.abortMission): the
+ * `abortMission` input record, resolved here against a detached copy of
+ * the player (mission_accept.ts AbortedMissionType).
+ */
+export const AbortMissionEvent = new EcsEvent<{
+    record: AbortedMission,
+}>('AbortMissionEvent');
 const MissionInfoControlsSubscription =
     new Resource<Subscription>('MissionInfoControlsSubscription');
 /**
@@ -92,6 +105,23 @@ export const MissionInfoPlugin: Plugin = {
             if (!ship) {
                 return;
             }
+            // In flight (no planetId) Abort goes through the simulation:
+            // resolved against the CURRENT mirror of the player, as the
+            // abort is clicked, and sent as an input record.
+            const inFlightAbort = async (missionId: string) => {
+                const player = getPlayerShip(world);
+                if (!player) {
+                    return false;
+                }
+                const abort = await buildMissionAbort(player, missionId,
+                    simulationData, universe,
+                    { systemId: world.resources.get(SystemIdResource) });
+                if (!abort) {
+                    return false;
+                }
+                world.emit(AbortMissionEvent, { record: abort.record });
+                return true;
+            };
             opening = true;
             try {
                 // Re-adding moves the dialog to the top of the stage, so
@@ -101,7 +131,7 @@ export const MissionInfoPlugin: Plugin = {
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
                 await dialog.show(ship, planetId
                     ? { gameData: simulationData, planetId, transaction }
-                    : undefined);
+                    : inFlightAbort);
             } finally {
                 opening = false;
                 // dialog.show resolves when the dialog closes.

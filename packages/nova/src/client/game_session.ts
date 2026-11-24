@@ -31,6 +31,7 @@ import {
     EscortActionEvent, HailRequestEvent,
 } from '../display/hail_dialog_plugin.js';
 import { jumpFadeCovering, resetJumpFade } from '../display/jump_fade_plugin.js';
+import { AbortMissionEvent } from '../display/mission_info_plugin.js';
 import {
     AcceptShipMissionEvent, RefuseShipMissionEvent,
 } from '../display/ship_mission_offer_plugin.js';
@@ -202,6 +203,15 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
         world.events.get(RefuseShipMissionEvent).subscribe(({ data }) => {
             void bridge.refuseMission(data.record).catch(e => {
                 console.warn('Failed to refuse a ship-offered mission:', e);
+            });
+        });
+        // A mission the player aborted from the in-flight 'i' dialog: its
+        // OnAbort resolved against a detached copy, like a refusal's
+        // OnRefuse, on its own input kind (mission_accept.ts
+        // AbortedMissionType).
+        world.events.get(AbortMissionEvent).subscribe(({ data }) => {
+            void bridge.abortMission(data.record).catch(e => {
+                console.warn('Failed to abort a mission:', e);
             });
         });
         world.events.get(LandEvent).subscribe(({ data, entities }) => {

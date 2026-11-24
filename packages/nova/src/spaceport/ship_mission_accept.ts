@@ -4,6 +4,7 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import {
+    abortMission, AbortedMission,
     AcceptedMission, AcceptedMissionShip, acceptOffer, EncodedActiveMission,
     LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
     missionMatchesLocation, RefusedMission, refuseOffer, SetStringEffects,
@@ -542,4 +543,45 @@ export async function buildShipMissionRefusal(player: Entity,
             ...effects,
         },
     };
+}
+
+/** An abort's record, plus anything its OnAbort gave the player to read. */
+export interface MissionAbort {
+    record: AbortedMission;
+    events: MissionEvent[];
+}
+
+/**
+ * Aborts the player's mission `missionId` IN FLIGHT against a detached
+ * copy of the player's state — the very abortMission the docked dialog
+ * ran (OnAbort, the 0x0040 CompReward reversal, the mission cargo
+ * unloaded) — and returns the input record that reproduces it in the
+ * simulation (mission_accept.ts AbortedMissionType). Null when there is
+ * nothing to abort: the mission is not on the player's list, or its mïsn
+ * says CanAbort 0 ("This mission can't be aborted by the player").
+ *
+ * `player` is the display world's mirror of the player's ship, read and
+ * never written, as for an accept.
+ */
+export async function buildMissionAbort(player: Entity, missionId: string,
+    gameData: SimulationGameDataInterface, universe: MissionUniverse,
+    options: {
+        /** The system the player is flying in (an OnAbort `Sxxx` is
+         * offered from there, as an in-flight accept's is). */
+        systemId?: string,
+    } = {}): Promise<MissionAbort | null> {
+    await universe.load();
+    if (!player.components.get(MissionsComponent)?.has(missionId)) {
+        return null;
+    }
+    if (!(universe.getMission(missionId)?.canAbort ?? true)) {
+        return null;
+    }
+    const { session, before, outcome } = await detachedSession(player,
+        gameData, universe, options.systemId);
+    abortMission(session.machinery, missionId, session.outfits);
+    const events = session.commit();
+    const effects = diffSetStringEffects(before, session.target, missionId,
+        outcome);
+    return { events, record: { missionId, ...effects } };
 }

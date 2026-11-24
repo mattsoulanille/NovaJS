@@ -22,7 +22,9 @@ import { ControlEvent } from "../nova_plugin/core/index.js";
 import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
-import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
+import {
+    AbortedMission, AcceptedMission, RefusedMission,
+} from "../nova_plugin/missions/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SimulationFrame } from "./simulation_frame.js";
@@ -131,6 +133,10 @@ class BrowserSimulationBridgeHost implements BrowserSimulationBridgeWorkerApi {
 
     async refuseMission(refused: RefusedMission) {
         await this.requireBridge().refuseMission(refused);
+    }
+
+    async abortMission(aborted: AbortedMission) {
+        await this.requireBridge().abortMission(aborted);
     }
 
     async step(count?: number) {

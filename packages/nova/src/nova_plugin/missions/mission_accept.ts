@@ -43,9 +43,8 @@ import {
  * re-enters the sim later inside the liftoff `addEntity` record. In
  * flight that entity belongs to the simulation, and the display's copy is
  * a one-way mirror that the next frame overwrites — so committing a
- * session against it would change nothing, on any peer. (mission_info.ts
- * says as much where it greys the Abort button in flight: "an in-flight
- * abort would need an input-record path of its own.") This is that path.
+ * session against it would change nothing, on any peer. This is that
+ * path, and the in-flight refusal and abort below take it too.
  *
  * ============================================================================
  * WHERE THE TRUST BOUNDARY SITS
@@ -412,6 +411,69 @@ export function applyRefuseMission(world: World, peerId: string | undefined,
             `the refusal of ${refused.missionId}`);
     }
     applySetStringEffects(world, controlled.uuid, player, refused);
+}
+
+/**
+ * The player ABORTING one of their own missions IN FLIGHT: the Abort
+ * button of the "Currently active missions" dialog ('i'), which is where
+ * the original puts it (the spaceport ignores 'i' — the wave-11 UI key
+ * matrix — so in flight is the only place to abort a mission at all).
+ *
+ * Resolved on the owning client exactly like a refusal
+ * (spaceport/ship_mission_accept.ts buildMissionAbort): the same abortMission
+ * the docked path ran — the mïsn's OnAbort set string, the 0x0040 "-5x
+ * CompReward reversal on abort", the mission cargo unloaded — against a
+ * detached copy of the player, carried as the same deltas. What the sim
+ * does with the mission's special ships needs no field: removing the
+ * mission from the list is enough, because MissionShipCleanupSystem
+ * deletes every mission ship whose owner no longer holds its mission —
+ * the tether an Axxx ending a mission in flight already relies on.
+ *
+ * IDEMPOTENT, and OWNER-ONLY, through one guard: the mission must be on
+ * the list of the ship `peerId` controls (the actor is never named in
+ * the record). A duplicated or replayed record finds it gone; a mission
+ * that ended some other way between the click and the apply (completed,
+ * failed, auto-aborted) is not aborted a second time, so its OnAbort
+ * does not run on top of its other ending; and no peer can name a
+ * mission that is not on its OWN list.
+ *
+ * CanAbort is the client's to enforce: the dialog greys Abort for a
+ * CanAbort 0 mission and buildMissionAbort refuses one. The simulation
+ * cannot read mïsn data to re-check it (mission_accept.ts's module note:
+ * a tampered client could equally hand itself a mission).
+ */
+export const AbortedMissionType = t.intersection([t.type({
+    /** The mïsn global id being aborted. */
+    missionId: t.string,
+}), t.partial({
+    ...SET_STRING_EFFECT_PROPS,
+})]);
+export type AbortedMission = t.TypeOf<typeof AbortedMissionType>;
+
+/**
+ * Applies an in-flight abort on every peer at the same tick: the actor
+ * from `peerId`, the mission off its list (a no-op when it is not there,
+ * see AbortedMissionType), then the OnAbort's own starts and ends and
+ * everything {@link applySetStringEffects} applies.
+ *
+ * Synchronous and free of randomness and wall-clock reads (the rollback
+ * driver replays it).
+ */
+export function applyAbortMission(world: World, peerId: string | undefined,
+    aborted: AbortedMission): void {
+    const controlled = findControlledEntity(world, peerId);
+    if (!controlled) {
+        return;
+    }
+    const player = controlled.entity;
+    const missions = player.components.get(MissionsComponent);
+    if (!missions || !missions.has(aborted.missionId)) {
+        return;
+    }
+    missions.delete(aborted.missionId);
+    applyMissionListDeltas(missions, aborted,
+        `the abort of ${aborted.missionId}`);
+    applySetStringEffects(world, controlled.uuid, player, aborted);
 }
 
 /**

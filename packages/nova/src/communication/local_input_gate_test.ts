@@ -138,6 +138,8 @@ describe('the local input gate', () => {
         { name: 'acceptMission, with a change of ship and a move', valid: true, input: { kind: 'acceptMission', accepted: { missionId: 'nova:1', mission: null, shipChange: { shipId: 'nova:130' }, moveToSystem: { systemId: 'nova:129', keepCoordinates: false } } } },
         { name: 'refuseMission', valid: true, input: { kind: 'refuseMission', refused: { missionId: 'nova:1', bitsSet: [3], shipChange: { shipId: 'nova:130' } } } },
         { name: 'refuseMission, change of ship without a class', valid: false, input: { kind: 'refuseMission', refused: { missionId: 'nova:1', shipChange: {} } } },
+        { name: 'abortMission', valid: true, input: { kind: 'abortMission', aborted: { missionId: 'nova:1', bitsCleared: [100], cargoDelta: [['mission:nova:1', -10]] } } },
+        { name: 'abortMission, no mission', valid: false, input: { kind: 'abortMission', aborted: { bitsCleared: [100] } } },
         { name: 'escortAction', valid: true, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort', toShip: 'nova:130' } } },
         { name: 'escortAction, upgrade without a class', valid: false, input: { kind: 'escortAction', action: { kind: 'queueUpgrade', target: 'escort' } } },
         { name: 'refundFighter', valid: true, input: { kind: 'refundFighter', refund: { carrier: 'carrier', bayWeaponId: 'nova:200' } } },
@@ -163,7 +165,7 @@ describe('the local input gate', () => {
         const members = (SimulationInputType as unknown as {
             types: { type: { props: { kind: { value: string } } } }[],
         }).types.map(member => member.type.props.kind.value).sort();
-        expect(members.length).toBe(14);
+        expect(members.length).toBe(15);
         const kindsOf = (valid: boolean) => [...new Set(cases
             .filter(c => c.valid === valid)
             .map(c => (c.input as { kind: string }).kind))]

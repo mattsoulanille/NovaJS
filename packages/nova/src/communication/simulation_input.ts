@@ -23,6 +23,7 @@ import { applySetTarget } from "../nova_plugin/combat/index.js";
 import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/index.js";
 import {
     AcceptedMission, AcceptedMissionType, applyAcceptMission,
+    AbortedMission, AbortedMissionType, applyAbortMission,
     applyRefuseMission, RefusedMission, RefusedMissionType, SetStringEffects,
 } from "../nova_plugin/missions/index.js";
 import {
@@ -71,6 +72,13 @@ export type SimulationInput =
      * See mission_accept.ts RefusedMissionType.
      */
     | { kind: 'refuseMission', refused: RefusedMission }
+    /**
+     * The player ABORTING one of their own missions in flight (the 'i'
+     * dialog's Abort): the mïsn's OnAbort and the rest of abortMission,
+     * resolved on the owning client and baked in as the same deltas a
+     * refusal carries. See mission_accept.ts AbortedMissionType.
+     */
+    | { kind: 'abortMission', aborted: AbortedMission }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
      * own escorts: release it, or queue/cancel an upgrade or a sale
@@ -168,6 +176,7 @@ export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
     t.strict({ kind: t.literal('hail'), action: HailActionType }),
     t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
     t.strict({ kind: t.literal('refuseMission'), refused: RefusedMissionType }),
+    t.strict({ kind: t.literal('abortMission'), aborted: AbortedMissionType }),
     t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
     t.strict({ kind: t.literal('refundFighter'), refund: FighterRefundType }),
     t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
@@ -252,7 +261,7 @@ export async function loadSetStringEffectsGameData(world: World,
  * applies (see loadInputRecordsGameData). */
 export function inputNeedsStaging(input: SimulationInput): boolean {
     return input.kind === 'addEntity' || input.kind === 'acceptMission'
-        || input.kind === 'refuseMission';
+        || input.kind === 'refuseMission' || input.kind === 'abortMission';
 }
 
 /**
@@ -331,6 +340,9 @@ export async function loadInputRecordsGameData(
                 : undefined,
             input.kind === 'refuseMission'
                 ? loadSetStringEffectsGameData(world, input.refused)
+                : undefined,
+            input.kind === 'abortMission'
+                ? loadSetStringEffectsGameData(world, input.aborted)
                 : undefined,
             input.kind === 'refundFighter'
                 ? loadWeaponsGameData(world, [input.refund.bayWeaponId])
@@ -668,6 +680,10 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'refuseMission': {
             applyRefuseMission(world, peerId, input.refused);
+            break;
+        }
+        case 'abortMission': {
+            applyAbortMission(world, peerId, input.aborted);
             break;
         }
         case 'escortAction': {

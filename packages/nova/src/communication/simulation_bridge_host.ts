@@ -23,7 +23,9 @@ import {
 import { warnThrottled } from "../common/log_throttle.js";
 import { HailAction } from "../nova_plugin/encounters/index.js";
 import { EscortAction, FighterRefund } from "../nova_plugin/escorts/index.js";
-import { AcceptedMission, RefusedMission } from "../nova_plugin/missions/index.js";
+import {
+    AbortedMission, AcceptedMission, RefusedMission,
+} from "../nova_plugin/missions/index.js";
 import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, SpeedVote, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
 import { InputRefusedNotice, relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
 import { encodedEntityStamps, entityStamps, restampEncodedEntity } from "./peer_identity.js";
@@ -1720,6 +1722,17 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     async refuseMission(refused: RefusedMission) {
         await loadSetStringEffectsGameData(this.world, refused);
         this.schedule({ kind: 'refuseMission', refused });
+    }
+
+    /**
+     * An in-flight abort of one of the player's own missions
+     * (mission_accept.ts AbortedMissionType). Its OnAbort can grant
+     * outfits or change the ship like any set string, so what it names
+     * is staged BEFORE scheduling, as for a refusal.
+     */
+    async abortMission(aborted: AbortedMission) {
+        await loadSetStringEffectsGameData(this.world, aborted);
+        this.schedule({ kind: 'abortMission', aborted });
     }
 
     snapshot(): SimulationFrame {
