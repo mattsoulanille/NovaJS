@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w17-rank",
+  "edits": {
+    "ship": 763,
+    "stellar": 1545,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1545": 2
+    },
+    "missionBits": {
+      "9200": true
+    },
+    "nickname": "Probe",
+    "shipName": "w17-rank"
+  }
+}

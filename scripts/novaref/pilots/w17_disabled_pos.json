@@ -1,0 +1,23 @@
+{
+  "name": "novaref-w17-disabled-pos",
+  "edits": {
+    "ship": 451,
+    "stellar": 1581,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1581": 2
+    },
+    "missionBits": {
+      "9187": true
+    },
+    "nickname": "Probe",
+    "shipName": "w17-disabled-pos",
+    "legal": {
+      "1581": 2000
+    }
+  }
+}

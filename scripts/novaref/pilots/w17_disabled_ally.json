@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w17-disabled-ally",
+  "edits": {
+    "ship": 456,
+    "stellar": 1584,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1584": 2
+    },
+    "missionBits": {
+      "9208": true
+    },
+    "nickname": "Probe",
+    "shipName": "w17-disabled-ally"
+  }
+}

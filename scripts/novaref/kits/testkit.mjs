@@ -288,8 +288,105 @@ export default {
         ...wave14Resources(),
         ...wave15Resources(),
         ...wave16Resources(),
+        ...wave17Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-17 experiments (docs/reference_experiments.md, "... wave 17").
+ * Nothing retired; ids above wave 16's: sÿst / spöb 1585-1592, shïp
+ * 454-456, düde 417-420, mïsn 1111-1123, bits 9193-9208, ränk 200 (the
+ * first kit ränk; stock ränks are 128-158). Map row y = -1100.
+ *
+ *  P   Self-defence and the watch range: sÿst 1585 Kit Self Defence (owner
+ *      326 Kit Police Nosy, no traffic): spöb 1585 port (0,0), markers 1586
+ *      (300,0), 1587 (0,150), 1588 (5000,0), 1589 (-9000,0). Offer 1111
+ *      (b9193): shïp 454 Kit Shooter Anchored (red, Speed 0, 30000 / 30000,
+ *      the 1-damage Kit Tickler turret; düde 417, AI 3, gövt 362 "always
+ *      attacks the player") on 1587, so it fires at the player first; BBS
+ *      1112 (b9194) the anchored nosy police (düde 408) on 1586. Offer 1113
+ *      (b9195): the anchored AI 1 victim of 343 (düde 405) at the port; BBS
+ *      1114 / 1115 (b9196 / 9197) the anchored police on 1588 / 1589.
+ *      AI 4 allies: düde 418 (AI 4 of 317, the ally of 343; the blue shïp
+ *      433) and 419 (AI 4 of 343 itself; the orange 432) as BBS jobs 1116 /
+ *      1117 (b9198 / 9199) at Kit Answer Range's port (1560), with wave
+ *      16's victim offer 1088 (b9170) and raider BBS 1091 (b9173).
+ *  H   ränk 200 Kit Assist Rank (AffilGovt 363, Flags 0x0400 "can always
+ *      request battle assistance"), given by offer 1118 (b9200, OnAccept
+ *      K200) at Kit Assist Range (1545: raiders, neutral 363 warships and
+ *      traders).
+ *  C1  sÿst/spöb 1590 Kit Cloak Anchor (363), marker 1591 (200,0): offer
+ *      1119 (b9201) shïp 455 Kit Cloak Yellow Anchored (shïp 443, the AI 3
+ *      0x4000 cloaker, with Speed / Accel 0; düde 420) on the marker.
+ *  S   sÿst/spöb 1592 Kit Scan Clean (owner 313 Kit Customs Big), its
+ *      cutters (düde 410) the traffic, avgShips 4: is a clean ship
+ *      approached by every cutter?
+ *  R   Rescue away from the port: mïsn 1120 (b9202) = 1080 (the kit düde
+ *      330 with cargo) and 1121 (b9204) = 1073 (no cargo), both with
+ *      ShipStart -3 (Kit Range's marker 2102), OnSuccess b9203 / b9205.
+ *      1122 (b9206) = 1070 (stock Raczak, ShipStart 2: appear randomly,
+ *      cloaked), OnSuccess b9207.
+ */
+function wave17Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const anchored = { ...mobile, accel: 0, speed: 0, armor: 30000, shield: 30000 };
+    const armed = (wid, n = 1, ammo = 0) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [ammo, 0, 0, 0] });
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const marker = (id, name, x, y) => spob(id, name, x, y, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] });
+    const RLED = { red: 1971, yellow: 1974 };
+    const shipMisn = (id, name, bit, availStel, dudeId, shipStart, bbs) => misn(id, name, bit, {
+        availStel, availLoc: bbs ? 0 : 3, shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart,
+        onAccept: `!b${bit}`, ...(bbs ? { dispWeight: 30000 } : {}) });
+
+    // --- P: self-defence, the watch range at 5000 / 9000 px, AI 4 allies.
+    out.push(...shareRled(454, "Kit Shooter Anchored", RLED.red, 24, { ...anchored, ai: 3, ...armed(361) }), dude(417, "Kit Shooter Anchored", 3, 362, 454));
+    out.push(system(1585, "Kit Self Defence", -520, -1100, 326, [1585, 1586, 1587, 1588, 1589]), port(1585, "Kit Self Defence Port"),
+        marker(1586, "Defence 300", 300, 0), marker(1587, "Defence South", 0, 150), marker(1588, "Watch 5000", 5000, 0), marker(1589, "Watch 9000", -9000, 0));
+    out.push(...shipMisn(1111, "Kit P shooter", 9193, 1585, 417, -3, false), ...shipMisn(1112, "Kit P police 300", 9194, 1585, 408, -2, true),
+        ...shipMisn(1113, "Kit P victim", 9195, 1585, 405, -1, false), ...shipMisn(1114, "Kit P police 5000", 9196, 1585, 408, -4, true),
+        ...shipMisn(1115, "Kit P police 9000", 9197, 1585, 408, -5, true));
+    out.push(dude(418, "Kit Shipping Ally AI4", 4, 317, 433), dude(419, "Kit Shipping Guard AI4", 4, 343, 432));
+    out.push(...shipMisn(1116, "Kit P ally AI4 317", 9198, 1560, 418, -1, true), ...shipMisn(1117, "Kit P guard AI4 343", 9199, 1560, 419, -1, true));
+
+    // --- H: a ränk with Flags 0x0400 for the neutral 363.
+    out.push({ type: "ränk", id: 200, name: "Kit Assist Rank", clone: "ränk:128",
+        set: { "@0:i16": 1, "@2:i16": 363, "@4:i16": 100, "@6:i32": 0, "@10:i32": 0, "@22:i16": 0x0400 } });
+    out.push(...misn(1118, "Kit H assist rank", 9200, { availStel: 1545, onAccept: "!b9200 K200" }));
+    // A disabled pilot asking an ALLY: shïp 456 Kit Fragile Ally (shïp 451 with
+    // InherentGovt 317, the ally of 343) at Kit Call Range B (1584: traffic
+    // Kit Shipping of 343); offer 1123 (b9208) the anchored Kit Disabler (düde
+    // 358) at the port.
+    out.push(...ship(456, "Kit Fragile Ally", 135, { accel: 2000, speed: 800, turn: 60, armor: 1500, shield: 0, shieldRecharge: 0, armorRecharge: 0, mass: 50,
+        freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, govt: 317 }));
+    out.push(...shipMisn(1123, "Kit H disabler at Call B", 9208, 1584, 358, -1, false));
+
+    // --- C1: the 0x4000 cloaker anchored on screen.
+    out.push(...shareRled(455, "Kit Cloak Yellow Anchored", RLED.yellow, 24, { ...anchored, ai: 3, armor: 2000, shield: 2000, flags2: 0x4000,
+        outfits: [266, -1, -1, -1], outfitCounts: [1, 0, 0, 0], ...armed(367) }), dude(420, "Kit Cloak Yellow Anchored", 3, 363, 455));
+    out.push(system(1590, "Kit Cloak Anchor", -480, -1100, 363, [1590, 1591]), port(1590, "Kit Cloak Anchor Port"), marker(1591, "Cloak Mark", 200, 0));
+    out.push(...shipMisn(1119, "Kit C anchored 0x4000", 9201, 1590, 420, -2, false));
+
+    // --- S: a clean ship among four cutters.
+    out.push(traffic(system(1592, "Kit Scan Clean", -440, -1100, 313, [1592]), [[410, 100]], 4), port(1592, "Kit Scan Clean Port"));
+
+    // --- R: rescues away from the port (Kit Range marker 2102 is the third stellar).
+    const raczak = { shipCount: 1, shipSyst: -1, shipDude: 258, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
+        cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
+    const noCargo = { cargoType: -1, cargoQty: 0, pickupMode: -1, dropoffMode: -1 };
+    out.push(...misn(1120, "Kit R kit dude with cargo at a marker", 9202, { ...raczak, shipDude: 330, shipStart: -3, onAccept: "!b9202", onSuccess: "b9203" }));
+    out.push(...misn(1121, "Kit R kit dude no cargo at a marker", 9204, { ...raczak, ...noCargo, shipDude: 330, shipStart: -3, onAccept: "!b9204", onSuccess: "b9205" }));
+    out.push(...misn(1122, "Kit R Raczak ShipStart 2 again", 9206, { ...raczak, shipStart: 2, onAccept: "!b9206", onSuccess: "b9207" }));
+    return out;
+}
 
 /**
  * Wave-16 experiments (docs/reference_experiments.md, "... wave 16").

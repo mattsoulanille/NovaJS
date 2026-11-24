@@ -1,0 +1,45 @@
+{
+ "name": "w17_space_interactive",
+ "_comment": "Wave 17: Enter Ship, recording from the start at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w17.jsonl) until {\"done\":true}; landings, offers, BBS jobs and takeoffs are hand-driven; the pilot is pulled at the end. Self-defence and the watch range (w17_selfdef, w17_watch5000/9000), AI 4 allies (w17_ally_ai4, w17_guard_ai4), H1 (w17_fuel*, w17_disabled_*, w17_rank), W1 (w17_hull3), C1 (w17_cloak_anchor), contraband (w17_scan_clean), the shipyard name limit (w17_shipyard), rescue (w17_rescue_*).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w17.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

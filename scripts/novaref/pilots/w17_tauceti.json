@@ -1,0 +1,15 @@
+{
+  "name": "novaref-w17-tauceti",
+  "edits": {
+    "ship": 131,
+    "stellar": 151,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w17-tauceti"
+  }
+}

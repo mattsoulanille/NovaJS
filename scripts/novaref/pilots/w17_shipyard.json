@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w17-shipyard",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 50000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w17-shipyard"
+  }
+}
