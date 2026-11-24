@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
+import { CarriedEscortEntry } from '../nova_plugin/escorts/index.js';
 import { OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import {
     ControlBitsComponent, makeDescTextContext, playerGender, resolveConditionalBlocks,
@@ -389,6 +390,22 @@ export class Shipyard extends Menu<Entity> {
     }
 
     /**
+     * The client's landed-escort roster (the live array), the docked
+     * player's uuid and the display world, for the hangar's escort
+     * operations — set per landing by the Spaceport, like the other venues'
+     * (Spaceport.setLandedEscorts).
+     */
+    private landedEscorts?: () => CarriedEscortEntry[];
+    private playerUuid?: string;
+    private world?: Iterable<[string, Entity]>;
+    setLandedEscorts(roster?: () => CarriedEscortEntry[], playerUuid?: string,
+        world?: Iterable<[string, Entity]>) {
+        this.landedEscorts = roster;
+        this.playerUuid = playerUuid;
+        this.world = world;
+    }
+
+    /**
      * Synchronous on purpose (no await before Menu.show): a purchase reads
      * the live entity, so the visit's savepoint is all the transaction
      * needs, and a caller that shows and dismisses in one turn keeps
@@ -528,6 +545,9 @@ export class Shipyard extends Menu<Entity> {
                 stellarId: this.stellarId ?? '',
                 fightersOut: () => this.playerFightersOut(),
                 adoptHull: (hull, label) => this.adoptHangarHull(hull, label),
+                roster: this.landedEscorts,
+                playerUuid: this.playerUuid,
+                world: this.world ? () => this.world! : undefined,
             });
         } finally {
             if (this.container.visible) {

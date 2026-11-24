@@ -1,13 +1,22 @@
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { displayName, Stat } from '../nova_plugin/core/index.js';
 import {
-    CreditsComponent, StoredShip, StoredShips, StoredShipsComponent,
+    CarriedEscortEntry, countsTowardEscortCap, ReturnWhenTargetRemovedComponent,
+} from '../nova_plugin/escorts/index.js';
+import {
+    CreditsComponent, escortProvenance, NO_DEAL, PlayerEscortComponent,
+    StoredShip, StoredShips, StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     Cargo, CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent,
+    SourceComponent,
 } from '../nova_plugin/ship/index.js';
+import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
     buildShipEntity, cargoForNewShip, isPersistent, newShipCargoCapacity,
 } from './shipyard_rules.js';
@@ -221,6 +230,100 @@ export function swapWithStored(hull: Entity, index: number, storedAt: string,
     setStoredShips(built.hull, list.map((entry, i) =>
         i === index ? outgoing : entry));
     return built.hull;
+}
+
+// ── Captured escorts ────────────────────────────────────────────────────
+
+/**
+ * Whether a landed-roster entry is an escort the hangar can swap with or
+ * store: the player's, CAPTURED (a hired pilot's hull was never the
+ * player's — the same line the comm dialog's Sell draws), and an escort the
+ * cap counts (not a bay fighter, not a mission ship). A launched fighter
+ * from a build before BayFighterComponent still carries its return-to-bay
+ * marker, which excludes it too.
+ */
+export function storableEscort(entry: CarriedEscortEntry, player: string):
+    boolean {
+    const { entity } = entry;
+    return entry.player === player
+        && entity.components.has(ShipComponent)
+        && escortProvenance(entity) === 'captured'
+        && countsTowardEscortCap(entity)
+        && !entity.components.has(ReturnWhenTargetRemovedComponent);
+}
+
+/**
+ * Whether escort `uuid` has a wing of its own out — fighters it launched,
+ * on the landed roster or still in the world. Such an escort cannot be put
+ * away or swapped: its fighters would have no carrier to come home to (the
+ * escort's counterpart of shipyard_rules judgment call 8).
+ */
+export function escortWingOut(uuid: string,
+    roster: readonly CarriedEscortEntry[],
+    world: Iterable<[string, Entity]> = []): boolean {
+    const launchedBy = (entity: Entity) =>
+        entity.components.get(SourceComponent) === uuid
+        || entity.components.get(PlayerEscortComponent)?.parent === uuid;
+    for (const entry of roster) {
+        if (entry.uuid !== uuid && launchedBy(entry.entity)) {
+            return true;
+        }
+    }
+    for (const [other, entity] of world) {
+        if (other !== uuid && launchedBy(entity)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * A CAPTURED ESCORT built from a record, for the landed roster: the hull
+ * built the way a hired escort is (makeNpcShip — its class's inherent AI,
+ * no government), with the record's outfits, hold and fuel, and the durable
+ * ownership marker of a prize: provenance 'captured', nothing queued.
+ * Formation, firing group and owner are stamped by the lift-off that puts it
+ * in the world (landed_escorts.ts prepareCarriedEscorts), which also
+ * restocks it like any escort that landed with the player.
+ */
+export function buildEscortFromRecord(record: StoredShip, player: string,
+    lookups: StorageLookups): Entity {
+    const shipData = lookups.getShip(record.ship);
+    if (!shipData) {
+        throw new Error(`Ship ${record.ship} is not loaded`);
+    }
+    const escort = makeNpcShip(shipData, 0, null, new Position(0, 0),
+        new Angle(0), new Vector(0, 0));
+    escort.components.set(OutfitsStateComponent, new Map(
+        record.outfits.map(([id, count]) => [id, { count }])));
+    escort.components.set(CargoComponent, new Map(record.cargo));
+    escort.components.set(FuelComponent, fuelStat(record.fuel));
+    escort.components.set(PlayerEscortComponent, {
+        player, parent: player, provenance: 'captured', deal: NO_DEAL,
+    });
+    return escort;
+}
+
+/**
+ * THE PLAYER SWAPS SHIPS WITH A CAPTURED ESCORT: the pilot flies away in the
+ * escort's hull (its outfits, hold and fuel, plus the pilot's persistent
+ * outfits and as much of the pilot's hold as fits), and the hull they were
+ * flying becomes the escort in its place (with the hold's overflow). Returns
+ * both; neither input is changed, and the caller puts `escort` into the
+ * roster entry the old escort had, so the escort count does not move.
+ */
+export function swapWithEscort(hull: Entity, escort: Entity, storedAt: string,
+    player: string, lookups: StorageLookups):
+    { hull: Entity, escort: Entity } {
+    const incoming = snapshotHull(escort, storedAt, lookups);
+    const persistent = persistentOutfits(hull, lookups);
+    const built = buildHullFromRecord(hull, incoming, persistent, lookups);
+    const outgoing = snapshotHull(hull, storedAt, lookups,
+        { strip: persistent, cargo: built.leftBehind });
+    return {
+        hull: built.hull,
+        escort: buildEscortFromRecord(outgoing, player, lookups),
+    };
 }
 
 /** Why a storage operation is refused, if it is. */

@@ -5,16 +5,20 @@ import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Stat } from '../nova_plugin/core/index.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
 import {
-    CreditsComponent, MissionsComponent, PlayerShipSelector, StoredShip,
+    CreditsComponent, MissionShipComponent, MissionsComponent, NO_DEAL,
+    PlayerEscortComponent, PlayerShipSelector, StoredShip,
     StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent,
+    SourceComponent,
 } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import {
-    exchangeHolds, setStoredShips, snapshotHull, StorageLookups, storedShipsOf,
+    buildEscortFromRecord, escortWingOut, exchangeHolds, setStoredShips,
+    snapshotHull, StorageLookups, storableEscort, storedShipsOf, swapWithEscort,
     swapWithStored,
 } from './ship_storage.js';
 
@@ -224,6 +228,124 @@ describe('ship storage rules', () => {
                     { stored: [stored('nova:404')] });
                 expect(() => swapWithStored(hull, 3, HERE, lookups)).toThrow();
                 expect(() => swapWithStored(hull, 0, HERE, lookups)).toThrow();
+            });
+    });
+
+    describe('captured escorts', () => {
+        const PLAYER = 'player-uuid';
+
+        /** A landed captured escort flying `shipId`. */
+        function captured(shipId: string, fields: {
+            outfits?: [string, number][], cargo?: [string, number][],
+            fuel?: number,
+        } = {}): Entity {
+            return buildEscortFromRecord(stored(shipId, {
+                outfits: fields.outfits ?? [], cargo: fields.cargo ?? [],
+                fuel: fields.fuel ?? 50,
+            }), PLAYER, lookups);
+        }
+
+        it('builds an escort from a record as a captured prize with nothing '
+            + 'queued, carrying the record\'s outfits, hold and fuel', () => {
+            const escort = buildEscortFromRecord(stored(FREIGHTER, {
+                outfits: [[BLASTER, 2]], cargo: [['cargo:1', 9]], fuel: 70,
+            }), PLAYER, lookups);
+            expect(escort.components.get(ShipComponent))
+                .toEqual({ id: FREIGHTER });
+            expect(escort.components.get(OutfitsStateComponent))
+                .toEqual(new Map([[BLASTER, { count: 2 }]]));
+            expect(escort.components.get(CargoComponent))
+                .toEqual(new Map([['cargo:1', 9]]));
+            expect(escort.components.get(FuelComponent)!.current).toBe(70);
+            expect(escort.components.get(PlayerEscortComponent)).toEqual({
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+                deal: NO_DEAL,
+            });
+            expect(storableEscort({ player: PLAYER, uuid: 'e', entity: escort },
+                PLAYER)).toBeTrue();
+        });
+
+        it('lists only the player\'s captured escorts: not a hire, a bay '
+            + 'fighter, a mission ship or another player\'s prize', () => {
+            const entry = (entity: Entity, player = PLAYER) =>
+                ({ player, uuid: 'e', entity });
+            const hired = captured(SHUTTLE);
+            hired.components.set(PlayerEscortComponent, {
+                player: PLAYER, parent: PLAYER, provenance: 'hired',
+                deal: NO_DEAL,
+            });
+            const fighter = captured(SHUTTLE);
+            fighter.components.set(BayFighterComponent,
+                { bayWeaponId: 'nova:200' });
+            const missionShip = captured(SHUTTLE);
+            missionShip.components.set(MissionShipComponent,
+                {} as never);
+            expect(storableEscort(entry(captured(SHUTTLE)), PLAYER)).toBeTrue();
+            expect(storableEscort(entry(hired), PLAYER)).toBeFalse();
+            expect(storableEscort(entry(fighter), PLAYER)).toBeFalse();
+            expect(storableEscort(entry(missionShip), PLAYER)).toBeFalse();
+            expect(storableEscort(entry(captured(SHUTTLE), 'other'), PLAYER))
+                .toBeFalse();
+        });
+
+        it('knows when an escort\'s own wing is out, on the roster or in '
+            + 'the world', () => {
+            const wing = captured(SHUTTLE);
+            wing.components.set(SourceComponent, 'carrier');
+            const roster = [
+                { player: PLAYER, uuid: 'carrier', entity: captured(FREIGHTER) },
+                { player: PLAYER, uuid: 'other', entity: captured(SHUTTLE) },
+            ];
+            expect(escortWingOut('carrier', roster)).toBeFalse();
+            expect(escortWingOut('carrier', roster, [['f', wing]])).toBeTrue();
+            expect(escortWingOut('carrier',
+                [...roster, { player: PLAYER, uuid: 'f', entity: wing }]))
+                .toBeTrue();
+        });
+
+        it('swaps ships with a captured escort: the pilot flies the prize, '
+            + 'and the old hull becomes the escort with the hold\'s overflow',
+            () => {
+                const hull = pilot(FREIGHTER, {
+                    outfits: [[LICENCE, 1], [BLASTER, 1]], fuel: 260,
+                    cargo: [['mission:nova:400', 2], ['cargo:0', 20]],
+                });
+                const prize = captured(SHUTTLE, {
+                    outfits: [[BLASTER, 4]], cargo: [['cargo:5', 3]], fuel: 30,
+                });
+                const swapped = swapWithEscort(hull, prize, HERE, PLAYER,
+                    lookups);
+
+                const flown = swapped.hull;
+                expect(flown.components.get(ShipComponent))
+                    .toEqual({ id: SHUTTLE });
+                expect(flown.components.get(OutfitsStateComponent)).toEqual(
+                    new Map([[BLASTER, { count: 4 }], [LICENCE, { count: 1 }]]));
+                // 10 tons: the mission cargo, then commodities by key.
+                expect(flown.components.get(CargoComponent)).toEqual(new Map([
+                    ['mission:nova:400', 2], ['cargo:0', 8]]));
+                expect(flown.components.get(FuelComponent)!.current).toBe(30);
+                expect(flown.components.get(CreditsComponent))
+                    .toEqual({ credits: 1234 });
+                expect(flown.components.has(PlayerEscortComponent)).toBeFalse();
+
+                const escort = swapped.escort;
+                expect(escort.components.get(ShipComponent))
+                    .toEqual({ id: FREIGHTER });
+                expect(escort.components.get(OutfitsStateComponent))
+                    .toEqual(new Map([[BLASTER, { count: 1 }]]));
+                expect(escort.components.get(CargoComponent)).toEqual(
+                    new Map([['cargo:0', 12], ['cargo:5', 3]]));
+                expect(escort.components.get(FuelComponent)!.current).toBe(260);
+                expect(escort.components.get(PlayerEscortComponent)?.provenance)
+                    .toBe('captured');
+                expect(escort.components.has(PlayerShipSelector)).toBeFalse();
+                expect(escort.components.has(CreditsComponent)).toBeFalse();
+                // Neither input was touched.
+                expect(hull.components.get(ShipComponent))
+                    .toEqual({ id: FREIGHTER });
+                expect(prize.components.get(ShipComponent))
+                    .toEqual({ id: SHUTTLE });
             });
     });
 

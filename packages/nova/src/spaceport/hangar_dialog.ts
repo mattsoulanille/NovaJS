@@ -8,9 +8,11 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
+import { CarriedEscortEntry } from '../nova_plugin/escorts/index.js';
 import { StoredShip } from '../nova_plugin/player/index.js';
 import {
-    cargoUsed, deriveShipPhysics, FUEL_PER_JUMP, OutfitsState, ShipComponent,
+    cargoUsed, deriveShipPhysics, FUEL_PER_JUMP, OutfitsState,
+    OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
@@ -20,8 +22,9 @@ import { MenuControls } from './menu_controls.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import {
-    snapshotHull, STORAGE_REFUSAL_TEXT, StorageLookups, StorageRefusal,
-    storedShipsOf, swapWithStored,
+    escortWingOut, snapshotHull, STORAGE_REFUSAL_TEXT, StorageLookups,
+    StorageRefusal, storableEscort, storedShipsOf, swapWithEscort,
+    swapWithStored,
 } from './ship_storage.js';
 
 /**
@@ -35,7 +38,10 @@ import {
  * ship's figures in the description pane, its picture top right, its
  * whereabouts in the pane below. The tiles are captioned like the
  * shipyard's, with the grey second line the original uses for "- used -"
- * saying where each ship is: "- flying -", "- stored -".
+ * saying where each ship is: "- flying -", "- stored -", "- escort -".
+ * The escorts are the CAPTURED ones that have landed with the player (on
+ * the client's landed roster): a hired pilot's ship was never the
+ * player's, and an escort still flying down to the pad is not here yet.
  *
  * Every button is one storage operation (ship_storage.ts), done at the
  * click and handed to the shipyard (HangarContext.adoptHull), which adopts
@@ -44,7 +50,7 @@ import {
  */
 
 /** What a tile stands for. */
-export type HangarEntryKind = 'current' | 'stored';
+export type HangarEntryKind = 'current' | 'stored' | 'escort';
 
 /** One tile: the ItemGrid fields plus what it stands for. */
 export interface HangarEntry {
@@ -59,6 +65,8 @@ export interface HangarEntry {
     stored?: StoredShip;
     /** Its index in the pilot's list, for a stored ship. */
     index?: number;
+    /** Its landed-roster uuid, for an escort. */
+    uuid?: string;
     /** The hull's class id. */
     shipId: string;
 }
@@ -80,6 +88,16 @@ export interface HangarContext {
     fightersOut(): boolean;
     /** Hands a NEW hull to the shipyard, which adopts it like a purchase. */
     adoptHull(hull: Entity, label: string): void;
+    /**
+     * The client's landed-escort roster — the live array, which the escort
+     * operations edit in place (as the lift-off's deal settlement does) —
+     * and the docked player's uuid its entries are filed under. Absent (a
+     * shipyard shown without a landing): the hangar lists no escorts.
+     */
+    roster?(): CarriedEscortEntry[];
+    playerUuid?: string;
+    /** The display world, where escorts still on approach are. */
+    world?(): Iterable<[string, Entity]>;
 }
 
 /** A caption's first line: the ship's ShortName without its subtitle. */
@@ -135,19 +153,21 @@ export function hangarDescription(entry: {
 }
 
 /**
- * The tiles, in order: the ship being flown, then the stored ships in
- * storage order. Pure, for the specs.
+ * The tiles, in order: the ship being flown, the stored ships in storage
+ * order, then the captured escorts on the landed roster in roster order.
+ * Pure, for the specs.
  */
 export function hangarEntries(hull: Entity, lookups: StorageLookups,
     gameData: SimulationGameDataInterface,
     stellarName: (id: string) => string | undefined,
-    stellarId: string): HangarEntry[] {
+    stellarId: string, roster: readonly CarriedEscortEntry[] = [],
+    player?: string): HangarEntry[] {
     const entries: HangarEntry[] = [];
     const tile = (record: StoredShip, kind: HangarEntryKind,
         where: string, subtitle: string, extra: Partial<HangarEntry>) => {
         const ship = lookups.getShip(record.ship);
         entries.push({
-            id: `${kind}:${extra.index ?? 0}`,
+            id: `${kind}:${extra.uuid ?? extra.index ?? 0}`,
             name: record.name,
             shortName: `${captionName(ship, record.name)}\n${subtitle}`,
             desc: hangarDescription({ ...record, shipId: record.ship, where },
@@ -165,6 +185,16 @@ export function hangarEntries(hull: Entity, lookups: StorageLookups,
         tile(record, 'stored', `Stored (put away at ${at})`, '- stored -',
             { stored: record, index });
     });
+    if (player !== undefined) {
+        roster.forEach((entry, index) => {
+            if (!storableEscort(entry, player)) {
+                return;
+            }
+            tile(snapshotHull(entry.entity, stellarId, lookups), 'escort',
+                'Captured escort (landed with you)', '- escort -',
+                { uuid: entry.uuid, index });
+        });
+    }
     return entries;
 }
 
@@ -262,7 +292,21 @@ export class HangarDialog {
         for (const record of hull ? storedShipsOf(hull) : []) {
             ids.add(record.ship);
         }
+        for (const { entity } of this.escorts()) {
+            const id = entity.components.get(ShipComponent)?.id;
+            if (id) {
+                ids.add(id);
+            }
+        }
         return [...ids];
+    }
+
+    /** The landed roster's entries the hangar can act on. */
+    protected escorts(): CarriedEscortEntry[] {
+        const player = this.context?.playerUuid;
+        return player === undefined ? []
+            : (this.context?.roster?.() ?? [])
+                .filter(entry => storableEscort(entry, player));
     }
 
     /**
@@ -277,6 +321,12 @@ export class HangarDialog {
         const hull = this.context?.hull();
         for (const record of hull ? storedShipsOf(hull) : []) {
             for (const [id] of record.outfits) {
+                outfitIds.add(id);
+            }
+        }
+        for (const { entity } of this.escorts()) {
+            for (const id of entity.components.get(OutfitsStateComponent)
+                ?.keys() ?? []) {
                 outfitIds.add(id);
             }
         }
@@ -297,7 +347,7 @@ export class HangarDialog {
         return hangarEntries(context.hull(), this.lookups,
             this.simulationData,
             id => this.simulationData.data.Planet.getCached(id)?.name,
-            context.stellarId);
+            context.stellarId, context.roster?.() ?? [], context.playerUuid);
     }
 
     /** Rebuilds the grid, selecting `select` (an entry id) if it exists. */
@@ -316,8 +366,10 @@ export class HangarDialog {
         }
         grid.drawGrid();
         this.updateArrows();
-        const stored = entries.filter(entry => entry.kind === 'stored').length;
-        this.text.statusValue.text = `${stored} stored`;
+        const count = (kind: HangarEntryKind) =>
+            entries.filter(entry => entry.kind === kind).length;
+        this.text.statusValue.text =
+            `${count('stored')} stored, ${count('escort')} escorts`;
         this.refreshButtons();
     }
 
@@ -342,6 +394,11 @@ export class HangarDialog {
         }
         if (!this.lookups.getShip(entry.shipId)) {
             return 'notLoaded';
+        }
+        if (entry.kind === 'escort' && entry.uuid !== undefined
+            && escortWingOut(entry.uuid, this.context?.roster?.() ?? [],
+                this.context?.world?.())) {
+            return 'wingDeployed';
         }
         return undefined;
     }
@@ -379,6 +436,25 @@ export class HangarDialog {
                 context.adoptHull(hull, 'Switched to');
                 this.say(`You are now flying the ${entry.name}; your old `
                     + 'ship is in storage.');
+            } else if (entry.kind === 'escort') {
+                const roster = context.roster?.();
+                const at = roster?.findIndex(row => row.uuid === entry.uuid)
+                    ?? -1;
+                if (!roster || at < 0 || context.playerUuid === undefined) {
+                    throw new Error(`Escort ${entry.uuid} left the roster`);
+                }
+                const swapped = swapWithEscort(context.hull(),
+                    roster[at].entity, context.stellarId,
+                    context.playerUuid, this.lookups);
+                // The old hull takes the escort's place on the roster, under
+                // its roster uuid: the fleet is the same size as before.
+                roster[at] = {
+                    player: roster[at].player, uuid: roster[at].uuid,
+                    entity: swapped.escort,
+                };
+                context.adoptHull(swapped.hull, 'Switched to');
+                this.say(`You are now flying the ${entry.name}; your old `
+                    + 'ship is flying escort.');
             }
         });
     }

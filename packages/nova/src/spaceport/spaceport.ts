@@ -953,6 +953,9 @@ export class Spaceport extends Menu<Entity> {
         // escort cap (nova_plugin/escorts/escort_cap.ts) — from the roster AND
         // the display world, where the escorts still on approach are.
         this.bar?.setLandedEscorts(roster, playerUuid, world);
+        // ...and the shipyard, whose hangar swaps with, stores and assigns
+        // captured escorts on the roster (ship storage), under the same cap.
+        this.shipyard?.setLandedEscorts(roster, playerUuid, world);
         // ...and the Leave, which settles the deals queued against the
         // roster's escorts as the player departs (leave). The roster is
         // the client's own array, MUTATED by a settled sale (the escort
