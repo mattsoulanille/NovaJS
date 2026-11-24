@@ -14,7 +14,8 @@ import {
     SimulationGameDataResource,
 } from '../nova_plugin/core/index.js';
 import {
-    BoardingComponent, BoardingState, capturable, captureChance, CargoComponent, FuelComponent,
+    BoardingComponent, BoardingGovtLookup, BoardingState, capturable,
+    captureChance, CargoComponent, FuelComponent, isDerelict,
     ShipDataComponent,
 } from '../nova_plugin/ship/index.js';
 import {
@@ -198,7 +199,9 @@ export function plunderDialogContent(boarding: BoardingState,
     cargoName: (key: string) => string = key => cargoKeyDisplayName(key),
     /** Whether the player already has MAX_ESCORTS hired-or-captured
      * escorts (escort_cap.ts), in which case Capture is greyed (#250). */
-    atEscortCap = false): {
+    atEscortCap = false,
+    /** Government data by id, for the derelict rule (isDerelict). */
+    lookupGovt: BoardingGovtLookup = () => undefined): {
         rows: PlunderRow[], notes: string[], lines: string[],
         enabledByAction: Record<string, boolean>
     } {
@@ -207,11 +210,16 @@ export function plunderDialogContent(boarding: BoardingState,
         ? [...cargo.values()].reduce((a, b) => a + b, 0) : 0;
     const fuel = target?.components.get(FuelComponent);
     const targetCrew = target?.components.get(ShipDataComponent)?.crew ?? 0;
-    // No capture is possible against a ship somebody is flying, none is
-    // possible with nobody to send across (Bible, shïp Crew), and none at
-    // the escort cap (ruling #250).
-    const captureBlocked = (target !== undefined && !capturable(target))
+    // No capture is possible against a ship somebody is flying or a
+    // derelict (ruling #378), none is possible with nobody to send across
+    // (Bible, shïp Crew), and none at the escort cap (ruling #250).
+    const captureBlocked =
+        (target !== undefined && !capturable(target, lookupGovt))
         || playerCrew <= 0 || atEscortCap;
+    // A DERELICT reads "Capture Odds: 0%" beside the greyed button, as the
+    // original shows it on every derelict board (boarding_component.ts,
+    // isDerelict); the other blocked cases drop the odds and say why.
+    const derelict = target !== undefined && isDerelict(target, lookupGovt);
 
     // Booty readout mirroring board_ship.png: Cargo / Credits / Ammo /
     // Energy, with capture odds inline. Cargo is summarised on one line
@@ -221,8 +229,9 @@ export function plunderDialogContent(boarding: BoardingState,
         : cargoKeys.length === 1
             ? `${cargoTons} tons of ${cargoName(cargoKeys[0])}`
             : `${cargoTons} tons`;
-    const odds = boarding.capture === 'succeeded' || captureBlocked
-        ? null : Math.round(captureChance(playerCrew, targetCrew) * 100);
+    const odds = derelict && boarding.capture !== 'succeeded' ? 0
+        : boarding.capture === 'succeeded' || captureBlocked
+            ? null : Math.round(captureChance(playerCrew, targetCrew) * 100);
     // The readout is a two-COLUMN table in the original (space/board_ship.png
     // sets the labels at frame x=11 and their values at x=61, with "Capture
     // Odds:" opening a second pair at x=131/207), not one space-padded string
@@ -245,7 +254,9 @@ export function plunderDialogContent(boarding: BoardingState,
         },
     ];
     const notes: string[] = [];
-    if (target !== undefined && !capturable(target)) {
+    if (derelict) {
+        // The original says nothing: 0% and a grey button.
+    } else if (target !== undefined && !capturable(target, lookupGovt)) {
         notes.push('Her captain still holds the bridge: cannot capture.');
     } else if (playerCrew <= 0) {
         notes.push('You have no crew to send across: cannot capture.');
@@ -381,6 +392,9 @@ class PlunderDialog {
     /** Resolves a cargo key to the name the readout shows (see
      * cargoKeyDisplayName); the plugin points it at the game data. */
     cargoName: (key: string) => string = key => cargoKeyDisplayName(key);
+    /** Government data by id, for the derelict capture rule; the plugin
+     * points it at the game data. */
+    lookupGovt: BoardingGovtLookup = () => undefined;
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
@@ -533,7 +547,8 @@ class PlunderDialog {
     refresh(boarding: BoardingState, target: Entity | undefined,
         playerCrew: number, atEscortCap: boolean) {
         const { rows, notes, enabledByAction } = plunderDialogContent(
-            boarding, target, playerCrew, this.cargoName, atEscortCap);
+            boarding, target, playerCrew, this.cargoName, atEscortCap,
+            this.lookupGovt);
         this.readout.forEach((cells, i) => {
             const row = rows[i];
             cells.label.text = row?.label ?? '';
@@ -930,6 +945,8 @@ export const BoardingDisplayPlugin: Plugin = {
         // jünk commodity names for the booty line come from the game data.
         const gameData = world.resources.get(SimulationGameDataResource);
         ui.plunder.cargoName = key => cargoKeyDisplayName(key, gameData);
+        // Derelict govts (gövt 0x0800) grey Capture at 0% (ruling #378).
+        ui.plunder.lookupGovt = govtId => gameData?.data.Govt.getCached(govtId);
         stage.addChild(ui.plunder.container);
         stage.addChild(ui.assignment.container);
         world.resources.set(BoardingUiResource, ui);

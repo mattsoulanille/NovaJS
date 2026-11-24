@@ -5,7 +5,7 @@ import {
     BoardingState, CargoComponent, FuelComponent, ShipDataComponent,
 } from '../nova_plugin/ship/index.js';
 import { ControlledByComponent } from '../nova_plugin/player/index.js';
-import { Stat } from '../nova_plugin/core/index.js';
+import { GovtComponent, Stat } from '../nova_plugin/core/index.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/index.js';
 import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escorts/index.js';
@@ -60,6 +60,43 @@ describe('plunder dialog content', () => {
         expect(enabledByAction['plunderAmmo']).toBeTrue();
         expect(enabledByAction['plunderCapture']).toBeTrue();
         expect(lines.join('\n')).toContain('Capture Odds:');
+    });
+
+    /**
+     * Ruling #378 ("U9 wave 8", item 5): every board of a derelict-govt
+     * hulk on the original read "Capture Odds: 0%" with Capture Ship
+     * greyed and nothing else said; the booty stays on offer.
+     */
+    describe('against a DERELICT (gövt Flags1 0x0800)', () => {
+        const lookupGovt = (id: string) => id === 'derelict govt'
+            ? { flags: { startsDisabled: true } }
+            : { flags: { startsDisabled: false } };
+        function derelict(govt = 'derelict govt'): Entity {
+            const entity = victim({ crew: 1 });
+            entity.components.set(GovtComponent, { id: govt });
+            return entity;
+        }
+
+        it('shows 0% and greys Capture Ship, with no note', () => {
+            const { enabledByAction, rows, notes } = plunderDialogContent(
+                boardingState(), derelict(), 500, undefined, false,
+                lookupGovt);
+            expect(enabledByAction['plunderCapture']).toBeFalse();
+            expect(rows[3].rightLabel).toEqual('Capture Odds:');
+            expect(rows[3].rightValue).toEqual('0%');
+            expect(notes).toEqual([]);
+            expect(enabledByAction['plunderCredits']).toBeTrue();
+            expect(enabledByAction['plunderCargo']).toBeTrue();
+        });
+
+        it('a hulk of an ordinary govt shows the original\'s odds', () => {
+            // Crew 10 against crew 1: the 75% cap.
+            const { enabledByAction, rows } = plunderDialogContent(
+                boardingState(), derelict('live govt'), 10, undefined,
+                false, lookupGovt);
+            expect(enabledByAction['plunderCapture']).toBeTrue();
+            expect(rows[3].rightValue).toEqual('75%');
+        });
     });
 
     describe('against a ship somebody is flying', () => {

@@ -281,6 +281,11 @@ export const CAPTURE_REPELLED_MESSAGE =
  * 2002 indices 130 and 131); the rest have no stock equivalent, since the
  * original lumps every other refusal into index 129, "You can't board
  * this ship."
+ *
+ * 'notAligned' is the EMPTY string: the original answers a misaligned
+ * press inside the range with nothing at all — it clears the status line
+ * and prints no hint (docs/reference_experiments.md, "U9 wave 8", item 1;
+ * ruling #378). Showing the empty line is what clears it.
  */
 export function boardingBlockedMessage(reason:
     'noTarget' | 'notDisabled' | 'noCrew' | 'tooFar' | 'tooFast'
@@ -297,7 +302,7 @@ export function boardingBlockedMessage(reason:
         case 'tooFast':
             return "You're moving too fast to board this ship.";
         case 'notAligned':
-            return 'Line up alongside the ship before boarding.';
+            return '';
         case 'alreadyBoarded':
             return ALREADY_BOARDED_MESSAGE;
     }

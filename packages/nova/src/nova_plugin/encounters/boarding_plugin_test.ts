@@ -11,6 +11,10 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
+import {
+    restoreWorld, snapshotWorld, SnapshotPoliciesResource,
+} from 'nova_ecs/plugins/snapshot_plugin';
+import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { UUID } from 'nova_ecs/arg_types';
 import { System } from 'nova_ecs/system';
@@ -24,7 +28,7 @@ import {
 import { AggressionComponent } from '../combat/index.js';
 import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
-import { BoardedComponent, BoardingComponent } from '../ship/index.js';
+import { BoardedComponent, BoardingComponent, creditBooty } from '../ship/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
@@ -46,7 +50,7 @@ import { escortParent } from '../escorts/index.js';
 import { OwnerComponent, SourceComponent } from '../combat/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
-import { GovtComponent } from '../core/index.js';
+import { deriveEntityComponents, GovtComponent } from '../core/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
@@ -92,8 +96,9 @@ function forceCaptureRoll(world: World, succeed: boolean) {
  * On the SYNTHETIC scenario: Thessaly Reach (Asteroids 0; it does list
  * NPC traffic, but the world is built with npcs: false), two Wren Skiffs,
  * and the Concord of Meridian — gövt BoardPenalty 10 — as the victim's
- * government. The Wren Skiff's price of 20,000 makes the credit booty
- * 10% = 2,000.
+ * government. The Wren Skiff's price of 20,000 pays the credit booty's
+ * 1,000 floor (creditBooty), and its 24 px frame makes the board square's
+ * half-side 12 px between two Skiffs (boardingRange).
  */
 describe('boarding in a live world', () => {
     /** The victim's government: BoardPenalty 10. */
@@ -103,7 +108,7 @@ describe('boarding in a live world', () => {
 
     async function boardingWorld({
         aligned = true,
-        distance = 100,
+        distance = 5,
         boarderCrew = 200,
         targetCrew = 4,
         targetFuel = 30,
@@ -203,6 +208,179 @@ describe('boarding in a live world', () => {
         expect(boarder.components.has(BoardingComponent)).toBeFalse();
     });
 
+    /**
+     * Ruling #378: the gate matches the original's measurements
+     * (boarding_component.ts has the fits; these drive them through the
+     * live gate system). Between two 24 px Wren Skiffs the board square's
+     * half-side is 12.
+     */
+    describe('the original\'s gate (ruling #378)', () => {
+        function recordBlocked(world: World): string[] {
+            const reasons: string[] = [];
+            world.addSystem(new System({
+                name: 'CollectBlockedOriginalGate',
+                events: [BoardingBlockedEvent],
+                args: [BoardingBlockedEvent] as const,
+                step: ({ reason }) => { reasons.push(reason); },
+            }));
+            return reasons;
+        }
+
+        /** Moves the boarder so the hulk sits at (dx, dy) from it, with
+         * the boarder at `speed` px/s along x (the hulk is at rest). */
+        function placeBoarder(boarder: Entity, target: Entity, dx: number,
+            dy: number, speed = 0) {
+            const at = target.components.get(MovementStateComponent)!
+                .position;
+            const movement = boarder.components.get(MovementStateComponent)!;
+            movement.position = new Position(at.x - dx, at.y - dy);
+            movement.velocity = new Vector(speed, 0);
+        }
+
+        it('boards inside the square, on the diagonal too', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            // 11.5 px both ways: 16.3 px away, inside a 12 px square.
+            placeBoarder(boarder, target, 11.5, -11.5);
+            press(world, BOARDER, 'board');
+            expect(boarder.components.get(BoardingComponent)?.target)
+                .toEqual(TARGET);
+        });
+
+        it('is "not close enough" just outside it', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            const reasons = recordBlocked(world);
+            placeBoarder(boarder, target, 0.5, 12.6);
+            press(world, BOARDER, 'board');
+            expect(boarder.components.has(BoardingComponent)).toBeFalse();
+            expect(reasons).toEqual(['tooFar']);
+            expect(boardingBlockedMessage('tooFar'))
+                .toEqual("You're not close enough to board this ship.");
+        });
+
+        it('refuses 9 px/s on top of the hulk as "not close enough"',
+            async () => {
+                const { world, boarder, target } = await boardingWorld();
+                const reasons = recordBlocked(world);
+                placeBoarder(boarder, target, 0, 0, 9);
+                press(world, BOARDER, 'board');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(reasons).toEqual(['tooFar']);
+            });
+
+        it('boards at 7 px/s', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            placeBoarder(boarder, target, 2, 0, 7);
+            press(world, BOARDER, 'board');
+            expect(boarder.components.get(BoardingComponent)?.target)
+                .toEqual(TARGET);
+        });
+
+        it('says "too fast" at 16 px/s, 70 px out', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            const reasons = recordBlocked(world);
+            placeBoarder(boarder, target, 70, 0, 16);
+            press(world, BOARDER, 'board');
+            expect(boarder.components.has(BoardingComponent)).toBeFalse();
+            expect(reasons).toEqual(['tooFast']);
+            expect(boardingBlockedMessage('tooFast'))
+                .toEqual("You're moving too fast to board this ship.");
+        });
+
+        it('refuses a misaligned board SILENTLY', async () => {
+            const { world, boarder } = await boardingWorld({ aligned: false });
+            const reasons = recordBlocked(world);
+            press(world, BOARDER, 'board');
+            expect(boarder.components.has(BoardingComponent)).toBeFalse();
+            expect(reasons).toEqual(['notAligned']);
+            // No hint: the status line is cleared and says nothing.
+            expect(boardingBlockedMessage('notAligned')).toEqual('');
+        });
+
+        it('freezes the money booty from ONE seeded draw per board',
+            async () => {
+                const { world, boarder, target } = await boardingWorld();
+                target.components.set(ShipDataComponent, {
+                    ...target.components.get(ShipDataComponent)!,
+                    price: 750_000,
+                });
+                const random = new Random();
+                let draws = 0;
+                random.next = () => { draws++; return 0.999999; };
+                world.resources.set(RandomResource, random);
+                press(world, BOARDER, 'board');
+                expect(draws).toBe(1);
+                // The top step of a 750,000 hull: 35,750, as the original
+                // paid once.
+                expect(boarder.components.get(BoardingComponent)
+                    ?.creditsAvailable).toEqual(35_750);
+                press(world, BOARDER, 'plunderCredits');
+                expect(boarder.components.get(CreditsComponent)!.credits)
+                    .toEqual(35_750);
+            });
+
+        it('never captures a DERELICT: no roll, the session open',
+            async () => {
+                const { world, boarder, target } = await boardingWorld({
+                    boarderCrew: 500, targetCrew: 1,
+                });
+                target.components.set(GovtComponent,
+                    { id: SYNTHETIC.govts.wrecks });
+                const random = new Random();
+                let draws = 0;
+                random.next = () => { draws++; return 0; };
+                world.resources.set(RandomResource, random);
+                press(world, BOARDER, 'board');
+                expect(draws).toBe(1); // the money booty's draw
+                press(world, BOARDER, 'plunderCapture');
+                expect(draws).toBe(1);
+                expect(boarder.components.get(BoardingComponent)?.capture)
+                    .toEqual('none');
+                expect(target.components.has(PlayerEscortComponent))
+                    .toBeFalse();
+                // Plunder is untouched.
+                press(world, BOARDER, 'plunderCredits');
+                expect(boarder.components.get(CreditsComponent)!.credits)
+                    .toBeGreaterThan(0);
+            });
+
+        it('replays the board identically after a rollback', async () => {
+            // The world's own seeded PRNG, a hull dear enough that the
+            // draw matters (750,000: 18 steps).
+            const { world, boarder, target } = await boardingWorld();
+            target.components.set(ShipDataComponent, {
+                ...target.components.get(ShipDataComponent)!,
+                price: 750_000,
+            });
+            world.step();
+            const beforeBoard = snapshotWorld(world);
+            const run = () => {
+                press(world, BOARDER, 'board');
+                const credits = world.entities.get(BOARDER)!.components
+                    .get(BoardingComponent)?.creditsAvailable;
+                const hashes = [hashWorld(world).hash];
+                for (let i = 0; i < 30; i++) {
+                    world.step();
+                    hashes.push(hashWorld(world).hash);
+                }
+                return { credits, hashes };
+            };
+            const first = run();
+            expect(first.credits).toBeGreaterThanOrEqual(18_750);
+            expect(first.credits).toBeLessThanOrEqual(35_750);
+            expect((first.credits! - 18_750) % 1_000).toEqual(0);
+
+            restoreWorld(world, beforeBoard, deriveEntityComponents);
+            expect(world.entities.get(BOARDER)!.components
+                .has(BoardingComponent)).toBeFalse();
+            const second = run();
+            expect(second.credits).toEqual(first.credits);
+            expect(second.hashes).toEqual(first.hashes);
+
+            const policies = world.resources.get(SnapshotPoliciesResource)!;
+            expect([...policies.unhandled]).toEqual([]);
+        });
+    });
+
     it('takes cargo, credits, and fuel and charges the board crime',
         async () => {
             const { world, boarder, target } = await boardingWorld();
@@ -217,7 +395,7 @@ describe('boarding in a live world', () => {
 
             press(world, BOARDER, 'plunderCredits');
             expect(boarder.components.get(CreditsComponent)!.credits)
-                .toEqual(Math.floor(price * 0.10));
+                .toEqual(creditBooty(price, 0));
 
             press(world, BOARDER, 'plunderFuel');
             expect(boarder.components.get(FuelComponent)!.current)
@@ -524,8 +702,11 @@ describe('boarding in a live world', () => {
                 random.next = () => { draws++; return 0; };
                 world.resources.set(RandomResource, random);
                 press(world, BOARDER, 'board');
+                // The board itself draws once, for the money booty's
+                // random part (ruling #378); the capture press none.
+                expect(draws).toBe(1);
                 press(world, BOARDER, 'plunderCapture');
-                expect(draws).toBe(0);
+                expect(draws).toBe(1);
                 expect(boarder.components.get(BoardingComponent)?.capture)
                     .toEqual('none');
                 // Not converted: no escort link, still the hulk it was.
@@ -1054,9 +1235,11 @@ describe('boarding in a live world', () => {
             const { world, target } = await ownEscortWorld();
             press(world, BOARDER, 'board');
             // Re-attaching an escort whose link never lapsed must not
-            // shuffle it to a new station.
+            // shuffle it to a new station. (Pulled alongside within the
+            // board square, the escort is already at its station, so the
+            // formation system may also have marked it `rcs`.)
             expect(target.components.get(FormationComponent))
-                .toEqual({ leader: BOARDER, slot: 0 });
+                .toEqual(jasmine.objectContaining({ leader: BOARDER, slot: 0 }));
         });
 
         it('a HOSTILE disabled ship (not your flock) still opens plunder',
@@ -1430,7 +1613,7 @@ describe('boarding in a live world', () => {
             // and it refuses a DIFFERENT pirate too, not just the first.
             const { world, boarder, target, gameData } = await boardingWorld();
             const price = target.components.get(ShipDataComponent)!.price;
-            const booty = Math.floor(price * 0.10);
+            const booty = creditBooty(price, 0);
             expect(booty).toBeGreaterThan(0);
 
             press(world, BOARDER, 'board');
@@ -1719,7 +1902,7 @@ describe('bay-capture shortcut', () => {
         const target = makeShip(
             gameData.data.Ship.map.get(targetShip)!);
         target.components.set(MovementStateComponent, {
-            accelerating: 0, position: new Position(60, 0),
+            accelerating: 0, position: new Position(10, 0),
             rotation: new Angle(0), turnBack: false, turning: 0,
             velocity: new Vector(0, 0),
         });
@@ -2061,7 +2244,7 @@ describe('bay-capture shortcut', () => {
                 // half a per-boarder flag could never cover.
                 const { world, boarder, target, gameData } =
                     await plunderWorld();
-                const booty = Math.floor(PRICE * 0.10);
+                const booty = creditBooty(PRICE, 0);
                 expect(booty).toBeGreaterThan(0);
 
                 press(world, BOARDER, 'board');

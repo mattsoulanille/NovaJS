@@ -15,7 +15,8 @@ import { System } from 'nova_ecs/system';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
     AmmoOutfitInfo, axesAligned, BoardBlockReason, BoardedComponent,
-    BoardedState, boardingBlockedReason, BoardingComponent, BoardingState,
+    BoardedState, boardingBlockedReason, BoardingComponent,
+    boardingDistance, BoardingGovtLookup, boardingRange, BoardingState,
     capturable, captureChance, CaptureBayCandidate, chooseCaptureBay,
     clearPlunderRecord, creditBooty, fuelTransferAmount, planAmmoPlunder,
     planCargoPlunder, plunderSpent,
@@ -187,6 +188,17 @@ function ammoPlunderInputs(boarderOutfits: OutfitsState | undefined,
         return { ammoFor: weaponId, capacity };
     };
     return { victim, boarderRoundsByWeapon, info };
+}
+
+/**
+ * The government lookup the capture rule reads (isDerelict): the world's
+ * staged GovtsResource first, the cached game data behind it — the same
+ * order planet_plugin's stellarClearanceFor and hail_plugin use. Both are
+ * static, peer-identical data.
+ */
+function boardingGovtLookup(govts: ReadonlyMap<string, GovtData> | undefined,
+    gameData: SimulationGameDataInterface): BoardingGovtLookup {
+    return govtId => govts?.get(govtId) ?? gameData.data.Govt.getCached(govtId);
 }
 
 /**
@@ -431,10 +443,11 @@ const BoardingGateSystem = new System({
         ShipDataComponent, TargetComponent, Optional(BoardingComponent),
         Optional(OutfitsStateComponent), Optional(WeaponsStateComponent),
         Optional(LegalRecordsComponent), Optional(GovtsResource),
-        GetEntity, UUID, Entities, SimulationGameDataResource, Emit] as const,
-    step(controls, movement, _shipData, target, boarding, boarderOutfits,
+        GetEntity, UUID, Entities, SimulationGameDataResource, RandomResource,
+        Emit] as const,
+    step(controls, movement, shipData, target, boarding, boarderOutfits,
         boarderWeapons, records, govts, entity, uuid, entities, gameData,
-        emit) {
+        random, emit) {
         if (controls.get('board') !== 'start') {
             return;
         }
@@ -471,9 +484,16 @@ const BoardingGateSystem = new System({
             return;
         }
 
-        const distanceSquared = targetMovement
-            ? targetMovement.position.subtract(movement.position).lengthSquared
+        // The original's gate (ruling #378; see boarding_component.ts): a
+        // SQUARE range from both sprites, a relative-speed gate with "too
+        // fast" checked first, and the silent alignment refusal.
+        const offset = targetMovement
+            ? targetMovement.position.subtract(movement.position)
+            : undefined;
+        const distance = offset ? boardingDistance(offset.x, offset.y)
             : Infinity;
+        const range = boardingRange(targetShipData?.spriteFrameWidth ?? 0,
+            shipData.spriteFrameWidth);
         const relSpeedSquared = targetMovement
             ? targetMovement.velocity.subtract(movement.velocity).lengthSquared
             : Infinity;
@@ -484,7 +504,8 @@ const BoardingGateSystem = new System({
             hasTarget: !!targetEntity && !!targetShipData && !!targetMovement,
             targetDisabled: !!targetEntity?.components.has(DisabledComponent),
             targetCrew: targetShipData?.crew ?? 0,
-            distanceSquared,
+            distance,
+            range,
             relSpeedSquared,
             aligned,
         });
@@ -496,7 +517,8 @@ const BoardingGateSystem = new System({
         // A ship somebody is FLYING is never captured, by either route
         // (see capturable). Its pilot keeps command of it; the plunder
         // session below is still open to a pirate.
-        const capturableTarget = capturable(targetEntity!);
+        const capturableTarget = capturable(targetEntity!,
+            boardingGovtLookup(govts, gameData));
 
         // 1. BAY CAPTURE. A hulk of a ship class one of the boarder's bays
         // launches, with room for it, is STOWED straight into that bay: no
@@ -634,9 +656,15 @@ const BoardingGateSystem = new System({
         // victim (creditBooty re-derives it from the ship price every
         // time) and so the only one a second session could duplicate.
         const priorBoarded = boarded;
+        // The money booty's random part: exactly ONE draw from the seeded
+        // PRNG per board, whatever the price (a cheap hull's draw is simply
+        // unused), so the draw count never depends on which hull it was.
+        // Made only here, as a plunder session opens — the refusals, the
+        // bay capture and the own-escort repair above draw nothing.
+        const moneyRoll = random.next();
         entity.components.set(BoardingComponent, {
             target: targetUuid!,
-            creditsAvailable: creditBooty(targetShipData!.price),
+            creditsAvailable: creditBooty(targetShipData!.price, moneyRoll),
             ammoAvailable,
             cargoTaken: priorBoarded?.cargoTaken ?? false,
             creditsTaken: priorBoarded?.creditsTaken ?? false,
@@ -1225,7 +1253,8 @@ const BoardingActionSystem = new System({
         // the roll and the assignment must not be converted either — that
         // half-owned chimera is the whole bug.
         if (controls.get('plunderCaptureEscort') === 'start'
-            && boarding.capture === 'succeeded' && capturable(target)) {
+            && boarding.capture === 'succeeded'
+            && capturable(target, boardingGovtLookup(govts, gameData))) {
             // No escort-cap check HERE: the cap gates the capture ATTEMPT
             // (the 'plunderCapture' roll below, ruling #250), and the
             // hired-or-captured count cannot change between that roll and
@@ -1350,7 +1379,8 @@ const BoardingActionSystem = new System({
         // first shipped is gone: the ruling is that the option is greyed,
         // not refused.
         if (controls.get('plunderCapture') === 'start'
-            && boarding.capture === 'none' && capturable(target)
+            && boarding.capture === 'none'
+            && capturable(target, boardingGovtLookup(govts, gameData))
             && cappedEscortCount(uuid, { world: entities }) < MAX_ESCORTS) {
             const targetCrew =
                 target.components.get(ShipDataComponent)?.crew ?? 0;

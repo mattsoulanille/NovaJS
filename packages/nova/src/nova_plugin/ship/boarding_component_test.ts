@@ -1,21 +1,25 @@
 import 'jasmine';
 import { Angle } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
+import { GovtComponent } from '../core/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { PlayerShipSelector } from '../player/index.js';
 import {
     capturable,
     AXIS_ALIGN_TOLERANCE_RAD,
     axesAligned,
-    BOARD_DISTANCE_SQUARED,
-    BOARD_REL_SPEED_SQUARED,
+    BOARD_RANGE_DEFAULT_SPRITE_WIDTH,
     boardingBlockedReason,
+    boardingDistance,
+    BoardingGovtLookup,
+    boardingRange,
     captureChance,
     CAPTURE_CHANCE_MAX,
-    CAPTURE_CHANCE_MIN,
     creditBooty,
-    CREDIT_BOOTY_FRACTION,
+    creditBootyBase,
+    creditBootyRandomSteps,
     fuelTransferAmount,
+    isDerelict,
     planCargoPlunder,
     planAmmoPlunder,
     AmmoOutfitInfo,
@@ -26,6 +30,23 @@ import {
     clearPlunderRecord,
     plunderSpent,
 } from './boarding_component.js';
+
+/** A government table with one derelict govt (Flags1 0x0800) and one
+ * ordinary one; any other id is unknown. */
+const DERELICT_GOVT = 'nova:378';
+const LIVE_GOVT = 'nova:363';
+const govts: BoardingGovtLookup = id =>
+    id === DERELICT_GOVT ? { flags: { startsDisabled: true } }
+        : id === LIVE_GOVT ? { flags: { startsDisabled: false } }
+            : undefined;
+
+function shipOf(govt?: string): Entity {
+    const ship = new Entity();
+    if (govt !== undefined) {
+        ship.components.set(GovtComponent, { id: govt });
+    }
+    return ship;
+}
 
 /**
  * The one predicate that decides whether a boarded ship can be TAKEN.
@@ -39,7 +60,7 @@ import {
  */
 describe('capturable', () => {
     it('a crewless hulk can be taken', () => {
-        expect(capturable(new Entity())).toBeTrue();
+        expect(capturable(new Entity(), govts)).toBeTrue();
     });
 
     it('a ship somebody is FLYING can never be taken', () => {
@@ -48,7 +69,7 @@ describe('capturable', () => {
         // not aboard while its owner still flew it.
         const flown = new Entity();
         flown.components.set(ControlledByComponent, { peerId: 'some peer' });
-        expect(capturable(flown)).toBeFalse();
+        expect(capturable(flown, govts)).toBeFalse();
     });
 
     it('is keyed on ControlledBy, NOT on the peer-local ship marker', () => {
@@ -58,27 +79,49 @@ describe('capturable', () => {
         // local marker but no controller is still capturable...
         const markedOnly = new Entity();
         markedOnly.components.set(PlayerShipSelector, undefined);
-        expect(capturable(markedOnly)).toBeTrue();
+        expect(capturable(markedOnly, govts)).toBeTrue();
 
         // ...and one carrying both is refused for the controller alone.
         const bothMarkers = new Entity();
         bothMarkers.components.set(PlayerShipSelector, undefined);
         bothMarkers.components.set(ControlledByComponent,
             { peerId: 'some peer' });
-        expect(capturable(bothMarkers)).toBeFalse();
+        expect(capturable(bothMarkers, govts)).toBeFalse();
     });
 
     it('goes back to capturable if the controller is removed', () => {
         // Presence, not history: an abandoned hull is a hulk like any other.
         const ship = new Entity();
         ship.components.set(ControlledByComponent, { peerId: 'some peer' });
-        expect(capturable(ship)).toBeFalse();
+        expect(capturable(ship, govts)).toBeFalse();
         ship.components.delete(ControlledByComponent);
-        expect(capturable(ship)).toBeTrue();
+        expect(capturable(ship, govts)).toBeTrue();
+    });
+
+    /**
+     * Ruling #378 ("U9 wave 8", item 5): every one of 29 boards of a
+     * derelict-govt hulk read "Capture Odds: 0%" with Capture greyed;
+     * the same hull of the neutral govt 363, disabled by the player,
+     * could be captured.
+     */
+    it('a DERELICT (gövt Flags1 0x0800) can never be taken', () => {
+        expect(isDerelict(shipOf(DERELICT_GOVT), govts)).toBeTrue();
+        expect(capturable(shipOf(DERELICT_GOVT), govts)).toBeFalse();
+    });
+
+    it('a hulk of an ordinary government can be', () => {
+        expect(isDerelict(shipOf(LIVE_GOVT), govts)).toBeFalse();
+        expect(capturable(shipOf(LIVE_GOVT), govts)).toBeTrue();
+        // No government, or one the lookup does not know: not a derelict.
+        expect(capturable(shipOf(), govts)).toBeTrue();
+        expect(capturable(shipOf('nova:999'), govts)).toBeTrue();
     });
 });
 
-describe('axis alignment gate (Matthew\'s spec)', () => {
+/** Degrees to radians, for the measured heading gaps. */
+const deg = (d: number) => d * Math.PI / 180;
+
+describe('axis alignment gate (the original\'s, ruling #378)', () => {
     const zero = new Angle(0);
 
     it('accepts parallel axes (same facing)', () => {
@@ -109,49 +152,203 @@ describe('axis alignment gate (Matthew\'s spec)', () => {
         expect(axesAligned(zero, new Angle(outside))).toBeFalse();
         expect(axesAligned(zero, new Angle(Math.PI - outside))).toBeFalse();
     });
+
+    it('boards at every gap the original boarded at, either way', () => {
+        // "U9 wave 8", item 1: boards straight from a stop at gaps 0, 5,
+        // 7, 9, 13, 17, 24 and 28; sweeps opened at about 25 (three times).
+        for (const gap of [0, 5, 7, 9, 13, 17, 24, 25, 28]) {
+            expect(axesAligned(zero, new Angle(deg(gap))))
+                .withContext(`same way, gap ${gap}`).toBeTrue();
+            expect(axesAligned(zero, new Angle(deg(180 - gap))))
+                .withContext(`opposite, gap ${gap}`).toBeTrue();
+        }
+        // The real headings, not just the gaps: hulk -50, player 113.
+        expect(axesAligned(new Angle(deg(-50)), new Angle(deg(113))))
+            .toBeTrue();
+    });
+
+    it('stays silent at the gaps that stayed silent', () => {
+        // Silent at 30 (three sweeps), 40, 50, 60, 70 and 80.
+        for (const gap of [30, 40, 50, 60, 70, 80]) {
+            expect(axesAligned(zero, new Angle(deg(gap))))
+                .withContext(`same way, gap ${gap}`).toBeFalse();
+            expect(axesAligned(zero, new Angle(deg(180 - gap))))
+                .withContext(`opposite, gap ${gap}`).toBeFalse();
+        }
+    });
 });
 
-describe('boardingBlockedReason', () => {
+describe('boarding range (the original\'s square, ruling #378)', () => {
+    /** Whether the hulk's centre at (dx, dy) from the boarder's is inside
+     * the board square. */
+    const inRange = (target: number, boarder: number, dx: number,
+        dy: number) => boardingDistance(dx, dy)
+            <= boardingRange(target, boarder);
+
+    it('is a square, max(|dx|, |dy|), not a circle', () => {
+        expect(boardingDistance(-10, 10)).toEqual(10);
+        expect(boardingDistance(3.6, -12.1)).toEqual(12.1);
+        // 14.2 px away on the diagonal boarded; 12.7 px away nearly
+        // straight down did not: no circle fits that pair.
+        expect(inRange(24, 24, -10, 10)).toBeTrue();
+        expect(inRange(24, 24, 3.6, 12.1)).toBeFalse();
+    });
+
+    it('a 24 px hulk from a 24 px ring: half-side 12', () => {
+        expect(boardingRange(24, 24)).toEqual(12);
+        for (const [dx, dy] of [[12.0, 2.7], [-10, 10], [6.9, 7.7],
+            [-8.8, 1.6]]) {
+            expect(inRange(24, 24, dx, dy)).withContext(`${dx}, ${dy}`)
+                .toBeTrue();
+        }
+        for (const [dx, dy] of [[3.6, 12.1], [-12.1, 10], [-12.2, 4.7],
+            [0.5, -14.2]]) {
+            expect(inRange(24, 24, dx, dy)).withContext(`${dx}, ${dy}`)
+                .toBeFalse();
+        }
+    });
+
+    it('grows with the TARGET\'s sprite (96 px hulk, 24 px ring)', () => {
+        expect(inRange(96, 24, -38.9, -23.7)).toBeTrue();
+        expect(inRange(96, 24, -47.6, -28.6)).toBeFalse();
+    });
+
+    it('grows a little with the BOARDER\'s (24 px hulk, 96 px ring)', () => {
+        expect(inRange(24, 96, 10.5, -11.5)).toBeTrue();
+        expect(inRange(24, 96, 15.5, -17.5)).toBeFalse();
+        expect(boardingRange(24, 96)).toBeGreaterThan(boardingRange(24, 24));
+        // The 48 px Lightning (waves 6-7, about 15 / 15.5-16 by centroid):
+        // between the 24 px and 96 px rings.
+        expect(boardingRange(24, 48)).toBeGreaterThan(boardingRange(24, 24));
+        expect(boardingRange(24, 48)).toBeLessThan(15.5);
+    });
+
+    it('treats a hull with no frame size as the default width', () => {
+        expect(boardingRange(0, 0)).toEqual(boardingRange(
+            BOARD_RANGE_DEFAULT_SPRITE_WIDTH,
+            BOARD_RANGE_DEFAULT_SPRITE_WIDTH));
+    });
+});
+
+describe('boardingBlockedReason (the original\'s order, ruling #378)', () => {
+    /** A valid board: on top of a 24 px hulk, at rest, aligned. */
     const ok = {
         hasTarget: true,
         targetDisabled: true,
         targetCrew: 2,
-        distanceSquared: BOARD_DISTANCE_SQUARED - 1,
-        relSpeedSquared: BOARD_REL_SPEED_SQUARED - 1,
+        distance: 0,
+        range: boardingRange(24, 24),
+        relSpeedSquared: 0,
         aligned: true,
     };
+    const atSpeed = (pxPerSecond: number) => pxPerSecond * pxPerSecond;
 
     it('allows a valid board', () => {
         expect(boardingBlockedReason(ok)).toBeNull();
     });
 
-    it('reports reasons in priority order', () => {
+    it('reports the target reasons first', () => {
         expect(boardingBlockedReason({ ...ok, hasTarget: false }))
             .toEqual('noTarget');
         expect(boardingBlockedReason({ ...ok, targetDisabled: false }))
             .toEqual('notDisabled');
         expect(boardingBlockedReason({ ...ok, targetCrew: 0 }))
             .toEqual('noCrew');
-        expect(boardingBlockedReason({
-            ...ok, distanceSquared: BOARD_DISTANCE_SQUARED,
-        })).toEqual('tooFar');
-        expect(boardingBlockedReason({
-            ...ok, relSpeedSquared: BOARD_REL_SPEED_SQUARED,
-        })).toEqual('tooFast');
-        expect(boardingBlockedReason({ ...ok, aligned: false }))
-            .toEqual('notAligned');
     });
+
+    it('is "not close enough" outside the square', () => {
+        expect(boardingBlockedReason({ ...ok, distance: ok.range }))
+            .toBeNull();
+        expect(boardingBlockedReason({ ...ok, distance: ok.range + 0.1 }))
+            .toEqual('tooFar');
+    });
+
+    it('boards at the speeds the original boarded at', () => {
+        // "U9 wave 7": plunder dialog at 3.4, 6.2 and 7.3 px/s.
+        for (const speed of [3.4, 6.2, 7.3]) {
+            expect(boardingBlockedReason({
+                ...ok, distance: 10, relSpeedSquared: atSpeed(speed),
+            })).withContext(`${speed} px/s`).toBeNull();
+        }
+    });
+
+    it('says "not close enough" between the two speed gates, even on top',
+        () => {
+            // Refused at 7.8 (128 presses), 9.2 and 11 px/s, every press
+            // "not close enough", with the ships on top of each other.
+            for (const speed of [7.8, 9.2, 11]) {
+                expect(boardingBlockedReason({
+                    ...ok, distance: 0, relSpeedSquared: atSpeed(speed),
+                })).withContext(`${speed} px/s`).toEqual('tooFar');
+            }
+            // 11 px/s far out is "not close enough" too.
+            expect(boardingBlockedReason({
+                ...ok, distance: 67, relSpeedSquared: atSpeed(11),
+            })).toEqual('tooFar');
+        });
+
+    it('checks "too fast" BEFORE the distance', () => {
+        // Every press at 16 and 22 px/s said "too fast", 67-70 px from
+        // the hulk included, and on top of it.
+        for (const speed of [16, 22]) {
+            for (const distance of [0, 3.6, 67, 70]) {
+                expect(boardingBlockedReason({
+                    ...ok, distance, relSpeedSquared: atSpeed(speed),
+                })).withContext(`${speed} px/s at ${distance} px`)
+                    .toEqual('tooFast');
+            }
+        }
+    });
+
+    it('refuses a misaligned board last, only once everything else holds',
+        () => {
+            expect(boardingBlockedReason({ ...ok, aligned: false }))
+                .toEqual('notAligned');
+            // Out of range or in the speed band, the answer is still
+            // "not close enough" (wave 8: out-of-range stops said so
+            // whatever the heading).
+            expect(boardingBlockedReason({
+                ...ok, aligned: false, distance: 20,
+            })).toEqual('tooFar');
+            expect(boardingBlockedReason({
+                ...ok, aligned: false, relSpeedSquared: atSpeed(9),
+            })).toEqual('tooFar');
+        });
 });
 
-describe('captureChance', () => {
-    it('is a share of total crew, clamped', () => {
-        expect(captureChance(10, 10)).toBeCloseTo(0.5, 9);
-        expect(captureChance(30, 10)).toBeCloseTo(0.75, 9);
+describe('captureChance (the original\'s odds, ruling #378)', () => {
+    /** As the plunder dialog shows it. */
+    const shown = (attacker: number, defender: number) =>
+        Math.round(captureChance(attacker, defender) * 100);
+
+    it('reads the measured odds for a crew-10 boarder', () => {
+        // "U9 wave 8", item 5: crew 10 against 1 / 5 / 10 / 15 / 20 / 40.
+        expect(shown(10, 1)).toEqual(75);
+        expect(shown(10, 5)).toEqual(34);
+        expect(shown(10, 10)).toEqual(20);
+        expect(shown(10, 15)).toEqual(18);
+        expect(shown(10, 20)).toBeGreaterThanOrEqual(17);
+        expect(shown(10, 20)).toBeLessThanOrEqual(18);
+        expect(shown(10, 40)).toEqual(7);
     });
 
-    it('clamps to the min/max band', () => {
-        expect(captureChance(1, 1000)).toEqual(CAPTURE_CHANCE_MIN);
-        expect(captureChance(1000, 1)).toEqual(CAPTURE_CHANCE_MAX);
+    it('tops out at 75%', () => {
+        // Crew 500 against crew 1 read 75% too.
+        expect(captureChance(500, 1)).toEqual(CAPTURE_CHANCE_MAX);
+        expect(CAPTURE_CHANCE_MAX).toEqual(0.75);
+        expect(captureChance(1000, 0)).toEqual(CAPTURE_CHANCE_MAX);
+    });
+
+    it('rises with the boarders and falls with the defenders', () => {
+        let last = 0;
+        for (let attacker = 1; attacker <= 200; attacker++) {
+            const chance = captureChance(attacker, 20);
+            expect(chance).toBeGreaterThanOrEqual(last);
+            expect(chance).toBeLessThanOrEqual(CAPTURE_CHANCE_MAX);
+            last = chance;
+        }
+        expect(captureChance(10, 1000)).toBeGreaterThan(0);
+        expect(captureChance(10, 1000)).toBeLessThan(0.01);
     });
 
     it('is zero for a crewless boarder (Bible: cannot capture)', () => {
@@ -163,14 +360,71 @@ describe('captureChance', () => {
     });
 });
 
-describe('booty math', () => {
-    it('derives money booty from purchase price', () => {
-        expect(creditBooty(10_000))
-            .toEqual(Math.floor(10_000 * CREDIT_BOOTY_FRACTION));
-        expect(creditBooty(0)).toEqual(0);
-        expect(creditBooty(-5)).toEqual(0);
+describe('money booty (the original\'s, ruling #378)', () => {
+    /** Every amount a hull of this price can pay, over every k. */
+    function reachable(price: number): number[] {
+        const steps = Math.max(1, creditBootyRandomSteps(price));
+        return [...Array(steps).keys()].map(k =>
+            creditBooty(price, (k + 0.5) / steps));
+    }
+
+    it('pays the 1,000 floor for cheap hulls', () => {
+        for (const roll of [0, 0.5, 0.999]) {
+            expect(creditBooty(2_000, roll)).toEqual(1_000);
+            expect(creditBooty(20_000, roll)).toEqual(1_000);
+            expect(creditBooty(0, roll)).toEqual(1_000);
+            expect(creditBooty(-5, roll)).toEqual(1_000);
+        }
     });
 
+    it('pays exactly price / 40 for the 50,000 hull, every board', () => {
+        // 24 boards of 50,000 hulls, all 1,250.
+        for (const roll of [0, 0.25, 0.5, 0.75, 0.999999]) {
+            expect(creditBooty(50_000, roll)).toEqual(1_250);
+        }
+    });
+
+    it('can pay every amount the original paid', () => {
+        const boards: [number, number[]][] = [
+            [100_000, [2_500]],
+            [200_000, [5_000, 7_000]],
+            [300_000, [12_500, 11_500]],
+            [500_000, [19_500, 21_500]],
+            [750_000, [35_750, 32_750]],
+            [1_000_000, [26_000, 45_000]],
+            [2_000_000, [87_000]],
+        ];
+        for (const [price, paid] of boards) {
+            const amounts = reachable(price);
+            for (const amount of paid) {
+                expect(amounts).withContext(`${price}: ${amount}`)
+                    .toContain(amount);
+            }
+        }
+    });
+
+    it('stays a multiple of 250 between price / 40 and price / 20', () => {
+        for (const price of [50_000, 100_000, 123_456, 200_000, 300_000,
+            500_000, 750_000, 1_000_000, 2_000_000, 7_777_777]) {
+            for (const amount of reachable(price)) {
+                expect(amount % 250).withContext(`${price}`).toEqual(0);
+                expect(amount).toBeGreaterThanOrEqual(
+                    creditBootyBase(price));
+                expect(amount).toBeLessThan(price / 20);
+            }
+        }
+        // The base is price / 40, rounded down to 250.
+        expect(creditBootyBase(750_000)).toEqual(18_750);
+        expect(creditBootyBase(123_456)).toEqual(3_000);
+    });
+
+    it('750,000\'s 35,750 is its very top step', () => {
+        expect(creditBooty(750_000, 0.999999)).toEqual(35_750);
+        expect(creditBooty(750_000, 0)).toEqual(18_750);
+    });
+});
+
+describe('booty math', () => {
     it('transfers fuel clamped by victim tank and boarder headroom', () => {
         // Boarder headroom (max - current) is the binding limit.
         expect(fuelTransferAmount(500, 80, 100)).toEqual(20);

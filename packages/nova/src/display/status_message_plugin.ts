@@ -167,8 +167,14 @@ const ShowBoardingBlockedMessage = new System({
     args: [BoardingBlockedEvent, StatusLineResource, TimeResource,
         PlayerShipSelector, Emit] as const,
     step({ reason }, statusLine, { time }, _player, emit) {
-        statusLine.setMessage(boardingBlockedMessage(reason), time);
-        emit(UiSoundEvent, { id: BEEP_CANT_DO });
+        const message = boardingBlockedMessage(reason);
+        // An empty message is the original's SILENT refusal (a misaligned
+        // press, ruling #378): the line is cleared and nothing is said,
+        // so the cant-do beep stays quiet too.
+        statusLine.setMessage(message, time);
+        if (message !== '') {
+            emit(UiSoundEvent, { id: BEEP_CANT_DO });
+        }
     },
 });
 
