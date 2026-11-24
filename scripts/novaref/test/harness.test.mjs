@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { test } from "node:test";
 
 import { frameAt, parseFfmpegStart, stepEntersShip, syncEvents } from "../frame_sync.mjs";
@@ -292,6 +293,55 @@ test("board loop: passKeys crosses the target pressing b at the given spacing", 
     const short = passKeys({ dist: 1, speedPxS: 1000, overPx: 0 });
     assert.equal(short.presses, 3);
     assert.ok(short.seq.startsWith("hold:40"));
+});
+
+test("board loop: sweepKeys stays put, then turns between presses", async () => {
+    const { sweepKeys } = await import("../loops/board.mjs");
+    assert.equal(sweepKeys(0), "b wait 700");
+    assert.equal(sweepKeys(2), "b wait 700");
+    assert.equal(sweepKeys(3), "Right@115 wait 300 b wait 700");
+    assert.equal(sweepKeys(1, { repeat: 0, between: "Space@5000 wait 500", waitMs: 900 }), "Space@5000 wait 500 b wait 900");
+    for (let i = 0; i < 40; i++) assert.ok(!/Escape/.test(sweepKeys(i)));
+    // The target panel's "Disabled" corner: dark = no (or no disabled) target.
+    const { targetDisabledShown, targetShown } = await import("../loops/board.mjs");
+    const W = 832, H = 604, data = Buffer.alloc(W * H * 4);
+    assert.equal(targetDisabledShown({ width: W, height: H, data }), false);
+    assert.equal(targetShown({ width: W, height: H, data }), false);
+    for (let y = 338; y < 346; y++) for (let x = 690; x < 760; x += 3) data.set([255, 255, 255, 255], (y * W + x) * 4);
+    assert.equal(targetShown({ width: W, height: H, data }), true);
+    for (let y = 426; y < 436; y++) for (let x = 650; x < 700; x += 2) data.set([255, 255, 255, 255], (y * W + x) * 4);
+    assert.equal(targetDisabledShown({ width: W, height: H, data }), true);
+});
+
+test("pointer: reads the ring's and the hulk's headings off a shot", async () => {
+    const { pointerFrames } = await import("../kits/testkit.mjs");
+    const { readShot, axisGap, wrap } = await import("../analysis/pointer.mjs");
+    const W = 832, H = 604;
+    const png = new (createRequire(import.meta.url)("pngjs").PNG)({ width: W, height: H });
+    png.data.fill(0);
+    for (let p = 3; p < png.data.length; p += 4) png.data[p] = 255;
+    const blit = (frame, cx, cy) => {
+        for (let y = 0; y < frame.height; y++) for (let x = 0; x < frame.width; x++) {
+            const v = frame.pixels[y * frame.width + x];
+            if (v < 0) continue;
+            const i = ((cy - frame.height / 2 + y) * W + (cx - frame.width / 2 + x)) * 4;
+            png.data.set([((v >> 10) & 31) << 3, ((v >> 5) & 31) << 3, (v & 31) << 3], i);
+        }
+    };
+    // Hulk frame 9 (nose east) 40 px right of the player; player frame 18 (nose south).
+    blit(pointerFrames(24, [31, 0, 31], [0, 31, 0], { outer: 11, spokeFrom: 0, spokeTo: 11 })[9], 358, 302);
+    blit(pointerFrames(24, [0, 31, 31], [31, 31, 31], { outer: 11, inner: 9, spokeFrom: 5, spokeTo: 10 })[18], 318, 302);
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "novaref-ptr-")), "shot.png");
+    fs.writeFileSync(file, createRequire(import.meta.url)("pngjs").PNG.sync.write(png));
+    const r = readShot(file);
+    assert.equal(r.player, 90, `player ${r.playerRaw}`);
+    assert.equal(r.hulk.heading, 0, `hulk ${r.hulk.headingRaw}`);
+    assert.ok(Math.abs(wrap(r.playerRaw - 90)) <= 6);
+    assert.ok(Math.abs(r.hulk.dist - 40) <= 1.5, `dist ${r.hulk.dist}`);
+    assert.ok(Math.abs(r.bearing) <= 2, `bearing ${r.bearing}`);
+    assert.equal(axisGap(90, 0), 90);
+    assert.equal(axisGap(170, -5), 5);
+    assert.equal(r.status.n, 0);
 });
 
 test("runScriptStep: a closed-loop script runs ordinary steps and may not press Escape", async () => {

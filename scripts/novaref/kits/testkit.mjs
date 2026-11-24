@@ -19,6 +19,8 @@
  */
 
 import { discShipGraphics } from "novaparse/plugin_kit/sprites";
+import { circle, polygon, rgb15, rotationFrames, TRANSPARENT } from "novaparse/synthetic/raster";
+import { encodeRled } from "novaparse/synthetic/rled";
 
 const KIT_TECH = 9000; // kit ships/outfits are sold only where specialTech lists it
 const none4 = [-1, -1, -1, -1];
@@ -278,8 +280,136 @@ export default {
         ...wave4Resources(),
         ...wave6Resources(),
         ...wave7Resources(),
+        ...wave8Resources(),
     ],
 };
+
+/**
+ * A 36-frame "pointer" sprite whose heading can be read off a screenshot
+ * (wave 8): a disc (or, with `inner`, a ring whose hole shows what is under
+ * it) of one colour and a spoke of another from `spokeFrom` to `spokeTo`
+ * px out, pointing at the ship's nose (frame 0 up, clockwise, like a stock
+ * sheet). Radii in px; the frame is `size` x `size`.
+ */
+export function pointerFrames(size, rgb, spokeRgb, { outer = size / 2 - 1, inner = 0, spokeFrom = 0, spokeTo = outer, spokeHalfWidth = 1 } = {}) {
+    const h = (px) => px * 2; // raster units are half pixels
+    const shapes = [circle(rgb15(...rgb), [0, 0], h(outer))];
+    if (inner > 0) shapes.push(circle(TRANSPARENT, [0, 0], h(inner)));
+    const w = h(spokeHalfWidth);
+    shapes.push(polygon(rgb15(...spokeRgb), [[-w, -h(spokeTo)], [w, -h(spokeTo)], [w, -h(spokeFrom)], [-w, -h(spokeFrom)]]));
+    return rotationFrames(size, size, shapes, 36);
+}
+
+/**
+ * A hull drawn with pointerFrames. Like discShip it clones the stock
+ * Shuttle's shän and swaps only the sprite, but it also writes the frame
+ * size into the shän (discShip leaves the Shuttle's 24 x 24 there, so the
+ * wave-7 96 px Kit Hulk Big declared 24 x 24). Wave 8 keeps its rlëD ids odd
+ * so the mask the shän names (rledId + 1) is no resource at all.
+ */
+function pointerShip(id, name, rledId, size, frames, set) {
+    return [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+        { type: "rlëD", id: rledId, name, hex: Buffer.from(encodeRled(frames, { original: true })).toString("hex") },
+    ];
+}
+
+/**
+ * Wave-8 experiments (docs/reference_experiments.md, "U9 wave 8" and "B
+ * wave 8"). Nothing retired; ids above wave 7's (shïp 818+, düde 304+,
+ * sÿst/spöb 2032+, mïsn 1021+, bits 9062+, rlëD 1955-1961 odd, free between the stock 1952 and the kit's 1970).
+ *
+ *  U9  Boarding with readable headings. rlëD 1955 Kit Ring 24 (a 2 px
+ *      cyan ring, 24 px, with a white spoke at the nose and an open
+ *      centre, so a hulk under it stays visible), rlëD 1957 Kit Ring 96
+ *      (the same ring 96 px across), rlëD 1959 Kit Hulk Pointer (the 24 px
+ *      magenta disc with a green spoke from the centre to the nose).
+ *      Player hulls (Kit Crawler 100 stats, inertialess): shïp 818 Kit
+ *      Ring Crawler (Ring 24, crew 10), 819 Kit Ring Crawler Big (Ring 96),
+ *      826 Kit Ring Crawler Crew (Ring 24, crew 500).
+ *      Hulks (immobile, derelict gövt 378, booty food + money, each the
+ *      only traffic of its own system like wave 7's): shïp 820 Kit Hulk
+ *      Pointer 50,000 (düde 304, sÿst/spöb 2032), 821-824 at 200,000 /
+ *      300,000 / 750,000 / 1,000,000 (düde 305-308, sÿst/spöb 2033-2036),
+ *      825 Kit Hulk Pointer Crew 20 (50,000, crew 20; düde 309, sÿst/spöb
+ *      2037), 827 Kit Hulk Pointer Big (rlëD 1961: a 96 px magenta disc with
+ *      a green spoke, shän 96 x 96, 50,000; düde 310, sÿst/spöb 2038).
+ *  B   The carrier whose 1-damage bombers never let it fire: shïp 828 Kit
+ *      Gun Carrier Anchored (shïp 800's hull and two Kit Escort Guns, no
+ *      bay), düde 311 (gövt 362), mïsn 1021 (bit 9062) beside the player;
+ *      shïp 830 Kit Empty Bay Carrier Anchored (shïp 802 with its bay
+ *      empty), düde 313, mïsn 1022 (bit 9063).
+ *  Added during the wave (capture): shïp 829 Kit Live Pointer (the pointer
+ *      hulk of the NEUTRAL gövt 363, AI 4, not a derelict: the player
+ *      disables it), düde 312, sÿst/spöb 2039 Kit Board Live; shïp 831 the
+ *      same with crew 20, düde 314, sÿst/spöb 2040.
+ */
+function wave8Resources() {
+    const out = [];
+    const cyan = [0, 31, 31], white = [31, 31, 31], magenta = [31, 0, 31], green = [0, 31, 0];
+    const ring24 = pointerFrames(24, cyan, white, { outer: 11, inner: 9, spokeFrom: 5, spokeTo: 10 });
+    const ring96 = pointerFrames(96, cyan, white, { outer: 47, inner: 45, spokeFrom: 36, spokeTo: 46, spokeHalfWidth: 1.5 });
+    const hulkPtr = pointerFrames(24, magenta, green, { outer: 11, spokeFrom: 0, spokeTo: 11 });
+    const hulkPtrBig = pointerFrames(96, magenta, green, { outer: 47, spokeFrom: 0, spokeTo: 47, spokeHalfWidth: 2 });
+    const crawler = { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...pointerShip(818, "Kit Ring Crawler", 1955, 24, ring24, crawler));
+    out.push(...pointerShip(819, "Kit Ring Crawler Big", 1957, 96, ring96, crawler));
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    out.push(...shareRled(826, "Kit Ring Crawler Crew", 1955, 24, { ...crawler, crew: 500 }));
+
+    const hulkSet = { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000 };
+    const hulkSystem = (sid, did, shipId, name) => {
+        const d = dude(did, name, 1, 378, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        const s = system(sid, `Kit Board ${name}`, -600 + 30 * (sid - 2020), -800, 363, [sid]);
+        s.set = { ...s.set, dudes: [did, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+        out.push(d, s, spob(sid, `Kit Board ${name} Port`, 0, 0, 138, { flags: 0x43 }));
+    };
+    out.push(...pointerShip(820, "Kit Hulk Pointer", 1959, 24, hulkPtr, hulkSet));
+    hulkSystem(2032, 304, 820, "Pointer");
+    [[821, 200000], [822, 300000], [823, 750000], [824, 1000000]].forEach(([id, cost], i) => {
+        out.push(...shareRled(id, `Kit Hulk Pointer ${cost}`, 1959, 24, { ...hulkSet, cost }));
+        hulkSystem(2033 + i, 305 + i, id, `Pointer ${cost}`);
+    });
+    out.push(...shareRled(825, "Kit Hulk Pointer Crew 20", 1959, 24, { ...hulkSet, crew: 20 }));
+    hulkSystem(2037, 309, 825, "Pointer Crew 20");
+    out.push(...pointerShip(827, "Kit Hulk Pointer Big", 1961, 96, hulkPtrBig, hulkSet));
+    hulkSystem(2038, 310, 827, "Pointer Big");
+    // Added during the wave: the derelict hulk read "Capture Odds: 0%" even
+    // with 90% of its armor shot away, so a hulk that is NOT a derelict:
+    // shïp 829 Kit Live Pointer (the pointer hulk, 300 armor, so disabled
+    // below 100) of the neutral gövt 363, düde 312 (booty food +
+    // money; AI 4, so it neither jumps out nor lands), the only traffic of
+    // sÿst/spöb 2039. The player disables it.
+    // shïp 831 / düde 314 / sÿst 2040: the same with crew 20.
+    const liveSystem = (sid, did, shipId, name) => {
+        const d = dude(did, name, 4, 363, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        const s = system(sid, `Kit Board ${name}`, -600 + 30 * (sid - 2020), -800, 363, [sid]);
+        s.set = { ...s.set, dudes: [did, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+        out.push(d, s, spob(sid, `Kit Board ${name} Port`, 0, 0, 138, { flags: 0x43 }));
+    };
+    out.push(...shareRled(829, "Kit Live Pointer", 1959, 24, hulkSet));
+    liveSystem(2039, 312, 829, "Live");
+    out.push(...shareRled(831, "Kit Live Pointer Crew 20", 1959, 24, { ...hulkSet, crew: 20 }));
+    liveSystem(2040, 314, 831, "Live Crew 20");
+
+    // --- B: the anchored carrier's guns without a bay.
+    out.push(...ship(828, "Kit Gun Carrier Anchored", 143, { armor: 3000, shield: 3000, weapons: [365, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 100, crew: 40, speed: 0, accel: 0 }));
+    out.push(dude(311, "Kit Gun Carrier Anchored", 3, 362, 828));
+    out.push(...misn(1021, "Kit B anchored gun carrier", 9062, { shipCount: 1, shipDude: 311, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    // Added during the wave: the gun-only carrier DID fire, so one more
+    // factor: shïp 830, shïp 802 (Kit Bomber Bay 1) with its bay EMPTY
+    // (ammo 0), düde 313, mïsn 1022 (bit 9063) beside the player.
+    out.push(...ship(830, "Kit Empty Bay Carrier Anchored", 143, { armor: 3000, shield: 3000, weapons: [365, 247, -1, -1], weaponCounts: [2, 1, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 100, crew: 40, speed: 0, accel: 0 }));
+    out.push(dude(313, "Kit Empty Bay Carrier Anchored", 3, 362, 830));
+    out.push(...misn(1022, "Kit B anchored empty-bay carrier", 9063, { shipCount: 1, shipDude: 313, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    return out;
+}
 
 /**
  * Wave-7 experiments (docs/reference_experiments.md). Nothing retired; ids

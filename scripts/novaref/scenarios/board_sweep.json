@@ -1,0 +1,71 @@
+{
+ "name": "board_sweep",
+ "_comment": "U9 wave 8: why some boards never open. Pilot w8_ptr (Kit Ring Crawler: Crawler 100 on a 24 px cyan ring with a white nose spoke; or another w8 pilot for another hulk) at Kit Board Pointer (sÿst 2032), whose only traffic is the Kit Hulk Pointer (immobile 24 px magenta disc with a green nose spoke, derelict gövt 378). loops/board.mjs walks in pressing b at every stop. At the first press the game answers with NOTHING (status line cleared), or within sweep.atPx, it stays at that spot and presses b again and again: 4 presses without moving, then a ~5 degree turn in place before each press, until a dialog opens (closed with Abort: a hulk boards only once) or 70 presses. Every press is shot (sw-NN). Read headings, offsets and answers with analysis/pointer.mjs --run <dir>.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 4,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1
+    },
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "retarget": 3
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

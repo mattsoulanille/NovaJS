@@ -26,6 +26,7 @@
  */
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { statusText } from "../analysis/pointer.mjs";
 import { RADAR, blipsIn } from "../analysis/radar_blips.mjs";
 
 const { PNG } = createRequire(import.meta.url)("pngjs");
@@ -81,6 +82,35 @@ export function brightShare(png, level = 60) {
     return n / tot;
 }
 
+/**
+ * Whether the target panel shows a disabled target: the word "Disabled"
+ * in its lower-left corner (window x 645-725, y 422-440). "No Target" is
+ * drawn in the middle of the panel and leaves that corner dark.
+ */
+export function targetDisabledShown(png) {
+    const { width: W, data } = png;
+    let n = 0;
+    for (let y = 422; y < 440; y++) for (let x = 645; x < 725; x++) {
+        const i = (y * W + x) * 4;
+        if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) n++;
+    }
+    return n >= 30;
+}
+
+/**
+ * Whether anything is targeted: the target's name in white at the top of
+ * the target panel (window x 645-825, y 334-348); "No Target" is grey.
+ */
+export function targetShown(png) {
+    const { width: W, data } = png;
+    let n = 0;
+    for (let y = 334; y < 349; y++) for (let x = 645; x < 825; x++) {
+        const i = (y * W + x) * 4;
+        if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) n++;
+    }
+    return n >= 20;
+}
+
 /** Radar blips (radar px from the player) of an RGBA window PNG. */
 export function radarOf(png) {
     const rgb = Buffer.alloc(png.width * png.height * 3);
@@ -124,6 +154,57 @@ export function passKeys({ turn = null, dist, speedPxS, overPx = 60, pressGapMs 
     const each = `b wait ${Math.max(0, pressGapMs - 60)}`;
     const seq = `${turn ? turn + " wait 250 " : ""}hold:40 gap:20 down:Up wait ${thrustMs} up:Up ${Array(presses).fill(each).join(" ")} down:Down wait ${brakeMs} up:Down wait 300`;
     return { seq, presses };
+}
+
+/**
+ * The keys of sweep press `i` (wave 8, `args.sweep`): the first `repeat`
+ * presses stay put (does the same stop answer the same way twice?), every
+ * later one is preceded by `between` (default: a `turnMs` tap of Right, so
+ * the player turns in place about 10 degrees between presses).
+ */
+export function sweepKeys(i, { repeat = 3, turnMs = 115, between = null, waitMs = 700 } = {}) {
+    const before = i < repeat ? "" : (between ?? `Right@${turnMs} wait 300`);
+    return `${before ? before + " " : ""}b wait ${waitMs}`;
+}
+
+/**
+ * Presses `b` again and again at one stop (wave 8). Each press is shot;
+ * a dialog (the play area `dialogShare` brighter than at the start) is
+ * shot and closed with Abort (`sweep.abort`, default the plunder dialog's
+ * Abort button), so the next press can open it again. With
+ * `sweep.dialogClicks` those buttons are clicked instead (each followed by
+ * a shot) the first `sweep.clickTimes` times a dialog opens.
+ */
+async function runSweep(api, shoot, sweep, basePng, dialogClicks) {
+    const base = brightShare(basePng);
+    const presses = sweep.presses ?? 36;
+    const out = [];
+    let opened = 0;
+    for (let i = 0; i < presses; i++) {
+        await api.step({ keys: sweepKeys(i, sweep) });
+        const r = await shoot("sw");
+        const lit = brightShare(r.png) - base;
+        const dialog = lit > (sweep.dialogShare ?? 0.03);
+        const rec = { i, dialog, lit: +lit.toFixed(3), shot: r.file };
+        if (dialog) {
+            const clicks = opened < (sweep.clickTimes ?? 0) ? (sweep.dialogClicks ?? dialogClicks ?? []) : [];
+            for (const [x, y, label] of clicks) {
+                await api.step({ click: [x, y], win: true });
+                await api.step({ wait: 1000 });
+                await shoot(`sw-${label}`);
+            }
+            if (!clicks.length) {
+                await api.step({ click: sweep.abort ?? [418, 380], win: true });
+                await api.step({ wait: 1000 });
+                await shoot("sw-abort");
+            }
+            opened++;
+        }
+        out.push(rec);
+        api.log({ sweep: i, dialog, lit: rec.lit });
+        if (sweep.stopAfter && opened >= sweep.stopAfter) break;
+    }
+    return out;
 }
 
 export default async function board(api, args = {}) {
@@ -214,10 +295,22 @@ export default async function board(api, args = {}) {
     }
     if (!loc.o || !loc.on) return { ok: false, error: "target not on screen after the approach", legs };
 
+    // Wave 8: a hulk 2,000+ px out at the start may not be Tab-able yet
+    // (the target panel stayed "No Target"), and `b` with no target is
+    // answered with nothing. Tab until the panel names a target (with
+    // one ship around, Tab toggles between it and "No Target").
+    for (let t = 0; t < (args.retarget ?? 0) && !targetShown(s.png); t++) {
+        await api.step({ keys: "Tab wait 400" });
+        s = await shoot("retarget");
+        api.log({ retarget: t, targeted: targetShown(s.png), disabled: targetDisabledShown(s.png) });
+    }
+
     // Step in, pressing b at each stop (or, with args.pass, cross the
     // target at full speed pressing b all the way).
     const steps = [];
     const pass = args.pass;
+    const sweep = args.sweep;
+    let fired = false;
     for (let k = 0; k < maxSteps; k++) {
         const dist = Math.hypot(...loc.o);
         const want = bearing(loc.o);
@@ -252,6 +345,19 @@ export default async function board(api, args = {}) {
             }
             break;
         }
+        if (args.fire && !fired && dist <= args.fire.atPx) {
+            // Wave 8 (capture): damage the target once on the way in, e.g.
+            // "Space@300" for one turret shot, then shoot the result.
+            fired = true;
+            await api.step({ keys: args.fire.keys });
+            s = await shoot("fired");
+            api.log({ fired: args.fire.keys, dist: Math.round(dist) });
+        }
+        if (sweep && (dist <= sweep.atPx || loc.hidden)) {
+            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks);
+            steps.push({ k, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), sweep: r });
+            break;
+        }
         // Wave 7: face the target at every stop, however close (was > 12 px):
         // close stops that skipped the turn often got no answer at all.
         const keys = dist > (args.faceMinPx ?? 3) ? turnKeys(wrapDeg(want - heading), turnRate) : null;
@@ -265,6 +371,18 @@ export default async function board(api, args = {}) {
         const dialog = lit > (args.dialogShare ?? 0.03);
         steps.push({ k, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), shot: reply.file, dialog, lit: +lit.toFixed(3) });
         api.log({ step: k, dist: Math.round(dist), dialog, lit: +lit.toFixed(3) });
+        // Wave 8: a hulk boards only ONCE, even when the dialog is left with
+        // Abort (every later press: "You can't board this ship."), so a
+        // dialog during a sweep run ends it; nothing is left to sweep.
+        // `sweep.startOnSilent` starts the sweep at the first press the game
+        // answers with nothing (the status line is cleared, not rewritten).
+        const silent = !dialog && statusText(reply.png).n < 100;
+        steps[steps.length - 1].silent = silent;
+        if (sweep && !dialog && silent && sweep.startOnSilent) {
+            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks);
+            steps[steps.length - 1].sweep = r;
+            break;
+        }
         if (dialog) {
             // Optional clicks on the dialog's buttons (window points), each
             // followed by a shot, e.g. Credits, Cargo, then Abort.
@@ -279,7 +397,7 @@ export default async function board(api, args = {}) {
         }
         if (dist < 6) break;
         const before = loc.o;
-        await api.step({ keys: `down:Up wait ${stepMs} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
+        await api.step({ keys: `down:Up wait ${dist < (args.fineBelowPx ?? 0) ? args.fineStepMs : stepMs} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
         s = await shoot("step");
         loc = locate(s.png);
         if (!loc.o || !loc.on) {

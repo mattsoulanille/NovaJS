@@ -1,0 +1,75 @@
+{
+ "name": "board_capture_live_9",
+ "_comment": "U9 wave 8, capture of a hulk that is NOT a derelict: pilot w8_live (Kit Ring Crawler, crew 10, one Kit Escort Gun turret, 30 damage every 20 frames) at sÿst 2039 Kit Board Live, whose only traffic is shïp 829 Kit Live Pointer (the 24 px pointer hulk, 300 armor, crew 1, neutral gövt 363, AI 4, immobile). 150 px out the turret fires for 5800 ms (about 9 shots: 270 damage of its 300 armor; it is disabled below 100); the walk goes on, sweeps its heading at the first unanswered press, boards once; the dialog (Capture Odds) is shot and closed with Abort.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space@5800 wait 2500"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1
+    }
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,75 @@
+{
+ "name": "board_capture_5",
+ "_comment": "U9 wave 8, capture: is Capture offered once the hulk is damaged? Pilots w8_cap (Kit Ring Crawler, crew 10, one Kit Escort Gun turret: 30 damage every 20 frames) / w8_cap_crew (crew 500) at Kit Board Pointer (the 50,000 crew-1 Kit Hulk Pointer, 300 armor), or w8_cap_h20 (sÿst 2037: the same hulk with crew 20). Tab targets the hulk; 150 px out the turret fires for 2900 ms (about 5 shots, 150 of its 300 armor), then the walk goes on; at the first unanswered press (misaligned, see board_sweep.json) it turns in place about 5 degrees between presses until the dialog opens; the dialog (Capture Odds) is shot and closed with Abort.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space@2900 wait 1500"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1
+    }
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

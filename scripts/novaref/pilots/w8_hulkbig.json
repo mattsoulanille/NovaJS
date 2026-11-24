@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w8-hulkbig",
+  "edits": {
+    "ship": 818,
+    "stellar": 2038,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2038": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w8-hulkbig"
+  }
+}
