@@ -465,7 +465,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    rule (a nosy scanner in another govt's system raises the owner's
 //    record by half the owner's SmugPenalty). No input kind or message
 //    kind changes. The derived wire schema fingerprint changes
-//    (de1618493c2c83ef -> 188a53cfde98e2e0 on its own; COMBINEDFP
+//    (de1618493c2c83ef -> 188a53cfde98e2e0 on its own; 0c6eeff124ceccf1
 //    together with the piracy-police note above), and the join gate keeps
 //    older and newer builds apart.
 
