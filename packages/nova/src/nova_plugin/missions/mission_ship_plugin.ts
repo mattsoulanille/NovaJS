@@ -9,7 +9,7 @@ import { TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { BoardedComponent } from '../ship/index.js';
 import { CloakActiveComponent, CloakComponent, isTargetable } from '../ship/index.js';
-import { DeathEvent } from '../ship/index.js';
+import { DeathEvent, ExplodingComponent } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
@@ -269,15 +269,27 @@ const MissionShipTrackSystem = new System({
     args: [MissionShipComponent, UUID, MovementStateComponent,
         Optional(DisabledComponent), Optional(CloakComponent),
         Optional(CloakActiveComponent), Optional(BoardedComponent),
-        GetEntity, Entities] as const,
+        Optional(ExplodingComponent), GetEntity, Entities] as const,
     step(missionShip, uuid, movement, disabled, cloak, cloakActive, boarded,
-        shipEntity, entities) {
+        exploding, shipEntity, entities) {
         const objective = objectiveOf(missionShip, entities);
         if (!objective) {
             return;
         }
         registerShip(objective, uuid);
-        if (disabled) {
+        // A ship DESTROYED outright is not a disabled one. Its armor drops
+        // through the disable threshold on the way to zero, so
+        // ShipDisableSystem marks the exploding wreck disabled too
+        // (disabled_plugin.ts), and crediting that would let a ShipGoal 1
+        // ("Disable but don't destroy them") mission be completed by
+        // killing every ship — and never fail, since shipDied only fails a
+        // ship that was not disabled first. A ship disabled on an earlier
+        // tick keeps its credit when it is later destroyed. This system
+        // steps before ShipDisableSystem, so a wreck is never seen disabled
+        // before ShipZeroArmorSystem (end of the killing tick) has marked it
+        // exploding; mission_ship_integration_test's "destroyed outright"
+        // spec fails if that order ever flips.
+        if (disabled && exploding === undefined) {
             shipDisabled(objective, uuid);
         }
         if (boarded?.plundered && boarded.boarder === missionShip.owner) {

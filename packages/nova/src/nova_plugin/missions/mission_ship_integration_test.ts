@@ -181,6 +181,21 @@ describe('mission ships in the shared simulation', () => {
         expect(objective.complete).toBe(true);
     }, 30_000);
 
+    it('fails a disable goal when the ship is destroyed outright',
+        async () => {
+            const { world, missionShipUuid, deathDelay, activeObjective } =
+                await makeWorldWithMissionShip(GOAL_DISABLE);
+            // The wreck crosses the disable threshold on its way to zero
+            // armor and is marked disabled while it explodes; that is not
+            // a disable, so the goal fails instead of completing.
+            const died = await killShip(world, missionShipUuid, deathDelay);
+            expect(died).toBe(true);
+            const objective = activeObjective()!;
+            expect(objective.satisfied).toBe(0);
+            expect(objective.complete).toBe(false);
+            expect(objective.failed).toBe(true);
+        }, 30_000);
+
     it('observes a cloakless ship by co-presence', async () => {
         const { world, activeObjective } =
             await makeWorldWithMissionShip(GOAL_OBSERVE);
