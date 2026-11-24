@@ -23,7 +23,8 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
 import { SimulationGameDataResource } from '../core/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { Govt, GovtComponent } from '../core/index.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { OutfitsState, OutfitsStateComponent, ShipComponent }
+    from '../ship/index.js';
 import { ProjectileDataComponent } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
@@ -42,8 +43,10 @@ import { DisableCreditSystem } from '../reputation/index.js';
  *    jamming types (0-100%). "Ignored if the weapon is not a guided weapon."
  *  - oütf ModTypes 33-36 ("Jamming Type 1-4"): jamming strength an outfit
  *    gives its ship (percent).
- *  - gövt InhJam1-4: a government's inherent jamming. Parsed, but NOT applied:
- *    the reference measured no effect (see deriveJamming).
+ *  - gövt InhJam1-4: a government's inherent jamming. Applies only through
+ *    a hull's own shïp InherentGovt (its attributes govt, baked into
+ *    ShipData.inheritedJamming), never through the düde/combat govt (see
+ *    deriveJamming).
  *  - sÿst Interference: system sensor static (0-100), which confuses
  *    missiles with Seeker flag 0x0008 (confusedByInterference): rule 5.
  *  - Seeker flags: turnsAwayIfJammed (0x0010), attackParentIfJammed (0x8000),
@@ -113,9 +116,10 @@ export const ATTACK_PARENT_IF_JAMMED_PROBABILITY = 0.1;
 
 /**
  * A ship's jamming strength for each of the four jamming types, derived from
- * its outfits (oütf ModTypes 33-36): per type, the LARGEST single outfit's
- * value (see deriveJamming). Clamped to be non-negative when applied against
- * missiles.
+ * its outfits (oütf ModTypes 33-36) and its hull's inherent govt InhJam: per
+ * type, the sum over its DIFFERENT jammer outfits, each counted once, plus
+ * the hull's InhJam (see deriveJamming). Not clamped here; clamped into
+ * 0-100 when applied against missiles (effectiveJamming).
  *
  * Ordered [type1, type2, type3, type4] to match weapon JamVulnerabilities.
  */
@@ -229,32 +233,55 @@ export const ASTEROID_DECOY_CAPTURE_HALF_ANGLE = 25 * Math.PI / 180;
  * docs/reference_experiments.md, "J-series wave 5: sensor interference and
  * attack-parent": Interference 0 confused none of 48.7 missiles a run, and
  * Interference 100 lost 68% (16 hits of 49.5 launched, so 1 - 16/49.5 =
- * 0.677) with JamVuln 0, so jamming played no part. Only those two levels
- * were measured; the line in between is an assumption (the doc's "about
- * I x 0.7 / 100"). Stock systems run from Interference 1 to 80 (Vellos).
+ * 0.677) with JamVuln 0, so jamming played no part. Wave 7 ("J wave 7")
+ * added Interference 30 (23% lost) and 60 (35%); a least-squares line
+ * through the origin over the three levels gives 0.0066 per point, within
+ * one 49-missile run's noise of 0.0068 at every level, so the constant
+ * stands. Stock systems run from Interference 1 to 80 (Vellos).
  */
 export const INTERFERENCE_CONFUSION_PER_POINT_FITTED = 0.0068;
 
 /**
- * Derives a ship's jamming from its outfits (oütf ModTypes 33-36): per type,
- * the LARGEST value any single outfit gives, not the sum. The reference found
- * one, two, three or four +25 jammers on a hull all acting as 25, while one
- * +100 jammer acted as 100 ("Jammer outfits on a hull do not add up"; the
- * "count is ignored" alternative fits the data equally). An outfit's count
- * does not matter, and with no positive outfit a type stays at 0.
+ * Derives a ship's jamming (docs/reference_experiments.md, "J wave 7"):
  *
- * gövt InhJam1-4 is deliberately NOT applied: a target of an InhJam1 100
- * government jammed nothing in the reference (0 of 149 missiles). What InhJam
- * actually does is open; see the "J leftovers" row of the pending table in
- * docs/reference_experiments.md. The field is still parsed (GovtData.inhJam).
+ *     J_k = sum over the DIFFERENT jammer outfits on the ship of that
+ *           outfit's type-k value (oütf ModTypes 33-36), each counted once
+ *         + the hull's inherent jamming: InhJam_k of the gövt its shïp
+ *           InherentGovt names as its attributes govt
+ *           (ShipData.inheritedJamming)
  *
- * Pure and deterministic; returns a fresh 4-tuple. Returns undefined (retry
- * next step, matching deriveWeaponsState) if any outfit is not yet in the
+ * Outfits: Kit Jammer 25 + Kit Jammer 75 jammed every V 100 missile in both
+ * slot orders on the original (J 100, where the larger alone gives about
+ * 72%), while one to four copies of Kit Jammer 25 all acted as J 25 (wave 3:
+ * "Jammer outfits on a hull do not add up"). So an outfit's count does not
+ * matter, but different outfits add. The sum is signed: a negative jammer
+ * outfit subtracts (JUDGMENT CALL, untested on the original; there was no
+ * reason left to ignore one once outfits add).
+ *
+ * InhJam: a hull whose own InherentGovt names an InhJam1 100 govt jammed 98%
+ * of V 100 missiles; the same govt given only through the düde (the
+ * GovtComponent) jammed none of about 250 in waves 3-4, so the ship's
+ * combat govt is deliberately NOT read. How InhJam combines with outfits
+ * was not measured; adding is the natural reading of the outfit rule.
+ *
+ * No cap here: effectiveJamming clamps each type into 0-100 when a missile
+ * faces it, so the total is capped at 100 (the reference never went past
+ * 100; J above 100 jams nothing more anyway, V 100 at J 100 already jams
+ * every roll).
+ *
+ * `shipId` is the hull's shïp id (ShipComponent), if the entity has one.
+ *
+ * Pure and deterministic (integer sums, so the outfit iteration order does
+ * not matter); returns a fresh 4-tuple. Returns undefined (retry next step,
+ * matching deriveWeaponsState) if any outfit or the hull is not yet in the
  * game-data cache.
  */
 export function deriveJamming(outfits: OutfitsState,
-    gameData: SimulationGameDataInterface): Jamming | undefined {
-    const strongest: [number, number, number, number] = [0, 0, 0, 0];
+    gameData: SimulationGameDataInterface,
+    shipId?: string): Jamming | undefined {
+    const total: [number, number, number, number] = [0, 0, 0, 0];
+    // OutfitsState is keyed by outfit id, so each different outfit is seen
+    // once whatever its count.
     for (const [id, state] of outfits) {
         const outfit = gameData.data.Outfit.getCached(id);
         if (!outfit) {
@@ -265,10 +292,19 @@ export function deriveJamming(outfits: OutfitsState,
             continue;
         }
         for (let i = 0; i < 4; i++) {
-            strongest[i] = Math.max(strongest[i], outfit.jamming[i] ?? 0);
+            total[i] += outfit.jamming[i] ?? 0;
         }
     }
-    return strongest;
+    if (shipId !== undefined) {
+        const ship = gameData.data.Ship.getCached(shipId);
+        if (!ship) {
+            return undefined;
+        }
+        for (let i = 0; i < 4; i++) {
+            total[i] += ship.inheritedJamming?.[i] ?? 0;
+        }
+    }
+    return total;
 }
 
 /**
@@ -608,15 +644,18 @@ export function confusedTurning(steer: JamSteer | undefined):
 }
 
 /**
- * Live provider: keeps a ship's JammingComponent in sync as its outfits change.
- * Mirrors OutfitWeaponProvider in outfit_plugin.ts.
+ * Live provider: keeps a ship's JammingComponent in sync as its outfits or
+ * its hull (an escort upgrade swaps the ShipComponent) change. Mirrors
+ * OutfitWeaponProvider in outfit_plugin.ts.
  */
 const JammingProvider = ProvideFromCache({
     name: 'JammingProvider',
     provided: JammingComponent,
-    update: [OutfitsStateComponent],
-    args: [OutfitsStateComponent, SimulationGameDataResource] as const,
-    factory: (outfits, gameData) => deriveJamming(outfits, gameData),
+    update: [OutfitsStateComponent, ShipComponent],
+    args: [OutfitsStateComponent, Optional(ShipComponent),
+        SimulationGameDataResource] as const,
+    factory: (outfits, ship, gameData) =>
+        deriveJamming(outfits, gameData, ship?.id),
     // #237 pin (shared: *): JammingPlugin registers after ReputationPlugin
     // (and the debug cheats, which order after it).
     after: [DisableCreditSystem],
@@ -790,10 +829,10 @@ export const JammingPlugin: Plugin = {
 
         // A ship's government. Registered for the delta/serializer so it
         // replicates and survives snapshots; it's a plain { id } object, so
-        // the default codec/snapshot policy suffice. It no longer feeds
-        // jamming (gövt InhJam is not applied, see deriveJamming), but it
-        // stays registered here: many systems read it and this is where it
-        // has always been registered.
+        // the default codec/snapshot policy suffice. It does not feed
+        // jamming (InhJam comes from the hull's InherentGovt, never the
+        // düde govt; see deriveJamming), but it stays registered here: many
+        // systems read it and this is where it has always been registered.
         world.addComponent(GovtComponent);
         deltaMaker.addComponent(GovtComponent, {
             componentType: Govt,
@@ -814,14 +853,15 @@ export const JammingPlugin: Plugin = {
             world.resources.set(SystemInterferenceResource, { interference: 0 });
         }
 
-        // Re-derive a ship's jamming from its outfits at completeEntity /
-        // snapshot restore (mirrors WeaponsStateDeriver).
+        // Re-derive a ship's jamming from its outfits and hull at
+        // completeEntity / snapshot restore (mirrors WeaponsStateDeriver).
         registerEntityDeriver(world, {
             name: 'JammingDeriver',
             provided: JammingComponent,
             requires: [OutfitsStateComponent],
             derive: (entity, gameData) => deriveJamming(
-                entity.components.get(OutfitsStateComponent)!, gameData),
+                entity.components.get(OutfitsStateComponent)!, gameData,
+                entity.components.get(ShipComponent)?.id),
         });
         world.addSystem(JammingProvider);
         world.addSystem(MissileJammingSystem);

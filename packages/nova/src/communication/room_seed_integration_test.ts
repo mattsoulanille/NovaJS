@@ -184,11 +184,18 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // interference roll, drawn by every missile), so the Random
             // state after 300 steps is four draws further on (four missiles
             // launched) and everything rolled after the first launch differs.
+            //
+            // The four hashes were re-pinned for "J wave 7": a ship's
+            // JammingComponent now sums its different jammer outfits and
+            // adds its hull's InherentGovt InhJam, so genesis NPCs whose
+            // hull names the Raiders or the Compact hash differently. Both
+            // Random states did not move: the draw count per jam decision
+            // is unchanged.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '3ca4d4b0', '60fbbf30',
+                [THESSALY, 'b2f5c0fa', '8534ddd3',
                     [3151324470, 1269255679, 2221342106, 396450743]],
-                [SYNTHETIC.systems.kestrel, 'e5390f10', '297b0add',
+                [SYNTHETIC.systems.kestrel, 'cc8bd060', '71a631e3',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

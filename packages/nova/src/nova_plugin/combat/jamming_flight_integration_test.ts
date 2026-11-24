@@ -17,7 +17,7 @@ import { ProjectileWeaponData, SeekerFlags } from 'novadatainterface/weapon_data
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { deriveEntityComponents, ProjectileDataComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
-import { loadWeaponsGameData } from '../spawn/index.js';
+import { completeEntity, loadWeaponsGameData } from '../spawn/index.js';
 import { WeaponConstructors } from './fire_weapon_plugin.js';
 import {
     ASTEROID_DECOY_CAPTURE_HALF_ANGLE, ASTEROID_DECOY_CAPTURE_RANGE,
@@ -26,7 +26,8 @@ import {
 } from './jamming_plugin.js';
 import { AsteroidComponent, loadAsteroidGameData, makeAsteroid }
     from './asteroid_plugin.js';
-import { TargetComponent } from '../ship/index.js';
+import { makeShip, TargetComponent } from '../ship/index.js';
+import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 
 /**
  * Jamming in a real simulation world: missiles fired through the real
@@ -247,6 +248,65 @@ describe('missile jamming in flight', () => {
         expect(world.entities.get(first[0][0])!
             .components.get(ProjectileDataComponent)!.jamVulnerabilities)
             .toEqual([100, 0, 0, 0]);
+    });
+
+    it("jams off a real hull's InherentGovt InhJam, and replays it identically after a rollback", async () => {
+        // The Bastion Hulk: no outfits, InherentGovt = the Amber Compact
+        // (InhJam [50, 50, 35, 20]), so V 100 type-1 missiles are jammed
+        // half the time. Its JammingComponent comes from the real provider
+        // and is re-derived (not carried) across a restore.
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.hulk);
+        const hulk = makeShip(shipData);
+        hulk.components.set(MultiplayerData, { owner: 'server' });
+        hulk.components.set(MovementStateComponent, {
+            position: new Position(400, 0),
+            velocity: new Vector(0, 0),
+            rotation: new Angle(0),
+            accelerating: 0,
+            turning: 0,
+            turnBack: false,
+        });
+        await completeEntity(world, hulk);
+        world.entities.set('hulk', hulk);
+        step(5);
+        const jammingOf = () => world.entities.get('hulk')!
+            .components.get(JammingComponent);
+        expect(jammingOf()).toEqual([50, 50, 35, 20]);
+        const entry = await launcher([100, 0, 0, 0]);
+
+        const beforeLaunch = snapshotWorld(world);
+        const salvo = () => {
+            const ids: string[] = [];
+            for (let i = 0; i < 24; i++) {
+                ids.push(fire(entry, 'hulk'));
+            }
+            step(1);
+            return ids.map(id => [id, world.entities.get(id)!
+                .components.get(JamDecisionComponent)?.steer] as const);
+        };
+        const first = salvo();
+        const steers = first.map(([, steer]) => steer);
+        expect(steers).toContain('flyStraight');
+        expect(steers).toContain('track');
+
+        const midFlight = snapshotWorld(world);
+        const original: string[] = [];
+        for (let i = 0; i < 90; i++) {
+            world.step();
+            original.push(hashWorld(world).hash);
+        }
+        restoreWorld(world, midFlight, deriveEntityComponents);
+        expect(jammingOf()).toEqual([50, 50, 35, 20]);
+        const resimulated: string[] = [];
+        for (let i = 0; i < 90; i++) {
+            world.step();
+            resimulated.push(hashWorld(world).hash);
+        }
+        expect(resimulated).toEqual(original);
+
+        restoreWorld(world, beforeLaunch, deriveEntityComponents);
+        expect(jammingOf()).toEqual([50, 50, 35, 20]);
+        expect(salvo()).toEqual(first);
     });
 
     /** Flies `uuid` for up to `ticks` ticks; returns, per tick, its target

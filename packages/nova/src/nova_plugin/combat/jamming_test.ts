@@ -11,6 +11,7 @@ import { World } from 'nova_ecs/world';
 import { getDefaultProjectileWeaponData, getDefaultSeekerFlags, SeekerFlags }
     from 'novadatainterface/weapon_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
+import { getDefaultShipData } from 'novadatainterface/ship_data';
 import {
     ASTEROID_DECOY_CAPTURE_HALF_ANGLE,
     ASTEROID_DECOY_CAPTURE_RANGE,
@@ -39,12 +40,17 @@ import { ProjectileDataComponent } from '../core/index.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
 import { TargetComponent } from '../ship/index.js';
 
-/** A stand-in for the simulation game data, exposing only Outfit.getCached. */
-function mockGameData(outfits: Record<string, ReturnType<typeof getDefaultOutfitData>>) {
+/** A stand-in for the simulation game data, exposing only Outfit.getCached
+ * and Ship.getCached (a hull's inheritedJamming). */
+function mockGameData(outfits: Record<string, ReturnType<typeof getDefaultOutfitData>>,
+    ships: Record<string, ReturnType<typeof getDefaultShipData>> = {}) {
     return {
         data: {
             Outfit: {
                 getCached: (id: string) => outfits[id],
+            },
+            Ship: {
+                getCached: (id: string) => ships[id],
             },
         },
     } as any;
@@ -65,8 +71,26 @@ function jammer(jamming: [number, number, number, number]) {
     return { ...getDefaultOutfitData(), jamming };
 }
 
-describe('deriveJamming (the largest single jammer outfit, per type)', () => {
-    it('takes the largest outfit per type, not the sum', () => {
+/** A hull whose InherentGovt carries InhJam `inheritedJamming`. */
+function hull(inheritedJamming: [number, number, number, number]) {
+    return { ...getDefaultShipData(), inheritedJamming };
+}
+
+describe('deriveJamming (different jammer outfits add, copies count once, plus the hull InhJam)', () => {
+    it('adds two different jammers: 25 + 75 is 100, in either order', () => {
+        // The wave-7 cells: Kit Jammer 25 + Kit Jammer 75 jammed every V 100
+        // missile in both slot orders on the original.
+        const gameData = mockGameData({
+            kit25: jammer([25, 0, 0, 0]),
+            kit75: jammer([75, 0, 0, 0]),
+        });
+        expect(deriveJamming(new Map([['kit25', { count: 1 }],
+            ['kit75', { count: 1 }]]), gameData)).toEqual([100, 0, 0, 0]);
+        expect(deriveJamming(new Map([['kit75', { count: 1 }],
+            ['kit25', { count: 1 }]]), gameData)).toEqual([100, 0, 0, 0]);
+    });
+
+    it('adds per type across different outfits', () => {
         const gameData = mockGameData({
             'nova:irJammer': jammer([20, 0, 0, 0]),
             'nova:radarJammer': jammer([0, 15, 0, 0]),
@@ -77,24 +101,28 @@ describe('deriveJamming (the largest single jammer outfit, per type)', () => {
             ['nova:radarJammer', { count: 1 }],
             ['nova:bigIr', { count: 1 }],
         ]);
-        expect(deriveJamming(outfits, gameData)).toEqual([35, 15, 0, 0]);
+        expect(deriveJamming(outfits, gameData)).toEqual([55, 20, 0, 0]);
     });
 
-    it('treats four +25 jammers as 25 (the count is not a multiplier)', () => {
-        // The reference's stacked cell: 1-4 Kit Jammer 25s all behave like
-        // J = 25 against the original's missiles.
+    it('counts copies of the same outfit once (four +25 jammers are 25)', () => {
+        // The wave-3 stacked cell: 1-4 Kit Jammer 25s all behave like J = 25.
         const gameData = mockGameData({ kit25: jammer([25, 0, 0, 0]) });
-        expect(deriveJamming(new Map([['kit25', { count: 4 }]]), gameData))
-            .toEqual([25, 0, 0, 0]);
+        for (const count of [1, 2, 3, 4]) {
+            expect(deriveJamming(new Map([['kit25', { count }]]), gameData))
+                .withContext(`${count} copies`).toEqual([25, 0, 0, 0]);
+        }
     });
 
-    it('lets one +100 jammer give 100', () => {
+    it('counts several copies of each of two outfits once each', () => {
         const gameData = mockGameData({
             kit25: jammer([25, 0, 0, 0]),
             big: jammer([100, 0, 0, 0]),
         });
-        const outfits = new Map([['kit25', { count: 3 }], ['big', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData)).toEqual([100, 0, 0, 0]);
+        const outfits = new Map([['kit25', { count: 3 }], ['big', { count: 2 }]]);
+        // Uncapped here; effectiveJamming caps it at 100 against a missile.
+        expect(deriveJamming(outfits, gameData)).toEqual([125, 0, 0, 0]);
+        expect(effectiveJamming(deriveJamming(outfits, gameData)))
+            .toEqual([100, 0, 0, 0]);
     });
 
     it('ignores an outfit entry with a zero count', () => {
@@ -103,13 +131,15 @@ describe('deriveJamming (the largest single jammer outfit, per type)', () => {
             .toEqual([0, 0, 0, 0]);
     });
 
-    it('never goes below zero for a negative outfit', () => {
+    it('lets a negative outfit subtract, and never jams below zero', () => {
         const gameData = mockGameData({
             jam: jammer([30, 0, 0, 0]),
-            disruptor: jammer([-10, 0, 0, 0]),
+            disruptor: jammer([-10, -5, 0, 0]),
         });
         const outfits = new Map([['jam', { count: 1 }], ['disruptor', { count: 1 }]]);
-        expect(deriveJamming(outfits, gameData)).toEqual([30, 0, 0, 0]);
+        expect(deriveJamming(outfits, gameData)).toEqual([20, -5, 0, 0]);
+        expect(effectiveJamming(deriveJamming(outfits, gameData)))
+            .toEqual([20, 0, 0, 0]);
     });
 
     it('returns undefined when an outfit is not cached yet', () => {
@@ -122,6 +152,33 @@ describe('deriveJamming (the largest single jammer outfit, per type)', () => {
         const gameData = mockGameData({ p: jammer([0, 0, 0, 0]) });
         const outfits = new Map([['p', { count: 3 }]]);
         expect(deriveJamming(outfits, gameData)).toEqual([0, 0, 0, 0]);
+    });
+
+    it("adds the hull's inherent InhJam (shïp InherentGovt)", () => {
+        // Wave 7: the J0 hull with InherentGovt 364 (InhJam1 100), no
+        // jammer outfits, jammed 98% of V 100 missiles.
+        const gameData = mockGameData({}, { j0: hull([100, 0, 0, 0]) });
+        expect(deriveJamming(new Map(), gameData, 'j0'))
+            .toEqual([100, 0, 0, 0]);
+    });
+
+    it("adds the hull's InhJam on top of its outfits", () => {
+        const gameData = mockGameData({ kit25: jammer([25, 10, 0, 0]) },
+            { raider: hull([7, 5, 0, 0]) });
+        expect(deriveJamming(new Map([['kit25', { count: 2 }]]), gameData,
+            'raider')).toEqual([32, 15, 0, 0]);
+    });
+
+    it('returns undefined when the hull is not cached yet', () => {
+        const gameData = mockGameData({ kit25: jammer([25, 0, 0, 0]) });
+        expect(deriveJamming(new Map([['kit25', { count: 1 }]]), gameData,
+            'missing')).toBeUndefined();
+    });
+
+    it('reads no hull without a ship id (outfits only)', () => {
+        const gameData = mockGameData({ kit25: jammer([25, 0, 0, 0]) });
+        expect(deriveJamming(new Map([['kit25', { count: 1 }]]), gameData))
+            .toEqual([25, 0, 0, 0]);
     });
 });
 

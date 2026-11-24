@@ -12,8 +12,8 @@ import { makeSystem } from '../make_system.js';
 
 // These assertions stay on the real Nova game data (Nova_Data): the whole
 // point of this describe is to pin a few known STOCK governments' parsed
-// values (allies/enemies/MaxOdds/InhJam), which no other data set has. The
-// rule that InhJam does NOT reach a ship's JammingComponent is
+// values (allies/enemies/MaxOdds/InhJam), which no other data set has. How
+// InhJam reaches a ship's JammingComponent (through its hull only) is
 // exercised on the synthetic scenario in the describe below.
 describe('GovtData against real Nova data', () => {
     it("pins the Federation's (nova:128) parsed values", async () => {
@@ -80,17 +80,20 @@ describe('GovtData against real Nova data', () => {
     });
 });
 
-// gövt InhJam is parsed (pinned above) but NOT applied to a ship's jamming:
-// a target of an InhJam1 100 government jammed none of 149 missiles in the
-// reference (docs/reference_experiments.md, "J-series wave 3", finding 5).
-describe('a ship\'s government does not add to its jamming (InhJam ignored)', () => {
-    it("leaves a jammer-less ship of a weak-InhJam govt at zero", async () => {
+// gövt InhJam reaches a ship's jamming only through its HULL's shïp
+// InherentGovt, never through its düde govt (GovtComponent): the original
+// jammed 98% of V 100 missiles at a hull whose own InherentGovt named an
+// InhJam1 100 govt, and none of about 250 when only the düde carried it
+// (docs/reference_experiments.md, "J wave 7" finding 1, and waves 3-4).
+describe('a ship\'s jamming: outfits plus its hull\'s InhJam, never the düde govt', () => {
+    it("leaves a jammer-less hull with no InherentGovt at zero under an InhJam düde govt", async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
 
-        // The Wren Skiff carries no jamming outfits; the Verge Raiders have
-        // InhJam [7, 5, 0, 0], which is not applied.
+        // The Wren Skiff carries no jamming outfits and has no InherentGovt;
+        // the Verge Raiders' InhJam [7, 5, 0, 0] given as its düde govt does
+        // nothing.
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
@@ -100,23 +103,25 @@ describe('a ship\'s government does not add to its jamming (InhJam ignored)', ()
         expect(ship.components.get(JammingComponent)).toEqual([0, 0, 0, 0]);
     });
 
-    it("keeps a ship's outfit jamming under a strong-InhJam govt", async () => {
+    it("adds the hull's InhJam to its outfits, and ignores a strong-InhJam düde govt", async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
 
-        // The Shrike Ghost's jammers give [20, 15, 0, 0]. The Amber Compact's
-        // InhJam [50, 50, 35, 20] would dominate every type if it applied.
+        // The Shrike Ghost's two different jammers give [20, 0, 0, 0] and
+        // [0, 15, 0, 0]; its InherentGovt (the Verge Raiders) adds InhJam
+        // [7, 5, 0, 0]. The Amber Compact's InhJam [50, 50, 35, 20] as its
+        // düde govt is not applied.
         const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
         ship.components.set(GovtComponent, { id: SYNTHETIC.govts.compact });
         await completeEntity(system, ship);
 
-        expect(ship.components.get(JammingComponent)).toEqual([20, 15, 0, 0]);
+        expect(ship.components.get(JammingComponent)).toEqual([27, 20, 0, 0]);
     });
 
-    it('gives the same jamming with no GovtComponent (outfit-only)', async () => {
+    it('gives the same jamming with no GovtComponent', async () => {
         const gameData = await getSyntheticGameData();
         const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             undefined, { npcs: false });
@@ -127,6 +132,22 @@ describe('a ship\'s government does not add to its jamming (InhJam ignored)', ()
         await completeEntity(system, ship);
 
         expect(ship.components.get(GovtComponent)).toBeUndefined();
-        expect(ship.components.get(JammingComponent)).toEqual([20, 15, 0, 0]);
+        expect(ship.components.get(JammingComponent)).toEqual([27, 20, 0, 0]);
+    });
+
+    it("gives a jammer-less hull its InherentGovt's full InhJam", async () => {
+        const gameData = await getSyntheticGameData();
+        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
+
+        // The Bastion Hulk has no outfits and InherentGovt = the Amber
+        // Compact (InhJam [50, 50, 35, 20]).
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.hulk);
+        const ship = makeShip(shipData);
+        ship.components.set(MultiplayerData, { owner: 'server' });
+        await completeEntity(system, ship);
+
+        expect(ship.components.get(JammingComponent))
+            .toEqual([50, 50, 35, 20]);
     });
 });
