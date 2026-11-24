@@ -48,6 +48,7 @@ import {
     carriedBatchSettled, CarriedEscort, escortsAccountedFor,
     takeCarriedEscorts,
 } from '../spaceport/landed_escorts.js';
+import { runLiftoffAutoAborts } from '../spaceport/mission_session.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     buildHiredEscort, FleetInsertionResult, insertEscortBatch,
@@ -778,6 +779,14 @@ export async function prepareMissionShips(gameData: SimulationGameData,
     try {
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
+        // The OnAbort of a mission that auto-aborted at a docked accept
+        // runs now, as its ships are created (reference #320 item 3). Its
+        // own failure must not cost the ships.
+        try {
+            await runLiftoffAutoAborts(playerEntity, gameData, universe);
+        } catch (e) {
+            console.warn('Failed to run lift-off auto-aborts:', e);
+        }
         return await buildMissionShipSpawns(playerEntity, playerUuid,
             systemId, gameData, universe, firstSlot, Math.random,
             world ? liveMissionShips(world.entities, playerUuid) : undefined);

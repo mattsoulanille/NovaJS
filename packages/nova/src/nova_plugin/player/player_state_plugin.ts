@@ -235,8 +235,9 @@ export const PendingMissionNoticesComponent =
  * the same reason; this is the docked counterpart, in the same shape.
  *
  * Written by MissionSession.commit from the working state acceptOffer
- * pushed to; drained by buildMissionShipSpawns at the owner's next system
- * entry (the lift-off), BEFORE the entity is encoded into its insertion
+ * pushed to; at the owner's next system entry (the lift-off) the batch's
+ * OnAbort runs (runLiftoffAutoAborts) and buildMissionShipSpawns drains
+ * it, both BEFORE the entity is encoded into its insertion
  * record, so it never reaches a peer. Serializer-registered all the same,
  * like PendingMissionNotices, so a rollback snapshot or a docked mirror
  * carries it unchanged. Carried onto a hull bought before lift-off
@@ -256,6 +257,15 @@ export const PendingAutoAbortShipType = t.intersection([t.type({
     /** The <SN> pick the auto-abort notice showed, so the ships wear it. */
     shipName: t.string,
     shipSubtitle: t.string,
+    /**
+     * The mission's OnAbort has not run yet: it runs at the lift-off, as
+     * the ships are created (runQueuedAutoAbortOnAborts), which is when
+     * the original aborts the mission (reference #320 item 3, wave 10).
+     * Absent on a batch whose OnAbort already ran — every batch an older
+     * build queued (it ran OnAbort at accept), which a restored save may
+     * still carry — so such a batch never runs it twice.
+     */
+    onAbortPending: t.literal(true),
 })]);
 export type PendingAutoAbortShip = t.TypeOf<typeof PendingAutoAbortShipType>;
 export const PendingAutoAbortShipsType = t.array(PendingAutoAbortShipType);

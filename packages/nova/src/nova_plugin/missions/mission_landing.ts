@@ -144,6 +144,48 @@ export function runPendingAutoAborts(machinery: MissionMachineryContext,
 }
 
 /**
+ * Runs the OnAbort of every immediate auto-abort (mïsn Flags 0x0001) whose
+ * special ships were queued at a docked accept and are about to be
+ * created: the lift-off, where the original aborts such a mission
+ * (reference #320 item 3, wave 10; see acceptOffer). Each batch's
+ * `onAbortPending` is cleared BEFORE its set string runs, so it runs once
+ * however the set string recurses; the batch itself stays for
+ * buildMissionShipSpawns to spawn. A batch queued by the set strings run
+ * here (an Sxxx starting another such mission) aborts at this same
+ * lift-off. Nothing else of the abort is deferred: OnAccept, the 0x0002
+ * Pay, the date and the notice all happened at accept. Returns how many
+ * ran.
+ */
+export function runQueuedAutoAbortOnAborts(machinery: MissionMachineryContext,
+    outfits?: Map<string, number>): number {
+    const batches = machinery.state.autoAbortShips;
+    if (!batches) {
+        return 0;
+    }
+    let ran = 0;
+    for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        if (!batch.onAbortPending) {
+            continue;
+        }
+        // Replaced, not edited: the entry may be shared with the entity's
+        // component (see PLAYER_STATE_COMPONENTS).
+        const { onAbortPending: _ran, ...rest } = batch;
+        batches[i] = rest;
+        const mission = machinery.getMission(batch.missionId);
+        if (!mission) {
+            console.warn(`Auto-abort ${batch.missionId} has no data; `
+                + 'its OnAbort is skipped.');
+            continue;
+        }
+        runMissionSetString(machinery, mission.onAbort,
+            setStringPrefix(mission), outfits);
+        ran++;
+    }
+    return ran;
+}
+
+/**
  * Fails every active mission whose deadline has passed as of
  * `currentDay`, or which the shared sim marked failed (`active.failed`).
  * Runs OnFailure and appends a failure event for each — the same as a

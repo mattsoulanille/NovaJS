@@ -296,6 +296,10 @@ async function detachedSession(player: Entity,
     const session = await MissionSession.create(copy, gameData, universe,
         inFlightStellar(universe, systemId),
         { announceCheckpoints: false });
+    // No lift-off queue in flight: an immediate auto-abort's ships come
+    // with the accept's own record (buildAcceptedMissionShips), so its
+    // OnAbort runs with the accept too (mission_accept_offer.ts).
+    session.state.autoAbortShips = undefined;
     const before = detachPlayerState(copy);
     const outcome: { shipChange?: ShipChange, moveToSystem?: SystemMove } = {};
     session.setChangeShipHook((id, mode) => {

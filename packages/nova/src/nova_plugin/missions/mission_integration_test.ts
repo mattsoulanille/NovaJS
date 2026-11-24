@@ -5,7 +5,9 @@ import {
     getIntegrationGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { MissionSession, advanceEntityDate, processEntityLanding } from '../../spaceport/mission_session.js';
+import {
+    MissionSession, advanceEntityDate, processEntityLanding, runLiftoffAutoAborts,
+} from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
 import { dayNumber, daysPerJump } from '../player/index.js';
 import { CargoComponent } from '../ship/index.js';
@@ -734,15 +736,27 @@ describe('missions against real Nova data', () => {
                 entity.components.get(PendingAutoAbortShipsComponent)!;
             expect(pending.length).toBe(1);
             expect(pending[0].missionId).toBe('nova:614');
-            // OnAccept AND OnAbort ran (both are "G348 !b6100"): the bit
-            // is clear and the Bureau Bomb was granted by each. (Gxxx
-            // bypasses the oütf Max of 1 by design — ncb.ts.)
+            expect(pending[0].onAbortPending).toBe(true);
+            // OnAccept ran (it is "G348 !b6100"): the bit is clear and the
+            // Bureau Bomb granted. OnAbort (the same string) waits for the
+            // lift-off, where the original aborts (reference #320 item 3).
             expect(entity.components.get(ControlBitsComponent)!.has(6100))
                 .toBe(false);
             expect(entity.components.get(OutfitsStateComponent)!
+                .get('nova:348')?.count).toBe(1);
+
+            // Lift-off: OnAbort runs, granting the second bomb (Gxxx
+            // bypasses the oütf Max of 1 by design — ncb.ts), once.
+            await runLiftoffAutoAborts(entity, gameData, universe);
+            expect(entity.components.get(OutfitsStateComponent)!
+                .get('nova:348')?.count).toBe(2);
+            expect(entity.components.get(PendingAutoAbortShipsComponent)!
+                .map(batch => batch.onAbortPending)).toEqual([undefined]);
+            await runLiftoffAutoAborts(entity, gameData, universe);
+            expect(entity.components.get(OutfitsStateComponent)!
                 .get('nova:348')?.count).toBe(2);
 
-            // Lift-off into Sol: four untethered Federation ships.
+            // ...and into Sol: four untethered Federation ships.
             const ships = await buildMissionShipSpawns(entity, 'player',
                 'nova:128', gameData, universe);
             expect(ships.length).toBe(4);

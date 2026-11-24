@@ -109,11 +109,26 @@ export function acceptOffer(machinery: MissionMachineryContext,
     const ctx = machinery.offerContext();
 
     if (mission.flags.autoAbort && !deferredAutoAbort(mission)) {
+        // The special ships wait for the lift-off when there is a lift-off
+        // queue to wait in (docked: MissionSession seeds one). An
+        // in-flight accept has none (ship_mission_accept.ts spawns the
+        // ships with the accept), nor does a bare test state.
+        const queueShips = offer.shipObjective !== undefined
+            && state.autoAbortShips !== undefined;
         // One-shot scripting missions: run OnAccept (and pay if
         // flagged), never becoming active.
         runMissionSetString(machinery, mission.onAccept, prefix,
             outfits, depth);
-        // ...and then OnAbort, because it IS an abort. EVN Bible, Flags
+        // ...and then OnAbort, because it IS an abort — but WHEN the abort
+        // happens, which is when the special ships are created. The
+        // original, docked (reference #320 item 3, wave 10): OnAccept's
+        // bit set at accept, the mission still listed while landed (it is
+        // in the pilot written at the Leave), and OnAbort's bit set only
+        // once the special ship had appeared in flight. So with the ships
+        // queued for lift-off, OnAbort is queued with them
+        // (`onAbortPending`, run by runQueuedAutoAbortOnAborts at the
+        // lift-off); otherwise the ships appear now, and so does the
+        // abort. EVN Bible, Flags
         // 0x0001: "automatically abort itself after it is accepted ... Any
         // control bits pointed to by the mission's OnAbort fields will be
         // automatically set when the mission aborts." OnAccept first, then
@@ -132,9 +147,13 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // reversal every time a squad is dispatched cannot be what their
         // author meant. The DEFERRED auto-abort (runPendingAutoAborts)
         // leaves it out too, through autoAbortMission: one rule for both
-        // (#320, see autoAbortMission).
-        runMissionSetString(machinery, mission.onAbort, prefix,
-            outfits, depth);
+        // (#320, see autoAbortMission). The original agrees: neither a
+        // +CompReward nor a -5x reversal reached the record, 0x0040 or not
+        // (reference #320 item 3).
+        if (!queueShips) {
+            runMissionSetString(machinery, mission.onAbort, prefix,
+                outfits, depth);
+        }
         // mïsn Flags2 0x0002, "Apply mission Pay on auto-abort". The Pay
         // is the WHOLE PayVal, not just a positive one: the stock traps
         // that use this bit are the ones that TAKE — nova:609/610 take 2%
@@ -173,10 +192,11 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // for the lift-off to spawn from, exactly as the in-flight accept
         // keeps the offer's objective for the Derelict Decoy's ambush
         // (ship_mission_accept.ts). See PendingAutoAbortShipsComponent.
-        if (offer.shipObjective && state.autoAbortShips) {
+        if (queueShips && offer.shipObjective && state.autoAbortShips) {
             const shipSubtitle =
                 pickSpecialShipSubtitle(mission, machinery.random);
             state.autoAbortShips.push({
+                onAbortPending: true,
                 missionId: mission.id,
                 shipObjective: {
                     ...offer.shipObjective,

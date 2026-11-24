@@ -336,6 +336,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    without it changes. No input kind or message kind changes. The
 //    derived wire schema fingerprint changes (cbfec2237c0e82e5), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): an immediate auto-abort's OnAbort runs at the
+//    lift-off that creates its special ships, not at the docked accept
+//    (reference #320 item 3, wave 10). One OPTIONAL PendingAutoAbortShip
+//    field, `onAbortPending` (player/player_state_plugin.ts). The batch is
+//    drained before the player's insertion record is encoded, so it never
+//    reaches a peer, but its codec is part of the derived schema. No sim
+//    rule, input kind or message kind changes. The derived wire schema
+//    fingerprint changes (1f7350a5d5199574), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

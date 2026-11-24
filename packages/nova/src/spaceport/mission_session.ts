@@ -14,7 +14,8 @@ import {
     abortMission, failExpiredMissions, failMission, MissionContext, MissionEvent,
     MissionMachineryContext, MissionWorkingState, outfitsAfterShipChange,
     processLanding, rehullShip, runCronsForDays, runMissionSetString,
-    runPendingAutoAborts, runPendingShipDone, startMissionById, stellarInfoOf,
+    runPendingAutoAborts, runPendingShipDone, runQueuedAutoAbortOnAborts,
+    startMissionById, stellarInfoOf,
 } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
@@ -999,23 +1000,63 @@ async function processInFlightMissions(entity: Entity,
     const events = session.commit().filter(event =>
         !(event.type === 'shipDone'
             && takeShipDoneTextShown(event.missionId)));
-    if (events.length > 0) {
-        const existing =
-            entity.components.get(PendingMissionNoticesComponent) ?? [];
-        entity.components.set(PendingMissionNoticesComponent,
-            [...existing, ...events.map(e => ({
-                missionId: e.missionId,
-                missionName: e.missionName,
-                type: e.type,
-                text: e.text,
-                payment: e.payment,
-                // Only a present (non-null) pict rides the serialized
-                // partial; a null dësc-graphic is simply omitted.
-                ...(e.pict ? { pict: e.pict } : {}),
-                ...(e.specialShipName
-                    ? { specialShipName: e.specialShipName } : {}),
-            }))]);
+    queueMissionNotices(entity, events);
+}
+
+/**
+ * Queues `events` on the entity for the next spaceport screen
+ * (PendingMissionNoticesComponent), after any already queued.
+ */
+function queueMissionNotices(entity: Entity, events: MissionEvent[]): void {
+    if (events.length === 0) {
+        return;
     }
+    const existing =
+        entity.components.get(PendingMissionNoticesComponent) ?? [];
+    entity.components.set(PendingMissionNoticesComponent,
+        [...existing, ...events.map(e => ({
+            missionId: e.missionId,
+            missionName: e.missionName,
+            type: e.type,
+            text: e.text,
+            payment: e.payment,
+            // Only a present (non-null) pict rides the serialized
+            // partial; a null dësc-graphic is simply omitted.
+            ...(e.pict ? { pict: e.pict } : {}),
+            ...(e.specialShipName
+                ? { specialShipName: e.specialShipName } : {}),
+        }))]);
+}
+
+/**
+ * The lift-off half of a docked immediate auto-abort (mïsn Flags 0x0001):
+ * runs the OnAbort of every queued batch still owing it
+ * (runQueuedAutoAbortOnAborts), on the entity about to be inserted, just
+ * before buildMissionShipSpawns creates the batch's ships — where the
+ * original aborts the mission (reference #320 item 3, wave 10). Runs
+ * player-locally on the held entity, like processInFlightMissions, so its
+ * effects ride the insertion record. A no-op, skipping the session build,
+ * when nothing is owed.
+ */
+export async function runLiftoffAutoAborts(entity: Entity,
+    gameData: SimulationGameDataInterface,
+    universe: MissionUniverse): Promise<void> {
+    const pending = entity.components.get(PendingAutoAbortShipsComponent);
+    if (!pending?.some(batch => batch.onAbortPending)) {
+        return;
+    }
+    const session = await MissionSession.create(
+        entity, gameData, universe, '<in-flight>');
+    // An OnAbort's Cxxx / Exxx / Hxxx swaps the held hull in place, as in
+    // processInFlightMissions.
+    const hull = await heldHullChanger(entity, gameData, universe);
+    session.setChangeShipHook((id, mode) => {
+        if (hull.changeShip(id, mode, session.outfits)) {
+            session.retarget(entity, id);
+        }
+    }, hull.shipExists);
+    runQueuedAutoAbortOnAborts(session.machinery, session.outfits);
+    queueMissionNotices(entity, session.commit());
 }
 
 /**

@@ -11,6 +11,7 @@ import {
     matchesStellarRef,
     missionMapMarks,
     runPendingShipDone,
+    runQueuedAutoAbortOnAborts,
     startMissionById,
     MissionContext,
     MissionMachineryContext,
@@ -1477,6 +1478,86 @@ describe('accept / landing / completion flow', () => {
                 makeMissionOffer(plain, machinery.offerContext())!);
             expect(state.autoAbortShips!.length).toBe(1);
         });
+
+    describe('OnAbort runs when the abort happens: with the ships '
+        + '(reference #320 item 3)', () => {
+        // The original, docked (mïsn 1036/1037, one Kit Escort at ShipSyst
+        // -6): OnAccept's bit at accept, OnAbort's only once the special
+        // ship existed in flight, after take-off; CompReward neither
+        // granted nor reversed, 0x0040 or not.
+        function squad(flags: Partial<MissionData['flags']> = {}) {
+            const mission = makeMission({
+                id: 'nova:1036', shipGoal: 0, shipCount: 1, shipSyst: -6,
+                shipDudeId: 'nova:130', shipBehav: 0, shipStart: -1,
+                onAccept: 'b9078', onAbort: 'b9079',
+                compGovt: 128, compReward: 20,
+            });
+            mission.flags = { ...mission.flags, autoAbort: true, ...flags };
+            return mission;
+        }
+        function docked(mission: MissionData) {
+            const state = makeState({
+                autoAbortShips: [], records: new Map([['nova:128', 0]]),
+            });
+            const machinery = makeMachinery(state, [mission], {
+                systems: [{ id: 'nova:200', govt: null, links: [] }],
+                systemIdOfStellar: () => 'nova:200',
+            });
+            return { state, machinery };
+        }
+
+        it('runs OnAccept at a docked accept and leaves OnAbort with the '
+            + 'queued ships', () => {
+            for (const lose5x of [false, true]) {
+                const mission = squad({ lose5xCompRewardOnAbort: lose5x });
+                const { state, machinery } = docked(mission);
+                acceptOffer(machinery,
+                    makeMissionOffer(mission, machinery.offerContext())!);
+                expect(state.bits.has(9078)).withContext('OnAccept').toBe(true);
+                expect(state.bits.has(9079)).withContext('OnAbort').toBe(false);
+                expect(state.autoAbortShips!.map(b => b.onAbortPending))
+                    .toEqual([true]);
+
+                // The lift-off.
+                expect(runQueuedAutoAbortOnAborts(machinery)).toBe(1);
+                expect(state.bits.has(9079)).toBe(true);
+                expect(state.autoAbortShips!.map(b => b.onAbortPending))
+                    .toEqual([undefined]);
+                // Once only.
+                state.bits.delete(9079);
+                expect(runQueuedAutoAbortOnAborts(machinery)).toBe(0);
+                expect(state.bits.has(9079)).toBe(false);
+                // Neither +20 nor the -5x reversal.
+                expect(state.records!.get('nova:128')).toBe(0);
+            }
+        });
+
+        it('leaves a batch an older build queued (OnAbort already run) '
+            + 'alone', () => {
+            const mission = squad();
+            const { state, machinery } = docked(mission);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            const { onAbortPending: _, ...legacy } = state.autoAbortShips![0];
+            state.autoAbortShips!.splice(0, 1, legacy);
+            expect(runQueuedAutoAbortOnAborts(machinery)).toBe(0);
+            expect(state.bits.has(9079)).toBe(false);
+        });
+
+        it('runs OnAbort at accept where there is no lift-off queue (an '
+            + 'in-flight accept spawns the ships with it)', () => {
+            const mission = squad();
+            const state = makeState();
+            const machinery = makeMachinery(state, [mission], {
+                systems: [{ id: 'nova:200', govt: null, links: [] }],
+                systemIdOfStellar: () => 'nova:200',
+            });
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            expect(state.bits.has(9078)).toBe(true);
+            expect(state.bits.has(9079)).toBe(true);
+        });
+    });
 });
 
 describe('mission set-string hooks (Sxxx/Axxx/Fxxx)', () => {
