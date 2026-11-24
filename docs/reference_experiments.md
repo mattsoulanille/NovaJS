@@ -8733,10 +8733,22 @@ while attacking AND thrusting beyond the stand-off, factor 1.6: the factor
 **matches**; burning most of the time (this run) suggests the burn also
 covers the circling, not only the closing run: **partial**.
 
-**Proposed (not applied).** A 0x0002 hull's attack stand-off is about 500
+**Proposed.** A 0x0002 hull's attack stand-off is about 500
 px, holding still there (it never closes); confirm with a Tab on it first.
 Flags 0x0040: burn whenever the ship is in attack mode and thrusting (not
 only beyond the stand-off), wants a frame-by-frame look first.
+
+**Applied (Flags 0x0040) in 2ffa3382**, revised to fit both waves:
+`npcAfterburning` (`N/nova_plugin/npc/npc_afterburner.ts`) now burns for
+the WHOLE attack, thrusting or coasting (top speed held at 1.6x, thrust
+boosted whenever it thrusts), so the ship closes, passes and swings back at
+the boosted speed; NovaJS's attack arm thrusts only beyond its 250 px
+stand-off, so "attack mode and thrusting" alone would have changed nothing.
+Spec `npc_hull_ai_test.ts`: the flagged hull's median speed over an attack
+is 1.6x the control's. Wave 15's slow first 36 s close in is read as a
+turning fight (GUESS, docs/npc_behavior_gaps.md). **Not applied:** the
+0x0002 stand-off (radar only, low confidence): recorded as a guess in
+docs/npc_behavior_gaps.md.
 
 **C1 rig.** sÿst/spöb 1580 Kit Cloak Provoke (363, no traffic): the offer
 puts the yellow AI 3 0x4000 cloaker (the stock Wraith cloak) at the port,
@@ -8763,7 +8775,8 @@ ships flew off screen before leaving).
 **NovaJS today.** `N/nova_plugin/npc/npc_cloak.ts` (first pass, 0x0800
 only); 0x4000 is not read: **missing**. **Proposed:** none until a run sees
 the cloak itself (a Tab every 0.5 s around the beam, or a recording that
-keeps the ship on screen: anchor it).
+keeps the ship on screen: anchor it). Recorded as a guess in
+docs/npc_behavior_gaps.md (not applied).
 
 **H1 rigs.** sÿst/spöb 1581 Kit Assist Calm (363): neutral AI 3 warships
 (blue) and AI 1 traders (green) of gövt 363, avgShips 3; the record 0.
@@ -8802,13 +8815,33 @@ NovaJS has a 'forPay' path only for hostile bribe-takers (`assistForPayText`,
 `hail.ts:620-631`, STR# 3000 140-149) and no Lower Price: **mismatch**. 7: not
 checked.
 
-**Proposed (not applied).** Request Assistance from a NEUTRAL (not allied,
+**Proposed.** Request Assistance from a NEUTRAL (not allied,
 not hostile) ship: refuse a disabled pilot from 95-99; offer a fuelless
 pilot fuel for a price (the "You're in luck ..." / "Pay me N credits."
 dialog with Lower Price / Accept Price; N 1,000-2,000 here; Lower Price
 withdraws the offer with "If that's the way you feel ..."), refuelling
 about one jump on Accept. Which STR# 3000 rows these are, and how the price
 is drawn, want a look at the strings and more asks.
+
+**Applied (H1 findings 5 and 6) in 1d0b8fdf.** The strings: STR# 3000
+115-119 (good mood, "You're in luck ..." is 116), 155-159 (Lower Price
+withdrawn, "If that's the way ..." is 156), 145-149 (accepted, "Hold on,
+I'll be right there." is 146), 95-99 (the refusal); the popup line is STR#
+2002 186 "Pay me" + the price + 32 "credits" + "."; the buttons STR# 150 30
+"Lower Price" / 29 "Accept Price". `assistWillingness`
+(`N/nova_plugin/reputation/hail.ts`) gains 'refuse' (a disabled pilot) and
+'sellFuel' (a fuelless one) for a neutral ship; free help stays with an
+ally (GUESS), a Roadside Assistance govt (Flags2 0x0010) and a ränk
+0x0400 / 0x0800. Price (GUESS): 1,000 x 2^(Lower Price presses on that ship
+by that pilot), per ship and per pilot, never back down; always the good
+mood. Credits move only on Accept Price (applyHail, through the input
+path); the ship flies over and adds 100 fuel (one jump), no repair. Lower
+Price is a new hail input (`lowerPrice`), counted on the NPC
+(FuelHaggle). The haggle popup is now drawn over the comm it came from (as
+on hail/beg_mercy.png), for every haggle. GUESSES: a disabled pilot with no
+fuel is refused; a neutral warship sells like the trader; Accept Price is
+greyed for a pilot who cannot pay. Finding 7 (a jumping-out ship) was not
+checked here.
 
 Confidence: medium for 5 (three refusals, one pilot), high for the fuel
 dialog's texts (screenshots), low for the amount of fuel (bar read).
