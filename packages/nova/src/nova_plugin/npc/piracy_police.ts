@@ -4,8 +4,7 @@ import { GovtData } from 'novadatainterface/govt_data';
 import { GovtComponent } from '../core/index.js';
 import { alliedEitherWay, govtDisposition } from '../reputation/index.js';
 import { flockPlayer } from './allegiance.js';
-import { AggressionComponent } from './aggression.js';
-import { NpcComponent, NpcState } from './npc_component.js';
+import { NpcState } from './npc_component.js';
 
 /**
  * ============================================================================
@@ -46,6 +45,13 @@ import { NpcComponent, NpcState } from './npc_component.js';
  *     player once (1200 damage) and stayed hostile, its gun reloading; the
  *     player beamed it 72 s later and the nosy police 300 px off turned
  *     hostile at once (wave 17, one take).
+ *  9. And so is shooting one that is FIRING ON THE PLAYER AT THAT MOMENT:
+ *     a 0x0004 pest put a bolt into the strip between them every 1.2 s,
+ *     the last about 1 s before the player's beam, and the nosy police
+ *     turned hostile all the same (wave 18, "P1 / H1 wave 18", one run).
+ *     So there is NO self-defence exemption for the player at all: the
+ *     police react to any hit on a victim they defend, whatever the
+ *     victim is doing to the player.
  *
  * So an AI 4 WITNESS takes the attacker as its own aggressor
  * (npc_targeting.ts's NpcAggressionSystem records it as if the witness had
@@ -61,26 +67,18 @@ import { NpcComponent, NpcState } from './npc_component.js';
  *    not tested with a board);
  *  - every hit that provokes the victim provokes the witnesses, stray
  *    player-side hits included (the victim's own rule);
- *  - SELF-DEFENCE against a hostile that is FIRING on the attacker right
- *    now (it hit him within SELF_DEFENCE_WINDOW_MS) is not piracy, and no
- *    witness reacts (selfDefence below). Findings 7 and 8 measured the
- *    rest: a hostile's posture is no excuse, nor is a hit 72 s old; one
- *    firing continuously at that moment was not measured;
+ *  - the player's ESCORT has no self-defence exemption either (finding 9
+ *    measured the player only): an escort firing back at a hostile that
+ *    is shooting at it is policed like the player. Chosen because the
+ *    original's police evidently do not look at what the victim is doing
+ *    at all, an escort is the player's own side (its fire is attributed
+ *    and policed through the same responsibleShip path), and one rule for
+ *    every player-side attacker is the simplest that fits;
  *  - a ONE-WAY alliance counts for 3 (local_law.ts's alliedEitherWay, the
  *    A14 enforcement rule), and gövt 0x0020 does not shield a victim from
  *    its OWN govt's police (the Bible's "non-allied"; the ally's police
  *    was measured in wave 15, the own govt's was not).
  */
-
-/**
- * How recent the victim's last hit on the attacker must be for the
- * attacker's fire to count as self-defence (selfDefence). GUESS, "the
- * last few seconds": a hit 72 s old did not excuse the player (reference
- * "P1 wave 17"), and a hostile firing continuously (unmeasured) lands one
- * every second or two, so it still does. Narrower than the 30 s
- * AGGRESSION_WINDOW_MS that decides the target brackets.
- */
-export const SELF_DEFENCE_WINDOW_MS = 5_000;
 
 /**
  * Whether police of govt `police` defend a ship of govt `victim` against an
@@ -115,38 +113,6 @@ export function policeDefendVictim(police: GovtData | undefined,
     return govtDisposition(police, victim) !== 'enemy';
 }
 
-/**
- * Whether the attacker is DEFENDING ITSELF against `victim`: the victim
- * is firing on it right now, as the attacker's own records say: its last
- * hostile act on the attacker is under SELF_DEFENCE_WINDOW_MS old. For a
- * player's ship, its AggressionComponent entry for the victim (a hit, or a
- * guided-missile lock: `at` is the latest act). For an NPC on a player's
- * side (an escort, a protecting special ship), its NpcComponent: the
- * victim is its recorded aggressor and hit it (`aggressorHitAt`) within
- * the window.
- *
- * NOT the victim's posture, nor an old shot. Reference "P1 wave 16"
- * finding 7: the player beamed a Kit Raider of an always-hostile govt
- * (gövt 0x0004) that stood off about 500 px and had not fired, and the
- * nosy police turned hostile. "P1 wave 17": a 0x0004 ship that had hit
- * the player once, 72 s before, and was still hostile: the police turned
- * hostile all the same. A hostile firing continuously at that moment is
- * unmeasured: excusing it is a GUESS (the Bible's AI 4 polices ships that
- * fire on "another, non-enemy ship", and one that is shooting at you is
- * hardly that), kept from before.
- */
-export function selfDefence(victim: string, attackerEntity: Entity,
-    now: number): boolean {
-    const entry = attackerEntity.components.get(AggressionComponent)
-        ?.get(victim);
-    if (entry?.hostile && now - entry.at < SELF_DEFENCE_WINDOW_MS) {
-        return true;
-    }
-    const npc = attackerEntity.components.get(NpcComponent);
-    return npc?.aggressor === victim && npc.aggressorHitAt !== undefined
-        && now - npc.aggressorHitAt < SELF_DEFENCE_WINDOW_MS;
-}
-
 /** One possible witness: an NPC's synced state as PiracyPoliceQuery reads
  * it (npc_targeting.ts). */
 export type PoliceCandidate = readonly [
@@ -165,8 +131,8 @@ export type PoliceCandidate = readonly [
  * command (its brain is the escort framework, not NpcComponent); a ship in
  * a player's flock (a protector follows its player, allegiance.ts); a
  * disabled ship. No range: an interceptor anywhere in the system sees it
- * (finding 5). Nobody reacts when the victim is firing on the attacker
- * (selfDefence).
+ * (finding 5). No self-defence excuse (finding 9): what the victim is
+ * doing to the attacker does not matter.
  *
  * Reads synced components and game data only, and the answer is a set (the
  * caller writes the same value to each), so iteration order changes
@@ -176,10 +142,9 @@ export function piracyWitnesses(victim: string, attacker: string,
     getEntity: (uuid: string) => Entity | undefined,
     candidates: Iterable<PoliceCandidate>,
     getGovt: (id: string) => GovtData | undefined,
-    victimGovt: GovtData | undefined, now: number): string[] {
+    victimGovt: GovtData | undefined): string[] {
     const attackerEntity = getEntity(attacker);
-    if (!attackerEntity
-        || selfDefence(victim, attackerEntity, now)) {
+    if (!attackerEntity) {
         return [];
     }
     const attackerGovtId = attackerEntity.components.get(GovtComponent)?.id;

@@ -401,9 +401,6 @@ export const NpcAggressionSystem = new System({
             }
             const now = time.time;
             provoke(npc, source, getEntity, now);
-            // The hit itself (not a witness's or a wingman's provocation):
-            // piracy_police.ts's self-defence window reads it.
-            npc.aggressorHitAt = now;
             provokeFleet(uuid, source, followers, getEntity, now);
             const getGovt = (id: string) => gameData.data.Govt.getCached(id);
             const provokeAll = (ships: readonly string[]) => {
@@ -419,7 +416,7 @@ export const NpcAggressionSystem = new System({
             const victim = entities.get(uuid);
             if (isPlayerSideShip(source, getEntity)) {
                 provokeAll(piracyWitnesses(uuid, source, getEntity, police,
-                    getGovt, govtData, now));
+                    getGovt, govtData));
             } else {
                 provokeAll(alliedDefenders(uuid, source, govtData,
                     now - (npc.aggressorSince ?? now), getEntity, police,

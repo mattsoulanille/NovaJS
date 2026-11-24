@@ -603,6 +603,21 @@ export const STATE_HASH_INTERVAL = 60;
 //    No input kind or message kind changes. The derived wire schema
 //    fingerprint changes (51a63184211e887b -> 7110220773935a73), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-18 police and contraband fixes
+//    (reference "P1 / H1 wave 18", "Contraband / W1 / C1, wave 18").
+//    The OPTIONAL NpcState field `aggressorHitAt` is GONE again: the
+//    piracy police have no self-defence exemption at all (a hostile
+//    firing on the player at that moment is still policed), so nothing
+//    reads the latest hit's time. No input kind or message kind changes.
+//    Sim-rule changes alongside: no self-defence excuse for the player or
+//    an escort; an AI 4 sits on a scanned ship for the whole visit (not
+//    30 s); a ship's fuel price reads the pilot's cash and record; a
+//    Lower Price the pilot cannot pay changes nothing; a ränk 0x0800
+//    refuels for free but no longer repairs. The derived wire schema
+//    fingerprint changes back (7110220773935a73 -> 51a63184211e887b, the
+//    value before the wave-17 field): a pre-wave-17 build would pass the
+//    join gate against this one, though its sim rules differ.
 
 export const PROTOCOL_VERSION = 8;
 

@@ -38,9 +38,7 @@ import {
 } from './allied_defenders.js';
 import { NpcComponent } from './npc_component.js';
 import { FormationComponent } from './npc_formation.js';
-import {
-    policeDefendVictim, SELF_DEFENCE_WINDOW_MS,
-} from './piracy_police.js';
+import { policeDefendVictim } from './piracy_police.js';
 
 /**
  * ============================================================================
@@ -441,72 +439,67 @@ describe('piracy police and distress calls in the sim', () => {
                 expect(npc('police').aggressor).toBe('player');
             });
 
-        it('self-defence is not piracy (GUESS): no witness for a victim '
-            + 'that is FIRING on the player (hit him within '
-            + 'SELF_DEFENCE_WINDOW_MS)', async () => {
-                await scene(NOSY, ALWAYS, 3);
-                world.entities.get('player')!.components.set(
-                    AggressionComponent, new Map([['victim',
-                        { at: now(), damage: 0, hostile: true }]]));
-                hit('victim', 'player', { group: 'player', aimed: true });
-                expect(npc('police').aggressor).toBeUndefined();
-            });
-
-        it('an OLD hit is no excuse: a hostile that hit the player and is '
-            + 'still hostile, but not firing now, is policed (reference P1 '
-            + 'wave 17: 72 s)', async () => {
+        it('NO self-defence: shooting a hostile that is FIRING on the '
+            + 'player at that moment is piracy (reference P1 / H1 wave 18: a '
+            + 'bolt every 1.2 s, the last about 1 s before the beam)',
+            async () => {
                 await scene(NOSY, ALWAYS, 3);
                 Object.assign(npc('victim'), { mode: 'attack' });
                 world.entities.get('victim')!.components.set(TargetComponent,
                     { target: 'player' });
-                // Still within the 30 s bracket window, past the excuse.
+                world.entities.get('player')!.components.set(
+                    AggressionComponent, new Map([['victim',
+                        { at: now(), damage: 20, hostile: true }]]));
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('police').aggressor).toBe('player');
+            });
+
+        it('an OLD hit is no excuse either: a hostile that hit the player '
+            + 'and is still hostile, but not firing now, is policed '
+            + '(reference P1 wave 17: 72 s)', async () => {
+                await scene(NOSY, ALWAYS, 3);
+                Object.assign(npc('victim'), { mode: 'attack' });
+                world.entities.get('victim')!.components.set(TargetComponent,
+                    { target: 'player' });
                 world.entities.get('player')!.components.set(
                     AggressionComponent, new Map([['victim', {
-                        at: now() - SELF_DEFENCE_WINDOW_MS - 1000,
-                        damage: 0, hostile: true,
+                        at: now() - 72_000, damage: 1200, hostile: true,
                     }]]));
                 hit('victim', 'player', { group: 'player', aimed: true });
                 expect(npc('police').aggressor).toBe('player');
             });
 
-        it('the same for the player\'s escort: excused only while the '
-            + 'victim\'s hits on it are recent', async () => {
-                for (const [age, excused] of [[0, true],
-                    [SELF_DEFENCE_WINDOW_MS + 1000, false]] as const) {
-                    world = await makeSystem('test:system', gameData,
-                        undefined, { npcs: false });
-                    await scene(NOSY, ALWAYS, 3);
-                    await addShip('wing', -100, 0, ship => {
-                        ship.components.set(FormationComponent,
-                            { leader: 'player', slot: 0 });
-                        ship.components.set(FiringGroupComponent,
-                            { group: 'player' });
-                        ship.components.set(NpcComponent, {
-                            aiType: 3, nextDecision: ASLEEP, departAt: 1e12,
-                            aggressor: 'victim',
-                            aggressorHitAt: now() - age,
-                        });
+        it('the same for the player\'s escort (GUESS): policed even while '
+            + 'the victim is shooting at it', async () => {
+                await scene(NOSY, ALWAYS, 3);
+                await addShip('wing', -100, 0, ship => {
+                    ship.components.set(FormationComponent,
+                        { leader: 'player', slot: 0 });
+                    ship.components.set(FiringGroupComponent,
+                        { group: 'player' });
+                    ship.components.set(NpcComponent, {
+                        aiType: 3, nextDecision: ASLEEP, departAt: 1e12,
                     });
-                    world.step();
-                    hit('victim', 'wing', { group: 'player', aimed: true });
-                    expect(npc('police').aggressor).withContext(`${age} ms`)
-                        .toBe(excused ? undefined : 'wing');
-                }
+                });
+                world.step();
+                // The victim hits the escort first, then the escort fires
+                // back.
+                hit('wing', 'victim', { group: 'victim', aimed: true });
+                expect(npc('wing').aggressor).toBe('victim');
+                hit('victim', 'wing', { group: 'player', aimed: true });
+                expect(npc('police').aggressor).toBe('wing');
             });
 
-        it('a hit on an NPC stamps aggressorHitAt with each hit, and '
-            + 'aggressorSince only for a new attacker', async () => {
+        it('a hit on an NPC records aggressorSince only for a new attacker',
+            async () => {
                 await scene(NOSY, SHIPPING);
                 hit('victim', 'player', { group: 'player', aimed: true });
                 const since = npc('victim').aggressorSince;
-                expect(npc('victim').aggressorHitAt).toBe(since);
+                expect(since).toBeDefined();
                 advance(3000);
                 hit('victim', 'player', { group: 'player', aimed: true });
                 expect(npc('victim').aggressorSince).toBe(since);
-                expect(npc('victim').aggressorHitAt!).toBeGreaterThan(since!);
-                // A witness is provoked, not hit: no stamp.
                 expect(npc('police').aggressor).toBe('player');
-                expect(npc('police').aggressorHitAt).toBeUndefined();
             });
 
         it('a stray player hit counts as the victim\'s own rule does',
