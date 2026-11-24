@@ -4050,6 +4050,278 @@ the two edges and press `l` while creeping outward).
 (`track.json`, `track_summary.json`, `msgs/`); the re-read is
 `~/.local/share/novaref/evidence/20261123-w7/u9/flips/` (`flips.py`, `flips.txt`).
 
+### U9 wave 8: why boards stay silent (the ships must be aligned), board range by sprite size, one board per hulk, money above 100,000, capture (2026-11-23)
+
+**Rig.** Wave 7's hulks could only be found by colour, so neither ship's
+heading was known. `kits/testkit.mjs` wave 8 adds **pointer hulls**: the
+player flies Kit Ring Crawler (shïp 818: Kit Crawler 100 stats, crew 10,
+drawn as a thin 24 px cyan ring with a white spoke at its nose, open in
+the middle so a hulk under it stays visible) and each hulk is a 24 px
+magenta disc with a green spoke from its centre to its nose (shïp 820 at
+50,000; 821-824 at 200,000 / 300,000 / 750,000 / 1,000,000; 827 the same
+96 px across, its shän declaring 96 x 96). All hulks are wave 7's: the
+derelict gövt 378, immobile, crew 1, 300 armor, booty food + money, the
+only traffic of their own system. `analysis/pointer.mjs` reads both
+headings off any shot (snapped to the sheet's 10° frames) and the hulk's
+offset. `loops/board.mjs` gained a **sweep**: the walk stops when a press
+is answered with nothing (or within a few px), then stays on that spot,
+presses `b` four times without moving, and turns about 5-10° in place
+before every further press until the plunder dialog opens
+(`scenarios/board_sweep.json`; `pointer.mjs --run <dir>` lists every
+press). Headings below are screen degrees (0 = east, 90 = south); the
+"gap" is how far the player's heading is from the hulk's axis (0 = the
+same way or exactly opposite).
+
+**1. The silent press is "not aligned".** A press the game does not
+answer CLEARS the status line (the previous "not close enough" vanishes
+in the frame of the press; wave 7's "no answer") and prints nothing. In
+every sweep the player sat still on one spot and only its heading
+changed:
+
+| run (hulk, heading) | spot | presses that got nothing (heading: gap) | dialog |
+|---|---|---|---|
+| 50,000 (-160) | 1.9 px | 150 x4, 160, 170 (gap 50, 40, 30) | at 180 (gap 20) |
+| 200,000 (-120) | 7.2 px | 140 x5 ... -150, -140 (gap 80 down to 20) | at about -130 (gap 10) |
+| 200,000 (-90) | 12 px | 50 x6 (gap 40) | one tap later (gap about 35) |
+| 750,000 (-90) | 11 px | -170/-160 x9, -140, -130, -120 x2 (gap 80 down to 30) | one tap later (gap about 25) |
+| 1,000,000 (40) | 12.3 px | -20 x5, -10, 0 (gap 60, 50, 40) | one tap later (gap about 30) |
+| 2,000,000 (wave 7's plain disc, heading unknown) | 8.9 px | 170 x5, then -180 ... -100 (11 presses) | at about -90: **87,000 credits** (wave 7: never boarded in three walks) |
+| 24 px hulk, 96 px player ring (20) | 15.6 px | -50 x6 ... -10 x2 (gap 70 down to 30) | one tap later (gap about 25) |
+
+Repeating the press at one spot and heading never changed the answer (four
+to nine repeats per sweep); turning alone opened the dialog every time.
+Facing the hulk is not it either: the walk always turned to face the hulk,
+and stops facing it were silent whenever the hull's axis was off (2,000,000:
+silent while pointing straight at it). Boards that opened straight from a
+walk stop (the loop had turned to face the hulk) were all aligned too:
+
+| hulk heading | player heading at the press | gap | |
+|---|---|---|---|
+| -80 | 87 | 13 (opposite) | 50,000 |
+| 40 | -147 | 7 (opposite) | 300,000 |
+| -50 | 113 | 17 (opposite) | 300,000 |
+| -50 | 147 | 17 (opposite) | 50,000 |
+| 110 | -94 | 24 (opposite) | 50,000 |
+| 20 | 48 | 28 | 750,000 |
+| -40 | 135 | 5 (opposite) | 1,000,000 |
+| 50 | 50 | 0 | the live hulk (capture, below) |
+| -140 | -149 | 9 | 96 px hulk |
+
+So **boarding needs the two hulls' axes within about 25-30° of each
+other, the same way or opposite** (largest gap that boarded: about 25-30,
+once about 35-40 at a 1.9 px spot; smallest that stayed silent: 30, once
+20; each heading is good to a 10° sprite frame). Inside the range a
+misaligned press is refused with no message at all. This also explains
+wave 7's 96 px hulk and 2,000,000 hulk that "never opened" (in range,
+never aligned: the old loop only ever faced the hulk) and the boards that
+opened after many silent stops.
+
+**2. One board per hulk.** After the dialog was left with Abort (nothing
+taken), every later press, aligned or not, said **"You can't board this
+ship."** (40 presses in the first sweep). Wave 6/7's hulks were all
+boarded once, so this was never seen.
+
+**3. Range: a square around the target, about half its sprite.** From the
+stops just outside and just inside the range (out = "not close enough",
+in = silent or dialog; offsets are the hulk's centre from the player's):
+
+| target / boarder sprite | in range | out of range |
+|---|---|---|
+| 24 px hulk / 24 px ring | (12.0, 2.7), (-10, 10) (14.2 px away), (6.9, 7.7), (-8.8, 1.6) | (3.6, 12.1) (12.7 px away), (-12.1, 10) (15.7 px), (-12.2, 4.7), (0.5, -14.2) |
+| 96 px hulk (shän 96 x 96) / 24 px ring | (-38.9, -23.7) | (-47.6, -28.6) |
+| 24 px hulk / 96 px ring | (10.5, -11.5) | (15.5, -17.5) |
+| 24 px hulk / 48 px Lightning (waves 6-7) | about 15 | about 15.5-16 |
+
+With the 24 px pair, (-10, 10) boarded 14.2 px away while (-12.1, 10)
+(15.7 px) and (3.6, 12.1) (12.7 px) were out: the zone is max(|dx|,
+|dy|) <= about 12, a square of half the target's 24 px sprite, like the
+landing zone (wave 6). It grows with the target's sprite (39-47.6 for the
+96 px hulk; wave 7's 96 px hulk whose shän still said 24 x 24 behaved the
+same, so the sprite counts, not the shän's size field) and a little with
+the boarder's (about 15 for the 48 px Lightning, between 11.5 and 17.5
+for the 96 px ring: not pinned down).
+
+**4. Money above 100,000.** One board per hulk, so one amount per run:
+
+| price | credits (boards) | price / 40 | price / 20 |
+|---|---|---|---|
+| 50,000 | 1,250 (x7, waves 6-7), 1,250 (x17 this wave: 7 derelicts, the 96 px one included, and the 10 non-derelict capture hulks) | 1,250 | 2,500 |
+| 100,000 | 2,500 (wave 7) | 2,500 | 5,000 |
+| 200,000 | 5,000, 7,000 | 5,000 | 10,000 |
+| 300,000 | 12,500, 11,500 | 7,500 | 15,000 |
+| 500,000 | 19,500, 21,500 (wave 7) | 12,500 | 25,000 |
+| 750,000 | 35,750, 32,750 | 18,750 | 37,500 |
+| 1,000,000 | 26,000, 45,000 | 25,000 | 50,000 |
+| 2,000,000 | 87,000 | 50,000 | 100,000 |
+
+Every amount is a multiple of 250 between price / 40 and price / 20, and
+from 200,000 up it varies from board to board; at 50,000 it was exactly
+price / 40 on all 24 boards (a uniform draw over 1,250-2,500 would
+almost never do that), and 2,000 / 20,000 gave the 1,000 floor (waves
+6-7). So: **max(1,000, price / 40 + a random part)**, the random part
+reaching up to about price / 40 for dear hulls and zero (or nearly) for
+cheap ones. The data fit, for example, a random part drawn from 0 to
+price / 40 - 1,500 (zero at 50,000 and below, up to 3,500 / 6,000 / 17,250 /
+23,500 / 48,500 at 200,000 / 300,000 / 750,000 / 1,000,000 / 2,000,000:
+every board is inside that), but two boards per price can't pin the
+shape.
+
+**5. Capture: a derelict is never capturable; a hulk the player disabled
+is, at odds set by the crews.** Every derelict board (gövt 378, flag
+0x0800 "starts disabled") read "Capture Odds: 0%" with Capture Ship
+greyed: 29 boards over waves 6-8 (16 this wave), from crew 10 (and once
+crew 500, wave 7), including
+`cap9` where nine Kit Escort Gun shots (30 each, the hits seen in the
+trail picture) had taken about 270 of the hulk's 300 armor first. So
+neither crew nor damage opens it. The control is a hulk that is NOT a
+derelict: shïp 829 Kit Live Pointer (the same pointer hulk, 300 armor,
+crew 1) of the neutral gövt 363, AI 4, immobile, which the player
+disables with the turret on the way in (`scenarios/board_capture_live*.json`:
+150 px out, Space held 4.4 / 5.0 / 5.8 s for about 7 / 8 / 9 shots; the
+target panel read "Disabled" after each volley); shïp 831-835 are the
+same with crew 20 / 15 / 40 / 5 / 10:
+
+| hulk | player crew | shots before boarding | Capture Odds | Capture Ship |
+|---|---|---|---|---|
+| derelict, crew 1 (29 boards) | 10 (500 once) | 0, or 9 (`cap9`) | **0%** | greyed |
+| live, crew 1 | 10 | 8 | **75%** | enabled |
+| live, crew 1 | 500 | 8 | **75%** | enabled |
+| live, crew 1 | 10 | 7 | **75%** | enabled |
+| live, crew 20 | 10 | 8 | **18%** | enabled |
+| live, crew 20 | 10 | 9 | **17%** | enabled |
+| live, crew 20 | 10 | 7 | **17%** | enabled |
+| live, crew 5 | 10 | 8 | **34%** | enabled |
+| live, crew 10 | 10 | 8 | **20%** | enabled |
+| live, crew 15 | 10 | 8 | **18%** | enabled |
+| live, crew 40 | 10 | 8 | **7%** | enabled |
+
+So the shown odds top out at 75% (crew 10 and crew 500 against crew 1
+read the same), fall fast as the defenders catch up (34% at 2 boarders
+per defender, 20% at even crews) and then slowly (17-18% from 15 to 20
+defenders, 7% at 40); damage did not move them (7, 8 and 9 shots against
+crew 20: 17, 18, 17). No simple crew-share formula fits (a share would
+give 67 / 50 / 40 / 33 / 20%); the shape needs more crews, and possibly
+the player's hull (only the Kit Ring Crawler, crew 10, was used) or a
+random part (17 vs 18 at the same crews). Capture itself was not
+attempted.
+
+**NovaJS, capture (base b38635bd).** `capturable` (`boarding_component.ts:359`)
+refuses only a ship a player is flying, so a derelict is capturable:
+**mismatch**. `captureChance` (`:370-377`, crew share clamped to 5-95%)
+gives 91 / 95 / 67 / 50 / 33% for crews 10:1, 500:1, 10:5, 10:10 and
+10:20 against the original's 75 / 75 / 34 / 20 / 17-18%: **mismatch**. **Proposed (not applied):** no
+capture of a gövt 0x0800 derelict (Capture greyed, odds 0%); cap the
+odds at 75%; below that, interpolate the measured points (10 boarders
+vs 1 / 5 / 10 / 15 / 20 / 40 defenders: 75 / 34 / 20 / 18 / 17.5 / 7%)
+until a formula is found.
+
+**NovaJS (base b38635bd).**
+- Alignment: `N/nova_plugin/ship/boarding_component.ts:236`
+  (`AXIS_ALIGN_TOLERANCE_RAD` = π/12, 15° each side of parallel and
+  anti-parallel, "Matthew's spec") with `axesAligned` (`:256-261`) and the
+  gate's order range, speed, alignment (`:299-306`): the rule **matches
+  in kind** (both directions accepted, checked inside the range); the
+  tolerance is about half the original's. The refusal message does not:
+  `N/display/status_bar_content.ts:299` prints "Line up alongside the ship
+  before boarding." where the original prints nothing (and clears the
+  line). **Proposed (not applied):** tolerance about 30° (π/6); show no
+  message for 'notAligned' (or keep the hint deliberately, as a UI
+  choice).
+- One board per hulk: `plunderSpent` (`boarding_component.ts:318`) and the
+  'alreadyBoarded' refusal (`N/nova_plugin/encounters/boarding_plugin.ts:612-614`,
+  "You can't board this ship.", `status_bar_content.ts:262`) **match**,
+  including the message, and the hulk is spent the moment a session
+  opens, Abort or not (`boarding_plugin.ts:656`, comment at `:716-718`),
+  as in the original; the catalogue listed "one plunder per hulk" as a
+  deliberate non-fidelity ruling, but the original does the same.
+- Range: `BOARD_DISTANCE_SQUARED` = 22,500 (a 150 px circle,
+  `boarding_component.ts:227`): **mismatch** (wave 6 said so for the 24 px
+  case). **Proposed (not applied):** max(|dx|, |dy|) <= half the
+  target's sprite size (plus a little for a big boarder), the landing
+  zone's shape.
+- Money: `creditBooty` (`:323`, 10% of the price): **mismatch**.
+  **Proposed (not applied):** max(1,000, price / 40) plus a random part
+  that is zero at 50,000 and reaches about price / 40 for dear hulls (one
+  shape that fits: uniform 0 to price / 40 - 1,500, in steps of 250), from
+  the seeded RandomResource like the capture roll.
+
+Confidence: high that alignment is the silent refusal (nine sweeps, each
+silent at a fixed spot until only a turn opened the dialog; nine more
+boards straight from a stop all within 30° of the axis, both directions);
+medium for the 25-30° tolerance (10° sprite frames on both hulls); high
+for one board per hulk (40 presses); medium-high for the square range of
+the 24 px pair (one diagonal board at 14.2 px against two out at 12.7 and
+15.7), medium for how the range scales with sprite sizes (one or two
+brackets each); for money high that it stays inside price / 40 to price / 20
+and varies above 100,000 (eleven boards), low for the shape of the random
+part; high that a derelict is never capturable (29 boards, one 90% shot
+away) and that a hulk the player disabled is (ten boards), high for the
+75% cap (three boards), medium for the lower odds (one board per crew,
+except three at crew 20) and that damage plays no part.
+
+**Running boards (notes for later waves).** A hulk boards once, so a run
+measures one board; sweep from the first silent press (`startOnSilent`).
+A hulk 2,000+ px out may not be Tab-targetable when the run starts (the
+panel stays "No Target", and `b` with no target is silent too, which is
+how the first 96 px run went wrong): `args.retarget` Tabs until the panel
+names it. Of about 32 board runs, three went wrong before boarding and
+were rerun: that untargeted one, "target not found" at the start (the
+hulk not yet on the radar) and the known `open_pilot` flake.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w8/u9/`:
+`sweep/` (four 50,000 runs; `*164452*` is the first, which found the
+one-board rule), `money{200k,300k,750k,1000k}/` (two each),
+`hulk2m/`, `hulkbig/` (`*-INVALID-no-target` never had the hulk
+targeted: `b` with no target is answered with nothing too), `ptrbig/`,
+`cap5/`, `cap9/`, `live/`; each run's `NN-b-NN.png` / `NN-sw-NN.png` are
+the shots after each press, `log.jsonl` phase `script` has every stop and
+sweep press, `recording.mp4` + `recording.events.json`.
+
+### B wave 8: the anchored carrier's silent guns were not reproduced (2026-11-23)
+
+**Question (wave 7 side observation).** With 1-damage bombers, the
+anchored Kit Bomb Carrier never hit the player in 140 s, while with the
+50-damage bombers its guns wore the player's shield down. Is a carrier
+with live fighters out holding its guns?
+
+**Setup.** `scenarios/carrier_anchored_kit.json` as in wave 7 (the
+player Kit Lancer Heavy, 30000/30000, no recharge, no weapons, at Kit
+Port; the carrier of always-attacks gövt 362 beside it, Speed/Accel 0;
+Tab every 1.3 s for about 110 s; the shield bar read per frame by
+`analysis/hostility.mjs`). One factor per run: a gun-only carrier (shïp
+828: shïp 800's hull and two Kit Escort Guns, no bay; pilot
+`w8_guncarrier`), the 1-damage bomber carrier with its bay EMPTY (shïp
+830: shïp 802 with bay ammo 0; `w8_emptybay`), and wave 7's 1-damage
+bomber carrier again (pilot `w7_carrier1`, unchanged).
+
+| carrier | bombers out | player's shield bar (146 px full) | first drop |
+|---|---|---|---|
+| gun-only (no bay) | none | 146 -> 116 in 140 s, steady | 12.7 s |
+| 1-damage bay, empty | none | 146 -> 116, steady | 13.9 s |
+| 1-damage bay, 4 bombers (wave 7's run again) | yes: Tab panels show Kit Bomber 1 at 85-99% shield to the end, the carrier at 99% | 146 -> 118, steady | 13.3 s |
+| wave 7: the same 1-damage carrier | yes | 146, untouched for 140 s | none |
+| wave 7: 50-damage bombers | yes, disabled by about 15 s | 144 -> 108 | 6.9 s |
+
+**Finding.** The rerun of wave 7's 1-damage carrier fired at the player
+like the gun-only and empty-bay carriers (about 0.2 px of shield bar a
+second, from 13 s on) while its four bombers flew around it the whole
+time. So **live fighters do not hold a carrier's guns**, and wave 7's
+silent run is unexplained: one run in two (it may have been a targeting
+or placement quirk of that run; the carrier and the player were on top of
+each other at Kit Port in both). Whether a bay is empty or there is none
+makes no difference. **NovaJS (base b38635bd)** fires an NPC carrier's
+guns whatever its fighters do (`N/nova_plugin/npc/npc_fire_control.ts`
+holds only a protector mission ship's BAYS, lines 39-47 and 163):
+**matches**; nothing to change.
+
+Confidence: medium-high that fighters out don't silence the guns (the one
+direct rerun fired steadily for 127 s); the wave-7 run stays an
+unexplained outlier.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w8/b/{guncarrier,emptybay,carrier1}/*/`
+(`hostility.json` = the shield bar per frame, `NN-obs-NN.png` the Tab
+panels, `carrier1/*/panels.png` the contact sheet, `recording.mp4`).
+
 ### Reliability notes (for anyone running the reference)
 
 - **Boarding at rest close in is flaky (wave 7).** Under about 17 px
@@ -4141,8 +4413,8 @@ the two edges and press `l` while creeping outward).
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). **Wave 7:** boarding while moving needs under about 7.5-9 px/s (boarded at 3.4-7.3, refused at 9.2-11 with "not close enough", "too fast" from 16 px/s at any distance, checked before distance; NovaJS 54.8 px/s, after distance); money booty max(1,000, price / 40) from 2,000 to 100,000 (1,000 / 1,000 / 1,250 / 2,500), but 19,500 and 21,500 at 500,000; crew 500 still 0% capture; a 96 px hulk and a 2,000,000 one never opened the dialog (presses close in often get no answer). The receding "too fast" fits an approach state left only outside the UNCAPPED 1.7 W square (wave-4 re-read). Still open: money above 100,000, why capture is greyed (derelict govt?), the silent presses. |
-| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (waves 6, 7): no.** Wave 6: a stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player. Wave 7: an anchored Kit Bomb Carrier lost 60% of its shield to its Kit Bombers' blasts in 15 s and never finished off the four bombers its blasts had disabled; with 1-damage blasts its bombers flew 110 s unharmed by it. The kit-bay rechecks: Q4 stands (a protector carrier with a working kit bay never launched) and the player's own bay launches real Kit Fighters (E-view). Open: the 1-damage carrier never fired its guns at the player (one run). |
+| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). **Wave 7:** boarding while moving needs under about 7.5-9 px/s (boarded at 3.4-7.3, refused at 9.2-11 with "not close enough", "too fast" from 16 px/s at any distance, checked before distance; NovaJS 54.8 px/s, after distance); money booty max(1,000, price / 40) from 2,000 to 100,000 (1,000 / 1,000 / 1,250 / 2,500), but 19,500 and 21,500 at 500,000; crew 500 still 0% capture; a 96 px hulk and a 2,000,000 one never opened the dialog (presses close in often get no answer). The receding "too fast" fits an approach state left only outside the UNCAPPED 1.7 W square (wave-4 re-read). **Wave 8:** the silent presses are the ALIGNMENT gate: in range, a press is refused with no message (the status line is cleared) unless the two hulls' axes are within about 25-30° of each other, the same way or opposite (nine sweeps that only a turn in place opened; NovaJS 15°, and it prints a hint); one board per hulk (after an Abort every press says "You can't board this ship."; matches); the range is a SQUARE, max(\|dx\|, \|dy\|) <= about half the target's sprite (12 for 24 px, 39-47.6 for 96 px; a little more with a bigger boarder); money stays between price / 40 and price / 20, exactly price / 40 at 50,000 (24 boards) and random from 200,000 up (5,000-87,000 over 11 boards); capture: a derelict (gövt 0x0800) never (29 boards, 0%, also 90% shot away), a hulk the player disabled is capturable, odds capped at 75% and falling with the defenders' crew (10 boarders vs 1 / 5 / 10 / 15 / 20 / 40: 75 / 34 / 20 / 18 / 17-18 / 7%; NovaJS a crew share, 5-95%, and derelicts capturable: mismatch). Still open: the exact shape of the money's random part and of the odds below the 75% cap; the range's boarder-size term. |
+| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (waves 6, 7): no.** Wave 6: a stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player. Wave 7: an anchored Kit Bomb Carrier lost 60% of its shield to its Kit Bombers' blasts in 15 s and never finished off the four bombers its blasts had disabled; with 1-damage blasts its bombers flew 110 s unharmed by it. The kit-bay rechecks: Q4 stands (a protector carrier with a working kit bay never launched) and the player's own bay launches real Kit Fighters (E-view). **Wave 8:** not reproduced: the same 1-damage carrier fired at the player steadily with its four bombers out the whole run, as did a gun-only and an empty-bay carrier; live fighters don't hold a carrier's guns (matches NovaJS). |
 | J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS took the largest outfit and ignored InhJam: mismatch, applied in f20ecec2 (distinct outfits summed, plus the hull's InherentGovt InhJam). Asteroid range vs chance: not answerable (röid has no speed or position field). |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
@@ -4215,7 +4487,7 @@ cosmetic or rare.
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | CPl + kit stellar with MinStatus 32767 | L |
 | R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | CPl rating per Appendix I tier, VID | M |
 | R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | not implemented | CPg govt + syst ReinfFleet, VID, PD | L |
-| R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6, 7)**: max(1,000, price / 40) at 2,000-100,000 (1,000 / 1,000 / 1,250 / 2,500; 1,250 seven times), 19,500 and 21,500 at 500,000; cargo and energy a random share; capture 0% and greyed against crew 1 even from a crew-500 hull. **Mismatch** (10%, 150 px range, 54.8 px/s gate) | M |
+| R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6-8)**: max(1,000, price / 40) up to 100,000 (exactly, 24 boards at 50,000), then a random amount between price / 40 and price / 20 (200,000 to 2,000,000, wave 8); cargo and energy a random share; capture never for a derelict (gövt 0x0800), odds capped at 75% and falling with the defenders' crew for a hulk the player disabled; one board per hulk (matches). **Mismatch** (10%, 150 px circle, 54.8 px/s gate, 15° alignment, crew-share odds, derelicts capturable) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |
 
@@ -4226,7 +4498,7 @@ cosmetic or rare.
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
 | U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227-228` | **landing answered (waves 4, 6: a square zone), applied in bd344b9f**; boarding range about 13-19 px, speed gate about 7.5-9 px/s with "too fast" first from about 13 px/s (waves 6, 7) | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227-228` | **landing answered (waves 4, 6: a square zone), applied in bd344b9f**; boarding: speed gate about 7.5-9 px/s with "too fast" first from about 13 px/s (wave 7); range a square of about half the target's sprite (12 px for 24 px; wave 8); hulls aligned within about 25-30°, either way, else a silent refusal (wave 8) | M |
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
