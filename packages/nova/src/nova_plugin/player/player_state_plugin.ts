@@ -264,6 +264,30 @@ export type PendingAutoAbortShips =
 export const PendingAutoAbortShipsComponent =
     new Component<PendingAutoAbortShips>('PendingAutoAbortShips');
 
+/**
+ * The pilot plays STRICT (the New Pilot dialog's "Strict Play" box):
+ * present on a strict pilot's ship, absent on everyone else's.
+ *
+ * Strict play is more than permadeath in the original: it cuts the
+ * player's TOP SPEED to about two thirds and leaves acceleration and turn
+ * rate alone (docs/reference_experiments.md, "#316 wave 10": the same
+ * Speed-300 probe hull topped out at about 130 px/s regular and 88 px/s
+ * strict, 0.68; turn 29.19 deg/s both; acceleration about the same). The
+ * sim applies it in EffectiveMovementPhysicsSystem
+ * (travel/afterburner_plugin.ts, STRICT_PLAY_SPEED_FACTOR).
+ *
+ * It is the pilot's, not the hull's: the profile sets it when the player
+ * is built (client/player_start.ts) and every change of hull carries it
+ * (missions/mission_ship_change.ts PLAYER_STATE_COMPONENTS). It rides the
+ * player's own entity into the world, so every peer flies a strict pilot
+ * at the same cut speed from the same synced state: there is no
+ * client-only branch. Only the PLAYER's ship carries it; the measurement
+ * covered the player alone, so escorts and NPCs fly at full speed.
+ */
+export const StrictPlayType = t.type({});
+export type StrictPlay = t.TypeOf<typeof StrictPlayType>;
+export const StrictPlayComponent = new Component<StrictPlay>('StrictPlay');
+
 export const PlayerStatePlugin: Plugin = {
     name: 'PlayerStatePlugin',
     build(world) {
@@ -288,6 +312,9 @@ export const PlayerStatePlugin: Plugin = {
         });
         deltaMaker.addComponent(PendingAutoAbortShipsComponent, {
             componentType: PendingAutoAbortShipsType,
+        });
+        deltaMaker.addComponent(StrictPlayComponent, {
+            componentType: StrictPlayType,
         });
     }
 };

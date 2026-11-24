@@ -7,7 +7,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import { ION_FACTOR, IsIonizedComponent } from '../ship/index.js';
 import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, JUMP_DEPART_DELAY_MS } from './jump_plugin.js';
-import { ShipControlStateComponent } from '../player/index.js';
+import { ShipControlStateComponent, StrictPlayComponent } from '../player/index.js';
 import { ControlShipSystem } from './ship_controller_plugin.js';
 import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
 
@@ -19,6 +19,16 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
  * roughly-double boost.
  */
 export const AFTERBURNER_FACTOR = 2;
+
+/**
+ * What strict play multiplies the player's top speed by. Measured on the
+ * original (docs/reference_experiments.md, "#316 wave 10"): one probe
+ * hull, regular vs strict pilot, 130 vs 88 px/s (0.68; the window
+ * summaries spread 0.64-0.71). Two thirds is the round figure the
+ * measurement brackets; acceleration and turn rate are NOT cut (both
+ * matched within the measurement). See StrictPlayComponent.
+ */
+export const STRICT_PLAY_SPEED_FACTOR = 2 / 3;
 
 /**
  * How fast a ship sheds speed its cap no longer covers, as a multiple of
@@ -65,8 +75,9 @@ export function decayedSpeedCap(ceiling: number, speed: number,
  * The single per-tick writer of a ship's effective movement physics:
  * recomputes it from ShipPhysicsComponent and applies the transient
  * modifiers (ionization slowness, afterburner boost, hyperspace jump
- * burn). Modifiers that hold while a condition lasts belong here, so
- * they compose instead of clobbering each other's writes.
+ * burn, strict play's top-speed cut). Modifiers that hold while a
+ * condition lasts belong here, so they compose instead of clobbering each
+ * other's writes.
  *
  * While the afterburner control is held (and the ship has an
  * afterburner outfit), the ship thrusts forward, burning
@@ -85,9 +96,9 @@ export const EffectiveMovementPhysicsSystem = new System({
         MovementStateComponent, TimeResource,
         Optional(ShipControlStateComponent), Optional(FuelComponent),
         Optional(IsIonizedComponent), Optional(JumpComponent),
-        Optional(DisabledComponent)] as const,
+        Optional(DisabledComponent), Optional(StrictPlayComponent)] as const,
     step(shipPhysics, movementPhysics, movementState, time,
-        controlState, fuel, isIonized, jump, disabled) {
+        controlState, fuel, isIonized, jump, disabled, strictPlay) {
         let afterburning = false;
         // A disabled ship cannot burn: DisabledMovementSystem erases the
         // thrust afterwards, but the fuel was already spent here (Matthew's
@@ -105,13 +116,16 @@ export const EffectiveMovementPhysicsSystem = new System({
         const base = getShipMovementPhysics(shipPhysics);
         const slowness = isIonized ? ION_FACTOR : 1;
         const boost = afterburning ? AFTERBURNER_FACTOR : 1;
+        // A strict pilot's top speed only: not its acceleration, not its
+        // turn rate (reference #316 wave 10).
+        const strict = strictPlay ? STRICT_PLAY_SPEED_FACTOR : 1;
         // While the burner is on this IS the boosted cap: a ship at or
         // below it has no overspeed to bleed. Once it is released the cap
         // drops, and the leftover speed comes off over the following
         // ticks rather than all at once. Same for the ionization
         // slowdown, and for the burner cutting out on a dry tank.
         movementPhysics.maxVelocity = decayedSpeedCap(
-            base.maxVelocity * slowness * boost,
+            base.maxVelocity * strict * slowness * boost,
             movementState.velocity.length,
             base.acceleration * OVERSPEED_DECAY_FACTOR, time.delta_s);
         movementPhysics.acceleration = base.acceleration * slowness * boost;

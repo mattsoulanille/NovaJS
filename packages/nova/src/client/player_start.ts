@@ -23,7 +23,7 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import {
     playerDiscovery, PlayerShipSelector, CreditsComponent, GameDateComponent,
-    ControlledByComponent,
+    ControlledByComponent, StrictPlayComponent,
 } from '../nova_plugin/player/index.js';
 import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import {
@@ -37,7 +37,8 @@ import {
     resetSave, restoreClientSaveState, restorePlayerState, savedFleetArmament,
 } from '../nova_plugin/pilot/index.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
-import { clearPilotProfile } from '../title/client_prefs.js';
+import { clearPilotProfile, loadPilotProfile } from '../title/client_prefs.js';
+import { getActivePilot } from '../title/pilot_registry.js';
 import {
     recordLoadAnyway, withoutMissingOutfits,
 } from '../title/pilot_quarantine.js';
@@ -294,6 +295,17 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         commitActiveRanks(ship, startRanks, getRank);
     }
     ensurePlayerStateComponents(ship);
+    // Strict play, from the pilot's profile (the New Pilot dialog's box,
+    // or an imported original pilot's flag). It goes on the entity, not
+    // into a client-side branch, so the top-speed cut it brings rides the
+    // player's insertion record and every peer simulates it alike
+    // (StrictPlayComponent). Read the same way the title reads the pilot.
+    const profile = getActivePilot()?.profile ?? loadPilotProfile();
+    if (profile?.strict) {
+        ship.components.set(StrictPlayComponent, {});
+    } else {
+        ship.components.delete(StrictPlayComponent);
+    }
 
     // ?system=nova:131 picks the starting system; otherwise the saved
     // system, otherwise the chär's start system, otherwise the default.

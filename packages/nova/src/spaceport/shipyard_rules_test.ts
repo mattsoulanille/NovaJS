@@ -11,7 +11,7 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import {
     EscortPayrollComponent, CreditsComponent, GameDateComponent, PendingAutoAbortShips,
-    PendingAutoAbortShipsComponent,
+    PendingAutoAbortShipsComponent, StrictPlayComponent,
 } from '../nova_plugin/player/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { CombatRatingComponent } from '../nova_plugin/reputation/index.js';
@@ -466,6 +466,24 @@ describe('shipyard purchase rules', () => {
                 ship('nova:101', { price: 200000 }), ctx);
             expect(bought.components.get(PendingEscortsComponent))
                 .toEqual(['nova:128', 'nova:129']);
+        });
+
+        it('carries strict play across the hull swap, and only for a strict '
+            + 'pilot', () => {
+            // Strict play's top-speed cut is the PILOT's (reference #316
+            // wave 10): a strict pilot's new hull flies at the cut speed.
+            const strict = oldPlayer();
+            strict.components.set(StrictPlayComponent, {});
+            const ctx = () => context({
+                currentShip: ship('nova:100', { price: 40000 }),
+                outfits: [], catalogue: [], credits: 500000,
+            });
+            expect(buildPurchasedShip(strict,
+                ship('nova:101', { price: 200000 }), ctx()).components
+                .has(StrictPlayComponent)).toBeTrue();
+            expect(buildPurchasedShip(oldPlayer(),
+                ship('nova:101', { price: 200000 }), ctx()).components
+                .has(StrictPlayComponent)).toBeFalse();
         });
 
         it('carries a pending auto-abort squad across the hull swap', () => {

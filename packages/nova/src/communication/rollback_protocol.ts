@@ -326,6 +326,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    attacker is beyond its reach. No input kind or message kind changes.
 //    The derived wire schema fingerprint changes (88eeee94fd636d3b), and
 //    the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): strict play (reference #316 wave 10). A new
+//    delta-registered player component, StrictPlay (player/
+//    player_state_plugin.ts, an empty record), present only on a strict
+//    pilot's ship and carried across hull changes. Sim-rule change
+//    alongside: EffectiveMovementPhysicsSystem caps a ship carrying it at
+//    2/3 of its top speed (acceleration and turn rate unchanged). No ship
+//    without it changes. No input kind or message kind changes. The
+//    derived wire schema fingerprint changes (cbfec2237c0e82e5), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

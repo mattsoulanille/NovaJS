@@ -343,7 +343,10 @@ export interface PilotProfile {
     nickname: string;
     /** 'male' | 'female'. */
     gender: string;
-    /** Strict play: permadeath (no reincarnation). */
+    /**
+     * Strict play: permadeath (no reincarnation), and a top speed cut to
+     * about two thirds (StrictPlayComponent, reference #316 wave 10).
+     */
     strict: boolean;
     /** A stable ship hull number for the "Ship Name" display line. */
     shipNumber?: number;

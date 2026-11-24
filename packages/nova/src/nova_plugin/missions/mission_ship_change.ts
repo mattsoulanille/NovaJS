@@ -23,7 +23,7 @@ import {
     ControlledByComponent, CreditsComponent, CronStatesComponent,
     EscortPayrollComponent, GameDateComponent, MissionsComponent,
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    PlayerShipSelector,
+    PlayerShipSelector, StrictPlayComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import {
@@ -157,6 +157,9 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // scoped to the hull it sits on, and EscortPayrollSystem replaces the
     // array wholesale rather than mutating it.
     EscortPayrollComponent,
+    // Strict play (StrictPlayComponent) is the PILOT's setting: a strict
+    // pilot who buys a ship still flies it at the strict top speed.
+    StrictPlayComponent,
 ];
 
 /**
