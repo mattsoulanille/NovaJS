@@ -36,16 +36,37 @@ import { DrawDockedStatus } from "./status_bar_docked.js";
  * The bottom-left on-screen status line the original game uses for the date on
  * system entry and transient gameplay messages (e.g. "Jumping into the Sanddown
  * system on November 21st, 1177 NC."). Display-only: it reads simulation state
- * (never writes it) and fades a message out after a few seconds.
+ * (never writes it) and clears a message after STATUS_LINE_HOLD_MS.
  */
+/**
+ * How long a status-line message stays, in (display, TimeScale-scaled)
+ * ms; then the line goes dark AT ONCE, with no fade. Reference "P1 wave 16"
+ * (docs/reference_experiments.md, the status line): read frame by frame
+ * from a 10 fps recording, eight distress lines each stayed 8.0-8.2 s and
+ * then the line went dark at once, and wave 14's recording re-read the same
+ * way gives back-to-back 8.0-8.3 s segments. NovaJS uses the one rule for
+ * every line (arrival, landing and boarding feedback, scans, hails,
+ * distress): only the distress lines were timed closely, and the doc
+ * reads its finding as "a status line stays 8 s".
+ *
+ * Not matched (open): the original's TAKE-OFF line ("Leaving / Taking off
+ * from ...", which NovaJS does not print) stayed only 4.3-4.6 s, and a
+ * contraband detection long enough to wrap onto two lines stayed at least
+ * 12.7 s; whether the hold depends on the message is unmeasured.
+ */
+export const STATUS_LINE_HOLD_MS = 8000;
+
+/** The status line's opacity `age` ms after its message was set: fully
+ * shown for STATUS_LINE_HOLD_MS, then gone (no fade). */
+export function statusLineAlpha(age: number): number {
+    return age < STATUS_LINE_HOLD_MS ? 1 : 0;
+}
+
 class StatusLine {
     readonly container = new PIXI.Container();
     private readonly text: PIXI.Text;
     /** Wall-clock time (TimeResource) the current message was set. */
     private shownAt = -Infinity;
-    /** How long the message stays fully opaque, then how long it fades. */
-    private static readonly HOLD_MS = 8000;
-    private static readonly FADE_MS = 4000;
     /**
      * Insets from the screen edge. Measured on the original's status line
      * (map/mini_map/mini_map.png, "Jumping into the Tau Ceti system on March
@@ -76,15 +97,10 @@ class StatusLine {
         this.shownAt = time;
     }
 
-    /** Fades the message: fully shown for HOLD_MS, then linearly over FADE_MS. */
+    /** Shows the message for STATUS_LINE_HOLD_MS, then clears the line at
+     * once (statusLineAlpha). */
     update(time: number) {
-        const age = time - this.shownAt;
-        if (age <= StatusLine.HOLD_MS) {
-            this.container.alpha = 1;
-        } else {
-            this.container.alpha = Math.max(0,
-                1 - (age - StatusLine.HOLD_MS) / StatusLine.FADE_MS);
-        }
+        this.container.alpha = statusLineAlpha(time - this.shownAt);
     }
 
     reposition(screenHeight: number) {
@@ -132,7 +148,7 @@ const StatusLineResize = new System({
 });
 
 // Composes the "Jumping into ..." arrival line once per system (the display
-// world is rebuilt on each jump), then fades it out. Reads the player's synced
+// world is rebuilt on each jump), then clears it (statusLineAlpha). Reads the player's synced
 // game date; never mutates the simulation.
 const DrawStatusMessage = new System({
     name: 'DrawStatusMessage',
