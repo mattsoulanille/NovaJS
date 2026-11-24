@@ -94,8 +94,9 @@ import { ActiveRanksComponent, RankLookup, rankPriceMod } from '../nova_plugin/n
  *   exactly what was paid). A discount on one end only would have minted
  *   credits, which is why the two must always move together.
  * - The ship TRADE-IN valuation (shipyard_rules' tradeInValue). The Bible pins
- *   that to "25% of the ORIGINAL cost of your current ship and upgrades", and
- *   a discount rank must not also devalue the property the player brings in.
+ *   that to the "ORIGINAL cost of your current ship and upgrades" (the
+ *   original credits 25% of the hull's and 50% of the outfits'), and a
+ *   discount rank must not also devalue the property the player brings in.
  *   It cannot be farmed either: a trade-in only offsets a purchase and is
  *   clamped at zero, so it never pays out cash.
  * - COMMODITY prices in the trade centre. A commodity's price is not an item's

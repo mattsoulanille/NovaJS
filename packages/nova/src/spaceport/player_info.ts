@@ -33,6 +33,9 @@ import { DailyBudget, dailyBudget } from './daily_budget.js';
 import { ActiveRanksComponent, activeRankData } from '../nova_plugin/ncb/index.js';
 import { RankData } from 'novadatainterface/rank_data';
 import { outfitPrice } from './outfitter_rules.js';
+import {
+    SHIP_TRADE_IN_FRACTION, SHIP_TRADE_IN_OUTFIT_FRACTION,
+} from './shipyard_rules.js';
 import { enhancementEnabled } from '../enhancements.js';
 
 // The player-info dialog composes the three PICTs 8518 (top strip,
@@ -559,7 +562,7 @@ export class PlayerInfoDialog {
                         name: outfit.name,
                         // What it cost on THIS hull (oütf 0x0200 scales
                         // the price by the ship's mass), which is what
-                        // the trade-in line below values at 25%.
+                        // the trade-in line below values at 50%.
                         price: outfitPrice(outfit, this.shipData),
                         builtIn: outfit.builtIn,
                         showAsRank: outfit.showAsRank,
@@ -813,10 +816,12 @@ export class PlayerInfoDialog {
         const lines = ['Current extras for your ship:',
             extras.length > 0 ? extras.join(', ') + '.' : 'None.'];
         if (this.shipData) {
-            // Trade-in at 25% of the ship's and outfits' original
-            // cost (the original's shipyard trade-in rate).
+            // Trade-in at the original's shipyard rates: 25% of the
+            // hull's and 50% of the outfits' original cost (reference
+            // wave 12; shipyard_rules' tradeInValue).
             const tradeIn = Math.floor(
-                0.25 * (this.shipData.price + outfitValue));
+                SHIP_TRADE_IN_FRACTION * this.shipData.price
+                + SHIP_TRADE_IN_OUTFIT_FRACTION * outfitValue);
             lines.push(`Ship trade-in value: `
                 + `${tradeIn.toLocaleString()} credits`);
         }

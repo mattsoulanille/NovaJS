@@ -28,12 +28,14 @@ import {
     ShipPurchaseContext,
     shipPurchasePrice,
     SHIP_TRADE_IN_FRACTION,
+    SHIP_TRADE_IN_OUTFIT_FRACTION,
     tradeInValue,
 } from './shipyard_rules.js';
 
 /**
  * The shipyard's trade-up pricing and outfit-persistence rules (EVN
- * Bible ~:2421 for the 25% formula, ~:1962 for oütf flag 0x0004).
+ * Bible ~:2421 for the trade-in, ~:1962 for oütf flag 0x0004; the
+ * original's 25% of the hull + 50% of the outfits, reference wave 12).
  */
 describe('shipyard purchase rules', () => {
     function outfit(id: string, fields: Partial<OutfitData> = {}): OutfitData {
@@ -74,17 +76,18 @@ describe('shipyard purchase rules', () => {
             expect(tradeInValue(ctx)).toBe(10000);
         });
 
-        it('adds 25% of each outfit at its ORIGINAL list price', () => {
-            // Judgment call 2: the 25% is taken on list price, not on the
-            // outfitter's 50% resale value.
+        it('adds 50% of each outfit at its ORIGINAL list price', () => {
+            // The original (reference wave 12): the outfits at the
+            // outfitter's resale fraction, taken on list price.
             const cannon = outfit('nova:200', { price: 12000 });
             const ctx = context({
                 currentShip: ship('nova:100', { price: 40000 }),
                 outfits: [['nova:200', 2]],
                 catalogue: [cannon],
             });
-            // 0.25 * (40000 + 2*12000) = 16000
-            expect(tradeInValue(ctx)).toBe(16000);
+            // 0.25 * 40000 + 0.5 * 2*12000 = 22000
+            expect(SHIP_TRADE_IN_OUTFIT_FRACTION).toBe(0.5);
+            expect(tradeInValue(ctx)).toBe(22000);
         });
 
         it('counts ammunition outfits like any other upgrade', () => {
@@ -98,7 +101,7 @@ describe('shipyard purchase rules', () => {
                 outfits: [['nova:300', 10]],
                 catalogue: [rocket],
             });
-            expect(tradeInValue(ctx)).toBe(1000);
+            expect(tradeInValue(ctx)).toBe(2000);
         });
 
         it('EXCLUDES persistent outfits from the valuation', () => {
@@ -110,8 +113,9 @@ describe('shipyard purchase rules', () => {
                 outfits: [['nova:221', 1], ['nova:200', 1]],
                 catalogue: [beam, cannon],
             });
-            // The persistent beam contributes nothing: 0.25*(40000+12000)
-            expect(tradeInValue(ctx)).toBe(13000);
+            // The persistent beam contributes nothing:
+            // 0.25 * 40000 + 0.5 * 12000
+            expect(tradeInValue(ctx)).toBe(16000);
         });
 
         it('values an unknown outfit id at zero', () => {
@@ -143,7 +147,7 @@ describe('shipyard purchase rules', () => {
             + 'THIS hull (oütf 0x0200)', () => {
                 // Carbon Fiber (Cost 250, flag 0x0200) on a Leviathan
                 // (Mass 10,000) cost 2,500,000 cr, and that is its
-                // "original cost" for the 25%.
+                // "original cost" for the 50%.
                 const plating = outfit('nova:180', {
                     price: 250, priceScalesWithShipMass: true,
                 });
@@ -156,10 +160,45 @@ describe('shipyard purchase rules', () => {
                     outfits: [['nova:180', 2]],
                     catalogue: [plating],
                 });
-                // 0.25 * (12,000,000 + 2 * 2,500,000)
-                expect(tradeInValue(ctx)).toBe(4_250_000);
+                // 0.25 * 12,000,000 + 0.5 * 2 * 2,500,000
+                expect(tradeInValue(ctx)).toBe(5_500_000);
             });
     });
+
+    describe('the original\'s Kit Mass Roomy trade-ins (reference wave 12)',
+        () => {
+            // docs/reference_experiments.md, "Trade center at Schmoo, and
+            // the trade-in's outfits, wave 12": pilots on Kit Mass Roomy
+            // 100 (100,000 cr) buying Kit Mass Roomy 300 at Kit Port; the
+            // confirm dialog's Trade-In.
+            const roomy100 = ship('kit:100', { price: 100_000 });
+            const plain = outfit('kit:300', { price: 1000 });
+            const keep = outfit('kit:301', { price: 1000, persistent: true });
+            const catalogue = new Map([[plain.id, plain], [keep.id, keep]]);
+            function tradeIn(outfits: [string, number][],
+                cargo: [string, number][] = []): number {
+                const entity = makeShip(roomy100);
+                entity.components.set(CreditsComponent, { credits: 1_000_000 });
+                entity.components.set(OutfitsStateComponent, new Map(
+                    outfits.map(([id, count]) => [id, { count }])));
+                entity.components.set(CargoComponent, new Map(cargo));
+                return tradeInValue(purchaseContextFrom(entity, roomy100,
+                    id => catalogue.get(id)));
+            }
+
+            it('50 t of food, no outfits: 25,000 (cargo does not count)',
+                () => {
+                    expect(tradeIn([], [['cargo:0', 50]])).toBe(25_000);
+                });
+
+            it('five Kit Plain Mass (Cost 1,000): 27,500', () => {
+                expect(tradeIn([[plain.id, 5]])).toBe(27_500);
+            });
+
+            it('two persistent Kit Mass Keep (Cost 1,000): 25,000', () => {
+                expect(tradeIn([[keep.id, 2]])).toBe(25_000);
+            });
+        });
 
     describe('purchase price', () => {
         it('charges the new price minus the trade-in', () => {
@@ -439,9 +478,9 @@ describe('shipyard purchase rules', () => {
 
         it('charges the trade-up price, not the whole balance', () => {
             const { bought } = purchase();
-            // trade-in = 0.25*(40000 + 2*12000) = 16000; 200000-16000
+            // trade-in = 0.25*40000 + 0.5*2*12000 = 22000; 200000-22000
             expect(bought.components.get(CreditsComponent))
-                .toEqual({ credits: 500000 - 184000 });
+                .toEqual({ credits: 500000 - 178000 });
         });
 
         it('flies the new hull', () => {
@@ -594,7 +633,7 @@ describe('shipyard purchase rules', () => {
             const next = purchaseContextFrom(bought, target,
                 id => new Map([['nova:221', beam], ['nova:200', cannon]]).get(id));
             expect(next.currentShip.id).toBe('nova:101');
-            expect(next.credits).toBe(500000 - 184000);
+            expect(next.credits).toBe(500000 - 178000);
             // The new hull (200000) plus the free stock outfit and the
             // carried, zero-priced persistent beam.
             expect(tradeInValue(next)).toBe(50000);
@@ -602,7 +641,7 @@ describe('shipyard purchase rules', () => {
             const third = ship('nova:102', { price: 300000 });
             const bought2 = buildPurchasedShip(bought, third, next);
             expect(bought2.components.get(CreditsComponent))
-                .toEqual({ credits: 500000 - 184000 - 250000 });
+                .toEqual({ credits: 500000 - 178000 - 250000 });
             // The Vell-os beam survives a second trade too.
             expect(bought2.components.get(OutfitsStateComponent)!.get('nova:221'))
                 .toEqual({ count: 1 });

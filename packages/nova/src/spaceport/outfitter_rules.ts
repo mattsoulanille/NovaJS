@@ -411,7 +411,9 @@ export type SellDenialReason =
  * upgrades", Bible shïp Cost field). Per Matthew's rule, standalone
  * outfit resale is 50% of the price, floored. (A unit bought and sold
  * within the same outfitter visit is refunded in full — that same-visit
- * accounting lives in the Outfitter menu, not here.)
+ * accounting lives in the Outfitter menu, not here.) The original's ship
+ * trade-in credits the outfits at this same fraction, not the Bible's 25%
+ * (reference wave 12; shipyard_rules' SHIP_TRADE_IN_OUTFIT_FRACTION).
  */
 export const OUTFIT_RESALE_FRACTION = 0.5;
 

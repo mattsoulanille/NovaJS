@@ -150,13 +150,13 @@ describe('shipyard price pane', () => {
         const target = ship('nova:101', { price: 200000 });
         const readout = shipyardPriceReadout(target, ctx);
 
-        // 0.25 * (40000 + 2*12000) = 16000; 200000 - 16000 = 184000.
-        expect(tradeInValue(ctx)).toBe(16000);
-        expect(shipPurchasePrice(target, ctx)).toBe(184000);
+        // 0.25 * 40000 + 0.5 * 2*12000 = 22000; 200000 - 22000 = 178000.
+        expect(tradeInValue(ctx)).toBe(22000);
+        expect(shipPurchasePrice(target, ctx)).toBe(178000);
         expect(readout).toEqual({
             shipPrice: '200,000 cr',
-            tradeIn: '16,000 cr',
-            finalPrice: '184,000 cr',
+            tradeIn: '22,000 cr',
+            finalPrice: '178,000 cr',
             youHave: '546,553 cr',
         });
     });
@@ -164,7 +164,7 @@ describe('shipyard price pane', () => {
     it('shows the same figures the rules return, whatever they are', () => {
         // The drift guard: the displayed strings are the formatted
         // outputs of tradeInValue / shipPurchasePrice, not a second
-        // implementation of the 25% formula.
+        // implementation of the trade-in formula.
         const cannon = outfit('nova:200', { price: 7777 });
         const ctx = context({
             currentShip: ship('nova:100', { price: 123457 }),
@@ -217,11 +217,11 @@ describe('shipyard price pane', () => {
         const withCloak = shipyardPriceReadout(target,
             context({ ...base, outfits: [['nova:200', 1], ['nova:211', 1]] }));
 
-        // 0.25 * (40000 + 12000) = 13000 either way: the cloak follows
+        // 0.25 * 40000 + 0.5 * 12000 = 16000 either way: the cloak follows
         // the player onto the new hull, so it is not sold with the old.
-        expect(without?.tradeIn).toBe('13,000 cr');
-        expect(withCloak?.tradeIn).toBe('13,000 cr');
-        expect(withCloak?.finalPrice).toBe('187,000 cr');
+        expect(without?.tradeIn).toBe('16,000 cr');
+        expect(withCloak?.tradeIn).toBe('16,000 cr');
+        expect(withCloak?.finalPrice).toBe('184,000 cr');
     });
 
     it('abbreviates millions the way the outfitter does', () => {
@@ -275,14 +275,14 @@ describe('shipyard price pane', () => {
 
             // Trade-in is a property of what you fly, so it holds across
             // a selection change while price and final price follow the
-            // newly selected hull. 0.25 * (40000 + 2*12000) = 16000.
+            // newly selected hull. 0.25 * 40000 + 0.5 * 2*12000 = 22000.
             expect(quote(entity, current, cheap)).toEqual({
-                shipPrice: '100,000 cr', tradeIn: '16,000 cr',
-                finalPrice: '84,000 cr', youHave: '500,000 cr',
+                shipPrice: '100,000 cr', tradeIn: '22,000 cr',
+                finalPrice: '78,000 cr', youHave: '500,000 cr',
             });
             expect(quote(entity, current, dear)).toEqual({
-                shipPrice: '900,000 cr', tradeIn: '16,000 cr',
-                finalPrice: '884,000 cr', youHave: '500,000 cr',
+                shipPrice: '900,000 cr', tradeIn: '22,000 cr',
+                finalPrice: '878,000 cr', youHave: '500,000 cr',
             });
         });
 
@@ -295,8 +295,8 @@ describe('shipyard price pane', () => {
             const target = ship('nova:101', { price: 200000 });
             const before = quote(entity, current, target);
             expect(before).toEqual({
-                shipPrice: '200,000 cr', tradeIn: '16,000 cr',
-                finalPrice: '184,000 cr', youHave: '500,000 cr',
+                shipPrice: '200,000 cr', tradeIn: '22,000 cr',
+                finalPrice: '178,000 cr', youHave: '500,000 cr',
             });
 
             // Exactly what Shipyard.buyShip does: swap the entity, then
@@ -308,10 +308,10 @@ describe('shipyard price pane', () => {
 
             // The 2 cannons went with the old hull, so the new trade-in
             // is 25% of the 200,000 hull alone; credits are 500,000 less
-            // the 184,000 charged.
+            // the 178,000 charged.
             expect(after).toEqual({
                 shipPrice: '200,000 cr', tradeIn: '50,000 cr',
-                finalPrice: '150,000 cr', youHave: '316,000 cr',
+                finalPrice: '150,000 cr', youHave: '322,000 cr',
             });
             expect(after).not.toEqual(before!);
         });

@@ -265,9 +265,10 @@ describe('the seams between landed venues', () => {
         await visit.press('buy');
     }
 
-    /** Trade-up price: 200,000 less 25% of the old hull and its outfits. */
+    /** Trade-up price: 200,000 less 25% of the old hull and 50% of its
+     * outfits (the original's, reference wave 12). */
     const tradeUpPrice = (outfitsAboard: number) =>
-        200_000 - Math.floor(0.25 * (100_000 + outfitsAboard));
+        200_000 - Math.floor(0.25 * 100_000 + 0.5 * outfitsAboard);
 
     describe('an outfit bought at the outfitter, then the hull traded in at '
         + 'the shipyard, in one landing', () => {
@@ -299,7 +300,7 @@ describe('the seams between landed venues', () => {
                     await tradeUp(visit);
                     // The shipyard priced the trade against the outfit the
                     // outfitter just put aboard (judgment call 3: every
-                    // non-persistent outfit is valued at 25% of list).
+                    // non-persistent outfit is valued at 50% of list).
                     expect(client.entity.components.get(ShipComponent)?.id)
                         .toBe(NEW_SHIP);
                     const expected = 499_500 - tradeUpPrice(500);

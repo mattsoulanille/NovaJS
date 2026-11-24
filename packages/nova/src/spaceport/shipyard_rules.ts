@@ -9,13 +9,15 @@
  * plus the oütf persistence flag 0x0004 (~:1962): "This item stays with
  * you when you trade ships (persistent)".
  *
+ * The original does not do what that sentence says for the outfits
+ * (reference "Trade center at Schmoo, and the trade-in's outfits, wave
+ * 12"): it credits 25% of the hull's price and 50% of the non-persistent
+ * outfits' -- the outfits at the outfitter's own resale fraction. Cargo
+ * and persistent outfits count for nothing.
+ *
  * Pure logic; the Shipyard menu supplies the context. This is the
- * shipyard's counterpart to outfitter_rules.ts, and deliberately does
- * NOT reuse that file's 50% outfit resale fraction: the outfitter's
- * resale rule governs selling an outfit over the counter, while the
- * Bible's 25% here is a single valuation of the whole ship-plus-outfits
- * package being traded in. See the JUDGMENT CALLS block below for the
- * points the Bible leaves open.
+ * shipyard's counterpart to outfitter_rules.ts. See the JUDGMENT CALLS
+ * block below for the points the measurements leave open.
  */
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
@@ -36,7 +38,7 @@ import {
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
-import { outfitPrice } from './outfitter_rules.js';
+import { OUTFIT_RESALE_FRACTION, outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
 import {
     outfitsAfterShipChange, PLAYER_STATE_COMPONENTS, resolveNumberedResource,
@@ -45,10 +47,19 @@ import {
 import { RankData } from 'novadatainterface/rank_data';
 
 /**
- * The fraction of the current ship-and-outfits value that is credited
- * against the new ship's price (EVN Bible ~:2421).
+ * The fraction of the current HULL's price that is credited against the
+ * new ship's price (EVN Bible ~:2421; the original, reference wave 12).
  */
 export const SHIP_TRADE_IN_FRACTION = 0.25;
+
+/**
+ * The fraction of each traded-in (non-persistent) outfit's price credited
+ * with it: the outfitter's resale fraction, 50%. Measured on the original
+ * (reference "Trade center at Schmoo, and the trade-in's outfits, wave
+ * 12"): Kit Mass Roomy 100 (100,000) with five 1,000-credit outfits trades
+ * in for 27,500 = 25,000 + 2,500.
+ */
+export const SHIP_TRADE_IN_OUTFIT_FRACTION = OUTFIT_RESALE_FRACTION;
 
 export interface ShipPurchaseContext {
     /** The hull the player is flying right now. */
@@ -85,20 +96,21 @@ export interface ShipPurchaseContext {
 }
 
 /*
- * JUDGMENT CALLS. The Bible states the 25% formula in one sentence and
- * leaves these open; each is decided here and pinned by a spec in
+ * JUDGMENT CALLS. The Bible states the trade-in in one sentence and the
+ * original's measurements (25% of the hull + 50% of the outfits) leave
+ * these open; each is decided here and pinned by a spec in
  * shipyard_rules_test.ts.
  *
  * 1. "upgrades" includes AMMUNITION outfits. Ammo rounds are ordinary
  *    oütf resources with a Cost, and the Bible draws no distinction, so
- *    each round is valued like any other outfit. (Consequence: a full
- *    magazine is worth 25% of its list price on a trade, the same as
- *    selling it at 50% would be worth half of that. Nothing in the
- *    Bible suggests ammo is special here.)
+ *    each round is valued like any other outfit: at 50% on a trade, as
+ *    selling it over the counter would pay. (Not measured for ammo.)
  *
- * 2. The 25% is taken on ORIGINAL (list) cost -- OutfitData.price and
- *    ShipData.price -- not on any depreciated or resale value. The
- *    Bible says "original cost" explicitly.
+ * 2. Both fractions are taken on the ORIGINAL (list) cost --
+ *    OutfitData.price (outfitPrice: times the hull's Mass for 0x0200)
+ *    and ShipData.price -- not on any depreciated value, and the SUM is
+ *    floored once, not each outfit's share (the rounding of each part is
+ *    not measured).
  *
  * 3. STOCK outfits count. The player's outfit list does not record
  *    which units arrived with the hull and which were bought, so every
@@ -173,7 +185,7 @@ export interface ShipPurchaseContext {
  *    shop PriceMod is for: the whole point of Extra Outfits' four PriceMod-1
  *    Spica ranks is that the hulls you commissioned come free from your own
  *    yard. The trade-in is not a price but a valuation of the player's
- *    own property, and the Bible pins it to "25% of the ORIGINAL cost of your
+ *    own property, and the Bible pins it to "the ORIGINAL cost of your
  *    current ship and upgrades" -- so a discount rank must not also devalue
  *    what the player brings in. Nothing can be farmed either way: the
  *    trade-in only ever offsets a purchase and is clamped at zero (judgment
@@ -210,21 +222,24 @@ export function partitionOutfits(context: ShipPurchaseContext): {
 
 /**
  * What the player's current ship and its non-persistent outfits are
- * worth against a new hull: 25% of the hull's list price plus 25% of
- * every traded-in outfit's list price, floored to whole credits.
+ * worth against a new hull: 25% of the hull's list price plus 50% of
+ * every traded-in outfit's list price, floored to whole credits (the
+ * original's, reference wave 12: 25,000 + 2,500 = 27,500 where NovaJS
+ * said 26,250). Cargo and persistent (0x0004) outfits count for nothing.
  */
 export function tradeInValue(context: ShipPurchaseContext): number {
     const { tradedIn } = partitionOutfits(context);
-    let total = context.currentShip.price;
+    let outfits = 0;
     for (const [id, count] of tradedIn) {
         const outfit = context.getOutfit(id);
         // The "original cost" of an outfit flagged oütf 0x0200 is what it
-        // cost ON THIS HULL — its Cost times the current ship's Mass
+        // cost ON THIS HULL -- its Cost times the current ship's Mass
         // (outfitter_rules' outfitPrice), which is what the player paid.
-        total += (outfit ? outfitPrice(outfit, context.currentShip) : 0)
+        outfits += (outfit ? outfitPrice(outfit, context.currentShip) : 0)
             * count;
     }
-    return Math.floor(total * SHIP_TRADE_IN_FRACTION);
+    return Math.floor(context.currentShip.price * SHIP_TRADE_IN_FRACTION
+        + outfits * SHIP_TRADE_IN_OUTFIT_FRACTION);
 }
 
 /**
