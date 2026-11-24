@@ -4682,8 +4682,8 @@ business (no beam subs there); keep NovaJS's own rule.
 
 **Applied in d9e989c2.** The rule lives in one function
 (`N/nova_plugin/combat/submunition_rule.ts` `submunitionFires`: a direct
-hit never subs, a prox detonation always does, an expiry unless Flags2
-0x0020), which `fireSubs` asks per submunition entry. A prox shot keeps
+hit never subs (since relaxed for ProxRadius > 0, below), a prox
+detonation always does, an expiry unless Flags2 0x0020), which `fireSubs` asks per submunition entry. A prox shot keeps
 its sprite hurtbox; the fuse is `ProjectileProximityFuseSystem`
 (`projectile_plugin.ts`, after the collision pass, so a same-tick tie
 goes to the body), firing at ProxRadius + 2/3 of the target's hull
@@ -4697,6 +4697,28 @@ launching subs) are a new feature I added"), and the beam rule is back
 to his: a beam subs at the far end of its ray when it ends, whatever it
 hit, unless Flags2 0x0020 (`beam_plugin.ts` BeamSystem passes
 'expired'; the `BeamState.hitLastTick` field d9e989c2 added is gone).
+
+**NovaJS departs deliberately: a direct hit by a shot with ProxRadius > 0
+fires its subs.** Matthew's ruling (2026-11-23): "I suspect that a plugin
+author who sets a proximity fuse above zero would always want the
+submunitions to fire. [...] Prox radius > 0 can serve as the flag that
+forces subs to fire". On the original a small fuse loses the race to the
+body (finding 2), so e.g. the stock Polaron Multi-Torp. (wëap 182/185,
+ProxRadius 10, 5 Polaron Torps) almost never splits; in NovaJS it now
+splits on the hit as well. A wëap with ProxRadius 0 (or negative) keeps
+the original's rule: no subs on a direct hit. Extra Outfits' Interference
+Missile (wëap 303 in "ExtraOutfits v18 Part 1": homing, ProxRadius 0,
+ProxSafety 1, Flags 0x8002, Flags2 0x0000, 6 x wëap 304 Optimated IR
+Missile at SubTheta 10, SubLimit 6) depends on that: its outfit text says
+that if it hits a target before the IR missiles fire, they do no damage.
+Flags2 0x0020 stays an expiry-only switch: a fused direct hit subs with
+or without it. Of the 102 wëaps with subs in the stock data (3) and the
+installed plug-ins (99), 66 have ProxRadius > 0; the ones whose hits
+change in practice are those with a small fuse (33 at 20 or less, where
+the body usually wins the race), e.g. the Polaron Multi-Torp., Extra
+Outfits' Farseeker Missile chain (prox 2), Flak Rounds (5), Scatter
+Blaster (5) and Duplicator Mine parts (10). The rule is
+`N/nova_plugin/combat/submunition_rule.ts` `submunitionFires`.
 
 Confidence: high for "no subs on a direct hit" (18 hits over three runs,
 none subbed; every prox detonation and every expiry did); medium for the

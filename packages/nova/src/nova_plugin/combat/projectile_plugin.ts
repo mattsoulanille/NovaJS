@@ -170,7 +170,8 @@ class ProjectileWeaponEntry extends WeaponEntry {
             // (ProjectileHurtboxProvider) for direct hits: the fuse is a
             // separate test with its own reach
             // (ProjectileProximityFuseSystem), and which of the two fires
-            // first decides whether the shot subs (submunition_rule.ts).
+            // first decides where the shot detonates (both sub: see
+            // submunition_rule.ts).
 
             if (this.data.blastRadius) {
                 const blastHull = new CompositeHull([
@@ -580,12 +581,14 @@ export const ProjectileCollisionSystem = new System({
             return;
         }
 
-        // The shot's sprite touched the body: a DIRECT HIT, which never
-        // subs (submunition_rule.ts) however wide its proximity fuse.
-        // CollisionSystem runs before ProjectileProximityFuseSystem, so
-        // when the body and the fuse connect on the same tick the body
-        // wins: on the original a prox 12 shot fused at the 24 px disc's
-        // body distance (19-20 px) hit it without subbing.
+        // The shot's sprite touched the body: a DIRECT HIT, which subs
+        // only when the wëap has a proximity fuse (ProxRadius > 0, a
+        // deliberate NovaJS departure: on the original a direct hit
+        // never subs; submunition_rule.ts). CollisionSystem runs before
+        // ProjectileProximityFuseSystem, so when the body and the fuse
+        // connect on the same tick the body wins: on the original a prox
+        // 12 shot fused at the 24 px disc's body distance (19-20 px) hit
+        // it without subbing.
         detonate(shot, self, collision.other, 'directHit', fireSubs,
             emitNow);
     },
@@ -628,8 +631,8 @@ const ProximityFuseCandidates = new Query([UUID, MovementStateComponent,
 /**
  * A shot's PROXIMITY FUSE (wëap ProxRadius > 0), separate from its body:
  * the shot detonates — damaging the ship that tripped it and firing its
- * submunitions, the one way besides expiry that a shot subs — once its
- * centre comes within proximityFuseReach of something it may strike
+ * submunitions — once its centre comes within proximityFuseReach of
+ * something it may strike
  * (projectileMayStrike: the same firing-group / same-govt / guided /
  * point defense / ProxSafety rules as a direct hit). The body
  * (ProjectileCollisionSystem, inside CollisionSystem) is judged first

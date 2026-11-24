@@ -30,12 +30,14 @@ import { submunitionFires } from './submunition_rule.js';
 
 /**
  * When a shot fires its submunitions, against the original
- * (docs/reference_experiments.md, "Submunitions wave 10"): never on a
- * direct hit; on expiry (unless wëap Flags2 0x0020) or when the proximity
- * fuse fires before the body is touched; ProxSafety disarms every
- * collision. The rig mirrors the reference one: an immobile disc of
- * radius 12 (the 24 px disc) and a 16 px shot fired straight at it.
- * Beams (a NovaJS extension) sub at the end of the ray whatever it hit.
+ * (docs/reference_experiments.md, "Submunitions wave 10"): on expiry
+ * (unless wëap Flags2 0x0020) or when the proximity fuse fires before the
+ * body is touched; ProxSafety disarms every collision. A direct hit subs
+ * only when the wëap's ProxRadius is above zero, a deliberate NovaJS
+ * departure (Matthew's ruling; the original never subs on a direct hit).
+ * The rig mirrors the reference one: an immobile disc of radius 12 (the
+ * 24 px disc) and a 16 px shot fired straight at it. Beams (a NovaJS
+ * extension) sub at the end of the ray whatever it hit.
  */
 
 const TARGET_SHIP = 'test:disc-ship';
@@ -215,17 +217,36 @@ function distanceFromCentre(position: Position) {
 }
 
 describe('submunitionFires (the one sub rule)', () => {
-    it('never subs on a direct hit', () => {
-        expect(submunitionFires({ subIfExpire: true }, 'directHit')).toBeFalse();
-        expect(submunitionFires({ subIfExpire: false }, 'directHit')).toBeFalse();
+    const fused = { type: 'ProjectileWeaponData', proxRadius: 10 } as const;
+    const unfused = { type: 'ProjectileWeaponData', proxRadius: 0 } as const;
+    it('never subs on a direct hit without a proximity fuse (the original)', () => {
+        expect(submunitionFires(unfused, { subIfExpire: true }, 'directHit')).toBeFalse();
+        expect(submunitionFires(unfused, { subIfExpire: false }, 'directHit')).toBeFalse();
+        // A negative ProxRadius (arpia's "Explosion", -1) is no fuse.
+        expect(submunitionFires({ ...unfused, proxRadius: -1 }, { subIfExpire: true },
+            'directHit')).toBeFalse();
+        // Weapon data without the field (a beam's) counts as 0.
+        expect(submunitionFires({ type: 'BeamWeaponData' }, { subIfExpire: true },
+            'directHit')).toBeFalse();
+    });
+    it('subs on a direct hit with ProxRadius > 0, Flags2 0x0020 or not '
+        + '(a NovaJS departure)', () => {
+        expect(submunitionFires(fused, { subIfExpire: true }, 'directHit')).toBeTrue();
+        expect(submunitionFires(fused, { subIfExpire: false }, 'directHit')).toBeTrue();
+        expect(submunitionFires({ ...fused, proxRadius: 1 }, { subIfExpire: true },
+            'directHit')).toBeTrue();
     });
     it('always subs on a proximity detonation', () => {
-        expect(submunitionFires({ subIfExpire: true }, 'proximity')).toBeTrue();
-        expect(submunitionFires({ subIfExpire: false }, 'proximity')).toBeTrue();
+        for (const weapon of [fused, unfused]) {
+            expect(submunitionFires(weapon, { subIfExpire: true }, 'proximity')).toBeTrue();
+            expect(submunitionFires(weapon, { subIfExpire: false }, 'proximity')).toBeTrue();
+        }
     });
     it('subs on expiry unless wëap Flags2 0x0020', () => {
-        expect(submunitionFires({ subIfExpire: true }, 'expired')).toBeTrue();
-        expect(submunitionFires({ subIfExpire: false }, 'expired')).toBeFalse();
+        for (const weapon of [fused, unfused]) {
+            expect(submunitionFires(weapon, { subIfExpire: true }, 'expired')).toBeTrue();
+            expect(submunitionFires(weapon, { subIfExpire: false }, 'expired')).toBeFalse();
+        }
     });
 });
 
@@ -257,15 +278,57 @@ describe('when a shot fires its submunitions (reference: Submunitions wave 10)',
         expect(distanceFromCentre(detonations[0].position)).toBeGreaterThan(17);
     });
 
+    it('a direct hit (prox 0) with Flags2 0x0020 fires none either', async () => {
+        const { world, damaged } = await makeWorld([parent({
+            submunitions: [star(false)],
+        })]);
+        fireAtTarget(world);
+        expect(runToEnd(world)).toBe(0);
+        expect(damaged).toContain(TARGET);
+    });
+
     for (const proxRadius of [5, 8, 12]) {
-        it(`a small fuse (prox ${proxRadius}) loses the race to the body: no subs`,
+        it(`a small fuse (prox ${proxRadius}) loses the race to the body, and `
+            + 'the direct hit subs because ProxRadius > 0 (NovaJS departure)',
             async () => {
-                const { world, damaged } = await makeWorld([parent({ proxRadius })]);
+                const { world, damaged, detonations } =
+                    await makeWorld([parent({ proxRadius })]);
                 fireAtTarget(world);
-                expect(runToEnd(world)).toBe(0);
+                expect(runToEnd(world)).toBe(4);
                 expect(damaged).toContain(TARGET);
+                // It struck the body (about 20 px out), not the fuse's reach.
+                expect(detonations.length).toBe(1);
+                const at = distanceFromCentre(detonations[0].position);
+                expect(at).toBeLessThanOrEqual(21);
+                expect(at).toBeGreaterThan(17);
             });
     }
+
+    it('a fused direct hit subs with Flags2 0x0020 too (that flag is only '
+        + 'about expiry)', async () => {
+        const { world, damaged } = await makeWorld([parent({
+            proxRadius: 5, submunitions: [star(false)],
+        })]);
+        fireAtTarget(world);
+        expect(runToEnd(world)).toBe(4);
+        expect(damaged).toContain(TARGET);
+    });
+
+    it('an Interference-Missile-like shot (guided, prox 0, short ProxSafety) '
+        + 'that hits its target fires none', async () => {
+        // Extra Outfits' Interference Missile: homing, ProxRadius 0,
+        // ProxSafety 1 frame, 6 Optimated IR Missiles at SubTheta 10. Its
+        // description: if it hits a target before the IR missiles fire,
+        // they do nothing.
+        const { world, damaged } = await makeWorld([parent({
+            guidance: 'guided', proxHitAll: false, proxRadius: 0,
+            proxSafety: 1 / 30,
+            submunitions: [{ ...star(), count: 6, theta: 10 * Math.PI / 180 }],
+        })]);
+        fireAtTarget(world);
+        expect(runToEnd(world)).toBe(0);
+        expect(damaged).toContain(TARGET);
+    });
 
     for (const proxRadius of [16, 30, 60]) {
         it(`a wide fuse (prox ${proxRadius}) fires short of the body and subs`,
@@ -293,10 +356,15 @@ describe('when a shot fires its submunitions (reference: Submunitions wave 10)',
             expect(at).toBeGreaterThan(59.5);
         });
 
-    it('on the bigger target prox 20 still loses to the body', async () => {
-        const { world } = await makeWorld([parent({ proxRadius: 20 })], 48);
+    it('on the bigger target prox 20 still loses to the body, and that '
+        + 'direct hit subs (ProxRadius > 0)', async () => {
+        const { world, detonations } =
+            await makeWorld([parent({ proxRadius: 20 })], 48);
         fireAtTarget(world);
-        expect(runToEnd(world)).toBe(0);
+        expect(runToEnd(world)).toBe(4);
+        // The body (radius 48 + the shot's 8) came before the fuse's 52.
+        expect(distanceFromCentre(detonations[0].position))
+            .toBeGreaterThan(proximityFuseReach(20, 48));
     });
 
     it('an expiring shot subs where it expired', async () => {

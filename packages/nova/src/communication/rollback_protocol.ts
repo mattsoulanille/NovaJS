@@ -347,17 +347,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    fingerprint changes (1f7350a5d5199574), and the join gate keeps older
 //    and newer builds apart.
 //    Also under 8, no further bump (maintainer's standing ruling for
-//    schema-only changes): no submunitions on a direct hit (reference
+//    schema-only changes): when a shot fires its submunitions (reference
 //    "Submunitions wave 10"). Sim rules only: a projectile with a
 //    proximity fuse keeps its sprite hurtbox, the fuse is a separate test
 //    (ProxRadius + 2/3 of the target's radius, combat/
-//    projectile_plugin.ts ProjectileProximityFuseSystem), and only the
-//    fuse or an expiry fires subs. Beams keep their own rule (subs when
-//    the beam ends). d9e989c2 briefly added an OPTIONAL BeamState field,
-//    `hitLastTick` (fingerprint 2942187f166aced1); it is gone again, so
-//    the derived wire schema fingerprint is back to 1f7350a5d5199574, the
-//    same as before d9e989c2. No input kind or message kind changes. The
-//    build stamp gate keeps builds with different sim rules apart.
+//    projectile_plugin.ts ProjectileProximityFuseSystem), and subs come
+//    from the fuse, an expiry, or a direct hit by a wëap with ProxRadius
+//    > 0 (combat/submunition_rule.ts; Matthew's ruling, a departure from
+//    the original). Beams keep their own rule (subs when the beam ends).
+//    d9e989c2 briefly added an OPTIONAL BeamState field, `hitLastTick`
+//    (fingerprint 2942187f166aced1); it is gone again, so the derived
+//    wire schema fingerprint is back to 1f7350a5d5199574, the same as
+//    before d9e989c2. No input kind or message kind changes. The build
+//    stamp gate keeps builds with different sim rules apart.
 
 export const PROTOCOL_VERSION = 8;
 

@@ -680,9 +680,10 @@ export abstract class WeaponEntry {
             if (!subWeapon) {
                 continue;
             }
-            // A direct hit never subs; an expiry only without wëap
-            // Flags2 0x0020 (submunition_rule.ts).
-            if (!submunitionFires(sub, end)) {
+            // A direct hit subs only with wëap ProxRadius > 0 (a NovaJS
+            // departure); an expiry only without wëap Flags2 0x0020
+            // (submunition_rule.ts).
+            if (!submunitionFires(this.data, sub, end)) {
                 continue;
             }
 
