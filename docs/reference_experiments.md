@@ -7744,6 +7744,25 @@ Confidence: high for 1 and 3 (read back from the pilot), high for 2's "no
 record change" (one run, CompReward 1000), medium for 4 (one scan; its
 record change not read).
 
+**Applied in fdd020ac** (finding 2, the CompReward part only; 1 waits on
+ruling #380, 3-4 belong to the contraband fixes): `compRewardDelta`
+(`N/nova_plugin/reputation/reputation.ts`) has a 'timeout' outcome worth
+0, and `failMission` (`N/nova_plugin/missions/mission_transitions.ts`)
+takes a cause: both deadline sweeps (`failExpiredMissions` in flight,
+`processLanding`) pass 'timeout' unless the sim had already failed the
+mission (`active.failed`, or an unachievable ship goal). The failure kinds
+NOT measured keep the Bible's -R/2 with the CompGovt alone: an Fxxx set
+string, the owner disabled or destroyed under Flags2 0x0004, a ship goal
+made unachievable (an escort died, a disable target destroyed), and a
+0x0020 mission failed by a scan. The last one WAS measured (wave 12's S2:
+no record change, CompReward 10) but arrives as the same `active.failed`
+mark as the 0x0004 failure, so telling them apart needs a failure cause on
+the ActiveMission (a schema change); left for a maintainer's call. Specs:
+`N/nova_plugin/missions/mission_reputation_test.ts` "CompGovt/CompReward"
+(the old "costs half the reward on failure" spec was a deadline failure
+and is overturned), `N/nova_plugin/reputation/reputation_test.ts`
+"compRewardDelta".
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{unowned,comp_fail,scan_ally,several}/*/`
 (unowned `pilot-after1/`, `06-map2.png` "Independent, Minor Offender";
 comp_fail `pilot-p1/`, `04-i0.png`; scan_ally `03-s1.png`, `pilot-after/`;
@@ -7812,6 +7831,20 @@ the system (jump or landing), not by a timer (60 s did not end it).
 Confidence: high for 1 (five runs) and 2 (red brackets, bolts); medium for
 3 (one run; "neutral" read from the hail layout and no approach, the
 returning system's ships being a new draw).
+
+**Checked against main caae7d02 and pinned in 9e56b637: NovaJS already
+matched all three** (the "NovaJS today" above read an older base, before
+the wave-14 piracy police landed). 1: `NpcAggressionSystem`
+(`N/nova_plugin/npc/npc_targeting.ts`) sends a distress call only for an
+attacker that is not on a player's side. 2: `policeDefendVictim`
+(`N/nova_plugin/npc/piracy_police.ts`) answers for the victim's own or
+allied govt before it reads 0x0020. 3: the witness's aggressor mark has no
+timer; it is dropped when the attacker leaves the world (jump, landing,
+death). Specs (`N/nova_plugin/npc/piracy_police_test.ts`): the player's own
+victims never call across four call intervals; a non-nosy police defends
+its ally's 0x0020 ship; the nosy police is still hostile after 61 s with
+the player present ("gone with the player" already covered the jump). No
+code change.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{own_victim,friend_ign,nosy_end,distress}/*/`
 (own_victim `sl/` status lines, `*-k?.png`; friend_ign `30-g1.png`,
@@ -7996,6 +8029,19 @@ ränk was tested (none in the kit).
   disabled or out of fuel is answered from STR# 3000 95-99 and changes
   nothing (no battle assistance without a ränk 0x0400), instead of 70-74.
 Each wants a second run before code (one run each).
+
+**H1 applied in 13c164af** (W1 and C1 not touched here): `assistAnswer`
+(`N/display/hail_dialog_plugin.ts`) answers a healthy player's request with
+`underFireRefusalText` (STR# 3000 95-99, `N/nova_plugin/reputation/hail.ts`)
+when some ship is attacking him (allegiance.ts's `isAttackingPlayer`: in
+attack posture on him, or a hit / lock inside the 30 s aggression window),
+and still with 70-74 when nobody is; nothing is dispatched either way (the
+sim's `applyHail` already did nothing for a healthy player). Left as they
+were (unmeasured): a disabled or fuelless pilot under attack (busy /
+willingness / granted, unchanged), and a ship of a govt whose ränk 0x0400
+the player holds (keeps 70-74). GUESS: another PLAYER's ship attacking
+counts as "under attack" too. Specs: `N/display/hail_dialog_plugin_test.ts`
+"a HEALTHY player under attack (reference H1 wave 15)".
 
 Confidence: medium for 1 and 2 (one run each, clean numbers), low for 3,
 4, 6, 7 and 8.
