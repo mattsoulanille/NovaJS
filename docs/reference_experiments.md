@@ -5766,11 +5766,13 @@ Matches: flight `m` / `h` / `e` / Escape, spaceport `m` / `h` / `e` /
 Escape, Escape closing every venue and the landed map, `m` over the BBS,
 `i` / `h` / `e` ignored in the BBS and on the landed map, `h` as Hire in
 the bar.
-**Proposed fix (not applied):** let KeyM open the star map over any venue
-(as over the BBS), drop KeyI in the spaceport, print "You have no active
-missions." instead of an empty mission list, and map Return to the
+**Proposed fix (all applied):** let KeyM open the star map over any venue
+(as over the BBS; **applied in 5830c073**), drop KeyI in the spaceport
+(**applied in 2acf0126**), print "You have no active missions." instead
+of an empty mission list (**applied in 621a94cf**), and map Return to the
 default button (Leave / Done / Close) per screen rather than fullscreen
-(a fullscreen key could move to a modifier combination).
+(a fullscreen key could move to a modifier combination; applied in the
+two steps below).
 **Fullscreen part applied in 46306f39** (Matthew 2026-11-24): fullscreen
 is Option+Return / Alt+Enter on every screen (`N/client/fullscreen.ts`),
 plus a Preferences > Display button; plain Return no longer toggles it.
@@ -5783,13 +5785,15 @@ the bar and the BBS (each venue's `done()`, buying or accepting nothing).
 called from the key relay in `N/client/game_session.ts`: plain Return
 only (Option+Return stays fullscreen), no key repeat, never under a text
 field (quantity dialog, Find, shop search), and only the focused
-surface's button, so the landed map and the popups (no default button
-yet) swallow it and flight leaves Return unbound. The shipyard, trade
-center and bar were not measured on the original for Return; they follow
-the outfitter. Spec: `N/spaceport/landed_return_key_test.ts`.
-Still open: Return = Yes / Okay on mission-offer and notice popups (K2;
-wave 16's empty-BBS Okay "swallows the next Return"), not part of this
-matrix.
+surface's button, so the landed map (no default button) swallows it and
+flight leaves Return unbound. The shipyard, trade center and bar were not
+measured on the original for Return; they follow the outfitter. Spec:
+`N/spaceport/landed_return_key_test.ts`.
+**Return on the mission-text popups applied in eb749b6f** (outside this
+matrix: K2, and wave 16's empty-BBS Okay that "swallows the next
+Return"): Return presses the accept button, Yes on a mission offer and
+Okay on a notice (`N/spaceport/offer_popup.ts`), with the same rules.
+Spec: `N/spaceport/offer_popup_return_key_test.ts`.
 
 Confidence: high for the cells shown (one shot each, unambiguous).
 
@@ -9101,7 +9105,7 @@ cosmetic or rare.
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
 | K1 | Spaceport hotkeys (Bar/Mission BBS/Trade/Shipyard/Outfitter/Leave): which letters, and does Return = Leave? (Return = Leave **confirmed**; `o` = Outfitter confirmed) | `N/spaceport/spaceport.ts` key handling | **mostly (wave 5)**: `o` `s` `t` `b` open Outfitter, Shipyard, Trade, Bar; `m` opens the star map (not the BBS); Escape closes each back to the spaceport. The BBS key is unknown. Return = Leave applied in b70d4d51 | H |
-| K2 | Mission offer dialog keys: Return = Yes (**confirmed** for AvailLoc 3), Escape = No? | spaceport mission offer | **answered (wave 5)**: Escape does NOT dismiss a bar mission offer | M |
+| K2 | Mission offer dialog keys: Return = Yes (**confirmed** for AvailLoc 3), Escape = No? | spaceport mission offer | **answered (wave 5)**: Escape does NOT dismiss a bar mission offer. Return = Yes (and Okay on a notice) applied in eb749b6f | M |
 | K3 | Tab with one ship toggles target ↔ none (**observed**). Does `r` skip friendly escorts? | `N/nova_plugin/hostility.ts` targeting | SS. **Wave 9:** Tab never selects the player's escorts (60 presses, 12 escorts; matches NovaJS's flock rule); a click does. With only escorts in the system and one targeted, `r` kept it (inconclusive) | M |
 | K4 | Map (`m`) keys: zoom +/-, Find, Escape | map dialog | SS | L |
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
