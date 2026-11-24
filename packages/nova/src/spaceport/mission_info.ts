@@ -99,7 +99,8 @@ export function listedMissions(entity: Entity, universe: MissionUniverse):
  * applies on every peer ({@link MissionInfoAbort}), and is greyed for a
  * mïsn with CanAbort 0. Like the original's, it acts at once: no "are
  * you sure?" (the stock STR# resources hold a confirmation for
- * jettisoning cargo and none for aborting a mission).
+ * jettisoning cargo and none for aborting a mission), and the dialog
+ * closes behind it.
  */
 export class MissionInfoDialog {
     container = new PIXI.Container();
@@ -352,8 +353,11 @@ export class MissionInfoDialog {
 
     /**
      * Aborts the selected mission: hands it to the abort action (an input
-     * record) and drops it from the list at once — the display's mirror
-     * of the player catches up when the simulation applies the record.
+     * record) and closes the WHOLE dialog, as the original does — no
+     * confirmation, and no shortened list left on screen (reference
+     * "Aborting a mission in flight from the `i` dialog, wave 13"; `i`
+     * then lists what is left). The display's mirror of the player
+     * catches up when the simulation applies the record.
      */
     private async doAbort() {
         const entry = this.missions[this.selectedIndex];
@@ -376,16 +380,8 @@ export class MissionInfoDialog {
         }
         if (sent) {
             this.missions = this.missions.filter(([mid]) => mid !== id);
-            this.afterAbort();
+            this.dismiss();
         }
-    }
-
-    /** Re-selects within the shortened list and redraws. */
-    private afterAbort() {
-        this.selectedIndex = Math.min(this.selectedIndex,
-            Math.max(0, this.missions.length - 1));
-        this.refreshList();
-        this.refreshDescription();
     }
 
     /**

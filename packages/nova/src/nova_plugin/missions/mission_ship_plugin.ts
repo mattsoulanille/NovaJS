@@ -70,9 +70,11 @@ import {
  *    owner's ship entity). No input records are needed for progress:
  *    determinism makes every peer agree on it.
  *
- *  - DESPAWN. Every mission-ending transition (complete / abort /
- *    fail) happens while the owner is docked — i.e. while the owner's
- *    entity is OUT of the simulation. So "delete mission ships whose
+ *  - DESPAWN. Most mission-ending transitions (complete / fail, and
+ *    an abort at the spaceport) happen while the owner is docked — i.e.
+ *    while the owner's entity is OUT of the simulation. (An abort IN
+ *    FLIGHT is the exception: it keeps the ShipBehav 0 and 1 ships, see
+ *    mission_ship_release.ts.) So "delete mission ships whose
  *    owner is absent" subsumes despawn-on-mission-end, despawn when
  *    the owner jumps away (the ships are respawned by the owner's
  *    client in the next system when the mission calls for it), and
@@ -98,10 +100,14 @@ export { MissionShipComponent, MissionShipType };
 export const OBSERVE_RANGE = 1500;
 
 /** The owner's ShipObjective for a mission ship, if everything about
- * it still exists. */
+ * it still exists. Never for an aux ship (atmosphere, not part of the
+ * goal) nor for an `untethered` one: that ship's mission is over (an
+ * auto-abort's ambush, or a ship released by an in-flight abort —
+ * mission_ship_release.ts), so it is an ordinary ship to every goal and
+ * failure check, even should its owner take the same mission again. */
 function objectiveOf(missionShip: MissionShip,
     entities: EntityMap): ShipObjective | undefined {
-    if (missionShip.aux) {
+    if (missionShip.aux || missionShip.untethered) {
         return undefined;
     }
     const owner = entities.get(missionShip.owner);

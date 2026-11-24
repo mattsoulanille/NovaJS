@@ -21,6 +21,7 @@ import { ShipPhysicsComponent } from '../ship/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
 import { findControlledEntity } from '../player/index.js';
+import { releaseAbortedMissionShips } from './mission_ship_release.js';
 import {
     applyShipChange, MissionSystemMoveRequestEvent, ShipChangeType, SystemMoveType,
 } from './mission_ship_change.js';
@@ -424,10 +425,13 @@ export function applyRefuseMission(world: World, peerId: string | undefined,
  * the docked path ran — the mïsn's OnAbort set string, the 0x0040 "-5x
  * CompReward reversal on abort", the mission cargo unloaded — against a
  * detached copy of the player, carried as the same deltas. What the sim
- * does with the mission's special ships needs no field: removing the
- * mission from the list is enough, because MissionShipCleanupSystem
- * deletes every mission ship whose owner no longer holds its mission —
- * the tether an Axxx ending a mission in flight already relies on.
+ * does with the mission's special ships needs no field either. The
+ * original keeps them: a ShipBehav-1 escort turns neutral and leaves, a
+ * ShipBehav-0 attacker keeps fighting (mission_ship_release.ts), which
+ * the apply settles from the mission's own frozen objective; every other
+ * one follows the mission out through MissionShipCleanupSystem, which
+ * deletes a mission ship whose owner no longer holds its mission — the
+ * tether an Axxx ending a mission in flight relies on.
  *
  * IDEMPOTENT, and OWNER-ONLY, through one guard: the mission must be on
  * the list of the ship `peerId` controls (the actor is never named in
@@ -452,9 +456,11 @@ export type AbortedMission = t.TypeOf<typeof AbortedMissionType>;
 
 /**
  * Applies an in-flight abort on every peer at the same tick: the actor
- * from `peerId`, the mission off its list (a no-op when it is not there,
- * see AbortedMissionType), then the OnAbort's own starts and ends and
- * everything {@link applySetStringEffects} applies.
+ * from `peerId`, the mission's surviving special ships released
+ * ({@link releaseAbortedMissionShips}), the mission off its list (a
+ * no-op when it is not there, see AbortedMissionType), then the OnAbort's
+ * own starts and ends and everything {@link applySetStringEffects}
+ * applies.
  *
  * Synchronous and free of randomness and wall-clock reads (the rollback
  * driver replays it).
@@ -467,9 +473,13 @@ export function applyAbortMission(world: World, peerId: string | undefined,
     }
     const player = controlled.entity;
     const missions = player.components.get(MissionsComponent);
-    if (!missions || !missions.has(aborted.missionId)) {
+    const active = missions?.get(aborted.missionId);
+    if (!missions || !active) {
         return;
     }
+    // Before the mission goes: its ShipBehav lives on its objective.
+    releaseAbortedMissionShips(world, controlled.uuid, aborted.missionId,
+        active.shipObjective);
     missions.delete(aborted.missionId);
     applyMissionListDeltas(missions, aborted,
         `the abort of ${aborted.missionId}`);

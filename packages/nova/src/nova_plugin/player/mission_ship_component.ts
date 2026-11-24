@@ -22,11 +22,13 @@ export const MissionShipType = t.intersection([t.type({
     aux: t.boolean,
     /**
      * Spawned by a mission that auto-aborted at accept (the Derelict
-     * Decoy's ambush, mïsn 133): the mission never joins the owner's
-     * MissionsComponent, so the ship is tethered to the OWNER's presence
-     * only — never to the mission being active. Without this the cleanup
-     * in mission_ship_plugin deleted the ambush a few ticks after it
-     * jumped in.
+     * Decoy's ambush, mïsn 133), or released by an in-flight abort of its
+     * mission (ShipBehav 0 and 1; missions/mission_ship_release.ts): the
+     * mission is not (or no longer) in the owner's MissionsComponent, so
+     * the ship is tethered to the OWNER's presence only — never to the
+     * mission being active — and no goal system counts it. Without this
+     * the cleanup in mission_ship_plugin deleted the ambush a few ticks
+     * after it jumped in.
      */
     untethered: t.boolean,
     /**

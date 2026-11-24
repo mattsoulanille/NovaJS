@@ -477,7 +477,11 @@ export function liveMissionShips(entities: Iterable<[string, Entity]>,
     const live: LiveMissionShips = { special: new Map(), aux: new Map() };
     for (const [uuid, entity] of entities) {
         const missionShip = entity.components.get(MissionShipComponent);
-        if (!missionShip || missionShip.owner !== ownerUuid) {
+        // An untethered ship belongs to no live batch: its mission is over
+        // (an auto-abort's ambush, or a ship an in-flight abort released,
+        // mission_ship_release.ts), so it never stands in for one.
+        if (!missionShip || missionShip.owner !== ownerUuid
+            || missionShip.untethered) {
             continue;
         }
         if (missionShip.aux) {
