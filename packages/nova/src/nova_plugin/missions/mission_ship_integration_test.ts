@@ -15,8 +15,10 @@ import {
     GOAL_CHASE_OFF,
     GOAL_DESTROY,
     GOAL_DISABLE,
+    GOAL_ESCORT,
     GOAL_OBSERVE,
     GOAL_RESCUE,
+    objectiveAllowsCompletion,
     ShipObjective,
     shipsToSpawn,
 } from '../player/index.js';
@@ -180,6 +182,24 @@ describe('mission ships in the shared simulation', () => {
         expect(objective.satisfied).toBe(1);
         expect(objective.complete).toBe(true);
     }, 30_000);
+
+    it('fails an escort goal the tick its ship becomes disabled (the '
+        + 'original, reference wave 11)', async () => {
+            const { world, missionShipUuid, activeObjective } =
+                await makeWorldWithMissionShip(GOAL_ESCORT);
+            expect(activeObjective()!.failed).toBe(false);
+            const armor = world.entities.get(missionShipUuid)!.components
+                .get(ArmorComponent)!;
+            armor.current = armor.max * 0.05;
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(world.entities.get(missionShipUuid)!.components
+                .has(DisabledComponent)).toBe(true);
+            const objective = activeObjective()!;
+            expect(objective.failed).toBe(true);
+            expect(objectiveAllowsCompletion(objective)).toBe(false);
+        }, 30_000);
 
     it('fails a disable goal when the ship is destroyed outright',
         async () => {

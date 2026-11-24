@@ -1235,6 +1235,27 @@ describe('boarding in a live world', () => {
             expect(repairs).toEqual([BOARDER]);
         });
 
+        it('replays the repair identically after a rollback', async () => {
+            const { world } = await ownEscortWorld();
+            const beforeBoard = snapshotWorld(world);
+            const run = () => {
+                press(world, BOARDER, 'board');
+                const hashes = [hashWorld(world).hash];
+                for (let i = 0; i < 30; i++) {
+                    world.step();
+                    hashes.push(hashWorld(world).hash);
+                }
+                return hashes;
+            };
+            const first = run();
+            expect(world.entities.get(TARGET)!.components
+                .has(DisabledComponent)).toBeFalse();
+            restoreWorld(world, beforeBoard, deriveEntityComponents);
+            expect(world.entities.get(TARGET)!.components
+                .has(DisabledComponent)).toBeTrue();
+            expect(run()).toEqual(first);
+        });
+
         it('keeps a live escort\'s existing formation slot', async () => {
             const { world, target } = await ownEscortWorld();
             press(world, BOARDER, 'board');
