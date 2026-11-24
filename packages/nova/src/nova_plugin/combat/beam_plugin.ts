@@ -56,14 +56,6 @@ export interface BeamState {
      * Bible exempts. Optional: beams from older snapshots have none.
      */
     aimOffset?: number;
-    /**
-     * Whether the previous tick's collision pass found a body on the ray
-     * (its targetHit, which BeamResetSystem clears before BeamSystem
-     * runs). A beam that ENDS this way ended in a direct hit and fires no
-     * submunitions (BeamSystem, submunition_rule.ts). Optional: absent
-     * means no hit, as on beams from older snapshots.
-     */
-    hitLastTick?: boolean;
 }
 
 export const BeamStateComponent = new Component<BeamState>('BeamState');
@@ -85,7 +77,6 @@ export const BeamStateType: t.Type<BeamState> = t.exact(t.partial({
     hitDist: t.number,
     targetHit: t.string,
     aimOffset: t.number,
-    hitLastTick: t.boolean,
 }));
 
 const BeamSubsQuery = new Query([MovementStateComponent] as const);
@@ -201,19 +192,13 @@ export const BeamSystem = new System({
         const timeSinceFire = time - fireTime;
         if (intervalElapsed(timeSinceFire,
             beamData.onScreenDuration ?? beamData.shotDuration, delta_ms)) {
-            // A beam that ends with its ray on a body (the last tick's
-            // BeamCollisionSystem hit, BeamState.hitLastTick) ended in a
-            // DIRECT HIT, and
-            // a direct hit never subs: measured on the original, a turreted
-            // beam held on its target fired no subs (docs/
-            // reference_experiments.md, "Submunitions wave 10"). A beam that
-            // ends untouched keeps NovaJS's long-standing behaviour, subs
-            // at the end of the ray subject to wëap Flags2 0x0020; the
-            // original's untouched case was NOT measured (an untargeted
-            // player turret beam does not fire), nor whether a beam that
-            // hit earlier in its life but not on its last frame subs.
-            fireSubs(beamData.id, uuid,
-                beamState.hitLastTick ? 'directHit' : 'expired');
+            // Beam submunitions are a NovaJS extension (the original has
+            // none), and their rule is Matthew's: a beam subs at the far
+            // end of its ray when it ends, whether or not the ray lay on
+            // a body, subject only to wëap Flags2 0x0020. So it always
+            // ends as 'expired', never as a direct hit
+            // (submunition_rule.ts).
+            fireSubs(beamData.id, uuid, 'expired');
             entities.delete(uuid);
             return;
         }
@@ -280,10 +265,6 @@ export const BeamResetSystem = new System({
     name: "BeamResetSystem",
     args: [BeamStateComponent] as const,
     step: (state) => {
-        // Kept across the reset for BeamSystem (which runs after this),
-        // whose end-of-life submunitions need to know whether the beam's
-        // last collision pass found a body.
-        state.hitLastTick = state.targetHit !== undefined ? true : undefined;
         state.hitDist = undefined;
         state.targetHit = undefined;
     },

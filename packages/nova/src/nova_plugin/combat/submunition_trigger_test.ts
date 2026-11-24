@@ -35,6 +35,7 @@ import { submunitionFires } from './submunition_rule.js';
  * fuse fires before the body is touched; ProxSafety disarms every
  * collision. The rig mirrors the reference one: an immobile disc of
  * radius 12 (the 24 px disc) and a 16 px shot fired straight at it.
+ * Beams (a NovaJS extension) sub at the end of the ray whatever it hit.
  */
 
 const TARGET_SHIP = 'test:disc-ship';
@@ -341,14 +342,17 @@ describe('when a shot fires its submunitions (reference: Submunitions wave 10)',
         expect(damaged).not.toContain(TARGET);
     });
 
-    describe('beams', () => {
-        function beam(): BeamWeaponData {
+    // Beam submunitions are a NovaJS extension (the original has none);
+    // Matthew's rule: a beam subs at the far end of its ray when it ends,
+    // whatever it hit, unless wëap Flags2 0x0020.
+    describe('beams (a NovaJS extension)', () => {
+        function beam(subIfExpire = true): BeamWeaponData {
             const base = getDefaultBeamWeaponData();
             return {
                 ...base, id: BEAM, guidance: 'beam', reload: 1000,
                 shotDuration: 100, onScreenDuration: 100, exitType: 'center',
                 beamAnimation: { ...base.beamAnimation, length: 300, width: 2 },
-                submunitions: [star()],
+                submunitions: [star(subIfExpire)],
             };
         }
 
@@ -374,20 +378,27 @@ describe('when a shot fires its submunitions (reference: Submunitions wave 10)',
                 e.components.get(ProjectileComponent)?.id === SUB).length;
         }
 
-        it('a beam held on its target to the end fires no subs (measured)',
-            async () => {
-                const { world, damaged } = await makeWorld([beam()]);
-                fireBeam(world, new Angle(0));
-                expect(subsAfterBeam(world)).toBe(0);
-                expect(damaged).toContain(TARGET);
-            });
+        it('a beam held on its target to the end subs at its end', async () => {
+            const { world, damaged } = await makeWorld([beam()]);
+            fireBeam(world, new Angle(0));
+            expect(subsAfterBeam(world)).toBe(4);
+            expect(damaged).toContain(TARGET);
+        });
 
-        it('a beam that ends untouched still subs at its end (unmeasured: '
-            + 'NovaJS\'s long-standing behaviour)', async () => {
+        it('a beam that ends untouched subs at its end', async () => {
             const { world, damaged } = await makeWorld([beam()]);
             fireBeam(world, new Angle(Math.PI / 2));
             expect(subsAfterBeam(world)).toBe(4);
             expect(damaged).not.toContain(TARGET);
         });
+
+        it('a beam with Flags2 0x0020 fires none, on its target or not',
+            async () => {
+                for (const angle of [0, Math.PI / 2]) {
+                    const { world } = await makeWorld([beam(false)]);
+                    fireBeam(world, new Angle(angle));
+                    expect(subsAfterBeam(world)).toBe(0);
+                }
+            });
     });
 });

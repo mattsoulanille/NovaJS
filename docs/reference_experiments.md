@@ -4620,7 +4620,7 @@ starburst, read per frame from the recording.
 | guided, prox 0 | hit the body edge (explosion on the rim) | none |
 | guided, prox 30 | detonated about 30 px off the rim, with its explosion | yes |
 | prox 60 with ProxSafety 30 | flew **through** the target untouched while the fuse was safe, detonated 32 px beyond it the moment the safety ran out | yes |
-| turreted beam (300 px) with subs, on the target | hit | none |
+| turreted beam (300 px, wëap 261) with SubCount 4 written into its record, on the target | hit | none (the original has no beam subs: see 4) |
 | the same beam with no target selected | the player's turreted beam did not fire at all | (untested) |
 | **96 px target:** prox 0 / 8 / 12 / 16 / 20 | hit the body 54-56 px from the centre | none |
 | 96 px target: prox 30 / 60 | detonated 61.7 / 89.5 px from the centre | yes |
@@ -4650,9 +4650,15 @@ starburst, read per frame from the recording.
    shot passes through ships until it expires (NovaJS's
    `projectile_plugin.ts:438` skips every collision while safe:
    matches).
-4. Beams: a turreted beam that hit fired no subs; whether a beam subs
-   when it ends untouched was not measured (an untargeted player turret
-   beam does not fire).
+4. Beams: not a measurement of this rule. The original has no beam
+   submunitions: in a beam's wëap record the bytes a projectile reads as
+   SubCount..SubLimit (62-69) are filler (the keyed-union TMPL,
+   `F00A`), so the kit's "Sub Beam" (wëap 261, SubCount 4 / SubType 251
+   written there) was simply a beam that hit its target for its 8 frames
+   and left nothing behind (`tiles/w9.png`). Its untargeted copy (276)
+   did not fire at all (a player turret beam needs a target). Beams
+   launching subs, and beams as subs, are a NovaJS extension of
+   Matthew's, with their own rule (below).
 
 **NovaJS today (base 69e8a400): mismatch.**
 - `N/nova_plugin/combat/projectile_plugin.ts:511` calls
@@ -4664,13 +4670,15 @@ starburst, read per frame from the recording.
   (`projectile_plugin.ts:164-169`), so there is no "body first" outcome
   to tell apart.
 - `N/nova_plugin/combat/beam_plugin.ts:192-194` subs every beam at its
-  end when it expires (not measured either way).
+  end when it expires. Beam subs are a NovaJS extension, so there is
+  nothing on the original to match.
 
 **Proposed fix.** Keep the sprite hitbox for every shot and
 add the prox circle (ProxRadius plus part of the target's radius, see 2)
 as a separate test; in `ProjectileCollisionSystem`, fire subs only when
 the prox test, not the hitbox overlap, triggered the detonation. A shot
-with ProxRadius 0 never subs on impact. Beams: leave until measured.
+with ProxRadius 0 never subs on impact. Beams: not the original's
+business (no beam subs there); keep NovaJS's own rule.
 
 **Applied in d9e989c2.** The rule lives in one function
 (`N/nova_plugin/combat/submunition_rule.ts` `submunitionFires`: a direct
@@ -4682,9 +4690,13 @@ goes to the body), firing at ProxRadius + 2/3 of the target's hull
 radius (`PROX_FUSE_TARGET_RADIUS_FACTOR_FITTED`: +8 px on the 24 px
 disc, +32 on the 96 px one, at or just outside every measured
 detonation). Body and fuse share one strike predicate, ProxSafety
-included. Beams: one that ends with its ray on a body fires no subs (the
-measured case); one that ends untouched keeps the old subs (still
-unmeasured), as does one that hit earlier but not on its last frame.
+included. d9e989c2 also stopped a beam that ended with its ray on a body
+from subbing, reading the "Sub Beam" row as a measurement; Matthew
+corrected that (2026-11-23: "beam submunitions (beams as subs and beams
+launching subs) are a new feature I added"), and the beam rule is back
+to his: a beam subs at the far end of its ray when it ends, whatever it
+hit, unless Flags2 0x0020 (`beam_plugin.ts` BeamSystem passes
+'expired'; the `BeamState.hitLastTick` field d9e989c2 added is gone).
 
 Confidence: high for "no subs on a direct hit" (18 hits over three runs,
 none subbed; every prox detonation and every expiry did); medium for the
@@ -5369,7 +5381,7 @@ panel and the credit count).
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). |
-| Wave 10 leftovers | Submunitions: does a beam sub when it ends untouched; the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
+| Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 
 ## Catalogue
 
