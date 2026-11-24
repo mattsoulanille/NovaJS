@@ -295,7 +295,7 @@ export default {
 /**
  * Wave-17 experiments (docs/reference_experiments.md, "... wave 17").
  * Nothing retired; ids above wave 16's: sÿst / spöb 1585-1592, shïp
- * 454-456, düde 417-420, mïsn 1111-1123, bits 9193-9208, ränk 200 (the
+ * 454-456, düde 417-420, mïsn 1111-1124, bits 9193-9209, ränk 200 (the
  * first kit ränk; stock ränks are 128-158). Map row y = -1100.
  *
  *  P   Self-defence and the watch range: sÿst 1585 Kit Self Defence (owner
@@ -303,8 +303,10 @@ export default {
  *      (300,0), 1587 (0,150), 1588 (5000,0), 1589 (-9000,0). Offer 1111
  *      (b9193): shïp 454 Kit Shooter Anchored (red, Speed 0, 30000 / 30000,
  *      the 1-damage Kit Tickler turret; düde 417, AI 3, gövt 362 "always
- *      attacks the player") on 1587, so it fires at the player first; BBS
- *      1112 (b9194) the anchored nosy police (düde 408) on 1586. Offer 1113
+ *      attacks the player") on 1587, meant to fire at the player first (it
+ *      never did); offer 1124 (b9209) wave 13's anchored Kit Disabler (düde
+ *      358, one 1200-damage bolt) there instead, which did; BBS 1112
+ *      (b9194) the anchored nosy police (düde 408) on 1586. Offer 1113
  *      (b9195): the anchored AI 1 victim of 343 (düde 405) at the port; BBS
  *      1114 / 1115 (b9196 / 9197) the anchored police on 1588 / 1589.
  *      AI 4 allies: düde 418 (AI 4 of 317, the ally of 343; the blue shïp
@@ -314,7 +316,10 @@ export default {
  *  H   ränk 200 Kit Assist Rank (AffilGovt 363, Flags 0x0400 "can always
  *      request battle assistance"), given by offer 1118 (b9200, OnAccept
  *      K200) at Kit Assist Range (1545: raiders, neutral 363 warships and
- *      traders).
+ *      traders). A disabled ALLY: shïp 456 Kit Fragile Ally (shïp 451 with
+ *      InherentGovt 317, the ally of 343) at Kit Call Range B (1584, Kit
+ *      Shipping traffic of 343), offer 1123 (b9208) the Kit Disabler at the
+ *      port.
  *  C1  sÿst/spöb 1590 Kit Cloak Anchor (363), marker 1591 (200,0): offer
  *      1119 (b9201) shïp 455 Kit Cloak Yellow Anchored (shïp 443, the AI 3
  *      0x4000 cloaker, with Speed / Accel 0; düde 420) on the marker.
@@ -325,7 +330,8 @@ export default {
  *      330 with cargo) and 1121 (b9204) = 1073 (no cargo), both with
  *      ShipStart -3 (Kit Range's marker 2102), OnSuccess b9203 / b9205.
  *      1122 (b9206) = 1070 (stock Raczak, ShipStart 2: appear randomly,
- *      cloaked), OnSuccess b9207.
+ *      cloaked), OnSuccess b9207. (Marker 2102 is about 3,000 px out: the
+ *      board loop never reached it.)
  */
 function wave17Resources() {
     const out = [];
@@ -368,6 +374,11 @@ function wave17Resources() {
     out.push(...ship(456, "Kit Fragile Ally", 135, { accel: 2000, speed: 800, turn: 60, armor: 1500, shield: 0, shieldRecharge: 0, armorRecharge: 0, mass: 50,
         freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, govt: 317 }));
     out.push(...shipMisn(1123, "Kit H disabler at Call B", 9208, 1584, 358, -1, false));
+    // Added during the wave: the Kit Shooter never fired first (not at a Kit
+    // Lancer, not at the Strength-1 Kit Lancer Heavy Weak), so offer 1124
+    // (b9209) puts wave 13's anchored Kit Disabler (düde 358, gövt 362; it
+    // fired at once at wave 16's H1 pilot) on 1587 instead.
+    out.push(...shipMisn(1124, "Kit P disabler as the first shooter", 9209, 1585, 358, -3, false));
 
     // --- C1: the 0x4000 cloaker anchored on screen.
     out.push(...shareRled(455, "Kit Cloak Yellow Anchored", RLED.yellow, 24, { ...anchored, ai: 3, armor: 2000, shield: 2000, flags2: 0x4000,

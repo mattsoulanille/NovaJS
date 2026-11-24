@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w17-selfdef-b",
+  "edits": {
+    "ship": 703,
+    "stellar": 1585,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1585": 2
+    },
+    "missionBits": {
+      "9194": true,
+      "9209": true
+    },
+    "nickname": "Probe",
+    "shipName": "w17-selfdef-b",
+    "weapons": {
+      "128": 0,
+      "246": 1
+    },
+    "outfits": {
+      "128": 0,
+      "450": 1
+    }
+  }
+}

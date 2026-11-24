@@ -1,0 +1,95 @@
+{
+ "name": "w17_rescue_board",
+ "_comment": "Wave 17 rescue: the kit düde 330 (disabled, ShipGoal 5, no mission cargo) on Kit Range marker 2102, away from the port (mïsn 1121, pilot w17_rescue_nocargo2, Kit Lancer). Land, accept the offer, take off recording; hand-driven steps until {done}, then loops/board.mjs (the w13 Raczak arguments, brackets) and hand-driven again (land, leave, pull: is bit 9205, the OnSuccess, set?).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w17.jsonl"
+   }
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "locateBy": "bracket",
+    "bracketColours": [
+     "grey",
+     "yellow",
+     "green",
+     "red"
+    ],
+    "speedPxS": 360,
+    "turnDegS": 174.2,
+    "near": 200,
+    "stepMs": 50,
+    "maxSteps": 40,
+    "maxLegs": 10,
+    "calMs": 300,
+    "fineBelowPx": 60,
+    "fineStepMs": 25,
+    "retarget": 3,
+    "sweep": {
+     "atPx": 25,
+     "startOnSilent": true,
+     "repeat": 2,
+     "turnMs": 40,
+     "presses": 40,
+     "stopAfter": 1,
+     "dialogClicks": [],
+     "clickTimes": 0
+    }
+   }
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w17.jsonl"
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
