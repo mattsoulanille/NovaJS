@@ -1,7 +1,10 @@
 import { Entity } from 'nova_ecs/entity';
 import { FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { OwnerComponent } from '../ship/index.js';
-import { applyAggression, isInFlock, NpcComponent } from '../npc/index.js';
+import {
+    applyAggression, isInFlock, isPlayerSideShip, NpcComponent,
+    playerSideAggressor,
+} from '../npc/index.js';
 
 /**
  * The player's flock — flockParent, isInFlock and MAX_FLOCK_DEPTH — lives in
@@ -61,7 +64,14 @@ export function provokeGuidedLock(target: string, source: string | undefined,
         ?? source ?? ownerRoot;
     const npc = victim.components.get(NpcComponent);
     if (npc) {
-        npc.aggressor = aggressor;
+        // A PLAYER's flock is the exception, as on the damage path
+        // (npc_targeting.ts's responsibleShip): the NPC goes after the
+        // escort that locked on, not the player (reference "A trader shot
+        // by the player's escort, wave 12"). The player-side aggression
+        // record below keeps the root.
+        npc.aggressor = isPlayerSideShip(aggressor, getEntity)
+            ? playerSideAggressor(source, getEntity) ?? aggressor
+            : aggressor;
         npc.nextDecision = 0;
     }
     // A lock draws no blood, but it is hostile on its face, so it flips

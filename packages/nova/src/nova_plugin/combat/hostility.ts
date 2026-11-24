@@ -17,6 +17,7 @@ import { LegalRecordsComponent } from '../reputation/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { ShipComponent } from '../ship/index.js';
+import { TargetComponent } from '../ship/index.js';
 
 /**
  * Tier 3 on its own (isAttackingPlayer) lives in npc/allegiance.ts, beside
@@ -116,6 +117,14 @@ export { isAttackingPlayer } from '../npc/index.js';
  *           brain, and it is also what keeps an attacker red for a
  *           moment after it breaks its lock instead of flickering
  *           neutral between volleys.
+ *       (c) FIGHTING BACK AGAINST THE PLAYER'S FLOCK
+ *           (isFightingPlayerFlock): in mode 'attack' against a ship of
+ *           the player's flock that it recorded as its aggressor — a
+ *           trader the player's escort shot, now shooting the escort.
+ *           An NPC hit by a player's escort goes after the escort, not
+ *           the player (npc_targeting.ts's responsibleShip), and the
+ *           original paints it red all the same (reference "A trader shot
+ *           by the player's escort, wave 12").
  *  4. Political: onSightDisposition below — hostile when the ship would
  *     attack the player ON SIGHT (a warship or interceptor of a govt
  *     hostile to them; NOT a trader of one), friendly when its govt is
@@ -166,9 +175,10 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     const playerGovt = playerGovtId
         ? gameData.data.Govt.getCached(playerGovtId) : undefined;
 
-    // Tier 3, both halves (isAttackingPlayer below).
+    // Tier 3: (a) and (b) are isAttackingPlayer, (c) the flock reading.
     const attackingPlayer = isAttackingPlayer(targetUuid, targetEntity,
-        playerUuid, playerEntity, now);
+        playerUuid, playerEntity, now)
+        || isFightingPlayerFlock(targetEntity, playerUuid, getEntity);
 
     // The player's legal records (delta-synced): a criminal record in
     // THIS system makes the hunters of every govt that enforces its law
@@ -184,6 +194,33 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
                 .get(AggressionSuppressGovtsComponent), targetGovt?.id),
             getEntity),
         attackingPlayer);
+}
+
+/**
+ * TIER 3c OF THE HOSTILITY RULE: whether `targetEntity` is fighting back
+ * against a ship of `playerUuid`'s flock that attacked it — NPC mode
+ * 'attack', its TargetComponent on a flock member (isInFlock), and that
+ * member its recorded aggressor (NpcComponent.aggressor).
+ *
+ * A ship hit by a player's escort records the ESCORT as its aggressor and
+ * goes after it (npc_targeting.ts's responsibleShip; reference "A trader
+ * shot by the player's escort, wave 12": the trader fought the escort and
+ * never fired at the player), yet the original paints its corners red to
+ * the player throughout. The aggressor test keeps it to that case: a ship
+ * merely attacking the player's escort of its own accord is the escort's
+ * business, not the owner's corners' (escort_hostility_agreement_test,
+ * "ATTACKING THE ESCORT ITSELF").
+ *
+ * Pure over synced state. The escort brains' isHostileTo reads it too.
+ */
+export function isFightingPlayerFlock(targetEntity: Entity,
+    playerUuid: string,
+    getEntity: (uuid: string) => Entity | undefined): boolean {
+    const npc = targetEntity.components.get(NpcComponent);
+    const target = targetEntity.components.get(TargetComponent)?.target;
+    return npc?.mode === 'attack' && target !== undefined
+        && npc.aggressor === target
+        && isInFlock(target, playerUuid, getEntity);
 }
 
 /**

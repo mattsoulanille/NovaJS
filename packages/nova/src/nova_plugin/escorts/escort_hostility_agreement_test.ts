@@ -401,6 +401,56 @@ const ROWS: Row[] = [
             root: new Entity(ROOT),
         }),
     },
+    // --- Fighting back against the owner's flock (tier 3c) ---
+    {
+        name: 'a neutral trader FIGHTING BACK against the owner\'s escort '
+            + 'that shot it (reference wave 12)',
+        hostile: true,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent,
+                    { aiType: 2, mode: 'attack', aggressor: 'sibling' })
+                .addComponent(TargetComponent, { target: 'sibling' }),
+            root: new Entity(ROOT),
+            extra: [['sibling', new Entity('sibling')
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(FormationComponent, { leader: ROOT, slot: 1 })]],
+        }),
+    },
+    {
+        name: 'a neutral trader FLEEING the owner\'s escort that shot it',
+        hostile: false,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent,
+                    { aiType: 2, mode: 'flee', aggressor: 'sibling' })
+                .addComponent(TargetComponent, { target: 'sibling' }),
+            root: new Entity(ROOT),
+            extra: [['sibling', new Entity('sibling')
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(FormationComponent, { leader: ROOT, slot: 1 })]],
+        }),
+    },
+    {
+        name: 'a neutral warship attacking a ship that is NOT the owner\'s, '
+            + 'its aggressor',
+        hostile: false,
+        build: () => ({
+            other: new Entity(OTHER)
+                .addComponent(ShipComponent, { id: 'nova:1' })
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'stranger' })
+                .addComponent(TargetComponent, { target: 'stranger' }),
+            root: new Entity(ROOT),
+            extra: [['stranger', new Entity('stranger')
+                .addComponent(ShipComponent, { id: 'nova:1' })]],
+        }),
+    },
     {
         name: 'the legacy dev-enemy ShootAllWeapons marker, aimed at us',
         hostile: true,

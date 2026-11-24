@@ -4,6 +4,7 @@ import { OwnerComponent } from './fire_weapon_plugin.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
 import { flockRoot, FormationComponent, NpcComponent, sameFlock } from '../npc/index.js';
+import { ControlledByComponent } from '../player/index.js';
 
 const PLAYER = 'player';
 
@@ -184,6 +185,22 @@ describe('provokeGuidedLock (guided-missile provocation)', () => {
         expect(wingman.components.get(NpcComponent)!.aggressor)
             .toBeUndefined();
     });
+
+    it("a PLAYER's escort's lock makes the ESCORT the NPC's aggressor "
+        + '(reference "A trader shot by the player\'s escort, wave 12")',
+        () => {
+            const trader = new Entity('trader')
+                .addComponent(NpcComponent, { aiType: 2, mode: 'travel' });
+            const player = new Entity('player')
+                .addComponent(ControlledByComponent, { peerId: 'peer' });
+            const escort = new Entity('escort')
+                .addComponent(FormationComponent, { leader: PLAYER, slot: 0 })
+                .addComponent(FiringGroupComponent, { group: PLAYER });
+            provokeGuidedLock('trader', 'escort', PLAYER,
+                lookup({ trader, player, escort }), 0);
+            expect(trader.components.get(NpcComponent)!.aggressor)
+                .toBe('escort');
+        });
 
     it('a target with neither an NPC brain nor a pilot is a no-op', () => {
         // Nobody to provoke: no NpcComponent to set an aggressor on and

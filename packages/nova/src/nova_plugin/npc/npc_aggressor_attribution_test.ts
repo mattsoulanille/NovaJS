@@ -20,7 +20,9 @@ import {
     OwnerComponent, ShipComponent, SourceComponent, TargetComponent,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
+import { ControlledByComponent } from '../player/index.js';
 import { NpcComponent } from './npc_component.js';
+import { FormationComponent } from './npc_formation.js';
 import { aimedAt, responsibleShip } from './npc_targeting.js';
 
 /**
@@ -86,6 +88,74 @@ describe('responsibleShip', () => {
             expect(responsibleShip(shot, lookup({ carrier, fighter })))
                 .toBe('fighter');
         });
+
+    describe('a PLAYER\'s flock (reference "A trader shot by the player\'s '
+        + 'escort, wave 12")', () => {
+        function player(): Entity {
+            return ship().addComponent(ControlledByComponent,
+                { peerId: 'peer' });
+        }
+
+        it('records the escort that fired, not the player', () => {
+            const escort = ship()
+                .addComponent(FormationComponent, { leader: 'player', slot: 0 })
+                .addComponent(FiringGroupComponent, { group: 'player' });
+            const shot = new Entity()
+                .addComponent(SourceComponent, 'escort')
+                .addComponent(FiringGroupComponent, { group: 'player' });
+            expect(responsibleShip(shot,
+                lookup({ player: player(), escort }))).toBe('escort');
+        });
+
+        it('the player\'s own shot is the player\'s', () => {
+            const shot = new Entity()
+                .addComponent(SourceComponent, 'player')
+                .addComponent(FiringGroupComponent, { group: 'player' });
+            expect(responsibleShip(shot, lookup({ player: player() })))
+                .toBe('player');
+        });
+
+        it('a bay fighter\'s shot is its CARRIER\'s: the player\'s own '
+            + 'fighters\' the player\'s, an escort carrier\'s the escort\'s',
+            () => {
+                const fighter = ship()
+                    .addComponent(SourceComponent, 'player')
+                    .addComponent(OwnerComponent, { owner: 'player' })
+                    .addComponent(FiringGroupComponent, { group: 'player' });
+                const shot = new Entity()
+                    .addComponent(SourceComponent, 'fighter')
+                    .addComponent(FiringGroupComponent, { group: 'player' });
+                expect(responsibleShip(shot,
+                    lookup({ player: player(), fighter }))).toBe('player');
+
+                const carrier = ship()
+                    .addComponent(FormationComponent,
+                        { leader: 'player', slot: 0 })
+                    .addComponent(FiringGroupComponent, { group: 'player' });
+                const escortFighter = ship()
+                    .addComponent(SourceComponent, 'carrier')
+                    .addComponent(FiringGroupComponent, { group: 'player' });
+                const escortShot = new Entity()
+                    .addComponent(SourceComponent, 'escortFighter')
+                    .addComponent(FiringGroupComponent, { group: 'player' });
+                expect(responsibleShip(escortShot, lookup({
+                    player: player(), carrier, escortFighter,
+                }))).toBe('carrier');
+                // A disabled carrier's fighter fights on in its own name.
+                carrier.components.set(DisabledComponent, { repairAt: null });
+                expect(responsibleShip(escortShot, lookup({
+                    player: player(), carrier, escortFighter,
+                }))).toBe('escortFighter');
+            });
+
+        it('the root still answers when the firer has left the world', () => {
+            const shot = new Entity()
+                .addComponent(SourceComponent, 'gone')
+                .addComponent(FiringGroupComponent, { group: 'player' });
+            expect(responsibleShip(shot, lookup({ player: player() })))
+                .toBe('player');
+        });
+    });
 
     it('resolves nothing when the whole chain is gone', () => {
         const sub = new Entity().addComponent(SourceComponent, 'parent');

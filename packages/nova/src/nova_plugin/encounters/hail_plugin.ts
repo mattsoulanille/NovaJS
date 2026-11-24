@@ -17,7 +17,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource, SystemIdResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { AssistingComponent, AssistingType, NpcFireControlSystem } from '../npc/index.js';
+import { AssistingComponent, AssistingType, isInFlock, NpcFireControlSystem } from '../npc/index.js';
 import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import { escortParent } from '../escorts/index.js';
@@ -537,7 +537,12 @@ export function applyHail(world: World, peerId: string | undefined,
         const time = world.resources.get(TimeResource);
         npc.pacifiedFrom = found.uuid;
         npc.pacifiedUntil = (time?.time ?? 0) + BRIBE_PACIFY_MS;
-        if (npc.aggressor === found.uuid) {
+        // The briber's escorts too: a ship one of them provoked records
+        // that escort as its aggressor (npc_targeting.ts's
+        // responsibleShip), and the money buys off the whole flock's fight.
+        if (npc.aggressor === found.uuid || (npc.aggressor !== undefined
+            && isInFlock(npc.aggressor, found.uuid,
+                id => world.entities.get(id)))) {
             npc.aggressor = undefined;
         }
         const tgt = target.components.get(TargetComponent);

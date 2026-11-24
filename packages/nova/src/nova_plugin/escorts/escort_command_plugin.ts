@@ -28,7 +28,7 @@ import { isInFlock } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
-import { onSightDisposition } from '../combat/index.js';
+import { isFightingPlayerFlock, onSightDisposition } from '../combat/index.js';
 import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
 import { NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
@@ -454,6 +454,11 @@ export interface EscortHostilityContext {
  *    test as the rest of the posture tier — an escort defending a leader
  *    somewhere else, with no target or another target, is not attacking
  *    US.
+ *  - FIGHTING BACK (tier 3c): attacking a ship of the owner's flock that
+ *    shot it first (hostility.ts's isFightingPlayerFlock) — a trader one
+ *    of the owner's escorts provoked records that escort, not the owner,
+ *    as its aggressor (reference "A trader shot by the player's escort,
+ *    wave 12").
  *  - RECENT AGGRESSION (tier 3b): it shot the OWNER, or locked a guided
  *    missile on them, inside the aggression window. This is the tier that
  *    reaches another PLAYER's ship, which has neither a government nor an
@@ -504,6 +509,7 @@ export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
             || theirCommand === 'attack' || theirCommand === 'defend'
             || other.components.has(ShootAllWeaponsComponent));
     return attackingUs
+        || isFightingPlayerFlock(other, rootUuid, ctx.getEntity)
         || isRecentAggressor(
             ctx.rootEntity?.components.get(AggressionComponent),
             otherUuid, ctx.now);

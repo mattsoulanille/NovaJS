@@ -56,18 +56,22 @@ const MAX_SOURCE_HOPS = 8;
  *
  *  1. The weapon's FIRING-GROUP ROOT (FiringGroupComponent.group) when that
  *     ship is still in the world: a lone ship's own uuid, a fleet's leader,
- *     the carrier (or the carrier's fleet leader) for a bay fighter's shots,
- *     the player for a hired escort's or player fighter's. The same answer
- *     the player-side hostility (aggression_plugin's damagerRoot), kill
- *     credit (DamageAttributionSystem) and a guided lock's provocation
- *     (flock.ts's provokeGuidedLock, which already wrote the root into
- *     npc.aggressor) give, so "who is attacking me" has one answer for a
- *     whole flock. Recording the concrete firer instead made a ship fighting
- *     a carrier alternate between the carrier (its missile lock, its own
- *     guns) and each bay fighter (their guns) hit by hit, and a fleeing
- *     trader swung its flee heading to each in turn.
+ *     the carrier (or the carrier's fleet leader) for a bay fighter's shots.
+ *     The same answer kill credit (DamageAttributionSystem) gives, so "who
+ *     is attacking me" has one answer for a whole NPC flock. Recording the
+ *     concrete firer instead made a ship fighting a carrier alternate
+ *     between the carrier (its missile lock, its own guns) and each bay
+ *     fighter (their guns) hit by hit, and a fleeing trader swung its flee
+ *     heading to each in turn.
+ *     EXCEPT A PLAYER'S FLOCK (the root is a player's ship or flies in a
+ *     player's flock): there the ship that actually fired is the aggressor
+ *     (playerSideAggressor). Reference "A trader shot by the player's
+ *     escort, wave 12": a trader the player's escort attacked fought (and
+ *     fled) the ESCORT and never fired at the player beside it. Kill
+ *     credit, legal records and the player-side aggression record (the
+ *     IFF) still go to the root.
  *  2. Else its owner-chain root (OwnerComponent.owner) if still in the
- *     world.
+ *     world (the same player's-flock exception applies).
  *  3. Else the firing ship itself, walking SourceComponent through any
  *     parent projectiles: a SUBMUNITION's SourceComponent is the projectile
  *     it split from (fire_weapon_plugin's fireSubs), and recording that
@@ -98,14 +102,62 @@ export function responsibleShip(damager: Entity | undefined,
             && !entity.components.has(DisabledComponent);
     };
     const group = damager.components.get(FiringGroupComponent)?.group;
-    if (active(group)) {
-        return group;
-    }
     const owner = damager.components.get(OwnerComponent)?.owner;
-    if (active(owner)) {
-        return owner;
+    const root = active(group) ? group : active(owner) ? owner : undefined;
+    if (root === undefined) {
+        return firingShip(damager, getEntity);
     }
-    return firingShip(damager, getEntity);
+    if (isPlayerSideShip(root, getEntity)) {
+        return playerSideAggressor(firingShip(damager, getEntity), getEntity)
+            ?? root;
+    }
+    return root;
+}
+
+/**
+ * Whether `uuid` is on a player's side: a player's ship, or a ship in a
+ * player's flock (allegiance.ts's flockPlayer: hired escorts, bay
+ * fighters, a protecting special ship). The same test as
+ * aggression_plugin's isPlayerSide, which lives above npc.
+ */
+export function isPlayerSideShip(uuid: string,
+    getEntity: (uuid: string) => Entity | undefined): boolean {
+    return getEntity(uuid)?.components.has(ControlledByComponent) === true
+        || flockPlayer(uuid, getEntity) !== undefined;
+}
+
+/**
+ * The ship an NPC records as its aggressor when the ship that fired at it
+ * (`firer`, a firingShip answer) flies on a PLAYER's side: that ship
+ * itself — a hired escort, a protecting special ship, the player — so the
+ * victim fights or flees the escort that attacked it, not the player
+ * (reference "A trader shot by the player's escort, wave 12").
+ *
+ * A BAY FIGHTER (a ship whose SourceComponent names the ship that launched
+ * it) answers for its CARRIER while the carrier is in the world and not
+ * disabled: the player's own fighters for the player, an escort carrier's
+ * fighters for that escort. Unmeasured; chosen because a fighter is a
+ * weapon its carrier fires (a wëap, launched and recalled like ammunition,
+ * the same reason a guided missile's lock provokes against its firer), and
+ * because it keeps the NPC-carrier rule's one-aggressor-per-carrier
+ * answer: recording each fighter in turn is what made a trader swing its
+ * flee heading from fighter to fighter (npc_aggressor_attribution_test).
+ *
+ * Undefined when `firer` is undefined (the chain left the world).
+ */
+export function playerSideAggressor(firer: string | undefined,
+    getEntity: (uuid: string) => Entity | undefined): string | undefined {
+    if (firer === undefined) {
+        return undefined;
+    }
+    const carrier = getEntity(firer)?.components.get(SourceComponent);
+    const carrierEntity = carrier !== undefined
+        ? getEntity(carrier) : undefined;
+    if (carrierEntity?.components.has(ShipComponent)
+        && !carrierEntity.components.has(DisabledComponent)) {
+        return carrier;
+    }
+    return firer;
 }
 
 /**
@@ -154,7 +206,8 @@ export function aimedAt(victim: string, damager: Entity,
 /**
  * Records who last damaged an NPC. The damager of a DamagedEvent is
  * the projectile/beam/blast entity; the ship recorded is the one
- * responsibleShip resolves it to (the firing group's root while it lives).
+ * responsibleShip resolves it to (the firing group's root while it lives,
+ * the ship that fired for a player's flock).
  *
  * Only an ATTACK is recorded, not every hit (provokes, below):
  *  - a hit AIMED at this ship (aimedAt: the shot, its firer or the firer's
@@ -227,10 +280,14 @@ export const NpcAggressionSystem = new System({
             // React at the next think, not next frame: reaction time.
             npc.aggressor = source;
             // A bribe (hail beg-for-mercy) only lasts "until the player
-            // provokes them again": if the briber is the one now shooting
-            // us, the reprieve is void — clear it so NpcDecisionSystem stops
-            // skipping them and resumes hostility.
-            if (npc.pacifiedFrom === source) {
+            // provokes them again": if the briber, or a ship of the
+            // briber's flock, is the one now shooting us, the reprieve is
+            // void — clear it so NpcDecisionSystem stops skipping them and
+            // resumes hostility. (The flock half keeps what the reprieve
+            // did when an escort's hit was recorded as the player's.)
+            if (npc.pacifiedFrom !== undefined
+                && (npc.pacifiedFrom === source
+                    || flockPlayer(source, getEntity) === npc.pacifiedFrom)) {
                 npc.pacifiedFrom = undefined;
                 npc.pacifiedUntil = undefined;
             }
