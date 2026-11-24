@@ -7052,6 +7052,22 @@ neighbour 32 -> 16, 65 -> 32: **48**. All match.
   (today's charge to the victim plus the wave-12 reward to the owner, no
   spread), or per-system records.
 
+**Applied in 51d3dd35** (the CompReward part only; crimes still wait on
+ruling #380): `reputation.ts`'s `applyCompletionReward`, called from
+`applyOutcomeReputation` for a completion. +R to the CompGovt,
++trunc(R / 2) to every govt allied to it either way round
+(`govtRelation`, now shared with the chär starting statuses),
+-trunc(R / 2) to every enemy and every non-allied xenophobe; failure and
+the 0x0040 abort stay with the CompGovt. Either-direction is confirmed on
+stock data: mapping every stock system to its owner's new record, Rescue
+Raczak (CompGovt 144, R 10) gives exactly wave 13's 4 systems +10, 173 +5
+and 121 -5 (`missions/comp_reward_integration_test.ts`); Wild Geese's own
+ally / enemy lists alone would give 93 / 113. Still guesses: the
+failure's -R / 2 (CompGovt only), the half's rounding for odd or negative
+R (truncated; seven stock missions have a negative CompReward), and a
+xenophobic CompGovt (the two stock Pirate missions: only enemies and the
+other xenophobes take -R / 2, not every govt).
+
 Confidence: high (four runs read back from the pilot; every changed
 record fits one formula to the unit, plus wave 13's four values).
 
