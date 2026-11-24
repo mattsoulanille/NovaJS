@@ -149,6 +149,13 @@ export class Shipyard extends Menu<Entity> {
     }
     private buttons: { info: Button, buy: Button, done: Button };
     /**
+     * KEEP_HINT, under the description: bottom-anchored on the pane's last
+     * line, so its two lines rise into the pane rather than run into the
+     * button rail (the status caption above sits one line lower).
+     */
+    private keepHint = new PIXI.Text(KEEP_HINT,
+        { ...FONT.normal, wordWrapWidth: 196 });
+    /**
      * The grid's scroll arrows. The original's shipyard has the same
      * pair as the outfitter, 7px left and a pixel higher (sphere centres
      * (731, 678.5) and (761, 678.5) on the R8 wave-5 05-shipyard.png),
@@ -229,6 +236,10 @@ export class Shipyard extends Menu<Entity> {
         this.text.description.position.y = -150;
         this.text.status.position.x = -27;
         this.text.status.position.y = 100;
+        this.keepHint.anchor.y = 1;
+        this.keepHint.position.set(-27, 116);
+        this.keepHint.visible = false;
+        this.container.addChild(this.keepHint);
 
         // The price pane, measured against
         // shipyard/earth_spaceport.png (see shipyard_content.ts for the
@@ -475,6 +486,7 @@ export class Shipyard extends Menu<Entity> {
         // pills are dark on the R8 wave-5 05-shipyard.png, which opens
         // with nothing selected.
         this.buttons.info.state = ship ? 'normal' : 'grey';
+        this.keepHint.visible = false;
         if (!ship || !context) {
             this.buttons.buy.state = 'grey';
             return;
@@ -484,11 +496,14 @@ export class Shipyard extends Menu<Entity> {
         this.buttons.buy.state =
             (stockCheck.allowed && check.allowed) ? 'normal' : 'grey';
         if (stockCheck.allowed) {
-            this.text.status.text = check.allowed
-                ? (enhancementEnabled('enhShipStorage') ? KEEP_HINT : '') : check.message;
+            this.text.status.text = check.allowed ? '' : check.message;
         } else {
             this.text.status.text = stockCheck.message;
         }
+        // Ship storage's buy-and-keep, said where a buyable hull's denial
+        // would otherwise be.
+        this.keepHint.visible = this.buttons.buy.state === 'normal'
+            && enhancementEnabled('enhShipStorage');
     }
 
     /**
