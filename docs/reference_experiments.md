@@ -8408,13 +8408,34 @@ every AI 3 and AI 4 ship departs at its `rollDepartureTime` (120-300 s,
 shuttles are left. **Mismatch:** the original's AI 4 interceptors (and this
 Asteroid Miner) stayed.
 
-**Proposed fix (not applied; one run).** AI 4 ships of ordinary traffic do
+**Proposed fix (applied in 4e5a888e, see below).** AI 4 ships of ordinary traffic do
 not depart (no `departAt` check in the AI 4 branch, `npc_decision.ts:907`),
 like shuttles; keep the AI 3 departure. With that, NovaJS's Sol fills with
 shuttles AND interceptors and freezes, as the original did. Whether the
 Asteroid Miner's stay is the rule for stock miners (the wave-15 kit miners
 left after 3-4 minutes) wants a second look; leave miners as they are.
 Arcturus was not watched (time).
+
+**Applied in 4e5a888e.** The AI 4 branch of `npc_decision.ts` no longer acts on
+the departure roll (still drawn, so no other NPC's draws shift); AI 3 and
+miners keep leaving. Only an AI 4 with no business here leaves on its
+clock: `passingThrough`, set by a released mission ship (as before) and
+now also by a përs sent on its way after its offer (përs Flags 0x0800,
+`mission_accept.ts`). No schema change. Spec: `npc_traffic_stay_test.ts`
+(an AI 4 stays on an expired roll, an AI 3 leaves; a stock-Sol-like mix of
+AI 4 / AI 3 / trader / shuttle düdes freezes with interceptors and
+shuttles only). **NovaJS's stock Sol now** (headless census, no player,
+26 sim minutes, six PRNG seeds after the fixed genesis): it FREEZES too,
+the last arrival or departure at 3.9-15.9 minutes (median about 10), with
+**seven ships: six or seven AI 4 interceptors and none or one shuttle**
+(Fed Viper, Fed Scout Ships, Vipers, a Fed Patrol Boat, a Vell-os Dart;
+the shuttle a Cargo Drone or a Heavy Shuttle). The original froze by
+minute 5 with six: three AI 4, two shuttles and the AI 1 Asteroid Miner.
+The difference is the mix, not the rule: NovaJS's fixed Sol genesis
+already has five AI 4 ships among its ten (the original's had one among
+six), and NovaJS's miners still leave. Before this change (wave 15's
+census above) Sol ended with 5-7 shuttles of about 7 slots by 10-18
+minutes.
 
 Confidence: high that Sol did not fill with shuttles and that the six ships
 did not change for 21 minutes (nine identical Tab cycles); medium for "AI 4
@@ -8498,11 +8519,36 @@ shuttle parks there for good (docs/npc_behavior_gaps.md shuttles guess 3):
 **mismatch** (the original visits once, about 6 s, and leaves); no stop:
 the guess "jumps out like a trader" **matches**.
 
-**Proposed (not applied):** mark the lane rule MEASURED in
+**Proposed (applied in e7377529, see below):** mark the lane rule MEASURED in
 `npc_shuttle.ts` and docs/npc_behavior_gaps.md; a shuttle whose
 `shuttleStops` hold ONE stellar makes one stop of about 6 s
 (SHUTTLE_DWELL_MS-like, measured 5-7 s) and departs like a trader, instead
 of returning to it for good; with none it departs at once (as now).
+
+**Applied in e7377529.**
+- The lane rule is MEASURED in `npc_shuttle.ts` (the tie's draw stays a
+  guess) and docs/npc_behavior_gaps.md.
+- One stop: at the end of its pause a shuttle whose lane is its one stop
+  (`laneEnd` = `destination`) departs, after `SHUTTLE_ONE_STOP_DWELL_MS`
+  (6 s) instead of `SHUTTLE_DWELL_MS`; a held shuttle still goes back to
+  it. No stop: unchanged (it departs on its first think).
+- The short lane: the turn-point clamp (`shuttleTurnPoint`, never past
+  half the lane) puts a 152 px lane's two turn points 12 px apart, within
+  the 30 px arrival radius, but the check found the shuttle did NOT stand
+  still: a pause left up to 10 px/s of drift, so it wandered about 40 px
+  either side of the midpoint (62 px from it at most in 10 minutes). A
+  pausing SHUTTLE now brakes to a standstill (`SHUTTLE_REST_SPEED`
+  0.01 px/s, the last burn a fraction of a tick's thrust; traders keep
+  their 10 px/s park drift), and on the 152 px lane it sits 4 px from the
+  midpoint and moves under 1 px in 9.5 minutes. NovaJS's threshold is
+  about 2 x 70 + 30 = 170 px (the arrival radius on top of the original's
+  about 150 px); between the two a NovaJS shuttle stands still where the
+  original would shuffle a few pixels.
+- Specs (`npc_shuttle_test.ts`): the Lane Range layout (each stellar's
+  lane end, in both list orders, no draw), the turn-point geometry, the
+  152 px lane standing still and the 209 px lane flying, one stop (one
+  6 s visit, then a jump; overturns "with a single stop, goes back to it
+  rather than leave"), no stop. No schema change.
 
 Confidence: high for 1-3 (19.5 minutes, every shuttle colour-tracked); high for one stop (20 tracks), low for no stop (radar only).
 
