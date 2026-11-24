@@ -7449,7 +7449,541 @@ Confidence: high for 1 (one run, panel shots over 22 s); medium for 2
 (abort_rescue `04-t1.png` before, `06-after.png` .. `09-a3.png` after;
 shipstart2 `04-t1.png`, `10-hail.png`, `13-g1.png`, `14-k1.png`; nocargo `05-hail.png`).
 
+### Shuttles and T1 traders, wave 15: no landing, fixed lanes, shuttles fill the system (2026-11-24)
+
+**Questions** (docs/npc_behavior_gaps.md "Shuttles and miners: guesses to
+measure" 1-5 and 10; T1 leftovers). Does a shuttle LAND at a stellar, and
+does a fresh one take off? Which stellars are stops (neutral, enemy,
+uninhabited)? In mixed traffic, do shuttles take every slot? T1: stay and
+park time per trader; the destination rule (the first stellar? an enemy's
+port?).
+
+**Rig** (`kits/testkit.mjs` `wave15Resources`, "T/S"). sÿst 1500 Kit Square
+Range (owner gövt 346): five stellars ALL ON SCREEN from the player's port,
+listed in this order: 1501 Square Hostile (220,220) of the enemy gövt 347,
+1502 Square Market (220,0) of 346, 1500 Square Port (0,0) of 346 (the
+player sits on it), 1503 Square Neutral (0,220) of the neutral 363, 1504
+Square Marker (-220,0), uninhabited. Traffic avgShips 6, half each from two
+AI 1 düdes of gövt 346: traders (no Flags3; red / orange / yellow / green
+discs, shïp 420-423) and shuttles (Flags3 0x0002, no scoop; azure / blue /
+purple / magenta, shïp 424-427): one colour per hull, so single ships can
+be followed. Pilot `w15_square` (Kit Ring Tank, unarmed), 1165 s at 10 fps
+(`scenarios/w15_watch.json`); per-colour disc tracks
+(`evidence/.../tools/_w15_hues.mjs`), radar tracks, a 60 s trail picture.
+
+**Result.**
+
+| | traders (no flag) | shuttles (Flags3 0x0002) |
+|---|---|---|
+| arrival | from off screen (radar tracks from about 45 radar px, about 1400 px: jump-ins) | the same: all five shuttles came in from the screen edge (0 s, 63 s, about 105 s, 144 s) |
+| where they went | the **Port** (2 ships, parked 33 px off its centre) and the **Neutral** port (2 ships, 68 px off); none to the Hostile (listed first) or the Market (listed second) | each one **back and forth between the Port and ONE neighbour**, the whole run: Port - Marker (three purple, as a pack), Port - Market (one), Port - Neutral (one blue); never towards the Hostile |
+| stop | **12.4-18.9 s** parked (four ships), 20-26 s on screen in all | turned round about **70 px short of each stellar's centre** (between the two sprites, never over a planet), pausing **3.7 s** (median of 155 turns; 10-90%: 1.1-6.2 s) |
+| leaving | flew off the screen after the park (jump-outs; none after 114 s) | **never**: no shuttle vanished, landed or jumped in the last 17 minutes; no new ship of any kind arrived after 144 s (radar) |
+| count | 3-4 in the first 2 minutes, **0 from 114 s to the end (1165 s)** | 5 from 144 s to the end |
+
+**Traders only (added during the wave).** Because the shuttles had held
+every slot after 2 minutes, the same layout was rebuilt as sÿst 1550 Kit
+Square Traders Range (spöb 1551 Hostile, 1552 Market, 1550 Port, 1553
+Neutral, 1554 Marker: same list order and positions) with the four-colour
+traders only, avgShips 6; pilot `w15_square_traders`, 780 s at 10 fps.
+**70 trader visits** (a park of 4 s or more):
+
+| stellar (list position, govt) | visits | park median |
+|---|---|---|
+| Square T Hostile (1st, the ENEMY 347) | **0** | - |
+| Square T Market (2nd, own 346) | 21 | 16.6 s |
+| Square T Port (3rd, own 346; the player) | 25 | 14.8 s |
+| Square T Neutral (4th, neutral 363) | 24 | 14.9 s |
+| Square T Marker (5th, uninhabited) | **0** | - |
+
+All parks: median **15.2 s** (10-90%: 12.2-17.9 s), 20-100 px from the
+stellar's centre; each ship came in from the screen edge, parked at ONE
+stellar and left over the edge (20-28 s on screen; no second stop seen).
+
+Shots and the trail picture (`trail_600_660.png`: three straight lanes, one
+from the Port to each of the Marker, the Market and the Neutral; nothing to
+the Hostile) show the same. The shuttle colours were very uneven (four
+purple, one magenta, one blue, no azure; traders: red, three green, yellow,
+no orange), so the düde's equal odds did not come out equal; not pursued.
+
+**Findings.**
+1. **A shuttle does not land, and none takes off.** Five shuttles shuttled
+   for 17 minutes without one disappearing, and every shuttle (like every
+   trader) ARRIVED from outside the screen, by jump-in. The guess "lands at
+   the end of a stop when its stay is up, and a respawn takes off from a
+   stop" is not what the original does.
+2. **Shuttles fill the system.** With avgShips 6 and half the draws
+   shuttles, the traders were gone after 2 minutes and never replaced:
+   the shuttles, which never leave, held every traffic slot. The original
+   has exactly the effect the guess was written to avoid.
+3. **A shuttle keeps one lane:** back and forth between two stellars (here
+   the Port and one neighbour each; all neighbours were 220 px from the
+   Port), turning about 70 px short of each centre after a pause of about
+   4 s; no landing approach.
+4. **Stops:** the NEUTRAL govt's port and the uninhabited marker are stops;
+   the ENEMY's port never was (matches the guess and wave 13).
+5. **Traders park about 15 s** (median 15.2 s, 10-90% 12.2-17.9 s, 70
+   visits), 20-28 s on screen with the approach and the departure; wave
+   13's "about 45 s" was the whole on-screen time from Little's law.
+6. **Trader destinations: one landable stellar per visit, about evenly
+   among the own govt's and the NEUTRAL govt's ports** (21 / 25 / 24),
+   **never the enemy govt's port** (0 of 70, though listed first) and
+   **never the uninhabited marker** (0). Not "the first stellar": wave
+   14's Market result (no visits in 526 s) is unexplained (that Market
+   was 1000 px out).
+
+**NovaJS today (base d0797579).**
+- Landing: `N/nova_plugin/npc/npc_decision.ts:640-648` deletes a shuttle at
+  the end of a stop once its stay (`rollDepartureTime`, 120-300 s,
+  `:92-93`) is up, and `N/nova_plugin/spawn/npc_spawn_plugin.ts:1012-1032`
+  (`takeOffState`, used at `:1092`) puts a respawned shuttle on a stop
+  instead of jumping it in. **Mismatch** (findings 1, 2).
+- Lanes: `pickPlanet` (`npc_decision.ts:186-194`) draws a new random stop
+  among all `shuttleStops` (`N/nova_plugin/npc/npc_shuttle.ts:77-82`) at
+  every stop; the arrival is `PLANET_ARRIVE_RADIUS` 90 px and the stay
+  `TRADER_DWELL_MS` 12 s (`N/nova_plugin/npc/npc_steering.ts:41-46,
+  386-392`) for shuttles as for traders. **Mismatch** (finding 3).
+- Stops (finding 4): matches.
+- Trader park (finding 5): `TRADER_DWELL_MS` 12 s vs the measured 15 s
+  median: a small mismatch.
+- Trader destinations: `landingDestinations` (`npc_decision.ts:176-179`)
+  takes every landable stellar whatever its govt, so an enemy govt's port
+  is a destination (0 of 70 in the original): **mismatch**. The marker
+  (uninhabited, not landable) is already excluded: matches. NovaJS's
+  trader goes on to another stellar after a dwell (`npc_decision.ts`
+  dwell -> `pickPlanet`) until its departure time; the original's traders
+  made one stop per visit: **mismatch** (70 visits, no second stop).
+
+**Proposed fixes (not applied).**
+- Drop the shuttle's landing and take-off: a shuttle never departs (no
+  `entities.delete` at `npc_decision.ts:644-648`; no departure time), and a
+  respawned shuttle jumps in like any traffic (drop the `takeOffState`
+  branch at `npc_spawn_plugin.ts:1092`). This lets shuttles fill a
+  system's traffic as in the original (finding 2); if that is unwanted in
+  NovaJS (stock Sol is 30% shuttles), it is a deliberate departure for a
+  ruling, not a fidelity fix.
+- Lanes: a shuttle's next stop is the one it came from (after its first
+  leg, a random stop), so it keeps a two-stellar lane; turn about 70 px
+  short of the stellar's centre (a shuttle arrive radius of 70) with a
+  4 s pause (a `SHUTTLE_DWELL_MS` of 4000, measured median 3.7 s) instead
+  of the trader's 12 s.
+- Traders: filter `landingDestinations` by govt like `shuttleStops`
+  (`friendlyStellar`): never a stellar of an enemy of the trader's govt;
+  `TRADER_DWELL_MS` 15000; after its one dwell an AI 1 trader departs
+  (jump out) instead of picking another stellar.
+
+Confidence: high for 1-4 (one 19.4-minute run, every ship followed by
+colour, the trail picture unambiguous) and for 5-6 (70 visits in the
+traders-only run).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/square/20261124-051618-w15_watch/`
+(`recording.mp4`, `hue_tracks.jsonl`, `radar_tracks.jsonl`, `trail_600_660.png`,
+`w-NN.png` every 20 s); `.../square_traders/20261124-065557-w15_watch_mid/`
+(`hue_tracks.jsonl`).
+
+### N1 wave 15: one miner's stay, by colour (2026-11-24, third pass)
+
+**Rig.** sÿst/spöb 1505 Kit Mine Colour (16 metal rocks, gövt 363): the
+wave-13 Kit Miner (AI 1, Flags3 0x0003, the stock scoop, four stock
+Mining Blasters wëap 181) as red / yellow / blue / magenta discs (shïp
+428-431, one düde), avgShips 2. Pilot `w15_mine` (Kit Ring Tank) sat at
+the port 780 s at 10 fps (`scenarios/w15_watch_mid.json`); per-colour
+tracks (`_w15_hues.mjs`), radar tracks, green bolt pixels within 40 px of
+each disc (`_w15_boltnear.mjs`).
+
+**Result.** Two miners were in the system from the start (blue, yellow).
+Both looped among the rocks, crossing the screen edge to edge again and
+again (21 tracks of 3-44 s), with hit puffs in the trail pictures and green
+bolts beside each of them (20 frames each). The yellow one was last on
+screen at **170 s**, the blue one at **239 s**; after that no miner of any
+colour came on screen in the remaining 540 s, and the radar was empty but
+for a few short slow tracks (rocks). So a miner that was there at the
+start stayed **at least 3-4 minutes** and then left, and the system then
+stayed EMPTY for 9 minutes (no replacement at avgShips 2). Whose bolt
+broke which rock could not be separated (the rocks' own streaks fill the
+trail pictures; bolts were seen beside both colours).
+
+**Finding.** AI 1 miners stay about 3-4 minutes in a field (two ships; a
+lower bound, both present from the start), then leave; with avgShips 2 no
+new miner arrived for 9 minutes (the same slow refill as wave 14's green
+miners, gone after about 5 minutes). Both miners fired at rocks.
+
+**NovaJS today.** `N/nova_plugin/npc/npc_decision.ts:92-93,114-119`: every
+AI 1 ship's departure is drawn from 120-300 s after it spawns, miners
+included (`npc_mining.ts` header), which brackets the measured 170-240 s.
+**Matches** within the scatter; no change proposed. The refill rate of a
+system's traffic (none in 9 minutes here, none in 17 minutes in the square
+rig once the shuttles held the slots) is not measured; NovaJS respawns
+(`N/nova_plugin/spawn/npc_spawn_plugin.ts`) are not compared here.
+
+Confidence: medium (two ships, the end of the stay seen as the last
+on-screen frame, not a jump).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/mine/*/`
+(`recording.mp4`, `hue_tracks.jsonl`, `radar_tracks.jsonl`, `trail_0_120.png`,
+`trail_120_240.png`).
+
+### A14 / contraband wave 15: an unowned neighbour, a timed-out mission's CompReward, an ally as the scanner, several finds in one scan (2026-11-24)
+
+**Rigs** (`wave15Resources` "A", "S"). (1) sÿst 1510 Kit Spread Unowned (govt
+-1, "Independent"; a port and gövt 350's bare traders) linked to 2095 Kit
+Spread Kill, and 1511 Kit Spread Beyond (owner 338) linked only to 1510.
+Pilot `w15_unowned` killed ONE bare trader (gövt 350) in 2095 with the Kit
+One Shot, landed, left, pulled (`scenarios/w15_space_interactive.json`,
+hand-driven). (2) mïsn 1083 at Kit Port: CompGovt 338, CompReward 1000,
+TimeLimit 1, ReturnStel Kit Market; pilot `w15_comp_fail` accepted it,
+took off, and pulled (`w15_offer_interactive.json`). (3) gövt 321 Kit Smug
+Ally Owner (SmugPenalty 70, no ScanMask) owns sÿst 1515, patrolled by the
+cutters of its ALLY gövt 320 Kit Customs Ally (ScanMask 0x0001, fine 500,
+Smug 50, CrimeTol 30000); pilot `w15_scan_ally` with the pod (oütf 458).
+(4) Several finds: pilot `w15_several` (pod) at 2053 Kit Scan Tolerant
+(gövt 332, CrimeTol 30000) accepted mïsn 1084 there (1 t of food with
+ScanMask 0x0001, mïsn Flags 0x0020) and bought 10 t of jünk 203 Kit
+Contraband (now also sold at 2053), took off, jumped to 2031 and back.
+
+| run | what happened | records / credits |
+|---|---|---|
+| (1) kill in 2095 | as wave 14 in every system (2095 +4001, chain +2600 ... +301, ally +32, enemy +67, victim's home -84) | **1510 (unowned, 1 jump): -20**; 1511 (338, 2 jumps through 1510): +1690 |
+| (2) TimeLimit-1 failure | "You have no active missions." right after the first take-off (accepted June 24th, the date became the 25th on leaving); no status line seen; OnFailure bit 9161 set | **no record change anywhere** (no -500 for 338, nothing for its ally / enemy / the xenophobes) |
+| (3) the owner's ALLY scans | "Kit Customs Cutter: w15-scan-ally, your posession of a kit contraband pod has been detected. You have been fined 500 credits." | -500; **1515: -50** (the SCANNER's SmugPenalty, not the owner's 70) |
+| (4) several finds | at Enter Ship: the pod line (fined 500, 2053 -50, as wave 14). After the landing (mission + 10 t jünk aboard), at take-off: "Kit Customs Cutter: w15-several, prepare to be scanned." (twice), then ONE line **"...your attempt to smuggle kit contraband through this system has been detected. You have been fined 500 credits."**: one fine; **the 0x0020 mission failed SILENTLY** (its 1 t gone from the hold, "You have no active missions.", no "mission failed" line); the pod not named. Back from 2031: no further scan in 33 s | -500 twice; the second scan's record change was not read (the last landing failed, so the pilot was not rewritten after it) |
+
+**Also seen (side finding, my rig's fault):** 1510 sits at the same map
+position as wave 13's 2085 Kit Life Range, and 1511 at 2082 Kit Odd
+Traffic's. The same kill also changed **2085 +48** (its owner 346's
+one-jump share), **2082 +7, 2083 +4, 2084 +19, 2081 +2** (two to four
+jumps through 2082's own links). So the spread treats a system that sits
+at a linked system's map POSITION as linked too: it walks the map by
+coordinates, not by the sÿst ids in the link list. Stock systems never
+share a position, so this only matters for plug-ins (and for kit rigs:
+place systems apart).
+
+**Findings.**
+1. **An unowned (Independent) neighbour gets -20 for the kill of an
+   unrelated govt's ship one jump away**, where an owned neighbour gets
+   its owner's halved reward. -20 does not fit the owner formula (no
+   owner) or the victim's scaled fields (-84); it is one data point
+   (victim gövt 350: 30 / 5 / 100). The unowned system did pass the spread
+   on to its own neighbour (1511 +1690, the normal two-jump value).
+2. **A mission that fails by its time limit costs nothing**: the Bible's
+   "decrease your record by 1/2 the amount specified in CompReward" did
+   not happen for a TimeLimit failure (CompReward 1000). Wave 12's scan
+   failure (S2) also changed no record, so in 1.1.1 the -R/2 may not exist
+   at all for these failure kinds.
+3. **An ally of the owner scanning charges ITS OWN SmugPenalty** (-50, not
+   the owner's 70): the A14 rule with the scanner as the "victim" (own or
+   allied victim: minus the victim's field), as wave 14's finding 7
+   predicted.
+4. **Several finds in one scan: one line, one fine.** The line named the
+   JÜNK ("attempt to smuggle kit contraband"), not the pod, and the 0x0020
+   mission failed with no line of its own. A ship already scanned this
+   visit was scanned AGAIN after a landing when it took off carrying new
+   contraband ("prepare to be scanned" first), unlike wave 14's pod-only
+   pilot, which was not rescanned after a landing.
+
+**NovaJS today (base d0797579).**
+- 1: `N/nova_plugin/reputation/reputation.ts:153-160` (`applyCrime`) has no
+  spread and no per-system records (ruling #380 pending); nothing to
+  compare. Noted for #380: an Independent system's record moves too.
+- 2: `N/nova_plugin/missions/mission_payval.ts:54-67` with
+  `reputation.ts:447-455` (`compRewardDelta`: 'fail' -> -trunc(R / 2))
+  charges -500 to gövt 338 for this failure. **Mismatch.**
+- 3: `N/nova_plugin/npc/contraband.ts:250-254` (`applyContrabandScan`)
+  charges the SCANNER's SmugPenalty to the system's status govt: -50 here,
+  **matches** in amount (it charges the owner's record, which on per-govt
+  records is the closest stand-in).
+- 4: `N/nova_plugin/npc/contraband.ts:145-188` (`findContraband`) stops at
+  the first outfit and names it (`findings.outfit` wins the line in
+  `contrabandScanMessage`, `N/display/status_bar_content.ts:363`), so the
+  pod would be named, not the jünk; the mission failure is silent too
+  (matches); one fine (matches). The rescan after a landing with NEW
+  contraband: `clearContrabandScan` (`N/nova_plugin/npc/contraband_target.ts:43`)
+  clears the marker at every landing anyway (`BoardingLandingResetSystem`) (wave 14's proposal was to keep it):
+  the wave-14 proposal needs the exception "unless the hold gained
+  something illegal".
+
+**Proposed fixes (not applied).**
+- `compRewardDelta`'s 'fail' case returns 0 (no record change on a
+  failure), or keep -R/2 only for failure kinds not yet measured (a
+  special ship's death); the TimeLimit and scan failures measured nothing.
+- `findContraband`: when jünk (or plain mission cargo) and an outfit are
+  both found, the line is the cargo's ("your attempt to smuggle <jünk
+  LCName> ..."), one fine.
+- Rescans: keep the scanned marker across a landing (wave 14) but clear it
+  when the ship takes off with contraband it did not have at the scan.
+
+Confidence: high for 1 and 3 (read back from the pilot), high for 2's "no
+record change" (one run, CompReward 1000), medium for 4 (one scan; its
+record change not read).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{unowned,comp_fail,scan_ally,several}/*/`
+(unowned `pilot-after1/`, `06-map2.png` "Independent, Minor Offender";
+comp_fail `pilot-p1/`, `04-i0.png`; scan_ally `03-s1.png`, `pilot-after/`;
+several `07-trade.png`, `11-gate.png` (Special: Contraband, 998,200),
+`sl/t100.png`, `sl/t113.png` (the status lines), `12-i1.png`).
+
+### P1 wave 15: the player's own victims never call, 0x0020 does not stop an ally, a nosy police's hostility ends with a jump, distress answerers (2026-11-24)
+
+**Rigs.** Pilots on a Kit Lancer with the Kit Long Beam, hand-driven
+(`scenarios/w15_space_interactive.json`).
+- **Own victim** (`w15_own_victim`): wave 12's sÿst 2079 Kit Police Range
+  (non-nosy police 342, Kit Shipping 343). Tab to a Kit Shipping, beam it
+  1.5 s, then (a fresh one after the first jumped out) 4 s more (to 84%
+  shield); shots every 2-4 s; the whole recording (310 s) scanned for
+  status-line text (`region_lit.mjs`).
+- **0x0020 on an ally** (`w15_friend_ign`): sÿst/spöb 1525 Kit Friend Ign
+  Range, owned by gövt 319 (not nosy, AI 4 police), with the blue traders
+  of its ALLY gövt 318, which has **gövt 0x0020**. Tab to a blue, beam it
+  2.5 s (to 90%), Tab through the police.
+- **Nosy police, what ends it** (`w15_nosy_end`): wave 14's sÿst 2001 Kit
+  Nosy Range (owner 326, gövt 0x0002), now linked to sÿst 1520 Kit Nosy
+  Gate. Beam a green Kit Shipping (343) 3 s (to 88%); Tab through the
+  police at once, after 30 s and after 60 s; jump to 1520 and straight
+  back; watch 40 s; hail a police (`y`).
+- **Distress answerers** (`w15_distress`, unattended, 360 s at 10 fps):
+  sÿst/spöb 1530 Kit Distress Range (owner 363): raiders (yellow, gövt 328,
+  enemy of 343), Kit Shipping (green, 343) and four possible answerers:
+  orange AI 3 of 343 itself, blue AI 3 of 343's ally 317, cyan AI 3 of an
+  unrelated 316, red AI 4 of an unrelated, non-nosy 315.
+
+| run | result |
+|---|---|
+| own victim | **no distress line** in 310 s (only "You are cleared to land...", a përs greeting); the beamed Kit Shipping jumped out within about 9 s of the hit, the first one within 4 s |
+| 0x0020 ally | the owner's police turned on the player: **brackets RED** (two police), their bolts in the shots, the player's shield bar 820 -> 817 px |
+| nosy police | brackets RED at once, still RED after 30 s and 60 s, the player's shield bar falling the whole time; after the jump out and back: no police came near in 40 s, and a police's hail showed **Greetings / Request Assistance / Close Channel** (the ordinary, non-hostile layout); legal records unchanged |
+| distress | two lines from the attacked Kit Shipping in the first 25 s ("Kit Shipping: We're under attack! Someone help us!", "... Somebody help us! We're under attack!"); who answered could not be read: the fights were a melee over the port and the 60 s trail pictures do not separate the ships |
+
+**Findings.**
+1. **The player's own victims do not send distress calls**: five runs now
+   (waves 12-13 P1 runs 1, 1b, 1c, 2 and this one), none, against several a
+   minute in wave 14's raider watch. Distress is for ships under NPC
+   attack.
+2. **gövt 0x0020 does not stop an ally**: a non-nosy owner's police
+   defended its ally's 0x0020 ship (the Bible: "nosy ships of other
+   NON-ALLIED governments ignore ..."). With wave 14: 0x0020 only turns
+   away nosy govts that are not allied.
+3. **A nosy police's hostility outlasts a minute but ends with the visit**:
+   still attacking after 60 s; after a jump out and back the police were
+   neutral (hail layout, no approach). With wave 14 (a landing ends it),
+   the hostility is per system visit.
+4. Distress answerers: not measured (first pass; the run needs the fight
+   on screen, e.g. raiders and a trader placed by a mission on the
+   player's marks).
+
+**NovaJS today (base d0797579).** 1: nothing sends distress calls (STR#
+5003 unused; wave 14's proposal already limits it to NPC attackers:
+keep that). 2-3: no piracy police at all
+(`N/nova_plugin/npc/npc_ai_plugin.ts:59-62`); `ignoredByOtherNosyGovts`
+is parsed (`P/parsers/govt_parse.ts:66`) and read nowhere. **Proposed
+(adds to wave 14's `NpcAggressionSystem` proposal,
+`N/nova_plugin/npc/npc_targeting.ts:315`):** the 0x0020 exemption applies
+only to nosy govts NOT allied to the victim's govt (an ally always
+defends); the police's aggressor mark is cleared when the player leaves
+the system (jump or landing), not by a timer (60 s did not end it).
+
+Confidence: high for 1 (five runs) and 2 (red brackets, bolts); medium for
+3 (one run; "neutral" read from the hail layout and no approach, the
+returning system's ships being a new draw).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{own_victim,friend_ign,nosy_end,distress}/*/`
+(own_victim `sl/` status lines, `*-k?.png`; friend_ign `30-g1.png`,
+`32-h2.png`, `33-h3.png`; nosy_end `*-c?.png`, `*-d?.png`, `*-e?.png`,
+`41-hail.png`; distress `recording.mp4`, `sl/t18.png`, `sl/t21.png`).
+
+### Status bar "Special:" with two missions of one cargo type, and #381 commodity rows, wave 15 (2026-11-24)
+
+**Rig.** Pilot `w15_special` (Kit Lancer, cargo Industrial 5 / Luxury 7 /
+Equipment 9: three non-adjacent commodities), Kit Port: the spaceport offer
+mïsn 1085 and the BBS job 1086 each carry 3 t of cargo type 7 "Military
+Stores" (STR# 4002 "Mil Stores").
+
+| moment | cargo readout |
+|---|---|
+| in flight, commodities only | **Ind: 5 / LuxG: 7 / Equ: 9 on the first three rows**, then Free: 179, Credits |
+| after accepting 1085 (docked) | Free: 176, **Special: Mil Stores** |
+| after also accepting 1086 (same cargo type) | Free: 173, **Special: Multiple** |
+| in flight with both | Ind 5 / LuxG 7 / Equ 9, Free 173, **Special: Multiple** |
+
+Also seen in the contraband run: 1 t of mission FOOD reads **Special:
+Food**, and 10 t of jünk 203 with no mission cargo reads **Special:
+Contraband** (its abbreviation) and no commodity row.
+
+**Findings.**
+1. **Two missions carrying the SAME cargo type read "Multiple"**: the
+   count is per mission, not per cargo type.
+2. **#381: no fixed rows.** Industrial, Luxury and Equipment took the first
+   three rows with no gap for Food, Medical or Metal, in commodity order;
+   abbreviations Ind / LuxG / Equ.
+3. A jünk shows on the "Special:" line by its abbreviation, not as a
+   commodity row.
+
+**NovaJS today (base d0797579).** 1: `specialCargoSummary`
+(`N/display/status_bar_content.ts:129-137`) counts per mission:
+**matches** (the comment at `:126-127` calls it a guess; it is now
+measured). 2: `cargoDisplayOf` (`N/display/status_bar_cargo.ts:271-307`)
+packs the lines (`:278-297`) with `abbreviateCargoName`
+(`status_bar_content.ts:105-116`: Ind / LuxG / Equ): **matches** for
+rows and names; the order follows the cargo map's insertion order, not
+the commodity index (not tested with commodities bought out of order).
+3: jünk is pushed as a commodity LINE (`status_bar_cargo.ts:289-294`)
+and never reaches `specialNames`: **mismatch** (one run).
+**Proposed (not applied):** sort the commodity lines by commodity index;
+put each jünk's abbreviation into `specialNames` (so jünk + mission cargo,
+or two jünks, read "Multiple") instead of a commodity line.
+
+Confidence: high for 1 and 2 (explicit readouts), medium for 3 (one
+pilot, jünk alone).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/special/*/`
+(`02-fly0.png`, `04-accepted.png`, `06-acc2.png`, `10-fly2b.png`);
+`.../several/*/11-gate.png` (Special: Contraband).
+
+### Rescue leftovers, wave 15: the kit düde with cargo, not boarded again (2026-11-24)
+
+mïsn 1080 (the Raczak fields with the kit düde 330) was run with
+`board.mjs` in COLOUR mode (`scenarios/w15_offer_board.json`, pilot
+`w15_kitdude`): the hulk "UFS Excelsior" sat Disabled on Kit Port, but
+the loop's 30 sweep presses all answered "You're not close enough to board
+this ship." with the player about 140 px off (the planet under the hulk
+confused the walk); the mission stayed active. The ShipStart-2 reveal and
+the no-cargo goal-5 completion were not run (time). Still open, with
+wave 14's notes.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/kitdude/*/`.
+
+### W1 / C1 / H1 wave 15: first passes (hull AI flags, NPC cloaking, battle assistance) (2026-11-24)
+
+**W1 rig.** sÿst/spöb 1535 Kit Hull Flags Range (owner 363); hostile
+(gövt 362, 0x0004) AI 3 discs, 2000 / 2000, avgShips 8, a fifth each: red
+shïp 435 Flags2 **0x0080** armed ONLY with wëap 289 Kit Ammo Missile (5
+rounds, guided), green 436 the control (Kit Raider Gun), yellow 437 Flags2
+**0x0002** (standoff), blue 438 Flags2 **0x0001** (swarm), magenta 439 shïp
+Flags **0x0040** (AI afterburner, no afterburner outfit). Pilot `w15_hull`
+(Kit Lancer Heavy, 30000 shield, no recharge, passive) at the port, 353 s
+at **30 fps** (`scenarios/w15_watch_short30.json`); per-colour distances
+from the player and speeds (`_w15_ranges.mjs`, every 3rd frame).
+
+| colour (flag) | on screen | distance from the player p10 / p50 / p90 (px) | share under 100 px | speed p50 / p90 (px per frame, the player at rest) |
+|---|---|---|---|---|
+| red (0x0080, 5 missiles only) | **0-21 s only**, never again in 330 s; circled the player once firing missiles (trail picture), then flew straight off screen | 79 / 149 / 282 | 21% | 2.6 / 3.4 |
+| green (control) | the whole run | 42 / 175 / 257 | 27% | 2.8 / 3.3 |
+| blue (0x0001 swarm) | from 37 s | 41 / 147 / 253 | **35%** | 2.8 / 3.4 |
+| magenta (Flags 0x0040) | the whole run | 47 / 208 / 347 | 24% | 2.4 / **5.5** |
+| yellow (0x0002 standoff) | **never on screen** in 353 s | - | - | - |
+
+**W1 findings (first pass).**
+1. **0x0080: the missile-only ship left after its five shots**: it
+   attacked for about 20 s (5 rounds at reload 2 s) and was never seen
+   again, while every gun-armed hull stayed the whole run. Whether it
+   jumped or landed ("dock") was not seen (it flew off screen).
+2. **Flags 0x0040 makes speed bursts**: the magenta hull's 90th-percentile
+   speed was 1.6x the others' (5.5 vs 3.3-3.4 px a frame), with no
+   afterburner outfit aboard; it also ranged wider (median 208 px).
+3. **0x0001 (swarm)** sat a little closer than the control (median 147 vs
+   175 px; 35% vs 27% of the time under 100 px): a weak difference on one
+   run.
+4. **0x0002 (standoff)**: no yellow ship was ever on screen in 6 minutes,
+   either because none was drawn (about 17% at these odds) or because it
+   stayed beyond the screen (300+ px) the whole time. Inconclusive.
+
+**C1 rig.** sÿst/spöb 1540 Kit Cloak Range (owner 363): disc hulls with the
+stock Wraith Cloaking Device (oütf 266), one Flags2 bit each: green AI 1
+0x0800 (cloak when flying around), blue AI 1 0x0400 (when hyperspacing),
+orange AI 1 0x2000 (when docking), yellow AI 3 (363) 0x4000 (when
+preemptively attacked), red AI 3 hostile (362) 0x0800 + 0x1000 (stays
+cloaked until close). Pilot `w15_cloak` (Kit Lancer Heavy) at the port,
+about 4 minutes at 30 fps, hand-driven shots.
+
+**C1 findings (first pass).**
+5. The hostile reds (0x0800 + 0x1000) were **visible the whole time they
+   attacked** the player (four to six at once, the shield bar falling) and
+   Tab cycled only through them.
+6. The green 0x0800 trader was on screen only twice, for 4-5 s each,
+   **appearing in mid-screen beside the port** (no entry from the edge)
+   and then flying off: cloaked while flying, uncloaked at the stellar
+   (consistent with "cloak when just flying around"; two sightings).
+7. The blue 0x0400, orange 0x2000 and yellow 0x4000 ships flew and parked
+   visibly (stays of 13-15 s beside the port); none was seen cloaking. The
+   0x4000 case was not provoked (Tab never offered the yellow ship).
+
+**H1 rig.** sÿst/spöb 1545 Kit Assist Range (owner 363): Kit Raiders (gövt
+362, always hostile) attacking the player, a neutral AI 3 warship (blue,
+gövt 363, Kit Escort Gun) and a neutral AI 1 trader (green). Pilots
+`w15_assist` (record 0, rating 0) and `w15_assist_good` (record +1000 in
+1545, combat rating 6400), Kit Lancer Heavy, under raider fire but far
+from disabled. Tab to the ship, `y`, Request Assistance.
+
+| pilot | hailed | answer |
+|---|---|---|
+| record 0 | the warship | "Yeah, right!" |
+| record 0 | the trader | "No way." |
+| record +1000, rating 6400 | the warship | "No way." |
+
+**H1 finding (first pass).** 8. A neutral warship and trader asked for help
+by a healthy pilot under raider fire **refuse with STR# 3000 95-99** ("In
+your dreams, pal." ... "Not a chance."), whatever the record; neither
+"You're not in any trouble." (70-74) nor "I'd rather not." (85-89). No
+ränk was tested (none in the kit).
+
+**NovaJS today (base d0797579).**
+- W1: the flags are parsed (`P/parsers/ship_parse.ts:502-519`, `aiFlags`)
+  and read nowhere in the sim: no out-of-ammo departure, no afterburner,
+  one attack approach (`ATTACK_STANDOFF` 250 px,
+  `N/nova_plugin/npc/npc_steering.ts:70`). **Missing**, as catalogued.
+- C1: NPCs never cloak (`aiFlags.cloak` read nowhere; cloak control is
+  player input, `N/nova_plugin/ship/cloak_plugin.ts`). **Missing.**
+- H1: `canRequestAssistance` / `assistWillingness`
+  (`N/nova_plugin/reputation/hail.ts:242-305`) make a neutral ship
+  'willing', and a healthy player's request is answered from 70-74
+  (`NO_NEED_RESPONSE_FIRST_INDEX`, `:449-452`); 95-99 is used only for a
+  refused mercy plea (`:505-515`, marked ASSUMPTION). **Mismatch** for this
+  situation (one pilot each, three hails).
+
+**Proposed (not applied).**
+- 0x0080: an AI ship whose every ammo-using weapon is empty and that has no
+  other weapon leaves (the trader departure: jump out), as the red hull
+  did.
+- Flags 0x0040: AI ships of this hull use an afterburner-like boost
+  (about 1.6x speed) when closing or fleeing; needs a finer run for when.
+- 0x0800: cloak while travelling, uncloak on arriving at a stellar.
+- H1: a Request Assistance from a player who is under NPC attack but not
+  disabled or out of fuel is answered from STR# 3000 95-99 and changes
+  nothing (no battle assistance without a ränk 0x0400), instead of 70-74.
+Each wants a second run before code (one run each).
+
+Confidence: medium for 1 and 2 (one run each, clean numbers), low for 3,
+4, 6, 7 and 8.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w15/{hull,cloak,assist,assist_good}/*/`
+(hull `recording.mp4` 30 fps, `hue_tracks.jsonl`, `trail_0_25.png`; cloak
+`hue_tracks.jsonl`, `*-w?.png`, `*-t?.png`; assist `*-asked2.png`,
+`*-asked3.png`; assist_good `*-asked.png`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **Place kit systems apart (wave 15).** The A14 spread treats a system
+  that sits at the same map position as a linked system as linked too:
+  wave 15's 1510 / 1511 shared positions with 2085 / 2082, and one kill
+  changed the records of 2081-2085 as well. Give every rig system its own
+  map position.
+- **New kit id ranges (wave 15):** every spöb id 2000-2175 was taken, so
+  wave 15 opened sÿst / spöb 1500-1599 and shïp 416-699 (README "Id
+  limits"). They load and land normally.
+- **A düde's hull odds come out uneven (wave 15).** Four equal-odds hulls
+  in one düde gave four purple shuttles of six and no azure; three red
+  cloakers of five in another system. Count per colour before reading
+  anything per hull.
+- **A pilot is written only when the player LEAVES a spaceport (again,
+  wave 15):** after a jump the arrival point is far from the port, the
+  `l l l` landing fails ("You're too far away"), and the pulled pilot is
+  the one from the previous take-off. Read records after a landing you
+  have seen succeed.
+- **Hand-driven runs cannot run loop scripts** (`tab_to`, `board`): the
+  interactive step refuses nested scripts. Tab and strip the target
+  panel's name (crop 200x22 at 632,332) instead.
+- **Shuttles hold their traffic slots (wave 15)**: a system whose traffic
+  includes Flags3-0x0002 shuttles fills with them in a few minutes; watch
+  traders in a system without shuttles.
 
 - **Count the kills from the pilot (wave 14).** In the A14 spread run a
   press of Space while the panel read "No Target" (a Tab had cycled past
@@ -7653,7 +8187,8 @@ shipstart2 `04-t1.png`, `10-hail.png`, `13-g1.png`, `14-k1.png`; nocargo `05-hai
 | Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
 | Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, a real mouse's wheel (the BBS in NovaJS: checked, 39f5805d). Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) **Wave 13** answered: the NPC disable of a goal-1 ship (completes it), a disable alone (-Disab), the same-govt missile (moot: no own-govt targeting), P1 run 1 with hits and a kill, P1 run 6, T1 / N2 / N1 first passes. |
 | Wave 13 leftovers | Abort: an aborted ship held in the system by its goal (a rescue hulk). Rescue: what "Waiting" means on the stock special ship (ShipStart 2), mïsn 1070 (stock fields, ShipStart 2) and 1073 (the kit düde with cargo) not run, how a goal-5 mission without cargo can complete, the CompReward spread across allies' / enemies' systems (+5 / -5). A14 spread: how far (2 jumps still +7), the exact factor (about 0.65), penalties (a kill of the owner's own ship) spreading, an ally / enemy owner of a neighbour. P1: runs 3-5 (raiders vs traders, 0x0020, Flags2 0x0008), a victim the police govt cares about; the guards' bracket colours in run 6. T1: landings at the other stellars (park at the Market; the Hostile Port watch was cut at 5.5 min by a network drop), stay times per ship. N1: AI 2 / AI 3 / AI 4 (Zephyr) miners, mining time before leaving. S1-S3, W1, C1, H1 untouched. | **Wave 13** (the "... wave 13" sections above) **Wave 14** answered: the abort of a held hulk (stays, disabled, renamed to its class), "Waiting" (a ShipStart-2 ship not yet revealed, apparently cloaked), the CompReward spread, the A14 spread (all four questions), P1 runs 3-5 and a victim the police care about, T1 at the Market, N1 AI 2 / 3 / 4, and S1-S3's guesses ("... wave 14" sections). |
-| Wave 14 leftovers | A14: the failure's -R/2 of CompReward (govt-wide like the success, or the CompGovt alone like the 0x0040 abort?); a system with no owner in the spread; the per-govt mapping (ruling #380). Contraband: an ALLY of the owner as the scanner (whose SmugPenalty); one scan finding several things; a clean scan's message. P1: who answers a distress call (the raid melee was not attributed); whether the player's own victims ever call; the 0x0020 / ally combination; what ends a nosy police's hostility besides landing. T1: stay times per ship (a single distinguishable trader); the destination rule (first stellar?). N1: one miner's mining time before leaving; whose bolts break the rocks (per-colour bolt attribution). Rescue: the ShipStart-2 ship's reveal condition (fly onto its blip at rest); boarding the kit düde with cargo (1080, the board loop lost the 24 px hulk); whether a goal-5 mission without cargo can complete at all. W1, C1, H1 untouched. | **Wave 14** (the "... wave 14" sections above) |
+| Wave 14 leftovers | A14: the failure's -R/2 of CompReward (govt-wide like the success, or the CompGovt alone like the 0x0040 abort?); a system with no owner in the spread; the per-govt mapping (ruling #380). Contraband: an ALLY of the owner as the scanner (whose SmugPenalty); one scan finding several things; a clean scan's message. P1: who answers a distress call (the raid melee was not attributed); whether the player's own victims ever call; the 0x0020 / ally combination; what ends a nosy police's hostility besides landing. T1: stay times per ship (a single distinguishable trader); the destination rule (first stellar?). N1: one miner's mining time before leaving; whose bolts break the rocks (per-colour bolt attribution). Rescue: the ShipStart-2 ship's reveal condition (fly onto its blip at rest); boarding the kit düde with cargo (1080, the board loop lost the 24 px hulk); whether a goal-5 mission without cargo can complete at all. W1, C1, H1 untouched. | **Wave 14** (the "... wave 14" sections above) **Wave 15** answered: a TimeLimit failure costs NO CompReward (no -R/2); an Independent neighbour gets -20 (one point); an ally scanner charges its own SmugPenalty; several finds = one line naming the jünk, one fine, the 0x0020 mission failing silently; the player's own victims never call; 0x0020 does not stop an ally; a nosy police's hostility lasts the visit (60 s still hostile, gone after a jump); T1 park about 15 s, one stop per visit, evenly among the own and neutral govts' ports, never the enemy's port or the marker; N1 a miner stays 3-4 min ("... wave 15" sections). Not done: distress answerers, the ShipStart-2 reveal, boarding 1080 (the board loop failed again), the no-cargo goal-5 completion, whose bolts break the rocks. |
+| Wave 15 leftovers | Shuttles: why a shuttle keeps one lane (nearest stellar? the first leg's pair?) and what happens with one stop or none; whether a shuttle ever leaves in a longer watch (17.5 min: never); the düde's uneven hull odds (4 of 6 purple). A14: the Independent neighbour's -20 (a second victim govt to fit it); spread through co-located systems (a plug-in quirk). Contraband: the record change of a several-finds scan; a clean scan's message. P1: who answers a distress call (put the fight on screen with mission ships); does a hail of a provoked nosy police offer Beg For Mercy. Rescue: the ShipStart-2 reveal; boarding 1080 beside a planet (the board loop's colour walk failed over the port); a no-cargo goal-5 completion. W1: 0x0002 standoff (no ship seen), where the 0x0080 ship goes, when 0x0040 boosts. C1: provoke the 0x4000 ship; the 0x0400 / 0x2000 cloaks at a jump / landing. H1: a disabled or fuelless pilot's request; a ränk 0x0400. | **Wave 15** (the "... wave 15" sections above) |
 
 ## Catalogue
 
