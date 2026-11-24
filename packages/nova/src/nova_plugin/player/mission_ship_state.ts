@@ -211,10 +211,18 @@ export function shipDied(objective: ShipObjective, uuid: string): void {
             objective.satisfied++;
             break;
         case GOAL_DISABLE:
-            // Destroyed before it was disabled: unachievable.
-            if (!flags.disabled) {
-                objective.failed = true;
+            // "Disable but don't destroy": ANY destruction fails it,
+            // before or after the disable and whoever destroys it. On the
+            // original an NPC's blast after the player's disable, an NPC's
+            // beam on a healthy ship and the player's own burst into a
+            // ship he had disabled 52 s earlier all gave "Mission failed."
+            // (reference "The 'Fight to be Thurokiir' duel, wave 12").
+            // The disable no longer counts; a ShipDone it already earned
+            // stays earned (the original runs OnShipDone at the disable).
+            if (flags.disabled) {
+                objective.satisfied = Math.max(0, objective.satisfied - 1);
             }
+            objective.failed = true;
             break;
         case GOAL_ESCORT:
             objective.failed = true;

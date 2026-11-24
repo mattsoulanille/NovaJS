@@ -53,11 +53,15 @@ import { WeaponEntries } from '../combat/index.js';
  *
  *  1. A duellist the PLAYER disabled is not hit by another duellist's bolt
  *     at the player.
- *  2. TODAY'S BEHAVIOUR, reference pending: a duellist that was NOT yet
- *     disabled and is destroyed by another duellist's splash fails the
- *     mission, though the player killed nobody. The goal bookkeeping
- *     (mission_ship_state.ts's shipDied) does not ask who killed the ship;
- *     whether the original does is what the reference Mac is to measure.
+ *  2. Any destruction of a duellist fails the mission ("disable but don't
+ *     destroy"), whoever destroys it and whether or not it was disabled
+ *     first. Measured on the original (same reference section): another
+ *     duellist's BLAST after the player's disable, a BEAM on a healthy
+ *     duellist, and the player's own gun on a duellist he had disabled
+ *     all gave "Mission failed." The goal bookkeeping
+ *     (mission_ship_state.ts's shipDied) does not ask who killed the ship.
+ *     An NPC's kill credits the player nothing; the player's own kill of
+ *     the hulk still credits his combat rating (0 -> 10 on the original).
  */
 
 const CORSAIR = SYNTHETIC.ships.corsair;
@@ -247,17 +251,99 @@ describe('a disable-goal duel where the duellists hit each other', () => {
             expect(missionObjective().failed).toBeFalse();
         });
 
-    it('TODAY\'S BEHAVIOUR (reference pending): a duellist NOT yet disabled '
-        + 'killed by another duellist\'s splash fails the mission, though '
-        + 'the player killed nobody', async () => {
-            // The victim beside the player (200 px ahead of the shooter),
-            // inside the rocket's 60 px blast when it bursts on the player.
-            const besideThePlayer: Layout = {
-                player: new Position(1000, 800),
-                victim: new Position(1040, 810),
+    /** The victim beside the player (200 px ahead of the shooter),
+     * inside the rocket's 60 px blast when it bursts on the player. */
+    const BESIDE_THE_PLAYER: Layout = {
+        player: new Position(1000, 800),
+        victim: new Position(1040, 810),
+    };
+
+    /** The player disables the victim (as the last to damage it). */
+    function playerDisables(victim: Entity) {
+        const victimStats = stats(victim);
+        victimStats.shield.current = 0;
+        victimStats.armor.current = victimStats.armor.max * 0.05;
+        victim.components.set(DamageAttributionComponent,
+            { root: 'player', disabledAtHit: false });
+        step(5);
+        expect(victim.components.has(DisabledComponent)).toBeTrue();
+        expect(missionObjective().satisfied).toBe(1);
+        return victimStats;
+    }
+
+    /** The shooter fires a scatter rocket at the player; returns once its
+     * splash has reached the victim. */
+    async function splashOnTheVictim(ships: { player: Entity,
+        shooter: Entity, victim: Entity }) {
+        ships.shooter.components.set(TargetComponent, { target: 'player' });
+        pinScene(ships, BESIDE_THE_PLAYER);
+        hits = [];
+        await fire(SCATTER_ROCKET, 'shooter');
+        for (let i = 0; i < 120 && !hits.some(hit => hit.uuid === 'victim');
+            i++) {
+            pinScene(ships, BESIDE_THE_PLAYER);
+            step(1);
+        }
+        expect(hits.some(hit => hit.uuid === 'victim'))
+            .withContext('the splash reaches the duellist beside the player')
+            .toBeTrue();
+    }
+
+    it('a duellist the player disabled, then killed by another duellist\'s '
+        + 'splash, fails the mission; the kill is not the player\'s',
+        async () => {
+            const ships = await scene(BESIDE_THE_PLAYER);
+            const { victim, player } = ships;
+            const victimStats = playerDisables(victim);
+            // Barely holding together: the 15-point splash finishes it.
+            victimStats.armor.current = 0.5;
+
+            await splashOnTheVictim(ships);
+            expect(victim.components.get(DamageAttributionComponent)?.root)
+                .toBe('shooter');
+            expect(stepUntilDead('victim', 600)).toBeTrue();
+
+            const objective = missionObjective();
+            expect(objective.failed).toBeTrue();
+            expect(objective.satisfied).toBe(0);
+            expect(objective.live.has('victim')).toBeFalse();
+            expect(player.components.get(CombatRatingComponent)!.kills)
+                .toBe(0);
+        });
+
+    it('the player finishing off a duellist he disabled fails the mission '
+        + 'too, and the kill is his', async () => {
+            // The victim straight ahead of the player (who faces -y), the
+            // shooter far behind.
+            const aheadOfThePlayer: Layout = {
+                player: new Position(1000, 550),
+                victim: new Position(1000, 400),
             };
-            const ships = await scene(besideThePlayer);
-            const { victim, shooter, player } = ships;
+            const ships = await scene(aheadOfThePlayer);
+            const { victim, player } = ships;
+            const victimStats = playerDisables(victim);
+            victimStats.armor.current = 0.5;
+
+            // The player is governmentless: his bolt connects with the
+            // disabled duellist.
+            player.components.set(TargetComponent, { target: 'victim' });
+            pinScene(ships, aheadOfThePlayer);
+            hits = [];
+            await fire(BLASTER, 'player');
+            expect(stepUntilDead('victim', 120)).toBeTrue();
+            expect(hits.filter(hit => hit.uuid === 'victim').length).toBe(1);
+
+            const objective = missionObjective();
+            expect(objective.failed).toBeTrue();
+            expect(objective.satisfied).toBe(0);
+            expect(player.components.get(CombatRatingComponent)!.kills)
+                .toBeGreaterThan(0);
+        });
+
+    it('a duellist NOT yet disabled killed by another duellist\'s splash '
+        + 'fails the mission, though the player killed nobody', async () => {
+            const ships = await scene(BESIDE_THE_PLAYER);
+            const { victim, player } = ships;
 
             // Not disabled, but one splash from dead: shrink its hull so
             // the 15-point blast takes it straight from above the disable
@@ -273,25 +359,13 @@ describe('a disable-goal duel where the duellists hit each other', () => {
             expect(victimStats.armor.max).toBe(20);
             expect(victim.components.has(DisabledComponent)).toBeFalse();
 
-            shooter.components.set(TargetComponent, { target: 'player' });
-            pinScene(ships, besideThePlayer);
-            hits = [];
-            await fire(SCATTER_ROCKET, 'shooter');
-            for (let i = 0; i < 120 && !hits.some(hit => hit.uuid === 'victim');
-                i++) {
-                pinScene(ships, besideThePlayer);
-                step(1);
-            }
-            expect(hits.some(hit => hit.uuid === 'victim'))
-                .withContext('the splash reaches the duellist beside the player')
-                .toBeTrue();
+            await splashOnTheVictim(ships);
             expect(stepUntilDead('victim', 600)).toBeTrue();
 
             const objective = missionObjective();
             expect(objective.satisfied).toBe(0);
             expect(objective.failed)
-                .withContext('shipDied fails a ship that died undisabled, '
-                    + 'whoever killed it')
+                .withContext('shipDied fails on any death, whoever killed it')
                 .toBeTrue();
             expect(player.components.get(CombatRatingComponent)!.kills)
                 .toBe(0);

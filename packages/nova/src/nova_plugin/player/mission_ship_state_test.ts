@@ -103,13 +103,29 @@ describe('mission ship goal state machine', () => {
             expect(objective.complete).toBe(true);
         });
 
-        it('keeps credit for a disabled ship that is later destroyed', () => {
+        it('fails when a disabled ship is later destroyed (reference "The '
+            + '\'Fight to be Thurokiir\' duel, wave 12")', () => {
+            const objective = makeObjective(GOAL_DISABLE, 2);
+            registerShip(objective, 'a');
+            registerShip(objective, 'b');
+            shipDisabled(objective, 'a');
+            expect(objective.satisfied).toBe(1);
+            shipDied(objective, 'a');
+            expect(objective.failed).toBe(true);
+            // The disable no longer counts.
+            expect(objective.satisfied).toBe(0);
+            expect(objectiveAllowsCompletion(objective)).toBe(false);
+            expect(shipsToSpawn(objective)).toBe(0);
+        });
+
+        it('fails even after the goal was complete', () => {
             const objective = makeObjective(GOAL_DISABLE, 1);
             registerShip(objective, 'a');
             shipDisabled(objective, 'a');
-            shipDied(objective, 'a');
-            expect(objective.failed).toBe(false);
             expect(objective.complete).toBe(true);
+            shipDied(objective, 'a');
+            expect(objective.failed).toBe(true);
+            expect(objectiveAllowsCompletion(objective)).toBe(false);
         });
 
         it('fails when a ship is destroyed before being disabled', () => {
