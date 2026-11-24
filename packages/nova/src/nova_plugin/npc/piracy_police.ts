@@ -14,8 +14,8 @@ import { NpcState } from './npc_component.js';
  *
  * The Bible's AI 4 "will attack any ship that fires on or attempts to board
  * another, non-enemy ship while the interceptor is watching" (B:868-871).
- * Measured on the original (docs/reference_experiments.md, "P1 wave 13" and
- * "P1 wave 14"):
+ * Measured on the original (docs/reference_experiments.md, "P1 wave 13",
+ * "P1 wave 14" and "P1 wave 15"):
  *
  *  1. Police of a NOSY govt (gövt Flags 0x0002) turned on the player the
  *     moment the player shot a ship of an UNRELATED govt in front of them
@@ -27,7 +27,11 @@ import { NpcState } from './npc_component.js';
  *     ignore ships of this govt that are under attack").
  *  3. NON-nosy police defended a ship of their govt's ALLY (a two-way
  *     alliance in the rig): the player shot it and they turned on him.
- *  4. The hostility ended with the visit (yellow again after a landing).
+ *     They did so too when the ally's govt sets 0x0020 (wave 15): 0x0020
+ *     turns away only nosy govts that are NOT allied to the victim.
+ *  4. The hostility ended with the visit (yellow again after a landing),
+ *     and lasted as long as the visit did: still red after 30 s and 60 s,
+ *     gone after a jump out and back (wave 15).
  *
  * So an AI 4 WITNESS takes the attacker as its own aggressor
  * (npc_targeting.ts's NpcAggressionSystem records it as if the witness had
@@ -56,7 +60,8 @@ import { NpcState } from './npc_component.js';
  *    witness reacts to hits on it;
  *  - a ONE-WAY alliance counts for 3 (local_law.ts's alliedEitherWay, the
  *    A14 enforcement rule), and gövt 0x0020 does not shield a victim from
- *    its own or an allied govt's police (the Bible's "non-allied").
+ *    its OWN govt's police (the Bible's "non-allied"; the ally's police
+ *    was measured in wave 15, the own govt's was not).
  */
 
 /**

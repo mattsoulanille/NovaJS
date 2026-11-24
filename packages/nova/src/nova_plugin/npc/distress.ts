@@ -20,7 +20,9 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
  *    unless a newer one replaced it;
  *  - never from the Flags2-0x0008 traders (Kit Shipping Quiet), who were
  *    attacked as well;
- *  - none in four runs where the PLAYER was the attacker (waves 12-13).
+ *  - none in five runs where the PLAYER was the attacker (waves 12-13 and
+ *    "P1 wave 15", which watched 310 s of a player beaming traders): the
+ *    player's own victims never call.
  *
  * So: a trader (AI 1 or 2) whose govt (or hull, ShipData's
  * inheritedNoGreetings: the class's InherentGovt sets 0x0008) does not

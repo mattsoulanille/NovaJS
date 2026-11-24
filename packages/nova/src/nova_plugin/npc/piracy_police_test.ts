@@ -430,6 +430,52 @@ describe('piracy police and distress calls in the sim', () => {
                 hit('victim', 'player', { group: 'player', aimed: true });
                 expect(calls).toEqual([]);
             });
+
+        // Reference "P1 wave 15", finding 1: five runs of the player
+        // shooting traders (waves 12-15), never one call, against several
+        // a minute from traders under NPC attack.
+        it('the player\'s own victims NEVER call, however long he keeps at '
+            + 'it (reference wave 15)', async () => {
+                await scene(PLAIN, SHIPPING);
+                for (let i = 0; i < 4; i++) {
+                    hit('victim', 'player', { group: 'player', aimed: true });
+                    advance(DISTRESS_CALL_INTERVAL_MS);
+                }
+                expect(calls).toEqual([]);
+                expect(npc('victim').distressAt).toBeUndefined();
+            });
+
+        // Reference "P1 wave 15", finding 2: a NON-nosy owner's police
+        // turned on the player for shooting a ship of its ALLY whose govt
+        // sets 0x0020 (brackets red, bolts): 0x0020 turns away only nosy
+        // govts that are not allied (the Bible's "non-allied").
+        it('0x0020 does not stop the police of the victim\'s ALLY (reference '
+            + 'wave 15)', async () => {
+                const ignoredFriend = govt('test:ignored-friend', [12],
+                    { flags: { ignoredByOtherNosyGovts: true } });
+                gameData.data.Govt.map.set(ignoredFriend.id, ignoredFriend);
+                await scene(PLAIN, ignoredFriend.id);
+                hit('victim', 'player', { group: 'player', aimed: true });
+                expect(npc('police').aggressor).toBe('player');
+                wake('police');
+                advance(2000);
+                expect(style('police')).toBe('hostile');
+            });
+
+        // Reference "P1 wave 15", finding 3: a nosy police's hostility was
+        // still on after 30 s and 60 s (brackets red, the shield falling),
+        // and gone after a jump out and back ("gone with the player",
+        // above): it lasts the visit, not a timer.
+        it('the hostility outlasts a minute while the player stays '
+            + '(reference wave 15)', async () => {
+                await scene(NOSY, SHIPPING);
+                hit('victim', 'player', { group: 'player', aimed: true });
+                wake('police');
+                advance(61_000);
+                expect(npc('police').aggressor).toBe('player');
+                expect(npc('police').mode).toBe('attack');
+                expect(style('police')).toBe('hostile');
+            });
     });
 
     describe('distress calls', () => {
