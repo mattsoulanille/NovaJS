@@ -464,8 +464,28 @@ describe('buildShipMissionAccept (the input record)', () => {
             });
         }
         expect(await buildShipMissionAccept(player, offer!, gameData,
-            universe, { offeredBy: 'npc:trader' })).toBeNull();
+            universe, { offeredBy: 'npc:trader', offeredByFate: 'replace' }))
+            .toBeNull();
     });
+
+    it('aborts the same rescue mission at once when the përs is NOT '
+        + 'replaced (no deferral without përs 0x0040)', async () => {
+            // The Bible defers a board/rescue auto-abort only "If the
+            // mission is one in which a special ship replaces a përs
+            // ship"; the original aborted a no-përs one immediately
+            // (reference #320 item 3 wave 11).
+            const { gameData, universe } = await universeFor();
+            const pers = await gameData.data.Pers.get('nova:225');
+            const player = await makePlayer();
+            const offer = await buildShipMissionOffer(player, pers, 'hail',
+                gameData, universe);
+            const accept = await buildShipMissionAccept(player, offer!,
+                gameData, universe, { offeredBy: 'npc:trader' });
+            expect(accept).not.toBeNull();
+            expect(accept!.record.missionId).toEqual('nova:141');
+            expect(accept!.record.autoAborted).toBeTrue();
+            expect(accept!.active).toBeUndefined();
+        });
 });
 
 describe('the Refuel Trader replacement ship (përs Flags 0x0040)', () => {

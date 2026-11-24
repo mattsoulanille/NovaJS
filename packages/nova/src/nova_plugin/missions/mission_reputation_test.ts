@@ -7,6 +7,7 @@ import {
     failMission,
     makeMissionOffer,
     MissionContext,
+    MissionOffer,
     MissionMachineryContext,
     missionMatchesLocation,
     MissionWorkingState,
@@ -375,8 +376,11 @@ describe('PayVal on an immediate auto-abort (mïsn Flags2 0x0002)', () => {
                 });
                 const state = makeState({ credits: { credits: 25000 } });
                 const machinery = makeMachinery(state, [mission]);
-                acceptOffer(machinery,
-                    makeMissionOffer(mission, machinery.offerContext())!);
+                // Deferred only behind a përs replacement (përs 0x0040).
+                acceptOffer(machinery, {
+                    ...makeMissionOffer(mission, machinery.offerContext())!,
+                    replacesPers: true,
+                });
                 return state.missions.get('nova:609')!;
             };
 
@@ -438,6 +442,16 @@ describe('auto-aborts and the CompReward abort reversal (#320)', () => {
         return mission;
     }
 
+    /** Its offer as a përs that the special ship REPLACES makes it (përs
+     * Flags 0x0040): the condition for the deferral. */
+    function deferredOffer(mission: MissionData,
+        machinery: ReturnType<typeof makeMachinery>): MissionOffer {
+        return {
+            ...makeMissionOffer(mission, machinery.offerContext())!,
+            replacesPers: true,
+        };
+    }
+
     it('a DEFERRED auto-abort runs OnAbort and its Pay but no reversal',
         () => {
             const mission = deferredMission();
@@ -445,8 +459,7 @@ describe('auto-aborts and the CompReward abort reversal (#320)', () => {
                 records: new Map([['nova:128', 10], ['nova:129', -40]]),
             });
             const machinery = makeMachinery(state, [mission]);
-            acceptOffer(machinery,
-                makeMissionOffer(mission, machinery.offerContext())!);
+            acceptOffer(machinery, deferredOffer(mission, machinery));
             const active = state.missions.get(mission.id)!;
             expect(active.autoAbortOnBoard).toBeTrue();
             // The tick the owner boards the special ship, the sim marks it.
@@ -465,13 +478,31 @@ describe('auto-aborts and the CompReward abort reversal (#320)', () => {
             expect(state.records!.get('nova:128')).toBe(10);
         });
 
+    it('WITHOUT a përs replacement the same board-goal mission aborts at '
+        + 'once (the original, reference #320 item 3 wave 11)', () => {
+            // mïsn 1040 on the original: Flags 0x0001 + ShipGoal 5, no
+            // përs, aborted when its ship appeared — OnAbort set, no
+            // CompReward and no reversal — never waiting for a boarding.
+            const mission = deferredMission();
+            const state = makeState({
+                records: new Map([['nova:128', 10], ['nova:129', -40]]),
+            });
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            expect(state.missions.has(mission.id)).toBeFalse();
+            expect(state.bits.has(7)).toBeTrue();
+            expect(state.records!.get('nova:129')).toBe(0);
+            expect(state.records!.get('nova:128')).toBe(10);
+            expect(state.events.map(e => e.type)).toContain('autoAborted');
+        });
+
     it('the same mission aborted BY THE PLAYER still costs 5x', () => {
         // The reversal is not gone, only kept to the abort it is for.
         const mission = deferredMission();
         const state = makeState({ records: new Map([['nova:128', 10]]) });
         const machinery = makeMachinery(state, [mission]);
-        acceptOffer(machinery,
-            makeMissionOffer(mission, machinery.offerContext())!);
+        acceptOffer(machinery, deferredOffer(mission, machinery));
         abortMission(machinery, mission.id);
         expect(state.records!.get('nova:128')).toBe(10 - 15);
     });

@@ -17,29 +17,37 @@ export const AUTO_ABORT_FUEL_COST = 100;
 
 /**
  * Whether a mission's auto-abort (mïsn Flags 0x0001) is DEFERRED to the
- * boarding of its special ship rather than firing at accept.
+ * boarding of its special ship rather than firing at once.
  *
  * The Bible, verbatim: "If the mission is one in which a special ship
  * replaces a përs ship at mission start (such as for a 'rescue disabled
  * ship' mission) and the SpecialShipGoal is 2 or 5 (board or rescue) the
  * mission will auto-abort after the special ship is boarded."
  *
- * The checkable half of that sentence is the goal, and it is the half
- * that matters: the same paragraph already requires special ships for an
- * auto-abort to trigger at all ("there must be special ships associated
- * with the mission to trigger the auto-abort"), and a board/rescue goal
- * is only satisfiable by boarding a ship that exists. The përs-
- * replacement half is not re-checked here because acceptOffer does not
- * know which përs offered the mission — and a board/rescue auto-abort
- * mission with no përs behind it would otherwise abort instantly, before
- * its own goal could ever be met.
+ * BOTH halves are checked. `replacesPers` is the first: the mission was
+ * accepted from a përs whose Flags 0x0040 swaps the përs hull for the
+ * mission's special ship (shipOfferConsequence 'replace', passed in
+ * through MissionOffer.replacesPers by the in-flight ship-offer accept).
+ * The original, measured (reference "#320 item 3 wave 11"): mïsn 1040,
+ * Flags 0x0001 + ShipGoal 5 with NO përs behind it, aborted when its
+ * ship was created, exactly like a goal-less auto-abort (OnAbort set, no
+ * CompReward, no reversal), and its ship was then an ordinary hulk of its
+ * govt. So without the përs replacement a board/rescue goal changes
+ * nothing, and the mission takes the immediate path.
  *
- * A deferred mission therefore BECOMES ACTIVE like any other, so its
- * special ship spawns and can be found; MissionShipTrackSystem fires the
- * abort when the owner boards it.
+ * The përs case keeps the deferral the Bible describes; it is UNMEASURED
+ * on the original (the kit had no përs). It is every stock user: the four
+ * Refuel Trader missions (nova:141/650/651/652, ShipGoal 5 + 0x0001) are
+ * offered only by përs that all set 0x0040.
+ *
+ * A deferred mission BECOMES ACTIVE like any other, so its special ship
+ * spawns and can be found; MissionShipTrackSystem fires the abort when
+ * the owner boards it.
  */
-export function deferredAutoAbort(mission: MissionData): boolean {
-    return mission.flags.autoAbort && mission.shipCount > 0
+export function deferredAutoAbort(mission: MissionData,
+    replacesPers: boolean): boolean {
+    return replacesPers
+        && mission.flags.autoAbort && mission.shipCount > 0
         && (mission.shipGoal === GOAL_BOARD
             || mission.shipGoal === GOAL_RESCUE);
 }

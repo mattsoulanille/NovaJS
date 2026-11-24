@@ -331,7 +331,7 @@ describe('the stock ship-offered missions', () => {
             // it aborts the instant it is accepted and never becomes an
             // active mission (mission_logic's deferredAutoAbort).
             expect(mission.shipGoal).toEqual(-1);
-            expect(deferredAutoAbort(mission)).toBeFalse();
+            expect(deferredAutoAbort(mission, true)).toBeFalse();
             // Nothing but the pirates: no pay, no OnAccept set string.
             expect(mission.payVal).toEqual(0);
             expect(mission.onAccept).toEqual('');

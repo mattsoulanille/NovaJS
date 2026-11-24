@@ -107,8 +107,9 @@ export function acceptOffer(machinery: MissionMachineryContext,
     const mission = offer.data;
     const prefix = setStringPrefix(mission);
     const ctx = machinery.offerContext();
+    const deferred = deferredAutoAbort(mission, !!offer.replacesPers);
 
-    if (mission.flags.autoAbort && !deferredAutoAbort(mission)) {
+    if (mission.flags.autoAbort && !deferred) {
         // The special ships wait for the lift-off when there is a lift-off
         // queue to wait in (docked: MissionSession seeds one). An
         // in-flight accept has none (ship_mission_accept.ts spawns the
@@ -263,7 +264,7 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // it. Both are Bible flags: Flags2 0x0002 "Apply mission Pay on
         // auto-abort" and Flags 0x0008 "Mission takes away 100 units of
         // fuel upon auto-abort".
-        ...(deferredAutoAbort(mission) ? {
+        ...(deferred ? {
             autoAbortOnBoard: true,
             ...autoAbortPayEffects(mission),
             autoAbortFuel: mission.flags.remove100FuelOnAutoAbort

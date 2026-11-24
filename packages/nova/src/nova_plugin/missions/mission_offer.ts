@@ -30,6 +30,14 @@ export interface MissionOffer {
     acceptable: boolean;
     /** Why not, when !acceptable. */
     reason?: string;
+    /**
+     * Accepting this offer swaps the offering përs's hull for the
+     * mission's special ship (përs Flags 0x0040, shipOfferConsequence
+     * 'replace'). Set only by the in-flight ship-offer accept; it is what
+     * lets a board/rescue auto-abort mission defer its abort to the
+     * boarding (deferredAutoAbort).
+     */
+    replacesPers?: boolean;
 }
 
 /**

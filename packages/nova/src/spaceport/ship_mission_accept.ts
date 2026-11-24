@@ -441,7 +441,11 @@ export async function buildShipMissionAccept(player: Entity,
     const ships = options.ships ?? [];
     const { session, before, outcome } = await detachedSession(player,
         gameData, universe, options.systemId);
-    const result = acceptOffer(session.machinery, offer, session.outfits);
+    // A përs that is REPLACED by the special ship is the Bible's condition
+    // for deferring a board/rescue auto-abort (deferredAutoAbort).
+    const accepted = offeredByFate === 'replace'
+        ? { ...offer, replacesPers: true } : offer;
+    const result = acceptOffer(session.machinery, accepted, session.outfits);
     if (!result.accepted) {
         return null;
     }
