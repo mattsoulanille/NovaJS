@@ -6418,6 +6418,17 @@ govt, so an escort departs as ordinary traffic and an attacker keeps
 fighting until the player leaves the system. (Not measured: an aborted
 ship of a goal that holds it in the system, e.g. a rescue hulk.)
 
+**Applied in 492345b2.** Abort closes the dialog. `applyAbortMission`
+releases the aborted mission's ShipBehav 0 and 1 special ships before the
+mission leaves the list (`N/nova_plugin/missions/mission_ship_release.ts`):
+they turn `untethered` (deleted only when the owner leaves the system) and
+lose the mission holds, and no goal, failure check or respawn roster counts
+them; a ShipBehav-1 ship also leaves the owner's flock and decides to depart
+11 s later, so a warship is gone about 17 s after the abort (pinned in
+`mission_ship_release_test.ts`; a trader's run out takes longer). ShipBehav
+-1 and 2 and aux ships were not measured and are still deleted. A rescue
+hulk released this way stays a hulk (now an ordinary derelict).
+
 Confidence: high (two runs, unambiguous shots; the escort's jump-out from
 the radar track, frames 1235-1655 of its recording).
 
@@ -6496,6 +6507,15 @@ Wave 11's "not applied" refusal can now be applied in this narrower form
 (mïsn nova:394 itself carries cargo, so it stays completable). The
 CompReward spread (finding 4) is a separate check against
 `N/nova_plugin/missions/` reputation code (not done).
+
+**Applied in 14a3a450** (findings 1 and 2), in
+`N/nova_plugin/encounters/rescue_board.ts`, after the ordinary gate and
+before bay capture / repair / plunder. The retrieval credits the rescue
+goal (the drop-off then completes the mission); its line is STR# 2002
+105-107 with the Bible's '*' rule. Left on the plunder path: the deferred
+auto-abort rescue (përs replacement, the Refuel Traders), still untested.
+Choices not measured: a full hold refuses the board (the cargo stays
+retrievable), and a non-owner is refused.
 
 Confidence: high for 1 and 2 (one run each, explicit messages, the pilot
 read back); the stock run in Heraan Astra did not complete.
