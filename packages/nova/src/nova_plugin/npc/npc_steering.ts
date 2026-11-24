@@ -28,6 +28,7 @@ import {
     RETREAT_STANDOFF_HOLD_SPEED, RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN,
 } from './npc_retreat.js';
 import { TargetComponent, WeaponsStateComponent } from '../ship/index.js';
+import { updateNpcCloak } from './npc_cloak.js';
 
 /**
  * Executes the mode NpcDecisionSystem chose (see the AI overview in
@@ -343,6 +344,9 @@ export const NpcSteeringSystem = new System({
         TimeResource, Entities, GetEntity, UUID] as const,
     step(npc, movement, physics, target, formation, escortCommand, landing,
         disabled, jump, weapons, time, entities, entity, uuid) {
+        // A 0x0800 trader's cloak (npc_cloak.ts), every tick, whatever
+        // the arm below does or skips.
+        updateNpcCloak(entity, npc, time.time);
         if (jump) {
             // Committed to the hyperspace jump: JumpSequenceSystem owns
             // this ship's controls until it leaves (it overrides them

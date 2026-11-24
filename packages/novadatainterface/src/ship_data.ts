@@ -53,9 +53,10 @@ export function getDefaultShipPhysics(): ShipPhysics {
 
 /**
  * shïp Flags2 0x0100-0x4000 (EVN Bible ~:2578): when an AI-flown ship of
- * this class turns its cloak on. Data only: NPC cloaking does not exist
- * yet (docs/npc_behavior_gaps.md, brief C1). 45 of the 288 stock hulls set
- * at least one bit (the Wraiths, the Zephyrs, the "Cloaking" variants).
+ * this class turns its cloak on. 45 of the 288 stock hulls set at least
+ * one bit (the Wraiths, the Zephyrs, the "Cloaking" variants). Only
+ * 0x0800 is read, for AI 1/2 traders (nova npc/npc_cloak.ts, reference C1
+ * wave 15); the rest are data only (docs/npc_behavior_gaps.md C1).
  */
 export interface ShipAICloakFlags {
     /** 0x0100: "cloak when their weapon goes into burst reload". */
@@ -64,7 +65,8 @@ export interface ShipAICloakFlags {
     whenRunningAway: boolean;
     /** 0x0400: "cloak when hyperspacing". */
     whenHyperspacing: boolean;
-    /** 0x0800: "cloak when just flying around". */
+    /** 0x0800: "cloak when just flying around". Stock: the Wraith (Adult)
+     * and (Youth), shïp 168 and 169. */
     whenFlyingAround: boolean;
     /** 0x1000: "will not uncloak until close to their target". */
     untilCloseToTarget: boolean;
@@ -88,9 +90,10 @@ export function getDefaultShipAICloakFlags(): ShipAICloakFlags {
 
 /**
  * The shïp hull flags that tell an AI pilot how to fly the class, decoded
- * to named booleans. DATA ONLY: nothing in the sim reads them yet; they are
- * plumbed ahead of the NPC behaviours in docs/npc_behavior_gaps.md, whose
- * details still wait on reference-Mac measurements (briefs W1, N1, N2, C1).
+ * to named booleans, plumbed for the NPC behaviours in
+ * docs/npc_behavior_gaps.md. Read by the sim: 0x0080, 0x0040, the Flags3
+ * mining / shuttle bits and the 0x0800 cloak (nova npc/); the others are
+ * data only until measured (W1, C1).
  * Stock counts are over the 288 hulls of the base "Nova Files".
  */
 export interface ShipAIFlags {
@@ -101,11 +104,13 @@ export interface ShipAIFlags {
     /**
      * shïp Flags2 0x0080 (~:2576): "AI ships of this type will run
      * away/dock if out of ammo for all ammo-using weapons". 278 stock hulls.
+     * Read by nova npc/npc_out_of_ammo.ts (reference W1 wave 15).
      */
     runsAwayWhenOutOfAmmo: boolean;
     /**
      * shïp Flags 0x0040 (~:2521): "Ship always has afterburner (for AIs
-     * only)". 67 stock hulls.
+     * only)". 67 stock hulls. Read by nova npc/npc_afterburner.ts
+     * (reference W1 wave 15).
      */
     alwaysHasAfterburner: boolean;
     /**

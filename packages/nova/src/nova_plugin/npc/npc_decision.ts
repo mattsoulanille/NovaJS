@@ -58,6 +58,7 @@ import {
     chooseMiningJob, isMinerHull, miningReach, scoopsDebris,
 } from './npc_mining.js';
 import { isShuttle, shuttleStops } from './npc_shuttle.js';
+import { outOfAmmo } from './npc_out_of_ammo.js';
 import { TargetComponent } from '../ship/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
 
@@ -479,6 +480,27 @@ export const NpcDecisionSystem = new System({
                     && govtDisposition(govtData, otherGovtData) !== 'ally')) {
                 hostiles.push([otherUuid, distanceSquared] as const);
             }
+        }
+
+        // OUT OF AMMO (shïp Flags2 0x0080; npc_out_of_ammo.ts, reference
+        // W1 wave 15): a hull with the flag whose every weapon draws from
+        // an empty magazine leaves by the ordinary jump-out, whatever its
+        // AI type. Not while held, not a ship already fleeing (it is
+        // leaving anyway), and not a ship protecting a player (it stays
+        // with them; unmeasured). Synced state and staged caches only; it
+        // returns before any draw below, the same way for every peer.
+        if (shipData.aiFlags.runsAwayWhenOutOfAmmo && !held
+            && npc.mode !== 'flee'
+            && protectee === undefined && weapons !== undefined
+            && outOfAmmo(weapons, entity.components.get(OutfitsStateComponent),
+                id => gameData.data.Weapon.getCached(id),
+                id => gameData.data.Outfit.getCached(id))) {
+            npc.mode = 'depart';
+            target.target = undefined;
+            delete npc.mineTarget;
+            delete npc.scanTarget;
+            npc.boardTarget = undefined;
+            return;
         }
 
         switch (npc.aiType) {

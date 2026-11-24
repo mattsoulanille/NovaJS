@@ -19,7 +19,7 @@ import { deriveRepair, DisabledComponent, DisabledState, DISABLED_DECELERATION, 
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, ShieldComponent } from '../ship/index.js';
-import { FormationSystem, NpcSteeringSystem } from '../npc/index.js';
+import { FormationSystem, NpcAfterburnerSystem, NpcSteeringSystem } from '../npc/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
@@ -272,7 +272,8 @@ export const DisabledMovementSystem = new System({
     },
     after: [TimeSystem, ShipDisableSystem, ControlShipSystem,
         JumpSequenceSystem, EffectiveMovementPhysicsSystem,
-        NpcSteeringSystem, FormationSystem, EscortCommandBehaviorSystem,
+        NpcSteeringSystem, NpcAfterburnerSystem, FormationSystem,
+        EscortCommandBehaviorSystem,
         EscortLandingSystem, ReturnAI, FollowAI],
     before: [MovementSystem],
 });

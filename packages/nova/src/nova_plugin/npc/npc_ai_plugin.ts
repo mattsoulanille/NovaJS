@@ -9,6 +9,7 @@ import {
     NpcPlunderBoardSystem, PlayerPlunderedEvent, PlayerPlunderedEventType,
 } from './npc_plunder_board.js';
 import { NpcSteeringSystem } from './npc_steering.js';
+import { NpcAfterburnerSystem } from './npc_afterburner.js';
 import { NpcAggressionSystem } from './npc_targeting.js';
 import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
 import {
@@ -125,6 +126,12 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *                           policeDefendVictim, piracyWitnesses
  *  distress.ts              traders' distress calls: who calls, how often,
  *                           DistressCallEvent, the line
+ *  npc_out_of_ammo.ts       shïp Flags2 0x0080: out of ammo, leave
+ *  npc_afterburner.ts       shïp Flags 0x0040: NpcAfterburnerSystem, the AI
+ *                           afterburner
+ *  npc_cloak.ts             shïp Flags2 0x0800: traders cloaked while
+ *                           flying around (updateNpcCloak, run by
+ *                           NpcSteeringSystem)
  */
 
 export {
@@ -162,6 +169,14 @@ export {
     steerFormation,
 } from './npc_formation.js';
 export { AllFormationsQuery, FormationSystem } from './npc_formation_system.js';
+export { outOfAmmo } from './npc_out_of_ammo.js';
+export {
+    AI_AFTERBURNER_FACTOR, npcAfterburning, NpcAfterburnerSystem,
+} from './npc_afterburner.js';
+export {
+    NPC_CLOAK_REVEAL_AFTER_STAY_MS, NPC_CLOAK_RESUME_FRACTION,
+    npcCloaksWhileFlying, cloakSustainable, updateNpcCloak,
+} from './npc_cloak.js';
 
 export const NpcAiPlugin: Plugin = {
     name: 'NpcAiPlugin',
@@ -195,5 +210,6 @@ export const NpcAiPlugin: Plugin = {
         world.addSystem(ContrabandScanSystem);
         world.addSystem(NpcFireControlSystem);
         world.addSystem(FormationSystem);
+        world.addSystem(NpcAfterburnerSystem);
     },
 };
