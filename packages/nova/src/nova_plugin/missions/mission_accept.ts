@@ -793,8 +793,13 @@ function applyOfferingShipFate(world: World,
     // 'leave': the person departs under their own power. departAt is the
     // NPC AI's "start heading out" stamp (npc_ai_plugin); 0 is in the
     // past on any clock, so the next AI step begins the departure.
+    // `passingThrough` makes every AI type act on it at once: a trader
+    // would otherwise finish its stop first, and an AI 4 interceptor of
+    // ordinary traffic never leaves on its clock (npc_decision.ts,
+    // reference "Stock Sol, wave 16").
     const npc = offering.components.get(NpcComponent);
     if (npc) {
         npc.departAt = 0;
+        npc.passingThrough = true;
     }
 }

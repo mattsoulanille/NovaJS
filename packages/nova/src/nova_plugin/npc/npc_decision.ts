@@ -96,8 +96,12 @@ export const WARSHIP_ENGAGE_RANGE = 6000;
  * Unmeasured for ordinary sÿst traffic (reference A-series wave 4 left
  * it open), so kept as it was. Rolled for every NPC, but an AI 1/2
  * TRADER leaves after its one stop instead (reference "Shuttles and T1
- * traders, wave 15") and a SHUTTLE never leaves (npc_shuttle.ts); miners
- * (wave 15: 3-4 minutes in the field), warships and the rest go by it. */
+ * traders, wave 15"), a SHUTTLE with a two-stop lane never leaves and one
+ * with a single stop leaves after it (npc_shuttle.ts), and an AI 4
+ * INTERCEPTOR of ordinary traffic never leaves on it (reference "Stock
+ * Sol, wave 16": three stayed 21+ minutes while an AI 3 destroyer left
+ * within 5); miners (wave 15: 3-4 minutes in the field) and AI 3
+ * warships go by it. */
 export const NPC_DEPART_MIN_MS = 120_000;
 export const NPC_DEPART_MAX_MS = 300_000;
 /**
@@ -915,7 +919,18 @@ export const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                 }
                 delete npc.scanTarget;
-                if (!held && time.time >= npc.departAt) {
+                // An interceptor of ordinary traffic NEVER LEAVES on its
+                // departure roll (reference "Stock Sol, wave 16": the
+                // three AI 4 Fed interceptors stayed 21+ minutes, with the
+                // shuttles, until the system froze; an AI 3 destroyer
+                // left within 5 minutes). Only one with no business here
+                // leaves on its clock: a released mission ship
+                // (mission_ship_release.ts) or a përs sent on its way
+                // after its offer (mission_accept.ts), both
+                // `passingThrough`. The roll is still drawn (above), so no
+                // other NPC's draws shift.
+                if (!held && npc.passingThrough
+                    && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
                 }

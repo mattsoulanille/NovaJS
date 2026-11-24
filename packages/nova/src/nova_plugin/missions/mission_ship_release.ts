@@ -111,8 +111,10 @@ export function releaseAbortedMissionShips(world: World, ownerUuid: string,
             npc.waypoint = undefined;
             npc.boardTarget = undefined;
             // `passingThrough` is what makes a trader (AI 1/2) act on
-            // `departAt` without first finishing a trip and a dwell; a
-            // warship or interceptor acts on it anyway.
+            // `departAt` without first finishing a trip and a dwell, and
+            // an interceptor (AI 4) act on it at all (ordinary AI 4
+            // traffic never leaves, npc_decision.ts); a warship acts on
+            // it anyway.
             npc.passingThrough = true;
             npc.departAt = now + ABORTED_ESCORT_DEPART_MS;
         }

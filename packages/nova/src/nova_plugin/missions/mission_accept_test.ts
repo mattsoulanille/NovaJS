@@ -426,6 +426,10 @@ describe('applyAcceptMission', () => {
                 expect(world.entities.has('npc:pers')).toBeTrue();
                 expect(offering.components.get(NpcComponent)!.departAt)
                     .toEqual(0);
+                // So every AI type acts on it at once, an AI 4 too (whose
+                // ordinary traffic never leaves on its clock).
+                expect(offering.components.get(NpcComponent)!.passingThrough)
+                    .toBeTrue();
             });
 
         it('leaves a hull with no fate alone', () => {
