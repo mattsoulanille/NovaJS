@@ -4749,7 +4749,11 @@ projectile collisions only (a `weaponKind` argument, or a separate check
 in `ProjectileCollisionSystem`), keep beams and blasts as they are; in
 `NpcAggressionSystem`, record an aggressor only when the source was
 TARGETING the victim (its TargetComponent names it), so stray fire aimed
-at someone else provokes nothing. Not measured: whether a victim turns
+at someone else provokes nothing. **The `NpcAggressionSystem` half:
+Applied in 39e150d4** (an aimed hit, any hit from a player's side, or a
+hit from a govt the victim's counts as an enemy still records the
+aggressor; strays from its own, allied or neutral govts do not). Not
+measured: whether a victim turns
 when it is the shooter's own target but of the same govt, and longer
 than 45 s.
 
