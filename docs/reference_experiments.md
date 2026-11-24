@@ -5003,6 +5003,12 @@ pulled pilot, and the map read "Legal Status: No Record" before and
 after. (A14 wave 5's positive control: the same kind of kill with
 penalties 50 / 100 moved the record by -150.)
 
+**Wave 11 caveat:** killing a goal-less MISSION trader changed no record
+even with ordinary positive penalties (four runs, "A14 follow-ups wave
+11"), and this run's victim was such a ship, so the result below may
+come from that rule and not from the negative penalties; re-run with
+system traffic as the victim before relying on it.
+
 **Finding.** A negative penalty is not applied in either direction: the
 crime neither lowers nor raises the record (no "reward for the crime",
 no absolute value). **NovaJS matches:** `N/nova_plugin/reputation/reputation.ts:131-140`
@@ -5286,7 +5292,529 @@ panel and the credit count).
 **Evidence:** `~/.local/share/novaref/evidence/20261123-w10/mass/{buy37,buy50,buy100,buy155,buy300}/*/`
 (and `explore100/`, the first look at the shop).
 
+### Reviving a disabled ally, wave 11: mission ally, hired escort, plain NPC (2026-11-23)
+
+**Question (Matthew, wave 10 item 5).** Can the player revive (repair or
+recharge, by boarding or hailing) a disabled ally that a mission assigned,
+and to how much shield / armor / fuel? Compare a hired escort and a plain
+friendly NPC; Matthew suspects NovaJS's revive amount is wrong.
+
+**Rig.** `kits/testkit.mjs` wave 11: shïp 849 Kit Ally Pointer, the 24 px
+pointer hulk sprite on a working AI 3 hull (shield 1000, armor 3000, NO
+shield or armor recharge, one Kit Escort Gun), so what a revive restores
+stays on the target panel. The player (Kit Ring Tank, 30000 / 30000) taps
+wëap 277 Kit Blast 600 (the muzzle blast bomb at 600 damage) one shot at
+a time until the panel says Disabled (`loops/disable.mjs`), hails it
+(`y`), then boards it (`loops/board.mjs`, the wave-8 sweep;
+`stopWhenEnabled` ends the walk at a repair). The ship is: the mïsn 1038
+ShipBehav 1 / ShipGoal 3 escort (pilot `w11_ally`), a hired escort
+(`w11_hired`, targeted by a click since Tab skips escorts), the same hull
+of the neutral gövt 363 with no goal (`w11_neutral`), and mïsn 1040 /
+1041 / 1046 rescue ships (ShipGoal 5, which start disabled; below and in
+"#320 item 3 wave 11"). `scenarios/revive_ally.json`, `revive_hired.json`,
+`revive_hired2.json`, `rescue.json`.
+
+| ally | disabled by the player? | hail when disabled | board when disabled | after |
+|---|---|---|---|---|
+| mission escort (ShipBehav 1, ShipGoal 3) | yes, 5 taps; **"Mission failed."** at the moment it went Disabled (`i`: "You have no active missions.") | **"No response."** on the status line, no channel | **the plunder dialog** (Energy 270, Capture Odds 13%, Cargo / Credits / Ammo grey), as any hulk | stays Disabled |
+| hired escort | yes, 5 taps (panel "Disabled ... Escort") | **"No response."** | **"Escort repaired."**, no dialog, at 12 px | flies formation again; panel **"Shields Down"** (shield stays 0); ONE more 600 tap disables it again |
+| mission ship with ShipBehav 1 that starts disabled (rescue, mission running) | (spawned disabled) | not tried | **"You can't board this ship."** at every press (40 presses, 220° of sweep) | stays Disabled; the mission stays active |
+| plain neutral NPC (AI 1) | not reached: it flew out of the blast's reach and jumped out after 5 taps | | (wave 8: a neutral hulk the player disabled opens the plunder dialog with capture odds) | |
+
+Before it was disabled, the mission escort answered a hail with a
+channel ("What do you need?", Status: Escort, Greetings / Request
+Assistance / Close Channel).
+
+**Finding.**
+1. **Only the player's own escort can be revived, and only by boarding:**
+   "Escort repaired." Hailing a disabled ship (escort or not) gets "No
+   response.".
+2. **The repair is minimal: armor just above the disable threshold,
+   shields NOT recharged.** The hull's shield stayed at 0 ("Shields Down")
+   and one 600-damage blast disabled it again, so the repair left its
+   armor between the 33% threshold (1000) and about 1600 (53%) of 3000.
+   Fuel was not observable.
+3. **A mission ally is not the player's escort.** Disabling a ShipBehav-1
+   / ShipGoal-3 ship fails the mission at once, and the hulk is then an
+   ordinary ship: no revive, the plunder dialog with capture. While a
+   ShipBehav-1 mission ship's mission runs it cannot be boarded at all
+   ("You can't board this ship.").
+
+**NovaJS today (base 7c184cdf): four mismatches.**
+- `N/nova_plugin/encounters/boarding_plugin.ts:560-590`: boarding a
+  disabled ship in the player's flock (`isInFlock`) or marked
+  `PlayerEscortComponent` repairs it (`repairHulk`, `:240-251`): armor to
+  threshold + 10% (`N/nova_plugin/ship/disabled_component.ts:77,110`,
+  1300 of 3000 here, inside the measured bound) but **shields to full**
+  (`:248-250`); the original leaves the shield where it was.
+- A mission ShipBehav-1 / escort-goal ship gets `FormationComponent`
+  leader = the player (`N/nova_plugin/missions/mission_ship_spawn.ts:438-446`),
+  so it is in the flock and NovaJS **repairs** it on boarding; the
+  original fails the mission when it is disabled and then plunders it.
+- `N/nova_plugin/player/mission_ship_state.ts:218-220`: the escort goal
+  fails only when the ship DIES; the original fails it at the disable.
+- `N/display/hail_dialog_plugin.ts:672-680`: a disabled target still
+  opens a channel; the original answers "No response.".
+- (Not checked in NovaJS: the "You can't board this ship." refusal for a
+  live mission's ShipBehav-1 ship.)
+
+**Proposed fix (not applied).** In `repairHulk`, leave the shield alone
+(armor to just above the threshold only); restrict the own-escort repair
+to hired / captured escorts and bay fighters (not mission ships); fail an
+escort goal when its ship is disabled; refuse a hail to a disabled ship
+with the no-response line; refuse boarding a live mission's ShipBehav-1
+ship with "You can't board this ship.".
+
+Confidence: high for 1 and 3 (one run each, unambiguous messages and
+dialogs); medium for the armor bound in 2 (blast damage at that distance
+assumed full; one re-disable).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/revive/{ally,hired,hired2,neutral}/*/`
+(ally `20261123-212724-*`: `10-dis-tap-06.png` "Mission failed.",
+`12-hail.png`, `68-sw-54.png` the dialog; hired `42-b-31.png`; hired2
+`84-repaired.png`, `87-dis-tap-01.png`), `rescue/plain/*/`.
+
+### #320 item 3 wave 11: the board / rescue auto-abort, and rescue ships (2026-11-23)
+
+**Question.** Wave 10 settled the immediate auto-abort (OnAbort when the
+special ships appear, no CompReward and no -5x reversal). The Bible's
+DEFERRED case: "If the mission is one in which a special ship replaces a
+përs ship at mission start ... and the SpecialShipGoal is 2 or 5 (board
+or rescue) the mission will auto-abort after the special ship is
+boarded."
+
+**Setup.** mïsn 1040: Flags 0x0001, ShipGoal 5 (rescue: the ship starts
+disabled), ShipBehav 1, one Kit Ally Pointer (gövt 360) at Kit Port,
+CompGovt 360 / CompReward 20, OnAccept b9084 (and clears its own
+availability bit), OnAbort b9085, OnSuccess b9086; mïsn 1041 the same
+without 0x0001 (ReturnStel Kit Port); mïsn 1046 = 1041 with ShipBehav -1.
+No përs is involved (the kit has none). `scenarios/rescue.json`: accept,
+leave (pilot `leave1`), Tab, the mission list, board the hulk
+(`loops/board.mjs`), the list again, land, leave (`leave2`). Pilots
+`w11_rescue_aa`, `w11_rescue`, `w11_rescue_free`.
+
+| mission | in flight | boarding the disabled special ship | pilot after the next Leave |
+|---|---|---|---|
+| 1040 (0x0001, goal 5) | `i` 3 s after takeoff: "You have no active missions." | the **plunder dialog** (Energy 140, Capture Odds 9%; left with Abort) | b9084 + **b9085** (OnAbort), no b9086; **record 2100 = -50** (gövt 360's BoardPenalty) |
+| 1041 (goal 5, ShipBehav 1) | active ("Kit R rescue") | **"You can't board this ship."** at every press (40 presses over 220° of heading) | still active; b9084 only; record 0 |
+| 1046 (goal 5, ShipBehav -1) | active | **"You can't board this ship."** the same | still active; record 0 |
+
+**Finding.**
+1. **Without a përs replacement, a board / rescue goal does not defer
+   the auto-abort**: mïsn 1040 aborted when its ship was created, exactly
+   like wave 10's goal-less case (OnAbort set, no CompReward, no
+   reversal). Its ship is then an ordinary hulk of its govt, and boarding
+   it is a crime (BoardPenalty, -50 in the current system's record).
+2. **A ShipGoal-5 special ship that is not a përs replacement could not
+   be boarded at all** while its mission ran ("You can't board this
+   ship.", ShipBehav 1 or -1), so these kit rescue missions could never
+   complete. The deferred abort the Bible describes needs a përs with a
+   LinkMission whose ship the special ship replaces; the kit has no përs,
+   so that case is **still open** (a përs kit is the next step).
+
+**NovaJS (base 7c184cdf).** `N/nova_plugin/missions/mission_auto_abort.ts:41-45`
+`deferredAutoAbort` defers EVERY goal-2/5 auto-abort mission to the
+board, përs or not; the original deferred none of the kit's. **Proposed
+fix (not applied):** defer only when a special ship replaced a përs
+(`ReplacementPlacement` present), else abort at once as for other goals.
+Boarding: NovaJS lets the player board a live mission's rescue hulk
+(`N/display/boarding_plugin.ts` presents board / rescue goals through the
+boarding dialog); whether the original's refusal also holds for përs
+rescue ships is untested, so leave that until the përs run.
+
+Confidence: high for 1 (one run, bits and record read back); medium for
+2 (two runs, every press refused; the cause is inferred).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/rescue/{aa,plain,free}/*/`
+(`pilot-leave1/`, `pilot-leave2/`, `26-b-20.png` the aa dialog).
+
+### Mass-scaled outfits wave 11: across a trade-in, and base vs loaded mass (2026-11-23)
+
+**Setup.** oütf 457 Kit Mass Keep (Flags 0x0404: mass-scaled AND
+persistent, Mass 10, Cost 1000) and wave 10's 453 Kit Mass Mass (0x0400);
+hulls shïp 850 / 851 Kit Mass Roomy 100 / 300 (Mass 100 / 300, 200 t
+free, cost 100,000). Pilot `w11_mass`: Roomy 100 LOADED with 5 Kit Plain
+Mass (50 t), 1 Kit Mass Keep and 50 t of food. `scenarios/mass_trade.json`
+(take 2: Buy Ship is at 452,442; 371,443 is Info): the outfitter (Item
+Mass of 453; buy a second Keep), the shipyard (buy Roomy 300, which asks
+for the new ship's name), the outfitter on the new hull.
+
+| reading | value |
+|---|---|
+| Kit Mass Mass (0x0400) Item Mass on the loaded Mass-100 hull (100 + 50 t outfits + 50 t cargo) | **10 tons** (hull class Mass 100; a loaded 200 would give 20) |
+| Available before / after buying a second Keep | 140 / 130 tons |
+| Roomy 300: Ship Price / Trade-In / Final | 100,000 / **27,500** / 72,500 (credits 999,000 -> 926,500) |
+| after the trade-in, on Roomy 300 | the 2 Keeps came along (persistent); the 5 Plain Mass did not; Keep's **Item Mass 30 tons**, Available **140** = 200 - 2 x 30 |
+
+**Finding.**
+1. **"Mass" is the hull CLASS Mass**, not the loaded mass: outfits and
+   cargo aboard do not change a 0x0400 item's mass.
+2. **An installed 0x0400 item's mass follows the CURRENT hull**, not the
+   hull it was bought on ("at purchase" in the Bible notwithstanding): a
+   persistent Keep bought at 10 t on Mass 100 weighs 30 t on Mass 300.
+   (The pilot file stores only counts, so the original has nothing else
+   to go on.)
+3. The trade-in was 27,500 = 25% of 110,000 with a 100,000 hull, 5,000
+   of Plain Mass and 2,000 of Keeps aboard (107,000): 3,000 of value not
+   accounted for (the 50 t of food? the Keeps at a mass-scaled price?);
+   one data point, not pinned down.
+
+**NovaJS (base 7c184cdf).** 1 and 2 match in shape:
+`N/nova_plugin/ship/outfit_plugin.ts:77-84` `installedOutfitMass(outfit,
+shipMass)` uses the current hull's class mass (the rounding is wave 10's
+mismatch). 3: `N/spaceport/shipyard_rules.ts:216` `tradeInValue` =
+25% x (hull + non-persistent outfits) = 26,250 here vs 27,500 measured:
+**unexplained 1,250**; worth one more run (empty hold, no persistent
+outfits) before changing anything.
+
+Confidence: high for 1 and 2 (read off the shop's own panel); low for 3.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/mass/{trade,trade2}/*/`
+(trade2: `03-mass-loaded.png`, `08-roomy300.png`, `15-keep2.png`).
+
+### Submunitions wave 11: a beam that ends untouched, and a third target size (2026-11-23)
+
+**Setup.** As "Submunitions wave 10" (Kit Sub Range, the player at rest
+on Kit Sub Port, the target 150 px north), with shïp 852 Kit Sub Target
+48 (a 48 px magenta disc, rlëD 1963, mïsn 1042). Pilot `w11_sub48`
+fires, one at a time, the slow parents 269-273 (Speed 200 = 2 px a
+frame, prox 8 / 12 / 16 / 20 / 30) at it, then wëap 278 Sub Beam Short (a
+turreted beam 100 px long: it ends 26 px short of the target's rim) and
+279 Sub Beam Fixed (guidance 0, 300 px, fired along the nose into empty
+space). `scenarios/sub_fire3.json`; read from the recording, every 4th
+frame after each trigger (`ffmpeg ... tile`), positions relative to the
+target's centre.
+
+| parent | 48 px target | where it ended |
+|---|---|---|
+| prox 8 | hit the body, **no subs** | about 33 px from the centre |
+| prox 12 | hit the body, **no subs** | about 33 px |
+| prox 16 | **subs** | starburst about 31-33 px out (just ahead of the body contact) |
+| prox 20 | **subs** | about 35 px |
+| prox 30 | **subs** | about 43 px |
+| Sub Beam Short (turreted, ends short) | no subs | the beam drew for about 6 frames and vanished; nothing at its tip |
+| Sub Beam Fixed (into empty space) | no subs | the same |
+
+**Finding.**
+1. **The fuse's target-size term, third point:** on the 48 px disc the
+   fuse fires at about ProxRadius + 13-15 px from the centre, between the
+   24 px disc's +7 and the 96 px disc's +30 (wave 10). The three sizes
+   fit fuse distance ≈ ProxRadius + 0.6 x (target radius) (radius 12 / 24
+   / 48 -> +7 / +14 / +29), so the race against the body (contact at
+   about radius + 8-9 px for the 16 px shot) is won by the fuse when
+   ProxRadius > about 0.4 x radius + 8 px: 16 px here, between wave 10's
+   12-16 (24 px) and 20-30 (96 px). Resolution ±4 px (4-frame sampling,
+   2 px a frame).
+2. **Beams never fire subs**: neither on a hit (wave 10) nor when the
+   beam ends untouched, turreted or fixed.
+3. Side finding: the neutral AI 1 target's brackets turned from yellow to
+   red after the first 1-damage hit (it became hostile; it cannot fire).
+
+**NovaJS (base 7c184cdf).** 1: the prox fuse is a circle of ProxRadius
+alone (`N/nova_plugin/combat/projectile_plugin.ts:164-169`); the wave-10
+proposed fix (a separate prox test of ProxRadius plus part of the target's
+radius) should use about 0.6 x the target's radius (half its sprite
+width). 2: **mismatch**, `N/nova_plugin/combat/beam_plugin.ts:192-194`
+subs every beam when it expires. **Proposed fix (not applied):** never
+fire a beam's subs (drop the expiry `fireSubs` for beams).
+
+Confidence: medium-high for 1 (one shot per parent; the yes/no is clear,
+the distances ±4 px); high for 2 (two beams, every frame after the
+trigger shows nothing).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/sub/48/*/recording.mp4`
+(triggers at frames 173 / 490 / 802 / 1117 / 1435 / 1766 / 2089, the
+`sel-NN` shots name each parent).
+
+### Multi-jump routes and the `j` key, wave 11 (2026-11-23)
+
+**Question (wave-11 seed; a NovaJS bug report says releasing `j` before
+the arrival still jumps again).** With a 3-hop route, does one tap of `j`
+jump once or follow the whole route; does holding `j` chain; does a
+release mid-transit stop further jumps?
+
+**Setup.** Pilot `w11_route` (Kit Lancer, every system of the kit map
+region explored) at Map Hub. The big map; ONE shift-click on Map Far (two
+hops beyond East and Void, all explored); Clear Route; shift-click pins
+East, Void, Far (a 3-hop route, "Selected System: Map Far"); close the
+map, fly out 2 s, then `scenarios/jroute_{tap,hold,release}.json`:
+tap `j` once / hold `j` about 25 s / hold it 2.5 s (the jump takes about 5.7 s
+from the press to the arrival, "#344 wave 10"); a window shot every ~2 s
+(status line and the nav panel), the map at the end.
+
+| `j` | what happened |
+|---|---|
+| one tap | **one jump**: "Arriving in the Map East system on June 24th"; the nav panel then shows Hyperspace / Map Void (the rest of the route kept, drawn dim for the first seconds after the arrival), and **no further jump** in 20 s; the map at the end: current East, destination Void |
+| held about 25 s | **the whole route**: Map East (June 24th), Map Void (June 25th, "No stellar objects present"), Map Far (June 26th), each jump starting as soon as the previous one arrived (about 6-7 s apart); then "Nav System Off" (route used up) |
+| held 2.5 s, released mid-transit | **one jump** (Map East), none after, as for the tap |
+| one shift-click on Map Far (explored path through East and Void) | **ignored**: no route, no selection |
+
+**Finding.** A jump needs the key: each hop of a route starts only while
+`j` is down at the moment the ship can jump. A tap or a release during
+the transit completes that hop and stops with the rest of the route
+kept; a held key chains hop after hop at once. Side finding (route
+planning, wave 10's open question): a single shift-click on a system two
+hops away is ignored even when every system on the way is explored, so
+a shift-click only ever pins a neighbour of the route's end (wave 10
+found the same with unexplored systems on the way). A plain click was
+not tried.
+
+**NovaJS (base 7c184cdf): matches as written.** `PlayerJumpControl`
+(`N/nova_plugin/travel/jump_plugin.ts:518-570`) polls the held
+`hyperjump` control every tick: a held key starts the next hop as soon
+as the ship arrives (outside the no-jump zone), a tap starts one hop,
+and the remaining route is kept (`:115-165`). The ModType 32 multi-jump
+continuation (`MultiJumpContinueSystem`) is separate and outfit-only. So
+the reported "released before the arrival but jumped again" is not in
+this system; if it reproduces, look at the input layer (a `hyperjump`
+control left true across the arrival / world swap) rather than here.
+
+Confidence: high (three runs, the status lines and dates are
+unambiguous).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/jroute/{tap,hold,release}/*/`
+(`02-one-shift-far.png`, `03-route3.png`, the `w-NN` shots, `map-end`).
+
+### AppearOn on mission ships whose düde has no admissible class, wave 11 (2026-11-23)
+
+**Setup.** düde 335 lists only shïp 853 Kit Appear A and 854 Kit Appear B
+(50 / 50); their AppearOn test the unset bits b9095 / b9096. mïsn 1045
+puts one ship of düde 335 at Kit Port (ShipStart -1). Pilot `w11_appear`,
+`scenarios/appear_excluded.json`: accept, take off, Tab, the mission
+list.
+
+**Result.** A ship spawned: Tab named **Kit Appear B** (an excluded
+class), and the mission was active.
+
+**Finding.** When the player's bits rule out every class of a mission
+düde, the original still spawns one of them. That is exactly NovaJS's
+fallback (`N/nova_plugin/missions/mission_ship_spawn.ts:263-275`
+`appearingDudeShips` returns the whole list when nothing passes):
+**matches; the comment's "unconfirmed" can be dropped.** Not settled by
+this one run: whether the original applies AppearOn to mission draws at
+all (a mixed düde, one admissible class and one not, would show it).
+
+Confidence: high for "it spawns" (one run); the class choice is one draw.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/appear/*/04-tab1.png`.
+
+### A14 follow-ups wave 11: whose record a kill changes (2026-11-23, inconclusive)
+
+**Questions (wave-11 seed).** (a) A crime against govt V's ship in a
+system owned by a different govt O: whose record changes? (b) Killing an
+ENEMY of the system's owner: does the record go up? (c) Does a kill
+through "disabled" charge DisabPenalty + KillPenalty or KillPenalty only?
+
+**Setup.** gövt 350 Kit Victim Govt (Disab 30, Board 5, Kill 100), 351
+Kit Owner Govt (Disab 7, Board 3, Kill 13), 352 Kit Law Govt and 353 Kit
+Pirate Govt (each lists the other's class as an enemy; class ids 352 /
+353). The victim is a mission ship beside the player's port (AI 1 Kit
+Trader, ShipStart -1, no goal), killed in one burst of the Kit Beam
+Turret (5000); land, leave, pull the pilot (`pilot_summary.mjs`, which
+now also lists the set mission bits). `scenarios/a14_owner.json`,
+`a14_enemy.json`, `a14_home3.json`, `a14_warship.json`.
+
+| kill | where | records afterwards | combat rating |
+|---|---|---|---|
+| V's (350) mission trader | 2061, owned by O (351) | **none changed** (2061, 2062 V's home, 2063 O's other: 0; map "No Record") | 0 -> 4 |
+| 353's mission trader (an enemy of the owner) | 2064, owned by 352 | **none changed** | 0 -> 4 |
+| V's mission trader | 2062, V's own system | **none changed** | 0 -> 4 |
+| V's mission trader | 2070, V's own system with V's AI 3 traffic | **none changed** (pilot after the kill) | 0 -> 4 |
+| two ships Tab picked first in 2070: a stock-art "Leviathan, 3rd Model" and "Viper, Fighter Class", both tagged "Trader" on the target panel (the Kit Raiders of gövt 350 were there too; the one targeted later survived at 73% shield) | 2070 | **2070: +130**, map "Legal Status: Good Citizen" | 0 -> 26 |
+
+**What this shows, and what it does not.**
+1. **A mission ship with no goal is no crime:** killing a goal-less
+   mission trader changed no record anywhere, in its own govt's system
+   or not (four runs, rating credited every time). Wave 5's -150 was a
+   SYSTEM-spawned AI 3 warship. This also re-reads wave 10's
+   negative-penalty run, whose victim was the same kind of mission
+   trader: its "no change" may come from this rule rather than from the
+   negative penalties (`#320 item 2 wave 10` should be re-run with system
+   traffic).
+2. So (a), (b) and (c) are **not answered** by these runs; they need
+   system traffic as the victim (wave 5's design).
+3. The +130 in the last run is unexplained: 130 is exactly gövt 350's
+   Disab 30 + Kill 100 but POSITIVE, and the ships killed were not the
+   kit's gövt 350 Kit Raiders; where the stock-art "Leviathan" and
+   "Viper" in a sealed kit system came from (and their govt) is not
+   known. Worth a closer look before anyone relies on it: it may be the
+   enemy-kill credit (b) asks about.
+
+**NovaJS (base 7c184cdf).** `N/nova_plugin/reputation/reputation_plugin.ts:205-230`
+charges the kill penalty for ANY ship with a govt, mission ship or not
+(and the victim govt's record, `reputation.ts:145-152`), and nothing for
+enemies; `DisableCreditSystem` (`:236-290`) charges Kill only for a
+one-burst kill. Against finding 1 that is a **mismatch** for goal-less
+mission ships. **Proposed fix (not applied):** exempt mission special
+ships without a destroy/disable goal from crime penalties, pending a
+run that checks goal ships and ShipBehav 0 ones.
+
+Confidence: high for 1 (four runs); none yet for (a)-(c).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/a14/{owner,enemy,victim,home3,warship}/*/`
+(`pilot-*/`, the `map` shots).
+
+### The UI screen x key matrix, wave 11: original vs NovaJS (2026-11-23)
+
+**Question (wave 10 item 6).** From flight, the spaceport, each venue and
+their dialogs, what do `m`, `i`, `h`, `e`, preferences and Escape do
+(opens / ignored / closes)? Then the same in NovaJS, headless.
+
+**Original: setup.** Pilot `w11_ui` / `w11_ui2` (no missions; `ui2`
+has mïsn 1032's Mission BBS job) at Kit Port. `scenarios/ui_matrix_a.json`
+(the spaceport row, every venue's shot, the flight row, `cmd+,` in
+flight), `ui_matrix_b.json` (m / i / h / e inside each venue, each from a
+fresh open, followed by its own undo and the venue's own Done / Leave).
+Escape was not pressed in flight (the rule; wave 10: it quits to the
+title) and is known in the spaceport (leaves) and in the venues (closes
+them, K1). Run B's last rows were lost (below) and re-run as
+`ui_matrix_c.json`.
+
+| screen | `m` | `i` | `h` | `e` | `cmd+,` | Escape |
+|---|---|---|---|---|---|---|
+| flight, no missions / escorts | opens the map; `m` closes it | **status line "You have no active missions."** (no dialog; with a mission: the dialog, wave 10) | minimap peek | status line "You don't have any escorts." | nothing visible | quits to the title (wave 10, not re-run) |
+| spaceport main | opens the star map over it; `m` closes it | **ignored** (no dialog, no message) | ignored | ignored | (lost, see below) | leaves (K1) |
+| outfitter | **opens the star map over the outfitter**; `m` closes it, back to the outfitter | ignored | ignored | ignored | | closes (K1) |
+| shipyard | **opens the map over it**, `m` closes | ignored | ignored | ignored | | closes |
+| trade center | **opens the map over it**, `m` closes | ignored | ignored | ignored | | closes |
+| bar | **opens the map over it**, `m` closes | ignored | **Hire Escort**: "There are no ships available for hire." (Okay) | (lost) | | closes |
+| bar's no-hire popup | ignored | ignored | ignored | ignored | ignored | **closes the popup** (back to the bar) |
+| Mission BBS (a job listed) | **opens the star map over the BBS**; `m` closes it, back to the BBS | ignored | ignored | ignored | | (Return closes it, wave 10) |
+| star map opened while landed | closes it (run A) | ignored | ignored | ignored | | **closes the map**, back to the spaceport (does not leave) |
+| spaceport main, `cmd+,` | | | | | nothing (no preferences dialog) | |
+
+Run B lost its last rows: the bar's `h` opened the no-hire popup, whose
+Okay the scripted Leave click missed, and the popup swallowed every key
+until the final Escape closed it; `ui_matrix_c.json` re-ran the BBS row,
+`cmd+,` in the spaceport and the landed map's row. Preferences: neither
+`cmd+,` in flight nor in the spaceport opened anything; the original's
+in-game preferences key, if any, is still unknown.
+
+**NovaJS (headless, PORT 8537, base 7c184cdf; every cell from a reload,
+with screenshots; no console errors).** Key bindings:
+`packages/nova/settings/controls.json` (`map` KeyM :50, `smallMap` KeyH
+:51, `escorts` KeyE :41, `missions` KeyI :85, `properties` KeyP :84,
+`depart` Escape :75-78, `hire` KeyH :80, `fullscreen` Enter :86).
+
+| screen | `m` | `i` | `h` | `e` | Escape | Return |
+|---|---|---|---|---|---|---|
+| flight | map, `m` closes | "Currently active missions" dialog, `i` closes | minimap peek (2.2 s) | escort panel (8.25 s); none: "You don't have any escorts." | quits to the title | browser fullscreen |
+| spaceport main | star map, `m` closes | missions dialog, `i` closes | ignored | ignored | takes off | fullscreen (not Leave) |
+| outfitter / shipyard / trade | **ignored** | ignored | ignored | ignored | closes | fullscreen |
+| bar | ignored | ignored | Hire Escort dialog | ignored | closes | fullscreen |
+| Mission BBS | star map, `m` closes | ignored | ignored | ignored | closes | fullscreen |
+
+**Mismatches (original first).**
+1. `m` in the outfitter, shipyard, trade center and bar: the original
+   opens the star map over the venue; NovaJS ignores it
+   (`N/spaceport/menu_controls.ts:46-63` sends keys only to the topmost
+   menu, and only the spaceport and the BBS handle KeyM:
+   `N/spaceport/spaceport.ts:392-397`, `N/spaceport/mission_board.ts:216`).
+2. `i` in the spaceport: the original ignores it; NovaJS opens the
+   missions dialog (`N/spaceport/spaceport.ts:402-403`). In flight with no
+   mission the original prints "You have no active missions." instead of
+   a dialog (NovaJS's flight path: `N/display/mission_info_plugin.ts:105-116`;
+   whether it opens an empty dialog was not checked).
+3. Return: the original presses Leave in the spaceport and closes the
+   outfitter and the BBS (wave 10); NovaJS toggles browser fullscreen
+   everywhere (`N/display/fullscreen_plugin.ts:16-18`).
+Matches: flight `m` / `h` / `e` / Escape, spaceport `m` / `h` / `e` /
+Escape, Escape closing every venue and the landed map, `m` over the BBS,
+`i` / `h` / `e` ignored in the BBS and on the landed map, `h` as Hire in
+the bar.
+**Proposed fix (not applied):** let KeyM open the star map over any venue
+(as over the BBS), drop KeyI in the spaceport, print "You have no active
+missions." instead of an empty mission list, and map Return to the
+default button (Leave / Done / Close) per screen rather than fullscreen
+(a fullscreen key could move to a modifier combination).
+
+Confidence: high for the cells shown (one shot each, unambiguous).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/ui/{a,b,c}/*/`; NovaJS:
+`ui/novajs/` (279 shots `shots/<row>__<key>_*.png`, `results.jsonl`, the driver `matrix.mjs`).
+
+### S1 / I1 wave 11: contraband scanning on arrival, and idle interceptors (2026-11-23, first pass)
+
+**Brief.** docs/npc_behavior_gaps.md S1 (runs 1 and 2 only) and I1.
+
+**Rig.** gövt 354 Kit Customs (ScanMask 0x0001, ScanFine 500,
+SmugPenalty 50, CrimeTol 10) owns sÿst 2069 Kit Scan Range (Kit Scan
+Port at 0,0; traffic: düde 336, two AI 4 Kit Customs Cutters, red discs
+with one Kit Escort Gun). sÿst 2068 Kit Scan Gate is its only link.
+oütf 458 Kit Contraband Pod: ScanMask 0x0001, mass 0. Pilots
+`w11_scan_clean` (Kit Lancer, nothing illegal) and `w11_scan_pod` (one
+pod): the map, Tab to Kit Scan Range, fly out 3.5 s, hold `j` 1.5 s,
+brake on arrival, then a window shot every ~2.8 s for about 2.8 min.
+`scenarios/scan_watch.json` (take 1 never left the gate: 1.5 s of
+thrust stayed inside the no-jump zone).
+
+| pilot | what happened |
+|---|---|
+| clean | **no scan, no message**, never approached: one cutter was on screen about 300 px off at the first shot and then neither came on screen again; the shield bar stayed full throughout |
+| pod | within about 3 s of the arrival a cutter beside the player: **"Kit Customs Cutter: w11-scan-pod, your posession [sic] of a kit contraband pod has been detected. You have been fined 500 credits."**, credits 1,000,000 -> 999,500, ONE fine only; from then on both cutters stayed within 100-250 px and **kept firing** at the player (the shield bar fell steadily, 149 -> 134 px over 2.7 min, against the Lancer's recharge) |
+
+Neither run's closing landing happened (the player sat about 1000 px
+from the port), so the pilot was not written and the 2069 record (the
+SmugPenalty) was not read; the cutters turning hostile after the fine
+fits a SmugPenalty of 50 against CrimeTol 10.
+
+**Findings so far.**
+1. A ScanMask-matching outfit is scanned on arrival in a system of the
+   scanning govt, quickly (seconds), by an AI 4 ship that comes to the
+   player; the message names the item ("your possession of a <item> has
+   been detected") and the fine is charged once.
+2. After the scan the interceptors attack (a criminal player in their
+   system), so detection is a crime (SmugPenalty) for outfits, not only
+   for mission cargo as the Bible's SmugPenalty text says. To confirm
+   with the record read back.
+3. A clean ship is not scanned, or at least not approached and not
+   messaged, within 2.7 min (I1: the idle cutters stayed away from the
+   player; where they park was not tracked).
+
+**NovaJS (base 7c184cdf):** scanning is missing
+(`N/nova_plugin/npc/npc_ai_plugin.ts:49-56`), SmugPenalty is not wired
+(`N/nova_plugin/reputation/reputation.ts:21`); see
+docs/npc_behavior_gaps.md "Law and policing". No fix proposed here
+beyond the brief's.
+
+**Left of S1-S3 / I1:** the record read-back (land from close by), a
+jünk and a mission-cargo case, ScanFine 0, rescans over 5 minutes, a
+criminal pilot, the pod pilot fleeing, a radar track of idle cutters
+(300 s), and S2 / S3 (0x0020 missions).
+
+Confidence: high for the pod run's message, fine and the attack (one
+run); medium for "a clean ship is not scanned" (one run, 2.7 min).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w11/scan/{clean,pod}/*/`
+(the first run in each folder is take 1; the pod run `20261123-232524-*`: `04-w-00.png` .. `07-w-03.png` the
+message, `recording.mp4`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **Kit hulls had their running lights on until wave 11 (Matthew).**
+  Every kit shän is a clone of a stock one, so most of them carried the
+  stock RUNNING LIGHTS (101 of its 145 shäns): the Shuttle's shän 128 behind every disc,
+  pointer, ring and shareRled hull (rlëD 1955-1999 sprites) has
+  LightImage 1600 blinking in mode 1, and most stock-art kit hulls
+  (Kit Escort, Kit Target and their copies) have their own lights.
+  Since wave 11 `kits/testkit.mjs` switches them off on every kit shän
+  (`withoutRunningLights`: LightImage / LightMask -1, BlinkMode 0; the
+  engine glow while thrusting is kept). Blinking light pixels can pass
+  for shots, sparkles or bracket pixels and shift
+  lit-pixel counts and centroids. **Measurements that could have been
+  touched** (none re-run; a 60-frame zoom around a lit pointer hull and
+  the player's ring in the wave-11 `revive/ally` recording showed no
+  visible light pixel, so the effect is probably small): the blob-based
+  readings near a kit hull, i.e. `discs.mjs` escort offsets (F1, F1b,
+  F1n), `bolt_births.mjs` (wave 5: a light inside the 26 px radius could
+  count as a bolt birth), `decoy_track.mjs` (saturated red/blue
+  "missile heads" near the targets), `brackets.mjs`'s "largest blob
+  inside the box" (K10; the corner glyphs themselves are unaffected),
+  `click_targets.mjs` blob picks, `hostility.mjs` bracket colours (K9),
+  and `motion.mjs`'s centre-crop turn template (#316 Turn). Readings off
+  the status bar, the target panel, the radar and the stellars
+  (`panel_hits`, `region_lit`, `radar_blips`, `world_motion`,
+  `planet_track`) are unaffected.
 
 - **Tab never targets the player's own escorts (wave 9).** To target an
   escort, click it: `loops/click_targets.mjs` finds the ship sprites in a
@@ -5404,6 +5932,7 @@ panel and the credit count).
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). |
 | Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
+| Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
 
 ## Catalogue
 
