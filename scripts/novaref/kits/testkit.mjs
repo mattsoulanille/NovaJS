@@ -457,6 +457,18 @@ function wave14Resources() {
     mixed.set = { ...mixed.set, asteroids: 16, asteroidTypes: 0x000F };
     out.push(mixed, port(2065, "Kit Mine Mixed Port"));
 
+    // Added during the wave (leftovers). Rescans after a JUMP: sÿst 2031 /
+    // spöb 2156 Kit Scan Tolerant Gate (gövt 363) linked to 2053 Kit Scan
+    // Tolerant. The CompReward of an ABORT under mïsn Flags 0x0040: mïsn
+    // 1082 (bit 9155) at Kit Port, CompGovt 338, CompReward 100, Flags
+    // 0x0040 (OnAbort b9156): govt-wide like the success's spread?
+    const tolerant = out.find((r) => r.type === "sÿst" && r.id === 2053);
+    tolerant.set.links = links(2031);
+    const tolGate = system(2031, "Kit Scan Tolerant Gate", -240, -720, 363, [2156]);
+    tolGate.set.links = links(2053);
+    out.push(tolGate, port(2156, "Kit Scan Tolerant Gate Port"));
+    out.push(...misn(1082, "Kit A comp abort 338", 9155, { compGovt: 338, compReward: 100, flags: 0x0040, returnStel: 2100, onAccept: "!b9155", onAbort: "b9156", onSuccess: "b9157" }));
+
     // --- R: the Raczak rescue with the kit düde and the mission cargo.
     const raczak = { shipCount: 1, shipSyst: -1, shipDude: 330, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
         cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
