@@ -287,11 +287,20 @@ export class HangarDialog {
             this.container.addChild(t);
         }
 
+        // The arrows are dropped while an operation's grid rebuild is in
+        // flight: they would move a selection on the grid being replaced.
+        const navigate = (move: (grid: ItemGrid<HangarEntry>) => void) =>
+            () => {
+                if (this.itemGrid && !this.busy) {
+                    move(this.itemGrid);
+                    this.updateArrows();
+                }
+            };
         this.controls = new MenuControls(controlEvents, {
-            left: () => { this.itemGrid?.left(); this.updateArrows(); },
-            right: () => { this.itemGrid?.right(); this.updateArrows(); },
-            up: () => { this.itemGrid?.up(); this.updateArrows(); },
-            down: () => { this.itemGrid?.down(); this.updateArrows(); },
+            left: navigate(grid => grid.left()),
+            right: navigate(grid => grid.right()),
+            up: navigate(grid => grid.up()),
+            down: navigate(grid => grid.down()),
             depart: () => this.closed.next(),
         });
     }
@@ -591,14 +600,16 @@ export class HangarDialog {
         select: () => string = () => 'current:0'): Promise<void> {
         this.busy = true;
         try {
-            await operation();
-        } catch (e) {
-            console.warn('Hangar operation failed:', e);
-            this.say('That could not be done.');
+            try {
+                await operation();
+            } catch (e) {
+                console.warn('Hangar operation failed:', e);
+                this.say('That could not be done.');
+            }
+            await this.refresh(select());
         } finally {
             this.busy = false;
         }
-        await this.refresh(select());
     }
 
     /** Shows the hangar over the shipyard until Done. */
