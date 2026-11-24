@@ -1388,7 +1388,11 @@ our V 100 / J 25 target almost 0% (original 22-25%), and InhJam would jam
   moment). No re-acquisition.
 - J_k from the target's outfits: the largest single outfit's value, not
   the sum (the "count is ignored" alternative fits the data equally).
+  (Superseded by "J wave 7": count ignored, different outfits add;
+  applied in f20ecec2.)
 - InhJam: leave it out of J until it is measured to do something.
+  (Superseded by "J wave 7": InhJam counts through the hull's own
+  InherentGovt; applied in f20ecec2.)
 
 Confidence: high for findings 1-3 (about 1850 missiles over 38 runs, 32 of them in wave 3; clean
 0/100 cells); medium for the exact formula between its anchor points (two
@@ -3825,11 +3829,24 @@ New targets in `kits/testkit.mjs` wave 7.
   change needed (the comment can cite the three points).
 - Ionization: `N/nova_plugin/ship/ionization_plugin.ts:69-74`
   (`ionizedNow`: charge > IonizeMax / 2): **matches** the 40-60 window.
-- **Proposed (not applied):** J_k = min(100, sum over distinct jammer
+- **Proposed:** J_k = min(100, sum over distinct jammer
   outfit ids of that outfit's type-k value) + the hull's inherent govt
   InhJam_k (shïp InherentGovt 128-383 or 1128-1383, not the düde/combat
   govt). How InhJam and outfits combine (sum or max) is untested; sum is
   the natural reading of finding 2.
+  **Applied in f20ecec2** (`deriveJamming`): J_k = the sum over the ship's
+  DIFFERENT outfits (OutfitsState keys, count ignored) of their type-k
+  value, plus `ShipData.inheritedJamming` (new: the InhJam1-4 of the
+  attributes govt, InherentGovt 128-383 / 1128-1383, baked by the shïp
+  parser; a combat-only 2128-2383 govt, no govt or a dangling id gives 0).
+  The düde govt (GovtComponent) is not read. The cap is the existing
+  clamp into 0-100 when a missile faces J (`effectiveJamming`), so the
+  total, not the outfit sum alone, is capped at 100: the same thing for
+  non-negative values, and above 100 nothing changes anyway (V 100 at
+  J 100 already jams on every roll). Judgment call: the sum is signed, so
+  a negative jammer outfit (none in the stock data) subtracts instead of
+  being ignored. The draw count per decision is unchanged (six).
+  The Interference comment now cites the three levels; no value change.
 
 Confidence: high for the InhJam and the two-jammer cells (clean 98-100%
 against the 22-72% the alternatives predict; one run each); medium for
@@ -4099,7 +4116,7 @@ the two edges and press `l` while creeping outward).
 |---|---|---|
 | U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). **Wave 7:** boarding while moving needs under about 7.5-9 px/s (boarded at 3.4-7.3, refused at 9.2-11 with "not close enough", "too fast" from 16 px/s at any distance, checked before distance; NovaJS 54.8 px/s, after distance); money booty max(1,000, price / 40) from 2,000 to 100,000 (1,000 / 1,000 / 1,250 / 2,500), but 19,500 and 21,500 at 500,000; crew 500 still 0% capture; a 96 px hulk and a 2,000,000 one never opened the dialog (presses close in often get no answer). The receding "too fast" fits an approach state left only outside the UNCAPPED 1.7 W square (wave-4 re-read). Still open: money above 100,000, why capture is greyed (derelict govt?), the silent presses. |
 | B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (waves 6, 7): no.** Wave 6: a stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player. Wave 7: an anchored Kit Bomb Carrier lost 60% of its shield to its Kit Bombers' blasts in 15 s and never finished off the four bombers its blasts had disabled; with 1-damage blasts its bombers flew 110 s unharmed by it. The kit-bay rechecks: Q4 stands (a protector carrier with a working kit bay never launched) and the player's own bay launches real Kit Fighters (E-view). Open: the 1-damage carrier never fired its guns at the player (one run). |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS takes the largest outfit and ignores InhJam: mismatch. Asteroid range vs chance: not answerable (röid has no speed or position field). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS took the largest outfit and ignored InhJam: mismatch, applied in f20ecec2 (distinct outfits summed, plus the hull's InherentGovt InhJam). Asteroid range vs chance: not answerable (röid has no speed or position field). |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS keeps chasing (mismatch). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumps every 16 s stand-off (mismatch). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
@@ -4213,7 +4230,7 @@ cosmetic or rare.
 | E2 | Fixed-angle (negative Inaccuracy) firing side | `N/nova_plugin/combat/fire_weapon_plugin.ts:211-231` | CPg, SS | L |
 | E3 | Weapon readiness right after a spawn or jump (#135) | `fire_weapon_plugin.ts:85,510` | CPg slow-reload weapon, VID | L |
 | E4 | planetType weapons vs normal ships (#136/#150) | wëap planetType | CPg, VID | L |
-| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up (wave 7: copies of one outfit don't, DIFFERENT outfits do, and gövt InhJam counts through the hull's own govt; not applied). Applied in c9fc116c | L |
+| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up (wave 7: copies of one outfit don't, DIFFERENT outfits do, and gövt InhJam counts through the hull's own govt; applied in f20ecec2). Applied in c9fc116c | L |
 | E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | **mostly (waves 6, 7)**: an ionized hull is drawn in the ion colour, turns a fraction of its normal rate and cannot fire Seeker 0x0020 weapons; ionization starts at about half of IonizeMax (40-60 of 100, wave 7). All match; the slow factor is not measured | M |
 | E7 | Auto-refuel rate (ModType 19) | `N/nova_plugin/ship/health_plugin.ts:40-48` | CPl fuel 0, timed PD | L |
 | E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | VID Kit Carrier | L |
