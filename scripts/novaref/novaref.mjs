@@ -390,9 +390,13 @@ async function cmdClick(args) {
     const dbl = takeFlag(args, "--double");
     const anyApp = takeFlag(args, "--any-app");
     const mods = takeOpt(args, "--mods") ?? "";
-    if (args.length < 2) throw new NovarefError("usage: novaref click x y [--win] [--right] [--double] [--mods shift+ctrl]");
+    // --hold-ms N keeps the button down N ms (wave 12: held scroll arrows);
+    // a hold over 200 ms also stamps the release ("clickup").
+    const holdMs = takeOpt(args, "--hold-ms") ?? "60";
+    if (!/^\d+$/.test(holdMs)) throw new NovarefError(`bad --hold-ms ${holdMs}`);
+    if (args.length < 2) throw new NovarefError("usage: novaref click x y [--win] [--right] [--double] [--mods shift+ctrl] [--hold-ms N]");
     const [x, y] = toScreen(args.slice(0, 2).map(Number), rel);
-    const res = helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1", "60", mods],
+    const res = helper(["click", String(x), String(y), right ? "right" : "left", dbl ? "2" : "1", holdMs, mods],
         { front: anyApp ? null : cfg.bundleId });
     return { ok: true, cmd: "click", screen: [x, y], win: rel, button: right ? "right" : "left",
         t_host: res.t_host, events_t: res.events_t };
@@ -406,6 +410,25 @@ async function cmdDrag(args) {
     const pts = toScreen(args.slice(0, 4).map(Number), rel);
     const res = helper(["drag", ...pts.map(String), "20", ms], { front: anyApp ? null : cfg.bundleId });
     return { ok: true, cmd: "drag", from: pts.slice(0, 2), to: pts.slice(2), win: rel, t_host: res.t_host, events_t: res.events_t };
+}
+
+/**
+ * Mouse wheel (wave 12): `wheel x y dy [--win] [--count N] [--gap ms]`
+ * posts N scroll-wheel events of dy LINES each at (x, y); positive dy
+ * scrolls up (towards the top of a list), negative down.
+ */
+async function cmdWheel(args) {
+    const rel = takeFlag(args, "--win");
+    const anyApp = takeFlag(args, "--any-app");
+    const count = takeOpt(args, "--count") ?? "1";
+    const gap = takeOpt(args, "--gap") ?? "100";
+    if (args.length < 3 || ![args[2], count, gap].every((v) => /^-?\d+$/.test(v))) {
+        throw new NovarefError("usage: novaref wheel x y dy [--win] [--count N] [--gap ms]");
+    }
+    const [x, y] = toScreen(args.slice(0, 2).map(Number), rel);
+    const res = helper(["wheel", String(x), String(y), args[2], count, gap], { front: anyApp ? null : cfg.bundleId });
+    return { ok: true, cmd: "wheel", screen: [x, y], win: rel, dy: Number(args[2]), count: Number(count),
+        t_host: res.t_host, events_t: res.events_t };
 }
 
 async function cmdMove(args) {
@@ -1099,7 +1122,11 @@ async function runStep(step, ctx) {
     }
     if (step.click) return cmdClick([...step.click.map(String), ...(step.win ? ["--win"] : []),
         ...(step.right ? ["--right"] : []), ...(step.double ? ["--double"] : []),
-        ...(step.mods ? ["--mods", [].concat(step.mods).join("+")] : [])]);
+        ...(step.mods ? ["--mods", [].concat(step.mods).join("+")] : []),
+        ...(step.hold_ms ? ["--hold-ms", String(step.hold_ms)] : [])]);
+    // {"wheel": [x, y, dy], "win": true, "count": N, "gap": ms} (wave 12).
+    if (step.wheel) return cmdWheel([...step.wheel.map(String), ...(step.win ? ["--win"] : []),
+        ...(step.count ? ["--count", String(step.count)] : []), ...(step.gap ? ["--gap", String(step.gap)] : [])]);
     if (step.drag) return cmdDrag([...step.drag.map(String), ...(step.win ? ["--win"] : [])]);
     // {"move": [x, y]} moves the mouse; {"move": true} parks it at (40, 40),
     // outside the game window, so it never shows up in shots/recordings.
@@ -1412,7 +1439,8 @@ const USAGE = `novaref — drive the original EV Nova on the reference Mac
   status
   shot [out.png] [--window | --rect x,y,w,h]
   keys "<sequence>" [--hold ms] [--gap ms] [--any-app]
-  click x y [--win] [--right] [--double]      drag x1 y1 x2 y2 [--win]   move x y [--win]
+  click x y [--win] [--right] [--double] [--hold-ms N]   drag x1 y1 x2 y2 [--win]   move x y [--win]
+  wheel x y dy [--win] [--count N] [--gap ms]   mouse wheel, dy lines per event (+ up, - down)
   launch [--app stock|minimal] | quit [--force] | restart [--app ...]
   pilots list | pull <name> [dest] [--raw] | push <local> [as <name>] | rm <name> | backup | park-last | unpark-last
   pilot-make <spec.json> [out]
@@ -1474,6 +1502,7 @@ async function dispatch(argv) {
         case "click": return cmdClick(args);
         case "drag": return cmdDrag(args);
         case "move": return cmdMove(args);
+        case "wheel": return cmdWheel(args);
         case "launch": return cmdLaunch(args);
         case "quit": return cmdQuit(args);
         case "restart": return cmdRestart(args);

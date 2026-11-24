@@ -287,6 +287,10 @@ def cmd_click(x, y, button='left', count=1, hold_ms=60, mods=''):
                 Quartz.CGEventSetFlags(ev, flags)
             if kind == down_t:
                 stamp('click', '%s%s,%s' % (mods + '-' if mods else '', x, y))
+            elif hold_ms > 200:
+                # A long press (wave 12, held scroll arrows): stamp the
+                # release too, so a recording can be cut at both ends.
+                stamp('clickup', '%s,%s' % (x, y))
             Quartz.CGEventPost(TAP, ev)
             sleep_ms(hold_ms if kind == down_t else 40)
     if mod_codes:
@@ -295,6 +299,25 @@ def cmd_click(x, y, button='left', count=1, hold_ms=60, mods=''):
         post_key(mc, False, 0)
     out({'ok': True, 'cmd': 'click', 'x': x, 'y': y, 'button': button,
          'count': count, 'mods': mods})
+
+
+def cmd_wheel(x, y, dy, count=1, gap_ms=100):
+    """Mouse wheel (wave 12): moves the pointer to (x, y), then posts
+    `count` scroll-wheel events of `dy` LINES each (positive = up/away from
+    the user, the macOS convention for a non-natural wheel), `gap_ms`
+    apart. Each event is stamped."""
+    Quartz.CGEventPost(TAP, mouse(Quartz.kCGEventMouseMoved, x, y, 0))
+    sleep_ms(40)
+    for i in range(count):
+        ev = Quartz.CGEventCreateScrollWheelEvent(
+            SOURCE, Quartz.kCGScrollEventUnitLine, 1, int(dy))
+        Quartz.CGEventSetLocation(ev, (x, y))
+        stamp('wheel', '%s@%s,%s' % (dy, x, y))
+        Quartz.CGEventPost(TAP, ev)
+        if i + 1 < count:
+            sleep_ms(gap_ms)
+    out({'ok': True, 'cmd': 'wheel', 'x': x, 'y': y, 'dy': dy,
+         'count': count})
 
 
 def cmd_drag(x1, y1, x2, y2, steps=20, ms=400):
@@ -409,6 +432,10 @@ def main(argv):
                      int(args[5]) if len(args) > 5 else 400)
         elif cmd == 'move':
             cmd_move(float(args[0]), float(args[1]))
+        elif cmd == 'wheel':
+            cmd_wheel(float(args[0]), float(args[1]), int(args[2]),
+                      int(args[3]) if len(args) > 3 else 1,
+                      int(args[4]) if len(args) > 4 else 100)
         elif cmd == 'clock':
             out({'ok': True, 'cmd': 'clock'})
         else:

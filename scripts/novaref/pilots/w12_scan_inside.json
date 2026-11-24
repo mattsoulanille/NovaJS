@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w12-scan-inside",
+  "edits": {
+    "ship": 703,
+    "stellar": 2069,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2068": 2,
+      "2069": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "458": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w12-scan-inside"
+  }
+}

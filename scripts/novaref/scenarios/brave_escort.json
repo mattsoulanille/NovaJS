@@ -1,0 +1,19 @@
+{
+ "name": "brave_escort",
+ "_comment": "Wave 12 item 4: when the player's escort shoots a trader, whom does the trader fight? sÿst 2076 Kit Brave Range: one AI 2 Kit Brave Trader (green disc, gövt 363 neutral, 3000 / 3000, two Kit Raider Guns). The player (Kit Ring Tank, unarmed) has one hired Kit Escort (two Kit Escort Guns). Target the trader (tab_to green), order the escort to attack it (f), then watch 50 s: whose ship the trader's bolts go at, the player's shield bar, the trader's bracket colour (red = hostile to the player?).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 2500 },
+  { "script": "../loops/tab_to.mjs", "args": { "colour": "green", "tries": 6 } },
+  { "keys": "f wait 800" },
+  { "shot": "ordered", "window": true },
+  { "repeat": 20, "steps": [ { "wait": 2000 }, { "shot": "watch-{i}", "window": true } ] },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

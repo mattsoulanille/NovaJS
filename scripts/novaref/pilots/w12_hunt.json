@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w12-hunt",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-hunt",
+    "ship": 839,
+    "stellar": 2071,
+    "explored": {
+      "2071": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "601": 1
+    }
+  }
+}

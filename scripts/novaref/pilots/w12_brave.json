@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w12-brave",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-brave",
+    "ship": 839,
+    "stellar": 2076,
+    "explored": {
+      "2076": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "escorts": [
+      {
+        "ship": 704,
+        "hired": true
+      }
+    ]
+  }
+}

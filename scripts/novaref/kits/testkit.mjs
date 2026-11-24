@@ -283,8 +283,230 @@ export default {
         ...wave8Resources(),
         ...wave10Resources(),
         ...wave11Resources(),
+        ...wave12Resources(),
     ].map(withoutRunningLights),
 };
+
+/**
+ * Wave-12 experiments (docs/reference_experiments.md, "... wave 12").
+ * Nothing retired; ids above wave 11's (shïp 856+, wëap 280+, oütf 459+,
+ * düde 338+, gövt 355-357, sÿst/spöb 2071+, mïsn 1049+, bits 9097+, rlëD
+ * 1965 / 1967: odd, so the mask id the shän names is no resource).
+ *
+ *  D   The "Fight to be Thurokiir" duel (stock mïsn 674: 5 Duellists of
+ *      gövt 175, ShipGoal 1, ShipBehav 0). In Kit FF Range (sÿst 2047):
+ *      gövt 355 Kit Duellist (stock 175's 0x0002, CrimeTol 0, no
+ *      penalties). A shooter mission is the spaceport offer (ShipBehav 0,
+ *      no goal, the far mark, ShipStart -3): mïsn 1049 (bit 9097) shïp 837
+ *      Kit FF Shooter (10-damage bolt), 1050 (9098) shïp 858 Kit Duel
+ *      Shooter Blast (wëap 281: 100 damage, 150 px blast), 1051 (9099) shïp
+ *      857 Kit Duel Shooter Beam (wëap 280: a turreted beam, ONE frame of
+ *      5000 damage; a beam stops on its own govt's ships, wave 10). The
+ *      duellist is a Mission BBS job, mïsn 1052 (9100): shïp 856 Kit Duel
+ *      Victim (the magenta pointer, anchored, shield 200, armor 1500, no
+ *      recharge, a 1-damage pea) on the near mark, ShipGoal 1, ShipBehav
+ *      0, ReturnStel Kit FF Port, OnSuccess b9101, OnFailure b9102,
+ *      DispWeight 30000 (a stock BBS job listed above it got the Accept in
+ *      the first blast run; the kit's BBS jobs now come first). düde
+ *      338-341; mïsn 1053 (bit 9103) is the job with shïp 865 (shield 0,
+ *      düde 350), which the beam kills in one frame. The player disables
+ *      the duellist with wëap 282 Kit Duel Gun (turret,
+ *      100 damage) + oütf 459.
+ *  H   IFF of an NPC fighting another NPC: sÿst/spöb 2071 Kit Hunt Range
+ *      (gövt 363) with traffic of gövt 356 Kit Hunter (yellow disc, shïp
+ *      859) and 357 Kit Prey (cyan disc, shïp 860), each listing the
+ *      other's class as an enemy, both AI 3, 5000 / 5000, Kit Raider Gun;
+ *      düde 342 / 343, four ships on average. Neither is hostile to the
+ *      player.
+ *  A   A14 with SYSTEM traffic victims: shïp 861 Kit Bare Trader (AI 1,
+ *      shield 0, armor 1000). sÿst/spöb 2072 Kit Owner Traffic (owned by
+ *      351, traffic of 350's traders: düde 344), 2073 Kit Law Traffic
+ *      (352, traffic of the enemy 353: düde 345), 2074 Kit Victim Traffic
+ *      (350, its own traders: düde 344), 2075 Kit Negative Traffic (369,
+ *      its own: düde 346). wëap 283 Kit One Shot (one 10000-damage bolt)
+ *      + oütf 460.
+ *  W   Whom does a trader fight when the player's escort shoots it?
+ *      sÿst/spöb 2076 Kit Brave Range (gövt 363) with traffic of düde 347:
+ *      AI 2 shïp 862 Kit Brave Trader (green disc, 3000 / 3000, two Kit
+ *      Raider Guns), one on average.
+ *  S   Submunition fuse vs an ELONGATED target, on Kit Sub Mark: shïp 863
+ *      Kit Sub Bar Side (rlëD 1965: a 76 x 14 magenta bar across an 80 x 80
+ *      frame, the same on all 36 frames, so it never turns end-on) and 864
+ *      Kit Sub Bar End (rlëD 1967: the bar upright, 14 x 76), düde 348 /
+ *      349, mïsn 1055 (bit 9106) / 1056 (9107).
+ *  U   Scrolling dialogs: mïsn 1057 (bit 9108) offered at Kit Port with a
+ *      60-line numbered offer text; mïsn 1058 (bit 9109) a Mission BBS job
+ *      with the same text.
+ */
+function wave12Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const anchored = { accel: 0, speed: 0, turn: 60, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, shieldRecharge: 0, armorRecharge: 0 };
+    const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+
+    // --- D: the duel.
+    out.push(govt(355, "Kit Duellist", { flags: 0x0002, crimeTol: 0, disabPenalty: 0, boardPenalty: 0, killPenalty: 0, classes: [355, -1, -1, -1] }));
+    out.push(weap(280, "Kit Duel Beam", 170, { reload: 90, duration: 1, armorDamage: 5000, shieldDamage: 5000, guidance: 3, beamLength: 400, flags: 0 }));
+    out.push(weap(281, "Kit Duel Blast", 131, { reload: 60, duration: 90, armorDamage: 100, shieldDamage: 100, guidance: 4, speed: 600, proxRadius: 0, blastRadius: 150, flags: 0 }));
+    out.push(weap(282, "Kit Duel Gun", 130, { reload: 20, duration: 60, armorDamage: 100, shieldDamage: 100, guidance: 4, speed: 900, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(gun(459, "Kit Duel Gun", 282));
+    out.push(...shareRled(856, "Kit Duel Victim", 1959, 24, { ...anchored, ai: 4, armor: 1500, shield: 200, ...armed(267) }));
+    out.push(...shareRled(857, "Kit Duel Shooter Beam", 1971, 24, { ...anchored, ai: 4, armor: 30000, shield: 30000, ...armed(280) }));
+    out.push(...shareRled(858, "Kit Duel Shooter Blast", 1971, 24, { ...anchored, ai: 4, armor: 30000, shield: 30000, ...armed(281) }));
+    out.push(dude(338, "Kit Duel Victim", 4, 355, 856));
+    out.push(dude(339, "Kit Duel Shooter Bolt", 4, 355, 837));
+    out.push(dude(340, "Kit Duel Shooter Blast", 4, 355, 858));
+    out.push(dude(341, "Kit Duel Shooter Beam", 4, 355, 857));
+    const duelShooter = { availStel: 2047, shipCount: 1, shipGoal: -1, shipBehav: 0, shipStart: -3 };
+    out.push(...misn(1049, "Kit D shooter bolt", 9097, { ...duelShooter, shipDude: 339, onAccept: "!b9097" }));
+    out.push(...misn(1050, "Kit D shooter blast", 9098, { ...duelShooter, shipDude: 340, onAccept: "!b9098" }));
+    out.push(...misn(1051, "Kit D shooter beam", 9099, { ...duelShooter, shipDude: 341, onAccept: "!b9099" }));
+    out.push(...misn(1052, "Kit D duellist", 9100, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 338, shipGoal: 1, shipBehav: 0, shipStart: -2,
+        returnStel: 2047, onAccept: "!b9100", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
+    // The one-frame beam kills a HEALTHY duellist outright only if no
+    // shield soaks the frame: shïp 865 Kit Duel Victim Bare (shield 0,
+    // armor 1500), düde 350, mïsn 1053 (bit 9103), the same BBS job.
+    out.push(...shareRled(865, "Kit Duel Victim Bare", 1959, 24, { ...anchored, ai: 4, armor: 1500, shield: 0, ...armed(267) }));
+    out.push(dude(350, "Kit Duel Victim Bare", 4, 355, 865));
+    out.push(...misn(1053, "Kit D duellist bare", 9103, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 350, shipGoal: 1, shipBehav: 0, shipStart: -2,
+        returnStel: 2047, onAccept: "!b9103", onSuccess: "b9101", onFailure: "b9102", dispWeight: 30000 }));
+
+    // --- H: hunters and prey, both neutral to the player.
+    out.push(govt(356, "Kit Hunter", { classes: [356, -1, -1, -1], enemies: [357, -1, -1, -1] }));
+    out.push(govt(357, "Kit Prey", { classes: [357, -1, -1, -1], enemies: [356, -1, -1, -1] }));
+    const fighter = { accel: 300, speed: 300, turn: 30, armor: 5000, shield: 5000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, ...armed(367) };
+    out.push(...shareRled(859, "Kit Hunter", 1974, 24, fighter));
+    out.push(...shareRled(860, "Kit Prey", 1976, 24, fighter));
+    out.push(dude(342, "Kit Hunters", 3, 356, 859));
+    out.push(dude(343, "Kit Prey", 3, 357, 860));
+    const hunt = system(2071, "Kit Hunt Range", -240, -740, 363, [2071]);
+    hunt.set = { ...hunt.set, dudes: [342, 343, ...none8.slice(2)], dudeProbs: [50, 50, ...zero8.slice(2)], avgShips: 4 };
+    out.push(hunt, spob(2071, "Kit Hunt Port", 0, 0, 138, { flags: 0x43 }));
+    // Added during the wave: in Kit Hunt Range the traffic fought 600-1400
+    // px away, off screen (no brackets to read). sÿst/spöb 2077 Kit Hunt
+    // Arena (gövt 363, no traffic) gets one hunter as the spaceport offer
+    // (mïsn 1054, bit 9104) and one prey as a Mission BBS job (mïsn 1059,
+    // bit 9105), both on the port (ShipStart -1, no goal, own AI).
+    out.push(system(2077, "Kit Hunt Arena", -240, -700, 363, [2077]), spob(2077, "Kit Hunt Arena Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(1054, "Kit H hunter", 9104, { availStel: 2077, shipCount: 1, shipDude: 342, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9104" }));
+    out.push(...misn(1059, "Kit H prey", 9105, { availStel: 2077, availLoc: 0, shipCount: 1, shipDude: 343, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9105", dispWeight: 30000 }));
+    // Added during the wave: in the arena the pair fought on screen for
+    // a few seconds, then flew off. ANCHORED copies in Kit FF Range (sÿst
+    // 2047): shïp 866 Kit Hunter Anchored (yellow, 30000 / 30000) on the far
+    // mark, the spaceport offer mïsn 1060 (bit 9110); shïp 867 Kit Prey
+    // Anchored (cyan) on the near mark, the BBS job mïsn 1061 (bit 9111);
+    // düde 352 / 353. They trade turret fire 150 px apart, above the player.
+    const anchoredFighter = { accel: 0, speed: 0, turn: 60, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, shieldRecharge: 0, armorRecharge: 0, armor: 30000, shield: 30000, ...armed(367) };
+    out.push(...shareRled(866, "Kit Hunter Anchored", 1974, 24, anchoredFighter));
+    out.push(...shareRled(867, "Kit Prey Anchored", 1976, 24, anchoredFighter));
+    out.push(dude(352, "Kit Hunter Anchored", 3, 356, 866));
+    out.push(dude(353, "Kit Prey Anchored", 3, 357, 867));
+    out.push(...misn(1060, "Kit H hunter anchored", 9110, { availStel: 2047, shipCount: 1, shipDude: 352, shipGoal: -1, shipBehav: -1, shipStart: -3, onAccept: "!b9110" }));
+    out.push(...misn(1061, "Kit H prey anchored", 9111, { availStel: 2047, availLoc: 0, shipCount: 1, shipDude: 353, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9111", dispWeight: 30000 }));
+
+    // --- S2 (docs/npc_behavior_gaps.md): illegal MISSION cargo. Offered on
+    // landing at Kit Scan Port (wave 11's S1 rig: gövt 354 Kit Customs,
+    // ScanMask 0x0001, ScanFine 500, SmugPenalty 50): 1 t of food with
+    // ScanMask 0x0001 to Kit Scan Gate Port, CompGovt 354 / CompReward 10.
+    // mïsn 1062 (bit 9112) with Flags 0x0020 ("fails if you're scanned",
+    // OnFailure b9114), 1063 (bit 9113) without (OnFailure b9115).
+    const s2 = { availStel: 2069, travelStel: 2068, cargoType: 0, cargoQty: 1, pickupMode: 0, dropoffMode: 0, scanMask: 0x0001, compGovt: 354, compReward: 10 };
+    out.push(...misn(1062, "Kit S2 cargo 0x20", 9112, { ...s2, flags: 0x0020, onAccept: "!b9112", onFailure: "b9114", onSuccess: "b9116" }));
+    out.push(...misn(1063, "Kit S2 cargo plain", 9113, { ...s2, onAccept: "!b9113", onFailure: "b9115", onSuccess: "b9116" }));
+
+    // --- P1 run 1 (docs/npc_behavior_gaps.md): does a police interceptor
+    // react when the player attacks a third party? sÿst/spöb 2079 Kit
+    // Police Range (owned by gövt 342 Kit Police: AI 4 red discs, shïp 868,
+    // 3000 / 3000, one Kit Escort Gun; düde 354) with traffic of gövt 343
+    // Kit Shipping (AI 1 green discs, shïp 869, 3000 / 3000, unarmed; düde
+    // 355); no relations between the two. Two of each on average.
+    out.push(govt(342, "Kit Police", { classes: [342, -1, -1, -1] }));
+    out.push(govt(343, "Kit Shipping", { classes: [343, -1, -1, -1] }));
+    out.push(...shareRled(868, "Kit Police", 1971, 24, { ...fighter, ai: 4, armor: 3000, shield: 3000, ...armed(365) }));
+    out.push(...shareRled(869, "Kit Shipping", 1972, 24, { ...fighter, ai: 1, armor: 3000, shield: 3000, weapons: none4, weaponCounts: zero4, weaponAmmo: zero4 }));
+    out.push(dude(354, "Kit Police", 4, 342, 868));
+    out.push(dude(355, "Kit Shipping", 1, 343, 869));
+    const police = system(2079, "Kit Police Range", -40, -700, 342, [2079]);
+    police.set = { ...police.set, dudes: [354, 355, ...none8.slice(2)], dudeProbs: [100, 100, ...zero8.slice(2)], avgShips: 4 };
+    out.push(police, spob(2079, "Kit Police Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- A14 (c), take 3: the AI 1 traders fled before the player could
+    // disable them on purpose. shïp 870 Kit Anchored Trader (Kit Bare
+    // Trader with Speed / Accel / Turn 0), düde 356 (AI 1, gövt 350), the
+    // only traffic (one) of sÿst/spöb 2080 Kit Victim Anchored (owner 350).
+    out.push(...ship(870, "Kit Anchored Trader", 138, { armor: 1000, shield: 0, shieldRecharge: 0, speed: 0, accel: 0, turn: 0, ai: 1, strength: 20, crew: 10 }));
+    out.push(dude(356, "Kit Anchored Trader", 1, 350, 870));
+    const anchoredRange = system(2080, "Kit Victim Anchored", -80, -700, 350, [2080]);
+    anchoredRange.set = { ...anchoredRange.set, dudes: [356, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+    out.push(anchoredRange, spob(2080, "Kit Victim Anchored Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- A: A14 with system traffic as the victims.
+    out.push(...ship(861, "Kit Bare Trader", 138, { armor: 1000, shield: 0, shieldRecharge: 0, ai: 1, strength: 20, crew: 10 }));
+    out.push(dude(344, "Kit Victim Bare Trader", 1, 350, 861));
+    out.push(dude(345, "Kit Pirate Bare Trader", 1, 353, 861));
+    out.push(dude(346, "Kit Negative Bare Trader", 1, 369, 861));
+    [[2072, "Kit Owner Traffic", -200, 351, 344], [2073, "Kit Law Traffic", -160, 352, 345],
+        [2074, "Kit Victim Traffic", -120, 350, 344], [2075, "Kit Negative Traffic", -80, 369, 346]].forEach(([id, name, x, g, d]) => {
+        const s = system(id, name, x, -740, g, [id]);
+        s.set = { ...s.set, dudes: [d, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 3 };
+        out.push(s, spob(id, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+    });
+    out.push(weap(283, "Kit One Shot", 130, { reload: 60, duration: 60, armorDamage: 10000, shieldDamage: 10000, guidance: 4, speed: 1200, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(gun(460, "Kit One Shot", 283));
+    // Added during the wave: with the 100-damage Kit Duel Gun the AI 1
+    // trader fled out of reach at 70% armor. wëap 284 Kit Gun 300 (turret,
+    // 300 damage: disabled on the third hit, dead on the fourth) + oütf 461.
+    out.push(weap(284, "Kit Gun 300", 130, { reload: 20, duration: 60, armorDamage: 300, shieldDamage: 300, guidance: 4, speed: 1200, proxRadius: 0, blastRadius: 0, flags: 0 }));
+    out.push(gun(461, "Kit Gun 300", 284));
+    // Added during the wave: killing a NON-owner ship RAISED the local
+    // record by half the owner's Disab + Kill. Control: the victim is the
+    // owner's ALLY. gövt 340 Kit Ally Owner (Disab 30, Board 5, Kill 100,
+    // class 340, allies class 341), 341 Kit Ally Victim (Disab 20, Board
+    // 5, Kill 40, class 341); sÿst/spöb 2078 Kit Ally Traffic (owned by
+    // 340) with traffic of 341's bare traders (düde 351).
+    out.push(govt(340, "Kit Ally Owner", { disabPenalty: 30, boardPenalty: 5, killPenalty: 100, classes: [340, -1, -1, -1], allies: [341, -1, -1, -1] }));
+    out.push(govt(341, "Kit Ally Victim", { disabPenalty: 20, boardPenalty: 5, killPenalty: 40, classes: [341, -1, -1, -1] }));
+    out.push(dude(351, "Kit Ally Bare Trader", 1, 341, 861));
+    const allyTraffic = system(2078, "Kit Ally Traffic", -40, -740, 340, [2078]);
+    allyTraffic.set = { ...allyTraffic.set, dudes: [351, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 3 };
+    out.push(allyTraffic, spob(2078, "Kit Ally Traffic Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- W: a brave trader shot by the player's escort.
+    out.push(...shareRled(862, "Kit Brave Trader", 1972, 24, { ...fighter, ai: 2, armor: 3000, shield: 3000, ...armed(367, 2) }));
+    out.push(dude(347, "Kit Brave Trader", 2, 363, 862));
+    const brave = system(2076, "Kit Brave Range", -200, -700, 363, [2076]);
+    brave.set = { ...brave.set, dudes: [347, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+    out.push(brave, spob(2076, "Kit Brave Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- S: elongated submunition targets (80 x 80 frames, a 76 x 14 bar).
+    const magenta = rgb15(...DISC_COLOURS.magenta);
+    const bar = (w, h) => {
+        const pixels = [];
+        for (let y = 0; y < 80; y++) {
+            for (let x = 0; x < 80; x++) {
+                pixels.push(Math.abs(x - 39.5) < w / 2 && Math.abs(y - 39.5) < h / 2 ? magenta : TRANSPARENT);
+            }
+        }
+        return { width: 80, height: 80, pixels };
+    };
+    [[863, "Kit Sub Bar Side", 1965, bar(76, 14), 348, 1055, 9106], [864, "Kit Sub Bar End", 1967, bar(14, 76), 349, 1056, 9107]].forEach(([id, name, rled, frame, did, mid, bit]) => {
+        out.push(...shareRled(id, name, rled, 80, { ...anchored, ai: 1, turn: 0, armor: 30000, shield: 0, strength: 1, crew: 1 }));
+        out.push({ type: "rlëD", id: rled, name, hex: Buffer.from(encodeRled(Array.from({ length: 36 }, () => frame), { original: true })).toString("hex") });
+        out.push(dude(did, name, 1, 363, id));
+        out.push(...misn(mid, `Kit S ${name}`, bit, { availStel: 2045, shipCount: 1, shipDude: did, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: `!b${bit}` }));
+    });
+
+    // --- U: a 60-line offer text (numbered lines, so a shot reads the scroll position).
+    const longText = Array.from({ length: 60 }, (_, i) => `Line ${String(i + 1).padStart(2, "0")} of the novaref scrolling test.`).join("\r");
+    for (const [id, bit, set] of [[1057, 9108, {}], [1058, 9109, { availLoc: 0, dispWeight: 30000 }]]) {
+        const [m] = misn(id, `Kit U long text ${id}`, bit, { ...set, onAccept: `!b${bit}` });
+        out.push(m, { type: "dësc", id: 4000 + id - 128, text: longText });
+    }
+    return out;
+}
 
 /**
  * Wave 11 (Matthew): every kit shän is a clone of a stock one, and most

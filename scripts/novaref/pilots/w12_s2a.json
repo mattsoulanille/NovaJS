@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w12-s2a",
+  "edits": {
+    "ship": 703,
+    "stellar": 2069,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "missionBits": {
+      "9112": true
+    },
+    "explored": {
+      "2068": 2,
+      "2069": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "458": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w12-s2a"
+  }
+}

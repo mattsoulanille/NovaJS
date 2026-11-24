@@ -1,0 +1,145 @@
+{
+ "name": "scroll_wheel",
+ "_comment": "Wave 12 item 2 (f): the mouse wheel (novaref wheel, new in wave 12) over the mission offer text (1 notch down, 3 down, 4 up) and over the outfitter grid (1 down, 3 down). Pilot w12_scroll at Kit Port.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "a-offer",
+   "window": true
+  },
+  {
+   "wheel": [
+    400,
+    280,
+    -1
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-wheel1",
+   "window": true
+  },
+  {
+   "wheel": [
+    400,
+    280,
+    -1
+   ],
+   "win": true,
+   "count": 3,
+   "gap": 300
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-wheel3",
+   "window": true
+  },
+  {
+   "wheel": [
+    400,
+    280,
+    1
+   ],
+   "win": true,
+   "count": 4,
+   "gap": 300
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-wheel-up4",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "o wait 2500"
+  },
+  {
+   "shot": "b-outfitter",
+   "window": true
+  },
+  {
+   "wheel": [
+    200,
+    280,
+    -1
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-wheel1",
+   "window": true
+  },
+  {
+   "wheel": [
+    200,
+    280,
+    -1
+   ],
+   "win": true,
+   "count": 3,
+   "gap": 300
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-wheel3",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ]
+}

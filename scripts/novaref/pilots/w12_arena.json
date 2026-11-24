@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w12-arena",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-arena",
+    "ship": 839,
+    "stellar": 2077,
+    "explored": {
+      "2077": 2
+    },
+    "missionBits": {
+      "9104": true,
+      "9105": true
+    },
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "601": 1
+    }
+  }
+}

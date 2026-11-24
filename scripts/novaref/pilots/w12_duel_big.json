@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w12-duel-big",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-duel-big",
+    "ship": 839,
+    "stellar": 2047,
+    "explored": {
+      "2047": 2
+    },
+    "missionBits": {
+      "9099": true,
+      "9103": true
+    },
+    "weapons": {
+      "128": 0,
+      "282": 1
+    },
+    "outfits": {
+      "128": 0,
+      "459": 1
+    }
+  }
+}

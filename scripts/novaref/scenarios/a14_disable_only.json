@@ -1,0 +1,27 @@
+{
+ "name": "a14_disable_only",
+ "_comment": "Wave 12 item 3 (c), take 3b: disable only, no kill (the Disab alone). Pilot w12_a14_dis3 in sÿst 2080 Kit Victim Anchored (owner gövt 350: Disab 30, Kill 100; its only traffic an immobile Kit Anchored Trader). Pilot w12_a14_victim_dis in sÿst 2074 Kit Victim Traffic (owner and victims gövt 350: Disab 30, Kill 100) with the Kit Duel Gun (100-damage turret): Tab, tap until the panel reads Disabled, then fire until the hulk is gone; land, map, leave, pull. One-hit kill (a14_traffic.json, w12_a14_victim_one) vs this: -100 / -130 / -160?",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 3000 },
+  { "script": "../loops/disable.mjs", "args": { "target": "tab", "maxTaps": 20, "waitMs": 800 } },
+  { "shot": "disabled", "window": true },
+  { "wait": 8000 },
+  { "shot": "still-disabled", "window": true },
+  { "keys": "Tab wait 600" },
+  { "shot": "t2", "window": true },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "m wait 2500" },
+  { "shot": "map", "window": true },
+  { "keys": "m wait 1500" },
+  { "keys": "Return wait 4000" },
+  { "shot": "space2", "window": true }
+ ],
+ "pull": true
+}

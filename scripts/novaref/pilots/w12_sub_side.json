@@ -1,0 +1,32 @@
+{
+  "name": "novaref-w12-sub-side",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-sub-side",
+    "ship": 818,
+    "stellar": 2045,
+    "explored": {
+      "2045": 2
+    },
+    "missionBits": {
+      "9106": true
+    },
+    "weapons": {
+      "128": 0,
+      "268": 1,
+      "269": 1,
+      "270": 1,
+      "271": 1,
+      "272": 1,
+      "273": 1
+    },
+    "outfits": {
+      "128": 0
+    }
+  }
+}

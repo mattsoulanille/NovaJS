@@ -1,0 +1,21 @@
+{
+ "name": "hunt_watch",
+ "_comment": "Wave 12 item 1 (IFF): what bracket does an NPC get while it attacks ANOTHER NPC, and does it turn on the player? sÿst 2071 Kit Hunt Range: traffic of Kit Hunters (gövt 356, yellow discs) and Kit Prey (gövt 357, cyan discs), each the other's enemy, both AI 3 and neutral to the player (Kit Ring Tank + Kit Tickler, 1-damage turret). Phase 1: Tab through the ships with a shot each (bracket colour while they fight each other). Phase 2: target a Kit Prey (tab_to cyan) and tickle it for 8 s (now the player fights it too); Tab through again; watch the player's shield.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 3000 },
+  { "repeat": 12, "steps": [ { "keys": "Tab wait 700" }, { "shot": "p1-{i}", "window": true } ] },
+  { "script": "../loops/tab_to.mjs", "args": { "colour": "cyan", "tries": 10 } },
+  { "keys": "down:Space wait 8000 up:Space wait 500" },
+  { "shot": "tickled", "window": true },
+  { "repeat": 12, "steps": [ { "keys": "Tab wait 700" }, { "shot": "p2-{i}", "window": true } ] },
+  { "repeat": 6, "steps": [ { "wait": 2500 }, { "shot": "p3-{i}", "window": true } ] },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": false
+}

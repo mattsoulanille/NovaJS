@@ -1,0 +1,305 @@
+{
+ "name": "scroll_measure",
+ "_comment": "Wave 12 item 2, measured (recorded; read the text / grid offsets per frame). Pilot w12_scroll lands at Kit Port. (A) the mission offer (mïsn 1057, 60 numbered lines, 12 px pitch; arrows at window 547,441 up / 580,441 down): one click on down, one on up, the down arrow HELD 3 s, Home, Down HELD 3 s, Home, PageDown, PageUp. (B) the outfitter (grid arrows 194,442 up / 226,442 down): one click down, another, the down arrow HELD 3 s, one click up, up HELD 3 s, PageDown, End. (C) the shipyard (arrows 188,441 / 219,441): one click down, down HELD 3 s. The mouse wheel is scroll_wheel.json.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "a-offer",
+   "window": true
+  },
+  {
+   "click": [
+    580,
+    441
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-click-down",
+   "window": true
+  },
+  {
+   "click": [
+    580,
+    441
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-click-down2",
+   "window": true
+  },
+  {
+   "click": [
+    547,
+    441
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-click-up",
+   "window": true
+  },
+  {
+   "keys": "Home wait 700"
+  },
+  {
+   "click": [
+    580,
+    441
+   ],
+   "win": true,
+   "hold_ms": 3000
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "a-hold-down",
+   "window": true
+  },
+  {
+   "keys": "Home wait 700"
+  },
+  {
+   "keys": "Down@3000 wait 700"
+  },
+  {
+   "shot": "a-key-hold-down",
+   "window": true
+  },
+  {
+   "keys": "Home wait 700"
+  },
+  {
+   "keys": "PageDown wait 700"
+  },
+  {
+   "shot": "a-pgdn",
+   "window": true
+  },
+  {
+   "keys": "PageDown wait 700"
+  },
+  {
+   "shot": "a-pgdn2",
+   "window": true
+  },
+  {
+   "keys": "PageUp wait 700"
+  },
+  {
+   "shot": "a-pgup",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "o wait 2500"
+  },
+  {
+   "shot": "b-outfitter",
+   "window": true
+  },
+  {
+   "click": [
+    226,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-click-down",
+   "window": true
+  },
+  {
+   "click": [
+    226,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-click-down2",
+   "window": true
+  },
+  {
+   "click": [
+    226,
+    442
+   ],
+   "win": true,
+   "hold_ms": 3000
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-hold-down",
+   "window": true
+  },
+  {
+   "click": [
+    194,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-click-up",
+   "window": true
+  },
+  {
+   "click": [
+    194,
+    442
+   ],
+   "win": true,
+   "hold_ms": 3000
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "b-hold-up",
+   "window": true
+  },
+  {
+   "keys": "PageDown wait 700"
+  },
+  {
+   "shot": "b-pgdn",
+   "window": true
+  },
+  {
+   "keys": "End wait 700"
+  },
+  {
+   "shot": "b-end",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "keys": "s wait 2500"
+  },
+  {
+   "shot": "c-shipyard",
+   "window": true
+  },
+  {
+   "click": [
+    219,
+    441
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "c-click-down",
+   "window": true
+  },
+  {
+   "click": [
+    219,
+    441
+   ],
+   "win": true,
+   "hold_ms": 3000
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "c-hold-down",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ]
+}

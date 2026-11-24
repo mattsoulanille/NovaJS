@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w12-scroll",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-scroll",
+    "ship": 839,
+    "stellar": 2100,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9108": true,
+      "9109": true
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    }
+  }
+}

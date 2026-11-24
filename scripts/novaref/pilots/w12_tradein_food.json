@@ -1,0 +1,32 @@
+{
+  "name": "novaref-w12-tradein-food",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 300,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-tradein-food",
+    "ship": 850,
+    "stellar": 2100,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "cargo": [
+      50,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+ "name": "s2_scan",
+ "_comment": "Wave 12 item 7, S2: illegal MISSION cargo. The pilot (Kit Lancer, nothing illegal aboard) starts beside Kit Scan Port in Kit Scan Range (gövt 354 Kit Customs: ScanMask 0x0001, ScanFine 500, SmugPenalty 50), lands, accepts the offer (1 t of food with ScanMask 0x0001 for Kit Scan Gate Port; mïsn 1062 with Flags 0x0020 'fails if scanned', or 1063 without), takes off and waits 30 s for a scan (status line), opens the mission list, lands again, leaves, pull: credits (ScanFine?), the 2069 record (SmugPenalty?), the mission state and bits (b9114 / b9115 = OnFailure). Pilots w12_s2a (0x0020), w12_s2b (plain).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 2000" },
+  { "repeat": 20, "steps": [ { "wait": 1200 }, { "shot": "w-{i}", "window": true } ] },
+  { "keys": "i wait 1500" },
+  { "shot": "missions", "window": true },
+  { "keys": "Return wait 1200" },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "landed-2", "window": true },
+  { "keys": "Return wait 4000" },
+  { "shot": "left", "window": true }
+ ],
+ "pull": true
+}

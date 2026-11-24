@@ -1,0 +1,37 @@
+{
+  "name": "novaref-w12-a14-dis3",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-a14-dis3",
+    "ship": 703,
+    "stellar": 2080,
+    "explored": {
+      "2061": 2,
+      "2062": 2,
+      "2063": 2,
+      "2064": 2,
+      "2065": 2,
+      "2066": 2,
+      "2072": 2,
+      "2073": 2,
+      "2074": 2,
+      "2075": 2,
+      "2060": 2,
+      "2080": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "282": 1
+    },
+    "outfits": {
+      "128": 0,
+      "459": 1
+    }
+  }
+}

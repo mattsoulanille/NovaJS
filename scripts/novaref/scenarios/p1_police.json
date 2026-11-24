@@ -1,0 +1,27 @@
+{
+ "name": "p1_police",
+ "_comment": "Wave 12 item 7, P1 run 1: the player (Kit Lancer + Kit Tickler, 1-damage turret) starts beside Kit Police Port in sÿst 2079 Kit Police Range (owner gövt 342 Kit Police: AI 4 red discs; traffic also of gövt 343 Kit Shipping: AI 1 green discs; no relations). Survey with Tab, then target a Kit Shipping (tab_to green) and tickle it 15 s; Tab through again (the police brackets), watch the player's shield 16 s; land, map, leave, pull (records with 2079: the owner is the police, not the victim's govt).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 2000 },
+  { "repeat": 6, "steps": [ { "keys": "Tab wait 700" }, { "shot": "p0-{i}", "window": true } ] },
+  { "script": "../loops/tab_to.mjs", "args": { "colour": "green", "tries": 8 } },
+  { "keys": "down:Space wait 15000 up:Space wait 500" },
+  { "shot": "tickled", "window": true },
+  { "repeat": 8, "steps": [ { "keys": "Tab wait 700" }, { "shot": "p1-{i}", "window": true } ] },
+  { "repeat": 8, "steps": [ { "wait": 2000 }, { "shot": "p2-{i}", "window": true } ] },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "m wait 2500" },
+  { "shot": "map", "window": true },
+  { "keys": "m wait 1500" },
+  { "keys": "Return wait 4000" },
+  { "shot": "space2", "window": true }
+ ],
+ "pull": true
+}

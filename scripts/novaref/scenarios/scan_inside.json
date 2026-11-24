@@ -1,0 +1,23 @@
+{
+ "name": "scan_inside",
+ "_comment": "Wave 12 item 7, S1 run 3 + the record read-back wave 11 missed: the pod pilot (w12_scan_inside: Kit Lancer + one Kit Contraband Pod, ScanMask 0x0001) STARTS in Kit Scan Range beside Kit Scan Port (Enter Ship, no jump). Is it scanned without arriving by jump? Watch 60 s (a shot every ~2.5 s), then land at once (the port is under the player), read the map's Legal Status, leave and pull: the 2069 record after a fine (SmugPenalty 50?) and the credits.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 3000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "repeat": 24, "steps": [ { "wait": 1500 }, { "shot": "w-{i}", "window": true } ] },
+  { "keys": "Tab wait 600" },
+  { "shot": "tab1", "window": true },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "m wait 2500" },
+  { "shot": "map", "window": true },
+  { "keys": "m wait 1500" },
+  { "keys": "Return wait 4000" },
+  { "shot": "space2", "window": true }
+ ],
+ "pull": true
+}

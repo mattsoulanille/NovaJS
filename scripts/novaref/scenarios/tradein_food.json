@@ -1,0 +1,31 @@
+{
+ "name": "tradein_food",
+ "_comment": "Wave 12 item 6b: the trade-in's second data point. Pilot w12_tradein_food: Kit Mass Roomy 100 (cost 100,000) with NO outfits and 50 t of food. Shipyard, the first cell (Kit Mass Roomy 300), Buy Ship: the confirm dialog's Trade-In. 25,000 = the hull only; 26,250 = the hull + the food at 100 / t. (Wave 11: 27,500 with 5,000 of plain outfits, 2 Keeps and 50 t of food aboard.)",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "spaceport", "window": true },
+  { "keys": "t wait 2500" },
+  { "shot": "trade", "window": true },
+  { "keys": "Escape wait 2000" },
+  { "keys": "s wait 2500" },
+  { "shot": "shipyard", "window": true },
+  { "click": [84, 180], "win": true },
+  { "move": true },
+  { "wait": 700 },
+  { "shot": "roomy300", "window": true },
+  { "click": [452, 442], "win": true },
+  { "move": true },
+  { "wait": 1200 },
+  { "shot": "buy-confirm", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "bought", "window": true },
+  { "click": [567, 442], "win": true },
+  { "move": true },
+  { "wait": 1200 },
+  { "shot": "spaceport2", "window": true }
+ ]
+}

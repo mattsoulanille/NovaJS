@@ -1,0 +1,16 @@
+{
+ "name": "trade_schmoo",
+ "_comment": "Wave 12 item 6: the Trade Center at Schmoo (stock spöb 322, in the BoughtAt lists of jünk 145 Seafood Delicacies, 146 Opals and 149 Durknen Girns). Stock data, no plug-in; pilot w12_schmoo (record 0, mission bits clear) lands and opens the exchange (t). Which jünk rows show?",
+ "pilot": { "as": "novaref-scenario" },
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "shot": "space", "window": true },
+  { "keys": "l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "t wait 2500" },
+  { "shot": "trade", "window": true },
+  { "keys": "Escape wait 2000" },
+  { "shot": "spaceport", "window": true }
+ ]
+}

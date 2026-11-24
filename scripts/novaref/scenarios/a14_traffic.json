@@ -1,0 +1,27 @@
+{
+ "name": "a14_traffic",
+ "_comment": "Wave 12 item 3: A14 with SYSTEM traffic as the victim. The pilot starts at the port of a kit system whose traffic is Kit Bare Traders (AI 1, shield 0, armor 1000) and carries Kit One Shot (one 10000-damage bolt: the trader dies in ONE hit, never disabled). Tab, one tap, check the panel (No Target), land, map (Legal Status), leave, pull: which systems' records changed, and by how much. Pilots w12_a14_owner (2072: owner 351, victims 350), w12_a14_enemy (2073: owner 352, victims its enemy 353), w12_a14_victim_one (2074: owner and victims 350), w12_negpen (2075: gövt 369, penalties -100).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 3000 },
+  { "keys": "Tab wait 600" },
+  { "shot": "t1", "window": true },
+  { "keys": "Space@100 wait 2500" },
+  { "shot": "t1-after", "window": true },
+  { "keys": "Tab wait 600" },
+  { "shot": "t2", "window": true },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "m wait 2500" },
+  { "shot": "map", "window": true },
+  { "keys": "m wait 1500" },
+  { "keys": "Return wait 4000" },
+  { "shot": "space2", "window": true }
+ ],
+ "pull": true
+}

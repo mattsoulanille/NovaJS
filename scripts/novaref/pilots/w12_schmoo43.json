@@ -1,0 +1,16 @@
+{
+  "name": "novaref-w12-schmoo43",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 300,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w12-schmoo43",
+    "missionBits": {
+      "43": true
+    },
+    "stellar": 322
+  }
+}

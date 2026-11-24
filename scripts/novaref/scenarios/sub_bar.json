@@ -1,0 +1,23 @@
+{
+ "name": "sub_bar",
+ "_comment": "Wave 12 item 5: submunition fuse vs an ELONGATED target. Kit Sub Range, the target 150 px north of Kit Sub Port: Kit Sub Bar Side (mïsn 1055: a 76 x 14 magenta bar lying across the line of fire, the same on every frame) or Kit Sub Bar End (mïsn 1056: the bar upright, end-on to the player). The player (Kit Ring Crawler at rest) fires the slow parents 268-273 (Speed 200 = 2 px a frame, prox 0 / 8 / 12 / 16 / 20 / 30) one at a time; read where each detonated (and whether it subbed) from the recording. Pilots w12_sub_side, w12_sub_end.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "keys": "Return wait 3500" },
+  { "shot": "space", "window": true },
+  { "keys": "Tab wait 600" },
+  { "shot": "target", "window": true },
+  { "record": "start", "window": true },
+  { "wait": 1000 },
+  { "repeat": 6, "steps": [ { "keys": "w wait 500" }, { "shot": "sel-{i}", "window": true }, { "keys": "down:ctrl wait 150 up:ctrl wait 5500" }, { "shot": "fired-{i}", "window": true } ] },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ]
+}
