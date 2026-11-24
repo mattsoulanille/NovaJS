@@ -5370,6 +5370,8 @@ ship with "You can't board this ship.".
   The armor margin is unchanged, `REPAIR_MARGIN_FRACTION` (threshold +
   10% of max, 43% = 1300 of 3000 on the kit hull): inside the measured
   33%-53% bracket, and one 600 blast re-disables it as on the original.
+  947634e1: the status line now reads "Escort repaired." (STR# 2002
+  #126) instead of NovaJS's own sentence.
 - **e0b875ea**, mission allies: the own-escort repair skips mission ships
   (boarding a disabled mission ally opens the plunder dialog); an escort
   goal fails the tick its ship is disabled (`shipDisabled`); the display
