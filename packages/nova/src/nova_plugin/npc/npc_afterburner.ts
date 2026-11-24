@@ -1,7 +1,7 @@
 import { ShipAIFlags } from 'novadatainterface/ship_data';
 import { Optional } from 'nova_ecs/optional';
 import {
-    MovementPhysicsComponent, MovementStateComponent, MovementSystem,
+    MovementPhysicsComponent, MovementSystem,
 } from 'nova_ecs/plugins/movement_plugin';
 import { System } from 'nova_ecs/system';
 import { EscortCommandComponent } from '../player/index.js';
@@ -31,12 +31,22 @@ import { NpcComponent, NpcState } from './npc_component.js';
  *  - never went over its ordinary top speed while it hung within about
  *    140 px of the player (its first 36 s).
  *
- * Here: an NPC of such a hull burns while it is ATTACKING (NpcSteeringSystem
- * 'attack') and thrusting at its target, which that arm does only beyond
- * its stand-off distance; inside it the ship coasts, and the boosted speed
- * bleeds off as after a player's burn (afterburner_plugin.ts's
- * decayedSpeedCap). That is the simplest rule that gives both halves of the
- * measurement. NpcAfterburnerSystem applies the boost on top of what
+ * Reference "W1 / C1 / H1 wave 16" (the same hull, a second run): its
+ * MEDIAN speed was 5.3 px a frame, 1.9x the control's 2.8, and its 90th
+ * percentile 5.7 — it flew at about the boosted top speed most of the run,
+ * ranging wide (median 223 px from the player), not only on the closing leg
+ * of a run.
+ *
+ * Here: an NPC of such a hull burns for as long as it is ATTACKING
+ * (NpcSteeringSystem 'attack'), thrusting or coasting: its top speed stays
+ * raised the whole engagement, so it closes, passes through and swings
+ * back at the boosted speed, and its thrust is boosted whenever it thrusts.
+ * Wave 15's first-pass rule (burn only while thrusting at the target,
+ * beyond the stand-off) let the boost bleed off on every coast and could
+ * not give wave 16's median. Wave 15's slow 36 s is read as a turning
+ * fight close in, where a ship cannot build speed whatever its cap — GUESS;
+ * NovaJS's attack arm has no close-in turning fight (it coasts inside its
+ * 250 px stand-off). NpcAfterburnerSystem applies the boost on top of what
  * travel's EffectiveMovementPhysicsSystem wrote this tick.
  *
  * GUESSES (docs/npc_behavior_gaps.md W1): whether it also burns to flee,
@@ -53,17 +63,17 @@ import { NpcComponent, NpcState } from './npc_component.js';
 export const AI_AFTERBURNER_FACTOR = 1.6;
 
 /**
- * Whether this NPC burns its AI afterburner this tick. `accelerating` is
- * the thrust NpcSteeringSystem has just set (MovementState.accelerating).
- * Pure; synced state only.
+ * Whether this NPC burns its AI afterburner this tick: the whole time it is
+ * attacking (thrusting or coasting), never while a player's escort command
+ * drives it or while it holds a gövt 0x0010 stand-off. Pure; synced state
+ * only.
  */
 export function npcAfterburning(npc: NpcState | undefined,
     aiFlags: Pick<ShipAIFlags, 'alwaysHasAfterburner'> | undefined,
-    accelerating: number, commanded: boolean): boolean {
+    commanded: boolean): boolean {
     return npc !== undefined && !commanded
         && aiFlags?.alwaysHasAfterburner === true
-        && npc.mode === 'attack' && npc.retreatSince === undefined
-        && accelerating > 0;
+        && npc.mode === 'attack' && npc.retreatSince === undefined;
 }
 
 /**
@@ -74,19 +84,20 @@ export function npcAfterburning(npc: NpcState | undefined,
  * A cap still above that (overspeed bleeding off) is kept. Not during a
  * jump sequence (its burn owns the physics) and not while disabled.
  *
- * Reads the thrust NpcSteeringSystem set this tick: steering runs before
- * JumpSequenceSystem, which runs before EffectiveMovementPhysicsSystem.
+ * Reads the mode NpcDecisionSystem / NpcSteeringSystem left this tick:
+ * steering runs before JumpSequenceSystem, which runs before
+ * EffectiveMovementPhysicsSystem.
  */
 export const NpcAfterburnerSystem = new System({
     name: 'NpcAfterburnerSystem',
     args: [NpcComponent, ShipDataComponent, ShipPhysicsComponent,
-        MovementPhysicsComponent, MovementStateComponent,
+        MovementPhysicsComponent,
         Optional(EscortCommandComponent), Optional(JumpComponent),
         Optional(DisabledComponent), Optional(IsIonizedComponent)] as const,
-    step(npc, shipData, shipPhysics, movementPhysics, movementState,
+    step(npc, shipData, shipPhysics, movementPhysics,
         escortCommand, jump, disabled, isIonized) {
         if (jump || disabled || !npcAfterburning(npc, shipData.aiFlags,
-            movementState.accelerating, escortCommand !== undefined)) {
+            escortCommand !== undefined)) {
             return;
         }
         const base = getShipMovementPhysics(shipPhysics);

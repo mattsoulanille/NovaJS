@@ -310,23 +310,22 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
     describe('AI afterburner (shïp Flags 0x0040)', () => {
         const flag = { alwaysHasAfterburner: true };
 
-        it('burns only while attacking and thrusting', () => {
-            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag, 1,
-                false)).toBeTrue();
-            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag, 0,
-                false)).toBeFalse();
-            for (const mode of ['travel', 'patrol', 'flee', 'depart'] as const) {
-                expect(npcAfterburning({ aiType: 3, mode }, flag, 1, false))
-                    .withContext(mode).toBeFalse();
-            }
-            expect(npcAfterburning({ aiType: 3, mode: 'attack' },
-                { alwaysHasAfterburner: false }, 1, false)).toBeFalse();
-            // A commanded escort, a gövt 0x0010 stand-off: no.
-            expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag, 1,
-                true)).toBeFalse();
-            expect(npcAfterburning({ aiType: 3, mode: 'attack',
-                retreatSince: 0 }, flag, 1, false)).toBeFalse();
-        });
+        it('burns the whole attack, thrusting or coasting (W1 wave 16)',
+            () => {
+                expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
+                    false)).toBeTrue();
+                for (const mode of ['travel', 'patrol', 'flee', 'depart'] as const) {
+                    expect(npcAfterburning({ aiType: 3, mode }, flag, false))
+                        .withContext(mode).toBeFalse();
+                }
+                expect(npcAfterburning({ aiType: 3, mode: 'attack' },
+                    { alwaysHasAfterburner: false }, false)).toBeFalse();
+                // A commanded escort, a gövt 0x0010 stand-off: no.
+                expect(npcAfterburning({ aiType: 3, mode: 'attack' }, flag,
+                    true)).toBeFalse();
+                expect(npcAfterburning({ aiType: 3, mode: 'attack',
+                    retreatSince: 0 }, flag, false)).toBeFalse();
+            });
 
         it('runs at 1.6x the control hull\'s top speed on an attack run '
             + '(W1)', async () => {
@@ -345,6 +344,37 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
                 expect(burnerAttacked).toBeTrue();
                 expect(control).toBeCloseTo(SPEED, 0);
                 expect(burner).toBeCloseTo(SPEED * AI_AFTERBURNER_FACTOR, 0);
+            });
+
+        it('flies at the boosted speed MOST of an attack, not only on the '
+            + 'closing leg (W1 wave 16: median 1.9x the control)',
+            async () => {
+                // Wave 16: the flagged hull's MEDIAN speed was 5.3 px a
+                // frame against the control's 2.8, its 90th percentile 5.7
+                // — near its boosted top speed most of the run. Sampled from
+                // the first attack on, against a target 3000 px off.
+                const { world, addShip } = await hullWorld();
+                await addShip('enemy', TARGET_HULL, 0, 3000, THEM);
+                await addShip('burner', BURNER, -100, 0, US, { aiType: 3 });
+                await addShip('control', CONTROL, 100, 0, US, { aiType: 3 });
+                const burner: number[] = [];
+                const control: number[] = [];
+                runFor(world, 60, () => {
+                    if (npcOf(world, 'burner')?.mode === 'attack') {
+                        burner.push(speedOf(world, 'burner'));
+                    }
+                    if (npcOf(world, 'control')?.mode === 'attack') {
+                        control.push(speedOf(world, 'control'));
+                    }
+                });
+                const median = (xs: number[]) =>
+                    [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+                expect(burner.length).toBeGreaterThan(100);
+                expect(control.length).toBeGreaterThan(100);
+                expect(median(burner))
+                    .toBeGreaterThan(1.4 * median(control));
+                expect(median(burner))
+                    .toBeGreaterThan(0.8 * SPEED * AI_AFTERBURNER_FACTOR);
             });
 
         it('does not burn when it is not fighting', async () => {
