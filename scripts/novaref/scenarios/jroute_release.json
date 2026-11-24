@@ -1,0 +1,149 @@
+{
+ "name": "jroute_release",
+ "_comment": "Wave 11 item 2c: as jroute_tap, but j is held 2.5 s (released mid-transit; the jump takes about 5.7 s from j to the arrival) and then the run watches 25 s.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "one-shift-far",
+   "window": true
+  },
+  {
+   "click": [
+    330,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "click": [
+    424,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "click": [
+    495,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "route3",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 2000 up:Up wait 500"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "keys": "down:j wait 2500 up:j"
+  },
+  {
+   "repeat": 12,
+   "steps": [
+    {
+     "wait": 1500
+    },
+    {
+     "shot": "w-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map-end",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  }
+ ],
+ "pull": true
+}

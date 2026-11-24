@@ -1,0 +1,88 @@
+{
+ "name": "a14_warship",
+ "_comment": "Wave 11 item 3, take 3: pilot w11_a14_home3b (no mission) in s\u00ffst 2070 Kit Victim Home 3 (g\u00f6vt 350: Disab 30 / Kill 100) with its AI 3 system warships (Kit Raiders of g\u00f6vt 350). Tab, fire the 5000 beam 3 s, twice (one or two kills), land, leave, pull: does a system warship's kill change the 2070 record (100 or 130 each)?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "t1",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "t1-after",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "t2",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "t2-after",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "t3",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "landed",
+   "window": true
+  },
+  {
+   "keys": "m wait 2500"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "space2",
+   "window": true
+  }
+ ],
+ "pull": true
+}

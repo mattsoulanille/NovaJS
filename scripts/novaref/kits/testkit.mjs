@@ -282,8 +282,178 @@ export default {
         ...wave7Resources(),
         ...wave8Resources(),
         ...wave10Resources(),
-    ],
+        ...wave11Resources(),
+    ].map(withoutRunningLights),
 };
+
+/**
+ * Wave 11 (Matthew): every kit shän is a clone of a stock one, and most
+ * carry the stock RUNNING LIGHTS (the Shuttle's shän 128, behind every
+ * disc / pointer / ring hull, has LightImage 1600 blinking in mode 1).
+ * Blinking light pixels can pass for shots, sparkles, bracket pixels or
+ * radar blips and shift lit-pixel counts and blob centroids, so the kit
+ * switches them off on EVERY kit shän: LightImage / LightMask -1 (offsets
+ * 30 / 32) and BlinkMode 0 (offset 54). The engine glow (GlowImage, shown
+ * while thrusting) is kept. Before wave 11 the lights were on.
+ */
+export function withoutRunningLights(r) {
+    if (r.type !== "shän") return r;
+    return { ...r, set: { ...(r.set ?? {}), "@30:i16": -1, "@32:i16": -1, "@54:i16": 0 } };
+}
+
+/**
+ * Wave-11 experiments (docs/reference_experiments.md, "... wave 11").
+ * Nothing retired; ids above wave 10's (shïp 849+, wëap 277+, oütf 456+,
+ * düde 330+, gövt 350-353, sÿst/spöb 2061+, mïsn 1038+, bits 9081+, rlëD
+ * 1963, free between the stock 1952 and the kit's 1970).
+ *
+ *  R   Reviving a disabled ally (wave 10 item 5). shïp 849 Kit Ally
+ *      Pointer: the 24 px pointer hulk's sprite (rlëD 1959) on a working
+ *      AI 3 hull (shield 1000, armor 3000, NO recharge, one Kit Escort
+ *      Gun, fuel 300), so what a revive restores reads off the target
+ *      panel. wëap 277 Kit Blast 600 (the Kit Blast Bomb at 600 damage) +
+ *      oütf 456 disables it in a few taps. düde 330 (AI 3, gövt 360) /
+ *      331 (AI 1, gövt 363). mïsn 1038 (bit 9081) ShipBehav 1 / ShipGoal 3
+ *      at Kit Port (the mission ally); 1039 (9082) the same ship of the
+ *      neutral govt, no goal (a plain NPC); 1040 (9083) ShipGoal 5 rescue
+ *      + ShipBehav 1 + Flags 0x0001 (auto-abort) with CompGovt 360 /
+ *      CompReward 20, OnAccept b9084, OnAbort b9085, OnSuccess b9086
+ *      (#320 item 3's deferred case); 1041 (9087) the same rescue without
+ *      0x0001, ReturnStel Kit Port. Hired escort: a pilot `escorts` entry.
+ *  M   0x0400 trade-in and loaded mass (wave 10 item 11): oütf 457 Kit
+ *      Mass Keep (0x0404: mass-scaled AND persistent, Mass 10); shïp 850 /
+ *      851 Kit Mass Roomy 100 / 300 (Mass 100 / 300, 200 t free, cargo 50).
+ *  S   Submunitions: wëap 278 Sub Beam Short (a turreted beam 100 px long,
+ *      the target 150 px away: it ends untouched), 279 Sub Beam Fixed
+ *      (guidance 0, 300 px, fired where the nose points); shïp 852 Kit Sub
+ *      Target 48 (a 48 px magenta disc, rlëD 1963), düde 332, mïsn 1042
+ *      (bit 9088) on Kit Sub Mark.
+ *  A   A14 follow-ups. gövt 350 Kit Victim Govt (Disab 30, Board 5, Kill
+ *      100), 351 Kit Owner Govt (Disab 7, Board 3, Kill 13). sÿst/spöb 2061
+ *      Kit Owner Range (owned by 351), sÿst 2062 Kit Victim Home (350),
+ *      2063 Kit Owner Home 2 (351). düde 333 Kit Victim Trader (AI 1, 350,
+ *      shïp 708), mïsn 1043 (bit 9089) beside the player at 2061's port.
+ *      gövt 352 Kit Law Govt (Disab 30, Kill 100; enemy of 353's class),
+ *      353 Kit Pirate Govt (Disab 20, Kill 40; enemy of 352's class).
+ *      sÿst/spöb 2064 Kit Law Range (352), sÿst 2065 Kit Pirate Home (353),
+ *      2066 Kit Law Home 2 (352). düde 334 Kit Pirate Trader (AI 1, 353),
+ *      mïsn 1044 (bit 9090) beside the player at 2064's port.
+ *  E   AppearOn: shïp 853 / 854 Kit Appear A / B (Kit Trader clones whose
+ *      AppearOn tests the unset bits 9095 / 9096), düde 335 (AI 1, gövt
+ *      363, 50 / 50), mïsn 1045 (bit 9091) at Kit Port, ShipStart -1.
+ */
+function wave11Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+
+    // --- R: reviving a disabled ally.
+    out.push(...shareRled(849, "Kit Ally Pointer", 1959, 24, {
+        accel: 600, speed: 300, turn: 60, armor: 3000, shield: 1000, shieldRecharge: 0, armorRecharge: 0,
+        mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0, fuel: 300, cost: 50000,
+        weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+    }));
+    out.push(weap(277, "Kit Blast 600", 134, { reload: 45, duration: 2, armorDamage: 600, shieldDamage: 600, guidance: -1, speed: 300, proxRadius: 0, blastRadius: 300, flags: 0x8000, guidedTurn: 0 }));
+    out.push(gun(456, "Kit Blast 600", 277));
+    out.push(dude(330, "Kit Ally", 3, 360, 849));
+    out.push(dude(331, "Kit Ally Neutral", 1, 363, 849));
+    out.push(...misn(1038, "Kit R mission ally", 9081, { shipCount: 1, shipDude: 330, shipGoal: 3, shipBehav: 1, shipStart: -1, onAccept: "!b9081" }));
+    out.push(...misn(1039, "Kit R plain NPC", 9082, { shipCount: 1, shipDude: 331, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9082" }));
+    const rescue = { shipCount: 1, shipDude: 330, shipGoal: 5, shipBehav: 1, shipStart: -1, compGovt: 360, compReward: 20 };
+    out.push(...misn(1040, "Kit R rescue auto-abort", 9083, { ...rescue, flags: 0x0001, onAccept: "b9084 !b9083", onAbort: "b9085", onSuccess: "b9086" }));
+    out.push(...misn(1041, "Kit R rescue", 9087, { ...rescue, returnStel: 2100, onAccept: "b9084 !b9087", onAbort: "b9085", onSuccess: "b9086" }));
+    // Added during the wave: a ShipBehav-1 ship answered every board with
+    // "You can't board this ship." while its mission ran, so mïsn 1046
+    // (bit 9092) is the rescue with ShipBehav -1 (the ship's own AI 3).
+    out.push(...misn(1046, "Kit R rescue free", 9092, { ...rescue, shipBehav: -1, returnStel: 2100, onAccept: "b9084 !b9092", onAbort: "b9085", onSuccess: "b9086" }));
+
+    // --- M: a mass-scaled persistent outfit and two roomy hulls.
+    const keep = gun(457, "Kit Mass Keep", 0);
+    keep.set = { ...keep.set, displayWeight: 9989, modType: 12, modVal: 1, max: 20, flags: 0x0404, cost: 1000, mass: 10 };
+    out.push(keep);
+    [[850, 100], [851, 300]].forEach(([id, mass]) =>
+        out.push(...ship(id, `Kit Mass Roomy ${mass}`, 128, { displayWeight: 9700 + mass, mass, freeMass: 200, cargo: 50, armor: 300, shield: 300, maxGuns: 4, maxTurrets: 4, ai: 1, strength: 10, cost: 100000 })));
+
+    // --- S: submunitions from a beam that ends untouched; a third target size.
+    const beamParent = { reload: 60, duration: 8, armorDamage: 1, shieldDamage: 1, speed: 0, graphic: -1,
+        proxRadius: 0, blastRadius: 0, flags: 0x0002, flags2: 0, subCount: 4, subType: 251, subTheta: -90, subLimit: 0 };
+    out.push(weap(278, "Sub Beam Short", 170, { ...beamParent, guidance: 3, beamLength: 100 }));
+    out.push(weap(279, "Sub Beam Fixed", 170, { ...beamParent, guidance: 0, beamLength: 300 }));
+    const g48 = discShipGraphics(1963, DISC_COLOURS.magenta, 48, 36, 46);
+    out.push({ type: "shïp", id: 852, name: "Kit Sub Target 48", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Sub Target 48", longName: "Kit Sub Target 48", commName: "Kit Sub Target 48", subtitle: "",
+        accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 10, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, shieldRecharge: 0, armorRecharge: 0, armor: 30000, shield: 0 } });
+    out.push({ type: "shän", id: 852, name: "Kit Sub Target 48", clone: "shän:128", set: { "@0:i16": 1963, "@2:i16": 1964, "@4:i16": 1, "@6:i16": 48, "@8:i16": 48 } });
+    out.push({ type: "rlëD", id: 1963, name: "Kit Sub Target 48", hex: Buffer.from(g48.rled).toString("hex") });
+    out.push(dude(332, "Kit Sub Target 48", 1, 363, 852));
+    out.push(...misn(1042, "Kit S sub target 48", 9088, { availStel: 2045, shipCount: 1, shipDude: 332, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+
+    // --- A: whose record a crime changes (A14 follow-ups).
+    out.push(govt(350, "Kit Victim Govt", { disabPenalty: 30, boardPenalty: 5, killPenalty: 100 }));
+    out.push(govt(351, "Kit Owner Govt", { disabPenalty: 7, boardPenalty: 3, killPenalty: 13 }));
+    out.push(system(2061, "Kit Owner Range", -440, -700, 351, [2061]));
+    out.push(spob(2061, "Kit Owner Port", 0, 0, 138, { flags: 0x43 }));
+    // Added during the wave (the 3c control): Kit Victim Home gets a port
+    // (spöb 2067) and mïsn 1047 (bit 9093) puts the same trader there.
+    out.push(system(2062, "Kit Victim Home", -440, -740, 350, [2067]));
+    out.push(spob(2067, "Kit Victim Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(1047, "Kit A victim trader at home", 9093, { availStel: 2067, shipCount: 1, shipDude: 333, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9093" }));
+    out.push(system(2063, "Kit Owner Home 2", -400, -740, 351, []));
+    out.push(dude(333, "Kit Victim Trader", 1, 350, 708));
+    // Added during the wave: neither the mission trader in 2061 nor in its
+    // own 2062 changed any record, unlike wave 5's AI 3 system warship.
+    // sÿst 2070 Kit Victim Home 3 (gövt 350, spöb 2070 port) has system
+    // traffic, düde 337 (AI 3 Kit Raiders of gövt 350, two on average),
+    // AND mïsn 1048 (bit 9094) puts the mission trader there too.
+    out.push(dude(337, "Kit Victim Warship", 3, 350, 707));
+    const home3 = system(2070, "Kit Victim Home 3", -480, -740, 350, [2070]);
+    home3.set = { ...home3.set, dudes: [337, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 };
+    out.push(home3, spob(2070, "Kit Victim Port 3", 0, 0, 138, { flags: 0x43 }));
+    out.push(...misn(1048, "Kit A victim trader home 3", 9094, { availStel: 2070, shipCount: 1, shipDude: 333, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9094" }));
+    out.push(...misn(1043, "Kit A victim trader", 9089, { availStel: 2061, shipCount: 1, shipDude: 333, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9089" }));
+    out.push(govt(352, "Kit Law Govt", { disabPenalty: 30, boardPenalty: 5, killPenalty: 100, classes: [352, -1, -1, -1], enemies: [353, -1, -1, -1] }));
+    out.push(govt(353, "Kit Pirate Govt", { disabPenalty: 20, boardPenalty: 5, killPenalty: 40, classes: [353, -1, -1, -1], enemies: [352, -1, -1, -1] }));
+    out.push(system(2064, "Kit Law Range", -400, -700, 352, [2064]));
+    out.push(spob(2064, "Kit Law Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(system(2065, "Kit Pirate Home", -360, -740, 353, []));
+    out.push(system(2066, "Kit Law Home 2", -360, -700, 352, []));
+    out.push(dude(334, "Kit Pirate Trader", 1, 353, 708));
+    out.push(...misn(1044, "Kit A pirate trader", 9090, { availStel: 2064, shipCount: 1, shipDude: 334, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9090" }));
+
+    // --- E: a mission düde whose every class the player's bits exclude.
+    out.push(...ship(853, "Kit Appear A", 138, { armor: 1000, shield: 1000, ai: 1, strength: 20, crew: 10, appearOn: "b9095" }));
+    out.push(...ship(854, "Kit Appear B", 138, { armor: 1000, shield: 1000, ai: 1, strength: 20, crew: 10, appearOn: "b9096" }));
+    const ad = dude(335, "Kit Appear", 1, 363, 853);
+    ad.set = { ...ad.set, ships: [853, 854, ...none16.slice(2)], probs: [50, 50, ...zero16.slice(2)] };
+    out.push(ad);
+    out.push(...misn(1045, "Kit E appear-excluded", 9091, { shipCount: 1, shipDude: 335, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9091" }));
+
+    // --- S1 / I1 (docs/npc_behavior_gaps.md): contraband scanning and the
+    // idle interceptor. gövt 354 Kit Customs (ScanMask 0x0001, ScanFine
+    // 500, SmugPenalty 50) owns sÿst 2069 Kit Scan Range (spöb 2069 port;
+    // traffic: düde 336, two AI 4 Kit Customs Cutters, shïp 855: the red
+    // disc, Speed 300, one Kit Escort Gun). sÿst 2068 Kit Scan Gate
+    // (neutral, spöb 2068 port) is its only link, so a pilot jumps in.
+    // oütf 458 Kit Contraband Pod: ScanMask 0x0001, mass 0, +1 fuel.
+    out.push(govt(354, "Kit Customs", { scanMask: 0x0001, scanFine: 500, smugPenalty: 50 }));
+    out.push(...shareRled(855, "Kit Customs Cutter", 1971, 24, {
+        accel: 300, speed: 300, turn: 30, armor: 3000, shield: 3000, mass: 50, freeMass: 100, cargo: 10,
+        ai: 4, strength: 50, crew: 10, flags: 0, flags2: 0, ...{ weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] },
+    }));
+    out.push(dude(336, "Kit Customs Cutter", 4, 354, 855));
+    const gate = system(2068, "Kit Scan Gate", -320, -700, 363, [2068]);
+    gate.set = { ...gate.set, links: [2069, ...none16.slice(1)] };
+    const range = system(2069, "Kit Scan Range", -280, -700, 354, [2069]);
+    range.set = { ...range.set, links: [2068, ...none16.slice(1)], dudes: [336, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 2 };
+    out.push(gate, range);
+    out.push(spob(2068, "Kit Scan Gate Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(spob(2069, "Kit Scan Port", 0, 0, 138, { flags: 0x43 }));
+    const pod = gun(458, "Kit Contraband Pod", 0);
+    pod.set = { ...pod.set, displayWeight: 9988, modType: 12, modVal: 1, max: 5, mass: 0, scanMask: 0x0001 };
+    out.push(pod);
+    return out;
+}
 
 /**
  * Wave-10 experiments (docs/reference_experiments.md, "Submunitions wave

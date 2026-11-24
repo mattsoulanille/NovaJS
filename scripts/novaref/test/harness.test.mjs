@@ -165,6 +165,31 @@ test("the test kit stays inside the game's id limits", async () => {
     }
 });
 
+test("every kit shän has its running lights switched off (wave 11)", async () => {
+    const kit = (await import("../kits/testkit.mjs")).default;
+    const shans = kit.resources.filter((r) => r.type === "shän");
+    assert.ok(shans.length > 100);
+    for (const r of shans) {
+        assert.equal(r.set["@30:i16"], -1, `shän ${r.id} LightImage`);
+        assert.equal(r.set["@32:i16"], -1, `shän ${r.id} LightMask`);
+        assert.equal(r.set["@54:i16"], 0, `shän ${r.id} BlinkMode`);
+    }
+});
+
+test("board.mjs disabledWord tells Disabled from Shields Down / No Shields", async () => {
+    const { disabledWord } = await import("../loops/board.mjs");
+    // A synthetic 832 x 604 RGBA shot with white pixels in the panel corner
+    // from x 651 to `endX` (Disabled ends near 700, the others past 705).
+    const shot = (endX) => {
+        const width = 832, height = 604, data = Buffer.alloc(width * height * 4);
+        for (let y = 426; y < 436; y++) for (let x = 651; x < endX; x += 2) data.fill(255, (y * width + x) * 4, (y * width + x) * 4 + 4);
+        return { width, height, data };
+    };
+    assert.equal(disabledWord(shot(700)), true);
+    assert.equal(disabledWord(shot(728)), false);
+    assert.equal(disabledWord(shot(651)), false);
+});
+
 test("expandSteps unrolls repeat blocks and numbers labels", async () => {
     const { expandSteps } = await import("../steps.mjs");
     const got = expandSteps([

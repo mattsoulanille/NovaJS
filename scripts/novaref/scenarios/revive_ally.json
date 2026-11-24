@@ -1,0 +1,33 @@
+{
+ "name": "revive_ally",
+ "_comment": "Wave 11 item 1a: can the player revive a disabled ally? Pilots w11_ally (mïsn 1038: a ShipBehav-1 / ShipGoal-3 Kit Ally Pointer, shield 1000 / armor 3000, no recharge), w11_neutral (mïsn 1039: the same hull of the neutral gövt 363, no goal), w11_hired (the same hull as a hired escort; target=click). Accept on landing, take off, target the ship, tap the Kit Blast 600 until the panel says Disabled, hail it (y, shot, Close Channel), board it (loops/board.mjs sweep), then watch the target panel.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "keys": "Return wait 3500" },
+  { "shot": "space", "window": true },
+  { "record": "start", "window": true },
+  { "wait": 2500 },
+  { "script": "../loops/disable.mjs", "args": { "target": "tab", "maxTaps": 14, "waitMs": 1700 } },
+  { "shot": "disabled", "window": true },
+  { "keys": "y wait 1500" },
+  { "shot": "hail", "window": true },
+  { "click": [309, 389], "win": true },
+  { "move": true },
+  { "wait": 800 },
+  { "shot": "after-hail", "window": true },
+  { "script": "../loops/board.mjs", "args": { "speedPxS": 44, "turnDegS": 87.1, "near": 220, "stepMs": 120, "maxSteps": 40, "dialogClicks": [[418, 380, "abort"]], "retarget": 3, "fineBelowPx": 30, "fineStepMs": 50, "sweep": { "atPx": 4, "startOnSilent": true, "repeat": 1, "turnMs": 60, "presses": 40, "stopAfter": 1 } } },
+  { "repeat": 5, "steps": [ { "wait": 1500 }, { "shot": "after-{i}", "window": true } ] },
+  { "keys": "i wait 1500" },
+  { "shot": "missions", "window": true },
+  { "keys": "Return wait 1200" },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ]
+}

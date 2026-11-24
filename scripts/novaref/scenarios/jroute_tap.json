@@ -1,0 +1,149 @@
+{
+ "name": "jroute_tap",
+ "_comment": "Wave 11 item 2a: pilot w11_route (all of the kit map region explored) at Map Hub. One shift-click on Map Far (auto-route through EXPLORED East and Void?), Clear Route, pins East, Void, Far (a 3-hop route), close the map, fly out 2 s, TAP j once, watch 30 s, the map at the end.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "one-shift-far",
+   "window": true
+  },
+  {
+   "click": [
+    330,
+    541
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "click": [
+    424,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "click": [
+    495,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 500
+  },
+  {
+   "click": [
+    566,
+    264
+   ],
+   "win": true,
+   "mods": "shift"
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "route3",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "closed",
+   "window": true
+  },
+  {
+   "keys": "down:Up wait 2000 up:Up wait 500"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "keys": "j"
+  },
+  {
+   "repeat": 12,
+   "steps": [
+    {
+     "wait": 1500
+    },
+    {
+     "shot": "w-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "map-end",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  }
+ ],
+ "pull": true
+}

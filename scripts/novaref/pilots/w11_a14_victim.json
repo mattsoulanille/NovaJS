@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w11-a14-victim",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w11-a14-victim",
+    "ship": 703,
+    "stellar": 2067,
+    "explored": {
+      "2061": 2,
+      "2062": 2,
+      "2063": 2
+    },
+    "missionBits": {
+      "9093": true
+    },
+    "weapons": {
+      "128": 0,
+      "360": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1
+    }
+  }
+}

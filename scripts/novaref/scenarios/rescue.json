@@ -1,0 +1,144 @@
+{
+ "name": "rescue",
+ "_comment": "Wave 11 item 1a/1b: a ShipGoal-5 rescue ship (starts disabled) with ShipBehav 1. Pilot w11_rescue_aa (m\u00efsn 1040, Flags 0x0001 auto-abort, CompGovt 360 / CompReward 20, OnAccept b9084, OnAbort b9085, OnSuccess b9086) or w11_rescue (m\u00efsn 1041, the same without 0x0001, ReturnStel Kit Port). Accept, leave (pilot-leave1), Tab, the mission list, board it (loops/board.mjs), watch the panel, the mission list again, land, leave (pilot-leave2).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "pull": "leave1"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "missions1",
+   "window": true
+  },
+  {
+   "keys": "Return wait 1200"
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 40,
+     "stopAfter": 1
+    },
+    "stopWhenEnabled": true
+   }
+  },
+  {
+   "repeat": 4,
+   "steps": [
+    {
+     "wait": 1500
+    },
+    {
+     "shot": "after-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "missions2",
+   "window": true
+  },
+  {
+   "keys": "Return wait 1200"
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "landed2",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "after-return2",
+   "window": true
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "space2",
+   "window": true
+  },
+  {
+   "pull": "leave2"
+  }
+ ]
+}

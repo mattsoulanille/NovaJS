@@ -111,6 +111,27 @@ export function targetShown(png) {
     return n >= 20;
 }
 
+/**
+ * Whether the target panel's lower-left corner reads "Disabled" (white).
+ * board.mjs `targetDisabledShown` also counts the white "100%" of a
+ * "Shield: 100%" line (its grey label sits in the same corner), so this
+ * only looks left of where the percentage starts (window x 645-690).
+ * "Shields Down" and "No Shields" are white too but run on past x 705;
+ * "Disabled" ends at about x 700 (wave 11).
+ */
+export function disabledWord(png) {
+    const { width: W, data } = png;
+    let n = 0, tail = 0;
+    for (let y = 422; y < 440; y++) for (let x = 645; x < 740; x++) {
+        const i = (y * W + x) * 4;
+        if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) {
+            if (x < 690) n++;
+            else if (x >= 705) tail++;
+        }
+    }
+    return n >= 30 && tail === 0;
+}
+
 /** Radar blips (radar px from the player) of an RGBA window PNG. */
 export function radarOf(png) {
     const rgb = Buffer.alloc(png.width * png.height * 3);
@@ -175,7 +196,7 @@ export function sweepKeys(i, { repeat = 3, turnMs = 115, between = null, waitMs 
  * `sweep.dialogClicks` those buttons are clicked instead (each followed by
  * a shot) the first `sweep.clickTimes` times a dialog opens.
  */
-async function runSweep(api, shoot, sweep, basePng, dialogClicks) {
+async function runSweep(api, shoot, sweep, basePng, dialogClicks, stopWhenEnabled = false) {
     const base = brightShare(basePng);
     const presses = sweep.presses ?? 36;
     const out = [];
@@ -199,6 +220,13 @@ async function runSweep(api, shoot, sweep, basePng, dialogClicks) {
                 await shoot("sw-abort");
             }
             opened++;
+        }
+        // Wave 11: an own escort is repaired without a dialog; stop there.
+        if (stopWhenEnabled && !dialog && targetShown(r.png) && !disabledWord(r.png)) {
+            rec.enabled = true;
+            out.push(rec);
+            api.log({ sweep: i, enabled: true });
+            break;
         }
         out.push(rec);
         api.log({ sweep: i, dialog, lit: rec.lit });
@@ -354,7 +382,7 @@ export default async function board(api, args = {}) {
             api.log({ fired: args.fire.keys, dist: Math.round(dist) });
         }
         if (sweep && (dist <= sweep.atPx || loc.hidden)) {
-            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks);
+            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks, args.stopWhenEnabled);
             steps.push({ k, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), sweep: r });
             break;
         }
@@ -376,10 +404,18 @@ export default async function board(api, args = {}) {
         // dialog during a sweep run ends it; nothing is left to sweep.
         // `sweep.startOnSilent` starts the sweep at the first press the game
         // answers with nothing (the status line is cleared, not rewritten).
+        // Wave 11: boarding one's own disabled escort repairs it ("Escort
+        // repaired.", no dialog); with args.stopWhenEnabled the walk ends
+        // at the first press after which the panel no longer says Disabled.
+        if (args.stopWhenEnabled && !dialog && targetShown(reply.png) && !disabledWord(reply.png)) {
+            steps[steps.length - 1].enabled = true;
+            api.log({ step: k, enabled: true });
+            break;
+        }
         const silent = !dialog && statusText(reply.png).n < 100;
         steps[steps.length - 1].silent = silent;
         if (sweep && !dialog && silent && sweep.startOnSilent) {
-            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks);
+            const r = await runSweep(api, shoot, sweep, s.png, args.dialogClicks, args.stopWhenEnabled);
             steps[steps.length - 1].sweep = r;
             break;
         }

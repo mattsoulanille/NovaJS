@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w11-a14-home3b",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w11-a14-home3b",
+    "ship": 703,
+    "stellar": 2070,
+    "explored": {
+      "2070": 2,
+      "2062": 2,
+      "2061": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "360": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1
+    }
+  }
+}

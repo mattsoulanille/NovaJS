@@ -1,0 +1,24 @@
+{
+  "name": "novaref-w11-scan-clean",
+  "edits": {
+    "ship": 703,
+    "stellar": 2068,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2068": 2,
+      "2069": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w11-scan-clean"
+  }
+}

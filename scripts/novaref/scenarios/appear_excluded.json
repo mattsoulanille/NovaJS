@@ -1,0 +1,77 @@
+{
+ "name": "appear_excluded",
+ "_comment": "Wave 11 item 4: m\u00efsn 1045's d\u00fcde 335 lists only Kit Appear A / B, whose AppearOn tests the unset bits 9095 / 9096. Accept, take off, Tab twice and the mission list: what spawned?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab1",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab2",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab3",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "missions",
+   "window": true
+  },
+  {
+   "keys": "Return wait 1200"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ]
+}

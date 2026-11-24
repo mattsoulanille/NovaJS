@@ -1,0 +1,948 @@
+{
+ "name": "ui_matrix_b",
+ "_comment": "Wave 11 item 5, run B: keys m / i / h / e inside each venue (outfitter, shipyard, trade, bar, Mission BBS with m\u00efsn 1032's job), each from a fresh open, followed by its own undo (m again; a click on the mission list's Done at 520,362; a wait) and the venue's own Done / Leave (coordinates from run A, chosen to land on plain text if the spaceport main is showing). Then cmd+, in the spaceport, and m / i / h / e / Escape on the star map opened while landed (Escape last: it may leave). Pilot w11_ui2 (bit 9073).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "o wait 2000"
+  },
+  {
+   "shot": "O-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "O-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "O-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "O-m-closed",
+   "window": true
+  },
+  {
+   "keys": "o wait 2000"
+  },
+  {
+   "shot": "O-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "O-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "O-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "O-i-closed",
+   "window": true
+  },
+  {
+   "keys": "o wait 2000"
+  },
+  {
+   "shot": "O-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "O-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "O-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "O-h-closed",
+   "window": true
+  },
+  {
+   "keys": "o wait 2000"
+  },
+  {
+   "shot": "O-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "O-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "O-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "O-e-closed",
+   "window": true
+  },
+  {
+   "keys": "s wait 2000"
+  },
+  {
+   "shot": "Y-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "Y-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "Y-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "Y-m-closed",
+   "window": true
+  },
+  {
+   "keys": "s wait 2000"
+  },
+  {
+   "shot": "Y-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "Y-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "Y-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "Y-i-closed",
+   "window": true
+  },
+  {
+   "keys": "s wait 2000"
+  },
+  {
+   "shot": "Y-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "Y-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "Y-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "Y-h-closed",
+   "window": true
+  },
+  {
+   "keys": "s wait 2000"
+  },
+  {
+   "shot": "Y-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "Y-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "Y-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    566,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "Y-e-closed",
+   "window": true
+  },
+  {
+   "keys": "t wait 2000"
+  },
+  {
+   "shot": "T-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "T-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "T-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    522,
+    408
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "T-m-closed",
+   "window": true
+  },
+  {
+   "keys": "t wait 2000"
+  },
+  {
+   "shot": "T-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "T-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "T-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    522,
+    408
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "T-i-closed",
+   "window": true
+  },
+  {
+   "keys": "t wait 2000"
+  },
+  {
+   "shot": "T-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "T-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "T-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    522,
+    408
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "T-h-closed",
+   "window": true
+  },
+  {
+   "keys": "t wait 2000"
+  },
+  {
+   "shot": "T-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "T-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "T-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    522,
+    408
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "T-e-closed",
+   "window": true
+  },
+  {
+   "keys": "b wait 2000"
+  },
+  {
+   "shot": "B-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "B-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "B-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    490,
+    376
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "B-m-closed",
+   "window": true
+  },
+  {
+   "keys": "b wait 2000"
+  },
+  {
+   "shot": "B-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "B-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "B-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    490,
+    376
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "B-i-closed",
+   "window": true
+  },
+  {
+   "keys": "b wait 2000"
+  },
+  {
+   "shot": "B-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "B-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "B-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    490,
+    376
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "B-h-closed",
+   "window": true
+  },
+  {
+   "keys": "b wait 2000"
+  },
+  {
+   "shot": "B-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "B-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "B-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    490,
+    376
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "B-e-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "M-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "M-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-m-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "M-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "M-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-i-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "M-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "M-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-h-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "M-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-e-closed",
+   "window": true
+  },
+  {
+   "keys": "cmd+, wait 2000"
+  },
+  {
+   "shot": "S-prefs",
+   "window": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "S-prefs-2",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "L",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "L-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "L-i-undo",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "L-h",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "L-e",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "L-escape",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "L-escape-2",
+   "window": true
+  }
+ ]
+}

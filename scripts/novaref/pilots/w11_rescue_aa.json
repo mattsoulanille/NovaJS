@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w11-rescue-aa",
+  "edits": {
+    "ship": 839,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9083": true
+    },
+    "weapons": {
+      "128": 0,
+      "277": 1
+    },
+    "outfits": {
+      "128": 0,
+      "456": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w11-rescue-aa"
+  }
+}

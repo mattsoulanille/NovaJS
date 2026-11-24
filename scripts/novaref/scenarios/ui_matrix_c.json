@@ -1,0 +1,300 @@
+{
+ "name": "ui_matrix_c",
+ "_comment": "Wave 11 item 5, run C (run B lost its BBS and landed-map rows behind the bar's no-ships-for-hire popup, which h opened): only the Mission BBS row, then keys m / i / h / e inside each venue (outfitter, shipyard, trade, bar, Mission BBS with m\u00efsn 1032's job), each from a fresh open, followed by its own undo (m again; a click on the mission list's Done at 520,362; a wait) and the venue's own Done / Leave (coordinates from run A, chosen to land on plain text if the spaceport main is showing). Then cmd+, in the spaceport, and m / i / h / e / Escape on the star map opened while landed (Escape last: it may leave). Pilot w11_ui2 (bit 9073).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "M-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "M-m-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-m-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-i",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "M-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "M-i-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-i-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-h",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "M-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "M-h-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-h-closed",
+   "window": true
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M-open-e",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "M-e",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-e-undo",
+   "window": true
+  },
+  {
+   "click": [
+    560,
+    384
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "M-e-closed",
+   "window": true
+  },
+  {
+   "keys": "cmd+, wait 2000"
+  },
+  {
+   "shot": "S-prefs",
+   "window": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "S-prefs-2",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "L",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "L-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "L-i-undo",
+   "window": true
+  },
+  {
+   "keys": "h wait 1500"
+  },
+  {
+   "shot": "L-h",
+   "window": true
+  },
+  {
+   "keys": "e wait 1500"
+  },
+  {
+   "shot": "L-e",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 2000"
+  },
+  {
+   "shot": "L-escape",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "L-escape-2",
+   "window": true
+  }
+ ]
+}

@@ -48,6 +48,8 @@ const summary = {
     strict_play: pilot.globals.strictPlay,
     // Wave 5: every non-zero per-system legal record, keyed by sÿst id.
     legal: Object.fromEntries(p.legalStatus.map((v, i) => [i + 128, v]).filter(([, v]) => v !== 0)),
+    // Wave 11: every set mission bit.
+    mission_bits: [...p.missionBits].flatMap((v, i) => (v ? [i] : [])),
 };
 
 if (!noNames && fs.existsSync(path.join(NOVA_DATA, "Nova Files"))) {

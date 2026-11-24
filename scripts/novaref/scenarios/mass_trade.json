@@ -1,0 +1,248 @@
+{
+ "name": "mass_trade",
+ "_comment": "Wave 11 item 1c: pilot w11_mass on Kit Mass Roomy 100 (Mass 100, 200 t free) LOADED with 5 Kit Plain Mass (50 t), 1 Kit Mass Keep (0x0404, Mass 10) and 50 t of food. Outfitter (Kit Mass Mass 0x0400 at 167,180: its Item Mass from the base Mass 10 or the loaded 21?; Kit Mass Keep at 84,234: buy one), shipyard (first cell: Kit Mass Roomy 300, DisplayWeight 10000): buy it (trade-in), then the outfitter again (Available on the new hull: did the Keep units carry over, at 10 or 30 t each?). Take 2: Buy Ship is at 452,442 (371,443 is Info), Done 567,442.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "o wait 2500"
+  },
+  {
+   "shot": "outfitter",
+   "window": true
+  },
+  {
+   "click": [
+    167,
+    180
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 600
+  },
+  {
+   "shot": "mass-loaded",
+   "window": true
+  },
+  {
+   "click": [
+    84,
+    234
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 600
+  },
+  {
+   "shot": "keep",
+   "window": true
+  },
+  {
+   "click": [
+    371,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 900
+  },
+  {
+   "shot": "keep-bought",
+   "window": true
+  },
+  {
+   "click": [
+    580,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "back",
+   "window": true
+  },
+  {
+   "keys": "s wait 2500"
+  },
+  {
+   "shot": "shipyard",
+   "window": true
+  },
+  {
+   "click": [
+    84,
+    180
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 700
+  },
+  {
+   "shot": "roomy300",
+   "window": true
+  },
+  {
+   "click": [
+    452,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "buy-confirm",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "bought",
+   "window": true
+  },
+  {
+   "shot": "bought-2",
+   "window": true
+  },
+  {
+   "click": [
+    567,
+    442
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "shot": "spaceport2",
+   "window": true
+  },
+  {
+   "keys": "o wait 2500"
+  },
+  {
+   "shot": "outfitter2",
+   "window": true
+  },
+  {
+   "click": [
+    84,
+    180
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 600
+  },
+  {
+   "shot": "cell1",
+   "window": true
+  },
+  {
+   "click": [
+    84,
+    234
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 600
+  },
+  {
+   "shot": "keep2",
+   "window": true
+  },
+  {
+   "click": [
+    167,
+    180
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 600
+  },
+  {
+   "shot": "mass2",
+   "window": true
+  },
+  {
+   "click": [
+    580,
+    443
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 1200
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "space",
+   "window": true
+  }
+ ],
+ "pull": true
+}

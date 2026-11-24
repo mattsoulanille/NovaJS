@@ -1,0 +1,33 @@
+{
+  "name": "novaref-w11-mass",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 300,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w11-mass",
+    "ship": 850,
+    "stellar": 2100,
+    "explored": {
+      "2100": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "455": 5,
+      "457": 1
+    },
+    "cargo": [
+      50,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}

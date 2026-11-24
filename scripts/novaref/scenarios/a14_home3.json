@@ -1,0 +1,138 @@
+{
+ "name": "a14_home3",
+ "_comment": "Wave 11 item 3, take 2: pilot w11_a14_home3 at Kit Victim Port 3 (s\u00ffst 2070, g\u00f6vt 350: Disab 30 / Kill 100), with g\u00f6vt 350 system traffic (AI 3 Kit Raiders) and m\u00efsn 1048's AI 1 mission trader of g\u00f6vt 350. Kill the mission trader (Tab, the 5000 beam), land, leave, pull `trader`; then Tab to a system warship, kill it, land, leave, pull `warship`. Which kill changes the 2070 record, and by 100 or 130?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "trader-target",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "trader-after",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "trader-landed",
+   "window": true
+  },
+  {
+   "keys": "m wait 2500"
+  },
+  {
+   "shot": "trader-map",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "trader-space",
+   "window": true
+  },
+  {
+   "pull": "trader"
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-a",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "tab-b",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "warship-target",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "warship-after",
+   "window": true
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "warship-landed",
+   "window": true
+  },
+  {
+   "keys": "m wait 2500"
+  },
+  {
+   "shot": "warship-map",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "warship-space",
+   "window": true
+  },
+  {
+   "pull": "warship"
+  },
+  {
+   "record": "stop"
+  }
+ ]
+}

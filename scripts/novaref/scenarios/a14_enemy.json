@@ -1,0 +1,92 @@
+{
+ "name": "a14_enemy",
+ "_comment": "Wave 11 item 3b: pilot w11_a14_enemy at Kit Law Port (s\u00ffst 2064, g\u00f6vt 352, whose enemy is g\u00f6vt 353). m\u00efsn 1044 puts a Kit Trader of g\u00f6vt 353 (Disab 20 / Kill 40) beside the port; kill it, land, leave, pull: does 2064's record go up (or down by 353's penalties), and 2065 / 2066?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "after-fire",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "after-tab",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "landed2",
+   "window": true
+  },
+  {
+   "keys": "m wait 2500"
+  },
+  {
+   "shot": "map-legal",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "space2",
+   "window": true
+  }
+ ],
+ "pull": true
+}

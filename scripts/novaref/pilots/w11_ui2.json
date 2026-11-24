@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w11-ui2",
+  "edits": {
+    "ship": 818,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2,
+      "2052": 2
+    },
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "nickname": "Probe",
+    "shipName": "w11-ui2",
+    "missionBits": {
+      "9073": true
+    }
+  }
+}

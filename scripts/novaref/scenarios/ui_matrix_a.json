@@ -1,0 +1,234 @@
+{
+ "name": "ui_matrix_a",
+ "_comment": "Wave 11 item 5, run A: the key matrix from the SPACEPORT and from FLIGHT (m, i, h, e, each followed by its own undo: m again, a click on the mission list's Done at 520,362, a wait), shots of every venue (o, s, t, b, the Mission BBS button 182,430) for their buttons, then cmd+, (preferences?) in flight last. Pilot w11_ui at Kit Port, no missions.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "S-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "S-m-again",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "S-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "S-i-done",
+   "window": true
+  },
+  {
+   "keys": "h wait 700"
+  },
+  {
+   "shot": "S-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "e wait 1200"
+  },
+  {
+   "shot": "S-e",
+   "window": true
+  },
+  {
+   "wait": 9000
+  },
+  {
+   "shot": "S-e-later",
+   "window": true
+  },
+  {
+   "keys": "o wait 2000"
+  },
+  {
+   "shot": "O",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1500"
+  },
+  {
+   "keys": "s wait 2000"
+  },
+  {
+   "shot": "Y",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1500"
+  },
+  {
+   "keys": "t wait 2000"
+  },
+  {
+   "shot": "T",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1500"
+  },
+  {
+   "keys": "b wait 2000"
+  },
+  {
+   "shot": "B",
+   "window": true
+  },
+  {
+   "keys": "Escape wait 1500"
+  },
+  {
+   "click": [
+    182,
+    430
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "M",
+   "window": true
+  },
+  {
+   "keys": "Return wait 1500"
+  },
+  {
+   "shot": "after-M",
+   "window": true
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "F",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "shot": "F-m",
+   "window": true
+  },
+  {
+   "keys": "m wait 1200"
+  },
+  {
+   "shot": "F-m-again",
+   "window": true
+  },
+  {
+   "keys": "i wait 1500"
+  },
+  {
+   "shot": "F-i",
+   "window": true
+  },
+  {
+   "click": [
+    520,
+    362
+   ],
+   "win": true
+  },
+  {
+   "move": true
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "F-i-done",
+   "window": true
+  },
+  {
+   "keys": "h wait 700"
+  },
+  {
+   "shot": "F-h",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "keys": "e wait 1200"
+  },
+  {
+   "shot": "F-e",
+   "window": true
+  },
+  {
+   "wait": 9000
+  },
+  {
+   "shot": "F-e-later",
+   "window": true
+  },
+  {
+   "keys": "cmd+, wait 2000"
+  },
+  {
+   "shot": "F-prefs",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "F-prefs-2",
+   "window": true
+  }
+ ]
+}

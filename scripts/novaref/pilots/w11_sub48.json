@@ -1,0 +1,33 @@
+{
+  "name": "novaref-w11-sub48",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w11-sub48",
+    "ship": 818,
+    "stellar": 2045,
+    "explored": {
+      "2045": 2
+    },
+    "missionBits": {
+      "9088": true
+    },
+    "weapons": {
+      "128": 0,
+      "269": 1,
+      "270": 1,
+      "271": 1,
+      "272": 1,
+      "273": 1,
+      "278": 1,
+      "279": 1
+    },
+    "outfits": {
+      "128": 0
+    }
+  }
+}

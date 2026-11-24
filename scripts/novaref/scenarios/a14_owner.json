@@ -1,0 +1,92 @@
+{
+ "name": "a14_owner",
+ "_comment": "Wave 11 item 3a/3c: pilot w11_a14_owner (record 0) at Kit Owner Port (s\u00ffst 2061, owned by g\u00f6vt 351: Disab 7 / Kill 13). m\u00efsn 1043 puts a Kit Trader of g\u00f6vt 350 (Disab 30 / Kill 100) beside the port; the Kit Beam Turret (5000) kills it in one burst. Land, leave (the pilot is written), pull: the records of 2061 (where), 2062 (the victim's home) and 2063 (the owner's other system).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1500 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "accepted",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "down:Space wait 3000 up:Space wait 1500"
+  },
+  {
+   "shot": "after-fire",
+   "window": true
+  },
+  {
+   "keys": "Tab wait 600"
+  },
+  {
+   "shot": "after-tab",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "keys": "l wait 1500 l wait 1500 l wait 10000"
+  },
+  {
+   "shot": "landed2",
+   "window": true
+  },
+  {
+   "keys": "m wait 2500"
+  },
+  {
+   "shot": "map-legal",
+   "window": true
+  },
+  {
+   "keys": "m wait 1500"
+  },
+  {
+   "keys": "Return wait 4000"
+  },
+  {
+   "shot": "space2",
+   "window": true
+  }
+ ],
+ "pull": true
+}

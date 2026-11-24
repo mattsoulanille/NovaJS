@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w11-a14-enemy",
+  "edits": {
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "nickname": "Probe",
+    "shipName": "w11-a14-enemy",
+    "ship": 703,
+    "stellar": 2064,
+    "explored": {
+      "2064": 2,
+      "2065": 2,
+      "2066": 2
+    },
+    "missionBits": {
+      "9090": true
+    },
+    "weapons": {
+      "128": 0,
+      "360": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+ "name": "revive_hired2",
+ "_comment": "Wave 11 item 1a, take 2 of the hired escort: disable it (Kit Blast 600 taps), board it once (board.mjs stopWhenEnabled: the walk ends at 'Escort repaired.'), shoot the panel, then count the taps that disable it AGAIN (each tap about 600 armor once the shield is down): how much armor the repair gave back. Pilot w11_hired.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "script": "../loops/disable.mjs",
+   "args": {
+    "target": "click",
+    "maxTaps": 14,
+    "waitMs": 1700
+   }
+  },
+  {
+   "shot": "disabled",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 40,
+     "stopAfter": 1
+    },
+    "stopWhenEnabled": true
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "repaired",
+   "window": true
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "repaired-2",
+   "window": true
+  },
+  {
+   "script": "../loops/disable.mjs",
+   "args": {
+    "target": "click",
+    "maxTaps": 8,
+    "waitMs": 1700
+   }
+  },
+  {
+   "shot": "redisabled",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ]
+}
