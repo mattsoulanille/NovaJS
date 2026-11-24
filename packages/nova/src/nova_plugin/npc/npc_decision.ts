@@ -41,7 +41,9 @@ import { chooseNearest } from './npc_targeting.js';
 import { attacksOnSight, huntsOnSight } from './on_sight.js';
 import { warshipRetreat } from './npc_retreat.js';
 import { ShootAllWeaponsAI } from './npc_plugin.js';
-import { chooseScanTarget } from './contraband_target.js';
+import {
+    chooseScanTarget, ContrabandScannedComponent,
+} from './contraband_target.js';
 import { scansHere } from './contraband.js';
 import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
@@ -136,6 +138,9 @@ const NpcTargetsQuery = new Query([UUID, MovementStateComponent, ShipComponent,
     // The ränk 0x0100 suppression set, baked at grant time: the sim
     // worker never loads Rank data, so the flag cannot be read here.
     Optional(AggressionSuppressGovtsComponent),
+    // A contraband detection on this stay in space (contraband_target.ts):
+    // the scanning govt's hunters attack the pilot whatever its CrimeTol.
+    Optional(ContrabandScannedComponent),
     Optional(ExplodingComponent)] as const);
 
 function lookupGovt(gameData: SimulationGameDataInterface,
@@ -403,7 +408,7 @@ export const NpcDecisionSystem = new System({
         let aggressorEntry: readonly [string, number, number] | undefined;
         for (const [otherUuid, otherMovement, , otherData, otherGovt,
             otherShield, cloak, otherDisabled, otherRecords,
-            otherSuppressGovts, otherExploding] of ships) {
+            otherSuppressGovts, otherScanned, otherExploding] of ships) {
             if (otherUuid === uuid || !isTargetable(cloak)
                 || otherExploding !== undefined) {
                 continue;
@@ -425,7 +430,7 @@ export const NpcDecisionSystem = new System({
                     && govtDispositionTo(govtData,
                         lookupGovt(gameData, otherGovt), otherRecords, law,
                         ranksSuppressAggression(otherSuppressGovts,
-                            govtData?.id)) === 'enemy') {
+                            govtData?.id), otherScanned?.hostile) === 'enemy') {
                     const hulk = entities.get(otherUuid);
                     if (hulk && npcPlunderEligible({
                         aiType: npc.aiType,
@@ -467,7 +472,8 @@ export const NpcDecisionSystem = new System({
                 otherRecords, law,
                 // ränk 0x0100 for THIS ship's government: its holder is not
                 // attacked on sight.
-                ranksSuppressAggression(otherSuppressGovts, govtData?.id))
+                ranksSuppressAggression(otherSuppressGovts, govtData?.id),
+                otherScanned?.hostile)
                 || (huntsOnSight(npc.aiType)
                     && attackingProtectee(otherUuid)
                     && govtDisposition(govtData, otherGovtData) !== 'ally')) {

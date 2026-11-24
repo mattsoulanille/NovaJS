@@ -13,7 +13,7 @@ import {
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecordsComponent, localLawIn } from '../reputation/index.js';
 import {
-    applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband,
+    applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband, isDetection,
 } from './contraband.js';
 import {
     ContrabandScannedComponent, contrabandAboard, scannable,
@@ -62,7 +62,10 @@ export interface ContrabandScanEventData {
     scanner: string;
     /** The illegal outfit's lower-case name, when one was found. */
     outfit?: string;
-    /** Illegal cargo (jünk or a plain mission's) was found. */
+    /** The illegal jünk's lower-case name (its LCName), when one was
+     * found. */
+    junk?: string;
+    /** Illegal cargo of a plain mission was found. */
     smuggled: boolean;
     /** A mission with Flags 0x0020 failed. */
     missionFailed: boolean;
@@ -76,6 +79,7 @@ export const ContrabandScanEventType = t.intersection([t.type({
     fine: t.number,
 }), t.partial({
     outfit: t.string,
+    junk: t.string,
 })]);
 export const ContrabandScanEvent =
     new EcsEvent<ContrabandScanEventData>('ContrabandScanEvent');
@@ -87,9 +91,13 @@ registerSimulationBridgeEvent({ event: ContrabandScanEvent });
  * CONTRABAND_SCAN_RANGE of its target scans it: the findings are taken
  * NOW (cargo jettisoned on the way no longer counts), applied to the
  * pilot (contraband.ts's applyContrabandScan), the ship is marked
- * scanned, and the pilot is told. The interceptor then goes back to its
- * business; the decision system will turn it on the pilot if the record
- * the scan cost has made him a criminal here (local_law.ts).
+ * scanned, and the pilot is told. A DETECTION (contraband.ts's
+ * isDetection: the fine line) also names the scanning govt on the marker
+ * (contraband_target.ts's `hostile`), and from the next think every
+ * hunter of that govt in the system attacks the pilot until he lands or
+ * leaves, whatever its CrimeTol (reference "Contraband wave 14": a
+ * CrimeTol-30000 customs govt's cutters fired on a pod pilot for the rest
+ * of the visit).
  *
  * A scan that finds nothing (the hold was emptied en route) still marks
  * the ship, and says nothing (GUESS: the stock "Have a nice day." line,
@@ -142,8 +150,10 @@ export const ContrabandScanSystem = new System({
                 continue; // Still on the way; NpcSteeringSystem flies it.
             }
             const findings = contrabandAboard(target, govt.scanMask, gameData);
-            target.components.set(ContrabandScannedComponent,
-                { at: time.time });
+            target.components.set(ContrabandScannedComponent, {
+                at: time.time,
+                ...(isDetection(findings) ? { hostile: govt.id } : {}),
+            });
             if (hasContraband(findings)) {
                 const result = applyContrabandScan(findings, govt, law, {
                     credits: target.components.get(CreditsComponent),

@@ -31,7 +31,7 @@ import { ranksSuppressAggression } from '../ncb/index.js';
 import { isFightingPlayerFlock, onSightDisposition } from '../combat/index.js';
 import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
-import { NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
+import { contrabandDetectedBy, NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
 import {
     LegalRecordsComponent, LegalRecordsState, LocalLaw, localLawIn,
 } from '../reputation/index.js';
@@ -492,7 +492,7 @@ export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
         ctx.rootGovt, ctx.rootRecords, ctx.law,
         ranksSuppressAggression(ctx.rootEntity?.components
             .get(AggressionSuppressGovtsComponent), otherGovt?.id),
-        ctx.getEntity);
+        ctx.getEntity, contrabandDetectedBy(ctx.rootEntity));
     if (disposition === 'hostile') {
         return true;
     }

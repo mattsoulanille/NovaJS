@@ -96,7 +96,16 @@ export function govtDispositionTo(self: GovtData | undefined,
      * target selection is untouched, so a ship the player shoots at still
      * fights back. The rank buys you their goodwill, not immunity.
      */
-    otherRankSuppresses?: boolean): Disposition {
+    otherRankSuppresses?: boolean,
+    /**
+     * The government whose AI 4 contraband scan DETECTED something aboard
+     * the target on this stay in space (npc/contraband_target.ts's
+     * contrabandDetectedBy). Its ships treat the target as an enemy until
+     * he lands or leaves, whatever its CrimeTol (reference "Contraband
+     * wave 14"). Beside the criminal-record test, so never-attacks and a
+     * ränk 0x0100 suppress it the same way (unmeasured for either).
+     */
+    otherDetectedBy?: string): Disposition {
     const base = govtDisposition(self, other);
     if (otherRankSuppresses) {
         // The rank buys off the automatic hostility and nothing else: an
@@ -106,9 +115,9 @@ export function govtDispositionTo(self: GovtData | undefined,
         // of "will not automatically attack").
         return base === 'enemy' ? 'neutral' : base;
     }
-    if (base !== 'enemy' && self && otherRecords
-        && !self.flags.neverAttacksPlayer
-        && criminalHere(self, otherRecords, law)) {
+    if (base !== 'enemy' && self && !self.flags.neverAttacksPlayer
+        && ((otherDetectedBy !== undefined && otherDetectedBy === self.id)
+            || (otherRecords && criminalHere(self, otherRecords, law)))) {
         return 'enemy';
     }
     return base;

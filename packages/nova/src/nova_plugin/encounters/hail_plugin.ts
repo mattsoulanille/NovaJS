@@ -42,7 +42,7 @@ import {
     isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
 import { AggressionComponent, isIffHostile } from '../combat/index.js';
-import { ShootAllWeaponsComponent } from '../npc/index.js';
+import { contrabandDetectedBy, ShootAllWeaponsComponent } from '../npc/index.js';
 import {
     ControlledByComponent, CreditsComponent, MissionsComponent, PlayerEscortComponent,
 } from '../player/index.js';
@@ -387,7 +387,8 @@ export function applyHail(world: World, peerId: string | undefined,
     // system (reference A14, ruling #376), the one the brackets use too.
     const systemId = world.resources.get(SystemIdResource);
     const disposition = shipDisposition(targetGovt, playerGovt, playerRecords,
-        localLawIn(gameData, systemId));
+        localLawIn(gameData, systemId), undefined,
+        contrabandDetectedBy(player));
 
     // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on #297),
     // not a narrower NPC-posture copy of it: the one predicate the target

@@ -96,6 +96,8 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
  *     criminalHere, reference A14 / ruling #376) — the same rule the
  *     sim's target selection uses (govtDispositionTo). `law` is the law
  *     in force where the player is (localLawIn for the world's system).
+ *  4. The ship's govt detected contraband aboard the player on this stay
+ *     in space (`playerDetectedBy`; reference "Contraband wave 14").
  * Friendliness (only if not hostile): the ship's govt `allies` classes
  * intersect the player's govt classes, or ship and player share a government.
  * Everything else is neutral.
@@ -111,7 +113,14 @@ export function shipDisposition(shipGovt: GovtData | undefined,
      * govtDispositionTo; both read the same rank set so the corners and the
      * ship shooting at you cannot disagree.
      */
-    rankSuppressesAggression?: boolean): Disposition {
+    rankSuppressesAggression?: boolean,
+    /**
+     * The government whose contraband scan detected something aboard the
+     * player on this stay in space (npc/contraband_target.ts's
+     * contrabandDetectedBy): hostile beside the criminal record, as in
+     * govtDispositionTo.
+     */
+    playerDetectedBy?: string): Disposition {
     if (!shipGovt) {
         return 'neutral';
     }
@@ -124,6 +133,10 @@ export function shipDisposition(shipGovt: GovtData | undefined,
             return 'hostile';
         }
         if (playerRecords && criminalHere(shipGovt, playerRecords, law)) {
+            return 'hostile';
+        }
+        if (playerDetectedBy !== undefined
+            && playerDetectedBy === shipGovt.id) {
             return 'hostile';
         }
     }

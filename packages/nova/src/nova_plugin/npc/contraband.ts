@@ -4,7 +4,7 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { displayName } from '../core/index.js';
 import { ActiveMission, Credits, Missions } from '../player/index.js';
 import {
-    addRecord, enforcesHere, LegalRecords, LocalLaw,
+    addRecord, alliedWithOwner, enforcesHere, LegalRecords, LocalLaw,
 } from '../reputation/index.js';
 import { Cargo, OutfitsState } from '../ship/index.js';
 
@@ -19,41 +19,42 @@ import { Cargo, OutfitsState } from '../ship/index.js';
  * (B:2027), a jünk (B:1168) or a mïsn's cargo (B:1364).
  *
  * MEASURED on the original (docs/reference_experiments.md, "S1 / I1 wave
- * 11" and "S1 and S2 wave 12"; gövt Kit Customs: ScanMask 0x0001,
- * ScanFine 500, SmugPenalty 50, CrimeTol 10):
+ * 11", "S1 and S2 wave 12" and "Contraband wave 14"; gövt Kit Customs:
+ * ScanMask 0x0001, ScanFine 500, SmugPenalty 50, CrimeTol 10):
  *  - an illegal OUTFIT: "<scanner>: <pilot>, your posession of a <item> has
  *    been detected. You have been fined 500 credits." ScanFine is charged
- *    once and SmugPenalty comes off the record of the system the scan
- *    happened in. (50 against CrimeTol 10 made the cutters attack; that
- *    is the ordinary criminal rule, local_law.ts, not part of the scan.)
+ *    once and the SmugPenalty moves the record of the system the scan
+ *    happened in (smugglingRecordChange below). The scanning govt's ships
+ *    then attack the pilot until he lands or leaves, whatever its
+ *    CrimeTol (contraband_target.ts's `hostile`).
+ *  - illegal JÜNK: "<scanner>: <pilot>, your attempt to smuggle <the
+ *    jünk's LCName> through this system has been detected. You have been
+ *    fined 500 credits." ScanFine AND SmugPenalty, like an outfit.
  *  - illegal cargo of a mission with mïsn Flags 0x0020: "Your ship has
  *    been scanned - mission failed." The mission fails at once; no fine,
- *    no record change.
+ *    no record change. Only a scan that finds THAT mission's cargo
+ *    illegal fails it: a ScanMask-0 0x0020 mission (as 51 stock missions
+ *    are) survived a scan that found the pilot's pod, and a clean ship
+ *    carrying one is never approached (wave 14, S3).
  *  - illegal cargo of an ORDINARY mission: "<scanner>: <pilot>, your
  *    attempt to smuggle illegal cargo through this system has been
  *    detected. You have been fined 500 credits." The mission continues
  *    and there is NO SmugPenalty (the Bible's SmugPenalty text speaks of
- *    mission cargo; the record moved only for the outfit).
+ *    mission cargo; the record moved only for the outfit and the jünk).
+ *  - ScanFine 0 AND ScanFine -5 alike: the detection line without its
+ *    fine sentence, no money taken, SmugPenalty still charged (see
+ *    contrabandFine for the Bible's contrary reading of -N).
  *  - a clean ship is not approached, and nothing is said to it.
  *
  * GUESSES (not measured; each is listed for the reference Mac in
  * docs/npc_behavior_gaps.md, "Contraband scan"):
- *  - illegal JÜNK is cargo: it reads like an ordinary mission's illegal
- *    cargo (the "attempt to smuggle" line, ScanFine, no SmugPenalty).
- *  - a 0x0020 mission fails only on a scan that FINDS its cargo illegal
- *    (S3). The interceptor never approaches a ship it finds clean, so a
- *    "scan" that finds nothing never happens. 51 stock 0x0020 missions
- *    have ScanMask 0 and so can never be failed by a scan under this
- *    reading.
  *  - a mission's cargo is "aboard" once loaded; a mission with no cargo
  *    at all (passengers, an agent, 8 stock missions with a ScanMask) is
  *    illegal for as long as it is active.
- *  - ScanFine 0 is the Bible's "no fine, just a warning": the detection
- *    line without its fine sentence, and an outfit's SmugPenalty is
- *    still charged. ScanFine -N fines N% of the pilot's cash (Bible).
- *    A fine never takes more than the pilot has.
+ *  - a fine never takes more than the pilot has.
  *  - one scan can find several things: every flagged mission fails, ONE
- *    fine is charged, and the line names the outfit when there is one.
+ *    fine is charged, ONE record change (for an outfit or jünk), and the
+ *    line names the outfit, else the jünk, else "illegal cargo".
  */
 
 // --- Tuning constants (GUESSES: listed for the reference Mac) ---
@@ -91,8 +92,12 @@ export interface ContrabandFindings {
     /** The first illegal outfit aboard, by sorted outfit id: its id and
      * the lower-case name the status line uses. */
     outfit?: { id: string, name: string };
-    /** Illegal jünk, or illegal cargo of a mission without Flags 0x0020:
-     * the "attempt to smuggle illegal cargo" case. */
+    /** The first illegal jünk in the hold, by sorted jünk id: its id and
+     * the lower-case name the status line uses ("your attempt to smuggle
+     * <name> through this system"). */
+    junk?: { id: string, name: string };
+    /** Illegal cargo of a mission without Flags 0x0020: the "attempt to
+     * smuggle illegal cargo" case. */
     smuggled: boolean;
     /** Active missions with Flags 0x0020 whose cargo is illegal here,
      * sorted by id: each fails. */
@@ -101,14 +106,27 @@ export interface ContrabandFindings {
 
 /** Whether a scan finding `findings` has anything to act on. */
 export function hasContraband(findings: ContrabandFindings): boolean {
-    return findings.outfit !== undefined || findings.smuggled
-        || findings.failMissions.length > 0;
+    return isDetection(findings) || findings.failMissions.length > 0;
+}
+
+/** Whether a scan finding `findings` DETECTED something: the fine line
+ * ("... has been detected."), as opposed to nothing, or only a failed
+ * Flags 0x0020 mission. */
+export function isDetection(findings: ContrabandFindings): boolean {
+    return findings.outfit !== undefined || findings.junk !== undefined
+        || findings.smuggled;
 }
 
 /** The lower-case name a scan line gives an outfit: its LCName, else
  * its name (player-facing part) in lower case. */
 export function outfitScanName(outfit: OutfitData): string {
     return outfit.lcName?.trim() || displayName(outfit.name).toLowerCase();
+}
+
+/** The lower-case name a scan line gives a jünk: its LCName (measured:
+ * "kit contraband" for the kit jünk), else its name in lower case. */
+export function junkScanName(junk: JunkData): string {
+    return junk.lcName?.trim() || displayName(junk.name).toLowerCase();
 }
 
 /**
@@ -159,13 +177,14 @@ export function findContraband(govtMask: number, hold: ScannedHold,
             break;
         }
     }
-    for (const [key, tons] of hold.cargo ?? []) {
-        if (tons > 0 && key.startsWith('junk:')) {
-            const junk = getJunk(key.slice('junk:'.length));
-            if (junk && scanMaskMatches(govtMask, junk.scanMask)) {
-                findings.smuggled = true;
-                break;
-            }
+    const junkIds = [...(hold.cargo ?? [])]
+        .filter(([key, tons]) => tons > 0 && key.startsWith('junk:'))
+        .map(([key]) => key.slice('junk:'.length)).sort();
+    for (const id of junkIds) {
+        const junk = getJunk(id);
+        if (junk && scanMaskMatches(govtMask, junk.scanMask)) {
+            findings.junk = { id, name: junkScanName(junk) };
+            break;
         }
     }
     for (const id of [...(hold.missions?.keys() ?? [])].sort()) {
@@ -183,38 +202,69 @@ export function findContraband(govtMask: number, hold: ScannedHold,
 }
 
 /**
- * The fine a gövt ScanFine charges a pilot holding `credits` (Bible
- * B:977-985): 1 and up, that amount; 0, nothing ("just a warning"); -1
- * and below, that percent of the pilot's cash (-5 is 5%), rounded down.
- * Never more than the pilot has (guess: the original's behaviour with too
- * little cash is not measured).
+ * The fine a gövt ScanFine charges a pilot holding `credits`: 1 and up,
+ * that amount; 0 AND BELOW, nothing (the detection line goes without its
+ * fine sentence). Never more than the pilot has (guess: the original's
+ * behaviour with too little cash is not measured).
+ *
+ * THE ORIGINAL OVER THE BIBLE. The Bible (B:977-985) reads ScanFine -1
+ * and below as "fine this percent of the player's cash" (-5 would be
+ * 5%). The original 1.1.1 does not: a ScanFine -5 govt detected a pod,
+ * printed the line without the fine sentence and took nothing, exactly
+ * as ScanFine 0 does (docs/reference_experiments.md, "Contraband wave
+ * 14", `w14_percent`). NovaJS follows the original.
  */
 export function contrabandFine(scanFine: number, credits: number): number {
     const cash = Math.max(0, Math.floor(credits));
-    if (scanFine > 0) {
-        return Math.min(Math.floor(scanFine), cash);
-    }
-    if (scanFine < 0) {
-        return Math.floor(cash * Math.min(100, -scanFine) / 100);
-    }
-    return 0;
+    return scanFine > 0 ? Math.min(Math.floor(scanFine), cash) : 0;
 }
 
 /**
- * The record a detected illegal outfit costs (gövt SmugPenalty, B:987).
- * Negative is "this govt does not care", as for every other penalty
- * field (reputation.ts's crimePenalty; stock nova:159 derelict Wraith
- * writes -1), and 0 is no penalty: smuggling has no engine default.
+ * A govt's SmugPenalty (B:987) as a scan charges it; 0 for no govt. 0 is
+ * no penalty: smuggling has no engine default. A NEGATIVE field reads as
+ * no penalty too (unmeasured for SmugPenalty; the one stock gövt that
+ * writes negatives is the derelict Wraith nova:159, -1. The crime
+ * penalties, reputation.ts's crimePenalty, were measured to apply
+ * signed).
  */
-export function smugglingPenalty(govt: GovtData): number {
-    return govt.smugglePenalty > 0 ? govt.smugglePenalty : 0;
+export function smugglingPenalty(govt: GovtData | undefined): number {
+    return govt && govt.smugglePenalty > 0 ? govt.smugglePenalty : 0;
+}
+
+/**
+ * How a detected illegal outfit or jünk moves the pilot's record of the
+ * system the scan happened in: the A14 crime rule with the SCANNER as
+ * the "victim" (docs/reference_experiments.md, "Contraband wave 14",
+ * finding 7).
+ *  - The scanner OWNS the system or is the owner's ally (either
+ *    direction, local_law.ts's alliedWithOwner): minus the SCANNER's
+ *    SmugPenalty (the customs govts in their own systems: -50).
+ *  - Otherwise (a nosy govt scanning in another govt's system): PLUS half
+ *    the OWNER's SmugPenalty, truncated (owner SmugPenalty 70: +35; owner
+ *    SmugPenalty 0: no change).
+ * Smuggling does not spread to linked systems (the nosy scanner's own
+ * system, linked to the one it scanned in, did not move), so on NovaJS's
+ * per-govt records it is ONE change, to the system's status govt
+ * (law.recordGovtId), as the doc proposes. GUESSES: when an ALLY of the
+ * owner scans, the ally's own SmugPenalty is charged (not measured); in
+ * an independent system there is no owner, so a nosy scanner's detection
+ * changes no record.
+ */
+export function smugglingRecordChange(scanner: GovtData, law: LocalLaw):
+    number {
+    if (law.owner && alliedWithOwner(scanner, law.owner)) {
+        return -smugglingPenalty(scanner);
+    }
+    return Math.trunc(smugglingPenalty(law.owner) / 2);
 }
 
 /** What a scan did to the scanned pilot, for the status line. */
 export interface ContrabandScanResult {
     /** The illegal outfit's lower-case name, when one was found. */
     outfit?: string;
-    /** Illegal cargo (jünk, or a plain mission's) was found. */
+    /** The illegal jünk's lower-case name, when one was found. */
+    junk?: string;
+    /** Illegal cargo of a plain mission was found. */
     smuggled: boolean;
     /** At least one Flags 0x0020 mission failed. */
     missionFailed: boolean;
@@ -224,12 +274,12 @@ export interface ContrabandScanResult {
 
 /**
  * Applies a scan's findings to the scanned pilot's synced state, in
- * place: flagged missions fail, an outfit or smuggled cargo costs the
- * govt's ScanFine once, and an outfit also costs its SmugPenalty off the
- * record of the system the scan happened in (law.recordGovtId: the
- * system's status govt, the per-govt stand-in for the original's
- * per-system record, as local_law.ts reads it). Pure apart from those
- * mutations; no PRNG.
+ * place: flagged missions fail, a detection (an outfit, jünk or a plain
+ * mission's cargo) costs the govt's ScanFine once, and an outfit or jünk
+ * also moves the record of the system the scan happened in by
+ * smugglingRecordChange (law.recordGovtId: the system's status govt, the
+ * per-govt stand-in for the original's per-system record, as
+ * local_law.ts reads it). Pure apart from those mutations; no PRNG.
  */
 export function applyContrabandScan(findings: ContrabandFindings,
     scanner: GovtData, law: LocalLaw, pilot: {
@@ -242,19 +292,21 @@ export function applyContrabandScan(findings: ContrabandFindings,
         }
     }
     let fine = 0;
-    if (findings.outfit || findings.smuggled) {
+    if (isDetection(findings)) {
         if (pilot.credits) {
             fine = contrabandFine(scanner.scanFine, pilot.credits.credits);
             pilot.credits.credits -= fine;
         }
-        const penalty = smugglingPenalty(scanner);
-        if (findings.outfit && pilot.records && penalty > 0) {
+        const change = smugglingRecordChange(scanner, law);
+        if ((findings.outfit || findings.junk) && pilot.records
+            && change !== 0) {
             addRecord(pilot.records, law.recordGovtId, law.recordGovt,
-                -penalty);
+                change);
         }
     }
     return {
         ...(findings.outfit ? { outfit: findings.outfit.name } : {}),
+        ...(findings.junk ? { junk: findings.junk.name } : {}),
         smuggled: findings.smuggled,
         missionFailed: findings.failMissions.length > 0,
         fine,

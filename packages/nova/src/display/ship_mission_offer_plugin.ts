@@ -25,6 +25,7 @@ import {
     expandMissionText, offerAutoAccepts, RefusedMission,
 } from '../nova_plugin/missions/index.js';
 import { isAttackingPlayer } from '../nova_plugin/combat/index.js';
+import { contrabandDetectedBy } from '../nova_plugin/npc/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import { offerSubstitutions } from '../spaceport/mission_offers.js';
@@ -183,8 +184,8 @@ export async function shipOfferGates(world: World, target: Entity,
         disabled: target.components.has(DisabledComponent),
         attackingPlayer,
         holdsGrudge: attackingPlayer,
-        likesPlayer:
-            shipDisposition(govt, playerGovt, records, law) !== 'hostile',
+        likesPlayer: shipDisposition(govt, playerGovt, records, law, undefined,
+            contrabandDetectedBy(player?.entity)) !== 'hostile',
     };
 }
 

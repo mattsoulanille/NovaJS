@@ -50,7 +50,7 @@ import { GovtComponent } from '../core/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
-    clearContrabandScan, formationsIn, FormationComponent, nextFormationSlot,
+    endContrabandHostility, formationsIn, FormationComponent, nextFormationSlot,
     NpcComponent, PlayerPlunderedEvent,
 } from '../npc/index.js';
 import {
@@ -1464,9 +1464,11 @@ const BoardingActionSystem = new System({
  * escort lands or is swept along by a jump or a gate transit), and the
  * jumping ship's own half is in jump_plugin's JumpFromSystem.
  *
- * The same landing also ends the ship's system VISIT for the AI 4
- * contraband scan, so its scanned-this-visit marker goes too and it may be
- * scanned again when it takes off (npc/contraband_target.ts; a guess).
+ * The same landing ends the AI 4 contraband scan's HOSTILITY (the
+ * scanning govt's ships attack a detected smuggler only until he lands),
+ * but NOT its scanned-this-visit marker: the original rescans only after
+ * an arrival by jump, never after a landing and takeoff
+ * (npc/contraband_target.ts; reference "Contraband wave 14").
  */
 const BoardingLandingResetSystem = new System({
     name: 'BoardingLandingResetSystem',
@@ -1474,7 +1476,7 @@ const BoardingLandingResetSystem = new System({
     args: [GetEntity] as const,
     step(entity) {
         clearPlunderRecord(entity);
-        clearContrabandScan(entity);
+        endContrabandHostility(entity);
     },
     // #237 pin (shared: *): among the LandEvent handlers, after travel's
     // gate departure.

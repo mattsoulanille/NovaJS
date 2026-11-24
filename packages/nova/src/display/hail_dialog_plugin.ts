@@ -35,7 +35,7 @@ import {
 } from '../nova_plugin/encounters/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
-import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
+import { contrabandDetectedBy, NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
@@ -477,7 +477,7 @@ export async function computeContext(world: World,
         const systemId = world.resources.get(SystemIdResource);
         const law = await loadLocalLaw(gameData, systemId);
         const disposition = shipDisposition(govt, playerGovt, playerRecords,
-            law);
+            law, undefined, contrabandDetectedBy(player.entity));
         // HOSTILITY IN THE CHANNEL IS THE SHIP'S IFF (Matthew's ruling on
         // #297): the one predicate the target corners paint with
         // (hostility.ts's isIffHostile) — recent aggression and another

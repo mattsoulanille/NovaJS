@@ -43,8 +43,9 @@ export function huntsOnSight(aiType: number | undefined): boolean {
  * when it is a player) on sight, before either has fired, in a system
  * where `law` is in force: it hunts (huntsOnSight) and its government
  * counts the other as an enemy (govtDispositionTo — the same call, with
- * the same local law and ränk 0x0100 suppression, that NpcDecisionSystem
- * makes for its hostiles list).
+ * the same local law, ränk 0x0100 suppression and contraband detection
+ * (`otherDetectedBy`, contraband_target.ts's contrabandDetectedBy), that
+ * NpcDecisionSystem makes for its hostiles list).
  *
  * Range and MaxOdds are deliberately not part of it. They decide WHEN a
  * hunter engages (an interceptor stays near its planet, a warship
@@ -53,9 +54,9 @@ export function huntsOnSight(aiType: number | undefined): boolean {
 export function attacksOnSight(aiType: number | undefined,
     selfGovt: GovtData | undefined, otherGovt: GovtData | undefined,
     otherRecords: LegalRecords | undefined, law: LocalLaw,
-    otherRankSuppresses?: boolean): boolean {
+    otherRankSuppresses?: boolean, otherDetectedBy?: string): boolean {
     return huntsOnSight(aiType) && govtDispositionTo(selfGovt, otherGovt,
-        otherRecords, law, otherRankSuppresses) === 'enemy';
+        otherRecords, law, otherRankSuppresses, otherDetectedBy) === 'enemy';
 }
 
 /**

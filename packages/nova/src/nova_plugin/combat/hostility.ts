@@ -12,7 +12,9 @@ import {
     Disposition, govtDisposition, LegalRecords, LocalLaw, localLawIn,
     TargetCornerStyle, targetCornerStyle,
 } from '../reputation/index.js';
-import { isPacifiedToward, NpcComponent } from '../npc/index.js';
+import {
+    contrabandDetectedBy, isPacifiedToward, NpcComponent,
+} from '../npc/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
@@ -192,7 +194,10 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
             // worker never loads Rank data (see rank_logic.ts).
             ranksSuppressAggression(playerEntity.components
                 .get(AggressionSuppressGovtsComponent), targetGovt?.id),
-            getEntity),
+            getEntity,
+            // A contraband detection on this stay in space (synced marker
+            // on the player): the scanning govt's hunters go red.
+            contrabandDetectedBy(playerEntity)),
         attackingPlayer);
 }
 
@@ -231,8 +236,10 @@ export function isFightingPlayerFlock(targetEntity: Entity,
  *  - 'hostile': the ship's NPC brain hunts the player on sight
  *    (on_sight.ts's attacksOnSight: a warship or interceptor whose
  *    government counts the player as an enemy, by gövt enemies classes,
- *    the xenophobic or always-attacks flags, or a criminal record in the
- *    system `law` governs, when that government enforces it). It is
+ *    the xenophobic or always-attacks flags, a criminal record in the
+ *    system `law` governs, when that government enforces it, or its
+ *    contraband scan's detection on this stay in space,
+ *    `playerDetectedBy`). It is
  *    the SAME call NpcDecisionSystem makes to build its hostiles list, so
  *    the brackets cannot paint red a ship the brain leaves alone, or the
  *    other way round.
@@ -259,10 +266,11 @@ export function onSightDisposition(targetUuid: string, targetEntity: Entity,
     targetGovt: GovtData | undefined, playerGovt: GovtData | undefined,
     playerRecords: LegalRecords | undefined, law: LocalLaw,
     rankSuppressesAggression: boolean,
-    getEntity: (uuid: string) => Entity | undefined): Disposition {
+    getEntity: (uuid: string) => Entity | undefined,
+    playerDetectedBy?: string): Disposition {
     if (attacksOnSight(onSightAiType(targetUuid, targetEntity, getEntity),
         targetGovt, playerGovt, playerRecords, law,
-        rankSuppressesAggression)) {
+        rankSuppressesAggression, playerDetectedBy)) {
         return 'hostile';
     }
     return govtDisposition(targetGovt, playerGovt) === 'ally'

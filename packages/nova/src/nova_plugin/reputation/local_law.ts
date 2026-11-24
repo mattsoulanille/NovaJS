@@ -119,6 +119,14 @@ export function enforcesHere(self: GovtData,
     return owner !== undefined && alliedEitherWay(self, owner);
 }
 
+/** Whether `self` is a system's owner `owner` or allied with it in
+ * EITHER direction (a one-way alliance is enough): rule 1 without the
+ * nosy flag. The contraband scan's record rule reads it too
+ * (npc/contraband.ts's smugglingRecordChange). */
+export function alliedWithOwner(self: GovtData, owner: GovtData): boolean {
+    return alliedEitherWay(self, owner);
+}
+
 /**
  * Whether ships of `self` count a pilot with `records` as a criminal to
  * attack here: rules 1 and 2 above. Only ships with legal records (player

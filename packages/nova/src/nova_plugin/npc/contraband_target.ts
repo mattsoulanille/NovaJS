@@ -23,25 +23,69 @@ import { chooseNearest } from './npc_targeting.js';
  */
 /**
  * The marker a scan leaves on the scanned ship: it has been scanned on
- * this visit and is not scanned again. GUESS, after the measured "ONE
- * fine only" (two cutters, 2.7 min): once per system VISIT, by anyone.
- * The visit ends at a landing (encounters/boarding_plugin's
- * BoardingLandingResetSystem, the landing's life-segment reset) or when
- * the ship leaves for another system (pilot/transition_prep.ts clears it
- * on every crossing into a fresh world), so a pilot is scanned again
- * after either.
+ * this visit and is not scanned again.
+ *
+ * MEASURED (docs/reference_experiments.md, "Contraband wave 14"): the
+ * visit is a stay in the system between two ARRIVALS BY JUMP, not
+ * between landings. A pod pilot was fined once in a 5.5 min visit, not
+ * again in 70 s after a landing and takeoff, and a pilot scanned before
+ * landing was not rescanned on takeoff; a jump out to the linked system
+ * and straight back was fined again within about 10 s of the arrival. So
+ * the marker survives a landing (the ship leaves the world and comes back
+ * with it) and goes only when the ship crosses into a fresh world
+ * (pilot/transition_prep.ts clears it on every crossing: a jump, a
+ * hypergate or wormhole transit, a mission's system move).
+ *
+ * `hostile` is the second half of the same measurement: after a
+ * DETECTION (a fine line: an outfit, jünk or a mission's cargo), the
+ * scanning government's ships attacked the player for the rest of that
+ * stay in space, whatever their CrimeTol (30000 in the run, with the
+ * record at -50), and after a landing they were peaceful again. So it
+ * names the scanning govt until the ship lands
+ * (encounters/boarding_plugin's BoardingLandingResetSystem calls
+ * endContrabandHostility) or leaves; the reputation layer reads it
+ * through govt_disposition's `otherDetectedBy`. GUESS: a scan that only
+ * failed a Flags 0x0020 mission ("Your ship has been scanned - mission
+ * failed.") is not a detection and leaves no hostility (wave 12 did not
+ * say whether the cutters turned).
  */
-export const ContrabandScannedType = t.type({
+export const ContrabandScannedType = t.intersection([t.type({
     /** Sim time (ms) of the scan. */
     at: t.number,
-});
+}), t.partial({
+    /** The government whose scan DETECTED contraband aboard, while its
+     * ships still attack this pilot (until a landing). */
+    hostile: t.string,
+})]);
 export type ContrabandScannedState = t.TypeOf<typeof ContrabandScannedType>;
 export const ContrabandScannedComponent =
     new Component<ContrabandScannedState>('ContrabandScanned');
 
-/** Drops a ship's scanned-this-visit marker (a visit boundary). */
+/** Drops a ship's scanned-this-visit marker (a crossing into a fresh
+ * world: a new visit). */
 export function clearContrabandScan(entity: Entity): void {
     entity.components.delete(ContrabandScannedComponent);
+}
+
+/**
+ * A LANDING: the detection's hostility ends (the scanning govt's ships
+ * were peaceful after the reference pilot took off again), but the
+ * scanned marker stays, so the pilot is not scanned again until he
+ * arrives by jump. Sets a fresh object rather than editing the stored
+ * one (the component is synced state).
+ */
+export function endContrabandHostility(entity: Entity): void {
+    const scanned = entity.components.get(ContrabandScannedComponent);
+    if (scanned?.hostile !== undefined) {
+        entity.components.set(ContrabandScannedComponent, { at: scanned.at });
+    }
+}
+
+/** The government whose contraband scan has turned its ships on `ship`
+ * for the rest of this stay in space, if any. */
+export function contrabandDetectedBy(ship: Entity | undefined):
+    string | undefined {
+    return ship?.components.get(ContrabandScannedComponent)?.hostile;
 }
 
 /** What `govtMask` finds aboard `ship`, through the staged caches. */

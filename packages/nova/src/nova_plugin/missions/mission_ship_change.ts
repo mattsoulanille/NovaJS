@@ -34,6 +34,7 @@ import {
     MultiJumpContinueComponent, PlanetTargetComponent,
 } from '../travel/index.js';
 import { sweepableEscorts, sweepJumpingEscort } from '../escorts/index.js';
+import { ContrabandScannedComponent } from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -160,6 +161,13 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // Strict play (StrictPlayComponent) is the PILOT's setting: a strict
     // pilot who buys a ship still flies it at the strict top speed.
     StrictPlayComponent,
+    // The contraband scan's scanned-this-visit marker
+    // (npc/contraband_target.ts). It outlives a landing (the original
+    // rescans only after an arrival by jump), so a hull bought at the
+    // port must keep it or the pilot would be scanned again on takeoff.
+    // Unmeasured for a ship purchase; the pilot, not the hull, is the one
+    // who was scanned. Replaced, never mutated, so safe to share.
+    ContrabandScannedComponent,
 ];
 
 /**

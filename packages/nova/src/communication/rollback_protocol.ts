@@ -451,6 +451,23 @@ export const STATE_HASH_INTERVAL = 60;
 //    for its call. No input kind or message kind changes. The derived wire
 //    schema fingerprint changes (de1618493c2c83ef -> 9812fe94442467ca), and
 //    the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-14 contraband fixes (reference
+//    "Contraband wave 14"). The ContrabandScanned marker gains an
+//    OPTIONAL `hostile` field (the govt whose scan detected contraband;
+//    its hunters attack the pilot until he lands), and ContrabandScanEvent
+//    an OPTIONAL `junk` field (the illegal jünk's LCName for the status
+//    line). Pilots never scanned carry neither, so their components and
+//    hash inputs are unchanged. Sim-rule changes alongside: a landing
+//    keeps the scanned marker (only a crossing into a fresh world clears
+//    it) and drops `hostile`; ScanFine 0 and below fine nothing; illegal
+//    jünk costs ScanFine and SmugPenalty; the SmugPenalty follows the A14
+//    rule (a nosy scanner in another govt's system raises the owner's
+//    record by half the owner's SmugPenalty). No input kind or message
+//    kind changes. The derived wire schema fingerprint changes
+//    (de1618493c2c83ef -> 188a53cfde98e2e0 on its own; COMBINEDFP
+//    together with the piracy-police note above), and the join gate keeps
+//    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
