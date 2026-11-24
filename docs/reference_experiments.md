@@ -688,9 +688,12 @@ System".
   Void (unexplored), then Far (explored) drew a strong green route
   Hub -> East -> Void -> Far. The info panel read "Destination System:
   <Unknown>" while the route ended in an unexplored system, and "Map
-  Far" once Far was pinned. (NovaJS refuses this route on purpose,
-  `N/spaceport/route.ts:19-29`; Matthew's ruling stands. This is just
-  the confirmation.)
+  Far" once Far was pinned. **NovaJS now matches (applied in db700fff):**
+  Matthew reversed his explored-only ruling (2026-11-23, "D-U-D is
+  allowed. Surprisingly, also D-U-U-D is allowed"). Routes pass through
+  every system the map draws, explored or not, by a single shift-click
+  or pin by pin. A system the map does not draw is never a hop
+  (`N/spaceport/route.ts`, DRAWN SYSTEMS ONLY).
 - **A shift-click on an unroutable system** (Lone, explored but with no
   links) is ignored: the route and the info panel are unchanged.
 - A plain click on a non-neighbour (Lone, Far) selects it for its info
@@ -4502,7 +4505,7 @@ cosmetic or rare.
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
-| M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | **answered (wave 2)**: D-U-U-D routes; an unroutable shift-click is ignored | M |
+| M4 | Shift-click on an unroutable system; the D-U-U-D exploration quirk | known-systems routing | **answered (wave 2)**: D-U-U-D routes; an unroutable shift-click is ignored. D-U-U-D applied in db700fff (routes pass through every drawn system) | M |
 | M5 | Faction borders: minor govts, two majors meeting, uninhabited and unlandable systems | NovaJS border drawing | **answered (wave 3)**: explored + inhabited stellar radiates even if unlandable; no stellar or unexplored: nothing. Applied in 6d202ebc | M |
 | M6 | Big-map default zoom (px per map unit) | NovaJS map (2.0 vs about 1.778) | **answered (wave 2)**: 1.77. **Mismatch** | L |
 | M7 | Tab cycling order on the big map | `N/spaceport/route.ts:233-252` | **answered (wave 2)**: link-slot order, no "off" step. **Mismatch** (the extra off slot) | M |
