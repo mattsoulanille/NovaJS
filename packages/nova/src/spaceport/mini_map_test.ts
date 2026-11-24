@@ -3,9 +3,11 @@ import * as PIXI from 'pixi.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { SystemData } from 'novadatainterface/system_data';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
+import { overrideEnhancements } from '../enhancements.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import {
-    MINI_MAP_FADE_MS, MINI_MAP_FRAME, MINI_MAP_PANE, MINI_MAP_PEEK_MS,
+    MINI_MAP_FADE_MS, MINI_MAP_FRAME, MINI_MAP_ORIGINAL_CLICK_WINDOW_MS,
+    MINI_MAP_PANE, MINI_MAP_PEEK_MS,
     MiniMap, MiniMapPeek, miniMapAlpha, miniMapPosition,
 } from './mini_map.js';
 import { SystemGraph } from './system_graph.js';
@@ -211,6 +213,44 @@ describe('the `h` hyperspace minimap', () => {
                 // No update() yet: the hit area itself refuses.
                 expect(miniMap.current!.container.hitArea!
                     .contains(centre, centre)).toBeFalse();
+            });
+
+        describe('with "Hidden h-map ignores clicks" off (the original)',
+            () => {
+                beforeEach(() => overrideEnhancements(
+                    { enhMiniMapHiddenNoClicks: false }));
+                afterEach(() => overrideEnhancements({}));
+
+                it('keeps taking clicks, hidden, until 8 s from the show',
+                    () => {
+                        const miniMap = shown();
+                        miniMap.peek();
+                        miniMap.update(true);
+                        clock += MINI_MAP_PEEK_MS + MINI_MAP_FADE_MS + 2000;
+                        miniMap.update(true);
+                        // Faded out: nothing drawn...
+                        expect(miniMap.container.alpha).toBe(0);
+                        // ...but its area still picks.
+                        expect(miniMap.takesInput).toBeTrue();
+                        expect(hitAt(miniMap, centre, centre))
+                            .not.toBeNull();
+                        clock = 10_000 + MINI_MAP_ORIGINAL_CLICK_WINDOW_MS;
+                        miniMap.update(true);
+                        expect(miniMap.takesInput).toBeFalse();
+                        expect(miniMap.container.visible).toBeFalse();
+                        expect(hitAt(miniMap, centre, centre)).toBeNull();
+                    });
+
+                it('still takes nothing before the first show, or while '
+                    + 'inactive', () => {
+                        const miniMap = shown();
+                        miniMap.update(true);
+                        expect(miniMap.takesInput).toBeFalse();
+                        miniMap.peek();
+                        clock += MINI_MAP_PEEK_MS + 1000;
+                        miniMap.update(false);
+                        expect(miniMap.takesInput).toBeFalse();
+                    });
             });
 
         it('takes no input while inactive, even during a peek', () => {

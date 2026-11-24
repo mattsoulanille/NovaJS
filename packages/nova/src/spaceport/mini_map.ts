@@ -32,7 +32,8 @@
 // seems like a bug that I don't care about reproducing"). This departs from
 // the original on purpose: there a click where the hidden map sat still
 // picks a system and shows it again for about 5-7 s after the fade
-// (reference_experiments "M1 wave 10"). Here, between peeks
+// (reference_experiments "M1 wave 10"); the "Hidden h-map ignores clicks"
+// enhancement OFF restores that (MINI_MAP_ORIGINAL_CLICK_WINDOW_MS). Here, between peeks
 // the minimap is not drawn and is out of the hit test altogether, so a
 // click there reaches whatever is underneath (tap-targeting a ship or
 // planet). Shown, the whole pane is UI, so a click on it never falls
@@ -54,6 +55,7 @@ import * as PIXI from 'pixi.js';
 import { Subject, Subscription } from 'rxjs';
 import { DEFAULT_ZOOM } from './starmap_viewport.js';
 import { SystemGraph } from './system_graph.js';
+import { enhancementEnabled } from '../enhancements.js';
 
 /**
  * The map pane: the frame's inside. 480 px with the outline, as in the
@@ -91,6 +93,16 @@ export const MINI_MAP_PEEK_MS = 60 * 1000 / 30;
  * the fade starts. It appears at full brightness at once: no fade-in.
  */
 export const MINI_MAP_FADE_MS = 16 * 1000 / 30;
+
+/**
+ * How long after a peek BEGINS the ORIGINAL's hidden minimap still takes
+ * clicks: somewhere between 6.8 and 9.3 s after the show, i.e. 4.4 to
+ * 6.8 s after its last pixel faded (reference_experiments "M1 wave 10");
+ * 8 s is inside both bounds. NovaJS only uses it with the "Hidden h-map
+ * ignores clicks" enhancement OFF; ON (the default), the map takes clicks
+ * only while it is shown.
+ */
+export const MINI_MAP_ORIGINAL_CLICK_WINDOW_MS = 8000;
 
 /**
  * The map's opacity at `now` for a peek that ends (stops taking input)
@@ -169,9 +181,20 @@ export class MiniMap {
     }
 
     /** Whether the map takes pointer input right now: active, with a map,
-     * and a peek running. Never while hidden or fading out. */
+     * and a peek running — never while hidden or fading out. With the
+     * "Hidden h-map ignores clicks" enhancement OFF, as the original's: for
+     * {@link MINI_MAP_ORIGINAL_CLICK_WINDOW_MS} from the show, hidden or
+     * not. */
     get takesInput(): boolean {
-        return this.active && this.graph !== undefined && this.showing;
+        if (!this.active || this.graph === undefined) {
+            return false;
+        }
+        if (this.showing) {
+            return true;
+        }
+        return !enhancementEnabled('enhMiniMapHiddenNoClicks')
+            && this.now() < this.peekState.until - MINI_MAP_PEEK_MS
+                + MINI_MAP_ORIGINAL_CLICK_WINDOW_MS;
     }
 
     /** Shows the map for {@link MINI_MAP_PEEK_MS} from now — `h`, or a
@@ -194,11 +217,14 @@ export class MiniMap {
         this.active = active;
         const alpha = miniMapAlpha(this.now(), this.peekState.until);
         this.container.alpha = alpha;
-        this.container.visible = active && this.graph !== undefined
-            && alpha > 0;
         // 'none' takes it (and its children) out of PIXI's hit test even
         // while it is still drawn, fading.
         const input = this.takesInput;
+        // Hidden but still clickable (the original's window, enhancement
+        // off): kept in the scene at alpha 0, since PIXI's hit test skips
+        // an invisible container.
+        this.container.visible = active && this.graph !== undefined
+            && (alpha > 0 || input);
         this.container.eventMode = input ? 'passive' : 'none';
         this.container.interactiveChildren = input;
     }
