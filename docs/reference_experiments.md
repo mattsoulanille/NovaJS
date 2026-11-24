@@ -8366,8 +8366,8 @@ contraband detection stayed at least 12.7 s.
   (attack mode on the player) no longer excuses (GUESS for the
   fired-first case).
 Schema: one optional NpcState field (protocol 8 note in
-`N/communication/rollback_protocol.ts`; fingerprint e730831c2453dc18 ->
-f50f3088ef5b4eff). Specs: `N/nova_plugin/npc/piracy_police_test.ts`
+`N/communication/rollback_protocol.ts`; fingerprint eb92bff5c7d72d2b ->
+8ef9af970d217153). Specs: `N/nova_plugin/npc/piracy_police_test.ts`
 ("allied defenders", the 2500 px police, posture vs a shot, a mission
 ship's silence, the 8 s interval), `N/display/status_line_lifetime_test.ts`.
 

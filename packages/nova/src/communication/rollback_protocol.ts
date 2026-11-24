@@ -552,7 +552,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    only a victim that has shot the attacker; an AI 4 scans a clean ship
 //    too, once a visit, and sits on a scanned ship 30 s. No input kind or
 //    message kind changes. The derived wire schema fingerprint changes
-//    (eb92bff5c7d72d2b -> FINGERPRINT_TBD), and the join gate keeps
+//    (eb92bff5c7d72d2b -> 8ef9af970d217153), and the join gate keeps
 //    older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
