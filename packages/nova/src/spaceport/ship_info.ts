@@ -21,9 +21,46 @@ const WIDTH = 614;
 const HEIGHT = 537;
 const ORIGIN_X = -WIDTH / 2;
 const ORIGIN_Y = -HEIGHT / 2;
+// The frame's top edge on a whole pixel. The frame is 537 tall, so
+// centring it puts its top at -268.5 and the linear sampler smears every
+// bevel row across two (the before capture's top bevel read 96/84/56
+// grey against the original's crisp 115/82/90 at screen y 272-274). The
+// original draws it from screen y 272 (all three shipyard/*_info.png
+// captures), i.e. -268 in centre-anchored coordinates.
+const FRAME_TOP = Math.ceil(ORIGIN_Y);
 
-// The picture area (the framed region above the name strip).
-const PICT_AREA = { x: 0, y: ORIGIN_Y + 210, w: 590, h: 400 };
+/**
+ * The picture well: the frame's opening above the name strip. Measured by
+ * pixel analysis on all three shipyard/*_info.png captures, where the
+ * 600x400 info PICT is blitted 1:1 at screen x 660..1259, y 278..677 --
+ * flush against the 3px dark inner shadow of the bevel (x 657-659, y
+ * 275-277, and the right/bottom bevels start at x 1260 / y 678). That is
+ * the frame's own (7, 6) offset, in centre-anchored coordinates.
+ */
+export const SHIP_INFO_PICT_AREA = {
+    x: ORIGIN_X + 7, y: FRAME_TOP + 6, width: 600, height: 400,
+} as const;
+
+/**
+ * Where the info picture goes for a texture of the given size: the stock
+ * 600x400 info PICTs fill the well exactly at 1:1 (the original never
+ * scales them). Anything larger (plug-in art) is scaled down to fit,
+ * never up -- the 200x200 browse-pict fallback stays crisp -- and is
+ * centred in the well with its top-left on a whole pixel so it is not
+ * resampled. Returns the top-left in centre-anchored coordinates.
+ */
+export function shipInfoPictPlacement(textureWidth: number,
+    textureHeight: number): { x: number, y: number, scale: number } {
+    const area = SHIP_INFO_PICT_AREA;
+    const scale = Math.min(1, area.width / textureWidth,
+        area.height / textureHeight);
+    return {
+        x: area.x + Math.round((area.width - textureWidth * scale) / 2),
+        y: area.y + Math.round((area.height - textureHeight * scale) / 2),
+        scale,
+    };
+}
+
 // The name strip. Its text was 12px too low (ours ran to screen y 716,
 // past the strip's own bottom, where shuttle_info.png has the name's ink
 // on rows 690-702) and two sizes too small: the original's caps there are
@@ -36,12 +73,24 @@ const NAME_Y = ORIGIN_Y + 414.5;
 // and the first box top two pixels above the first ink row (540 + 177).
 const STATS_TOP = ORIGIN_Y + 445.5;
 const ROW_HEIGHT = 12;
-const LEFT_LABEL_X = ORIGIN_X + 10;
-const LEFT_VALUE_X = ORIGIN_X + 62;
-const MID_LABEL_X = ORIGIN_X + 150;
-const MID_VALUE_X = ORIGIN_X + 200;
-const WEAPONS_X = ORIGIN_X + 268;
-const WEAPONS_WIDTH = 260;
+// Column x positions, from the first ink column of each column on
+// shipyard/shuttle_info.png (our Geneva's ink starts at the text's own x):
+// labels 664, left values 709, mid labels 794, mid values 839, Standard
+// Weapons 919.
+const LEFT_LABEL_X = ORIGIN_X + 11;
+const LEFT_VALUE_X = ORIGIN_X + 56;
+const MID_LABEL_X = ORIGIN_X + 141;
+const MID_VALUE_X = ORIGIN_X + 186;
+const WEAPONS_X = ORIGIN_X + 266;
+// The loadout line sits 14px under the "Standard Weapons:" heading, not
+// one 12px row (ink tops 719 -> 733 on shuttle_info.png and
+// ida_frigate_info.png).
+const WEAPONS_LIST_Y = STATS_TOP + 14;
+// ida_frigate_info.png prints "2 Medium Blaster Turrets, 1 Raven Rocket
+// Turret + 100 ammo" on ONE line (ink x 919..1202), which a 260px wrap
+// broke in three. Wrap at the text well's inner edge instead (x 1259),
+// keeping the same 4px margin the labels keep on the left (660 -> 664).
+const WEAPONS_WIDTH = 1255 - 919;
 const DONE_Y = ORIGIN_Y + 508;
 // Measured against shipyard/shuttle_info.png: the reference Done pill spans
 // screen x 1163-1243 (an 80px-wide button, wider than the default caption
@@ -56,6 +105,10 @@ const STAT_FONT: Partial<PIXI.ITextStyle> = {
     fontFamily: 'Geneva', fontSize: 10, fill: 0xffffff, align: 'left',
     wordWrap: false,
 };
+// The stat labels ("Speed:", "Space:" ...) are mid grey in the original,
+// their values white: every label pixel on shuttle_info.png and
+// ida_frigate_info.png peaks at exactly 128,128,128.
+const LABEL_FONT: Partial<PIXI.ITextStyle> = { ...STAT_FONT, fill: 0x808080 };
 const WEAPONS_FONT: Partial<PIXI.ITextStyle> = {
     ...STAT_FONT, wordWrap: true, wordWrapWidth: WEAPONS_WIDTH,
 };
@@ -142,7 +195,7 @@ export class ShipInfoDialog {
         this.container.addChild(shield);
 
         const background = this.displayAssets.spriteFromPict(SHIP_INFO_PICT);
-        background.anchor.set(0.5);
+        background.position.set(ORIGIN_X, FRAME_TOP);
         background.interactive = true;
         this.container.addChild(background);
 
@@ -167,23 +220,22 @@ export class ShipInfoDialog {
         this.content.removeChildren();
         this.nameText.text = infoDialogName(ship);
 
-        // The ship's dedicated info artwork, scaled to fit the picture
-        // area. Falls back to the shipyard browse picture for ships (and
+        // The ship's dedicated info artwork, in the frame's picture well. Falls back to the shipyard browse picture for ships (and
         // plug-ins) that don't supply one.
         const infoPict = ship.infoPict ?? ship.pict;
         if (infoPict) {
             const pict = this.displayAssets.spriteFromPict(infoPict);
-            pict.anchor.set(0.5);
-            pict.position.set(PICT_AREA.x, PICT_AREA.y);
-            // Scale down to fit, never up (keep small pictures crisp).
+            pict.position.set(SHIP_INFO_PICT_AREA.x, SHIP_INFO_PICT_AREA.y);
+            // 1:1 in the well for stock art; scaled down to fit, never
+            // up, and centred for anything else.
             const fit = () => {
                 if (!pict.texture.valid) {
                     return;
                 }
-                const scale = Math.min(1,
-                    PICT_AREA.w / pict.texture.width,
-                    PICT_AREA.h / pict.texture.height);
-                pict.scale.set(scale);
+                const place = shipInfoPictPlacement(
+                    pict.texture.width, pict.texture.height);
+                pict.position.set(place.x, place.y);
+                pict.scale.set(place.scale);
             };
             fit();
             pict.texture.baseTexture.once('loaded', fit);
@@ -206,7 +258,7 @@ export class ShipInfoDialog {
     private addRows(rows: [string, string][], labelX: number,
         valueX: number) {
         rows.forEach(([label, value], i) => {
-            const labelText = new PIXI.Text(label, STAT_FONT);
+            const labelText = new PIXI.Text(label, LABEL_FONT);
             labelText.position.set(labelX, STATS_TOP + i * ROW_HEIGHT);
             const valueText = new PIXI.Text(value, STAT_FONT);
             valueText.position.set(valueX, STATS_TOP + i * ROW_HEIGHT);
@@ -250,7 +302,7 @@ export class ShipInfoDialog {
         this.content.addChild(heading);
         const weaponsText = new PIXI.Text(
             await this.standardWeapons(ship), WEAPONS_FONT);
-        weaponsText.position.set(WEAPONS_X, STATS_TOP + ROW_HEIGHT);
+        weaponsText.position.set(WEAPONS_X, WEAPONS_LIST_Y);
         this.content.addChild(weaponsText);
     }
 
