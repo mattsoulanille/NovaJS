@@ -400,6 +400,8 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         ammoFor,
         increasesMax,
         miningScoop,
+        // oütf ScanMask: matched against a gövt's ScanMask (contraband).
+        scanMask: outf.scanMask,
         murkClear,
         interferenceReduction,
         iff,

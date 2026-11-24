@@ -1,6 +1,8 @@
 import "jasmine";
 import { OutfResource } from "../src/resource_parsers/outf_resource.js";
 import { OutfitParse } from "../src/parsers/outfit_parse.js";
+import { NovaDataType } from "novadatainterface/nova_data_interface";
+import { STOCK_DATA_MISSING, stockNovaParse } from "./stock_data.js";
 
 function fakeOutf(functions: Array<[string, number | boolean]>): OutfResource {
     return {
@@ -397,5 +399,37 @@ describe("OutfitParse", () => {
                     fakeOutf([["shield", 10]]), () => { });
                 expect(outfit.requireGovtScope).toEqual("all");
             });
+    });
+
+    describe("ScanMask (Bible ~:2027)", () => {
+        it("carries the illegal-outfit mask through", async () => {
+            const outf = Object.assign(fakeOutf([["shield", 10]]),
+                { scanMask: 0xe080 });
+            expect((await OutfitParse(outf, () => { })).scanMask)
+                .toBe(0xe080);
+        });
+
+        it("reads the stock contraband outfits", async () => {
+            const np = await stockNovaParse();
+            if (!np) {
+                pending(STOCK_DATA_MISSING);
+                return;
+            }
+            const outfits = np.data[NovaDataType.Outfit];
+            // Illegal Medium Blaster: the Federation's 0x8000.
+            expect((await outfits.get("nova:320")).scanMask).toBe(0x8000);
+            // EMP Torpedo Tube: three govt classes.
+            expect((await outfits.get("nova:175")).scanMask).toBe(0xe080);
+            // The Asteroid Scoop is legal everywhere.
+            expect((await outfits.get("nova:271")).scanMask).toBe(0);
+
+            let masked = 0;
+            for (const id of (await np.ids).Outfit) {
+                if ((await outfits.get(id)).scanMask !== 0) {
+                    masked++;
+                }
+            }
+            expect(masked).toBe(56);
+        });
     });
 });

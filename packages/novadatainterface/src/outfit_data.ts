@@ -245,6 +245,17 @@ export interface OutfitData extends BaseData {
      */
     miningScoop: boolean,
     /**
+     * oütf ScanMask (EVN Bible ~:2027): "If any of the 1 bits in a ship's
+     * government's ScanMask field match any of the 1 bits in an oütf type's
+     * ScanMask field, that government will consider that outfit item
+     * illegal. Set to zero if unused." Compare with GovtData.scanMask.
+     * Carried as data for contraband scanning, which does not exist yet
+     * (docs/npc_behavior_gaps.md); 56 stock outfits set bits, most of them
+     * 0x8000 (the Federation's), e.g. the "Illegal" blasters and missiles.
+     * Always 0 for a built-in (implicit) outfit.
+     */
+    scanMask: number,
+    /**
      * Amount this outfit clears the current system's murk by (ModType 28,
      * "murk modifier"). The Bible's ModVal is the amount to add to the
      * system's murkiness, so this is its negation: a stock Sensor Boost with
@@ -406,6 +417,7 @@ export function getDefaultOutfitData(): OutfitData {
         ammoFor: null,
         increasesMax: null,
         miningScoop: false,
+        scanMask: 0,
         murkClear: 0,
         interferenceReduction: 0,
         iff: false,
