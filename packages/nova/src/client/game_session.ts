@@ -73,7 +73,7 @@ import { PrefetchBudget } from './background_prefetch.js';
 import { LandedUiPrefetch } from './landed_ui_prefetch.js';
 import { fetchSystemResources, NextHopPrefetch } from './next_hop_prefetch.js';
 import { followIdentity } from './identity.js';
-import { preparePlayerStart } from './player_start.js';
+import { preparePlayerStart, PlayerStartOptions } from './player_start.js';
 import { ClientRuntime, sendToBridge } from './runtime.js';
 import { jumpTo, teardownLiveSystem, WorldWiring } from './system_entry.js';
 import {
@@ -289,8 +289,8 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
  * failed Enter Ship can be retried, and a half-entered session can never
  * be "exited".
  */
-export async function startGame(runtime: ClientRuntime, host: SessionHost):
-    Promise<() => Promise<void>> {
+export async function startGame(runtime: ClientRuntime, host: SessionHost,
+    options: PlayerStartOptions = {}): Promise<() => Promise<void>> {
     runtime.state.apply(enterGame);
     // Cleanups for everything this session registers on shared,
     // session-independent surfaces — document/window listeners, the PIXI
@@ -299,7 +299,7 @@ export async function startGame(runtime: ClientRuntime, host: SessionHost):
     // doesn't stack duplicate listeners/tickers/workers.
     const sessionDisposers: Array<() => void> = [];
     try {
-        return await enterSession(runtime, host, sessionDisposers);
+        return await enterSession(runtime, host, sessionDisposers, options);
     } catch (e) {
         await abandonEntry(runtime, sessionDisposers);
         throw e;
@@ -307,7 +307,8 @@ export async function startGame(runtime: ClientRuntime, host: SessionHost):
 }
 
 async function enterSession(runtime: ClientRuntime, host: SessionHost,
-    sessionDisposers: Array<() => void>): Promise<() => Promise<void>> {
+    sessionDisposers: Array<() => void>, options: PlayerStartOptions):
+    Promise<() => Promise<void>> {
     const { app, gameData, communicator, multiRoom, state, fleet, saves } =
         runtime;
     // "Which ShipDoneTexts has the player already read in flight" belongs
@@ -341,7 +342,7 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
     // The owner is READ, not captured: the server assigns a uuid per
     // socket, and a reconnect changes it mid-game (#354).
     const start = await preparePlayerStart(runtime, query,
-        () => communicator.uuid);
+        () => communicator.uuid, options);
     window.myShip = start.ship;
     // Everything the client holds out of the simulation (the docked hull,
     // a transit's carried player, the escort rosters) follows the current

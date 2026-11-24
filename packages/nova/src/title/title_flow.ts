@@ -22,6 +22,7 @@ import {
     canEnterGame, canExitToTitle, closeRollback, closeTitleDialog,
     openRollback, openTitleDialog, TitleDialog,
 } from '../client/client_state.js';
+import type { PlayerStartOptions } from '../client/player_start.js';
 import type { ClientRuntime } from '../client/runtime.js';
 import { isMuted } from '../client/mute.js';
 import { isTextEntryActive } from '../input_focus.js';
@@ -46,7 +47,7 @@ import {
     ImportResult, listPilots, selectPilot,
 } from './pilot_registry.js';
 import {
-    pilotQuarantineNote, quarantineOnEntryFailure,
+    LOAD_ANYWAY_BUTTON, pilotQuarantineNote, quarantineOnEntryFailure,
     releaseActivePilotQuarantine,
 } from './pilot_quarantine.js';
 import { ROLLBACK_PANEL, RollbackScreen } from './rollback_screen.js';
@@ -72,8 +73,11 @@ export interface TitleHost {
      * Returns the unregister.
      */
     onDisplayScale(listener: () => void): () => void;
-    /** Enters the game; resolves to its teardown (client/game_session.ts). */
-    startGame(): Promise<() => Promise<void>>;
+    /**
+     * Enters the game; resolves to its teardown (client/game_session.ts).
+     * `options.loadAnyway` flies a save naming missing content (#131).
+     */
+    startGame(options?: PlayerStartOptions): Promise<() => Promise<void>>;
     /** Re-reads the active pilot's bindings into the live control map. */
     applyControls(): Promise<void>;
     /** The display-scale preferences, for the Preferences dialog. */
@@ -294,13 +298,15 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
     };
     /**
      * A message the title raises itself (a pilot quarantined by a failed
-     * entry), in the same game-drawn frame as About.
+     * entry), in the same game-drawn frame as About. With `refuse`, a
+     * second button; resolves to which was pressed.
      */
-    const showNotice = async (text: string) => {
+    const showNotice = async (text: string, refuse?: string) => {
         titleUiLayer.addChild(aboutPopup.container);
         centreAbout();
         try {
-            await aboutPopup.show(text, { accept: 'Okay' }, { pict: null });
+            return await aboutPopup.show(text, { accept: 'Okay', refuse },
+                { pict: null });
         } finally {
             titleUiLayer.removeChild(aboutPopup.container);
         }
@@ -416,9 +422,10 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
      * the pilot's save names an uninstalled plug-in's content also
      * quarantines the pilot and tells the player why (title/
      * pilot_quarantine.ts), leaving the menu free to open or create
-     * another pilot.
+     * another pilot — or, through the notice's Load Anyway, to fly it
+     * without the missing content (`loadAnyway`, #131).
      */
-    const enterGame = async () => {
+    const enterGame = async (options: PlayerStartOptions = {}) => {
         if (state.state.kind !== 'title') {
             return;
         }
@@ -430,7 +437,7 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
         titleUiLayer.removeChild(title.container);
         let notice: string | undefined;
         try {
-            teardownGame = await host.startGame();
+            teardownGame = await host.startGame(options);
             // The save validated: a quarantine from an earlier attempt
             // (the plug-in has since been reinstalled) is over.
             releaseActivePilotQuarantine();
@@ -441,10 +448,13 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
         }
         if (notice !== undefined) {
             const text = notice;
-            await withDialog('notice', async () => {
-                await showNotice(text);
-                return false;
-            });
+            // Okay keeps the quarantine (the default, and what Escape or
+            // Enter would pick); Load Anyway enters again, flying the save
+            // without the missing content, and records that in the
+            // pilot's history (Matthew's ruling on #131).
+            await withDialog('notice', async () =>
+                await showNotice(text, LOAD_ANYWAY_BUTTON) === 'refuse',
+            { loadAnyway: true });
         }
     };
 
@@ -487,7 +497,8 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
 
     /** Runs a title dialog as a state of the machine. */
     const withDialog = async (dialog: TitleDialog,
-        body: () => Promise<boolean>): Promise<void> => {
+        body: () => Promise<boolean>,
+        entryOptions?: PlayerStartOptions): Promise<void> => {
         title.setEnabled(false);
         state.apply(s => openTitleDialog(s, dialog));
         let entering = false;
@@ -500,7 +511,7 @@ export async function runTitle(runtime: ClientRuntime, host: TitleHost):
             }
         }
         if (entering) {
-            await enterGame();
+            await enterGame(entryOptions);
         }
     };
 

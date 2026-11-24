@@ -33,11 +33,14 @@ import {
     initialRecordsFromGovtStatuses, CombatRatingComponent, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import {
-    assertSaveContentInstalled, loadSave, resetSave, restoreClientSaveState,
-    restorePlayerState, savedFleetArmament,
+    getActiveSaveKey, loadSave, missingSaveContent, MissingSaveContentError,
+    resetSave, restoreClientSaveState, restorePlayerState, savedFleetArmament,
 } from '../nova_plugin/pilot/index.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
 import { clearPilotProfile } from '../title/client_prefs.js';
+import {
+    recordLoadAnyway, withoutMissingOutfits,
+} from '../title/pilot_quarantine.js';
 import type { ClientRuntime } from './runtime.js';
 
 export interface PlayerStart {
@@ -45,6 +48,17 @@ export interface PlayerStart {
     readonly ship: Entity;
     /** The system to enter first. */
     readonly systemId: string;
+}
+
+/** How the title asked for this entry. */
+export interface PlayerStartOptions {
+    /**
+     * The player chose LOAD ANYWAY on the missing-content notice (#131):
+     * a save naming content the served data does not define is flown
+     * without it instead of being refused, and the load is recorded in
+     * the pilot's history first (title/pilot_quarantine.ts).
+     */
+    readonly loadAnyway?: boolean;
 }
 
 /**
@@ -55,8 +69,8 @@ export interface PlayerStart {
  * control-bit context are stashed on the runtime for the session.
  */
 export async function preparePlayerStart(runtime: ClientRuntime,
-    query: URLSearchParams, ownerUuid: () => string | undefined):
-    Promise<PlayerStart> {
+    query: URLSearchParams, ownerUuid: () => string | undefined,
+    options: PlayerStartOptions = {}): Promise<PlayerStart> {
     const { gameData, fleet, saves } = runtime;
     const ids = await gameData.ids;
     // How this server namespaced the plug-ins' control bits: needed to
@@ -76,7 +90,8 @@ export async function preparePlayerStart(runtime: ClientRuntime,
     // The saved game (if any) provides defaults; explicit URL params
     // override it. A corrupt or old-version save is quarantined by
     // loadSave and we fall back to defaults.
-    const save = loadSave();
+    let save = loadSave();
+    let loadedAnyway = false;
     if (save) {
         // A save naming a ship or outfit the served game data does not
         // define — a plug-in that was installed when it was written and
@@ -85,7 +100,23 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         // ship and the first save trigger would write that substitute
         // over the pilot's own. The title flow quarantines the pilot
         // (title/pilot_quarantine.ts); the save stays exactly as it is.
-        assertSaveContentInstalled(save, ids);
+        const missing = missingSaveContent(save, ids);
+        if (missing.length > 0) {
+            if (!options.loadAnyway) {
+                throw new MissingSaveContentError(missing);
+            }
+            // ...unless the player chose Load Anyway on that notice. The
+            // save as it was goes into the pilot's history first (the
+            // ruling's history event, and the way back once the plug-in
+            // is reinstalled); then a missing ship falls back to the
+            // chär's below, exactly as before #131, and missing outfits
+            // are left off.
+            console.warn('Loading anyway without missing content:',
+                missing.map(m => m.id).join(', '));
+            recordLoadAnyway(getActiveSaveKey(), save, missing);
+            save = withoutMissingOutfits(save, missing);
+            loadedAnyway = true;
+        }
         // Client-local state the save carries but no component holds:
         // the star-system discovery record (discovery_store.ts).
         restoreClientSaveState(save);
@@ -153,6 +184,11 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         } else {
             console.warn(`Unknown ship id '${requestedShip}'. Using ${shipId}.`);
         }
+    }
+    if (loadedAnyway) {
+        // The history's newest checkpoint is the save as it was; the
+        // in-flight change detector must compare against this hull.
+        saves.rebaseCheckpointShip(shipId);
     }
     const shipData = await gameData.data.Ship.get(shipId);
     const ship = makeShip(shipData);

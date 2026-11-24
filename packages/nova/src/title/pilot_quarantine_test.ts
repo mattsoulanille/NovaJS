@@ -8,18 +8,22 @@ import { FleetLedger } from '../client/fleet_ledger.js';
 import { preparePlayerStart } from '../client/player_start.js';
 import type { ClientRuntime } from '../client/runtime.js';
 import {
-    describeMissingSaveContent, encodeSave, isMissingSaveContentError,
-    MissingSaveContentError, quarantineKeyFor, SAVE_KEY, SaveData,
-    saveDefaults, setActiveSaveKey,
+    decodeSave, describeMissingSaveContent, encodeSave,
+    isMissingSaveContentError, MissingSaveContentError, quarantineKeyFor,
+    SAVE_KEY, SaveData, saveDefaults, setActiveSaveKey,
 } from '../nova_plugin/pilot/index.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import {
     OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import type { PilotProfile, PrefsStorage } from './client_prefs.js';
 import {
-    pilotQuarantineNote, quarantineOnEntryFailure,
+    LOAD_ANYWAY_BUTTON, pilotQuarantineNote, quarantineOnEntryFailure,
     releaseActivePilotQuarantine,
 } from './pilot_quarantine.js';
+import {
+    checkpointState, loadHistory, rewindPilotSave,
+} from './pilot_history.js';
 import {
     createPilot, getActivePilot, listPilots, loadRegistry, selectPilot,
 } from './pilot_registry.js';
@@ -81,10 +85,13 @@ function runtimeFor(data: MockGameData) {
         controlBits: undefined as unknown,
         loadCheckpointBaseline() { /* no history in these specs */ },
         installCheckpointRecorder() { /* nothing records here */ },
+        rebasedShip: undefined as string | undefined,
+        rebaseCheckpointShip(ship: string) { this.rebasedShip = ship; },
     };
     return {
         runtime: { gameData: data, fleet, saves } as unknown as ClientRuntime,
         fleet,
+        saves,
     };
 }
 
@@ -225,6 +232,112 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
             expect(listPilots(store).find(p => p.id === stranded.id)
                 ?.quarantine).toBeUndefined();
         });
+
+    // Matthew's ruling (2026-11-23): quarantine with a message naming the
+    // missing plug-in, "but allow loading anyway if they really want to,
+    // and keep that load as a history event in the history log".
+    describe('Load Anyway', () => {
+        it('is offered by the notice, which says what it will do', async () => {
+            pilots({ ship: MISSING_SHIP });
+            const error = await preparePlayerStart(
+                runtimeFor(gameData()).runtime, new URLSearchParams(),
+                () => 'peer-1').then(() => undefined, e => e);
+            const notice = quarantineOnEntryFailure(error, store)!;
+            expect(notice).toContain('"missing-plugin"');
+            expect(notice).toContain(`${LOAD_ANYWAY_BUTTON} flies the pilot `
+                + 'without it (the ship is replaced by the starting ship)');
+            expect(notice).toContain('notes the load in the pilot\'s history');
+        });
+
+        it('flies a save naming missing-plugin:128 in the starting ship and '
+            + 'records the load in the pilot\'s history', async () => {
+                const { stranded, bytes } = pilots({ ship: MISSING_SHIP });
+                expect(loadHistory(stranded.saveKey, store)).toBeUndefined();
+                const { runtime, fleet, saves } = runtimeFor(gameData());
+                const start = await preparePlayerStart(runtime,
+                    new URLSearchParams(), () => 'peer-1',
+                    { loadAnyway: true });
+                // The in-flight change detector compares against the
+                // substitute, so it does not report a "capture".
+                expect(saves.rebasedShip).toBe(STOCK_SHIP);
+                // The pre-#131 fallback hull, with the save's state on it.
+                expect(start.ship.components.get(ShipComponent)?.id)
+                    .toBe(STOCK_SHIP);
+                expect(start.ship.components.get(CreditsComponent)?.credits)
+                    .toBe(777_777);
+                expect(fleet.restoredSave).toBeDefined();
+
+                // The history event: one checkpoint, named for the missing
+                // plug-in, holding the save AS IT WAS (the pilot's own
+                // ship), so a rewind to it after reinstalling restores it.
+                const history = loadHistory(stranded.saveKey, store)!;
+                expect(history.checkpoints.length).toBe(1);
+                const [event] = history.checkpoints;
+                expect(event.label)
+                    .toBe('Loaded anyway without "missing-plugin"');
+                expect(event.kind).toBe('other');
+                expect(event.system).toBe('nova:130');
+                const recorded = decodeSave(
+                    JSON.stringify(checkpointState(history, 0)));
+                expect(recorded?.ship).toBe(MISSING_SHIP);
+                expect(recorded?.credits).toBe(777_777);
+                // The save itself is untouched until the session writes it.
+                expect(store.getItem(stranded.saveKey)).toBe(bytes);
+            });
+
+        it('leaves missing outfits off and keeps the rest', async () => {
+            const { stranded } = pilots({
+                outfits: [[STOCK_OUTFIT, 1], [MISSING_OUTFIT, 2]],
+            });
+            const start = await preparePlayerStart(
+                runtimeFor(gameData()).runtime, new URLSearchParams(),
+                () => 'peer-1', { loadAnyway: true });
+            expect(start.ship.components.get(ShipComponent)?.id)
+                .toBe(STOCK_SHIP);
+            expect([...start.ship.components.get(OutfitsStateComponent)!])
+                .toEqual([[STOCK_OUTFIT, { count: 1 }]]);
+            const history = loadHistory(stranded.saveKey, store)!;
+            expect(history.checkpoints.map(c => c.label))
+                .toEqual(['Loaded anyway without "missing-plugin"']);
+            expect(decodeSave(JSON.stringify(checkpointState(history, 0)))
+                ?.outfits).toEqual([[STOCK_OUTFIT, 1], [MISSING_OUTFIT, 2]]);
+        });
+
+        it('can be rewound once the plug-in is back, to fly the pilot\'s '
+            + 'own ship again', async () => {
+                const { stranded } = pilots({ ship: MISSING_SHIP });
+                await preparePlayerStart(runtimeFor(gameData()).runtime,
+                    new URLSearchParams(), () => 'peer-1',
+                    { loadAnyway: true });
+                // The session then saves the substitute over the pilot's
+                // own (the first save trigger)...
+                store.setItem(stranded.saveKey, encodeSave({
+                    ...saveDefaults(), ship: STOCK_SHIP, outfits: [],
+                    system: 'nova:130', credits: 700_000,
+                }));
+                // ...and later the plug-in is reinstalled: the history's
+                // "Loaded anyway" checkpoint takes the pilot back.
+                const history = loadHistory(stranded.saveKey, store)!;
+                const index = history.checkpoints.findIndex(c =>
+                    c.label.startsWith('Loaded anyway'));
+                expect(rewindPilotSave(stranded.saveKey, index, store, 0))
+                    .toBeTrue();
+                const start = await preparePlayerStart(
+                    runtimeFor(gameData([MISSING_SHIP])).runtime,
+                    new URLSearchParams(), () => 'peer-1');
+                expect(start.ship.components.get(ShipComponent)?.id)
+                    .toBe(MISSING_SHIP);
+                expect(start.ship.components.get(CreditsComponent)?.credits)
+                    .toBe(777_777);
+            });
+
+        it('records nothing when nothing is missing', async () => {
+            const { stranded } = pilots({});
+            await preparePlayerStart(runtimeFor(gameData()).runtime,
+                new URLSearchParams(), () => 'peer-1', { loadAnyway: true });
+            expect(loadHistory(stranded.saveKey, store)).toBeUndefined();
+        });
+    });
 
     it('leaves any other entry failure alone', () => {
         createPilot(profile('Kestrel Vane'), store);

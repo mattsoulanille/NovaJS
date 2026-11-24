@@ -177,6 +177,19 @@ export class PlayerPersistence {
     }
 
     /**
+     * Moves the in-flight change baseline onto the hull the session
+     * actually started in. A Load Anyway (#131) records the save as it
+     * was — naming the missing plug-in's ship — as the newest checkpoint,
+     * then flies a substitute; without this the first periodic save would
+     * read the substitution as a capture ("Captured Shuttle").
+     */
+    rebaseCheckpointShip(ship: string): void {
+        if (this.lastCheckpointData) {
+            this.lastCheckpointData = { ...this.lastCheckpointData, ship };
+        }
+    }
+
+    /**
      * Records a checkpoint of the player's state for the active pilot:
      * writes the save from the requested entity (so save and checkpoint
      * agree) and appends the checkpoint to the pilot's history. Skipped

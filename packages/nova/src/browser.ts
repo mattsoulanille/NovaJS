@@ -30,6 +30,7 @@ import { ClientStateSlot } from "./client/client_state.js";
 import { FleetLedger } from "./client/fleet_ledger.js";
 import { simulationControl } from "./client/frame_pump.js";
 import { startGame } from "./client/game_session.js";
+import type { PlayerStartOptions } from "./client/player_start.js";
 import { DisplayAssetData } from "./client/gamedata/display_asset_data.js";
 import { SimulationGameData } from "./client/gamedata/simulation_game_data.js";
 import { isMuted } from "./client/mute.js";
@@ -358,8 +359,12 @@ async function applyControls(): Promise<void> {
     }
 }
 
-/** Enters the game with the active pilot's bindings loaded. */
-async function enterGame(): Promise<() => Promise<void>> {
+/**
+ * Enters the game with the active pilot's bindings loaded. `options` come
+ * from the title (Load Anyway on the missing-content notice, #131).
+ */
+async function enterGame(options?: PlayerStartOptions):
+    Promise<() => Promise<void>> {
     const controlsJson = await simulationGameData.getSettings?.('controls.json');
     if (!controlsJson) {
         throw new Error("Expected controls settings to exist");
@@ -372,7 +377,7 @@ async function enterGame(): Promise<() => Promise<void>> {
         controls: () => controls,
         applyScaleControl,
         globalScale: () => displaySettings.globalScale,
-    });
+    }, options);
 }
 
 // `?mute` silences everything played through the pixi sound layer
