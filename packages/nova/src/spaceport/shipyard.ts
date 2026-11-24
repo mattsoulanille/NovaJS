@@ -37,7 +37,11 @@ import {
     runShipTradeSetStrings,
     ShipPurchaseContext,
 } from './shipyard_rules.js';
-import { playerDiscovery } from '../nova_plugin/player/index.js';
+import {
+    playerDiscovery, PlayerNamesComponent,
+} from '../nova_plugin/player/index.js';
+import { loadPilotProfile } from '../title/client_prefs.js';
+import { ShipNamePrompt } from './ship_name_prompt.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { shipGateContext } from './ship_gate_context.js';
 import { loadEachOrSkip } from './skip_failed_loads.js';
@@ -132,6 +136,13 @@ export class Shipyard extends Menu<Entity> {
      * shown greyed over a list that fits on one page. We drew none, so
      * a stock longer than 20 hulls could only be reached by keyboard.
      */
+    /**
+     * "Please name your new <ship>:" (ship_name_prompt.ts), asked by Buy
+     * Ship once the purchase is allowed. Public for headless driving.
+     */
+    readonly namePrompt: ShipNamePrompt;
+    /** A purchase is waiting on the name prompt. */
+    private naming = false;
     private scrollUpArrow = new ScrollArrow('up');
     private scrollDownArrow = new ScrollArrow('down');
     /** The search field over the grid (shop_search.ts). */
@@ -178,12 +189,13 @@ export class Shipyard extends Menu<Entity> {
             this.itemGrid?.setFilter(query);
             this.updateArrows();
         });
-        buttons.buy.click.subscribe(this.buyShip.bind(this));
+        buttons.buy.click.subscribe(() => void this.buyShip());
         buttons.done.click.subscribe(this.done.bind(this));
 
         this.shipInfo = new ShipInfoDialog(displayAssets, simulationData,
             controlEvents);
         this.container.addChild(this.shipInfo.container);
+        this.namePrompt = new ShipNamePrompt(controlEvents);
 
         this.text.description.position.x = -27;
         this.text.description.position.y = -150;
@@ -244,7 +256,7 @@ export class Shipyard extends Menu<Entity> {
             right: () => { itemGrid.right(); this.updateArrows(); },
             up: () => { itemGrid.up(); this.updateArrows(); },
             down: () => { itemGrid.down(); this.updateArrows(); },
-            buy: this.buyShip.bind(this),
+            buy: () => void this.buyShip(),
             map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
@@ -480,41 +492,94 @@ export class Shipyard extends Menu<Entity> {
         this.controls.bind();
     }
 
-    private buyShip() {
-        const newShip = this.itemGrid?.selection;
-        if (!newShip) {
-            return;
-        }
-        const multiplayerData = this.input.components.get(MultiplayerData);
-        if (!multiplayerData) {
+    /**
+     * The purchase context for buying `newShip` now, or undefined (with
+     * the denial caption shown) when it may not be bought: nothing to
+     * price against yet, the stock gate (tech, availability, require,
+     * today's BuyRandom), or affordability. Re-quoted on every call rather
+     * than trusted from the greyed button, since the keyboard shortcut
+     * reaches the buy path directly.
+     */
+    private purchaseCheck(newShip: ShipData): ShipPurchaseContext | undefined {
+        if (!this.input.components.get(MultiplayerData)) {
             console.warn('Missing multiplayer data for prior ship.');
-            return;
+            return undefined;
         }
         const context = this.purchaseContext();
         if (!context) {
             // Ship or outfit data still loading; refuse rather than
             // charge a price computed from an incomplete valuation.
-            return;
+            return undefined;
         }
-        // The stock gate (tech, availability, require, today's BuyRandom)
-        // is re-quoted here, not just trusted from the greyed button — the
-        // keyboard shortcut path reaches this line directly.
         const stockCheck = canBuyStockShip(newShip, this.stockContext());
         if (!stockCheck.allowed) {
             this.text.status.text = stockCheck.message;
-            return;
+            return undefined;
         }
         const check = canBuyShip(newShip, context);
         if (!check.allowed) {
             // Affordability is already reflected in the greyed Buy
             // button; this covers the keyboard shortcut path too.
             this.text.status.text = check.message;
+            return undefined;
+        }
+        return context;
+    }
+
+    /**
+     * Buy Ship: the purchase is checked, the player names the new ship
+     * ("Please name your new <ship>:", ship_name_prompt.ts), and only then
+     * is anything bought. Cancel buys nothing (GUESS, until the reference
+     * measures it): no credits move, the hull stays, no set string runs.
+     * Resolves once the purchase is done or abandoned.
+     */
+    async buyShip(): Promise<void> {
+        if (this.naming) {
             return;
         }
+        const newShip = this.itemGrid?.selection;
+        if (!newShip || !this.purchaseCheck(newShip)) {
+            return;
+        }
+        this.naming = true;
+        let name: string | undefined;
+        try {
+            // On top of everything the shipyard draws.
+            this.container.addChild(this.namePrompt.container);
+            name = await this.namePrompt.ask(newShip.name,
+                loadPilotProfile()?.shipNumber);
+        } finally {
+            this.naming = false;
+        }
+        if (name === undefined) {
+            return;
+        }
+        // Priced at the OK, not at the click. The prompt is modal, so
+        // nothing should have moved, but the purchase must never charge a
+        // quote that is no longer true.
+        const context = this.itemGrid?.selection === newShip
+            ? this.purchaseCheck(newShip) : undefined;
+        if (!context) {
+            return;
+        }
+        this.completePurchase(newShip, context, name);
+    }
+
+    /** The purchase itself, once it is allowed and the ship is named. */
+    private completePurchase(newShip: ShipData,
+        context: ShipPurchaseContext, shipName: string) {
         // Swapping this.input is how a ship purchase is communicated:
         // Menu.done() emits it, and the Spaceport re-runs the stat
         // providers on the entity it gets back (spaceport.ts).
         this.input = buildPurchasedShip(this.input, newShip, context);
+        // The new ship's name (player_names.ts), on the new hull: the
+        // pilot's name carries over with the rest of the pilot's state
+        // (CARRIED_COMPONENTS), and the record is replaced, not mutated,
+        // since the traded-in hull shares it by reference.
+        this.input.components.set(PlayerNamesComponent, {
+            ...this.input.components.get(PlayerNamesComponent),
+            ship: shipName,
+        });
         // The traded-in class's OnRetire, then the bought class's
         // OnPurchase (EVN Bible ~:2598, ~:2639), on the new entity — the
         // `b8888` every stock hull sets, the bits arpia's upgrade outfits

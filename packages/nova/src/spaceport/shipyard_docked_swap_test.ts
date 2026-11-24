@@ -25,6 +25,7 @@ import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import { OfferPopup } from './offer_popup.js';
 import { Spaceport } from './spaceport.js';
+import type { Shipyard } from './shipyard.js';
 
 /**
  * ============================================================================
@@ -257,6 +258,7 @@ describe('a shipyard purchase published to the docked seam', () => {
      * nothing selected).
      */
     async function tradeUp(visit: {
+        spaceport: Spaceport,
         press: (action: ControlEvent['action']) => Promise<void>,
         enter: (action: ControlEvent['action']) => Promise<void>,
     }) {
@@ -264,6 +266,14 @@ describe('a shipyard purchase published to the docked seam', () => {
         await visit.press('right');
         await visit.press('right');
         await visit.press('buy');
+        // Buy Ship asks the new ship's name first (ship_name_prompt.ts);
+        // OK keeps the prefilled one.
+        const prompt = (visit.spaceport as unknown as { shipyard: Shipyard })
+            .shipyard.namePrompt.alert;
+        expect(prompt.shown).toBe(true);
+        prompt.confirm();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     /**
