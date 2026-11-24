@@ -82,6 +82,25 @@ const ORBIT_COURSE_GAIN = 2;
 // --- Steering ---
 
 /**
+ * How far out a speed-limited arrival (steerArrive) starts slowing for
+ * its goal: ARRIVE_SLOW_RADIUS, or the room the hull needs to turn around
+ * at top speed (half a turn at its turn rate) and then brake from top
+ * speed to `arriveSpeed`, whichever is farther. Only slow-turning fast
+ * hulls need more than the slow radius (the Leviathan, nova:192, 481 px).
+ */
+export function arriveSlowRadius(physics: {
+    acceleration: number, turnRate: number, speed: number,
+}, arriveSpeed: number): number {
+    if (!(physics.turnRate > 0) || !(physics.acceleration > 0)) {
+        return ARRIVE_SLOW_RADIUS;
+    }
+    const flip = physics.speed * Math.PI / physics.turnRate;
+    const brake = Math.max(0, physics.speed * physics.speed
+        - arriveSpeed * arriveSpeed) / (2 * physics.acceleration);
+    return Math.max(ARRIVE_SLOW_RADIUS, flip + brake);
+}
+
+/**
  * Point-and-thrust arrival: steer toward the goal and burn while far;
  * inside the slow radius, turn retrograde and brake until slow.
  * Built from the same movement primitives the jump sequence's
@@ -107,8 +126,21 @@ export function steerArrive(movement: MovementState, physics: {
     // the way in. Reading `speed > arriveSpeed` for it anyway braked a
     // ship burning at its speed cap, which rounding leaves a hair over it.
     const speedLimited = arriveSpeed < physics.speed;
+    // Where a speed-limited arrival starts slowing: the slow radius, or
+    // farther out if the hull needs more room than that to TURN AROUND (a
+    // half turn at its turn rate, flown at top speed) and then brake from
+    // top speed to the arrival speed. A slow-turning fast hull (the
+    // Leviathan, nova:192: 67.5 px/s, 13.5 px/s^2, 30°/s, a 6 s flip
+    // covering 405 px) began its flip at the slow radius and sailed
+    // straight past the planet, 216 px out the far side, before it had
+    // braked and could come back. Fixed per hull (top speed, a full half
+    // turn) rather than from the current speed and the turn still left:
+    // either of those shrinks as the ship comes round and slows, and let
+    // it out of the brake, nose forward again, short of the planet.
+    const slowRadius = speedLimited
+        ? arriveSlowRadius(physics, arriveSpeed) : ARRIVE_SLOW_RADIUS;
     if (distance < Math.max(arriveRadius, stopDistance * 1.5)
-        || (speedLimited && distance < ARRIVE_SLOW_RADIUS
+        || (speedLimited && distance < slowRadius
             && speed > arriveSpeed)) {
         // Brake: turn retrograde, thrust when roughly aligned.
         movement.turnTo = null;
@@ -140,7 +172,7 @@ export function steerArrive(movement: MovementState, physics: {
     // between "retrograde" and "nose on the goal" every second or so all
     // the way in (any hull faster than 50 px/s, at every planet).
     movement.turnBack = false;
-    const slowing = speedLimited && distance < ARRIVE_SLOW_RADIUS;
+    const slowing = speedLimited && distance < slowRadius;
     const cruiseSpeed = slowing
         ? Math.min(physics.speed, ARRIVE_APPROACH_SPEED_FRACTION * arriveSpeed)
         : physics.speed;

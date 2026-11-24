@@ -42,6 +42,9 @@ const DESTINATION = 'destination';
 const PEGASUS = { speed: 49.5, acceleration: 15.3, turnRate: Math.PI / 3 };
 /** Stock Enterprise (shïp nova:209): 90 px/s, 45 px/s^2, 120°/s. */
 const ENTERPRISE = { speed: 90, acceleration: 45, turnRate: 2 * Math.PI / 3 };
+/** Stock Leviathan (shïp nova:192): 67.5 px/s, 13.5 px/s^2, 30°/s: a 6 s
+ * half turn, 405 px at top speed. */
+const LEVIATHAN = { speed: 67.5, acceleration: 13.5, turnRate: Math.PI / 6 };
 
 async function arrivalWorld(physics: typeof PEGASUS) {
     const gameData = new MockGameData();
@@ -133,6 +136,29 @@ describe('A trader flying in to a planet holds its heading', () => {
             expect(run.seconds).toBeLessThan(17);
         });
 
+    it('a slow-turning fast hull starts its turn-around early enough not '
+        + 'to overshoot', async () => {
+            // Before the fix it began its 6 s flip at the 400 px slow
+            // radius, which the flip alone covers at 67.5 px/s. Here it
+            // crossed the planet and only got under the arrival speed
+            // 33 px beyond it, heading away; in the playtest repro (setting
+            // off nose-away, so arriving faster) it sailed 216 px past,
+            // braked, and came back nose-first: 365° of swing, in at 26 s.
+            const world = await arrivalWorld(LEVIATHAN);
+            const run = flyIn(world);
+            expect(run.arrived).toBeTrue();
+            expect(run.reversals).toBe(0);
+            // One flip to retrograde, braking the rest of the way in.
+            expect(run.sweptDeg).toBeLessThan(200);
+            expect(run.seconds).toBeLessThan(16);
+            // ...and it arrived on the near side, still coming in: its
+            // velocity points at the planet, not back from beyond it.
+            const { position, velocity } = trader(world).movement;
+            expect(Vector.fromVectorLike(velocity)
+                .dot(new Position(0, 0).subtract(position)))
+                .toBeGreaterThan(0);
+        });
+
     it('a hull faster than the arrival speed brakes once, not back and '
         + 'forth across it', async () => {
             // Before the fix: 2 reversals, 493°.
@@ -143,32 +169,40 @@ describe('A trader flying in to a planet holds its heading', () => {
             expect(run.seconds).toBeLessThan(11);
         });
 
-    it('replays identically from a snapshot mid-approach', async () => {
-        const world = await arrivalWorld(ENTERPRISE);
+    for (const [name, hull, breakAt] of [
         // Into the slow radius, where the approach-speed cap and the
         // on-course hold both apply.
-        for (let i = 0; i < 60 * 6; i++) {
-            world.step();
-        }
-        expect(trader(world).npc.mode).toBe('travel');
-        const atBreak = snapshotWorld(world);
-        const record = () => {
-            const hashes: string[] = [];
-            const headings: number[] = [];
-            for (let i = 0; i < 60 * 6; i++) {
-                world.step();
-                hashes.push(hashWorld(world).hash);
-                headings.push(trader(world).movement.rotation.angle);
-            }
-            return { hashes, headings, mode: trader(world).npc.mode };
-        };
-        const first = record();
-        expect(first.mode).toBe('dwell');
-        restoreWorld(world, atBreak, deriveEntityComponents);
-        const second = record();
-        expect(second.headings).toEqual(first.headings);
-        expect(second.hashes).toEqual(first.hashes);
-        const policies = world.resources.get(SnapshotPoliciesResource)!;
-        expect([...policies.unhandled]).toEqual([]);
-    });
+        ['an Enterprise', ENTERPRISE, 6],
+        // Mid-flip, inside the Leviathan's widened slow radius (481 px)
+        // but outside the stock 400.
+        ['a Leviathan', LEVIATHAN, 7.5],
+    ] as const) {
+        it(`replays identically from a snapshot mid-approach (${name})`,
+            async () => {
+                const world = await arrivalWorld(hull);
+                for (let i = 0; i < 60 * breakAt; i++) {
+                    world.step();
+                }
+                expect(trader(world).npc.mode).toBe('travel');
+                const atBreak = snapshotWorld(world);
+                const record = () => {
+                    const hashes: string[] = [];
+                    const headings: number[] = [];
+                    for (let i = 0; i < 60 * 6; i++) {
+                        world.step();
+                        hashes.push(hashWorld(world).hash);
+                        headings.push(trader(world).movement.rotation.angle);
+                    }
+                    return { hashes, headings, mode: trader(world).npc.mode };
+                };
+                const first = record();
+                expect(first.mode).toBe('dwell');
+                restoreWorld(world, atBreak, deriveEntityComponents);
+                const second = record();
+                expect(second.headings).toEqual(first.headings);
+                expect(second.hashes).toEqual(first.hashes);
+                const policies = world.resources.get(SnapshotPoliciesResource)!;
+                expect([...policies.unhandled]).toEqual([]);
+            });
+    }
 });
