@@ -474,7 +474,7 @@ Untested:
 Two cases remain untested in the original:
 - öops price events (`price_events.ts`: base + PriceDelta, replacing the
   tier price);
-- a stellar in both a jünk's SoldAt and BoughtAt lists (NovaJS shows High; wave 10: the original shows two rows, High and Low, see "#321 wave 10").
+- a stellar in both a jünk's SoldAt and BoughtAt lists (wave 10: the original shows two rows, High and Low, see "#321 wave 10"; NovaJS does too since 9b0c62de).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-price-flux/`:
 `{p100,a150,b150,c150,d150,a50}/*/02-trade.png` and `day2-{a150,a50}/`.
@@ -4807,6 +4807,21 @@ lists (High: sell only; Low: buy only) and cap the exchange at 8 rows,
 dropping jünk rows past the cap; which jünk wins needs one more run (two
 plain jünk and a double at one stellar, or ids in the other order).
 
+**Applied in 9b0c62de** (import fixed in 9a4e14f4;
+`N/nova_plugin/economy/trade_logic.ts` `junkTradeGoods`,
+`junkExchangeRows`). A stellar in both lists gets a High sell-only row
+and then a Low buy-only row, and the exchange keeps at most two jünk rows
+below the six standard slots. The rule for which rows survive and their
+order is a model that fits all three tables (wave 1 Kit Port, wave 10 Kit
+Port and Kit Market): take the jünks highest id first (High row, then
+Low) until both slots are full, then list High rows above Low rows. Kit
+Market's Widgets High above Gadgets Low is why the order is not id order
+alone. The one-more-run above would still test the model. It has a
+stock-data case to test on: Schmoo (spöb 322) is in the BoughtAt list of
+three jünks, Seafood Delicacies (145), Opals (146) and Durknen Girns
+(149). NovaJS now lists Durknen Girns and Opals there and drops Seafood
+Delicacies. A reference landing at Schmoo would confirm or refute it.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261123-w10/trade/{port,market}/*/02-trade.png`
 (wave 1's Kit Port table: `20261123-price-flux/`).
 
@@ -4848,6 +4863,18 @@ constants.
 `N/title/title_dialogs.ts:219-252`); no physics reads it. **Proposed fix
 (not applied):** scale the player's max speed by 2/3 when the pilot is
 strict (one more run with a second hull would pin 2/3 against 0.68).
+
+**Applied in 0a3231f0.** A strict pilot's ship carries
+`StrictPlayComponent` (`N/nova_plugin/player/player_state_plugin.ts`),
+set from the profile at player start and carried across every hull
+change. `EffectiveMovementPhysicsSystem`
+(`N/nova_plugin/travel/afterburner_plugin.ts`) caps that ship at
+`STRICT_PLAY_SPEED_FACTOR` = 2/3 of its top speed and leaves acceleration
+and turn rate alone. The afterburner and the ion slowdown compose with
+it. Only the player is affected; escorts and NPCs were not measured. It
+rides the player's insertion record, so every peer simulates it. A room
+spec covers a rollback across the thrust input and a late joiner's
+restore.
 
 Confidence: medium (one run each; the stellar tracking has 1 px steps and
 gaps, but both summaries agree on 0.64-0.71).
@@ -4975,6 +5002,16 @@ save, up to 10 s old, standing: #344's description).
 **Proposed fix (not applied):** exclude jump transits in
 `canExitToTitle` (drop the key while `state.kind === 'transit'`), and
 make sure the save taken at the arrival includes the jump.
+
+**Applied in 640e3181.** `canExitToTitle` refuses Escape during the
+`hyper` transit. It also refuses it in space while the player's ship is
+in a departure stage (stopping, aligning, spin-up, the burn); title_flow
+reads that off the display world (`displayPlayerJumping` in
+`N/client/frame_pump.ts`). The key is dropped, not queued. The arrival
+tick does not count, so Escape works on arrival, and the exit's save
+names the new system. Gate, Mxxx-move and re-entry transits stay
+interruptible; they were not measured. Cmd-Q has no in-game handler in
+NovaJS, so its deferral does not apply.
 
 Confidence: high (four runs, each unambiguous on video).
 
@@ -5119,7 +5156,16 @@ OnAbort when the special ships appear; CompReward is neither granted nor
 reversed, 0x0040 or not. **NovaJS matches** on the record (no
 reversal) and the bits; it runs OnAbort at accept rather than at the
 special ships' creation (a timing difference only visible to a test that
-reads the bits while still landed). The DEFERRED case (a board/rescue
+reads the bits while still landed).
+
+**Applied in 0cf672ea.** The timing now matches. A docked accept runs
+OnAccept and queues the ships with `onAbortPending`. At the lift-off,
+`runLiftoffAutoAborts` (`N/spaceport/mission_session.ts`, called from
+`prepareMissionShips`) runs OnAbort once, just before the ships are
+built. An in-flight accept, whose ships come with its own record, and a
+mission without ships still run OnAbort at accept. OnAccept, the 0x0002
+Pay, the date and the notice stay at accept; their timing was not
+measured. CompReward is still neither granted nor reversed. The DEFERRED case (a board/rescue
 goal, aborting when the ship is boarded) was **not run** (boarding needs
 the U9 loop; left for a later wave).
 
@@ -5171,6 +5217,13 @@ mismatch: `N/nova_plugin/ship/outfit_plugin.ts:77-84`
 **Proposed fix (not applied):** `Math.max(mass, Math.floor(shipMass * mass / 100))`.
 The same-visit refund is outside this test's NovaJS reading (resale is
 50% for a pre-owned unit, `outfitter_rules.ts:479-481`).
+
+**Applied in a20de606** (`installedOutfitMass`). The five hulls are
+pinned in specs for the 0x0200 price, the 0x0400 mass, the units that fit
+in 25 t, and 0x0600. The same-visit refund already matched:
+`sellRefund` credits the full hull-scaled price for a unit bought this
+visit and 50% for a pre-owned one. That is now pinned for the five hulls
+too.
 
 Confidence: high (five hulls, every number read off the shop's own
 panel and the credit count).
