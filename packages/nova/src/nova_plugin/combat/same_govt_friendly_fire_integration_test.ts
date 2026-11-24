@@ -13,7 +13,9 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
-import { FormationComponent, NpcComponent } from '../npc/index.js';
+import {
+    AggressionComponent, FormationComponent, NpcComponent,
+} from '../npc/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import {
     DamagedEvent, DisabledComponent, FiringGroupComponent, makeShip,
@@ -403,20 +405,22 @@ describe('NPC friendly fire between same-govt / allied ships '
      * other NPC and did not try to attack me." Its brackets were red while
      * it fought somebody else.
      *
-     * No tier paints a ship red for being in 'attack' mode at someone else:
-     * tier 3a (npc/allegiance.ts isAttackingPlayer) needs its TargetComponent
-     * on the PLAYER. What does it is tier 3b, RECENT AGGRESSION: its stray
-     * shots in that fight land on the player, AggressionDamageSystem
-     * (aggression_plugin.ts) feeds them to the stray-damage accumulator
-     * (deliberate: false, since it is not targeting the player), and at
-     * AGGRESSION_DAMAGE_THRESHOLD (50 points within 30 s) the pair flips
-     * hostile for AGGRESSION_WINDOW_MS. That record lives only on the
-     * PLAYER's ship; the NPC's brain never hears of it (npc.aggressor is
-     * about who hit the NPC), so it finishes its fight and leaves the
-     * player alone while the brackets stay red.
+     * The cause was tier 3b, RECENT AGGRESSION: its stray shots in that
+     * fight landed on the player, AggressionDamageSystem
+     * (aggression_plugin.ts) fed them to the stray-damage accumulator
+     * (deliberate: false, since it was not targeting the player), and at
+     * AGGRESSION_DAMAGE_THRESHOLD the pair flipped hostile for
+     * AGGRESSION_WINDOW_MS: a record that lives only on the PLAYER's ship
+     * and that the NPC's brain never hears of.
+     *
+     * The fix, per Matthew's K9 ruling ("IFF bracket colors correspond to
+     * hostility regardless of govt's stance": red means hostile TO THE
+     * PLAYER): the stray-damage trigger (c) counts only against player-side
+     * shooters, the case it was written for. An NPC is red when it really
+     * is: targeting the player in 'attack' mode, its politics, or a
+     * DELIBERATE hit (one landed while it targets the player).
      */
-    describe('the player\'s IFF while an NPC fights another NPC '
-        + '(TODAY\'S BEHAVIOUR)', () => {
+    describe('the player\'s IFF while an NPC fights another NPC', () => {
         function style(ship: Entity) {
             const player = world.entities.get('player')!;
             return styleForTarget('shooter', ship, 'player', player,
@@ -425,54 +429,124 @@ describe('NPC friendly fire between same-govt / allied ships '
                 world.resources.get(SystemIdResource));
         }
 
-        it('stray hits past the threshold paint a neutral warship red, '
-            + 'though it never targets the player', async () => {
-            // A Concord warship (neutral to a clean, governmentless
-            // player) at war with the Verge Raiders; the player strays
-            // into the line of fire between it and its raider target.
+        function aggressionOn(uuid: string) {
+            return world.entities.get('player')!.components
+                .get(AggressionComponent)?.get(uuid);
+        }
+
+        /** The player in the middle, the shooter below it facing it (-y),
+         * and a raider beyond the player: a bolt the shooter fires at the
+         * raider meets the player first. */
+        async function crossfire(shooterSetup: (ship: Entity) => void) {
             const player = await addShip('player', CORSAIR, 1000, 850,
                 ship => ship.components.set(ControlledByComponent,
                     { peerId: 'peer' }));
             const shooter = await addShip('shooter', CORSAIR, 1000, 1000,
-                warship(MERIDIAN));
+                shooterSetup);
             const raider = await addShip('raider', CORSAIR, 1000, 700,
                 warship(RAIDERS));
             step(20);
             expect(player).toBeDefined();
             expect(raider).toBeDefined();
-            aim(shooter, 'raider');
-            expect(style(shooter)).withContext('before').toBe('neutral');
+            return shooter;
+        }
 
-            // Pulse Blaster: 8 shield + 6 armor = 14 a bolt. Three
-            // strays (42) are forgiven; the fourth (56) crosses 50.
+        /** Fires `count` blaster bolts from the shooter, each of which must
+         * land on the player; returns the shooter's style after each. */
+        async function bolts(shooter: Entity, count: number) {
             const verdicts: string[] = [];
-            for (let bolt = 0; bolt < 4; bolt++) {
+            for (let bolt = 0; bolt < count; bolt++) {
                 pin(world.entities.get('player')!, 1000, 850);
                 pin(shooter, 1000, 1000);
                 damaged = [];
                 await fire(BLASTER, 'shooter');
                 step(40);
                 expect(hitsOn('player').length)
-                    .withContext(`bolt ${bolt} strays into the player`)
+                    .withContext(`bolt ${bolt} lands on the player`)
                     .toBe(1);
                 verdicts.push(style(shooter));
             }
-            expect(verdicts)
-                .toEqual(['neutral', 'neutral', 'neutral', 'hostile']);
-            expect(targetOf(shooter)).toBe('raider');
+            return verdicts;
+        }
 
-            // Its brain is unaware of the player: with the raider gone it
-            // does not turn on the player (no aggressor, not an on-sight
-            // enemy), yet the brackets stay red...
+        it('an NPC whose strays hit the player while it fights another NPC '
+            + 'stays neutral', async () => {
+            // A Concord warship (neutral to a clean, governmentless
+            // player) at war with the Verge Raiders; the player strays
+            // into the line of fire between it and its raider target.
+            const shooter = await crossfire(warship(MERIDIAN));
+            aim(shooter, 'raider');
+            expect(style(shooter)).withContext('before').toBe('neutral');
+
+            // Pulse Blaster: 8 shield + 6 armor = 14 a bolt. Six strays
+            // (84) are well past AGGRESSION_DAMAGE_THRESHOLD (50), which
+            // used to flip it red at the fourth.
+            expect(await bolts(shooter, 6)).toEqual(['neutral', 'neutral',
+                'neutral', 'neutral', 'neutral', 'neutral']);
+            expect(targetOf(shooter)).toBe('raider');
+            // Nothing recorded at all: no state riding in snapshots for it.
+            expect(aggressionOn('shooter')).toBeUndefined();
+
+            // And its brain agrees: with the raider gone it does not turn
+            // on the player.
             world.entities.delete('raider');
             wake(shooter);
             step(60);
             expect(npcOf(shooter).aggressor).toBeUndefined();
             expect(targetOf(shooter)).not.toBe('player');
-            expect(style(shooter)).toBe('hostile');
-            // ...until the 30 s window lapses.
-            step(30 * 60);
             expect(style(shooter)).toBe('neutral');
         });
+
+        it('another PLAYER whose strays pass the threshold still turns red',
+            async () => {
+                // Trigger (c) as Matthew wrote it ("enough damage to us
+                // while not targeting us"), for other players' ships.
+                const shooter = await crossfire(ship => ship.components
+                    .set(ControlledByComponent, { peerId: 'peer b' }));
+                aim(shooter, 'raider');
+                expect(style(shooter)).withContext('before')
+                    .toBe('neutral');
+                // 14 a bolt: three (42) are forgiven, the fourth (56)
+                // crosses 50.
+                expect(await bolts(shooter, 4))
+                    .toEqual(['neutral', 'neutral', 'neutral', 'hostile']);
+                expect(aggressionOn('shooter')?.hostile).toBeTrue();
+                // ...until the 30 s window lapses.
+                step(30 * 60);
+                expect(style(shooter)).toBe('neutral');
+            });
+
+        it('another player\'s ESCORT whose strays pass the threshold turns '
+            + 'red', async () => {
+            // In formation on its player but with no shared firing group,
+            // so its shots root at the escort itself: the flock walk is
+            // what makes it player-side.
+            await addShip('other player', CORSAIR, 3000, 3000,
+                ship => ship.components.set(ControlledByComponent,
+                    { peerId: 'peer b' }));
+            const shooter = await crossfire(ship => {
+                warship(MERIDIAN)(ship);
+                ship.components.set(FormationComponent,
+                    { leader: 'other player', slot: 0 });
+            });
+            aim(shooter, 'raider');
+            expect(await bolts(shooter, 4))
+                .toEqual(['neutral', 'neutral', 'neutral', 'hostile']);
+        });
+
+        it('an NPC that deliberately attacks the player is red at once',
+            async () => {
+                // Targeting the player but asleep, so not in 'attack'
+                // mode: tier 3a is silent and only the hit itself (a
+                // damaging hit while targeting us, trigger (b)) can
+                // paint it.
+                const shooter = await crossfire(warship(MERIDIAN));
+                aim(shooter, 'player');
+                expect(npcOf(shooter).mode).not.toBe('attack');
+                expect(style(shooter)).withContext('before')
+                    .toBe('neutral');
+                expect(await bolts(shooter, 1)).toEqual(['hostile']);
+                expect(aggressionOn('shooter')?.hostile).toBeTrue();
+            });
     });
 });

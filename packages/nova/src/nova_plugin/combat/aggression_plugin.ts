@@ -1,4 +1,5 @@
 import { Entities, GetEntity, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
@@ -15,7 +16,7 @@ import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { TargetComponent, CloakDecloakOnHitSystem } from '../ship/index.js';
 import { IffProvider } from '../reputation/index.js';
-import { NpcAggressionSystem, sameFlock } from '../npc/index.js';
+import { flockPlayer, NpcAggressionSystem, sameFlock } from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -35,6 +36,21 @@ import { NpcAggressionSystem, sameFlock } from '../npc/index.js';
  *      Both caught here, in AggressionDamageSystem, off DamagedEvent —
  *      the single authoritative damage-application event that
  *      projectiles, beams and blasts all funnel through.
+ *
+ * (c) IS FOR PLAYER-SIDE SHOOTERS ONLY. The rule was written for OTHER
+ * PLAYERS' ships, which have no brain and no government, so what they do is
+ * the only evidence there is. An NPC is different: whether it is hostile to
+ * the player is its own posture (tier 3a: targeting the player in 'attack'
+ * mode) and its politics, and its brain never reads this record — so an NPC
+ * fighting somebody else, whose strays clip the player, would sit behind
+ * red brackets while it finished its fight and left the player alone
+ * (Matthew, from play, 2026-11-23). His K9 ruling: "IFF bracket colors
+ * correspond to hostility regardless of govt's stance" — red means hostile
+ * TO THE PLAYER, and that NPC is not. So a not-deliberate hit is recorded
+ * only when the responsible ship is a player's, or flies in a player's
+ * flock (an escort or bay fighter whose shots root at a ship that is not
+ * the player itself: see isPlayerSide). An NPC's DELIBERATE hit — while
+ * targeting us — still marks it at once, and (a) is untouched.
  *
  * WHAT "DOES DAMAGE" MEANS (b). The hit must carry positive shield or
  * armor damage: a pure-ionization or pure-knockback tap is not "a
@@ -99,6 +115,25 @@ export function hitDamage(damage: { shield: number, armor: number },
 
 const AggressorTargetQuery = new Query([Optional(TargetComponent)] as const);
 
+/**
+ * Whether the ship responsible for a hit (damagerRoot's answer) is on a
+ * PLAYER's side: a player-controlled ship, or one in a player's flock
+ * (npc/allegiance.ts flockPlayer — hired escorts, bay fighters, a protecting
+ * special ship). Normally a flock member's shots already root at its player
+ * through the shared firing group; the flock walk covers the ones whose
+ * group or chain tops out elsewhere (an escort's own fighters, a durable
+ * PlayerEscortComponent after the live links lapsed). Gate for trigger (c):
+ * stray damage only counts against player-side shooters. A responsible ship
+ * no longer in the world is not player-side (nothing left to paint).
+ *
+ * Pure over synced components, so every peer reaches the same verdict.
+ */
+export function isPlayerSide(uuid: string,
+    getEntity: (uuid: string) => Entity | undefined): boolean {
+    return getEntity(uuid)?.components.has(ControlledByComponent) === true
+        || flockPlayer(uuid, getEntity) !== undefined;
+}
+
 const AggressionDamageSystem = new System({
     name: 'AggressionDamageSystem',
     events: [DamagedEvent],
@@ -128,6 +163,12 @@ const AggressionDamageSystem = new System({
         // the same conclusion from the same tick's state.
         const targetingUs = runQuery(AggressorTargetQuery, aggressor)[0]?.[0]
             ?.target === uuid;
+        if (!targetingUs && !isPlayerSide(aggressor, getEntity)) {
+            // Trigger (c) is for player-side shooters only (see the header):
+            // an NPC's crossfire is not an attack on us, and recording it
+            // would paint brackets red that its brain never backs up.
+            return;
+        }
         applyAggression(victim, aggressor, time.time, {
             damage: dealt,
             deliberate: targetingUs,

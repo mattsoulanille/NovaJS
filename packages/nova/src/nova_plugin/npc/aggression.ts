@@ -76,6 +76,12 @@ export const AGGRESSION_WINDOW_MS = 30_000;
  * Because the accumulator is cleared when the pair lapses to neutral
  * (see sweepAggression), this is effectively "50 points within 30
  * seconds", not "50 points ever".
+ *
+ * Only PLAYER-SIDE shooters feed the accumulator (a player's ship or its
+ * flock: combat/aggression_plugin's isPlayerSide). An NPC's stray fire is
+ * dropped before it gets here — an NPC is hostile to the player by its own
+ * posture and politics, which its brain acts on; this record would only
+ * paint brackets red that the brain never backs up.
  */
 export const AGGRESSION_DAMAGE_THRESHOLD = 50;
 

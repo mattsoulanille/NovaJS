@@ -627,6 +627,10 @@ describe('aggression is deterministic across peers', () => {
             // would shift and the two states would part company.
             const build = async () => {
                 const world = (await makeStandardWorld()).world;
+                // Aimed at the player, so the hit is DELIBERATE (b): a
+                // stray from an NPC records nothing at all.
+                world.entities.get('neutral')!.components
+                    .set(TargetComponent, { target: 'player' });
                 world.entities.set('shot', new Entity('shot')
                     .addComponent(SourceComponent, 'neutral'));
                 world.step();

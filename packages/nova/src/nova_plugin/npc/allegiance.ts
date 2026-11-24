@@ -174,7 +174,9 @@ export function sameFlock(a: string, b: string,
  *      legacy dev-enemy ShootAllWeapons marker; or
  *  (b) it is a RECENT AGGRESSOR (aggression.ts): it shot the player, or
  *      locked a guided missile on them, within the last
- *      AGGRESSION_WINDOW_MS.
+ *      AGGRESSION_WINDOW_MS. For an NPC that means a DELIBERATE act (a hit
+ *      while targeting the player, a guided lock): stray damage only counts
+ *      against player-side shooters (combat/aggression_plugin).
  *
  * Exported so the ship-offer gates (display/ship_mission_offer_plugin's
  * "begins to attack the player") quote it rather than keeping a narrower
