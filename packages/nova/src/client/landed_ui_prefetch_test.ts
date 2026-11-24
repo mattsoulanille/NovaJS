@@ -194,6 +194,49 @@ describe('landed-UI prefetch (#369)', () => {
         }
     });
 
+    it('leaves nothing to fetch at a port without a shipyard or exchange (#373)',
+        async () => {
+            // Ossory's only landable stellar is Halden Refuge: an
+            // outfitter and a bar, no shipyard, no commodity exchange. The
+            // prefetch therefore warms neither of those venues — and the
+            // spaceport, which now builds only the venues the stellar has,
+            // asks for nothing of theirs either. (Before #373 it built all
+            // four, so this landing fetched every shïp for the shipyard.)
+            const { sim, meter, assets } = await coldClient();
+            const slot = new ClientStateSlot();
+            const prefetch = new LandedUiPrefetch(sim, assets,
+                { schedule: immediately, debug: fail });
+            prefetch.follow(slot);
+            slot.apply(() => inSpace(SYNTHETIC.systems.ossory));
+            await prefetch.idle;
+            expect(prefetch.done).toBe(true);
+
+            meter.reset();
+            assets.drawn.length = 0;
+            const spaceport = new Spaceport(assets.display, sim,
+                SYNTHETIC.planets.refuge, new Subject<ControlEvent>());
+            const venues = spaceport as unknown as
+                Record<string, Menu<unknown> | undefined>;
+            await spaceport.buildPromise;
+            await Promise.all(['outfitter', 'bar', 'missionComputer']
+                .map(name => venues[name]!.buildPromise));
+            expect(venues.shipyard).toBeUndefined();
+            expect(venues.tradeCenter).toBeUndefined();
+
+            const known = new Set((await sim.ids).PictImage);
+            const cold = [...new Set(assets.drawn)]
+                .filter(id => known.has(id) && !assets.warm.has(id));
+            expect(cold).withContext('PICTs drawn but not prefetched')
+                .toEqual([]);
+            expect(meter.stats.requests)
+                .withContext(`game-data requests at landing: ${JSON.stringify(meter.stats)}`)
+                .toBe(0);
+            expect(assets.drawn).not.toContain(SHIP_INFO_PICT);
+            expect(assets.drawn).not.toContain(TRADE_CENTER_PICT);
+            expect(assets.drawn).toContain(BAR_PICT);
+            expect(assets.drawn).toContain(OUTFITTER_PICT);
+        });
+
     it('starts nothing before the player is in space', async () => {
         const { sim, meter, assets } = await coldClient();
         const schedule = manualScheduler();

@@ -5,8 +5,9 @@
  *
  * Entering a system loads what flying needs (#368); landing then used to
  * wait on its own loads at the deployed server's ~100 ms round trip: the
- * spaceport frame and every venue's frame (the Spaceport builds all of
- * them as it opens), the stellar's landscape, the landing popups' frames,
+ * spaceport frame and each venue's frame (the Spaceport builds, as it
+ * opens, every venue the stellar has — and since #373 only those), the
+ * stellar's landscape, the landing popups' frames,
  * the BBS string table, the outfitter's weapon warm-up, and — opening the
  * venues — the trade center's jünk/öops and the shop grids' item art.
  *

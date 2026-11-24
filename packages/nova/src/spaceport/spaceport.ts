@@ -87,11 +87,32 @@ function outfitCounts(entity: Entity | undefined): [string, number][] {
 }
 
 export class Spaceport extends Menu<Entity> {
-    private outfitter: Outfitter;
-    private shipyard: Shipyard;
+    /*
+     * The four facility venues exist only where the stellar has them
+     * (spöb flags; #373, Matthew 2026-11-23: "build a venue only when the
+     * stellar has it"). Each is constructed in build(), once the stellar's
+     * data is in, so a landing at a stellar with no shipyard never loads
+     * the shipyard's art or data. Undefined before the build finishes and
+     * for a facility the stellar lacks; the button for a missing facility
+     * is hidden exactly as before. The Mission BBS has no spöb flag —
+     * every spaceport has one — so it is built with the spaceport.
+     */
+    private outfitter?: Outfitter;
+    private shipyard?: Shipyard;
     private missionComputer: MissionBoard;
-    private bar: Bar;
-    private tradeCenter: TradeCenter;
+    private bar?: Bar;
+    private tradeCenter?: TradeCenter;
+    /** What the venues are built with (build, after the stellar's data). */
+    private readonly venueControlEvents: Observable<ControlEvent>;
+    /**
+     * The per-landing settings the plugin pushes (setDeployedOutfitCounts,
+     * setLandedEscorts), kept so a venue built after they arrive — the
+     * first landing here, while the stellar's data is still loading —
+     * starts with them.
+     */
+    private deployedOutfitCounts?: DeployedOutfitCounts;
+    private landedEscortSettings?: [roster?: () => EscortDealEntry[],
+        playerUuid?: string, world?: Iterable<[string, Entity]>];
     private universe: MissionUniverse;
     /** Landing mission-offer / completion popups, shown over the
      * spaceport before it becomes interactive. */
@@ -136,7 +157,8 @@ export class Spaceport extends Menu<Entity> {
      */
     private get venues(): { transaction?: LandedTransaction, dismiss(): void }[] {
         return [this.outfitter, this.shipyard, this.bar, this.tradeCenter,
-            this.missionComputer];
+            this.missionComputer].filter(<T>(venue: T | undefined):
+                venue is T => venue !== undefined);
     }
 
     private font = {
@@ -207,14 +229,16 @@ export class Spaceport extends Menu<Entity> {
         buttons.leave.click.subscribe(() => void this.leave());
         buttons.refuel.click.subscribe(this.refuel.bind(this));
 
-        this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
+        this.venueControlEvents = controlEvents;
         // (A ship change from an OnPurchase set string is published off
         // the landing's transaction, like every venue's — see show.)
         const showOutfitter = async () => {
             // No stellar data yet (the spaceport's keys go live before its
-            // build finishes — see show) or no such venue here: nothing
-            // to open. The same rule guards every venue below.
-            if (!this.data?.flags.hasOutfitter) {
+            // build finishes — see show) or no such venue here (#373: it
+            // is built only where the stellar has it): nothing to open.
+            // The same rule guards every venue below.
+            const outfitter = this.outfitter;
+            if (!outfitter) {
                 return;
             }
             if (!this.enterVenue()) {
@@ -228,9 +252,9 @@ export class Spaceport extends Menu<Entity> {
             }
             // The outfitter mutates the ship's outfits and the
             // player's control bits.
-            this.setLiveStatus(() => this.outfitter.dockedStatus());
+            this.setLiveStatus(() => outfitter.dockedStatus());
             const outfitsBefore = outfitCounts(this.input);
-            this.input = await this.outfitter.show(this.input);
+            this.input = await outfitter.show(this.input);
             this.setLiveStatus(undefined);
             // An OnPurchase `Hxxx` (stock 314 "Chrome Valk Upgrade") may
             // have swapped the hull mid-visit; its stat providers are
@@ -276,10 +300,9 @@ export class Spaceport extends Menu<Entity> {
         };
         buttons.missions.click.subscribe(showMissionComputer);
 
-        this.bar = new Bar(displayAssets, simulationData, controlEvents,
-            this.universe, id);
         const showBar = async () => {
-            if (!this.data?.flags.hasBar) {
+            const bar = this.bar;
+            if (!bar) {
                 return;
             }
             if (!this.enterVenue()) {
@@ -287,8 +310,8 @@ export class Spaceport extends Menu<Entity> {
             }
             // The bar mutates missions, credits (gambling, hire fees),
             // cargo, bits, and records hired escorts.
-            this.setLiveStatus(() => this.bar.dockedStatus());
-            this.input = await this.bar.show(this.input);
+            this.setLiveStatus(() => bar.dockedStatus());
+            this.input = await bar.show(this.input);
             this.setLiveStatus(undefined);
             // As at the BBS: an accepted mission may have changed ships.
             await this.shipBuild;
@@ -297,10 +320,9 @@ export class Spaceport extends Menu<Entity> {
         };
         buttons.bar.click.subscribe(showBar);
 
-        this.tradeCenter = new TradeCenter(displayAssets, simulationData,
-            controlEvents, id);
         const showTradeCenter = async () => {
-            if (!this.data?.flags.hasCommodityExchange) {
+            const tradeCenter = this.tradeCenter;
+            if (!tradeCenter) {
                 return;
             }
             if (!this.enterVenue()) {
@@ -313,21 +335,17 @@ export class Spaceport extends Menu<Entity> {
                 return;
             }
             // The trade center mutates cargo and credits.
-            this.setLiveStatus(() => this.tradeCenter.dockedStatus());
-            this.input = await this.tradeCenter.show(this.input);
+            this.setLiveStatus(() => tradeCenter.dockedStatus());
+            this.input = await tradeCenter.show(this.input);
             this.setLiveStatus(undefined);
             this.refreshRefuelButton();
             this.rebindControls();
         };
         buttons.tradeCenter.click.subscribe(showTradeCenter);
 
-        this.shipyard = new Shipyard(displayAssets, simulationData, controlEvents);
-        // A purchase announces itself AT THE CLICK, not at the shipyard's
-        // exit — see adoptPurchasedShip.
-        this.shipyard.onShipPurchased = ship => this.adoptPurchasedShip(ship);
-
         const showShipyard = async () => {
-            if (!this.data?.flags.hasShipyard) {
+            const shipyard = this.shipyard;
+            if (!shipyard) {
                 return;
             }
             if (!this.enterVenue()) {
@@ -343,7 +361,7 @@ export class Spaceport extends Menu<Entity> {
             // Any purchase inside the visit has already been adopted (and
             // has already set this.input); this just picks up the entity the
             // menu closes on, which is the same one.
-            this.input = await this.shipyard.show(this.input);
+            this.input = await shipyard.show(this.input);
             // The new hull's stat providers are still running: hold the
             // spaceport's controls until they finish, exactly as awaiting
             // runShipBuildWorld here used to.
@@ -904,8 +922,9 @@ export class Spaceport extends Menu<Entity> {
      * judgment call 8) exactly as the outfitter refuses to sell the bay.
      */
     setDeployedOutfitCounts(counts?: DeployedOutfitCounts) {
-        this.outfitter.setDeployedOutfitCounts(counts);
-        this.shipyard.setDeployedOutfitCounts(counts);
+        this.deployedOutfitCounts = counts;
+        this.outfitter?.setDeployedOutfitCounts(counts);
+        this.shipyard?.setDeployedOutfitCounts(counts);
     }
 
     /**
@@ -917,11 +936,12 @@ export class Spaceport extends Menu<Entity> {
      */
     setLandedEscorts(roster?: () => EscortDealEntry[],
         playerUuid?: string, world?: Iterable<[string, Entity]>) {
-        this.tradeCenter.setLandedEscorts(roster, playerUuid);
+        this.landedEscortSettings = [roster, playerUuid, world];
+        this.tradeCenter?.setLandedEscorts(roster, playerUuid);
         // ...and the bar, whose hire dialog counts the fleet against the
         // escort cap (nova_plugin/escorts/escort_cap.ts) — from the roster AND
         // the display world, where the escorts still on approach are.
-        this.bar.setLandedEscorts(roster, playerUuid, world);
+        this.bar?.setLandedEscorts(roster, playerUuid, world);
         // ...and the Leave, which settles the deals queued against the
         // roster's escorts as the player departs (leave). The roster is
         // the client's own array, MUTATED by a settled sale (the escort
@@ -1009,20 +1029,7 @@ export class Spaceport extends Menu<Entity> {
         await super.build();
         const data = await this.simulationData.data.Planet.get(this.id);
         this.data = data;
-        // The outfitter stocks by this stellar's tech level / SpecialTech
-        // and honours its "buys anything" flag (see outfitter_rules.ts).
-        this.outfitter.setPlanet(data);
-        // The shipyard stocks ships by the same tech level / SpecialTech
-        // (see shipyard_stock_rules.ts) and rolls the per-day BuyRandom
-        // pool against this stellar's id.
-        // govt is not a stock gate; it is what a ränk PriceMod is matched
-        // against (price_mod.ts).
-        this.shipyard.setPlanet(
-            {
-                techLevel: data.techLevel, specialTech: data.specialTech,
-                govt: data.govt,
-            },
-            this.id);
+        this.buildVenues(data);
         const title = new PIXI.Text(data.name, this.font.title);
         title.anchor.x = 0.5;
         // "Earth"'s ink spans x940..982 on the R8 wave-5 capture
@@ -1063,13 +1070,68 @@ export class Spaceport extends Menu<Entity> {
         spaceportPict.position.x = -306;
         spaceportPict.position.y = -256;
         this.container.addChild(spaceportPict)
-        this.container.addChild(this.outfitter.container);
-        this.container.addChild(this.shipyard.container);
-        this.container.addChild(this.tradeCenter.container);
-        this.container.addChild(this.missionComputer.container);
-        this.container.addChild(this.bar.container);
+        for (const venue of [this.outfitter, this.shipyard, this.tradeCenter,
+            this.missionComputer, this.bar]) {
+            if (venue) {
+                this.container.addChild(venue.container);
+            }
+        }
         // The landing popups render over everything else on the spaceport.
         this.container.addChild(this.offerPopup.container);
+    }
+
+    /**
+     * Builds the facility venues this stellar has (#373) — and only those:
+     * a venue's construction is what loads its art and data, so a
+     * facility the stellar lacks costs the landing nothing. Runs once,
+     * from build(), with the stellar's data.
+     */
+    private buildVenues(data: PlanetData) {
+        const { displayAssets, simulationData } = this;
+        const controlEvents = this.venueControlEvents;
+        if (data.flags.hasOutfitter) {
+            this.outfitter = new Outfitter(displayAssets, simulationData,
+                controlEvents);
+            // The outfitter stocks by this stellar's tech level /
+            // SpecialTech and honours its "buys anything" flag (see
+            // outfitter_rules.ts).
+            this.outfitter.setPlanet(data);
+        }
+        if (data.flags.hasShipyard) {
+            this.shipyard = new Shipyard(displayAssets, simulationData,
+                controlEvents);
+            // A purchase announces itself AT THE CLICK, not at the
+            // shipyard's exit — see adoptPurchasedShip.
+            this.shipyard.onShipPurchased =
+                ship => this.adoptPurchasedShip(ship);
+            // The shipyard stocks ships by the same tech level /
+            // SpecialTech (see shipyard_stock_rules.ts) and rolls the
+            // per-day BuyRandom pool against this stellar's id. govt is
+            // not a stock gate; it is what a ränk PriceMod is matched
+            // against (price_mod.ts).
+            this.shipyard.setPlanet(
+                {
+                    techLevel: data.techLevel, specialTech: data.specialTech,
+                    govt: data.govt,
+                },
+                this.id);
+        }
+        if (data.flags.hasBar) {
+            this.bar = new Bar(displayAssets, simulationData, controlEvents,
+                this.universe, this.id);
+        }
+        if (data.flags.hasCommodityExchange) {
+            this.tradeCenter = new TradeCenter(displayAssets, simulationData,
+                controlEvents, this.id);
+        }
+        // The landing's settings may have arrived before the stellar's
+        // data (the first landing here): hand them on.
+        if (this.deployedOutfitCounts) {
+            this.setDeployedOutfitCounts(this.deployedOutfitCounts);
+        }
+        if (this.landedEscortSettings) {
+            this.setLandedEscorts(...this.landedEscortSettings);
+        }
     }
 
     /**
