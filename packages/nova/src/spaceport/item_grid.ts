@@ -566,21 +566,18 @@ export class ItemGrid<I extends Item> {
         return this.scroll < this.maxScroll;
     }
 
-    /** Scrolls the visible page up/down by a page, for the scroll-arrow
-     * buttons (the view moves without changing the selection). */
+    /**
+     * Scrolls the visible page up / down by ONE ROW, for the scroll-arrow
+     * buttons (the view moves without changing the selection). The
+     * original's outfitter and shipyard arrows move a row a click, on the
+     * release, and a held arrow does not repeat (reference "Scrolling ...
+     * wave 12"); the arrows fire on the release (ScrollArrow.click).
+     */
     scrollUp() {
-        if (this.scroll <= 0) {
-            return;
-        }
-        this.scroll = Math.max(0, this.scroll - BOX_COUNT[1]);
-        this.drawGrid();
+        this.scrollBy(-1);
     }
     scrollDown() {
-        if (this.scroll >= this.maxScroll) {
-            return;
-        }
-        this.scroll = Math.min(this.maxScroll, this.scroll + BOX_COUNT[1]);
-        this.drawGrid();
+        this.scrollBy(1);
     }
 
     /** Scrolls the visible page by `rows` (negative = up), clamped to the

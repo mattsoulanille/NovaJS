@@ -44,7 +44,7 @@ export const SCROLL_ARROW = {
  */
 export class ScrollArrow {
     container = new PIXI.Container();
-    /** Fires on release over an enabled arrow (one page / one step). */
+    /** Fires on release over an enabled arrow (a grid's one row). */
     readonly click = new Subject<void>();
     /** Fires on press-down over an enabled arrow, for owners that scroll
      * while the arrow is HELD (the mission-text popup). A greyed arrow

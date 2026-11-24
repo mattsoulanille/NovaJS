@@ -4,6 +4,7 @@ import { GRID_ROW_PX, TextWheelScroller, WheelRowStepper } from './grid_wheel.js
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { ItemGrid } from './item_grid.js';
 import { POPUP_WHEEL_NOTCH_PX } from './popup_layout.js';
+import { ScrollArrow } from './scroll_arrow.js';
 import {
     DOM_DELTA_LINE, DOM_DELTA_PIXEL, MAC_WHEEL_NOTCH, TRACKPAD_LATCH_MS,
     WheelSample,
@@ -141,8 +142,55 @@ describe('ItemGrid scroll wheel ("Scroll wheel in shops")', () => {
         g.onWheel(sample(GRID_ROW_PX * 3, 5000));
         expect(g.scrollRow).toBe(0);
         expect(scrolled).toBe(0);
-        // The arrows still work.
+        // The arrows still work: a row a click.
         g.scrollDown();
+        expect(g.scrollRow).toBe(1);
+    });
+});
+
+describe('ItemGrid scroll arrows (reference "Scrolling ... wave 12")', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    /** 37 items: ten rows of four with five showing, so row 5 is the
+     * furthest the grid scrolls. */
+    function grid() {
+        const items = Array.from({ length: 37 }, (_, i) => ({
+            id: `item:${i}`, name: `Item ${i}`, desc: '', pict: '',
+        }));
+        return new ItemGrid(undefined as never, items);
+    }
+
+    it('moves ONE row a click, as the original\'s outfitter and shipyard do',
+        () => {
+            const g = grid();
+            g.scrollDown();
+            expect(g.scrollRow).toBe(1);
+            g.scrollDown();
+            g.scrollDown();
+            expect(g.scrollRow).toBe(3);
+            g.scrollUp();
+            expect(g.scrollRow).toBe(2);
+        });
+
+    it('stops at either end', () => {
+        const g = grid();
+        g.scrollUp();
+        expect(g.scrollRow).toBe(0);
+        expect(g.canScrollUp).toBeFalse();
+        for (let i = 0; i < 9; i++) {
+            g.scrollDown();
+        }
         expect(g.scrollRow).toBe(5);
+        expect(g.canScrollDown).toBeFalse();
+    });
+
+    it('fires an arrow once, on the RELEASE, however long it is held', () => {
+        const arrow = new ScrollArrow('down');
+        let clicks = 0;
+        arrow.click.subscribe(() => clicks++);
+        arrow.container.emit('pointerdown', {} as never);
+        expect(clicks).toBe(0);
+        arrow.container.emit('pointerup', {} as never);
+        expect(clicks).toBe(1);
     });
 });
