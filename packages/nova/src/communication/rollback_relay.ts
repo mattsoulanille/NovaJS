@@ -85,6 +85,38 @@ const DEFAULT_DESYNC_THRESHOLD = 3;
 const TIMELY_REPORT_TICKS = 240;
 
 /**
+ * #374 (ruling of 2026-11-23): when a checkpoint has exactly two
+ * voices, ONE client and the server's archive, a disagreement never
+ * convicts the client. One client's word against the archive's is a tie,
+ * and the tie-break used to go to the server, so the archive convicted
+ * the client. In the nova:282 incident the convicted client matched a
+ * clean replay of the log; the archive was the one that had diverged
+ * from its own log. A wrong conviction forces a resync, which costs the
+ * player a hiccup and cures nothing when the archive is at fault.
+ * Cheating is not a concern, so the client is trusted: its hash is the
+ * canonical one. That marks the archive as outvoted (the loud "Archive
+ * diverged" path, which records an incident), and nobody resyncs.
+ *
+ * `hashes` is every report of the checkpoint plus the archive's. A lone
+ * client counts whether or not its report was timely: a throttled solo
+ * tab is no likelier to be the diverged party. With any further report
+ * (two clients and the archive, or more) this returns undefined and the
+ * majority vote stands as before, stale reporters still having no vote
+ * (TIMELY_REPORT_TICKS).
+ */
+export function loneClientCanonical(hashes: readonly [string, string][],
+    archive: string | undefined): string | undefined {
+    if (archive === undefined || hashes.length !== 2) {
+        return undefined;
+    }
+    const clients = hashes.filter(([peerId]) => peerId !== archive);
+    if (clients.length !== 1) {
+        return undefined;
+    }
+    return clients[0]![1];
+}
+
+/**
  * A fresh room seed (#140, nova_plugin/spawn/spawn_bits.ts): 32 random
  * bits from the platform's CSPRNG. Server-side only — the relay mints it
  * when it opens a room and hands it to every world of the room through
@@ -606,9 +638,9 @@ export class RollbackRelay {
         // (Stale reporters are still compared, and convicted, below.)
         // The archive's hash always joins as a standing witness: it
         // breaks two-peer ties (a tie-break alone can crown the
-        // diverged peer canonical, making the divergence permanent),
-        // and it convicts a lone diverged peer whose roommates report
-        // nothing at all.
+        // diverged peer canonical, making the divergence permanent).
+        // It never convicts a lone client on its own word, though
+        // (#374, see loneClientCanonical).
         const voters: [string, string][] = [...reports]
             .filter(([, report]) => report.arrivedAt - tick <= report.timelyTicks)
             .map(([peerId, report]) => [peerId, report.hash]);
@@ -624,8 +656,10 @@ export class RollbackRelay {
             }
             return;
         }
-        const canonical = canonicalDesyncHash(voters,
-            this.room.uuid ? new Set([this.room.uuid]) : undefined);
+        const canonical = (reference !== undefined
+            ? loneClientCanonical(allHashes, this.room.uuid) : undefined)
+            ?? canonicalDesyncHash(voters,
+                this.room.uuid ? new Set([this.room.uuid]) : undefined);
         if (canonical === undefined) {
             // Nothing but stale reports and no archive: no one to
             // trust, so no verdict.

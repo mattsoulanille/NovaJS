@@ -439,30 +439,124 @@ describe('RollbackRelay', () => {
             ? desyncs[0].hashes : [])).toBe('11111111');
     });
 
-    it('convicts a lone peer that disagrees with the archive', () => {
-        relay.close();
-        relay = new RollbackRelay(server, {
-            autoClock: false,
-            referenceHash: () => '11111111',
-            desyncThreshold: 1,
-        });
-        // Only peer a reports (b is throttled or gone). The set never
-        // completes, so nothing fires until the stale sweep forces
-        // the comparison — where the archive is the second witness.
-        peerA.sendMessage(wrapRollbackMessage({
-            kind: 'stateHash', tick: 60, hash: '22222222',
-        }) as never, 'server');
-        expect(received(peerA).length).toBe(0);
-        (relay as unknown as {
+    describe('one client against the archive (#374)', () => {
+        // Ruling of 2026-11-23: with exactly two voices, one client and
+        // the server's archive, the client is never convicted. In the
+        // nova:282 incident the archive itself had diverged from its
+        // own log and convicted an honest client.
+        let incidents: DesyncInfo[];
+        let outvoted: number[];
+        const force = (tick: number) => (relay as unknown as {
             compareStateHashes(tick: number, force: boolean): void,
-        }).compareStateHashes(60, true);
-        const desyncs = received(peerA).filter(m => m.kind === 'desync');
-        expect(desyncs).toEqual([{
-            kind: 'desync',
-            tick: 60,
-            hashes: [['a', '22222222'], ['server', '11111111']],
-            canonical: '11111111',
-        }]);
+        }).compareStateHashes(tick, true);
+        const report = (peer: MockCommunicator, tick: number, hash: string) =>
+            peer.sendMessage(wrapRollbackMessage(
+                { kind: 'stateHash', tick, hash }) as never, 'server');
+
+        function makeRelay(desyncThreshold: number) {
+            relay.close();
+            incidents = [];
+            outvoted = [];
+            relay = new RollbackRelay(server, {
+                autoClock: false,
+                referenceHash: () => '11111111',
+                desyncThreshold,
+                onDesync: info => incidents.push(info),
+                onArchiveOutvoted: tick => outvoted.push(tick),
+            });
+        }
+
+        it('trusts the client: the archive is outvoted and nobody resyncs', () => {
+            makeRelay(1);
+            // Only peer a reports (b is throttled or gone). The set
+            // never completes, so nothing fires until the stale sweep
+            // forces the comparison, with the archive as the only
+            // other voice.
+            report(peerA, 60, '22222222');
+            expect(received(peerA).length).toBe(0);
+            force(60);
+            const desyncs = received(peerA).filter(m => m.kind === 'desync');
+            // The client's hash is canonical: a sees its own hash
+            // there and does not resync.
+            expect(desyncs).toEqual([{
+                kind: 'desync',
+                tick: 60,
+                hashes: [['a', '22222222'], ['server', '11111111']],
+                canonical: '22222222',
+            }]);
+            // The archive is the outvoted party: the loud path, an
+            // incident for the analyzer, and a's state as the reference
+            // (one dump request, to a, as the healthy peer).
+            expect(outvoted).toEqual([60]);
+            expect(incidents.length).toBe(1);
+            expect(incidents[0]!.archiveOutvoted).toBeTrue();
+            expect(incidents[0]!.convicted).toEqual(['server']);
+            expect(received(peerA).filter(
+                m => m.kind === 'desyncDumpRequest').length).toBe(1);
+        });
+
+        it('never convicts the client however long the disagreement lasts', () => {
+            makeRelay(3);
+            for (let tick = 60; tick <= 600; tick += 60) {
+                report(peerA, tick, `2222${tick.toString(16).padStart(4, '0')}`);
+                force(tick);
+            }
+            for (const message of received(peerA)) {
+                if (message.kind === 'desync') {
+                    expect(message.canonical).toBe(message.hashes
+                        .find(([peerId]) => peerId === 'a')![1]);
+                }
+            }
+            expect(incidents.every(info =>
+                !info.convicted.includes('a'))).toBeTrue();
+            // The archive's own streak still reaches the threshold:
+            // the incident is recorded.
+            expect(incidents.length).toBeGreaterThan(0);
+        });
+
+        it('trusts a lone client whose report is late, too', () => {
+            makeRelay(1);
+            // A throttled solo tab: its report is stale (no vote), but
+            // the comparison is still one client against the archive.
+            relay.advanceTicks(500);
+            report(peerA, 60, '22222222');
+            force(60);
+            const desyncs = received(peerA).filter(m => m.kind === 'desync');
+            expect(desyncs.length).toBe(1);
+            expect(desyncs[0]!.kind === 'desync'
+                && desyncs[0].canonical).toBe('22222222');
+            expect(incidents[0]!.convicted).toEqual(['server']);
+        });
+
+        it('keeps the majority vote with a second client: two against one convicts', () => {
+            makeRelay(1);
+            // b agrees with the archive: a is outvoted two to one.
+            report(peerA, 60, '22222222');
+            report(peerB, 60, '11111111');
+            const desyncs = received(peerA).filter(m => m.kind === 'desync');
+            expect(desyncs.length).toBe(1);
+            expect(desyncs[0]!.kind === 'desync'
+                && desyncs[0].canonical).toBe('11111111');
+            expect(incidents[0]!.convicted).toEqual(['a']);
+            expect(outvoted).toEqual([]);
+        });
+
+        it('keeps the old rule when a third party reported late: the archive breaks the timely tie', () => {
+            makeRelay(1);
+            // a reports in time; b's report of the same checkpoint is
+            // stale (no vote) but makes three parties, so this is not
+            // one client against the archive. The timely voters (a and
+            // the archive) tie, and the tie goes to the archive, which
+            // b's late report agrees with.
+            report(peerA, 60, '22222222');
+            relay.advanceTicks(500);
+            report(peerB, 60, '11111111');
+            const desyncs = received(peerA).filter(m => m.kind === 'desync');
+            expect(desyncs.length).toBe(1);
+            expect(desyncs[0]!.kind === 'desync'
+                && desyncs[0].canonical).toBe('11111111');
+            expect(incidents[0]!.convicted).toEqual(['a']);
+        });
     });
 
     it('stays quiet when state hashes agree', () => {
