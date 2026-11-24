@@ -537,7 +537,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    stages every sÿst into the new LegalGeographyResource for it. No
 //    input kind or message kind changes. The derived wire schema
 //    fingerprint changes (90e66780d5561a8d -> 388761e4c9993a00 on its own; e730831c2453dc18 ->
-//    COMBINEDFP on top of the ship-names note above), and the
+//    eb92bff5c7d72d2b on top of the ship-names note above), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
