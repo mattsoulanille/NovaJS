@@ -6,9 +6,14 @@ import { WeaponDamage } from 'novadatainterface/weapon_data';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
+import {
+    restoreWorld, snapshotWorld, SnapshotPoliciesResource,
+} from 'nova_ecs/plugins/snapshot_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
-import { GovtComponent } from '../core/index.js';
+import { deriveEntityComponents, GovtComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     DamagedEvent, makeShip, ShieldComponent, ShipDataComponent,
@@ -19,15 +24,36 @@ import { JumpComponent } from '../travel/index.js';
 import { NpcComponent, NpcState } from './npc_component.js';
 import {
     addDamageLoad, damageLoadNow, HEAVY_FIRE_LOAD, HEAVY_FIRE_LOAD_CAP,
-    HEAVY_FIRE_RATE_PER_S, HEAVY_FIRE_RESUME_S, RETREAT_JUMP_MS,
+    HEAVY_FIRE_RATE_PER_S, HEAVY_FIRE_RESUME_S, RETREAT_JUMP_CHANCE_FITTED,
     RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN, underHeavyFire,
     warshipRetreat,
 } from './npc_retreat.js';
 
 /**
  * gövt Flags 0x0010 against the reference (docs/reference_experiments.md,
- * "A-series wave 4: AI 1 departure, gövt 0x0010 retreat").
+ * "A-series wave 4: AI 1 departure, gövt 0x0010 retreat" through "A wave
+ * 7: gövt 0x0010, distance and damage rate at the 25% crossing").
  */
+
+/** A Random whose every draw is `value` (and which counts its draws):
+ * forces the jump-or-stay draw one way. A subclass, so `below` and the
+ * snapshot state methods still work. */
+class FixedRandom extends Random {
+    draws = 0;
+    constructor(private readonly value: number) {
+        super();
+    }
+    override next(): number {
+        this.draws++;
+        return this.value;
+    }
+}
+/** Draws that decide "jump" and "stay". In a live world every other draw
+ * sees the same value too: 0.75 puts the tank's first patrol waypoint at
+ * (1000, 1000), off to the side, rather than at the attacker (0.5) or a
+ * far corner (near 1). */
+const JUMP_DRAW = 0;
+const STAY_DRAW = 0.75;
 
 describe('the 0x0010 damage load (leaky bucket)', () => {
     it('drains at HEAVY_FIRE_RATE_PER_S and never goes negative', () => {
@@ -87,66 +113,143 @@ describe('warshipRetreat (the 0x0010 decision)', () => {
         return npc;
     }
 
-    it('fights on below 25% when not losing (favorable odds, light fire)',
-        () => {
+    it('fights on below 25% when not losing (favorable odds, light fire), '
+        + 'without drawing', () => {
             const npc: NpcState = { aiType: 3 };
-            expect(warshipRetreat(npc, weak, 0, true, true)).toBeUndefined();
+            const random = new FixedRandom(JUMP_DRAW);
+            expect(warshipRetreat(npc, weak, 0, true, true, random))
+                .toBeUndefined();
             expect(npc.retreatSince).toBeUndefined();
+            expect(npc.retreatJump).toBeUndefined();
+            expect(random.draws).toBe(0);
         });
 
     it('does nothing at or above 25% shield, even under heavy fire', () => {
         const npc = heavy(0);
-        expect(warshipRetreat(npc, healthy, 0, true, false)).toBeUndefined();
+        const random = new FixedRandom(JUMP_DRAW);
+        expect(warshipRetreat(npc, healthy, 0, true, false, random))
+            .toBeUndefined();
+        expect(random.draws).toBe(0);
     });
 
-    it('stands off when under heavy fire, or when its odds are bad', () => {
-        expect(warshipRetreat(heavy(0), weak, 0, true, true))
-            .toBe('standoff');
-        expect(warshipRetreat({ aiType: 3 }, weak, 0, true, false))
-            .toBe('standoff');
+    it('a stay draw stands off, under heavy fire or bad odds alike', () => {
+        expect(warshipRetreat(heavy(0), weak, 0, true, true,
+            new FixedRandom(STAY_DRAW))).toBe('standoff');
+        expect(warshipRetreat({ aiType: 3 }, weak, 0, true, false,
+            new FixedRandom(STAY_DRAW))).toBe('standoff');
     });
 
-    it('jumps once it has been losing for RETREAT_JUMP_MS, and stays '
-        + 'committed', () => {
+    it('a jump draw jumps at once, the think the condition first holds, '
+        + 'and stays committed', () => {
             const npc = heavy(0);
-            expect(warshipRetreat(npc, weak, 0, true, false)).toBe('standoff');
-            expect(warshipRetreat(npc, weak, RETREAT_JUMP_MS - 1, true, false))
-                .toBe('standoff');
-            expect(warshipRetreat(npc, weak, RETREAT_JUMP_MS, true, false))
+            const random = new FixedRandom(JUMP_DRAW);
+            expect(warshipRetreat(npc, weak, 0, true, false, random))
                 .toBe('jump');
+            expect(npc.retreatJump).toBeTrue();
             npc.mode = 'flee';
             // Even with the odds turned favorable and the fire gone.
-            expect(warshipRetreat(npc, weak, RETREAT_JUMP_MS + 60_000, true,
-                true)).toBe('jump');
+            expect(warshipRetreat(npc, weak, 60_000, true, true, random))
+                .toBe('jump');
+            expect(random.draws).toBe(1);
+        });
+
+    it('a stay draw never turns into a late jump, however long it loses '
+        + '(waves 4-7: no tank that stayed jumped later)', () => {
+            const npc: NpcState = { aiType: 3, mode: 'attack' };
+            const random = new FixedRandom(STAY_DRAW);
+            for (let t = 0; t <= 120_000; t += 1000) {
+                addDamageLoad(npc, HEAVY_FIRE_LOAD, t);
+                expect(warshipRetreat(npc, weak, t, true, false, random))
+                    .toBe('standoff');
+            }
+            expect(npc.retreatJump).toBeFalse();
+            expect(random.draws).toBe(1);
+        });
+
+    it('draws once per crossing: a fresh losing spell under the same '
+        + 'crossing keeps the draw; recovering past 25% and crossing again '
+        + 'draws anew', () => {
+            const npc = heavy(0);
+            const stay = new FixedRandom(STAY_DRAW);
+            expect(warshipRetreat(npc, weak, 0, true, true, stay))
+                .toBe('standoff');
+            // The fire stops: back to fighting, the draw kept.
+            expect(warshipRetreat(npc, weak, 60_000, true, true, stay))
+                .toBeUndefined();
+            expect(npc.retreatSince).toBeUndefined();
+            expect(npc.retreatJump).toBeFalse();
+            // The fire resumes, still under 25%: stands off again, and a
+            // jump-only Random is never asked.
+            addDamageLoad(npc, HEAVY_FIRE_LOAD * 2, 61_000);
+            const jump = new FixedRandom(JUMP_DRAW);
+            expect(warshipRetreat(npc, weak, 61_000, true, true, jump))
+                .toBe('standoff');
+            expect(jump.draws).toBe(0);
+            expect(stay.draws).toBe(1);
+            // Shield back over 25%: the draw is dropped...
+            expect(warshipRetreat(npc, healthy, 62_000, true, true, jump))
+                .toBeUndefined();
+            expect(npc.retreatJump).toBeUndefined();
+            // ...and the next crossing, losing (bad odds now), draws again.
+            expect(warshipRetreat(npc, weak, 63_000, true, false, jump))
+                .toBe('jump');
+            expect(jump.draws).toBe(1);
         });
 
     it('forgets the retreat (and the drained load) when it stops losing',
         () => {
             const npc = heavy(0);
-            warshipRetreat(npc, weak, 0, true, true);
+            const random = new FixedRandom(STAY_DRAW);
+            warshipRetreat(npc, weak, 0, true, true, random);
             expect(npc.retreatSince).toBe(0);
-            expect(warshipRetreat(npc, weak, 60_000, true, true))
+            expect(warshipRetreat(npc, weak, 60_000, true, true, random))
                 .toBeUndefined();
             expect(npc.retreatSince).toBeUndefined();
             expect(npc.damageLoad).toBeUndefined();
             expect(npc.damageLoadAt).toBeUndefined();
         });
 
-    it('runs at once from heavy fire it cannot fight back against', () => {
-        expect(warshipRetreat(heavy(0), weak, 0, false, false)).toBe('jump');
-    });
+    it('runs at once from heavy fire it cannot fight back against, '
+        + 'whatever the draw', () => {
+            expect(warshipRetreat(heavy(0), weak, 0, false, false,
+                new FixedRandom(STAY_DRAW))).toBe('jump');
+        });
 
     it('a ship held in the system never commits to a jump: it keeps '
-        + 'standing off, and fights on once it stops losing', () => {
+        + 'standing off, fights on once it stops losing, and acts on its '
+        + 'draw once released', () => {
             const npc = heavy(0);
-            expect(warshipRetreat(npc, weak, RETREAT_JUMP_MS * 3, true, false,
+            const random = new FixedRandom(JUMP_DRAW);
+            expect(warshipRetreat(npc, weak, 0, true, false, random, false))
+                .toBe('standoff');
+            expect(warshipRetreat(npc, weak, 60_000, true, false, random,
                 false)).toBe('standoff');
-            npc.mode = 'flee';
-            expect(warshipRetreat(npc, weak, RETREAT_JUMP_MS * 3, true, true,
-                false)).toBeUndefined();
-            expect(warshipRetreat(heavy(0), weak, 0, false, false, false))
-                .toBeUndefined();
+            // Released while still losing: the crossing's draw said jump.
+            expect(warshipRetreat(npc, weak, 61_000, true, false, random))
+                .toBe('jump');
+            expect(random.draws).toBe(1);
+            const held = heavy(0);
+            held.mode = 'flee';
+            expect(warshipRetreat(held, weak, 0, true, true,
+                new FixedRandom(JUMP_DRAW), false)).toBe('standoff');
+            expect(warshipRetreat(heavy(0), weak, 0, false, false,
+                new FixedRandom(JUMP_DRAW), false)).toBeUndefined();
         });
+
+    it('jumps at the fitted share (13 of 28) over many crossings', () => {
+        expect(RETREAT_JUMP_CHANCE_FITTED).toBeCloseTo(13 / 28, 10);
+        const random = new Random(1234);
+        const runs = 4000;
+        let jumps = 0;
+        for (let i = 0; i < runs; i++) {
+            if (warshipRetreat(heavy(0), weak, 0, true, true, random)
+                === 'jump') {
+                jumps++;
+            }
+        }
+        expect(jumps / runs).toBeGreaterThan(RETREAT_JUMP_CHANCE_FITTED - 0.03);
+        expect(jumps / runs).toBeLessThan(RETREAT_JUMP_CHANCE_FITTED + 0.03);
+    });
 });
 
 const RETREATER = 'test:retreater';
@@ -166,9 +269,10 @@ const NO_DAMAGE: WeaponDamage = {
 /**
  * The reference tank fight: a 0x0010 (or plain) AI 3 warship at 20%
  * shield, 600 px from a stationary attacker that hits it on a fixed
- * schedule through the real DamagedEvent path.
+ * schedule through the real DamagedEvent path. `random`, when given,
+ * replaces the world's PRNG (a FixedRandom forces the jump-or-stay draw).
  */
-async function tankFight(govtId: string) {
+async function tankFight(govtId: string, random?: Random) {
     const gameData = new MockGameData();
     const hull = getDefaultShipData();
     gameData.data.Ship.map.set(HULL, {
@@ -188,6 +292,9 @@ async function tankFight(govtId: string) {
     });
     const world = await makeSystem('test:system', gameData, undefined,
         { npcs: false });
+    if (random) {
+        world.resources.set(RandomResource, random);
+    }
 
     async function addShip(uuid: string, x: number,
         configure: (entity: Entity) => void = () => { }) {
@@ -281,16 +388,19 @@ describe('gövt 0x0010 retreat in a live fight', () => {
                 .toBeUndefined();
         });
 
-    it('heavy damage: stands off, still attacking, then comes straight back '
-        + 'when the firing stops', async () => {
-            const world = await tankFight(RETREATER);
-            // Under four guns for 12 s (inside RETREAT_JUMP_MS).
+    it('heavy damage, stay draw: stands off, still attacking, then comes '
+        + 'straight back when the firing stops', async () => {
+            const random = new FixedRandom(STAY_DRAW);
+            const world = await tankFight(RETREATER, random);
             const distances: number[] = [];
-            fight(world, 12_000, FOUR_GUNS_MS,
+            // Long enough to settle into the band from wherever the
+            // crossing caught it (there is no jump timer to stay inside).
+            fight(world, 24_000, FOUR_GUNS_MS,
                 () => distances.push(distance(world)));
             const npc = npcOf(world)!;
             expect(npc.mode).toBe('attack');
             expect(npc.retreatSince).toBeDefined();
+            expect(npc.retreatJump).toBeFalse();
             // Over the last 6 s it held the band (with some slop for
             // settling), never closing in for a pass.
             const late = distances.slice(-360);
@@ -311,14 +421,39 @@ describe('gövt 0x0010 retreat in a live fight', () => {
             expect(resumedAt).toBeDefined();
             expect(resumedAt!).toBeLessThanOrEqual(
                 HEAVY_FIRE_RESUME_S * 1000 + 1100);
-            // ...and to close passes, shields still down.
+            // ...and to close passes, shields still down, the crossing's
+            // draw kept.
             expect(npcOf(world)!.mode).toBe('attack');
+            expect(npcOf(world)!.retreatJump).toBeFalse();
             expect(closest).toBeLessThan(RETREAT_STANDOFF_MIN - 100);
         });
 
-    it('heavy damage that persists: jumps out about 16 s in (never lands)',
+    it('heavy damage that persists, stay draw: stands off for the whole '
+        + 'minute of fire and never jumps (waves 4-7: no late jumps)',
         async () => {
-            const world = await tankFight(RETREATER);
+            const random = new FixedRandom(STAY_DRAW);
+            const world = await tankFight(RETREATER, random);
+            let fled = false;
+            let drawsAfterSetup: number | undefined;
+            fight(world, 60_000, FOUR_GUNS_MS, () => {
+                fled ||= npcOf(world)?.mode === 'flee';
+                if (drawsAfterSetup === undefined
+                    && npcOf(world)?.retreatJump !== undefined) {
+                    drawsAfterSetup = random.draws;
+                }
+            });
+            expect(fled).toBeFalse();
+            expect(world.entities.has('tank')).toBeTrue();
+            const npc = npcOf(world)!;
+            expect(npc.mode).toBe('attack');
+            expect(npc.retreatSince).toBeDefined();
+            // No draw after the one that decided.
+            expect(random.draws).toBe(drawsAfterSetup!);
+        });
+
+    it('heavy damage, jump draw: flees at once and is gone through the '
+        + 'hyperspace sequence (never lands)', async () => {
+            const world = await tankFight(RETREATER, new FixedRandom(JUMP_DRAW));
             const start = now(world);
             let fleeAt: number | undefined;
             let jumping = false;
@@ -331,13 +466,55 @@ describe('gövt 0x0010 retreat in a live fight', () => {
                     .has(JumpComponent) ?? false;
             });
             expect(fleeAt).toBeDefined();
-            // Losing from the first think (within a few seconds of the
-            // barrage starting), then RETREAT_JUMP_MS.
-            expect(fleeAt!).toBeGreaterThanOrEqual(RETREAT_JUMP_MS);
-            expect(fleeAt!).toBeLessThan(RETREAT_JUMP_MS + 5000);
-            // Gone through the hyperspace sequence.
+            // Decided the first think it is losing: four guns trip the
+            // bucket within a few seconds (no stand-off first).
+            expect(fleeAt!).toBeLessThan(5000);
             expect(jumping).toBeTrue();
-            expect(world.entities.has('tank')).toBeFalse();
+            expect(world.entities.has('tank')).toBeFalse();        });
+
+    it('replays the same draw after a rollback, and keeps it across a '
+        + 'restore', async () => {
+            // The world's own seeded PRNG.
+            const world = await tankFight(RETREATER);
+            const beforeFire = snapshotWorld(world);
+            const run = () => {
+                const hashes: string[] = [];
+                const decisions: Array<boolean | undefined> = [];
+                fight(world, 8000, FOUR_GUNS_MS, () => {
+                    hashes.push(hashWorld(world).hash);
+                    decisions.push(npcOf(world)?.retreatJump);
+                });
+                return { hashes, decisions };
+            };
+            const first = run();
+            const decided = first.decisions.find(d => d !== undefined);
+            expect(decided).toBeDefined();
+
+            // Mid-fight, after the draw: a restore keeps it (no re-roll)
+            // and retraces the timeline exactly.
+            const midFight = snapshotWorld(world);
+            const original: string[] = [];
+            fight(world, 3000, FOUR_GUNS_MS,
+                () => original.push(hashWorld(world).hash));
+            restoreWorld(world, midFight, deriveEntityComponents);
+            if (world.entities.has('tank')) {
+                expect(npcOf(world)!.retreatJump).toBe(decided);
+            }
+            const resimulated: string[] = [];
+            fight(world, 3000, FOUR_GUNS_MS,
+                () => resimulated.push(hashWorld(world).hash));
+            expect(resimulated).toEqual(original);
+
+            // Rolled back past the crossing: the same draw, the same
+            // timeline.
+            restoreWorld(world, beforeFire, deriveEntityComponents);
+            expect(npcOf(world)!.retreatJump).toBeUndefined();
+            const second = run();
+            expect(second.decisions).toEqual(first.decisions);
+            expect(second.hashes).toEqual(first.hashes);
+
+            const policies = world.resources.get(SnapshotPoliciesResource)!;
+            expect([...policies.unhandled]).toEqual([]);
         });
 
     it('without the flag: fights on under the same heavy fire', async () => {

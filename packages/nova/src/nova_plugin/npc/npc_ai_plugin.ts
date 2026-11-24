@@ -42,8 +42,8 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *                   classes/allies/enemies); patrols waypoints when
  *                   there is nothing to hunt; jumps out eventually.
  *                   With gövt Flags 0x0010, under 25% shield and
- *                   losing, it stands off and then jumps out
- *                   (npc_retreat.ts).
+ *                   losing, one draw decides: jump out at once, or
+ *                   stand off while losing (npc_retreat.ts).
  *  4 interceptor:   orbits a home planet and engages govt enemies that
  *                   come within its engagement bubble. (The Bible's
  *                   cargo-scanning "buzz" and piracy-police reactions

@@ -534,13 +534,15 @@ export const NpcDecisionSystem = new System({
                     favorable = oddsFavorable(govtData?.maxOdds ?? 100,
                         myStrength, chosenStrength);
                 }
-                // gövt Flags 0x0010: under 25% shield AND losing, stand
-                // off, then jump out if it lasts (npc_retreat.ts; the
-                // reference showed the shield level alone does not do
-                // it). Clock and synced state only; no PRNG draw.
+                // gövt Flags 0x0010: under 25% shield AND losing, one PRNG
+                // draw decides jump out or stand off while losing
+                // (npc_retreat.ts; the reference showed the shield level
+                // alone does not do it, and that the choice is made once,
+                // at the crossing). Synced state, the clock, and that
+                // one draw per crossing.
                 if (govtData?.flags.warshipsRetreatAt25) {
                     const retreat = warshipRetreat(npc, shield, time.time,
-                        chosen !== undefined, favorable, !held);
+                        chosen !== undefined, favorable, random, !held);
                     if (retreat === 'jump') {
                         npc.mode = 'flee';
                         target.target = undefined;

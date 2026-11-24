@@ -1,31 +1,46 @@
+import { Random } from 'nova_ecs/plugins/random_plugin';
 import { NpcState } from './npc_component.js';
 
 /**
  * gövt Flags 0x0010, "Warships of this govt will retreat when their
  * shields drop below 25%" — what that means on the original, as measured
- * (docs/reference_experiments.md, "A-series wave 3" and "A-series wave 4:
- * AI 1 departure, gövt 0x0010 retreat"):
+ * (docs/reference_experiments.md: "A-series wave 3", "A-series wave 4: AI
+ * 1 departure, gövt 0x0010 retreat", "A-series wave 5", "A wave 6" and "A
+ * wave 7: gövt 0x0010, distance and damage rate at the 25% crossing"):
  *
  *  - the shield level alone does NOT trigger it. Against one weak gun the
  *    flagged tank fought on with shields down in 5 of 6 runs;
- *  - heavy fire does. Against 4 guns, or with two attacking escorts, it
- *    never fought on: it either STOOD OFF 360-420 px (still firing) for
- *    as long as the fire lasted and came straight back to close passes
- *    within about 4 s of it stopping, or JUMPED OUT about 16-17 s after
- *    its shield crossed 25%. It never landed.
+ *  - heavy fire, or an attacker its MaxOdds call too strong, does. Then it
+ *    either JUMPED OUT or STOOD OFF (a few hundred px from the attacker,
+ *    still firing) for as long as the fire lasted, coming back to close
+ *    passes within a few seconds of it stopping. It never landed;
+ *  - which of the two is decided neither by the distance at the crossing
+ *    nor by the damage rate (wave 7: 4 of 12 jumped, crossings from 25 px
+ *    to 1320 px, two damage rates). Every jump was decided AT the crossing
+ *    (the jumper turned away within seconds and was gone 18-24 s later),
+ *    and no tank that stayed jumped later, under up to 50 s more fire
+ *    (waves 4-6: stand-offs lasted the whole 85 s of fire).
  *
  * The rule here: a flagged warship whose shield is under 25% and which
  * is LOSING — under heavy fire (the damage-load bucket below over its
- * threshold) or facing a fight its MaxOdds call unfavorable — stands off
- * from its enemy (npc_steering.ts's steerStandoff; still in 'attack', so
- * it keeps firing whatever reaches). If that lasts RETREAT_JUMP_MS it
- * flees, which ends in a hyperspace jump (departByJump). As soon as it
- * stops losing it resumes attacking. Flag-less ships never get here.
+ * threshold) or facing a fight its MaxOdds call unfavorable — makes ONE
+ * PRNG draw the first time that holds (NpcState `retreatJump`, synced).
+ * With RETREAT_JUMP_CHANCE_FITTED it flees at once, which ends in a
+ * hyperspace jump (departByJump); otherwise it stands off from its enemy
+ * (npc_steering.ts's steerStandoff; still in 'attack', so it keeps firing
+ * whatever reaches) for as long as it is losing, and never jumps for it.
+ * As soon as it stops losing it resumes attacking. Flag-less ships never
+ * get here.
  *
- * EVERY THRESHOLD BELOW IS A GUESS fitted to the doc's tables; the
- * original's exact rule was not pinned down (a per-decision random chance
- * could not be ruled out). Determinism: synced NpcState fields and the sim
- * clock only, plain arithmetic, no PRNG draw.
+ * ONE DRAW PER CROSSING. The draw is kept while the shield stays under
+ * 25%, through any number of stand-off / fight-on cycles (the original's
+ * tanks stood off, came back to fight and stood off again without a late
+ * jump); it is dropped, so the next losing spell draws afresh, only once
+ * the shield is back at or above 25% and then crosses again.
+ *
+ * The thresholds below are guesses fitted to the doc's tables; the jump
+ * chance is fitted to its counts. Determinism: synced NpcState fields,
+ * the sim clock and the seeded RandomResource only.
  */
 
 /** Bible: "...when their shields drop below 25%". */
@@ -51,10 +66,18 @@ export const HEAVY_FIRE_RESUME_S = 4;
  * forgive (derived from the two guesses above). */
 export const HEAVY_FIRE_LOAD_CAP =
     HEAVY_FIRE_LOAD + HEAVY_FIRE_RATE_PER_S * HEAVY_FIRE_RESUME_S;
-/** How long a flagged warship stays losing before it jumps out. A guess
- * from the doc: the jumps came 16-17 s after the shield crossed 25%
- * (three runs; 26.5 s and 92 s with escorts). */
-export const RETREAT_JUMP_MS = 16_000;
+/**
+ * The chance that a flagged warship, when it first starts losing below
+ * 25% shield, jumps out rather than standing off. FITTED to the counts of
+ * every reference run in which the retreat condition held: 13 of 28
+ * jumped. Wave 7's twelve: 4. Waves 4-6's sixteen heavy-fire or
+ * strong-attacker runs: 9 (4 guns 2 of 4, two attacking escorts 2 of 2,
+ * a Strength-10000 attacker 2 of 2, a Strength-1 attacker with 4 guns 1
+ * of 2, a 13 s burst 1 of 2, 8 guns 0 of 2, the long beam 1 of 2). Wave 7
+ * alone, the cleanest design, would give 1 in 3; the pooled share is the
+ * fit.
+ */
+export const RETREAT_JUMP_CHANCE_FITTED = 13 / 28;
 /** The stand-off band, px from the enemy: "stood off 360-420 px from the
  * player (still firing)". It stands in for "just outside the attacker's
  * weapon range"; the experiments never varied that range, so it is a
@@ -103,12 +126,18 @@ export function underHeavyFire(npc: NpcState, now: number): boolean {
  * `canLeave` is false for a ship HELD in the system (system_hold.ts: a
  * mission goal ship). It can never jump out, so it never commits to a
  * flee it could not finish: it keeps standing off for as long as it is
- * losing, and fights on normally once it is not.
- * Maintains `retreatSince` and drops a drained damage-load bucket.
+ * losing, and fights on normally once it is not. (It still makes and
+ * keeps its draw, so a hold released while it is losing acts on it.)
+ *
+ * Maintains `retreatSince` (cleared whenever it stops losing),
+ * `retreatJump` (the draw: made the first think the condition holds,
+ * dropped only once the shield is back at or above 25%), and drops a
+ * drained damage-load bucket. Exactly one `random` draw per crossing, on
+ * the think the condition first holds; none on any other think.
  */
 export function warshipRetreat(npc: NpcState,
     shield: { current: number, max: number } | undefined, now: number,
-    hasThreat: boolean, favorable: boolean,
+    hasThreat: boolean, favorable: boolean, random: Random,
     canLeave = true): 'jump' | 'standoff' | undefined {
     const load = damageLoadNow(npc, now);
     if (load <= 0) {
@@ -122,6 +151,11 @@ export function warshipRetreat(npc: NpcState,
     }
     const weak = shield !== undefined && shield.max > 0
         && shield.current < RETREAT_SHIELD_FRACTION * shield.max;
+    if (!weak) {
+        // Back at or over 25% (or no shield at all): the next crossing
+        // draws afresh.
+        delete npc.retreatJump;
+    }
     const losing = weak
         && (load > HEAVY_FIRE_LOAD || (hasThreat && !favorable));
     if (!losing) {
@@ -129,12 +163,15 @@ export function warshipRetreat(npc: NpcState,
         return undefined;
     }
     npc.retreatSince ??= now;
+    // The one draw of this crossing (wave 7: decided at the crossing).
+    npc.retreatJump ??= random.next() < RETREAT_JUMP_CHANCE_FITTED;
     if (!hasThreat) {
         // Hit hard by something it cannot target (cloaked, say): nothing
-        // to stand off from, so it runs (a held ship can only carry on).
+        // to stand off from, so it runs whatever the draw said (a held
+        // ship can only carry on).
         return canLeave ? 'jump' : undefined;
     }
-    if (canLeave && now - npc.retreatSince >= RETREAT_JUMP_MS) {
+    if (canLeave && npc.retreatJump) {
         return 'jump';
     }
     return 'standoff';

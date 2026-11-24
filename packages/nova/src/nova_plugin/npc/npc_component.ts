@@ -55,6 +55,12 @@ export const NpcState = t.intersection([t.type({
      * 'attack' it STANDS OFF instead of closing; in 'flee' it is
      * committed to jumping out. Cleared the moment it stops losing. */
     retreatSince: t.number,
+    /** A gövt 0x0010 warship's jump-or-stay decision: one PRNG draw made
+     * the first time it is losing below 25% shield (true: flee and jump
+     * out; false: stand off while losing, never jump for it). Kept while
+     * the shield stays under 25% and dropped once it is back at or above,
+     * so each crossing draws once (npc_retreat.ts). */
+    retreatJump: t.boolean,
     /** A mission special ship with no goal and AI 1 (mïsn ShipGoal -1,
      * ShipBehav -1; set at spawn by mission_ship_spawn.ts). It has no
      * business here: its departure roll uses the short PASS_THROUGH
