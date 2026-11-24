@@ -274,6 +274,33 @@ describe('status bar navigation: an unexplored destination is not named',
                 expect(last().value).toBe('Kania');
             });
 
+        it('reads each hop of a route through unexplored systems in turn',
+            () => {
+                // A D-U-U-D route (route.ts, DRAWN SYSTEMS ONLY): the
+                // readout names the NEXT hop, so it reads "Unexplored
+                // System" while that hop is unexplored and the name once
+                // the next hop is an explored one — however the route ends.
+                const { world, player, last } = makeWorld(
+                    { 'nova:129': 'Sanddown', 'nova:130': 'Kania',
+                        'nova:131': 'Levo' },
+                    new Map([['nova:131', DISCOVERY_ENTERED]]));
+                player.components.set(JumpRouteComponent,
+                    { route: ['nova:129', 'nova:130', 'nova:131'] });
+                world.step();
+                expect(last()).toEqual({
+                    header: 'Hyperspace', value: UNEXPLORED_SYSTEM,
+                    dim: false,
+                });
+                player.components.set(JumpRouteComponent,
+                    { route: ['nova:130', 'nova:131'] });
+                world.step();
+                expect(last().value).toBe(UNEXPLORED_SYSTEM);
+                player.components.set(JumpRouteComponent,
+                    { route: ['nova:131'] });
+                world.step();
+                expect(last().value).toBe('Levo');
+            });
+
         it('leaves the selected stellar alone: it is in the system the '
             + 'pilot is standing in', () => {
                 const { world, player, last } = makeWorld(

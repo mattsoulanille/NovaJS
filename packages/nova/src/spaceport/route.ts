@@ -16,17 +16,20 @@ import { GameDate } from 'novadatainterface/player_start_data';
 //
 // The multi-jump route always takes precedence for actual hyperspace jumps.
 //
-// KNOWN SYSTEMS ONLY (Matthew, 2026-11-23). The auto-router fills gaps only
-// through systems the player has EXPLORED (entered at least once — the
-// discovery record, discovery.ts). A system that is merely VISIBLE — a dim
-// neighbour of explored space, or a faraway mission destination the map
-// draws because a mission points at it — can END a route but never be
-// flown THROUGH: the route's last hop may enter an unexplored system only
-// from an explored one, exactly where a plain single jump could. Nothing
-// is ever plotted beyond an unexplored system, so pins after one contribute
-// nothing. The original EV Nova is laxer — pinning a D-U-U-D chain hop by
-// hop routes straight through two unexplored systems — and that quirk is
-// deliberately NOT reproduced. See {@link Passable}.
+// DRAWN SYSTEMS ONLY (Matthew, 2026-11-23: "I should be allowed to plan a
+// route through the undiscovered system. D-U-D is allowed. Surprisingly,
+// also D-U-U-D is allowed." — reversing his explored-systems-only rule of
+// 403c732a). The router fills gaps through every system the map DRAWS:
+// the explored ones (the discovery record, discovery.ts) and the merely
+// visible ones alike — the dim unexplored ring one jump out from explored
+// space, and a mission destination drawn because a mission points at it.
+// A system the map does not draw is never a hop. That is the original's
+// behaviour (docs/reference_experiments.md M4, wave 2): pinning East
+// (unexplored), Void (unexplored), then Far (explored) drew one route
+// Hub -> East -> Void -> Far. So D-U-D and D-U-U-D both route, by a single
+// shift-click (the gap fills with the shortest path) or pin by pin, while
+// D-U-U-U-D does not: its middle system is two jumps from anything
+// explored, so the map does not draw it. See {@link Passable}.
 //
 // DETERMINISM CONTRACT: the effective route feeds JumpRouteComponent, whose
 // consumer (jump_plugin.ts beginJump) relies on every hop being a *link* of
@@ -56,17 +59,19 @@ export type SamePlace = (a: string, b: string) => boolean;
 const sameId: SamePlace = (a, b) => a === b;
 
 /**
- * Whether a route may pass THROUGH a system: true for a system the player
- * has explored, false for one they only know of (see the KNOWN SYSTEMS
- * ONLY note above). An impassable system can still be a route's final
- * hop; it just cannot be an intermediate one, nor the anchor any later
- * segment starts from. The system the ship is in is always passable —
- * the route starts there whatever the record says.
+ * Whether a route may pass THROUGH a system: true for every system the map
+ * draws, explored or not, false for one it does not draw (see the DRAWN
+ * SYSTEMS ONLY note above). Here an impassable system can still be a
+ * route's final hop; it just cannot be an intermediate one, nor the anchor
+ * any later segment starts from. (The map only takes clicks on what it
+ * draws, so it never offers an undrawn system as a pin: in practice one
+ * appears in no route at all.) The system the ship is in is always
+ * passable — the route starts there whatever the predicate says.
  *
  * Injected like {@link SamePlace}: this module knows ids and links, not
- * the pilot's discovery record. The default (everything passable) is what
- * maps without a record of their own want, and what the pure-graph specs
- * assume.
+ * what the pilot's map draws. The default (everything passable) is what
+ * maps without a discovery record of their own want, and what the
+ * pure-graph specs assume.
  */
 export type Passable = (id: string) => boolean;
 const everywhere: Passable = () => true;
@@ -107,8 +112,7 @@ export function buildAdjacency(
  * Returns `[]` when `from === to`, or `null` when `to` is unreachable.
  *
  * Only {@link Passable} systems are expanded through: `to` itself may be
- * impassable (a route can end in an unexplored system), but no
- * intermediate hop may be. `from` is the caller's anchor and is not
+ * impassable, but no intermediate hop may be. `from` is the caller's anchor and is not
  * checked.
  */
 export function shortestPath(adj: Adjacency, from: string,
@@ -162,7 +166,7 @@ export function shortestPath(adj: Adjacency, from: string,
  *
  * Segments only pass through {@link Passable} systems, and the route ENDS
  * at the first impassable pin it reaches: a later segment would have to
- * start from (fly through) that unexplored system, so every pin after it
+ * start from (fly through) that system, so every pin after it
  * contributes nothing, like an unreachable one.
  */
 export function expandRoute(adj: Adjacency, current: string,
@@ -194,14 +198,15 @@ export function expandRoute(adj: Adjacency, current: string,
  * the multi-jump route to it — the gate on pinning a NEW waypoint. True
  * exactly when the expanded route with the candidate appended ends at the
  * candidate: there is a path from the route's current end to it through
- * passable (explored) systems, and the route has not already ended in an
- * unexplored system.
+ * passable (drawn) systems, and the route has not already ended in an
+ * impassable one.
  *
  * A refused candidate is not pinned at all. Pinning it anyway (and letting
  * {@link expandRoute} skip it, as it does for a pin that went stale) would
  * leave a waypoint box on the map that the ship will never fly to, and
  * would quietly start contributing the moment exploring one more system
- * opened a path — a route the player never saw being plotted.
+ * drew the missing hop of a path — a route the player never saw being
+ * plotted.
  */
 export function canPin(adj: Adjacency, current: string,
     pinned: readonly string[], candidate: string,

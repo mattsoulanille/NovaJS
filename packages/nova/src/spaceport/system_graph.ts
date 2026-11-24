@@ -218,10 +218,11 @@ export class SystemGraph {
         this.routes = reachablePaths(this.systems, currentSystem);
         // What the map is allowed to show. The adjacency stays the WHOLE
         // visible graph (this.adj / this.routes); what the router may fly
-        // THROUGH is the separate {@link passable} rule — explored systems
-        // only (route.ts, KNOWN SYSTEMS ONLY). A mission's faraway
+        // THROUGH is the separate {@link passable} rule — exactly this
+        // drawn set (route.ts, DRAWN SYSTEMS ONLY). A mission's faraway
         // destination is drawn (a bare dot with no links) but is only
-        // plottable once explored space reaches up to it.
+        // plottable once the drawn map reaches up to it: within two jumps
+        // of explored space, through the dim ring.
         this.drawn = drawnSystems(
             visibleSystems.map(s => s.id).filter(
                 id => this.discoveryOf(id) >= DISCOVERY_ENTERED),
@@ -386,13 +387,13 @@ export class SystemGraph {
 
     /**
      * Whether the router may fly THROUGH a system (route.ts Passable): the
-     * player has explored it, or the ship is in it. A system that is only
-     * drawn — a dim neighbour, a mission's destination — can end a route,
-     * never be an intermediate hop of one.
+     * map draws it — explored, a dim unexplored neighbour, a mission's
+     * destination, or the system the ship is in. So D-U-D and D-U-U-D
+     * chains route, as in the original (reference_experiments M4); a
+     * system the map does not draw is never a hop.
      */
     readonly passable: Passable = id =>
-        id === this.currentSystem
-        || this.discoveryOf(id) >= DISCOVERY_ENTERED;
+        id === this.currentSystem || this.drawn.has(id);
 
     get adjacency(): Adjacency {
         return this.adj;
@@ -599,10 +600,10 @@ export class SystemGraph {
             // pinned waypoint (or unpins it). Gaps between pins auto-fill
             // with the shortest path when the route is expanded — the only
             // auto-routing there is (map/notes.txt). A NEW pin is only
-            // taken when the route can reach it through explored systems
-            // (route.ts canPin); otherwise the click just inspects the
-            // system, like a plain click on a non-neighbour. Unpinning is
-            // always allowed.
+            // taken when the route can reach it through systems the map
+            // draws, explored or not (route.ts canPin); otherwise the click
+            // just inspects the system, like a plain click on a
+            // non-neighbour. Unpinning is always allowed.
             if (this.pinned.includes(system)) {
                 this.pinned = this.pinned.filter(p => p !== system);
                 this.routeChanged.next();

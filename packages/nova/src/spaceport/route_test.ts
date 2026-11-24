@@ -312,70 +312,136 @@ describe('hazardDescription', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Known systems only (Matthew, 2026-11-23): the router may END a route in a
-// system the player has not explored, but never fly THROUGH one.
+// Drawn systems only (Matthew, 2026-11-23): the router flies through every
+// system the map DRAWS, explored or not — "D-U-D is allowed. Surprisingly,
+// also D-U-U-D is allowed" (the original, reference_experiments M4) — and
+// never through one the map does not draw.
 //
-//   a - b - c - d          explored: a, b, d    (c and the e-f arm are not)
-//       |
-//       e - f
+//        p - q - r            explored (D): h, p, q, r, g, k, t
+//      /  \      \            drawn but unexplored (U): u1, u2, v, m, s1, s3
+//     h -- u1 - u2 - g        not drawn (X): s2 — two jumps from anything
+//      \    \                 explored, so the map leaves it out
+//       \    v (also linked to p)
+//        m - k - s1 - s2 - s3 - t
+//
+// h's links are [p, u1, m], in that slot order.
 // ---------------------------------------------------------------------------
-describe('routing through explored systems only', () => {
-    const explored = new Set(['a', 'b', 'd']);
-    const passable = (id: string) => explored.has(id);
+describe('routing through every drawn system', () => {
+    const drawnAdj = buildAdjacency([
+        { id: 'h', links: ['p', 'u1', 'm'] },
+        { id: 'p', links: ['h', 'q', 'v'] },
+        { id: 'q', links: ['p', 'r'] },
+        { id: 'r', links: ['q', 'g'] },
+        { id: 'g', links: ['r', 'u2'] },
+        { id: 'u1', links: ['h', 'u2', 'v'] },
+        { id: 'u2', links: ['u1', 'g'] },
+        { id: 'v', links: ['p', 'u1'] },
+        { id: 'm', links: ['h', 'k'] },
+        { id: 'k', links: ['m', 's1'] },
+        { id: 's1', links: ['k', 's2'] },
+        { id: 's2', links: ['s1', 's3'] },
+        { id: 's3', links: ['s2', 't'] },
+        { id: 't', links: ['s3'] },
+    ]);
+    const drawn = new Set(['h', 'p', 'q', 'r', 'g', 'k', 't',
+        'u1', 'u2', 'v', 'm', 's1', 's3']);
+    const passable = (id: string) => drawn.has(id);
     const same = (x: string, y: string) => x === y;
 
-    it('may end a path in an unexplored neighbour of explored space', () => {
-        // Exactly where a plain single jump from b could go.
-        expect(shortestPath(adj, 'a', 'c', passable)).toEqual(['b', 'c']);
-        expect(shortestPath(adj, 'a', 'e', passable)).toEqual(['b', 'e']);
+    it('takes the short way through two unexplored systems (D-U-U-D) '
+        + 'in a single shift-click', () => {
+            // Matthew's screenshot: the route went the long way round
+            // explored space instead of through two dim systems.
+            expect(shortestPath(drawnAdj, 'h', 'g', passable))
+                .toEqual(['u1', 'u2', 'g']);
+            expect(canPin(drawnAdj, 'h', [], 'g', same, passable))
+                .toBeTrue();
+            expect(expandRoute(drawnAdj, 'h', ['g'], same, passable))
+                .toEqual(['u1', 'u2', 'g']);
+        });
+
+    it('routes D-U-D in a single shift-click', () => {
+        expect(canPin(drawnAdj, 'h', [], 'k', same, passable)).toBeTrue();
+        expect(expandRoute(drawnAdj, 'h', ['k'], same, passable))
+            .toEqual(['m', 'k']);
     });
 
-    it('never passes through an unexplored system', () => {
-        // f is only reachable through e, and d only through c.
-        expect(shortestPath(adj, 'a', 'f', passable)).toBeNull();
-        expect(shortestPath(adj, 'a', 'd', passable)).toBeNull();
+    it('routes D-U-U-D pin by pin, as the original did', () => {
+        // The original's Hub -> East -> Void -> Far, one pin at a time.
+        expect(canPin(drawnAdj, 'h', [], 'u1', same, passable)).toBeTrue();
+        expect(canPin(drawnAdj, 'h', ['u1'], 'u2', same, passable))
+            .toBeTrue();
+        expect(canPin(drawnAdj, 'h', ['u1', 'u2'], 'g', same, passable))
+            .toBeTrue();
+        expect(expandRoute(drawnAdj, 'h', ['u1', 'u2', 'g'], same,
+            passable)).toEqual(['u1', 'u2', 'g']);
+        // And D-U-D the same way.
+        expect(expandRoute(drawnAdj, 'h', ['m', 'k'], same, passable))
+            .toEqual(['m', 'k']);
     });
 
-    it('does not reproduce the original\'s D-U-U-D pin-by-pin quirk', () => {
-        // The original lets a pilot shift-click b, then e, then f (D-U-U)
-        // and flies the chain. Here the route stops at the first unexplored
-        // pin: f would have to be flown to FROM unexplored e.
-        expect(expandRoute(adj, 'a', ['b', 'e', 'f'], same, passable))
-            .toEqual(['b', 'e']);
-        // Even when the pin after the unexplored one is explored (a-b-c-d:
-        // D-D-U-D), nothing is plotted beyond the unexplored c.
-        expect(expandRoute(adj, 'a', ['c', 'd'], same, passable))
-            .toEqual(['b', 'c']);
+    it('keeps on past an unexplored pin', () => {
+        // A route that ends in unexplored u1 is extended from there, into
+        // explored space or on into more unexplored space.
+        expect(canPin(drawnAdj, 'h', ['u1'], 'g', same, passable))
+            .toBeTrue();
+        expect(expandRoute(drawnAdj, 'h', ['u1', 'g'], same, passable))
+            .toEqual(['u1', 'u2', 'g']);
+        expect(expandRoute(drawnAdj, 'h', ['v', 'g'], same, passable))
+            .toEqual(['p', 'v', 'u1', 'u2', 'g']);
     });
 
-    it('refuses to pin what the explored route cannot reach', () => {
-        expect(canPin(adj, 'a', [], 'c', same, passable)).toBeTrue();
-        expect(canPin(adj, 'a', [], 'f', same, passable)).toBeFalse();
-        // After a route that ends in unexplored e, nothing more can be
-        // pinned — not even an explored system.
-        expect(canPin(adj, 'a', ['e'], 'f', same, passable)).toBeFalse();
-        expect(canPin(adj, 'a', ['e'], 'd', same, passable)).toBeFalse();
-        // The ship's own system, and a re-pin of the route's end, add
-        // nothing.
-        expect(canPin(adj, 'a', [], 'a', same, passable)).toBeFalse();
-        expect(canPin(adj, 'a', ['b'], 'b', same, passable)).toBeFalse();
-        // From an explored pin, on to its unexplored neighbour, is fine.
-        expect(canPin(adj, 'a', ['b'], 'e', same, passable)).toBeTrue();
+    it('never routes through a system the map does not draw', () => {
+        // t is only reachable through the undrawn s2 (D-U-X-U-D).
+        expect(shortestPath(drawnAdj, 'h', 't', passable)).toBeNull();
+        expect(shortestPath(drawnAdj, 'k', 's3', passable)).toBeNull();
+        expect(canPin(drawnAdj, 'h', [], 't', same, passable)).toBeFalse();
+        expect(canPin(drawnAdj, 'h', [], 's3', same, passable)).toBeFalse();
+        // Pin by pin is no way round it: s1 is fine, s3 beyond the
+        // undrawn s2 is not.
+        expect(canPin(drawnAdj, 'h', [], 's1', same, passable)).toBeTrue();
+        expect(canPin(drawnAdj, 'h', ['s1'], 's3', same, passable))
+            .toBeFalse();
+        expect(expandRoute(drawnAdj, 'h', ['s1', 's3', 't'], same,
+            passable)).toEqual(['m', 'k', 's1']);
+        expect(effectiveRoute(drawnAdj, 'h', { pinned: ['t'] }, same,
+            passable)).toEqual([]);
+        expect(effectiveRoute(drawnAdj, 'h', { pinned: ['t'], single: 'm' },
+            same, passable)).toEqual(['m']);
     });
+
+    it('stops at an undrawn pin: nothing is plotted beyond it', () => {
+        // The map never offers s2 as a pin; the pure rule still keeps any
+        // route from flying on out of it.
+        expect(expandRoute(drawnAdj, 'h', ['s2', 't'], same, passable))
+            .toEqual(['m', 'k', 's1', 's2']);
+        expect(canPin(drawnAdj, 'h', ['s2'], 't', same, passable))
+            .toBeFalse();
+    });
+
+    it('breaks ties between equally short paths by link-slot order, '
+        + 'explored or not', () => {
+            // h -> p -> v and h -> u1 -> v are both two jumps; p comes
+            // first among h's links, so the first is taken. The tie-break
+            // is breadth-first search order, unchanged by this rule.
+            expect(shortestPath(drawnAdj, 'h', 'v', passable))
+                .toEqual(['p', 'v']);
+            const u1First = buildAdjacency([
+                ...[...drawnAdj].map(([id, links]) => ({
+                    id, links: id === 'h' ? ['u1', 'p', 'm'] : links,
+                })),
+            ]);
+            expect(shortestPath(u1First, 'h', 'v', passable))
+                .toEqual(['u1', 'v']);
+        });
 
     it('always lets the route start from the current system', () => {
-        // Standing in an unexplored system (a fresh record, a rollback)
-        // must not strand the ship: the start is never checked.
-        const onlyD = (id: string) => id === 'd';
-        expect(shortestPath(adj, 'c', 'b', onlyD)).toEqual(['b']);
-        expect(expandRoute(adj, 'c', ['b'], same, onlyD)).toEqual(['b']);
-    });
-
-    it('feeds the effective route the same rule', () => {
-        expect(effectiveRoute(adj, 'a', { pinned: ['f'] }, same, passable))
-            .toEqual([]);
-        expect(effectiveRoute(adj, 'a', { pinned: ['f'], single: 'b' },
-            same, passable)).toEqual(['b']);
+        // Standing somewhere the predicate rejects (a fresh record, a
+        // rollback) must not strand the ship: the start is never checked.
+        const onlyK = (id: string) => id === 'k';
+        expect(shortestPath(drawnAdj, 's2', 's1', onlyK)).toEqual(['s1']);
+        expect(expandRoute(drawnAdj, 's2', ['s1'], same, onlyK))
+            .toEqual(['s1']);
     });
 
     it('plans over the whole graph when no record is given', () => {
