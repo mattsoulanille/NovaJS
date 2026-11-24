@@ -3,6 +3,9 @@ import { StringTableParse } from "../../src/parsers/string_table_parse.js";
 import { getEmptyNovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { StrNResource } from "../../src/resource_parsers/strn_resource.js";
 import { ResourceBuilder } from "../resource_parsers/resource_builder.js";
+import { NovaDataType } from "novadatainterface/nova_data_interface";
+import { DISTRESS_MESSAGES_STRING_TABLE } from "novadatainterface/string_table_data";
+import { STOCK_DATA_MISSING, stockNovaParse } from "../stock_data.js";
 
 /** A STR# resource: a uint16 count followed by that many Pascal strings. */
 function buildStrN(strings: string[]): ResourceBuilder {
@@ -49,4 +52,19 @@ describe("StringTableParse", () => {
         const data = await parseStrN([]);
         expect(data.strings).toEqual([]);
     });
+
+    it("finds the stock distress calls at DISTRESS_MESSAGES_STRING_TABLE",
+        async () => {
+            const np = await stockNovaParse();
+            if (!np) {
+                pending(STOCK_DATA_MISSING);
+                return;
+            }
+            const table = await np.data[NovaDataType.StringTable]
+                .get(DISTRESS_MESSAGES_STRING_TABLE);
+            expect(table.name).toBe("Ship Help Messages");
+            expect(table.strings.length).toBe(20);
+            expect(table.strings.some(line => line.startsWith("Mayday")))
+                .toBe(true);
+        });
 });

@@ -16,3 +16,15 @@ export function getDefaultStringTableData(): StringTableData {
         strings: [],
     };
 }
+
+/**
+ * The scenario's distress calls: stock STR# 5003 "Ship Help Messages", 20
+ * lines of the "we're under attack" kind. The EVN Bible documents the
+ * behaviour (ships "send distress messages" unless their gövt sets Flags2
+ * 0x0008, GovtData.flags2.noDistressMessages, or the class inherits it,
+ * ShipData.inheritedNoGreetings) but not the id; this is where the stock
+ * data keeps the text. Fetch it through the StringTable gettable. DATA
+ * ONLY: no ship sends distress calls yet (docs/npc_behavior_gaps.md,
+ * "Distress calls"), and who sends one, and when, is still to be measured.
+ */
+export const DISTRESS_MESSAGES_STRING_TABLE = "nova:5003";
