@@ -422,6 +422,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    message kind changes. The derived wire schema fingerprint changes
 //    (6ffbcaef16994bf3 -> de1618493c2c83ef), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-13 mission fixes (reference "Aborting
+//    a mission in flight from the `i` dialog" and "Boarding a rescue
+//    ship", wave 13). Sim rules only. The `abortMission` apply now keeps
+//    a ShipBehav-1 escort (out of the flock, leaving about 17 s later)
+//    and ShipBehav-0 attackers (still hostile) as `untethered` mission
+//    ships, through fields that already existed (MissionShip `untethered`,
+//    NpcState `departAt` / `passingThrough`); the goal systems and the
+//    respawn roster ignore untethered ships. A live rescue ship's board
+//    (encounters/rescue_board.ts) only retrieves its PickupMode-2 cargo or
+//    is refused. One new serializer event, MissionCargoRetrievedEvent
+//    (`{cargoType}`, host -> display only, like the other boarding
+//    events); no component, field, input kind or message kind changes, so
+//    the derived wire schema fingerprint is unchanged (6ffbcaef16994bf3 on
+//    its own; de1618493c2c83ef together with the shuttle/mining note above).
+//    The build stamp gate keeps builds with different sim rules apart.
 
 export const PROTOCOL_VERSION = 8;
 
