@@ -11,7 +11,7 @@ import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
 } from '../../spaceport/escort_fees.js';
 import { DisabledComponent } from '../ship/index.js';
-import { completeEntity } from '../spawn/index.js';
+import { completeEntity, loadEntityGameData } from '../spawn/index.js';
 import {
     applyEscortAction, escortUpgradeTarget, manageableEscort, releaseEscort,
     replaceEscortShipClass,
@@ -627,6 +627,10 @@ describe('replaceEscortShipClass (the refit itself, run at lift-off)',
 
             // ...and back from the NEW class, at full strength: this is a
             // new ship, not a repair, so the old hull's damage cannot leak.
+            // Staged first, as the lift-off that carries a refitted escort
+            // into a world stages it (insertPlayerAndFleet): a simulation
+            // world's provider must never miss the cache (#345).
+            await loadEntityGameData(fixture.world, escort);
             fixture.world.step();
             expect(escort.components.get(ShipPhysicsComponent)?.shield)
                 .toBe(500);

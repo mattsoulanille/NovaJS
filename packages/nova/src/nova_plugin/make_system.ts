@@ -9,7 +9,7 @@ import { buildNpcSpawnTables, loadEntityGameData } from "./spawn/index.js";
 import { configureSnapshotPolicies } from "./snapshot_policies.js";
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from "./combat/index.js";
 import { SystemInterferenceResource } from "./combat/index.js";
-import { IdFactory, IdFactoryResource, StagedWeaponIds } from "./core/index.js";
+import { CacheMissPolicyResource, defaultCacheMissPolicy, IdFactory, IdFactoryResource, StagedWeaponIds } from "./core/index.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { loadAsteroidGameData, spawnAsteroids } from "./combat/index.js";
 import { spawnNpcs } from "./spawn/index.js";
@@ -76,6 +76,9 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // stage anything (the ship builder, the display world) leave it
     // unset, and the warning stays off there.
     world.resources.set(StagedWeaponIds, new Set<string>());
+    // A ProvideFromCache miss in a simulation world is a staging bug:
+    // a hard error in development, a retry in production (#345).
+    world.resources.set(CacheMissPolicyResource, defaultCacheMissPolicy());
     if (platformOverride) {
         world.resources.set(PlatformResource, platformOverride);
     }
