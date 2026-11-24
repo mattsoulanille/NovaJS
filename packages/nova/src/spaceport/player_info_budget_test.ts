@@ -214,6 +214,18 @@ describe('the Shield / Armor status rows', () => {
             .toBe('50% (42)');
     });
 
+    it('shows the bare percentage, as the original does, with the '
+        + '"Shield and armor totals" enhancement off', () => {
+            expect(healthStatus({ current: 150, max: 150 }, 150, false))
+                .toBe('100%');
+            expect(healthStatus({ current: 42, max: 42 }, 44, false))
+                .toBe('95%');
+            expect(healthStatus(undefined, undefined, false)).toBe('-');
+            // ON is the default.
+            expect(healthStatus({ current: 75, max: 150 }, 150, true))
+                .toBe(healthStatus({ current: 75, max: 150 }, 150));
+        });
+
     it('dashes when there is no capacity to report', () => {
         expect(healthStatus(undefined, undefined)).toBe('-');
         expect(healthStatus({ current: 0, max: 0 }, 0)).toBe('-');

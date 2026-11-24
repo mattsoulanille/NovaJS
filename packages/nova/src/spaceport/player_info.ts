@@ -33,6 +33,7 @@ import { DailyBudget, dailyBudget } from './daily_budget.js';
 import { ActiveRanksComponent, activeRankData } from '../nova_plugin/ncb/index.js';
 import { RankData } from 'novadatainterface/rank_data';
 import { outfitPrice } from './outfitter_rules.js';
+import { enhancementEnabled } from '../enhancements.js';
 
 // The player-info dialog composes the three PICTs 8518 (top strip,
 // 413x40, tab row) / 8519 (black content pane, tiled 1:1 to the content
@@ -248,15 +249,20 @@ export function physicsRows(physics?: ShipPhysics): InfoRow[] {
  *
  * '-' when there is no capacity to report at all (no physics and no stat, or
  * a hull with none of that stat), as the other unresolved rows do.
+ *
+ * The total is a NovaJS Enhancement ("Shield and armor totals"): with
+ * `showTotal` false the row reads the original's bare "100%"
+ * (p_properties/general.png).
  */
 export function healthStatus(stat?: { current: number, max: number },
-    derivedMax?: number): string {
+    derivedMax?: number, showTotal = true): string {
     const max = derivedMax ?? stat?.max;
     if (max === undefined || max <= 0) {
         return '-';
     }
     const current = Math.max(0, Math.min(max, stat?.current ?? max));
-    return `${Math.round(100 * current / max)}% (${Math.round(max)})`;
+    const percent = `${Math.round(100 * current / max)}%`;
+    return showTotal ? `${percent} (${Math.round(max)})` : percent;
 }
 
 /**
@@ -655,6 +661,8 @@ export class PlayerInfoDialog {
         const credits = entity.components.get(CreditsComponent);
         const shield = entity.components.get(ShieldComponent);
         const armor = entity.components.get(ArmorComponent);
+        // NovaJS Enhancement: the totals beside the percentages.
+        const totals = enhancementEnabled('enhShieldArmorTotals');
         const fuel = entity.components.get(FuelComponent);
         const rating = entity.components.get(CombatRatingComponent);
         const records = entity.components.get(LegalRecordsComponent);
@@ -687,9 +695,9 @@ export class PlayerInfoDialog {
             { label: 'Combat Rating:',
                 value: combatRatingName(rating?.kills ?? 0) },
             { label: 'Shield Status:',
-                value: healthStatus(shield, physics?.shield) },
+                value: healthStatus(shield, physics?.shield, totals) },
             { label: 'Armor Status:',
-                value: healthStatus(armor, physics?.armor) },
+                value: healthStatus(armor, physics?.armor, totals) },
             { label: 'Energy Status:', value: fuel
                 ? `${percent(fuel)} (${Math.floor(fuel.current / 100)} jumps)`
                 : '-' },
