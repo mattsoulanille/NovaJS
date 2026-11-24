@@ -1,8 +1,9 @@
 import 'jasmine';
 import { overrideEnhancements } from '../enhancements.js';
-import { GRID_ROW_PX, WheelRowStepper } from './grid_wheel.js';
+import { GRID_ROW_PX, TextWheelScroller, WheelRowStepper } from './grid_wheel.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { ItemGrid } from './item_grid.js';
+import { POPUP_WHEEL_NOTCH_PX } from './popup_layout.js';
 import {
     DOM_DELTA_LINE, DOM_DELTA_PIXEL, MAC_WHEEL_NOTCH, TRACKPAD_LATCH_MS,
     WheelSample,
@@ -54,6 +55,29 @@ describe('WheelRowStepper (shop grid wheel)', () => {
         // Looks like a detent, but comes inside the trackpad latch.
         expect(stepper.rows(sample(MAC_WHEEL_NOTCH,
             TRACKPAD_LATCH_MS / 2))).toBe(0);
+    });
+});
+
+describe('TextWheelScroller (mission-text wheel)', () => {
+    it('scrolls three lines per notch of a classic wheel, either way', () => {
+        const wheel = new TextWheelScroller();
+        expect(POPUP_WHEEL_NOTCH_PX).toBe(36);
+        expect(wheel.pixels(sample(MAC_WHEEL_NOTCH * 3, 0))).toBe(36);
+        expect(wheel.pixels(sample(-MAC_WHEEL_NOTCH, 1000))).toBe(-36);
+        expect(wheel.pixels(sample(3, 2000,
+            { deltaMode: DOM_DELTA_LINE }))).toBe(36);
+    });
+
+    it('moves the text as far as a trackpad scroll goes', () => {
+        const wheel = new TextWheelScroller();
+        expect(wheel.pixels(sample(7.5, 0))).toBe(7.5);
+        expect(wheel.pixels(sample(-2.25, 16))).toBe(-2.25);
+    });
+
+    it('ignores a pinch and a sideways-only scroll', () => {
+        const wheel = new TextWheelScroller();
+        expect(wheel.pixels(sample(-80.5, 0, { ctrlKey: true }))).toBe(0);
+        expect(wheel.pixels(sample(0, 16, { deltaX: 40 }))).toBe(0);
     });
 });
 

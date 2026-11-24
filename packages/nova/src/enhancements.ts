@@ -24,6 +24,7 @@ export type EnhancementKey =
     | 'enhLiveTargetView'
     | 'enhShieldArmorTotals'
     | 'enhShopScrollWheel'
+    | 'enhTextScrollWheel'
     | 'enhShopSearch'
     | 'enhMiniMapHiddenNoClicks';
 
@@ -67,6 +68,13 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
         label: 'Scroll wheel in shops',
         novajs: 'The wheel or a two-finger scroll moves the outfitter, '
             + 'shipyard and hire grids by rows.',
+        original: 'The wheel does nothing; use the arrows or the keys.',
+    },
+    {
+        key: 'enhTextScrollWheel',
+        label: 'Scroll wheel in mission text',
+        novajs: 'The wheel or a two-finger scroll moves a long mission '
+            + 'offer or briefing text.',
         original: 'The wheel does nothing; use the arrows or the keys.',
     },
     {

@@ -90,12 +90,28 @@ export const POPUP_SCROLL_X = { up: 351, down: 384 };
  */
 export const POPUP_SCROLL_DY = 12.5;
 
-/** How far one click of a scroll arrow moves the text: a single line. */
-export const POPUP_SCROLL_STEP = POPUP_LINE_HEIGHT;
-/** Holding an arrow starts a continuous glide after this long (ms). */
-export const POPUP_SCROLL_HOLD_DELAY = 300;
-/** Speed of that glide, in px/second (≈5 lines a second). */
+/*
+ * How the original scrolls mission text (docs/reference_experiments.md,
+ * "Scrolling: long mission text and the shop scroll arrows, wave 12",
+ * frame-counted on a recording): an arrow HELD glides the text from the
+ * press to the release at a steady 2 px a 30 fps video frame, with no
+ * initial jump, no delay and no acceleration (181 px in a 3 s hold); a
+ * single click moves 5 px; the Up / Down keys move 10 px a press and do
+ * not repeat when held; PageUp / PageDown move 250 px; Home / End go to
+ * the ends; the wheel does nothing (a NovaJS Enhancement adds it).
+ */
+/** Speed of an arrow's glide, from the press to the release (px/s). */
 export const POPUP_SCROLL_HOLD_SPEED = 60;
+/** The least one press-and-release of an arrow moves the text (px): a
+ * quick click still moves this far. */
+export const POPUP_SCROLL_CLICK = 5;
+/** One press of the Up / Down key (px). */
+export const POPUP_SCROLL_KEY_STEP = 10;
+/** One press of PageUp / PageDown (px), about 21 lines. */
+export const POPUP_SCROLL_PAGE = 250;
+/** One detent of a notched mouse wheel, when the "Scroll wheel in text"
+ * enhancement is on: three lines, the usual desktop step. */
+export const POPUP_WHEEL_NOTCH_PX = 3 * POPUP_LINE_HEIGHT;
 
 /** The laid-out size of a tiled popup holding `lineCount` lines of text. */
 export interface TiledPopupLayout {
@@ -144,13 +160,41 @@ export function clampScroll(offset: number, maxScroll: number): number {
 }
 
 /**
- * Where a scroll offset lands after `heldMs` of holding an arrow. A press
- * shorter than the hold delay is a discrete one-line jump (applied by the
- * caller on pointer-down); past the delay the text glides continuously.
+ * How far the text has glided after `heldMs` of holding an arrow: the
+ * glide starts at the press, with no jump and no delay.
  */
 export function heldScrollDistance(heldMs: number): number {
-    const gliding = Math.max(0, heldMs - POPUP_SCROLL_HOLD_DELAY);
-    return gliding * POPUP_SCROLL_HOLD_SPEED / 1000;
+    return Math.max(0, heldMs) * POPUP_SCROLL_HOLD_SPEED / 1000;
+}
+
+/**
+ * How far one press-and-release of an arrow moves the text in all: the
+ * glide's distance, but never less than a click's {@link
+ * POPUP_SCROLL_CLICK} (the original's 60 ms click moves 5 px).
+ */
+export function releasedScrollDistance(heldMs: number): number {
+    return Math.max(POPUP_SCROLL_CLICK, heldScrollDistance(heldMs));
+}
+
+/** A keyboard scroll of the text: its key, and what it does. */
+export type PopupScrollKey = 'PageUp' | 'PageDown' | 'Home' | 'End';
+
+/**
+ * The text offset after a PageUp / PageDown / Home / End press, from
+ * `offset` in a text that scrolls `maxOffset` px, clamped to the text.
+ */
+export function popupKeyScroll(key: PopupScrollKey, offset: number,
+    maxOffset: number): number {
+    switch (key) {
+        case 'PageUp':
+            return clampScroll(offset - POPUP_SCROLL_PAGE, maxOffset);
+        case 'PageDown':
+            return clampScroll(offset + POPUP_SCROLL_PAGE, maxOffset);
+        case 'Home':
+            return 0;
+        case 'End':
+            return maxOffset;
+    }
 }
 
 /**

@@ -10,6 +10,8 @@ import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import { ScrollArrow } from './scroll_arrow.js';
+import { TextWheelScroller } from './grid_wheel.js';
+import { enhancementEnabled } from '../enhancements.js';
 import {
     autoAcceptOffer, autoAcceptedThisVisit, OfferRolls, offerSubstitutions,
     stillOffered,
@@ -29,16 +31,18 @@ import {
     POPUP_BUTTON_WIDTH,
     POPUP_BUTTON_X,
     POPUP_LINE_HEIGHT,
-    POPUP_SCROLL_HOLD_DELAY,
-    POPUP_SCROLL_HOLD_SPEED,
-    POPUP_SCROLL_STEP,
     POPUP_SCROLL_DY,
+    POPUP_SCROLL_KEY_STEP,
     POPUP_SCROLL_X,
     POPUP_TEXT_MARGIN,
     POPUP_TEXT_TOP,
     POPUP_TOP_HEIGHT,
     POPUP_WIDTH,
     pictPopupVisibleLines,
+    heldScrollDistance,
+    popupKeyScroll,
+    PopupScrollKey,
+    releasedScrollDistance,
     tiledPopupLayout,
     wrapMissionText,
 } from './popup_layout.js';
@@ -123,17 +127,24 @@ export class OfferPopup {
         up: ScrollArrow,
         down: ScrollArrow,
     };
-    /** The arrow being held down, and how long it has been held. */
+    /** The arrow being held down, when it was pressed (performance.now),
+     * and how far its glide has moved the text so far. */
     private hold?: {
         direction: number,
-        heldMs: number,
+        pressedAt: number,
+        moved: number,
         tick: () => void,
     };
+    /** The wheel over the text ("Scroll wheel in text" enhancement). */
+    private readonly wheel = new TextWheelScroller();
+    /** The DOM keydown listener for the page keys, while one is bound. */
+    private pageKeyListener?: (event: KeyboardEvent) => void;
 
     /**
-     * Keyboard: up/down arrows scroll a paginated popup a line at a time
-     * (the same step as an arrow-button press) and 'accept' presses the
-     * accept button. 'depart' (Escape / 'd', the landed UI's universal
+     * Keyboard: up/down arrows scroll a long text 10 px a press and do not
+     * repeat while held (the original's, wave 12); PageUp / PageDown /
+     * Home / End page it (listenPageKeys); 'accept' presses the accept
+     * button. 'depart' (Escape / 'd', the landed UI's universal
      * "close this") dismisses a NOTICE — a popup with only an accept
      * button, such as the bar's "There are no ships available for hire."
      * — exactly as pressing its lone button would. A two-button OFFER
@@ -175,12 +186,32 @@ export class OfferPopup {
         this.shield.interactive = true;
         if (controlEvents) {
             this.controls = new MenuControls(controlEvents, {
-                up: () => this.scrollBy(-POPUP_SCROLL_STEP),
-                down: () => this.scrollBy(POPUP_SCROLL_STEP),
+                up: () => this.scrollBy(-POPUP_SCROLL_KEY_STEP),
+                down: () => this.scrollBy(POPUP_SCROLL_KEY_STEP),
                 accept: () => this.choice.next('accept'),
                 depart: () => this.depart(),
             });
+            // A held Up / Down moves the text once: no key repeat.
+            this.controls.repeatableActions.delete('up');
+            this.controls.repeatableActions.delete('down');
         }
+        // The wheel scrolls the text only with the "Scroll wheel in text"
+        // enhancement on; the original's wheel does nothing here. Bound on
+        // the whole popup (the shield included, which the events bubble up
+        // from): PIXI only calls a container's listeners when the
+        // container is itself interactive.
+        this.container.eventMode = 'static';
+        this.container.on('wheel', (event: PIXI.FederatedWheelEvent) => {
+            const native = event.nativeEvent as WheelEvent & {
+                wheelDeltaY?: number };
+            this.onWheel({
+                deltaX: event.deltaX, deltaY: event.deltaY,
+                deltaMode: event.deltaMode, ctrlKey: event.ctrlKey,
+                wheelDeltaY: typeof native?.wheelDeltaY === 'number'
+                    ? native.wheelDeltaY : undefined,
+                timeStamp: event.timeStamp,
+            });
+        });
         // Headless-harness hook, like window.novaHailDialog: the
         // visual-comparison scenarios raise a popup with crafted mission
         // text instead of having to reach the mission state that offers it.
@@ -223,6 +254,7 @@ export class OfferPopup {
      */
     dismiss() {
         this.controls?.release();
+        this.unlistenPageKeys();
         this.container.visible = false;
         this.endHold();
     }
@@ -246,10 +278,12 @@ export class OfferPopup {
 
         this.container.visible = true;
         this.controls?.bind();
+        this.listenPageKeys();
         try {
             return await firstValueFrom(this.choice);
         } finally {
             this.controls?.unbind();
+            this.unlistenPageKeys();
             this.container.visible = false;
             this.container.removeChildren();
             this.endHold();
@@ -297,7 +331,7 @@ export class OfferPopup {
      * the R8 wave-5 bar capture 11-bar.png shows the long Charengo offer
      * with a dark up sphere and a red down one at x1091 / x1125, centred
      * on the No / Yes pills' row). Greyed at each end of the scroll range.
-     * A press steps one line; holding one glides the text continuously.
+     * The text glides while an arrow is held (see bindScrollButton).
      */
     private addScrollButtons(text: PIXI.Text, top: number,
         maxOffset: number, originX: number, buttonY: number) {
@@ -317,46 +351,111 @@ export class OfferPopup {
     }
 
     /**
-     * Pointer plumbing for one arrow: the press itself jumps a line, and
-     * holding past POPUP_SCROLL_HOLD_DELAY glides on at
-     * POPUP_SCROLL_HOLD_SPEED px/s until the pointer is released.
+     * Pointer plumbing for one arrow, the original's (wave 12): the text
+     * glides at POPUP_SCROLL_HOLD_SPEED from the press to the release, with
+     * no jump and no delay, and a quick click still moves it
+     * POPUP_SCROLL_CLICK px in all.
      */
     private bindScrollButton(button: ScrollArrow, direction: number) {
-        // The arrow's own press, which a GREYED arrow — at the top or
-        // bottom of the text — never fires (no scroll, no hold).
-        button.press.subscribe(() => {
-            this.scrollBy(direction * POPUP_SCROLL_STEP);
-            this.beginHold(direction);
-        });
-        button.container.on('pointerup', () => this.endHold());
-        button.container.on('pointerupoutside', () => this.endHold());
+        // The arrow's own press, which a GREYED arrow -- at the top or
+        // bottom of the text -- never fires (no scroll, no hold).
+        button.press.subscribe(() => this.beginHold(direction));
+        button.container.on('pointerup', () => this.releaseHold());
+        button.container.on('pointerupoutside', () => this.releaseHold());
     }
 
     private beginHold(direction: number) {
         this.endHold();
+        // Timed by the wall clock, not by summing frame deltas: the
+        // Ticker caps a slow frame's delta, and the glide must still have
+        // covered its 60 px/s when the frames catch up.
         const hold = {
-            direction, heldMs: 0,
-            tick: () => {
-                const dt = PIXI.Ticker.shared.deltaMS;
-                hold.heldMs += dt;
-                if (hold.heldMs <= POPUP_SCROLL_HOLD_DELAY) {
-                    return;
-                }
-                // Only the part of this frame past the delay glides.
-                const gliding = Math.min(dt,
-                    hold.heldMs - POPUP_SCROLL_HOLD_DELAY);
-                this.scrollBy(direction * POPUP_SCROLL_HOLD_SPEED
-                    * gliding / 1000);
-            },
+            direction, pressedAt: performance.now(), moved: 0,
+            tick: () => this.glideTo(hold,
+                heldScrollDistance(performance.now() - hold.pressedAt)),
         };
         this.hold = hold;
         PIXI.Ticker.shared.add(hold.tick);
+    }
+
+    /** Moves a held arrow's text on to `distance` px from the press. */
+    private glideTo(hold: NonNullable<OfferPopup['hold']>, distance: number) {
+        this.scrollBy(hold.direction * (distance - hold.moved));
+        hold.moved = distance;
+    }
+
+    /** The pointer came up: tops a quick click up to its full step, then
+     * stops the glide. */
+    private releaseHold() {
+        const hold = this.hold;
+        if (hold) {
+            this.glideTo(hold,
+                releasedScrollDistance(performance.now() - hold.pressedAt));
+        }
+        this.endHold();
     }
 
     private endHold() {
         if (this.hold) {
             PIXI.Ticker.shared.remove(this.hold.tick);
             this.hold = undefined;
+        }
+    }
+
+    /**
+     * PageUp / PageDown (250 px) and Home / End (the ends), as on the
+     * original. The game's control set has no page actions (adding some
+     * would change the sim's input schema for a display-only scroll), so
+     * the keys are read off the DOM while this popup owns the keyboard:
+     * its MenuControls are the focused surface. A popup without control
+     * events (the pointer-only About box) takes no keys at all.
+     */
+    private listenPageKeys() {
+        this.unlistenPageKeys();
+        if (!this.controls || typeof document === 'undefined') {
+            return;
+        }
+        const listener = (event: KeyboardEvent) => {
+            if (!isPopupScrollKey(event.key)
+                || MenuControls.focused !== this.controls) {
+                return;
+            }
+            event.preventDefault();
+            if (!event.repeat) {
+                this.onPageKey(event.key);
+            }
+        };
+        this.pageKeyListener = listener;
+        document.addEventListener('keydown', listener);
+    }
+
+    private unlistenPageKeys() {
+        if (this.pageKeyListener) {
+            document.removeEventListener('keydown', this.pageKeyListener);
+            this.pageKeyListener = undefined;
+        }
+    }
+
+    /** One PageUp / PageDown / Home / End press. Public for the headless
+     * harness. */
+    onPageKey(key: PopupScrollKey) {
+        if (!this.scroll) {
+            return;
+        }
+        this.scrollBy(popupKeyScroll(key, this.scroll.offset,
+            this.scroll.maxOffset) - this.scroll.offset);
+    }
+
+    /** One wheel event over the popup: scrolls the text with the "Scroll
+     * wheel in text" enhancement on, and does nothing with it off (the
+     * original). Public for the headless harness. */
+    onWheel(sample: Parameters<TextWheelScroller['pixels']>[0]) {
+        if (!this.scroll || !enhancementEnabled('enhTextScrollWheel')) {
+            return;
+        }
+        const px = this.wheel.pixels(sample);
+        if (px !== 0) {
+            this.scrollBy(px);
         }
     }
 
@@ -496,6 +595,12 @@ export class OfferPopup {
                 originX, buttonY);
         }
     }
+}
+
+/** Whether a DOM key is one of the popup's page keys. */
+function isPopupScrollKey(key: string): key is PopupScrollKey {
+    return key === 'PageUp' || key === 'PageDown' || key === 'Home'
+        || key === 'End';
 }
 
 /**

@@ -6,8 +6,12 @@ import {
     POPUP_LINE_HEIGHT,
     POPUP_MIDDLE_MAX,
     POPUP_MIDDLE_MIN,
-    POPUP_SCROLL_HOLD_DELAY,
+    popupKeyScroll,
+    POPUP_SCROLL_CLICK,
     POPUP_SCROLL_HOLD_SPEED,
+    POPUP_SCROLL_KEY_STEP,
+    POPUP_SCROLL_PAGE,
+    releasedScrollDistance,
     tiledPopupLayout,
     wrapMissionText,
 } from './popup_layout.js';
@@ -68,18 +72,38 @@ describe('scroll offsets', () => {
         expect(clampScroll(150, 100)).toBe(100);
     });
 
-    it('does not glide until the hold delay has passed', () => {
+    // docs/reference_experiments.md, "Scrolling ... wave 12": frame
+    // counts of the original's recording.
+    it('glides from the press, with no jump and no delay', () => {
         expect(heldScrollDistance(0)).toBe(0);
-        expect(heldScrollDistance(POPUP_SCROLL_HOLD_DELAY)).toBe(0);
+        // 2 px a 30 fps frame: 181 px in a 3 s hold.
+        expect(POPUP_SCROLL_HOLD_SPEED).toBe(60);
+        expect(heldScrollDistance(100)).toBeCloseTo(6, 6);
+        expect(heldScrollDistance(3000)).toBeCloseTo(180, 6);
+        // Twice as long travels twice as far.
+        expect(heldScrollDistance(2000))
+            .toBeCloseTo(2 * heldScrollDistance(1000), 6);
     });
 
-    it('glides at the hold speed afterwards', () => {
-        const oneSecondPast = POPUP_SCROLL_HOLD_DELAY + 1000;
-        expect(heldScrollDistance(oneSecondPast))
-            .toBeCloseTo(POPUP_SCROLL_HOLD_SPEED, 6);
-        // Twice as long past the delay travels twice as far.
-        expect(heldScrollDistance(POPUP_SCROLL_HOLD_DELAY + 2000))
-            .toBeCloseTo(POPUP_SCROLL_HOLD_SPEED * 2, 6);
+    it('moves a quick click 5 px, and a hold the glide\'s distance', () => {
+        expect(POPUP_SCROLL_CLICK).toBe(5);
+        // The original's 60 ms click.
+        expect(releasedScrollDistance(60)).toBe(5);
+        expect(releasedScrollDistance(0)).toBe(5);
+        expect(releasedScrollDistance(3000)).toBeCloseTo(180, 6);
+    });
+
+    it('steps the keys as the original does', () => {
+        expect(POPUP_SCROLL_KEY_STEP).toBe(10);
+        expect(POPUP_SCROLL_PAGE).toBe(250);
+        // 60 lines of 12 px with 22 showing: 456 px of scroll.
+        const max = (60 - 22) * POPUP_LINE_HEIGHT;
+        expect(popupKeyScroll('PageDown', 0, max)).toBe(250);
+        expect(popupKeyScroll('PageDown', 250, max)).toBe(max);
+        expect(popupKeyScroll('PageUp', max, max)).toBe(max - 250);
+        expect(popupKeyScroll('PageUp', 100, max)).toBe(0);
+        expect(popupKeyScroll('End', 30, max)).toBe(max);
+        expect(popupKeyScroll('Home', 300, max)).toBe(0);
     });
 });
 

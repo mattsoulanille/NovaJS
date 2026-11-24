@@ -1,14 +1,18 @@
-// The shop grids' scroll wheel (a NovaJS Enhancement, "Scroll wheel in
-// shops"): turns wheel events over the outfitter, shipyard and hire grids
-// into whole-row scroll steps. Pure, so the mapping is unit tested
-// (grid_wheel_test.ts); item_grid.ts binds it to PIXI's wheel event.
+// The landed UI's scroll wheel, two NovaJS Enhancements: "Scroll wheel in
+// shops" turns wheel events over the outfitter, shipyard and hire grids
+// into whole-row scroll steps, and "Scroll wheel in text" turns them into
+// px of mission-text scroll. Pure, so the mapping is unit tested
+// (grid_wheel_test.ts); item_grid.ts and offer_popup.ts bind it to PIXI's
+// wheel event.
 //
-// The original's grids scroll only by their arrow buttons (a page at a
-// time) and the keyboard; the wheel does nothing there.
+// The original's grids scroll only by their arrow buttons (a row a click)
+// and the keyboard, and its mission text only by the arrows and the keys;
+// the wheel does nothing over either.
 import {
     DOM_DELTA_LINE, DOM_DELTA_PAGE, LINE_PX, PAGE_PX, WheelMapper,
     WheelSample,
 } from './starmap_gestures.js';
+import { POPUP_WHEEL_NOTCH_PX } from './popup_layout.js';
 
 /**
  * CSS px of continuous (trackpad) scroll per grid row: one tile's height
@@ -52,5 +56,26 @@ export class WheelRowStepper {
         const rows = Math.trunc(this.carry / GRID_ROW_PX);
         this.carry -= rows * GRID_ROW_PX;
         return rows;
+    }
+}
+
+/**
+ * Maps wheel events over the mission text to px of scroll (positive =
+ * further down), for the "Scroll wheel in text" NovaJS Enhancement: a
+ * notched wheel moves {@link POPUP_WHEEL_NOTCH_PX} a detent, a trackpad
+ * moves the text as far as the fingers go, and a pinch (ctrl+wheel) does
+ * nothing. The original's wheel does nothing over text at all.
+ */
+export class TextWheelScroller {
+    private readonly mapper = new WheelMapper();
+
+    pixels(sample: WheelSample): number {
+        if (sample.ctrlKey || sample.deltaY === 0) {
+            return 0;
+        }
+        if (this.mapper.isNotched(sample)) {
+            return Math.sign(sample.deltaY) * POPUP_WHEEL_NOTCH_PX;
+        }
+        return sample.deltaY;
     }
 }
