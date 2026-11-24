@@ -277,8 +277,148 @@ export default {
         ...wave3Resources(),
         ...wave4Resources(),
         ...wave6Resources(),
+        ...wave7Resources(),
     ],
 };
+
+/**
+ * Wave-7 experiments (docs/reference_experiments.md). Nothing retired; ids
+ * above wave 6's (wëap 247+, oütf 451+, düde 292+, shïp 800+, sÿst/spöb
+ * 2023+, mïsn 1010+, bits 9051+, gövt 368, rlëD 1979).
+ *
+ *  B   A carrier that stays in the fight with REAL kit bombers: shïp 800
+ *      Kit Bomb Carrier Anchored (shïp 712 with Speed/Accel 0: 2 Kit Escort
+ *      Guns, Kit Bomber Bay of 4 Kit Bombers with the 50-damage 400 px
+ *      shell), düde 292 (AI 3, gövt 362), mïsn 1010 (bit 9051) beside the
+ *      player. One factor changed: shïp 802 the same with wëap 247 Kit
+ *      Bomber Bay 1 -> shïp 801 Kit Bomber 1 (the 1-damage shell, wëap
+ *      243), düde 293, mïsn 1011 (bit 9052).
+ *  U9  Boarding: Kit Hulk at other prices (shïp 803-806: 2,000 / 100,000 /
+ *      500,000 / 2,000,000; düde 294-297; sÿst/spöb 2023-2026), a 96 px
+ *      Kit Hulk Big at 50,000 (shïp 807, rlëD 1979, düde 298, sÿst/spöb
+ *      2027). Player hulls: shïp 808 Kit Crawler 25 and 809 Kit Crawler 40
+ *      (11 and 17.6 px/s) and 817 Kit Crawler Soft (Accel 200: the pass
+ *      speed is set by the thrust tap) for the boarding speed gate, 810 Kit
+ *      Crawler Crew
+ *      (Crawler 100 with crew 500) for the capture odds.
+ *  A   gövt 0x0010, distance vs damage rate: gövt 368 Kit Retreat Hostile
+ *      (0x0010 | 0x0004 always attacks the player, so the tank closes from
+ *      any distance unprovoked), düde 299 (AI 3 AI Tank Disc of 368); mïsn
+ *      1012 (bit 9053) beside the player at Kit Port, mïsn 1013 (bit 9054)
+ *      at Kit Jam Far's marker, 1800 px from the port (sÿst 2151). wëap 248
+ *      Kit Long Beam 50 + oütf 451 (the Kit Long Beam at 50 per beam frame).
+ *      mïsn 1020 (bit 9061): the neutral gövt 383 tank of waves 4-6 (düde
+ *      637) at Kit Market, 900 px out.
+ *  J   InhJam from the HULL's inherent govt: shïp 811 Jam Target Inh (the
+ *      J0 hull with shïp govt 364, InhJam1 100), düde 300 (govt 364), mïsn
+ *      1014 (bit 9055) at Kit Market. Two different jammers on one hull:
+ *      shïp 812 (Kit Jammer 25 then Kit Jammer 75) and 813 (75 then 25),
+ *      düde 301/302, mïsn 1015/1016 (bits 9056/9057) at Kit Market.
+ *      Interference 30 / 60: sÿst 2028 Kit Static 30 (spöb 2028 port, 2029
+ *      marker at 900,0) and sÿst 2030 Kit Static 60 (spöb 2030/2031), mïsn
+ *      1017/1018 (bits 9058/9059) put the J0 target on the marker.
+ *      Where ionization starts: shïp 814 Kit Lancer Ion Slow (IonizeMax
+ *      100, Deionize 1), shïp 815 Ion Target Green (an immobile green disc,
+ *      rlëD 1972, firing wëap 249 Kit Ion Gun 10: 1 damage, Ionization 10,
+ *      one shot every 45 frames), düde 303 (gövt 362), mïsn 1019 (bit 9060)
+ *      beside the player.
+ *  E   Front-quadrant turrets: wëap 250 Kit Front Turret (the Kit Escort
+ *      Gun with guidance 7), shïp 816 Kit Disc Blue Front (2 x 250).
+ */
+function wave7Resources() {
+    const out = [];
+    // --- B: the anchored Kit Bomb Carrier.
+    const carrierSet = { armor: 3000, shield: 3000, weaponCounts: [2, 1, 0, 0], weaponAmmo: [0, 4, 0, 0], ai: 3, strength: 100, crew: 40, speed: 0, accel: 0 };
+    out.push(...ship(800, "Kit Bomb Carrier Anchored", 143, { ...carrierSet, weapons: [365, 371, -1, -1] }));
+    out.push(dude(292, "Kit Bomb Carrier Anchored", 3, 362, 800));
+    out.push(...misn(1010, "Kit B anchored Kit Bomb Carrier", 9051, { shipCount: 1, shipDude: 292, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    out.push(...ship(801, "Kit Bomber 1", 167, { armor: 500, shield: 500, weapons: [243, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 20, crew: 1 }));
+    out.push(weap(247, "Kit Bomber Bay 1", 149, { reload: 30, guidance: 99, ammoType: 801 }));
+    out.push(...ship(802, "Kit Bomb Carrier Anchored 1", 143, { ...carrierSet, weapons: [365, 247, -1, -1] }));
+    out.push(dude(293, "Kit Bomb Carrier Anchored 1", 3, 362, 802));
+    out.push(...misn(1011, "Kit B anchored Kit Bomb Carrier 1", 9052, { shipCount: 1, shipDude: 293, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+
+    // --- U9: hulks at other prices, a big hulk, player hulls.
+    const hulkSet = { ...shipBase, subtitle: "", armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0 };
+    const hulkSystem = (sid, did, shipId, name) => {
+        const d = dude(did, name, 1, 378, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        const s = system(sid, `Kit Board ${name}`, -600 + 30 * (sid - 2020), -770, 363, [sid]);
+        s.set = { ...s.set, dudes: [did, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)], avgShips: 1 };
+        out.push(d, s, spob(sid, `Kit Board ${name} Port`, 0, 0, 138, { flags: 0x43 }));
+    };
+    [[803, 2000], [804, 100000], [805, 500000], [806, 2000000]].forEach(([id, cost], i) => {
+        const name = `Kit Hulk ${cost}`;
+        out.push({ type: "shïp", id, name, clone: "shïp:128", set: { ...hulkSet, shortName: name, longName: name, commName: name, cost } });
+        out.push({ type: "shän", id, name, clone: "shän:128", set: { "@0:i16": 1975, "@2:i16": 1976, "@4:i16": 1 } });
+        hulkSystem(2023 + i, 294 + i, id, name);
+    });
+    out.push(...discShip(807, "Kit Hulk Big", 1979, DISC_COLOURS.magenta, { ...hulkSet, cost: 50000 }, 96));
+    hulkSystem(2027, 298, 807, "Kit Hulk Big");
+    const crawler = { accel: 2000, turn: 30, armor: 3000, shield: 3000, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, flags: 0, flags2: 0x00C8 };
+    out.push(...ship(808, "Kit Crawler 25", 135, { ...crawler, speed: 25 }));
+    out.push(...ship(809, "Kit Crawler 40", 135, { ...crawler, speed: 40 }));
+    out.push(...ship(810, "Kit Crawler Crew", 135, { ...crawler, speed: 100, crew: 500 }));
+    // Added during the wave: at 11 px/s (Crawler 25) a pass straight over the
+    // hulk got "not close enough" all the way, so slower still. A slow TOP
+    // speed would take many minutes to reach the hulk, so instead Kit Crawler
+    // Soft: top speed 44 px/s but Accel 200 (about 35 px/s^2): an inertialess
+    // hull keeps the speed it has when thrust is released, so the pass speed
+    // is set by the length of the thrust tap (args.pass.thrustMs).
+    out.push(...ship(817, "Kit Crawler Soft", 135, { ...crawler, speed: 100, accel: 200 }));
+
+    // --- A: gövt 0x0010 tank that always attacks the player.
+    out.push(govt(368, "Kit Retreat Hostile", { flags: 0x0014 }));
+    out.push(dude(299, "AI Tank 3 retreat hostile", 3, 368, 762));
+    out.push(...misn(1012, "Kit A hostile retreat tank near", 9053, { shipCount: 1, shipDude: 299, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+    out.push(...misn(1013, "Kit A hostile retreat tank far", 9054, { availStel: 2152, shipCount: 1, shipDude: 299, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    out.push(weap(248, "Kit Long Beam 50", 170, { reload: 15, duration: 4, armorDamage: 50, shieldDamage: 50, guidance: 3, beamLength: 1500 }));
+    out.push(gun(451, "Kit Long Beam 50", 248));
+    // Added during the wave: the waves 4-6 tank (düde 637, neutral gövt 383,
+    // which only fights once provoked) at Kit Market, 900 px out, inside the
+    // beam's 1500 px: mïsn 1020 (bit 9061). Beside the player it is wave 3's
+    // mïsn 988 (bit 9029).
+    out.push(...misn(1020, "Kit A neutral retreat tank far", 9061, { shipCount: 1, shipDude: 637, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+
+    // --- J: InhJam on the hull's own govt; two different jammers; Interference 30/60; ion threshold.
+    const j0 = { armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, ai: 1, strength: 1, crew: 1 };
+    out.push(...ship(811, "Jam Target Inh", 136, { ...j0, govt: 364 }));
+    out.push(dude(300, "Jam Target Inh", 1, 364, 811));
+    out.push(...misn(1014, "Kit J InhJam hull govt", 9055, { shipCount: 1, shipDude: 300, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    [[812, 301, 1015, 9056, [623, 626]], [813, 302, 1016, 9057, [626, 623]]].forEach(([id, did, mid, bit, outfits]) => {
+        const name = `Jam Target ${outfits[0] === 623 ? "25+75" : "75+25"}`;
+        out.push(...ship(id, name, 136, { ...j0, outfits: [...outfits, -1, -1], outfitCounts: [1, 1, 0, 0] }));
+        out.push(dude(did, name, 1, 363, id));
+        out.push(...misn(mid, `Kit J ${name}`, bit, { shipCount: 1, shipDude: did, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    });
+    [[2028, "Kit Static 30", 30, 1017, 9058], [2030, "Kit Static 60", 60, 1018, 9059]].forEach(([sid, name, interference, mid, bit]) => {
+        const s = system(sid, name, -1200 + 30 * (sid - 2000), -790, 363, [sid, sid + 1]);
+        s.set = { ...s.set, interference };
+        out.push(s, spob(sid, `${name} Port`, 0, 0, 138, { flags: 0x43 }),
+            spob(sid + 1, `${name} Marker`, 900, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+        out.push(...misn(mid, `Kit ${name} J0 target`, bit, { availStel: sid, shipCount: 1, shipDude: 615, shipGoal: -1, shipBehav: -1, shipStart: -2 }));
+    });
+    out.push(...ship(814, "Kit Lancer Ion Slow", 135, {
+        accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000,
+        cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8, ionization: 100, deionize: 1,
+    }));
+    out.push(weap(249, "Kit Ion Gun 10", 131, { reload: 45, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: 4, ionization: 10 }));
+    out.push({ type: "shïp", id: 815, name: "Ion Target Green", clone: "shïp:128", set: { ...shipBase, shortName: "Ion Target Green", longName: "Ion Target Green", commName: "Ion Target Green", subtitle: "",
+        armor: 100, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 1, crew: 1, flags: 0, flags2: 0,
+        weapons: [249, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] } });
+    out.push({ type: "shän", id: 815, name: "Ion Target Green", clone: "shän:128", set: { "@0:i16": 1972, "@2:i16": 1973, "@4:i16": 1 } });
+    out.push(dude(303, "Ion Target Green", 3, 362, 815));
+    out.push(...misn(1019, "Kit J ion threshold", 9060, { shipCount: 1, shipDude: 303, shipGoal: -1, shipBehav: -1, shipStart: -1 }));
+
+    // --- E: front-quadrant turret escorts.
+    out.push(weap(250, "Kit Front Turret", 131, { reload: 20, duration: 60, armorDamage: 30, shieldDamage: 30, guidance: 7 }));
+    out.push({ type: "shïp", id: 816, name: "Kit Disc Blue Front", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Disc Blue Front", longName: "Kit Disc Blue Front", commName: "Kit Disc Blue Front", subtitle: "",
+        accel: 600, speed: 600, turn: 60, armor: 4000, shield: 4000, mass: 50, freeMass: 100, cargo: 10,
+        weapons: [250, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0],
+        ai: 3, strength: 100, crew: 20, flags: 0, flags2: 0, escortType: 2, cost: 10000 } });
+    out.push({ type: "shän", id: 816, name: "Kit Disc Blue Front", clone: "shän:128", set: { "@0:i16": 1973, "@2:i16": 1974, "@4:i16": 1 } });
+    return out;
+}
 
 /**
  * Wave-6 experiments (docs/reference_experiments.md). Nothing retired: like

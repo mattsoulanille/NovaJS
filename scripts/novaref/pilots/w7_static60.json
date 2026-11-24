@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w7-static60",
+  "edits": {
+    "ship": 703,
+    "stellar": 2030,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2030": 2
+    },
+    "missionBits": {
+      "9059": true
+    },
+    "weapons": {
+      "128": 0,
+      "235": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "444": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w7-static60"
+  }
+}

@@ -1,0 +1,87 @@
+{
+ "name": "ai_tank_hostile",
+ "_comment": "Wave 7, gövt 0x0010: distance vs damage rate at the 25% crossing. The AI 3 AI Tank Disc of gövt 368 (0x0010 retreat + 0x0004 always attacks the player, so it closes unprovoked) starts beside the player (mïsn 1012, pilots w7_ret_near*) or 1800 px out at Kit Jam Far's marker (mïsn 1013, w7_ret_far*). The player (Kit Lancer Heavy) holds the Kit Long Beam (15 per beam frame, about 120/s) or Long Beam 50 (about 400/s), 1500 px reach, from the first second. Panels about every 3.7 s; radar_blips.mjs gives the tank's distance off screen.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "shot": "idle",
+   "window": true
+  },
+  {
+   "keys": "down:Space"
+  },
+  {
+   "repeat": 16,
+   "steps": [
+    {
+     "wait": 1700
+    },
+    {
+     "shot": "fire-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "keys": "up:Space"
+  },
+  {
+   "repeat": 10,
+   "steps": [
+    {
+     "wait": 1700
+    },
+    {
+     "shot": "after-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,97 @@
+{
+ "name": "ion_threshold",
+ "_comment": "Wave 7, where ionization starts: the player (Kit Lancer Ion Slow: IonizeMax 100, Deionize 1) holds the JamM Ion (Seeker 0x0020) trigger at the Ion Target Green beside it (an immobile green disc firing the Kit Ion Gun 10: Ionization 10 a hit, one shot every 45 frames). The missiles stop and the hull turns blue when the charge crosses the threshold. Pilot w7_ionthr. Take 2: the recording starts in the spaceport, before Leave, so the first ion hits after takeoff are on it (take 1 was already flickering blue in its first frame).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "keys": "Return wait 1500"
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "keys": "w wait 500"
+  },
+  {
+   "keys": "down:ctrl"
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-5s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-10s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "shot": "fire-15s",
+   "window": true
+  },
+  {
+   "wait": 5000
+  },
+  {
+   "keys": "up:ctrl"
+  },
+  {
+   "shot": "fire-20s",
+   "window": true
+  },
+  {
+   "keys": "Left@1000 wait 300"
+  },
+  {
+   "shot": "turn",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

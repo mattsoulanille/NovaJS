@@ -1,0 +1,91 @@
+{
+ "name": "ai_outrange",
+ "_comment": "Wave 7, AI 2 'runs away when his attacker is out of range': the AI 2 subject (mïsn 978, pilot w7_ai2_out; AI 3 control w7_ai3_out) at Kit Port; the player (Kit Lancer, Tickler) targets it, tickles it once, lets it engage for about 20 s, then flies straight away for 5 s (about 1800 px, past the Kit Raider Gun's reach), brakes and waits about 90 s. radar_blips.mjs --tracks follows it off screen.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "keys": "l wait 1000 l wait 9000"
+  },
+  {
+   "shot": "offer",
+   "window": true
+  },
+  {
+   "keys": "Return wait 2500"
+  },
+  {
+   "shot": "spaceport",
+   "window": true
+  },
+  {
+   "keys": "Return wait 3500"
+  },
+  {
+   "keys": "Tab wait 300"
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 2000
+  },
+  {
+   "shot": "idle",
+   "window": true
+  },
+  {
+   "keys": "Space@600 wait 300"
+  },
+  {
+   "repeat": 5,
+   "steps": [
+    {
+     "wait": 2500
+    },
+    {
+     "shot": "engage-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "keys": "down:Up wait 5000 up:Up down:Down wait 600 up:Down"
+  },
+  {
+   "shot": "away",
+   "window": true
+  },
+  {
+   "repeat": 20,
+   "steps": [
+    {
+     "wait": 2500
+    },
+    {
+     "shot": "out-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

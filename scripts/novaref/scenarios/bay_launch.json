@@ -1,0 +1,76 @@
+{
+ "name": "bay_launch",
+ "_comment": "Wave 7, E-view re-check after the kit bay fix: pilot w7_bay (Kit Lancer with the Kit Fighter Bay, 4 Kit Fighters, quiet Kit Range). Select the bay with w, tap Control four times, then Tab through every ship and open the escort panel: what flies out, and does the panel count the fighters?",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "takeoff",
+   "window": true
+  },
+  {
+   "keys": "w wait 600"
+  },
+  {
+   "shot": "bay-selected",
+   "window": true
+  },
+  {
+   "keys": "down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 700 down:ctrl wait 200 up:ctrl wait 1500"
+  },
+  {
+   "shot": "after-launch",
+   "window": true
+  },
+  {
+   "repeat": 6,
+   "steps": [
+    {
+     "keys": "Tab wait 400"
+    },
+    {
+     "shot": "tab-{i}",
+     "window": true
+    }
+   ]
+  },
+  {
+   "keys": "e wait 700"
+  },
+  {
+   "shot": "panel",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "later",
+   "window": true
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ]
+}

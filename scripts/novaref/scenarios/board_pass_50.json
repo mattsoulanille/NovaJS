@@ -1,0 +1,65 @@
+{
+ "name": "board_pass_50",
+ "_comment": "Wave 7, U9 boarding speed gate: loops/board.mjs walks the player (Kit Crawler 50, 22 px/s, pilot w7_bspeed50) to rest about 60-90 px from the 50,000 Kit Hulk in Kit Board Range, aims at its centre, then crosses it at full speed pressing b every few frames (args.pass); each press is read from the recording (pass_reads in the result). A boarding dialog that opens mid-pass is closed with Abort.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 22,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "pass": {
+     "fromPx": 75,
+     "overPx": 60,
+     "pressGapMs": 100
+    },
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ]
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

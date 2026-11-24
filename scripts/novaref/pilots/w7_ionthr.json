@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w7-ionthr",
+  "edits": {
+    "ship": 814,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9060": true
+    },
+    "weapons": {
+      "128": 0,
+      "241": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "446": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w7-ionthr"
+  }
+}

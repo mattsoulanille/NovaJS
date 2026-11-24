@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w7-hulk-2k",
+  "edits": {
+    "ship": 716,
+    "stellar": 2023,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2023": 2
+    },
+    "missionBits": {},
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "601": 1
+    },
+    "nickname": "Probe",
+    "shipName": "w7-hulk-2k"
+  }
+}

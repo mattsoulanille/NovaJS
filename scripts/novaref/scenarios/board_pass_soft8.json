@@ -1,0 +1,68 @@
+{
+ "name": "board_pass_soft8",
+ "_comment": "Wave 7, U9 boarding speed gate, slow passes: pilot w7_bspeedsoft (Kit Crawler Soft: 44 px/s top speed, Accel 200, inertialess, so it keeps the speed of a short thrust tap). loops/board.mjs walks it to rest about 45 px from the 50,000 Kit Hulk (Down held 1.6 s to stop), aims, then a 230 ms tap (about 8 px/s) carries it over the hulk pressing b every 200 ms (pass_reads from the recording via planet_track.mjs --key b).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 22,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "pass": {
+     "fromPx": 45,
+     "overPx": 35,
+     "pressGapMs": 200,
+     "thrustMs": 230,
+     "speedPxS": 8
+    },
+    "dialogClicks": [
+     [
+      418,
+      380,
+      "abort"
+     ]
+    ],
+    "brakeMs": 1600
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
