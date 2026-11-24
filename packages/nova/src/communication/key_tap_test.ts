@@ -14,7 +14,8 @@ import {
     ControlAction, ControlEvent, Controls, getActions, SavedControls,
 } from '../nova_plugin/core/index.js';
 import {
-    ControlledByComponent, PlayerShipSelector, ShipControlEvent,
+    ApplyHeldControlEventsSystem, ControlledByComponent,
+    HoldControlReleasesSystem, PlayerShipSelector, ShipControlEvent,
     ShipControlStateComponent,
 } from '../nova_plugin/player/index.js';
 import { unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
@@ -55,6 +56,9 @@ function makeWorld(communicator?: MockCommunicator) {
     if (communicator) {
         world.resources.set(CommunicatorResource, communicator);
     }
+    // ShipController's per-tick control bookkeeping (#377).
+    world.addSystem(HoldControlReleasesSystem);
+    world.addSystem(ApplyHeldControlEventsSystem);
     return world;
 }
 

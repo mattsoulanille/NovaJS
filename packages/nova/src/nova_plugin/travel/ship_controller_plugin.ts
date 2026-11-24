@@ -9,7 +9,7 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import { EcsControlEvent } from '../core/index.js';
-import { AnalogControlComponent, ControlledByComponent, ControlledByType, SetControlledShipSystem, ShipControlStateComponent } from '../player/index.js';
+import { AnalogControlComponent, ApplyHeldControlEventsSystem, ControlledByComponent, ControlledByType, HoldControlReleasesSystem, SetControlledShipSystem, ShipControlStateComponent } from '../player/index.js';
 import { PlatformResource } from '../core/index.js';
 import { PlayerShipPlugin, PlayerShipSelector } from '../player/index.js';
 import { PlanetTargetComponent } from './planet_plugin.js';
@@ -101,5 +101,9 @@ export const ShipController: Plugin = {
             ControlledByComponent, ControlledByType);
         world.addSystem(ControlShipSystem);
         world.addSystem(SetControlledShipSystem);
+        // A release that landed on its press's tick waits for the end
+        // of the step (#377, applyControlEvents).
+        world.addSystem(HoldControlReleasesSystem);
+        world.addSystem(ApplyHeldControlEventsSystem);
     }
 };

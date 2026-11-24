@@ -26,15 +26,16 @@ import type { SimulationInput } from './simulation_input.js';
  * - A release followed by a press in one tick is fine: the press wins
  *   and is a fresh edge (the key was down again before a step could see
  *   it up).
- * - Adjacent control inputs merge into ONE control input. Applying them
- *   one at a time decays each earlier 'start' to plain held and emits a
- *   ShipControlEvent per input (applyControlEvents), so separate presses
- *   on one tick lost all edges but the last, and fired that one's
- *   handlers once per input. A control input that would follow a
- *   non-control input after a merged one waits for the next tick instead,
- *   so controls never move across another kind of input. (A control
- *   input with no events applies nothing but the decay and the event
- *   above, so it is dropped.)
+ * - Adjacent control inputs merge into ONE control input. (Applying them
+ *   one at a time used to decay each earlier 'start' to plain held and
+ *   emit a ShipControlEvent per input, so separate presses on one tick
+ *   lost all edges but the last. applyControlEvents now keeps one edge
+ *   set per tick (#377), which also covers several RECORDS on one tick;
+ *   merging still keeps the record to one input.) A control input that
+ *   would follow a non-control input after a merged one waits for the
+ *   next tick instead, so controls never move across another kind of
+ *   input. (A control input with no events would apply nothing but the
+ *   tick's decay and its event, so it is dropped.)
  *
  * Pure: the queue and its inputs are not modified (records are read-only
  * once made, and these objects may already be in one).
