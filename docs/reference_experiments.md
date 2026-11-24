@@ -7712,6 +7712,34 @@ place systems apart).
 - Rescans: keep the scanned marker across a landing (wave 14) but clear it
   when the ship takes off with contraband it did not have at the scan.
 
+**Contraband parts applied in adb7fc5f** (3 and 4; the CompReward fix is
+separate work):
+- 3: already matched; pinned by a world spec (`contraband_scan_test.ts`
+  "an ally of the owner scanning charges ITS OWN SmugPenalty").
+- 4, the line: `contrabandScanMessage` names the hold's cargo before an
+  outfit (the jünk, then "illegal cargo", then the outfit; jünk over an
+  outfit is the measured part). One fine, one record change, and the
+  0x0020 mission's silent failure already matched (pinned).
+- 4, rescans. The rule that fits both waves: **a ship is scanned again on
+  the same visit only when it carries contraband its last scan did not
+  find; a new arrival by jump starts afresh.** The marker keeps the
+  sorted keys of everything its scan found (`found`: "outfit:<id>",
+  "junk:<id>", "mission:<id>"; `ContrabandFindings.items` now lists every
+  illegal thing, not just the first), survives a landing, and
+  `needsScan` (`contraband_target.ts`) asks for a key it does not name.
+  Wave 14's pod pilot (nothing new, or only a ScanMask-0 mission) is not
+  rescanned; wave 15's (new jünk and an illegal 0x0020 mission) is, and
+  the rescan applies everything aboard as one scan. Guesses: contraband
+  gained in space counts as new too; whether the line named the jünk
+  because cargo outranks an outfit or because the pod was already found
+  this visit, this run cannot tell (both readings print the same line).
+  Schema: the OPTIONAL `found` field ("Also under 8" note in
+  rollback_protocol.ts; fingerprint 0c6eeff124ceccf1 -> c6ab0bdc34e2addd).
+- Not implemented: the "<scanner>: <pilot>, prepare to be scanned." line
+  the original printed twice before the rescan (`sl/t100.png`). The
+  "no further scan in 33 s" after the jump back differs from wave 14's
+  jump-back rescan within 10 s; NovaJS keeps the crossing reset.
+
 Confidence: high for 1 and 3 (read back from the pilot), high for 2's "no
 record change" (one run, CompReward 1000), medium for 4 (one scan; its
 record change not read).
@@ -7827,12 +7855,30 @@ rows and names; the order follows the cargo map's insertion order, not
 the commodity index (not tested with commodities bought out of order).
 3: jünk is pushed as a commodity LINE (`status_bar_cargo.ts:289-294`)
 and never reaches `specialNames`: **mismatch** (one run).
-**Proposed (not applied):** sort the commodity lines by commodity index;
-put each jünk's abbreviation into `specialNames` (so jünk + mission cargo,
-or two jünks, read "Multiple") instead of a commodity line.
+**Proposed (applied in 64a303e7, amended):** sort the commodity lines by
+commodity index; put each jünk's abbreviation into `specialNames` (so
+jünk + mission cargo, or two jünks, read "Multiple") instead of a
+commodity line.
+
+**Applied in 64a303e7, with one correction from the evidence.** The
+contraband run's own frames show jünk AND mission cargo aboard together:
+`several/08-bought.png` (docked, 10 t of Kit Contraband + 1 ton of
+mission Food, Free 189) and `09-left.png` / `10-map.png` (in flight, the
+same hold) all read **"Special: Food"**, not "Multiple"; `11-gate.png`
+(the mission gone, Free 190) reads "Special: Contraband". So the jünk
+counts on the "Special:" line only when no mission cargo is aboard. The
+text is the jünk's **Abbrev field** (kit jünk 203: name "Kit Contraband",
+LCName "kit contraband", Abbrev "Contraband"; `kits/testkit.mjs`), shown
+in full, not a STR# entry. `cargoDisplayOf` now: commodity rows sorted
+by commodity index; jünk never a row; "Special:" summarizes the
+missions' cargo names, or, with none, the jünks' Abbrevs
+(`specialJunkName`; empty Abbrev falls back to the name). Guess: two jünk
+types and no mission cargo read "Multiple". Specs in
+`status_bar_special_test.ts` pin "Multiple" for two missions of one
+cargo type, the Ind / LuxG / Equ rows, jünk alone, and jünk + mission.
 
 Confidence: high for 1 and 2 (explicit readouts), medium for 3 (one
-pilot, jünk alone).
+pilot; jünk alone and jünk + one mission's cargo).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w15/special/*/`
 (`02-fly0.png`, `04-accepted.png`, `06-acc2.png`, `10-fly2b.png`);
