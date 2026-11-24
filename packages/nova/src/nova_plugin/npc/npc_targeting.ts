@@ -2,16 +2,20 @@ import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import {
     DamagedEvent, DisabledComponent, FiringGroupComponent, OwnerComponent,
     ShieldComponent, ShipComponent, SourceComponent, TargetComponent,
 } from '../ship/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
-import { ControlledByComponent } from '../player/index.js';
+import {
+    ControlledByComponent, EscortCommandComponent,
+} from '../player/index.js';
 import { govtDisposition } from '../reputation/index.js';
-import { NpcComponent } from './npc_component.js';
+import { NpcComponent, NpcState } from './npc_component.js';
 import { flockPlayer, sameFlock } from './allegiance.js';
+import { FormationComponent } from './npc_formation.js';
 import { addDamageLoad } from './npc_retreat.js';
 
 /**
@@ -204,6 +208,63 @@ export function aimedAt(victim: string, damager: Entity,
 }
 
 /**
+ * Records `source` as `npc`'s aggressor. It reacts at its next think, not
+ * next frame: reaction time.
+ *
+ * A bribe (hail beg-for-mercy) only lasts "until the player provokes them
+ * again": if the briber, or a ship of the briber's flock, is the one now
+ * attacking, the reprieve is void — cleared so NpcDecisionSystem stops
+ * skipping them and resumes hostility. (The flock half keeps what the
+ * reprieve did when an escort's hit was recorded as the player's.)
+ */
+function provoke(npc: NpcState, source: string,
+    getEntity: (uuid: string) => Entity | undefined): void {
+    npc.aggressor = source;
+    if (npc.pacifiedFrom !== undefined
+        && (npc.pacifiedFrom === source
+            || flockPlayer(source, getEntity) === npc.pacifiedFrom)) {
+        npc.pacifiedFrom = undefined;
+        npc.pacifiedUntil = undefined;
+    }
+}
+
+/** Every NPC holding a formation slot: the candidates for a leader's
+ * fleet escorts (provokeFleet). */
+export const FleetFollowersQuery = new Query([FormationComponent,
+    NpcComponent, UUID, Optional(EscortCommandComponent)] as const);
+
+/**
+ * An attack on `leader` provokes its FLEET ESCORTS as if it had hit them
+ * (reference "P1 wave 13", see NpcAggressionSystem): every NPC holding a
+ * formation slot on it (FormationComponent.leader, the npc_spawn fleet
+ * escorts) records the same `source` the leader did, with the same bribe
+ * rule. The aggressor is the one the leader's hit resolved to, so the
+ * player-side rule carries over: a hit by the player's escort sets the
+ * fleet on that escort, not on the player.
+ *
+ * Not a ship under an escort command (a bay fighter in formation on its
+ * carrier, a player's hired escort): its brain is the escort command
+ * framework, which never reads NpcComponent's aggressor.
+ *
+ * Only direct followers, and only from the leader down: a hit on an
+ * escort provokes that escort alone (the other direction was not
+ * measured). Synced components only, the same value written to each
+ * follower, so the iteration order changes nothing and every peer agrees.
+ */
+function provokeFleet(leader: string, source: string,
+    followers: ReadonlyArray<readonly [{ leader: string }, NpcState, string,
+        unknown]>,
+    getEntity: (uuid: string) => Entity | undefined): void {
+    for (const [formation, followerNpc, followerUuid, command] of followers) {
+        if (formation.leader !== leader || command !== undefined
+            || followerUuid === source) {
+            continue;
+        }
+        provoke(followerNpc, source, getEntity);
+    }
+}
+
+/**
  * Records who last damaged an NPC. The damager of a DamagedEvent is
  * the projectile/beam/blast entity; the ship recorded is the one
  * responsibleShip resolves it to (the firing group's root while it lives,
@@ -226,6 +287,16 @@ export function aimedAt(victim: string, damager: Entity,
  * allied or a neutral government, never fired back. Recording those
  * strays made two same-govt warships fight each other over one bolt.
  *
+ * FLEET ESCORTS DEFEND THEIR LEADER: an attack recorded on a ship is
+ * recorded on its fleet escorts too (provokeFleet, above), so they turn on
+ * the attacker though nobody has hit them. Reference "P1 wave 13 ... fleet
+ * escorts defending their leader" (docs/reference_experiments.md): two
+ * guards of a convoy whose govt is neutral to the player turned back and
+ * fired at the player within about 4 s of the player's first beam on the
+ * convoy's lead. Only that direction was measured: a hit on an ESCORT is
+ * still recorded on the escort alone, its leader and fellow escorts do
+ * not take it up.
+ *
  * Never a ship of the victim's OWN FLOCK (allegiance.ts's sameFlock). Direct
  * hits pass through a flock, but damage from inside it still lands: a blast
  * whose weapon hurts its firing ship carries no firing group and splashes
@@ -246,9 +317,9 @@ export const NpcAggressionSystem = new System({
     events: [DamagedEvent],
     args: [DamagedEvent, NpcComponent, UUID, Entities,
         Optional(GovtComponent), Optional(ShieldComponent), TimeResource,
-        SimulationGameDataResource] as const,
+        SimulationGameDataResource, FleetFollowersQuery] as const,
     step({ damager, damage, scale = 1 }, npc, uuid, entities,
-        govt, shield, time, gameData) {
+        govt, shield, time, gameData, followers) {
         const getEntity = (id: string) => entities.get(id);
         const weapon = entities.get(damager);
         const source = responsibleShip(weapon, getEntity);
@@ -277,20 +348,8 @@ export const NpcAggressionSystem = new System({
             if (!provokes) {
                 return;
             }
-            // React at the next think, not next frame: reaction time.
-            npc.aggressor = source;
-            // A bribe (hail beg-for-mercy) only lasts "until the player
-            // provokes them again": if the briber, or a ship of the
-            // briber's flock, is the one now shooting us, the reprieve is
-            // void — clear it so NpcDecisionSystem stops skipping them and
-            // resumes hostility. (The flock half keeps what the reprieve
-            // did when an escort's hit was recorded as the player's.)
-            if (npc.pacifiedFrom !== undefined
-                && (npc.pacifiedFrom === source
-                    || flockPlayer(source, getEntity) === npc.pacifiedFrom)) {
-                npc.pacifiedFrom = undefined;
-                npc.pacifiedUntil = undefined;
-            }
+            provoke(npc, source, getEntity);
+            provokeFleet(uuid, source, followers, getEntity);
         }
     },
 });

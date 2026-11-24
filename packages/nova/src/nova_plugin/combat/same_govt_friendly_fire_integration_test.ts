@@ -62,8 +62,12 @@ import { styleForTarget } from './hostility.js';
  *     ended with the shooter shot to a hulk by its own government's ship.
  *  3. So the two do not fight each other over it.
  *  4. A DELIBERATE hit is still an attack, whatever the government, and it
- *     does not SPREAD by itself: the victim's own fleet escorts have no
- *     shared memory of the victim's aggressor and keep their own targets.
+ *     SPREADS to the victim's fleet escorts: they record the victim's
+ *     aggressor as their own (npc_targeting.ts's provokeFleet). Flipped on
+ *     purpose by reference "P1 wave 13" (docs/reference_experiments.md),
+ *     where a convoy's guards turned on the player that hit their lead;
+ *     the same-govt shooter case here is not measured, it follows the
+ *     same rule.
  *
  * Built on the synthetic data set: two Verge Raiders warships (xenophobic,
  * so both hunt the governmentless player on sight but never each other),
@@ -420,8 +424,8 @@ describe('NPC friendly fire between same-govt / allied ships '
         expect(npcOf(ships.victim).aggressor).toBeUndefined();
     });
 
-    it('a deliberate hit does not spread: the victim\'s fleet escort keeps '
-        + 'its own target', async () => {
+    it('a deliberate hit spreads: the victim\'s fleet escort takes the '
+        + 'shooter too (reference P1 wave 13)', async () => {
             const ships = await scene(RAIDERS, RAIDERS);
             const { victim } = ships;
             victim.components.set(FiringGroupComponent, { group: 'victim' });
@@ -446,10 +450,15 @@ describe('NPC friendly fire between same-govt / allied ships '
             wake(escort);
             step(1);
             expect(targetOf(victim)).toBe('shooter');
-            expect(npcOf(escort).aggressor).toBeUndefined();
+            expect(npcOf(escort).aggressor).toBe('shooter');
+            // The escort weighs the shooter (134 px away) against the
+            // player (335 px) and picks the nearer; a Skiff facing a
+            // Corsair has no odds (MaxOdds), so it breaks off and holds
+            // formation rather than going on hunting the player.
             expect(targetOf(escort))
-                .withContext('the escort is still after the player')
-                .toBe('player');
+                .withContext('no longer after the player')
+                .toBeUndefined();
+            expect(npcOf(escort).mode).toBe('patrol');
         });
 
     /**

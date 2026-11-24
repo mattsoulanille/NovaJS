@@ -160,7 +160,7 @@ take-off.
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **Fleets in formation** (flët lead + escorts) | B:885-925 | **Done and measured:** R: "F1n" waves 3 and 5 match (N/nova_plugin/npc/npc_formation.ts:44, N/nova_plugin/spawn/npc_spawn_plugin.ts:1105-1135). | Whether escorts defend a leader attacked by a ship they are not already hostile to (NovaJS: no; `npc.aggressor` is per ship). Fold into **P1**. | — |
+| **Fleets in formation** (flët lead + escorts) | B:885-925 | **Done and measured:** R: "F1n" waves 3 and 5 match (N/nova_plugin/npc/npc_formation.ts:44, N/nova_plugin/spawn/npc_spawn_plugin.ts:1105-1135). | Escorts defending their leader: measured in R: "P1 wave 13" (the guards attacked the player within about 4 s of its first hit on the lead) and applied (N/nova_plugin/npc/npc_targeting.ts `provokeFleet`: an aggressor recorded on a ship is recorded on its formation followers). Still unmeasured: whether a hit on an ESCORT draws the leader and the other escorts (NovaJS: no). | — |
 | **Mission ship behaviour** (ShipBehav 0 attack player, 1 protect, 2 attack enemy stellars) | B:1431-1435 | **0 and 1 done** (R: Q1-Q4). **2 missing** (N/nova_plugin/missions/mission_ship_spawn.ts:62-63); no stock mission uses it (0 of 791). | — | M, low value |
 | **Nav-default starts** (ShipStart -1..-16) | B:1441-1449 | **Missing:** ships are scattered instead (N/nova_plugin/missions/mission_ship_spawn.ts:50-51). 11 stock missions use it. | — | S |
 | **Hypergate / wormhole preference** (gövt Flags2 0x0020 never, 0x0040 prefer gates, 0x0080 prefer wormholes) | B:1101-1106 | **Missing:** NPCs only leave by jumping; wormholes are excluded from destinations (N/nova_plugin/npc/npc_decision.ts:145-161). Most stock govts set 0x0020; Pirate and others 0x0080; Rebellion 0x0040. | How an NPC uses a gate (flies in and vanishes?). | M |
@@ -198,8 +198,8 @@ reference-Mac experiments to run first. Briefs follow.
      what a miner does when full is probably "land".
 4. **Piracy police, distress calls and 0x0020 nosy-ignore** (P1). These
    are one cluster: a shared "who is attacking whom nearby" record that AI 4
-   reads, and the trigger for STR# 5003 messages. The same record answers
-   whether fleet escorts defend their leader.
+   reads, and the trigger for STR# 5003 messages. (Fleet escorts defending
+   their leader is done: P1 wave 13.)
 5. **Hull AI flags** (W1, C1):
    - **cheap, common:** out-of-ammo flee (278 hulls), AI afterburner;
    - **bigger:** swarm (155) and standoff (142);

@@ -6734,6 +6734,14 @@ applied):** when a fleet leader (or any member) records an aggressor,
 give the same aggressor to the other members of its flët group (the
 npc_formation leader / followers), so the escorts attack too; and the
 other direction (escorts' attackers drawing the leader) is untested.
+**Applied (wave-13 fixes):** `npc_targeting.ts`'s NpcAggressionSystem
+records an attack on a ship on its formation followers too
+(`provokeFleet`: NPCs with a FormationComponent naming it and no escort
+command), with the aggressor the leader's hit resolved to, so the stray
+rule and the player-side rule (the player's escort, not the player) carry
+over unchanged, and a bribe of an escort is voided as a hit on it would
+void it. A hit on an escort still provokes only that escort (untested
+direction left as it was). Spec: `combat/fleet_escorts_defend_integration_test.ts`.
 
 Confidence: medium-high for 1 (three runs: hits, a kill, a board); medium for 2 (one
 run, bolts seen heading for the player and a shield dip, the guards'

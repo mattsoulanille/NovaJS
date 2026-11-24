@@ -398,6 +398,15 @@ export const STATE_HASH_INTERVAL = 60;
 //    fingerprint changes (25cd54bd844fc9ef on its own; 6ffbcaef16994bf3
 //    together with the kill-penalty note above), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): fleet escorts defend their leader (reference
+//    "P1 wave 13"). Sim rule only: NpcAggressionSystem (npc/
+//    npc_targeting.ts provokeFleet) writes the aggressor it records on a
+//    ship to that ship's formation followers too (NPCs without an escort
+//    command), voiding their bribe as a hit would. No component, field,
+//    input kind or message kind changes, so the derived wire schema
+//    fingerprint is unchanged (still 6ffbcaef16994bf3). The build stamp
+//    gate keeps builds with different sim rules apart.
 
 export const PROTOCOL_VERSION = 8;
 
