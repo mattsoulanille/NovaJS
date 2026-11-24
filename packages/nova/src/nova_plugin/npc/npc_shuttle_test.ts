@@ -29,8 +29,9 @@ import { NpcComponent, NpcState } from './npc_component.js';
 import type { PlanetEntry } from './npc_decision.js';
 import { traderDestinations } from './npc_decision.js';
 import {
-    friendlyStellar, isShuttle, SHUTTLE_DWELL_MS, SHUTTLE_TURN_DISTANCE,
-    shuttleLaneEnd, shuttleStops, shuttleTurnPoint,
+    friendlyStellar, isShuttle, SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS,
+    SHUTTLE_ONE_STOP_DWELL_MS, SHUTTLE_TURN_DISTANCE, shuttleLaneEnd,
+    shuttleStops, shuttleTurnPoint,
 } from './npc_shuttle.js';
 import { TRADER_DWELL_MS } from './npc_steering.js';
 
@@ -48,6 +49,11 @@ import { TRADER_DWELL_MS } from './npc_steering.js';
  * (uninhabited). Shuttles never land or leave, keep one lane, turn 70 px
  * short after about 4 s; traders park about 15 s at ONE non-enemy port and
  * leave.
+ *
+ * And "Shuttles wave 16" (LANES below, Kit Lane Range): the lane is a
+ * stellar and its NEAREST neighbour; a lane under about 150 px stands
+ * still at its midpoint; a shuttle with ONE stop visits it about 6 s and
+ * leaves, with none it never comes in.
  * ============================================================================
  */
 
@@ -90,6 +96,20 @@ const SQUARE: PlanetData[] = [
     stellar(MARKER, -220, 0, {
         flags: { ...getDefaultPlanetFlags(), canLand: false, uninhabited: true },
     }),
+];
+
+/** Wave 16's Kit Lane Range (sÿst 1570), in its sÿst list order: uneven
+ * spacing, the player's Port NOT at the centre. Port-Centre 152 px,
+ * Centre-East 155, Centre-North 209, East-North 264, Port-North 272,
+ * Port-East 307. */
+const EAST = 'test:east';
+const NORTH = 'test:north';
+const CENTRE = 'test:centre';
+const LANES: PlanetData[] = [
+    stellar(EAST, 150, 40, { govt: TRADERS }),
+    stellar(NORTH, -60, 200, { govt: NEUTRAL }),
+    stellar(PORT, -140, -60, { govt: TRADERS }),
+    stellar(CENTRE, 0, 0, { govt: TRADERS }),
 ];
 
 function hull(id: string, shuttle: boolean): ShipData {
@@ -276,6 +296,25 @@ describe('In-system shuttles (shïp Flags3 0x0002 without a scoop)', () => {
                     .toEqual([MARKER, MARKET, NEUTRAL_PORT].sort());
             });
 
+        it('the lane is a stellar and its NEAREST neighbour, whatever '
+            + 'the list order or the player\'s stellar (wave 16, '
+            + 'measured)', () => {
+                const lanes = shuttleStops(entries(LANES), traders, govtOf);
+                // Every stellar's nearest is the Centre; the Centre's is
+                // the Port (152 px, the East 155): Port - Centre, Centre -
+                // East and Centre - North were the lanes seen, never Port -
+                // North, Port - East or East - North.
+                for (const [from, to] of [[PORT, CENTRE], [EAST, CENTRE],
+                    [NORTH, CENTRE], [CENTRE, PORT]] as const) {
+                    for (const order of [lanes, [...lanes].reverse()]) {
+                        const { random, draws } = countingRandom(3);
+                        expect(shuttleLaneEnd(order, from, random))
+                            .withContext(from).toBe(to);
+                        expect(draws()).toBe(0);
+                    }
+                }
+            });
+
         it('a lone stop is its own lane end', () => {
             const { random, draws } = countingRandom(1);
             const lone = shuttleStops(entries([SQUARE[2]!]), traders, govtOf);
@@ -298,6 +337,33 @@ describe('In-system shuttles (shïp Flags3 0x0002 without a scoop)', () => {
                 const alone = shuttleTurnPoint(origin, undefined,
                     new Position(0, -500));
                 expect(alone.y).toBeCloseTo(-SHUTTLE_TURN_DISTANCE, 6);
+            });
+
+        it('on a lane under about 2 x 70 px the two turn points close up '
+            + 'at the midpoint, within the arrival radius (wave 16)', () => {
+                const port = new Position(-140, -60);
+                const centre = new Position(0, 0);
+                const far = new Position(0, -900);
+                const atCentre = shuttleTurnPoint(centre, port, far);
+                const atPort = shuttleTurnPoint(port, centre, far);
+                // 152 px: the turn points are 12 px apart, 6 px either
+                // side of the midpoint (-70, -30).
+                const gap = atCentre.subtract(atPort).length;
+                expect(gap).toBeCloseTo(152.3 - 2 * SHUTTLE_TURN_DISTANCE, 0);
+                expect(gap).toBeLessThan(SHUTTLE_ARRIVE_RADIUS);
+                const middle = new Position(-70, -30);
+                expect(atCentre.subtract(middle).length).toBeLessThan(7);
+                expect(atPort.subtract(middle).length).toBeLessThan(7);
+                // A 100 px lane: both turn points ON the midpoint.
+                const a = new Position(0, 0);
+                const b = new Position(100, 0);
+                expect(shuttleTurnPoint(a, b, far).x).toBeCloseTo(50, 6);
+                expect(shuttleTurnPoint(b, a, far).x).toBeCloseTo(50, 6);
+                // The 209 px Centre - North lane leaves 69 px to fly.
+                const north = new Position(-60, 200);
+                expect(shuttleTurnPoint(centre, north, far)
+                    .subtract(shuttleTurnPoint(north, centre, far)).length)
+                    .toBeCloseTo(208.8 - 2 * SHUTTLE_TURN_DISTANCE, 0);
             });
     });
 
@@ -390,24 +456,166 @@ describe('In-system shuttles (shïp Flags3 0x0002 without a scoop)', () => {
         expect([npc.destination, npc.laneEnd]).toEqual(lane);
     }, 60_000);
 
-    it('with a single stop, goes back to it rather than leave', async () => {
-        const { world, addNpc } = await shuttleWorld([
-            stellar(PORT, 0, 0, { govt: TRADERS }),
-            stellar(HOSTILE_PORT, -1000, 0, { govt: HOSTILE }),
-        ]);
-        await addNpc('shuttle', SHUTTLE_HULL, 300, 0, { departAt: 0 });
-        const port = stellarUuid(world, PORT);
-        const destinations = new Set<string | undefined>();
-        let dwelt = 0;
-        runFor(world, 'shuttle', 60, npc => {
-            destinations.add(npc?.destination);
-            dwelt += npc?.mode === 'dwell' ? 1 : 0;
-            expect(npc?.mode).not.toBe('depart');
-        });
-        expect(world.entities.has('shuttle')).toBeTrue();
-        expect(dwelt).toBeGreaterThan(0);
-        expect([...destinations].filter(d => d !== undefined)).toEqual([port]);
-    }, 60_000);
+    it('with a single stop, visits it once for about 6 s and jumps out, '
+        + 'whatever its departure roll (wave 16, Kit Lane One)', async () => {
+            const { world, addNpc } = await shuttleWorld([
+                stellar(PORT, 0, 0, { govt: TRADERS }),
+                stellar(HOSTILE_PORT, 220, 0, { govt: HOSTILE }),
+                stellar(MARKET, 0, 220, { govt: HOSTILE }),
+            ]);
+            await addNpc('shuttle', SHUTTLE_HULL, 0, -900,
+                { departAt: Number.MAX_SAFE_INTEGER });
+            const port = stellarUuid(world, PORT);
+            const position = () => Position.fromVectorLike(
+                world.entities.get('shuttle')!.components
+                    .get(MovementStateComponent)!.position);
+            const destinations = new Set<string | undefined>();
+            let dwells = 0;
+            let dwellStart: number | undefined;
+            let dwell: number | undefined;
+            let stopDistance: number | undefined;
+            let modeAfter: string | undefined;
+            let jumped = false;
+            runFor(world, 'shuttle', 120, npc => {
+                const ship = world.entities.get('shuttle');
+                jumped ||= ship?.components.has(JumpComponent) ?? false;
+                if (!npc) {
+                    return;
+                }
+                destinations.add(npc.destination);
+                if (npc.mode === 'dwell' && dwellStart === undefined) {
+                    dwells++;
+                    dwellStart = now(world);
+                    stopDistance = position().length;
+                } else if (npc.mode !== 'dwell' && dwellStart !== undefined
+                    && dwell === undefined) {
+                    dwell = now(world) - dwellStart;
+                    modeAfter = npc.mode;
+                }
+            });
+            expect([...destinations].filter(d => d !== undefined))
+                .toEqual([port]);
+            expect(dwells).toBe(1);
+            // Measured: a 5-7 s stop within 20-70 px of the port.
+            expect(SHUTTLE_ONE_STOP_DWELL_MS).toBe(6_000);
+            expect(dwell).toBeGreaterThanOrEqual(SHUTTLE_ONE_STOP_DWELL_MS);
+            expect(dwell!).toBeLessThan(SHUTTLE_ONE_STOP_DWELL_MS + 1100);
+            expect(stopDistance!).toBeGreaterThan(SHUTTLE_TURN_DISTANCE
+                - SHUTTLE_ARRIVE_RADIUS);
+            expect(stopDistance!).toBeLessThan(SHUTTLE_TURN_DISTANCE
+                + SHUTTLE_ARRIVE_RADIUS);
+            expect(modeAfter).toBe('depart');
+            expect(jumped).toBeTrue();
+            expect(world.entities.has('shuttle')).toBeFalse();
+        }, 120_000);
+
+    it('with NO stop (every stellar an enemy\'s), leaves at once without '
+        + 'coming in (wave 16, Kit Lane None)', async () => {
+            const { world, addNpc } = await shuttleWorld([
+                stellar(HOSTILE_PORT, 0, 0, { govt: HOSTILE }),
+                stellar(MARKET, 220, 0, { govt: HOSTILE }),
+            ]);
+            await addNpc('shuttle', SHUTTLE_HULL, 0, -1500,
+                { departAt: Number.MAX_SAFE_INTEGER });
+            let first: string | undefined;
+            let closest = Infinity;
+            runFor(world, 'shuttle', 30, npc => {
+                first ??= npc?.mode;
+                const ship = world.entities.get('shuttle');
+                if (ship) {
+                    closest = Math.min(closest, ship.components
+                        .get(MovementStateComponent)!.position.length);
+                }
+            });
+            expect(first).toBe('depart');
+            expect(closest).toBeGreaterThan(1000);
+        }, 60_000);
+
+    describe('lanes of uneven length (wave 16, Kit Lane Range)', () => {
+        /** Flies a shuttle already given the lane `from` - `to` for
+         * `seconds`: the stops it paused at, and how far it strayed from
+         * the lane's midpoint after its first pause. */
+        async function flyLane(from: string, to: string, seconds: number) {
+            const { world, addNpc } = await shuttleWorld(LANES);
+            const a = stellarUuid(world, from);
+            const b = stellarUuid(world, to);
+            await addNpc('shuttle', SHUTTLE_HULL, 0, -500, {
+                departAt: 0, mode: 'travel', destination: a, laneEnd: b,
+            });
+            const positionOf = (uuid: string) => Position.fromVectorLike(
+                world.entities.get(uuid)!.components
+                    .get(MovementStateComponent)!.position);
+            const pa = positionOf(a);
+            const pb = positionOf(b);
+            const middle = new Position((pa.x + pb.x) / 2, (pa.y + pb.y) / 2);
+            const stops: string[] = [];
+            let pausing = false;
+            let settled = false;
+            let farthestFromMiddle = 0;
+            let left = false;
+            const start = now(world);
+            let held: Position | undefined;
+            let wander = 0;
+            runFor(world, 'shuttle', seconds, npc => {
+                const ship = world.entities.get('shuttle');
+                left ||= !ship || npc?.mode === 'depart'
+                    || ship.components.has(JumpComponent);
+                if (!npc || !ship) {
+                    return;
+                }
+                // A pause, at its start or (where the next turn point is
+                // already within reach, so the leg ends on the tick it
+                // begins) at the turn to the other end.
+                if (npc.mode === 'dwell' && (!pausing
+                    || npc.destination !== stops[stops.length - 1])) {
+                    stops.push(npc.destination!);
+                    settled = true;
+                }
+                pausing = npc.mode === 'dwell';
+                if (settled) {
+                    farthestFromMiddle = Math.max(farthestFromMiddle,
+                        positionOf('shuttle').subtract(middle).length);
+                }
+                // Where it is 30 s in, and how far it moves after that.
+                if (now(world) - start >= 30_000) {
+                    held ??= positionOf('shuttle');
+                    wander = Math.max(wander,
+                        positionOf('shuttle').subtract(held).length);
+                }
+            });
+            return { stops, farthestFromMiddle, wander, left, a, b };
+        }
+
+        it('a 152 px lane (Port - Centre) stands still at its midpoint',
+            async () => {
+                const { stops, farthestFromMiddle, wander, left, a, b } =
+                    await flyLane(CENTRE, PORT, 600);
+                expect(left).toBeFalse();
+                // It keeps pausing at alternate ends without moving: the
+                // next turn point is already within the arrival radius.
+                // 600 s of 4 s pauses (and the think after each).
+                expect(stops.length).toBeGreaterThan(50);
+                expect(new Set(stops)).toEqual(new Set([a, b]));
+                // Measured: (64,14) from the Port, the middle (70,30).
+                expect(farthestFromMiddle).toBeLessThan(
+                    SHUTTLE_ARRIVE_RADIUS);
+                // And it does not drift: under a pixel in 9.5 minutes.
+                expect(wander).toBeLessThan(1);
+            }, 180_000);
+
+        it('a 209 px lane (Centre - North) flies back and forth',
+            async () => {
+                const { stops, farthestFromMiddle, left } =
+                    await flyLane(CENTRE, NORTH, 300);
+                expect(left).toBeFalse();
+                expect(stops.length).toBeGreaterThan(10);
+                for (let i = 1; i < stops.length; i++) {
+                    expect(stops[i]).not.toBe(stops[i - 1]!);
+                }
+                // Out to the turn points, 35 px either side of the middle.
+                expect(farthestFromMiddle).toBeGreaterThan(25);
+            }, 120_000);
+    });
 
     it('a respawned shuttle jumps in at the edge like any traffic '
         + '(wave 15)', async () => {

@@ -655,10 +655,12 @@ export const NpcDecisionSystem = new System({
                 if (npc.mineTarget !== undefined) {
                     delete npc.mineTarget;
                 }
-                // SHUTTLES (npc_shuttle.ts; reference N2 wave 13, wave
-                // 15): a hull with Flags3 0x0002 and no scoop keeps one
-                // lane between two of the system's non-enemy stellars,
-                // uninhabited ones included, and never leaves. Ordinary
+                // SHUTTLES (npc_shuttle.ts; reference N2 wave 13, waves
+                // 15, 16): a hull with Flags3 0x0002 and no scoop keeps
+                // one lane between two of the system's non-enemy
+                // stellars, uninhabited ones included, and never leaves;
+                // with only one such stellar it stops there once and
+                // leaves, with none it leaves at once. Ordinary
                 // traders (wave 15) make ONE stop at a non-enemy landable
                 // port and then jump out.
                 const shuttle = isShuttle(shipData);
@@ -688,11 +690,20 @@ export const NpcDecisionSystem = new System({
                         // jump_plugin, player_escort_plugin and
                         // boarding_plugin's landing reset.
                         clearPlunderRecord(entity);
-                        if (shuttle) {
+                        if (shuttle && npc.laneEnd === npc.destination
+                            && !held && !npc.passingThrough) {
+                            // A lane of ONE stop (the system's only
+                            // non-enemy stellar): one visit and out, like
+                            // a trader (reference "Shuttles wave 16": 20
+                            // tracks, a 5-7 s stop, then over the edge).
+                            npc.mode = 'depart';
+                            return;
+                        } else if (shuttle) {
                             // Back along the lane: the other end becomes
-                            // the destination. A shuttle never leaves
-                            // (wave 15), whatever its departure time. If
-                            // the other end is no longer a stop, re-plan.
+                            // the destination. A shuttle with a two-stop
+                            // lane never leaves (waves 15, 16), whatever
+                            // its departure time. If the other end is no
+                            // longer a stop, re-plan.
                             if (isStop(npc.laneEnd)) {
                                 const from = npc.destination;
                                 npc.destination = npc.laneEnd;

@@ -25,7 +25,8 @@ import { EscortLandingComponent } from '../player/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
 import {
-    SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, shuttleTurnPoint,
+    SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, SHUTTLE_ONE_STOP_DWELL_MS,
+    SHUTTLE_REST_SPEED, shuttleTurnPoint,
 } from './npc_shuttle.js';
 import {
     RETREAT_STANDOFF_HOLD_SPEED, RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN,
@@ -411,22 +412,41 @@ export const NpcSteeringSystem = new System({
                     PLANET_ARRIVE_SPEED);
                 if (arrived) {
                     npc.mode = 'dwell';
-                    npc.until = time.time
-                        + (shuttle ? SHUTTLE_DWELL_MS : TRADER_DWELL_MS);
+                    // A shuttle's lane of one stop is a single visit
+                    // (npc_shuttle.ts), with its own measured stop.
+                    npc.until = time.time + (!shuttle ? TRADER_DWELL_MS
+                        : npc.laneEnd === npc.destination
+                            ? SHUTTLE_ONE_STOP_DWELL_MS : SHUTTLE_DWELL_MS);
                 }
                 break;
             }
             case 'dwell': {
-                // Loiter: brake to a stop and sit.
+                // Loiter: brake to a stop and sit. A trader leaves a
+                // drift under 10 px/s. A SHUTTLE brakes to a standstill,
+                // the last of it with part of a tick's thrust: on a lane
+                // too short to fly (npc_shuttle.ts shuttleTurnPoint) it
+                // must sit still between the stellars for good (reference
+                // "Shuttles wave 16"), where a 10 px/s drift carried it
+                // out of the arrival radius at every pause and back.
                 movement.turnTo = null;
                 movement.accelerating = 0;
                 const speed = movement.velocity.length;
-                movement.turnBack = speed > 10;
-                if (speed > 10) {
+                const shuttle = npc.laneEnd !== undefined;
+                const rest = shuttle ? SHUTTLE_REST_SPEED : 10;
+                movement.turnBack = speed > rest;
+                if (speed > rest) {
                     const reverse = movement.velocity.angle.add(Math.PI);
+                    const thrust = shuttle && physics.acceleration > 0
+                        && time.delta_s > 0
+                        ? Math.min(1,
+                            speed / (physics.acceleration * time.delta_s))
+                        : 1;
+                    // The partial last burn waits for a closer heading,
+                    // or it leaves most of the speed sideways.
+                    const aligned = thrust < 1 ? 0.1 : 0.4;
                     if (Math.abs(movement.rotation.distanceTo(reverse).angle)
-                        < 0.4) {
-                        movement.accelerating = 1;
+                        < aligned) {
+                        movement.accelerating = thrust;
                     }
                 }
                 break;
