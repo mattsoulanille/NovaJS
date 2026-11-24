@@ -5366,21 +5366,21 @@ with the no-response line; refuse boarding a live mission's ShipBehav-1
 ship with "You can't board this ship.".
 
 **Applied (three of the five).**
-- **1b74bf24**, the repair: `repairHulk` no longer touches the shield.
+- **8dd48ba2**, the repair: `repairHulk` no longer touches the shield.
   The armor margin is unchanged, `REPAIR_MARGIN_FRACTION` (threshold +
   10% of max, 43% = 1300 of 3000 on the kit hull): inside the measured
   33%-53% bracket, and one 600 blast re-disables it as on the original.
-  947634e1: the status line now reads "Escort repaired." (STR# 2002
+  b0f969a1: the status line now reads "Escort repaired." (STR# 2002
   #126) instead of NovaJS's own sentence.
-- **e0b875ea**, mission allies: the own-escort repair skips mission ships
+- **c2e3b590**, mission allies: the own-escort repair skips mission ships
   (boarding a disabled mission ally opens the plunder dialog); an escort
   goal fails the tick its ship is disabled (`shipDisabled`); the display
   prints "Mission failed." (STR# 2002 #283) when a ship goal fails in
   flight, and Mission Info hides that mission. OnFailure still runs at
   the next landing, as for every sim-marked failure. The other in-flight
   goal failures (an escorted ship killed, a disable target destroyed) get
-  the same line, unmeasured. Specs in 46e6c671.
-- **d973307e**, the hail: a disabled target gets "No response." (STR#
+  the same line, unmeasured. Specs in 7396f890.
+- **5bb32a3d**, the hail: a disabled target gets "No response." (STR#
   2002 #52, the dead-moon line) and no channel, before any hail offer.
   Every stock derelict përs offers on boarding (0x0200), so none is lost.
 - **Not applied:** "You can't board this ship." for a live mission's
@@ -5445,7 +5445,7 @@ Boarding: NovaJS lets the player board a live mission's rescue hulk
 boarding dialog); whether the original's refusal also holds for përs
 rescue ships is untested, so leave that until the përs run.
 
-**Applied in a86f321b** (finding 1): `deferredAutoAbort(mission,
+**Applied in 9b3f4aab** (finding 1): `deferredAutoAbort(mission,
 replacesPers)` defers only when the in-flight ship-offer accept replaced
 the offering përs (përs Flags 0x0040, carried as
 `MissionOffer.replacesPers`); every other board/rescue auto-abort takes
