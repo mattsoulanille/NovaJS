@@ -5896,7 +5896,7 @@ lived until the player's own burst.
   it as satisfied, whoever disabled it. The original fails the mission on
   ANY destruction of a goal-1 ship, disabled or not, whoever destroys it.
 
-**Proposed fix (not applied).** In `firingImmune`, let the disabled
+**Proposed fix.** In `firingImmune`, let the disabled
 carve-out cancel only the FLOCK (group) immunity and keep the same-govt
 projectile clause (`SAME_GOVT_FIRING_IMMUNITY.projectile`) for a disabled
 victim; in `shipDied`, fail GOAL_DISABLE on every death (and un-count
@@ -5904,6 +5904,13 @@ the satisfied disable), not only before the disable. Not measured: what
 happens to the mission when an NPC disables the ship and nobody kills it
 (the blast run's duellist was disabled by the player's gun and the blast
 together).
+
+**Applied in 13586627** ((i): the disabled carve-out cancels only the
+group immunity; the player's flock carries no govt, so the player still
+finishes off his own disabled escort) **and 0dc9f2d4** ((ii) and (iii):
+`shipDied` fails GOAL_DISABLE on every death and un-counts the disable;
+`missions/duel_disable_goal_integration_test.ts` pins the blast after the
+disable, the undisabled splash and the player's own kill).
 
 Confidence: high (three runs, each with the status line, the OnFailure
 bit and, for (i), 52 s of frame-counted bolts).
@@ -6030,13 +6037,22 @@ mismatches.**
   field (#108); the original applies it signed (the crime raises the
   record).
 
-**Proposed fix (not applied; the reward rule needs Matthew's ruling on
+**Proposed fix (the reward rule needs Matthew's ruling on
 how it maps onto per-govt records).** Charge DisabPenalty + KillPenalty
 for every kill (one entry, whether or not the disable was seen); when the
 victim's govt is neither the system's owner nor an ally of it, instead
 credit the owner's record with floor(Disab / 2) + floor(Kill / 2) of the
 OWNER's penalties; apply negative penalties signed (revisit #108's
 "negative = does not care" reading).
+
+**Applied in e710b4e3** (findings 1, 3 and 4): `KillCreditSystem` charges
+Disab + Kill, the Disab only once when the same root was charged it for
+the disable (`DamageAttribution.disableChargedTo`); a kill of a ship
+someone else disabled charges the killer both (unmeasured). `crimePenalty`
+applies a negative field signed (the derelict Wraith nova:159, -1
+everywhere, now raises its record by 2 per kill). **Not applied:**
+finding 2's reward; `applyCrime` carries a TODO pointing here, and every
+kill still charges the victim's govt.
 
 Confidence: high for 1-4 (seven clean runs, each a single kill, read from
 the pulled pilot); the halving rule rests on two owners' penalty sets
@@ -6068,12 +6084,25 @@ ESCORT, not the player, even while its brackets read hostile.
 **NovaJS today.** `N/nova_plugin/npc/npc_targeting.ts:55-60`
 (`responsibleShip`): a hired escort's hits make the PLAYER (its
 firing-group root) the victim's aggressor, so a provoked trader goes
-after the player. **Mismatch. Proposed fix (not applied):** record the
+after the player. **Mismatch. Proposed fix:** record the
 concrete firing ship (the escort) as the aggressor for an NPC's reaction,
 and keep the root for kill credit and legal records (where the original
 charges the player: not measured here). The red corners match NovaJS's
 "recent aggression against the player" tier only if hits by the
 player's flock count as the player's; the original paints it red anyway.
+
+**Applied in 5fcf49fe.** `responsibleShip` records the ship that fired
+when the firing-group root is on a player's side (an escort's missile
+lock too, `provokeGuidedLock`); NPC flocks keep their root. A bay
+fighter of the player's side answers for its carrier (the player's own
+fighters for the player, an escort carrier's for that escort):
+unmeasured, chosen because a fighter is a weapon its carrier fires and
+to keep one aggressor per carrier. The brackets stay red through a new
+tier 3c (`hostility.ts` `isFightingPlayerFlock`: in attack mode on a
+flock member that is its recorded aggressor), which the escort brains'
+`isHostileTo` reads too; a bribe clears an aggressor in the briber's
+flock. Kill credit, legal records and the player-side aggression record
+keep the root.
 
 Confidence: medium (one run; who the trader shot is inferred from the
 player's untouched shield, the fight left the screen).
