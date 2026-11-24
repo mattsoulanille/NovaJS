@@ -23,8 +23,9 @@ import { SystemHoldComponent } from './system_hold.js';
  * Reference A-series wave 4 (docs/reference_experiments.md): a mïsn
  * special ship with ShipGoal -1, ShipBehav -1 and AI 1 leaves by jumping
  * out 30-40 s after it appears (nine of nine ships), never landing.
- * Ordinary sÿst traffic was not measured and keeps the 120-300 s dwell
- * loop.
+ * Ordinary sÿst traffic makes ONE stop and then leaves (reference
+ * "Shuttles and T1 traders, wave 15"); a passing-through ship keeps going
+ * from port to port until its own window is up.
  */
 
 /** A PRNG that hands out a fixed sequence and counts its draws. */
@@ -106,13 +107,20 @@ describe('a passing-through mission ship in a live system', () => {
     }
 
     it('decides to leave 30-40 s after it appears, goes straight to the '
-        + 'jump, and is gone; ordinary traffic stays', async () => {
+        + 'jump, and is gone; ordinary traffic leaves after one stop',
+        async () => {
             const w = await world();
             const start = now(w);
             const modes = new Set<string | undefined>();
+            const ordinaryModes: Array<string | undefined> = [];
             let departedAt: number | undefined;
             let jumped = false;
             while (now(w) - start < 90_000) {
+                const ordinaryMode = w.entities.get('ordinary')?.components
+                    .get(NpcComponent)?.mode;
+                if (ordinaryModes[ordinaryModes.length - 1] !== ordinaryMode) {
+                    ordinaryModes.push(ordinaryMode);
+                }
                 const passing = w.entities.get('passing');
                 const npc = passing?.components.get(NpcComponent);
                 if (npc) {
@@ -136,12 +144,14 @@ describe('a passing-through mission ship in a live system', () => {
             expect(jumped).toBeTrue();
             expect(w.entities.has('passing')).toBeFalse();
 
-            // Ordinary traffic: 120 s at the earliest.
-            const ordinary = w.entities.get('ordinary')!
-                .components.get(NpcComponent)!;
-            expect(ordinary.departAt).toBeGreaterThanOrEqual(
-                start + NPC_DEPART_MIN_MS);
-            expect(ordinary.mode).not.toBe('depart');
+            // Ordinary traffic (wave 15): one stop, then out, well before
+            // its 120-300 s roll.
+            expect(ordinaryModes.filter(mode => mode === 'dwell').length)
+                .toBe(1);
+            expect(ordinaryModes.indexOf('depart'))
+                .toBeGreaterThan(ordinaryModes.indexOf('dwell'));
+            expect(w.entities.has('ordinary')).toBeFalse();
+            expect(NPC_DEPART_MIN_MS).toBe(120_000);
             // A HELD ship never leaves, short window or not.
             expect(w.entities.get('held')!.components.get(NpcComponent)!
                 .mode).not.toBe('depart');

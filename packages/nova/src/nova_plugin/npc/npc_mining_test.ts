@@ -211,17 +211,36 @@ describe('NPC mining (shïp Flags3 0x0001 / 0x0002)', () => {
             const { world, addRock, addNpc } = await miningWorld();
             addRock('rock', 600, 0);
             await addNpc('miner', MINER_HULL, 0, 0);
-            const modes = runFor(world, 'miner', 60);
+            // The miner as it leaves off mining (since wave 15 a trader
+            // makes one stop and jumps out, so it may be gone by the end).
+            let scooped = false;
+            let afterMining: { mode?: string, mineTarget?: string,
+                hold: number } | undefined;
+            const modes = runFor(world, 'miner', 60, () => {
+                const npc = world.entities.get('miner')?.components
+                    .get(NpcComponent);
+                if (!npc) {
+                    return;
+                }
+                scooped ||= npc.mode === 'scoop';
+                // (No mode at all is the step between the two.)
+                if (scooped && afterMining === undefined
+                    && npc.mode !== undefined
+                    && npc.mode !== 'mine' && npc.mode !== 'scoop') {
+                    afterMining = { mode: npc.mode,
+                        mineTarget: npc.mineTarget,
+                        hold: hold(world, 'miner') };
+                }
+            });
             expect(world.entities.has('rock')).toBeFalse();
             expect(modes.has('mine')).toBeTrue();
             expect(modes.has('scoop')).toBeTrue();
-            expect(hold(world, 'miner')).toBeGreaterThan(0);
+            expect(afterMining).toBeDefined();
+            expect(afterMining!.hold).toBeGreaterThan(0);
             expect(count(world, DebrisComponent)).toBe(0);
             // Nothing left to mine: back to the trader loop.
-            const npc = world.entities.get('miner')!.components
-                .get(NpcComponent)!;
-            expect(['travel', 'dwell']).toContain(npc.mode!);
-            expect(npc.mineTarget).toBeUndefined();
+            expect(['travel', 'dwell']).toContain(afterMining!.mode!);
+            expect(afterMining!.mineTarget).toBeUndefined();
         });
 
     it('a Flags3 0x0001 hull without a scoop shoots rocks but never '

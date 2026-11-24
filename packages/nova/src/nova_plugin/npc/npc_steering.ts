@@ -25,6 +25,9 @@ import { EscortLandingComponent } from '../player/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
 import {
+    SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, shuttleTurnPoint,
+} from './npc_shuttle.js';
+import {
     RETREAT_STANDOFF_HOLD_SPEED, RETREAT_STANDOFF_MAX, RETREAT_STANDOFF_MIN,
 } from './npc_retreat.js';
 import { TargetComponent, WeaponsStateComponent } from '../ship/index.js';
@@ -37,9 +40,12 @@ import { updateNpcCloak } from './npc_cloak.js';
 
 // --- Tuning constants ---
 
-/** How long a trader loiters at a planet, standing in for landing
- * (real landing would despawn/respawn the ship; not worth it yet). */
-export const TRADER_DWELL_MS = 12_000;
+/** How long a trader parks beside a planet, standing in for a landing.
+ * Reference "Shuttles and T1 traders, wave 15": 70 parks of the original's
+ * AI 1 traders, median 15.2 s (10-90% 12.2-17.9 s), 20-100 px from the
+ * stellar's centre; no trader vanished on a planet (T1 waves 13-15), so
+ * the park IS what the original shows. */
+export const TRADER_DWELL_MS = 15_000;
 /** Traders arrive at a planet within this distance... */
 const PLANET_ARRIVE_RADIUS = 90;
 /** ...and below this speed (matches AttemptLandingSystem's numbers:
@@ -387,12 +393,26 @@ export const NpcSteeringSystem = new System({
                 if (!destination) {
                     return; // Decision system will re-plan.
                 }
-                const arrived = steerArrive(movement, physics,
-                    Position.fromVectorLike(destination),
-                    PLANET_ARRIVE_RADIUS, PLANET_ARRIVE_SPEED);
+                // A SHUTTLE (it has a lane: npc_shuttle.ts) turns round
+                // short of the stellar, between it and the lane's other
+                // end, after a short pause; a trader parks beside it.
+                const shuttle = npc.laneEnd !== undefined;
+                const laneEnd = shuttle
+                    ? entities.get(npc.laneEnd!)?.components
+                        .get(MovementStateComponent)?.position
+                    : undefined;
+                const goal = shuttle
+                    ? shuttleTurnPoint(Position.fromVectorLike(destination),
+                        laneEnd && Position.fromVectorLike(laneEnd),
+                        movement.position)
+                    : Position.fromVectorLike(destination);
+                const arrived = steerArrive(movement, physics, goal,
+                    shuttle ? SHUTTLE_ARRIVE_RADIUS : PLANET_ARRIVE_RADIUS,
+                    PLANET_ARRIVE_SPEED);
                 if (arrived) {
                     npc.mode = 'dwell';
-                    npc.until = time.time + TRADER_DWELL_MS;
+                    npc.until = time.time
+                        + (shuttle ? SHUTTLE_DWELL_MS : TRADER_DWELL_MS);
                 }
                 break;
             }

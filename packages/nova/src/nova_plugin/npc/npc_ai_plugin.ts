@@ -40,13 +40,14 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  * times, formation spacing) are judgment calls, kept as named constants
  * for tuning:
  *
- *  1 wimpy trader:  flies planet to planet (arrive -> dwell -> next),
- *                   flees for a jump-out when attacked. A goal-less
+ *  1 wimpy trader:  flies to one non-enemy port, parks beside it
+ *                   (arrive -> dwell) and jumps out; flees for a
+ *                   jump-out when attacked. A goal-less
  *                   mission ship of AI 1 only passes through: it jumps
  *                   out 30-40 s after it appears. A SHUTTLE hull (shïp
- *                   Flags3 0x0002, no scoop) flies between the non-enemy
- *                   stellars, never jumps, and lands instead of leaving
- *                   (npc_shuttle.ts). A MINER hull (Flags3 0x0001) shoots
+ *                   Flags3 0x0002, no scoop) keeps one lane between two
+ *                   non-enemy stellars and never leaves (npc_shuttle.ts).
+ *                   A MINER hull (Flags3 0x0001) shoots
  *                   rocks apart and, with 0x0002 and a scoop, flies over
  *                   the debris before resuming the loop (npc_mining.ts).
  *  2 brave trader:  same, but fights its attacker back while the govt
@@ -119,7 +120,7 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  *  contraband_target.ts     ContrabandScannedComponent, chooseScanTarget
  *  contraband_scan.ts       ContrabandScanSystem, ContrabandScanEvent
  *  npc_shuttle.ts           shïp Flags3 0x0002 shuttles: their stops,
- *                           stellarEntries for the respawn's take-off
+ *                           lane (shuttleLaneEnd) and turn point
  *  npc_mining.ts            shïp Flags3 0x0001/0x0002 miners: who mines,
  *                           chooseMiningJob, which weapons fire at rocks
  *  piracy_police.ts         AI 4 witnesses of an attack on a third ship:
@@ -142,7 +143,7 @@ export {
     NPC_DECISION_INTERVAL_MS, INTERCEPTOR_ENGAGE_RANGE, WARSHIP_ENGAGE_RANGE,
     NPC_DEPART_MIN_MS, NPC_DEPART_MAX_MS, rollDepartureTime,
     PASS_THROUGH_DEPART_MIN_MS, PASS_THROUGH_DEPART_MAX_MS,
-    PlanetEntry, landingDestinations,
+    PlanetEntry, landingDestinations, traderDestinations,
 } from './npc_decision.js';
 export {
     NPC_DEPART_RADIUS, FLEE_JUMP_BLOCK_RANGE, FLEE_JUMP_BLOCK_HALF_ANGLE,

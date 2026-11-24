@@ -32,6 +32,11 @@ export const NpcState = t.intersection([t.type({
     mode: NpcMode,
     /** Planet uuid: travel destination (traders) or home (interceptors). */
     destination: t.string,
+    /** A SHUTTLE's other lane stop (npc/npc_shuttle.ts): it flies
+     * `destination` -> `laneEnd` and swaps the two at each stop. Set only
+     * on shuttles; the steering turns a ship with one short of the stellar
+     * (shuttleTurnPoint) and pauses it SHUTTLE_DWELL_MS. */
+    laneEnd: t.string,
     /** Current waypoint (patrol legs, orbit points, flee headings). */
     waypoint: t.tuple([t.number, t.number]),
     /** Sim time (ms) when the current dwell ends. */

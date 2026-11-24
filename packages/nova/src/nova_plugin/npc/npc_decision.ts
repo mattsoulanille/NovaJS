@@ -7,6 +7,7 @@ import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
+import { GovtData } from 'novadatainterface/govt_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import {
@@ -57,7 +58,9 @@ import { SystemHoldComponent } from './system_hold.js';
 import {
     chooseMiningJob, isMinerHull, miningReach, scoopsDebris,
 } from './npc_mining.js';
-import { isShuttle, shuttleStops } from './npc_shuttle.js';
+import {
+    friendlyStellar, isShuttle, shuttleLaneEnd, shuttleStops,
+} from './npc_shuttle.js';
 import { outOfAmmo } from './npc_out_of_ammo.js';
 import { TargetComponent } from '../ship/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
@@ -91,7 +94,10 @@ export const INTERCEPTOR_ENGAGE_RANGE = 1800;
 export const WARSHIP_ENGAGE_RANGE = 6000;
 /** NPCs stay in the system between these bounds before jumping out.
  * Unmeasured for ordinary sÿst traffic (reference A-series wave 4 left
- * it open), so kept as it was. */
+ * it open), so kept as it was. Rolled for every NPC, but an AI 1/2
+ * TRADER leaves after its one stop instead (reference "Shuttles and T1
+ * traders, wave 15") and a SHUTTLE never leaves (npc_shuttle.ts); miners
+ * (wave 15: 3-4 minutes in the field), warships and the rest go by it. */
 export const NPC_DEPART_MIN_MS = 120_000;
 export const NPC_DEPART_MAX_MS = 300_000;
 /**
@@ -184,17 +190,31 @@ export function landingDestinations(planets: PlanetEntry[]): PlanetEntry[] {
         data.gate?.kind !== 'wormhole' && landable(data));
 }
 
+/**
+ * Where an ordinary AI 1/2 trader may stop: the landing destinations that
+ * are not an ENEMY govt's (npc_shuttle.ts's `friendlyStellar`, the rule
+ * the shuttles use). Reference "Shuttles and T1 traders, wave 15": 70
+ * trader visits fell about evenly on the own govt's two ports and the
+ * NEUTRAL govt's port (21 / 25 / 24), none on the enemy's port (listed
+ * first) and none on the uninhabited marker (not landable, so already out).
+ * Pure over genesis state and the staged govt cache; no PRNG.
+ */
+export function traderDestinations(planets: PlanetEntry[],
+    shipGovt: GovtData | undefined,
+    govtOf: (id: string) => GovtData | undefined): PlanetEntry[] {
+    return landingDestinations(planets).filter(([, , , data]) =>
+        friendlyStellar(shipGovt, data.govt, govtOf));
+}
+
 /** Picks the next planet a trader heads for (uuid order for
- * determinism; Random for variety; excludes the one it's at). With
- * `sameIfOnly` (a SHUTTLE, npc_shuttle.ts) a ship whose only stop is the
- * one it is at goes back to it rather than having nowhere to go, which
- * would send it out of the system. No draw when there is no choice. */
+ * determinism; Random for variety, evenly over the candidates; excludes
+ * the one it's at). No draw when there is no choice. */
 function pickPlanet(planets: PlanetEntry[],
-    random: Random, exclude?: string, sameIfOnly = false): string | undefined {
-    const all = planets.map(([uuid]) => uuid).sort();
-    const ids = all.filter(uuid => uuid !== exclude);
+    random: Random, exclude?: string): string | undefined {
+    const ids = planets.map(([uuid]) => uuid).sort()
+        .filter(uuid => uuid !== exclude);
     if (ids.length === 0) {
-        return sameIfOnly ? all[0] : undefined;
+        return undefined;
     }
     return ids[random.below(ids.length)];
 }
@@ -635,17 +655,19 @@ export const NpcDecisionSystem = new System({
                 if (npc.mineTarget !== undefined) {
                     delete npc.mineTarget;
                 }
-                // SHUTTLES (npc_shuttle.ts; reference N2 wave 13): a hull
-                // with Flags3 0x0002 and no scoop flies between the
-                // system's non-enemy stellars, uninhabited ones included,
-                // and never jumps out: when its stay is up it lands at the
-                // end of a stop instead. Ordinary traders fly between the
-                // landable ports and jump out.
+                // SHUTTLES (npc_shuttle.ts; reference N2 wave 13, wave
+                // 15): a hull with Flags3 0x0002 and no scoop keeps one
+                // lane between two of the system's non-enemy stellars,
+                // uninhabited ones included, and never leaves. Ordinary
+                // traders (wave 15) make ONE stop at a non-enemy landable
+                // port and then jump out.
                 const shuttle = isShuttle(shipData);
+                const govtOf = (id: string) => gameData.data.Govt.getCached(id);
                 const destinations = shuttle
-                    ? shuttleStops(planets, govtData,
-                        id => gameData.data.Govt.getCached(id))
-                    : landingDestinations(planets);
+                    ? shuttleStops(planets, govtData, govtOf)
+                    : traderDestinations(planets, govtData, govtOf);
+                const isStop = (stop: string | undefined) => stop !== undefined
+                    && destinations.some(([other]) => other === stop);
                 // Planet-to-planet loop.
                 if (npc.mode === 'travel') {
                     if (!npc.destination || !entities.has(npc.destination)) {
@@ -666,26 +688,51 @@ export const NpcDecisionSystem = new System({
                         // jump_plugin, player_escort_plugin and
                         // boarding_plugin's landing reset.
                         clearPlunderRecord(entity);
-                        if (!held && time.time >= npc.departAt) {
-                            if (shuttle) {
-                                // A shuttle's way out: it lands here and is
-                                // gone (GUESS; see npc_shuttle.ts). Its
-                                // replacement takes off from a stop
-                                // (npc_spawn_plugin.ts's respawn).
-                                entities.delete(uuid);
-                                return;
+                        if (shuttle) {
+                            // Back along the lane: the other end becomes
+                            // the destination. A shuttle never leaves
+                            // (wave 15), whatever its departure time. If
+                            // the other end is no longer a stop, re-plan.
+                            if (isStop(npc.laneEnd)) {
+                                const from = npc.destination;
+                                npc.destination = npc.laneEnd;
+                                npc.laneEnd = from;
+                                npc.mode = 'travel';
+                            } else {
+                                npc.mode = undefined;
                             }
+                        } else if (!held && !npc.passingThrough) {
+                            // One stop per visit (wave 15: 70 visits, no
+                            // second stop), then out by jump.
                             npc.mode = 'depart';
                             return;
+                        } else {
+                            // Held here (system_hold.ts), it may not leave;
+                            // a ship passing through leaves on its own
+                            // clock (above: reference A-series wave 4,
+                            // 30-40 s after it appears). Either goes on to
+                            // another port meanwhile.
+                            npc.destination = pickPlanet(destinations, random,
+                                npc.destination);
+                            npc.mode = travelOrDepart(npc.destination, held);
                         }
-                        npc.destination = pickPlanet(destinations, random,
-                            npc.destination, shuttle);
-                        npc.mode = travelOrDepart(npc.destination, held);
                     }
                 }
                 if (npc.mode === undefined) {
-                    npc.destination = pickPlanet(destinations, random);
-                    npc.mode = travelOrDepart(npc.destination, held);
+                    if (shuttle && isStop(npc.destination)
+                        && isStop(npc.laneEnd)) {
+                        // Back from a flight or a fight: resume the lane.
+                        npc.mode = 'travel';
+                    } else {
+                        npc.destination = pickPlanet(destinations, random);
+                        if (shuttle && npc.destination !== undefined) {
+                            npc.laneEnd = shuttleLaneEnd(destinations,
+                                npc.destination, random);
+                        } else if (npc.laneEnd !== undefined) {
+                            delete npc.laneEnd;
+                        }
+                        npc.mode = travelOrDepart(npc.destination, held);
+                    }
                 }
                 break;
             }

@@ -494,6 +494,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    changes. The derived wire schema fingerprint changes
 //    (c6ab0bdc34e2addd -> 4ba45ea2f8ce4634), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-15 traffic fixes (reference "Shuttles
+//    and T1 traders, wave 15"). One OPTIONAL NpcState field, `laneEnd`
+//    (npc/npc_component.ts: a shuttle's other lane stop). Ships that are
+//    not shuttles never carry it, so their hash inputs are unchanged.
+//    Sim-rule changes alongside: a shuttle never lands or leaves and keeps
+//    one lane (one draw for its first stop, one more on a nearest-stop
+//    tie), turning 70 px short after a 4 s pause; a respawned shuttle jumps
+//    in like any traffic (no take-off draws); an AI 1/2 trader stops at one
+//    non-enemy port for 15 s and then departs. No input kind or message
+//    kind changes. The derived wire schema fingerprint changes
+//    (0c6eeff124ceccf1 -> 86cef0d44be60ecd on its own; 4ba45ea2f8ce4634 ->
+//    COMBINEDFP on top of the scan-failure note above), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
