@@ -47,10 +47,13 @@ import { SystemHoldComponent, SystemHoldType } from './system_hold.js';
  *                   losing, one draw decides: jump out at once, or
  *                   stand off while losing (npc_retreat.ts).
  *  4 interceptor:   orbits a home planet and engages govt enemies that
- *                   come within its engagement bubble. (The Bible's
+ *                   come within its engagement bubble. The Bible's
  *                   cargo-scanning "buzz" and piracy-police reactions
- *                   are not modeled: scanning and boarding don't exist
- *                   in the sim yet.)
+ *                   are not modeled: there is no scan, and no NPC
+ *                   reacts to an attack on a third ship. (Boarding
+ *                   exists, for the player and for NPC plunder,
+ *                   npc_plunder.ts, which keeps AI 4 out of it; the
+ *                   ScanMask data scanning needs is parsed.)
  *
  * NPC DEPARTURE runs the real hyperspace jump sequence. A ship that is
  * departing or fleeing enters jump_plugin's JumpComponent state machine

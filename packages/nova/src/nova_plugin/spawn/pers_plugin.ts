@@ -5,7 +5,7 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 
 /**
  * ============================================================================
- * përs unique characters (spawning only; see the gaps below)
+ * përs unique characters (spawning and identity; see the gaps below)
  * ============================================================================
  *
  * A përs is a named AI personality: "when ships are created, there is
@@ -24,20 +24,29 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
  * ship class, government, AI type, custom name/subtitle, at most one
  * living instance of a person per system, deterministic spawn timing.
  *
+ * ELSEWHERE: hailing and boarding exist, and read the person through
+ * this component. The comm quote and hail pict show in the hail dialog
+ * (nova_plugin/reputation/hail.ts, display/hail_dialog_plugin.ts); the
+ * HailQuote and the LinkMission offer, on hail or on boarding, with
+ * their hail-gating and after-accept flags, live in
+ * spaceport/ship_mission_offer.ts and display/ship_mission_offer_plugin.ts.
+ *
  * DOCUMENTED GAPS (hooks for future work):
- *  - Hail quotes, comm quotes, hail picts, LinkMission offers, and
- *    boarding grants (GrantClass/Count/Chance, Credits booty) are
- *    parsed and plumbed (novadatainterface/pers_data.ts) but inert:
- *    hailing and boarding do not exist in the engine.
+ *  - Boarding grants (GrantClass/Count/Chance) and the përs Credits
+ *    booty are parsed (novadatainterface/pers_data.ts) but inert: a
+ *    boarded person yields the same booty as any hull of its class.
+ *    Flags 0x0100 (deactivate after the LinkMission is accepted) and
+ *    0x8000 (disaster info when hailed) are inert too.
  *  - Per-player përs-alive tracking: the original's pilot file
  *    records which people have been killed and stops spawning them.
  *    Spawning is shared-sim state here, so it draws from the shared
  *    genesis table; a killed person can reappear on the next
  *    eligible spawn draw.
- *  - ShieldMod, custom weapon loadouts, ship paint color, and the
- *    escape-pod/grudge flags are carried in PersData but not applied
- *    to the spawned ship (shields and weapons are provider-derived
- *    from the ship class).
+ *  - ShieldMod, custom weapon loadouts, ship paint color, Aggress,
+ *    Coward and the escape-pod/grudge flags are carried in PersData but
+ *    not applied to the spawned ship (shields and weapons are
+ *    provider-derived from the ship class). The grudge is only
+ *    approximated, by "attacking the player", for gating the hail offer.
  */
 
 export const PersType = t.type({
