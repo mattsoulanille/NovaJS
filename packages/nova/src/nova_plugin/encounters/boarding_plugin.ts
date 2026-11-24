@@ -24,6 +24,10 @@ import {
 import { AggressionComponent } from '../combat/index.js';
 import { GateDepartureSystem, LandEvent } from '../travel/index.js';
 import { SelfDestructSystem } from './disabled_plugin.js';
+import {
+    MissionCargoRetrievedEvent, MissionCargoRetrievedEventType, rescueBoard,
+    retrieveRescueCargo,
+} from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
@@ -422,7 +426,9 @@ function stowCaptureIntoBay(targetUuid: string, bayWeaponId: string,
 /**
  * The 'board' key. With a disabled ship selected and the boarder pulled
  * alongside (close, matched speed, axis-aligned), one of three things
- * happens, in this precedence order:
+ * happens, in this precedence order — unless the hulk is a live mission's
+ * RESCUE ship, whose board only ever retrieves its mission cargo or is
+ * refused (rescue_board.ts):
  *
  *  1. BAY CAPTURE (Matthew's item 6). The hulk is a ship class one of the
  *     boarder's bays launches, and that bay has room: it is captured
@@ -514,6 +520,24 @@ const BoardingGateSystem = new System({
         });
         if (reason) {
             emit(BoardingBlockedEvent, { reason }, [uuid]);
+            return;
+        }
+
+        // 0. A LIVE RESCUE SHIP (mïsn ShipGoal 5) is never plundered,
+        // captured, stowed or repaired: its board only retrieves the
+        // mission cargo, and is otherwise refused with the catch-all line
+        // (rescue_board.ts). Past the gate above, as on the original: its
+        // misaligned presses were silent like any other.
+        const rescue = rescueBoard(targetEntity!, targetUuid!, uuid,
+            entities);
+        if (rescue.kind === 'refuse') {
+            emit(BoardingBlockedEvent, { reason: 'alreadyBoarded' }, [uuid]);
+            return;
+        }
+        if (rescue.kind === 'retrieve') {
+            retrieveRescueCargo(rescue, targetUuid!);
+            emit(MissionCargoRetrievedEvent,
+                { cargoType: rescue.active.cargoType }, [uuid]);
             return;
         }
 
@@ -1482,6 +1506,8 @@ export const BoardingPlugin: Plugin = {
             BayCaptureEvent, BayCaptureEventType);
         world.resources.get(SerializerResource)?.addEvent(
             BoardingRepelledEvent, BoardingRepelledEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            MissionCargoRetrievedEvent, MissionCargoRetrievedEventType);
 
         world.addSystem(BoardingGateSystem);
         world.addSystem(BoardingActionSystem);

@@ -425,16 +425,23 @@ describe('mission ships in the shared simulation', () => {
                 .get(missionCargoKey(MISSION_ID))).toEqual(2);
         }, 30_000);
 
-        it('rescues a GOAL_RESCUE hulk when the owner boards it',
-            async () => {
+        it('rescues a deferred auto-abort\'s GOAL_RESCUE hulk when the '
+            + 'owner boards it', async () => {
                 // Bible, mïsn ShipGoal 5: "Rescue them (they start out
                 // disabled and stay that way until you board them)". The
                 // "stay that way" half is the hulk flag, which
                 // ShipDisableSystem refuses to lift however healthy the
                 // armor is — so boarding, which DELETES the component, is
-                // the only thing that can end it.
+                // the only thing that can end it. Only the deferred
+                // auto-abort's përs replacement (the Refuel Traders) is
+                // still boarded through a plunder session: every other
+                // live rescue ship's board only retrieves its cargo and
+                // leaves the hulk be (encounters/rescue_board_test.ts).
                 const { world, shipUuid, missionShipUuid, activeObjective } =
                     await makeWorldWithMissionShip(GOAL_RESCUE);
+                world.entities.get(shipUuid)!.components
+                    .get(MissionsComponent)!.get(MISSION_ID)!
+                    .autoAbortOnBoard = true;
                 const ship = world.entities.get(missionShipUuid)!;
                 // Spawned as a hulk by mission_ship_spawn; stand that in
                 // here, since this harness builds its ship directly.

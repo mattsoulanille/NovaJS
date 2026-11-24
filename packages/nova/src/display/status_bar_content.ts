@@ -421,6 +421,25 @@ export function escortRepairedMessage(): string {
 }
 
 /**
+ * The status line for a rescue board that took the mission cargo off the
+ * ship (encounters/rescue_board.ts): "You retrieved Admiral Raczak from
+ * this ship." on the original (reference "Boarding a rescue ship: stock
+ * \"Rescue Raczak\" (nova:394), wave 13"), composed from stock STR#
+ * 2002 indices 105 "You retrieved ", 106 "the" and 107 "from this
+ * ship.". `cargoName` is the mission cargo's STR# 4000 entry as stored:
+ * the Bible's mission-cargo note says a name starting with '*' is
+ * "quantityless" and "the word \"the\" is omitted in the message that
+ * appears when the player retrieves that type of cargo from a ship" —
+ * the '*' itself is never shown (STR# 4000 index 27 is "*Admiral
+ * Raczak").
+ */
+export function cargoRetrievedMessage(cargoName: string): string {
+    const quantityless = cargoName.startsWith('*');
+    const name = quantityless ? cargoName.slice(1) : cargoName;
+    return `You retrieved ${quantityless ? '' : 'the '}${name} from this ship.`;
+}
+
+/**
  * What ANOTHER PLAYER's hail says on this player's status line (Matthew's
  * ruling on #332: "For now, buttons pressed should just send the message to
  * the bottom left info text area on that player's screen"), naming the

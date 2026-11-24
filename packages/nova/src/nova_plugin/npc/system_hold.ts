@@ -80,7 +80,12 @@ import { openEnum } from '../../common/open_enum.js';
  *   'rescue'     the ship IS the rescue target of an active mission
  *                (mïsn ShipGoal 5). Released by mission_ship_plugin's
  *                rescueBoarded, alongside the disable it lifts, so the
- *                refuelled trader is free to fly off and jump out.
+ *                refuelled trader is free to fly off and jump out; or by
+ *                an in-flight abort of a ShipBehav 0/1 mission
+ *                (missions/mission_ship_release.ts). A rescue ship whose
+ *                board only retrieved its cargo (encounters/
+ *                rescue_board.ts) keeps it, and its disable, for as long
+ *                as its mission runs: the original leaves that hulk be.
  *   'missionGoal' the ship is a mission SPECIAL ship whose ShipGoal is
  *                still outstanding — destroy it, disable it, board it,
  *                escort it, observe it. The Bible implies the rule rather

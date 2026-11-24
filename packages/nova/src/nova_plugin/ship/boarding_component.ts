@@ -363,6 +363,10 @@ export function axesAligned(a: Angle, b: Angle,
  *
  * 'notAligned' is a refusal with NO message: the original prints nothing
  * for it (and clears the status line), see boardingBlockedMessage.
+ *
+ * 'alreadyBoarded' is also the refusal of a live mission's rescue ship
+ * (encounters/rescue_board.ts): its line is the original's catch-all,
+ * "You can't board this ship.", whichever the cause.
  */
 export type BoardBlockReason =
     | 'noTarget' | 'notDisabled' | 'noCrew'

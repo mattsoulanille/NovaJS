@@ -13,9 +13,10 @@ import {
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
+import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
+import { cargoName } from '../nova_plugin/missions/index.js';
 import { ContrabandScanEvent, PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
 import { MissionShipComponent } from '../nova_plugin/player/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
@@ -103,6 +104,9 @@ export function showStatusMessage(world: World, message: string) {
 }
 /** The scenario's date suffix (e.g. " NC"), fetched once at build. */
 const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffix');
+/** The scenario's cargo names (STR# 4000, from the player start), fetched
+ * once at build: what a retrieved mission cargo is called. */
+const CargoNamesResource = new Resource<{ names: string[] }>('StatusLineCargoNames');
 /** Marks that the arrival message has been shown for this system's world. */
 const ArrivalShownResource = new Resource<{ shown: boolean }>('StatusLineArrivalShown');
 
@@ -269,6 +273,20 @@ const ShowEscortRepairedMessage = new System({
     },
 });
 
+// A rescue board took the mission cargo (rescue_board.ts): no dialog
+// opens, so this line is all the original shows. Same targeting as the
+// other boarding messages, and a success, so no cant-do beep.
+const ShowCargoRetrievedMessage = new System({
+    name: 'ShowCargoRetrievedMessage',
+    events: [MissionCargoRetrievedEvent],
+    args: [MissionCargoRetrievedEvent, StatusLineResource, TimeResource,
+        CargoNamesResource, PlayerShipSelector] as const,
+    step({ cargoType }, statusLine, { time }, { names }) {
+        statusLine.setMessage(
+            cargoRetrievedMessage(cargoName(cargoType, names)), time);
+    },
+});
+
 // The bay-capture shortcut's only feedback: no dialog opens, so this line
 // is how the player learns the hulk is now one of their fighters. Same
 // targeting as the other boarding messages (emitted at the boarder,
@@ -350,8 +368,10 @@ export const StatusMessagePlugin: Plugin = {
             throw new Error('Expected Stage resource to exist');
         }
 
-        // The scenario's date suffix (" NC" in stock Nova), read once.
+        // The scenario's date suffix (" NC" in stock Nova) and its cargo
+        // names, read once.
         let suffix = '';
+        let cargoNames: string[] = [];
         try {
             const ids = await simulationData.ids;
             if (ids.PlayerStart.length > 0) {
@@ -359,11 +379,13 @@ export const StatusMessagePlugin: Plugin = {
                     id => simulationData.data.PlayerStart.get(id)));
                 const start = starts.find(s => s.isDefault) ?? starts[0];
                 suffix = start?.dateSuffix ?? '';
+                cargoNames = [...(start?.cargoNames ?? [])];
             }
         } catch (e) {
             console.warn('Failed to load player start for date suffix:', e);
         }
         world.resources.set(DateSuffixResource, { suffix });
+        world.resources.set(CargoNamesResource, { names: cargoNames });
         world.resources.set(ArrivalShownResource, { shown: false });
 
         const statusLine = new StatusLine();
@@ -381,6 +403,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowContrabandScanMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
+        world.addSystem(ShowCargoRetrievedMessage);
         world.resources.set(SeenPlayerHailsResource, new Map());
         world.addSystem(ShowPlayerHailMessage);
     },
@@ -394,6 +417,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowContrabandScanMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
+        world.removeSystem(ShowCargoRetrievedMessage);
         world.removeSystem(ShowPlayerHailMessage);
         world.resources.delete(SeenPlayerHailsResource);
         // Destroyed, children included: the line's Text owns a canvas
@@ -402,6 +426,7 @@ export const StatusMessagePlugin: Plugin = {
             .destroy({ children: true });
         world.resources.delete(StatusLineResource);
         world.resources.delete(DateSuffixResource);
+        world.resources.delete(CargoNamesResource);
         world.resources.delete(ArrivalShownResource);
     },
 };

@@ -93,6 +93,12 @@ import { showStatusMessage } from './status_message_plugin.js';
  * you just sampled reads as nonsense, the same argument mïsn 134's
  * derelict already won.
  *
+ * A RESCUE goal is that case only for the deferred auto-abort's përs
+ * replacement, the one rescue ship still boarded through a plunder
+ * session. Every other live rescue ship's board only retrieves its
+ * mission cargo — no dialog, as on the original (encounters/
+ * rescue_board.ts) — so its text is presented by the sweep below.
+ *
  * If the boarding ends before the text is presented (the hulk is
  * destroyed under you, the session is closed from the simulation side),
  * nothing here shows it and the deferred 'shipDone' event still does, at
@@ -413,13 +419,28 @@ export async function presentShipDoneText(world: World,
 export const MISSION_FAILED_MESSAGE = 'Mission failed.';
 
 /**
+ * Whether a completed goal's ShipDoneText is the boarding dialog's to
+ * present (see the module note): a BOARD goal, and the one kind of rescue
+ * that is still boarded through a plunder session — the deferred
+ * auto-abort's (`autoAbortOnBoard`). Every other rescue goal completes by
+ * the cargo retrieval, which opens no dialog at all (encounters/
+ * rescue_board.ts), so its text is the sweep's like any other goal's.
+ */
+function boardingPresents(objective: ShipObjective,
+    autoAbortOnBoard: boolean | undefined): boolean {
+    return objective.goal === GOAL_BOARD
+        || (objective.goal === GOAL_RESCUE && !!autoAbortOnBoard);
+}
+
+/**
  * Sweeps the local player's missions for ship goals the simulation has
  * just completed and shows their ShipDoneText — and for ship goals it has
  * just FAILED, which get MISSION_FAILED_MESSAGE on the status line.
  *
- * BOARD AND RESCUE GOALS ARE SKIPPED — boarding_plugin presents those, in
- * place of the plunder dialog (see the module note). Sorted by mission
- * id so two goals completing on the same frame queue in a stable order.
+ * BOARD GOALS (and boarded rescues) ARE SKIPPED — boarding_plugin presents
+ * those, in place of the plunder dialog (see the module note and
+ * boardingPresents). Sorted by mission id so two goals completing on the
+ * same frame queue in a stable order.
  */
 export const MissionShipDoneSystem = new System({
     name: 'MissionShipDoneSystem',
@@ -446,8 +467,7 @@ export const MissionShipDoneSystem = new System({
             const hasText = shipDoneTextKnown(state, universe, missionId);
             if (!objective.shipDonePending || hasText !== true
                 || state.shown.has(missionId)
-                || objective.goal === GOAL_BOARD
-                || objective.goal === GOAL_RESCUE) {
+                || boardingPresents(objective, active.autoAbortOnBoard)) {
                 continue;
             }
             due.push(missionId);

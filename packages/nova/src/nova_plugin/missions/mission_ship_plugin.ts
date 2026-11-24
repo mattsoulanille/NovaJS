@@ -164,11 +164,16 @@ function pickUpOnBoarding(active: ActiveMission, owner: Entity): void {
  * owner boards one of its special ships.
  *
  * THE RESCUE ITSELF (mïsn ShipGoal 5, "they start out disabled and stay
- * that way until you board them"). Boarding is the rescue, so the hulk
- * state is lifted here and the ship flies off under its own AI — the only
- * thing that CAN lift it, since ShipDisableSystem refuses to re-enable a
- * `hulk` however healthy its armor is (see makeHulk). Deleting the
- * component is the documented external-repair route that file names.
+ * that way until you board them") — for the one kind of rescue ship that
+ * is still BOARDED here: the deferred auto-abort's përs replacement (the
+ * Refuel Traders, `autoAbortOnBoard`). Every other live rescue ship is
+ * never plundered at all: its board only retrieves the mission cargo and
+ * leaves the hulk disabled, as the original does (encounters/
+ * rescue_board.ts). For the refuelled trader boarding is the rescue, so
+ * the hulk state is lifted here and the ship flies off under its own AI —
+ * the only thing that CAN lift it, since ShipDisableSystem refuses to
+ * re-enable a `hulk` however healthy its armor is (see makeHulk). Deleting
+ * the component is the documented external-repair route that file names.
  *
  * THE DEFERRED AUTO-ABORT (mïsn Flags 0x0001, verbatim): "If the mission
  * is one in which a special ship replaces a përs ship at mission start
@@ -255,7 +260,9 @@ function rescueBoarded(active: ActiveMission, owner: Entity,
  * — and mïsn PickupMode 2 is "Pick up when boarding special ship". So
  * nothing here refuses a boarding; instead a boarding by the OWNER is
  * credited to the goal, closing the shipBoarded seam that
- * mission_ship_state.ts documents.
+ * mission_ship_state.ts documents. (A live RESCUE ship is the exception
+ * the original makes: its board only retrieves the mission cargo, and
+ * the boarding gate credits that itself — encounters/rescue_board.ts.)
  *
  * `boarder === owner` is checked because the durable record names
  * whoever spent the hulk's one plunder, and that can be somebody else: a

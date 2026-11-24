@@ -9,6 +9,7 @@
 export * from './boarding_plugin.js';
 export * from './disabled_plugin.js';
 export * from './hail_plugin.js';
+export * from './rescue_board.js';
 
 import { Domain, domainPlugin } from '../core/index.js';
 import { HailPlugin } from './hail_plugin.js';

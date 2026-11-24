@@ -1,7 +1,7 @@
 import { DEFAULT_CARGO_NAMES } from 'novadatainterface/player_start_data';
 import { cargoUsed } from '../ship/index.js';
 import type { MissionWorkingState } from './mission_machinery.js';
-import { ActiveMission } from '../player/index.js';
+import { ActiveMission, missionCargoKey } from '../player/index.js';
 
 /**
  * Mission cargo bookkeeping: cargo names, the CargoComponent key mission
@@ -26,10 +26,9 @@ export function cargoName(cargoType: number,
         || `Cargo ${cargoType}`;
 }
 
-/** The CargoComponent key that holds a mission's cargo. */
-export function missionCargoKey(missionId: string): string {
-    return `mission:${missionId}`;
-}
+/** The CargoComponent key that holds a mission's cargo (defined in the
+ * player domain, which the rescue board below the missions shares). */
+export { missionCargoKey };
 
 export function freeCargoSpace(state: MissionWorkingState): number {
     return state.cargoCapacity - cargoUsed(state.cargo);

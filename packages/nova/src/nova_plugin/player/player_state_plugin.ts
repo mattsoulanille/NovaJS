@@ -171,6 +171,16 @@ export const ActiveMissionType = t.intersection([t.type({
 })]);
 export type ActiveMission = t.TypeOf<typeof ActiveMissionType>;
 
+/**
+ * The CargoComponent key that holds a mission's cargo. Defined beside
+ * ActiveMission, below the domains that load it — the landing path and the
+ * player-info list (missions), and the rescue board (encounters) — so all
+ * of them name the one key.
+ */
+export function missionCargoKey(missionId: string): string {
+    return `mission:${missionId}`;
+}
+
 /** EV Nova allows at most 16 concurrently active missions. */
 export const MAX_ACTIVE_MISSIONS = 16;
 
