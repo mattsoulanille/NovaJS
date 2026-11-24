@@ -429,6 +429,7 @@ export class Outfitter extends Menu<Entity> {
             down: () => { itemGrid.down(); this.updateArrows(); },
             buy: this.buyOutfit.bind(this),
             sell: this.sellOutfit.bind(this),
+            map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
         // OS key-repeat should repeat buys/sells (each re-checked by the

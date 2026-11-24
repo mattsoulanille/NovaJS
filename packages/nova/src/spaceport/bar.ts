@@ -147,6 +147,7 @@ export class Bar extends Menu<Entity> {
             hire: () => void this.showHireEscort(),
             news: () => void this.showNews(),
             gamble: () => void this.showGamble(),
+            map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
     }

@@ -17,6 +17,17 @@ export abstract class Menu<T> {
     /** Guards {@link build} against being run a second time. */
     private buildEntered = false;
     protected controls: MenuControls;
+    /**
+     * The map key ('m') over this menu. The original opens the star map
+     * over the outfitter, shipyard, trade center and bar, and 'm' closes it
+     * back to the venue (docs/reference_experiments.md, "The UI screen x
+     * key matrix, wave 11"). The owning spaceport sets it, since the map
+     * needs the docked ship's state; a venue binds it as its 'map' control
+     * and a menu without one ignores the key. The starmap binds its own
+     * controls on top of the focus stack while open, so the venue's keys
+     * stay quiet under it.
+     */
+    onMapKey?: () => void;
     private results = new Subject<T>();
     protected input!: T;
 

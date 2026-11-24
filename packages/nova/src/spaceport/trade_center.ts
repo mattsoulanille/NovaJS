@@ -250,6 +250,7 @@ export class TradeCenter extends Menu<Entity> {
             down: () => this.moveSelection(1),
             buy: this.buy.bind(this),
             sell: this.sell.bind(this),
+            map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
     }

@@ -384,17 +384,8 @@ export class Spaceport extends Menu<Entity> {
             // The starmap and player info bind their own controls on
             // top of the focus stack while open, so the spaceport keys
             // stay quiet under them and 'd' backs out of just the
-            // overlay. The docked entity is out of the display world,
-            // so its date, mission marks, control bits (NCB system
-            // visibility) and legal records (the Legal Status line) all
-            // ride along to the map (#29) — read through the landing's
-            // working copy like every docked reader (playerComponent).
-            map: () => void this.openStarmap?.({
-                date: this.playerComponent(GameDateComponent),
-                missionMarks: this.activeMissionMarks(),
-                playerBits: this.playerComponent(ControlBitsComponent),
-                legalRecords: this.playerComponent(LegalRecordsComponent),
-            }),
+            // overlay.
+            map: () => this.openDockedMap(),
             properties: () => void this.openPlayerInfo?.(this.input),
             // The planetId enables the dialog's docked-only Abort, which
             // runs on the landing's transaction so the next venue does not
@@ -458,6 +449,24 @@ export class Spaceport extends Menu<Entity> {
         this.offerPopup.dismiss();
         this.popupBlocker.release();
         this.controls.release();
+    }
+
+    /**
+     * Opens the star map over the spaceport or over one of its venues
+     * (the 'm' key; Menu.onMapKey). The docked entity is out of the
+     * display world, so its date, mission marks, control bits (NCB system
+     * visibility) and legal records (the Legal Status line) all ride along
+     * to the map (#29) — read through the landing's working copy like
+     * every docked reader (playerComponent), so a venue's purchases and
+     * accepted missions show at once.
+     */
+    private openDockedMap() {
+        void this.openStarmap?.({
+            date: this.playerComponent(GameDateComponent),
+            missionMarks: this.activeMissionMarks(),
+            playerBits: this.playerComponent(ControlBitsComponent),
+            legalRecords: this.playerComponent(LegalRecordsComponent),
+        });
     }
 
     /**
@@ -1123,6 +1132,14 @@ export class Spaceport extends Menu<Entity> {
         if (data.flags.hasCommodityExchange) {
             this.tradeCenter = new TradeCenter(displayAssets, simulationData,
                 controlEvents, this.id);
+        }
+        // 'm' opens the star map over each venue as over the spaceport
+        // (the BBS opens its own, with the selected listing's marks).
+        for (const venue of [this.outfitter, this.shipyard, this.bar,
+            this.tradeCenter]) {
+            if (venue) {
+                venue.onMapKey = () => this.openDockedMap();
+            }
         }
         // The landing's settings may have arrived before the stellar's
         // data (the first landing here): hand them on.

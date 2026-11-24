@@ -245,6 +245,7 @@ export class Shipyard extends Menu<Entity> {
             up: () => { itemGrid.up(); this.updateArrows(); },
             down: () => { itemGrid.down(); this.updateArrows(); },
             buy: this.buyShip.bind(this),
+            map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
     }
