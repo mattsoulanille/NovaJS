@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w19-fuel-m1",
+  "edits": {
+    "ship": 763,
+    "stellar": 1509,
+    "credits": 1000000,
+    "fuel": 0,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1509": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w19-fuel-m1",
+    "legal": {
+      "1509": -1
+    }
+  }
+}

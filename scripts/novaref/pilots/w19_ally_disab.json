@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w19-ally-disab",
+  "edits": {
+    "ship": 451,
+    "stellar": 1508,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1508": 2
+    },
+    "missionBits": {
+      "9222": true,
+      "9223": true
+    },
+    "nickname": "Probe",
+    "shipName": "w19-ally-disab"
+  }
+}

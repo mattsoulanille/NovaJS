@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w19-a14-board",
+  "edits": {
+    "ship": 818,
+    "stellar": 1593,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1593": 2,
+      "1594": 2,
+      "1595": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w19-a14-board",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    }
+  }
+}

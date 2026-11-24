@@ -290,8 +290,126 @@ export default {
         ...wave16Resources(),
         ...wave17Resources(),
         ...wave18Resources(),
+        ...wave19Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-19 experiments (docs/reference_experiments.md, "... wave 19").
+ * Nothing retired. sÿst 1599 (the last id above wave 18's) and the free
+ * sÿst 1506-1509 / 1512 and spöb 1506-1509 / 1598-1599 inside the wave-15
+ * range (1500-1599 is otherwise full: the next wave needs a new range, e.g.
+ * sÿst 1128-1499 / spöb 1421-1499 above the stock maxima); shïp 467-481,
+ * düde 425-429, gövt 309-311, flët 304-305, ränk 202-203, bits 9221-9224,
+ * mïsn 925-928 (the free stock-gap ids after wave 18's 919-924; offer text
+ * dësc 4797-4800). Map row y = -1180.
+ *
+ *  T   Do FLEET members stay? sÿst 1599 Kit Fleet Stay (363, port spöb
+ *      1598): the only traffic is flët 304 Kit Stay Fleet (gövt 363): lead
+ *      shïp 467 Kit FS Lead (cyan, AI 3) and escorts shïp 468-471 Kit FS
+ *      Red / Orange / Yellow / Green (AI 3), each 0-1, so every fleet has
+ *      its own mix. avgShips 2.
+ *  R19 Reinforcement fleets: gövt 311 Kit Reinf Owner (MaxOdds 100, Disab
+ *      / Board / Kill 1, CrimeTol 30000, MediumName "Kit Reinf") owns sÿst
+ *      1506 Kit Reinf Range (port spöb 1506; ReinfFleet 305, ReinfTime 300
+ *      = 10 s, ReinfIntrval 0) and 1507 Kit Reinf Slow (port spöb 1507;
+ *      ReinfTime 900 = 30 s, ReinfIntrval 1), linked. Traffic of both:
+ *      311's AI 1 Kit RV Trader (shïp 474, the magenta pointer hulk, 30000
+ *      / 30000, unarmed; düde 425), avgShips 2. flët 305 Kit Reinf Fleet
+ *      (gövt 311): lead shïp 472 Kit RF Lead (purple, AI 3, Kit Escort
+ *      Gun), two shïp 473 Kit RF Guard (blue); its LinkSyst is 1594 (Kit
+ *      Disab One, no stellar) so it never appears as ordinary traffic here.
+ *  H   Many staying neutral ships to hail: sÿst 1509 Kit Assist Stay (363,
+ *      port spöb 1509): AI 4 warships of 363 (shïp 475-478 Kit AS Red /
+ *      Orange / Yellow / Green, the Kit Escort Gun; düde 426), avgShips 6.
+ *      Offer 925 (b9221): OnAccept K200 (ränk 0x0400, AffilGovt 363) and a
+ *      Kit Raider (düde 602) at the port.
+ *  H   ränk 0x0800 with an ALLY: gövt 310 Kit Rank Affil and 309 Kit Rank
+ *      Ally (mutual allies); ränk 202 Kit Ally Repair Rank (AffilGovt 310,
+ *      Flags 0x0800). sÿst 1508 Kit Ally Assist (363, port spöb 1508):
+ *      AI 4 traffic of 309 (blue shïp 479, düde 427) and of 310 (purple
+ *      shïp 480, düde 428), avgShips 4. BBS 926 (b9222, OnAccept K202);
+ *      offer 927 (b9223) the Kit Disabler (düde 358) at the port.
+ *  R19 ränk 0x0400 and reinforcements (added during the wave): sÿst 1512
+ *      Kit Reinf Rank (311, port spöb 1599; ReinfFleet 305, ReinfTime 300,
+ *      ReinfIntrval 0): 311's AI 4 warships (green shïp 481, düde 429),
+ *      avgShips 3; offer 928 (b9224): OnAccept K203 (ränk 203 Kit Reinf
+ *      Assist Rank, AffilGovt 311, Flags 0x0400) and a Kit Raider at the port.
+ */
+function wave19Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const armed = (wid, n = 1, ammo = 0) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [ammo, 0, 0, 0] });
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const RLED = { white: 1970, red: 1971, green: 1972, blue: 1973, yellow: 1974, magenta: 1975, cyan: 1976, orange: 1956, azure: 1958, purple: 1960, pointer: 1959 };
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const multiDude = (id, name, ai, govtId, shipIds) => ({ type: "düde", id, name, clone: "düde:128",
+        set: { ai, govt: govtId, flags: 0, infoTypes: 0, ships: [...shipIds, ...none16].slice(0, 16),
+            probs: [...shipIds.map(() => Math.floor(100 / shipIds.length)), ...zero16].slice(0, 16) } });
+
+    // --- T: a fleet as the only traffic.
+    out.push(...shareRled(467, "Kit FS Lead", RLED.cyan, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) }));
+    const fsEscorts = [[468, "Red"], [469, "Orange"], [470, "Yellow"], [471, "Green"]];
+    fsEscorts.forEach(([id, c]) => out.push(...shareRled(id, `Kit FS ${c}`, RLED[c.toLowerCase()], 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) })));
+    out.push(fleet(304, "Kit Stay Fleet", 467, fsEscorts.map(([id]) => [id, 0, 1]), 363, 1599));
+    out.push(traffic(system(1599, "Kit Fleet Stay", -520, -1180, 363, [1598]), [[-304, 100]], 2), port(1598, "Kit Fleet Stay Port"));
+
+    // --- R19: reinforcement fleets.
+    out.push(govt(311, "Kit Reinf Owner", { maxOdds: 100, disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000, classes: [311, -1, -1, -1], mediumName: "Kit Reinf" }));
+    out.push(...shareRled(474, "Kit RV Trader", RLED.pointer, 24, { ...mobile, ai: 1, armor: 30000, shield: 30000 }), dude(425, "Kit RV Traders", 1, 311, 474));
+    out.push(...shareRled(472, "Kit RF Lead", RLED.purple, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) }));
+    out.push(...shareRled(473, "Kit RF Guard", RLED.blue, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) }));
+    out.push(fleet(305, "Kit Reinf Fleet", 472, [[473, 2, 2], [473, 0, 0], [473, 0, 0], [473, 0, 0]], 311, 1594));
+    const reinfA = traffic(system(1506, "Kit Reinf Range", -480, -1180, 311, [1506]), [[425, 100]], 2);
+    reinfA.set = { ...reinfA.set, links: links(1507), reinfFleet: 305, reinfTime: 300, reinfInterval: 0 };
+    const reinfB = traffic(system(1507, "Kit Reinf Slow", -440, -1180, 311, [1507]), [[425, 100]], 2);
+    reinfB.set = { ...reinfB.set, links: links(1506), reinfFleet: 305, reinfTime: 900, reinfInterval: 1 };
+    out.push(reinfA, port(1506, "Kit Reinf Port"), reinfB, port(1507, "Kit Reinf Slow Port"));
+
+    // --- H: staying AI 4 warships of 363; ränk 0x0400 and a raider.
+    const as = [[475, "Red"], [476, "Orange"], [477, "Yellow"], [478, "Green"]];
+    as.forEach(([id, c]) => out.push(...shareRled(id, `Kit AS ${c}`, RLED[c.toLowerCase()], 24, { ...mobile, ai: 4, armor: 3000, shield: 3000, ...armed(365) })));
+    out.push(multiDude(426, "Kit AS Warships", 4, 363, as.map((s) => s[0])));
+    out.push(traffic(system(1509, "Kit Assist Stay", -360, -1180, 363, [1509]), [[426, 100]], 6), port(1509, "Kit Assist Stay Port"));
+    out.push(...misn(925, "Kit H assist rank vs AI 4 warships", 9221, { availStel: 1509, shipCount: 1, shipDude: 602, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9221 K200" }));
+
+    // --- H: ränk 0x0800 with an ally of the affiliated govt.
+    out.push(govt(310, "Kit Rank Affil", { classes: [310, -1, -1, -1], allies: [309, -1, -1, -1] }));
+    out.push(govt(309, "Kit Rank Ally", { classes: [309, -1, -1, -1], allies: [310, -1, -1, -1] }));
+    out.push({ type: "ränk", id: 202, name: "Kit Ally Repair Rank", clone: "ränk:128",
+        set: { "@0:i16": 1, "@2:i16": 310, "@4:i16": 100, "@6:i32": 0, "@10:i32": 0, "@22:i16": 0x0800 } });
+    out.push(...shareRled(479, "Kit Ally Blue", RLED.blue, 24, { ...mobile, ai: 4, armor: 3000, shield: 3000, ...armed(365) }), dude(427, "Kit Ally Blue", 4, 309, 479));
+    out.push(...shareRled(480, "Kit Affil Purple", RLED.purple, 24, { ...mobile, ai: 4, armor: 3000, shield: 3000, ...armed(365) }), dude(428, "Kit Affil Purple", 4, 310, 480));
+    out.push(traffic(system(1508, "Kit Ally Assist", -400, -1180, 363, [1508]), [[427, 50], [428, 50]], 4), port(1508, "Kit Ally Assist Port"));
+    out.push(...misn(926, "Kit H ally repair rank", 9222, { availStel: 1508, availLoc: 0, dispWeight: 30000, onAccept: "!b9222 K202" }));
+    out.push(...misn(927, "Kit H disabler at the ally port", 9223, { availStel: 1508, availLoc: 3, shipCount: 1, shipDude: 358, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9223" }));
+
+    // --- R19 + ränk 0x0400: does a warship of the reinforcement govt call the
+    // fleet in for the player? sÿst 1512 Kit Reinf Rank (311, port spöb 1599;
+    // ReinfFleet 305, ReinfTime 300, ReinfIntrval 0): 311's AI 4 warships
+    // (green shïp 481, düde 429), avgShips 3. Offer 928 (b9224): OnAccept K203
+    // (ränk 203 Kit Reinf Assist Rank: AffilGovt 311, Flags 0x0400) and a Kit
+    // Raider (düde 602) at the port.
+    out.push(...shareRled(481, "Kit RW Warship", RLED.green, 24, { ...mobile, ai: 4, armor: 3000, shield: 3000, ...armed(365) }), dude(429, "Kit RW Warships", 4, 311, 481));
+    const reinfRank = traffic(system(1512, "Kit Reinf Rank", -320, -1180, 311, [1599]), [[429, 100]], 3);
+    reinfRank.set = { ...reinfRank.set, reinfFleet: 305, reinfTime: 300, reinfInterval: 0 };
+    out.push(reinfRank, port(1599, "Kit Reinf Rank Port"));
+    out.push({ type: "ränk", id: 203, name: "Kit Reinf Assist Rank", clone: "ränk:128",
+        set: { "@0:i16": 1, "@2:i16": 311, "@4:i16": 100, "@6:i32": 0, "@10:i32": 0, "@22:i16": 0x0400 } });
+    out.push(...misn(928, "Kit R19 reinf assist rank and a raider", 9224, { availStel: 1599, shipCount: 1, shipDude: 602, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9224 K203" }));
+    return out;
+}
 
 /**
  * Wave-18 experiments (docs/reference_experiments.md, "... wave 18").

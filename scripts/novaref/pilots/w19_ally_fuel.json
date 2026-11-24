@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w19-ally-fuel",
+  "edits": {
+    "ship": 763,
+    "stellar": 1508,
+    "credits": 1000000,
+    "fuel": 0,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1508": 2
+    },
+    "missionBits": {
+      "9222": true
+    },
+    "nickname": "Probe",
+    "shipName": "w19-ally-fuel"
+  }
+}

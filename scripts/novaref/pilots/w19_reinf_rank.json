@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w19-reinf-rank",
+  "edits": {
+    "ship": 763,
+    "stellar": 1599,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1512": 2
+    },
+    "missionBits": {
+      "9224": true
+    },
+    "nickname": "Probe",
+    "shipName": "w19-reinf-rank"
+  }
+}

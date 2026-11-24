@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w19-reinf-weak",
+  "edits": {
+    "ship": 778,
+    "stellar": 1506,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1506": 2,
+      "1507": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w19-reinf-weak",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    }
+  }
+}

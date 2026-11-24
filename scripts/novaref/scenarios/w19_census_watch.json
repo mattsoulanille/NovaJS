@@ -1,0 +1,53 @@
+{
+ "name": "w19_census_watch",
+ "_comment": "Wave 19 fleets: Enter Ship and sit still for about 20 minutes, recording at 10 fps; every 2 minutes a census of 20 Tabs 0.84 s apart (names cut later with tools/tab_names.sh) and a window shot. Pilot w19_fleet_stay (sÿst 1599 Kit Fleet Stay: flët 304 is the only traffic).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "repeat": 10,
+   "steps": [
+    {
+     "keys": "Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760 Tab wait 760"
+    },
+    {
+     "shot": "census-{i}",
+     "window": true
+    },
+    {
+     "wait": 101000
+    }
+   ]
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
