@@ -4325,7 +4325,220 @@ unexplained outlier.
 (`hostility.json` = the shield bar per frame, `NN-obs-NN.png` the Tab
 panels, `carrier1/*/panels.png` the contact sheet, `recording.mp4`).
 
+### K10 wave 9: where the target bracket corners sit (2026-11-23)
+
+**Question (Matthew, 2026-11-23).** "Let's check the planet target
+corners distance, and maybe also ship target corners distances." Where are
+the four corner brackets drawn around a targeted stellar or ship: how far
+from the centre, square or following the sprite's w/h, tied to the frame,
+the visible art or the landing square, and do they change with distance,
+rotation or animation?
+
+**Method.** `analysis/brackets.mjs` (new) finds the four corner glyphs of
+one colour in a window shot (or every frame of a recording) and reports
+the box through their outermost pixels, the glyph size and the largest
+non-black blob inside the box (the target's visible art).
+- **Stellars, from existing shots** (no new runs needed): every U9 run of
+  waves 4 and 6 starts with the player on the stellar and presses `l`,
+  which targets it, so each run's lossless `01-request.png` holds the
+  stellar's bracket: thirteen stellars from 15x21 to 325x325, all at the
+  play area's centre. The recordings carry the same bracket while the
+  player flies out to about 250 px.
+- **Ships, existing:** K9's shots (red / yellow around 24 px discs),
+  wave 8's board sweeps (grey around the 24 px and 96 px hulks) and the
+  1920x1080 reference `ui_screenshots/original_macos_screenshots/space/in_space.png`
+  (a yellow Leviathan).
+- **Ships, new:** pilots `w9_esc_a` / `w9_esc_b` put the Kit Ring
+  Crawler in the sealed Kit Range with six stock-art escorts each (frames
+  24 to 192). `scenarios/brackets_tab.json` (30 x Tab, a shot and a short
+  turn each) showed that **Tab never selects an escort**: 60 Tabs in two
+  runs, every panel "No Target". So `scenarios/brackets_click.json` runs
+  the new `loops/click_targets.mjs`: it finds the ship sprites in a shot,
+  clicks each (a click targets a ship, escorts included), parks the
+  mouse and shoots, for five rounds with a turn in between so the
+  escorts re-form and show other rotations (the target panel names the
+  class). `w9_sol` runs `brackets_tab.json` in stock Sol for neutral
+  traffic: Tab reached Leviathans, Vipers, Patrol Boats, Pegasi and a
+  UFS Razorback, but only a Fed Viper was fully on screen when shot (2
+  of 30).
+
+| target | frame (w x h) | box (outer pixels) | box - frame | shots |
+|---|---|---|---|---|
+| stellar Type 51 station | 15x21 | 50 x 50 | 29 (from 21) | 2 |
+| stellar Type 53 station, and as a planet | 17x31 | 60 x 60 | 29 (from 31) | 3 |
+| stellar Type 48 station | 35x22 | 64 x 64 | 29 (from 35) | 2 |
+| stellar Type 3 | 40x40 | 70 x 70 | 30 | 3 (and a kit marker, 40x40, clicked by accident in `click-b`) |
+| stellar Type 6 | 72x72 | 102 x 102 | 30 | 2 |
+| stellar Type 16 | 80x80 | 110 x 110 | 30 | 1 |
+| stellar Type 24 | 88x88 | 118 x 118 | 30 | 1 |
+| stellar Type 9 | 96x96 | 126 x 126 | 30 | 1 |
+| stellar Type 10 | 112x112 | 142 x 142 | 30 | 1 |
+| stellar Type 0 (Kit Port) | 150x150 | 180 x 180 | 30 | 3 |
+| stellar Type 25 | 250x250 | 280 x 280 | 30 | 2 |
+| stellar Type 18 | 304x134 | 334 x 334 | 30 (from 304) | 1 |
+| stellar Type 39 (station art) | 315x200 | 344 x 344 | 29 (from 315) | 1 |
+| stellar Type 5 (Jupiter) | 325x325 | 354 x 354 | 29 | 2 |
+| Shuttle / Kit discs and hulks (green, yellow, red, grey) | 24 | 54 x 54 | 30 | 6 + 13 K9 + 4 wave 8 |
+| Heavy Shuttle (escort, green); Fed Viper (Sol traffic, yellow) | 32 | 62 x 62 | 30 | 4 + 2 |
+| Thunderhead | 48 | 78 x 78 | 30 | 7 |
+| Fed Patrol Boat | 56 | 86 x 86 | 30 | 4 |
+| Pegasus | 64 | 94 x 94 | 30 | 2 |
+| Fed Destroyer | 80 | 110 x 110 | 30 | 5 |
+| Kit Hulk Big (grey, disabled) | 96 | 126 x 126 | 30 | 2 |
+| IDA Frigate | 100 | 130 x 130 | 30 | 5 |
+| Aurora Cruiser | 120 | 150 x 150 | 30 | 8 |
+| Fed Carrier | 128 | 158 x 158 | 30 | 9 |
+| Leviathan | 144 | 174 x 174 | 30 | 3 (and the reference screenshot) |
+| Aurora Carrier | 184 | 214 x 214 | 30 | 6 |
+
+Every box measured the same in every shot of its target (err 0: the four
+glyphs line up to the pixel). The Raven (192) never came on screen fully
+enough to be clicked.
+
+**Findings.**
+1. **The box is the sprite FRAME plus 15 px on every side**: side =
+   2 x floor(S / 2) + 30 (S + 30 for even S, S + 29 for odd), centred on
+   the object's position. Stellars and ships follow the same rule,
+   from 15 to 325 px, with no cap.
+2. **It is always square, from the larger frame dimension**: the 17x31
+   station gets 60 x 60, the 15x21 one 50 x 50, the 35x22 one 64 x 64,
+   the 304x134 art 334 x 334, the 315x200 art 344 x 344. (Every stock
+   ship frame is square, so ships can't show the difference.)
+3. **The frame, not the visible art, and not the landing square.** The
+   325 px planet's art is about 302 px across and still gets 354; the
+   Fed Carrier's art spans anything from 103 x 107 to 133 x 98 as it
+   turns, the Aurora Carrier's from 52 x 129 to 160 x 64, and the box
+   stays 158 / 214 in every shot. The ship's **glow layer does not
+   count**: the Leviathan's shän glow image is 180 px (it would give
+   210), the box is 174 from its 144 px base frame. The landing square
+   (1.7 x W, capped near 212, "U9 wave 6") is unrelated: 354 for the
+   325 px planet, square from max(w, h) not w.
+4. **No change with distance, rotation or animation**: a planet's
+   bracket stays 102 x 102 (+-2 px of video noise) while the player flies
+   from 0 to 250 px out; a turning ship's box never changes; the box's
+   centre is the ship's position, not the art's (the art's bbox centre
+   wanders up to 30 px from the box centre as a long hull turns). EV
+   Nova has no zoom.
+5. **The glyphs are fixed-size sprites, not scaled with the target.**
+   Ships: 9 x 9 px, 1 px lines: a 4 px diagonal tick from the outer
+   corner pointing in, and an L whose arms (5 px, one 1 px nub each) start
+   4 px from the corner; neutral (255,255,0) with two (255,255,99)
+   pixels, friendly green, disabled grey (115,115,115) with two
+   (140,140,140). The hostile glyph is a different 8 x 8 orange-red
+   shape (255,99,0 / 255,49,0 / 239,0,0 / 222,0,0). Stellars: 11 x 11
+   px, a 2 px blue arc around the corner (0,0,222 shading to 0,206,255)
+   with a 1 px tick pointing in. The ship and stellar brackets are
+   independent: a stellar clicked while a ship is targeted shows both.
+6. **The brackets fly in when a target is chosen** (the box per
+   recording frame after each click or `l`, from `bracketsIn` over the
+   frames: `acquire.mjs` in the evidence folder's `novajs/`). For a frame
+   or two after the input there is no complete box on screen (it is larger
+   than the play area), then it shows 400-580 px WIDER than its final
+   size and closes over the next 3-4 recorded frames (100-130 ms at
+   30 fps), e.g. Shuttle 416, 204, 72, 54; Thunderhead 456, 386, 238, -,
+   78; the 112 px planet 582, 418, 274, 146, 142. The extra width is about the same
+   for a 24 px Shuttle and a 112 px planet, so it is an **additive
+   offset** closing at roughly 2-2.5 px/ms per side, not a scale of the
+   final box.
+7. **Tab skips the player's escorts** (60 Tabs, 12 escorts, never
+   one); a click targets them. With only escorts present and one already
+   targeted, `r` kept it targeted (twice, both runs) and Tab cleared it,
+   so whether `r` would ever pick an escort (K3) is still open.
+8. Nothing else is bracket-shaped: the radar marks no target (the
+   targeted escort's blip looks like the others at radar scale) and the
+   target panel has a plain frame (name, subtitle, the red picture,
+   Shield %, govt or "Escort").
+
+**NovaJS today (base 0a4e3f60).**
+- `N/display/target_corners_plugin.ts:110-116` (`TargetCorners.step`)
+  puts each corner sprite's anchor at (cos 45 deg x w / 2, sin 45 deg x h
+  / 2) = (+-0.354 w, +-0.354 h) of the target's centre, and the rotations
+  at lines 52-54 turn each 16 x 16 cicn so the glyph extends INWARD from
+  its anchor; the glyph's outermost pixel is 1 px inside the texture's
+  edge (the cicns carry a 1 px dark outline). So the glyph box is about
+  0.707 x size - 2 px: **inside the sprite**, where the original is 15 px
+  outside the frame.
+- `size` is `targetGraphic.size` (line 180), the largest of ALL the
+  shän layers (`N/display/animation_graphic.ts:147-148`), so a glow layer
+  bigger than the base frame counts: Shuttle 48, Heavy Shuttle 64,
+  Thunderhead 96, Fed Patrol Boat 84, Fed Destroyer 120, IDA Frigate 200,
+  Aurora Cruiser 240, Fed Carrier 192, Leviathan 180, Raven 288 (measured
+  live). Stellars have one layer (their frame). So NovaJS's box is too
+  small for every stellar (by 44-126 px) and most ships (by 12-49 px;
+  about half the size on hulls whose glow is no bigger than the frame:
+  Pegasus 43 vs 94, Aurora Carrier 128 vs 214), and a little too big only
+  for the IDA Frigate and Aurora Cruiser, whose glow is twice the frame.
+- w and h are used separately (line 114-115), so a 17x31 station would get
+  a 12 x 22 box; the original's is square from the larger side.
+- Stellars use the same `step` (`N/display/planet_corners_plugin.ts:36`).
+- The fly-in (`TIME_TO_TARGET = 100` ms, line 22; `scale = 1 + timeLeft /
+  20`, lines 106-108) MULTIPLIES the corner offsets by 6 down to 1,
+  linearly over 100 ms, so it starts at 6 x 0.354 x size per side (about
+  100 px for a Shuttle, 610 px for a Raven); the original adds roughly
+  the same 200-290 px per side to every target and is done in about
+  100-130 ms. Duration: matches; shape: mismatch (cosmetic).
+- Glyph art and colours (`packages/nova/objects/CicnImage/*.png`,
+  `objects/TargetCorners/*.json`) are the original's shapes; the
+  secondary pixels are a little darker (neutral 88 vs 99, disabled
+  100 / 117 vs 115 / 140), probably the original's 16-bit screen
+  rounding. Not worth changing.
+- Tab and `r` leave the flock out (`N/nova_plugin/combat/target_plugin.ts:58-76`):
+  Tab **matches**. NovaJS adds escortTarget (Alt+Tab), which the original
+  doesn't have, and click targeting reaches escorts in both.
+
+| target | original box | NovaJS glyph box (live, 0a4e3f60) |
+|---|---|---|
+| Shuttle (24, glow 48) | 54 | 32 |
+| Heavy Shuttle (32, glow and lights 64) | 62 | 43 |
+| Thunderhead (48, glow 96) | 78 | 66 |
+| Fed Patrol Boat (56, glow 84) | 86 | 57 |
+| Pegasus (64) | 94 | 43 |
+| Fed Destroyer (80, glow 120) | 110 | 83 |
+| IDA Frigate (100, glow and lights 200) | 130 | 139 |
+| Aurora Cruiser (120, glow 240) | 150 | 168 |
+| Fed Carrier (128, glow 192) | 158 | 134 |
+| Leviathan (144, glow 180) | 174 | 125 |
+| Aurora Carrier (184) | 214 | 128 |
+| Raven (192, glow 288) | 222 (rule) | 202 |
+| Europa / Type 3 (40) | 70 | 26 |
+| Earth / Kit Port (150) | 180 | 104 |
+| Jupiter (325) | 354 | 228 |
+
+**Proposed fix (NOT applied).** In `TargetCorners.step` place each glyph so
+its OUTERMOST pixel sits at +-(floor(S / 2) + 15) px from the target's
+centre on both axes (x0 = centre - floor(S / 2) - 15, x1 = x0 + 2 x floor(S
+/ 2) + 29), with S = max(w, h) of the BASE frame only: the shän base image
+for ships, the spïn frame for stellars (e.g. a `baseSize` on
+AnimationGraphic from `sprites.get('baseImage')`, leaving `size` alone for
+its other users), and account for the cicns' 1 px outline (the anchor
+goes one pixel outside the target pixel). Optionally make the fly-in an
+additive offset (start about 250 px per side, close to 0 in 120 ms). A
+spec can pin the table above through `TargetCorners.step` and the
+container's bounds.
+
+Confidence: high for the rule (26 frame sizes, 14 stellar and 12 ship,
+in about 100 shots, every one on the rule to the pixel; four ship
+colours; several hulls whose glow layer is bigger than the frame tell
+frame from glow); medium for the fly-in's shape (a 100 ms animation
+sampled at 30 fps, its first frames clipped by the play area).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w9/brackets/`:
+`esc-a/`, `esc-b/` (the Tab runs, all No Target), `click-a/`, `click-b/`
+(`NN-click-RR-K.png`, `panels.png` = the target panels with the box size
+under each, `brackets.json`, `recording.mp4`), `sol/`; the stellar shots
+are wave 4's and 6's `u9/{step,land,st,fine}-*/*/01-request.png`.
+Side-by-side with headless NovaJS (same classes, port 8495):
+`side_by_side.png`; the NovaJS shots and the live corner geometry
+(`results.json`: corner sprites' bounds, every shän layer's size) in
+`novajs/nj_a`, `novajs/nj_b`, with the scripts that made them.
+
 ### Reliability notes (for anyone running the reference)
+
+- **Tab never targets the player's own escorts (wave 9).** To target an
+  escort, click it: `loops/click_targets.mjs` finds the ship sprites in a
+  shot and clicks each. A click on a stellar sets the nav target instead
+  (blue bracket) and leaves the ship target alone. Park the mouse before
+  a shot (the cursor sprite is red).
 
 - **Boarding at rest close in is flaky (wave 7).** Under about 17 px
   (inside the sprite of a 96 px hulk) a `b` often gets no answer at all;
@@ -4421,6 +4634,7 @@ panels, `carrier1/*/panels.png` the contact sheet, `recording.mp4`).
 | J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS took the largest outfit and ignored InhJam: mismatch, applied in f20ecec2 (distinct outfits summed, plus the hull's InherentGovt InhJam). Asteroid range vs chance: not answerable (röid has no speed or position field). |
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
+| K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix proposed, not applied). Tab skips escorts (matches); whether `r` picks an escort is still open. |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
 
 ## Catalogue
@@ -4517,12 +4731,13 @@ cosmetic or rare.
 |---|---|---|---|---|
 | K1 | Spaceport hotkeys (Bar/Mission BBS/Trade/Shipyard/Outfitter/Leave): which letters, and does Return = Leave? (Return = Leave **confirmed**; `o` = Outfitter confirmed) | `N/spaceport/spaceport.ts` key handling | **mostly (wave 5)**: `o` `s` `t` `b` open Outfitter, Shipyard, Trade, Bar; `m` opens the star map (not the BBS); Escape closes each back to the spaceport. The BBS key is unknown | H |
 | K2 | Mission offer dialog keys: Return = Yes (**confirmed** for AvailLoc 3), Escape = No? | spaceport mission offer | **answered (wave 5)**: Escape does NOT dismiss a bar mission offer | M |
-| K3 | Tab with one ship toggles target ↔ none (**observed**). Does `r` skip friendly escorts? | `N/nova_plugin/hostility.ts` targeting | SS | M |
+| K3 | Tab with one ship toggles target ↔ none (**observed**). Does `r` skip friendly escorts? | `N/nova_plugin/hostility.ts` targeting | SS. **Wave 9:** Tab never selects the player's escorts (60 presses, 12 escorts; matches NovaJS's flock rule); a click does. With only escorts in the system and one targeted, `r` kept it (inconclusive) | M |
 | K4 | Map (`m`) keys: zoom +/-, Find, Escape | map dialog | SS | L |
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
 | K6 | Venue buttons when a stellar lacks a venue: hidden or greyed? (#373) | `N/spaceport/spaceport.ts:1037-1050` | CPg Kit Market (no outfitter/shipyard): SS its spaceport | H |
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
 | K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar | L |
+| K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix proposed | L |
 
 ### Edge cases
 
