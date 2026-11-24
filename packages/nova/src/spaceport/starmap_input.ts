@@ -3,11 +3,12 @@
 // click-vs-drag decision itself is the pure DragTracker (starmap_hit.ts).
 import * as PIXI from 'pixi.js';
 import { DragTracker } from "./starmap_hit.js";
+import { globalDeltaToLocal } from "./starmap_gestures.js";
 import { ZOOM_STEP } from "./starmap_viewport.js";
 
 /** What a bound map pane reports, in the pane's own coordinates. */
 export interface MapPointerHandlers {
-    /** The pointer dragged the map by a screen-space delta. */
+    /** The pointer dragged the map by a delta in pane-local units. */
     pan(dx: number, dy: number): void;
     /** The wheel zoomed by `factor` around the pane-local point (x, y). */
     zoomAt(factor: number, x: number, y: number): void;
@@ -56,7 +57,11 @@ export function bindMapPointer(container: PIXI.Container,
                 pressedAt = undefined;
                 handlers.dragStart?.(x, y);
             }
-            handlers.pan(delta.dx, delta.dy);
+            // The tracker works in renderer px (its deadzone is a screen
+            // distance); the pane is scaled by the UI layer above it.
+            const local = globalDeltaToLocal(container.worldTransform,
+                delta.dx, delta.dy);
+            handlers.pan(local.dx, local.dy);
         }
     };
     const onDragEnd = (event: PIXI.FederatedPointerEvent) => {
