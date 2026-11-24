@@ -32,7 +32,8 @@ import {
 } from '../nova_plugin/pilot/index.js';
 import {
     ControlsOverride, GameSettingsOverride, loadControlsOverride,
-    loadGameSettings, loadPilotProfile, PilotProfile, PrefsStorage,
+    loadGameSettings, loadPilotProfile, migrateControlsOverride,
+    PilotProfile, PrefsStorage,
     saveControlsOverride, saveGameSettings,
 } from './client_prefs.js';
 import {
@@ -529,7 +530,10 @@ export function loadPilotControls(storage?: PrefsStorage): ControlsOverride {
     if (!active) {
         return loadControlsOverride(storage);
     }
-    return { ...(active.controls ?? {}) };
+    // An old default the record still holds (client_prefs
+    // migrateControlsOverride) gives way to today's; the next
+    // Preferences OK writes the migrated map back.
+    return { ...migrateControlsOverride(active.controls ?? {}) };
 }
 
 /** Persists control overrides onto the active pilot. */

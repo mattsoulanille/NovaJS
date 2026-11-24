@@ -61,3 +61,13 @@ function domTextEntryFocused(): boolean {
 export function isTextEntryActive(): boolean {
     return pixiTextEntryCount > 0 || domTextEntryFocused();
 }
+
+/**
+ * Whether a key press is Return as a dialog's default-button key: Enter
+ * WITHOUT Option/Alt. Option+Return (Alt+Enter) is the fullscreen shortcut
+ * (client/fullscreen.ts), so it must not also press OK underneath.
+ */
+export function isReturnPress(event: { key: string, altKey?: boolean }):
+    boolean {
+    return event.key === 'Enter' && !event.altKey;
+}

@@ -29,6 +29,7 @@ import { CapsLockTracker } from "./client/caps_lock.js";
 import { ClientStateSlot } from "./client/client_state.js";
 import { FleetLedger } from "./client/fleet_ledger.js";
 import { simulationControl } from "./client/frame_pump.js";
+import { installFullscreenShortcut } from "./client/fullscreen.js";
 import { startGame } from "./client/game_session.js";
 import type { PlayerStartOptions } from "./client/player_start.js";
 import { DisplayAssetData } from "./client/gamedata/display_asset_data.js";
@@ -420,6 +421,11 @@ const autoEnter = ['enter', 'ship', 'system', 'char']
 // On first run this migrates the legacy single slot into the registry as
 // the first pilot, keeping its save exactly where it already is.
 applyActivePilot();
+
+// Fullscreen (Option+Return / Alt+Enter) answers on every screen, the
+// title included, so the bindings are read now rather than at game entry.
+installFullscreenShortcut(document, () => controls);
+void applyControls();
 
 if (autoEnter) {
     enterGame().catch((e) => {

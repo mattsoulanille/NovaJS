@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { ControlEvent } from '../nova_plugin/core/index.js';
-import { beginPixiTextEntry } from '../input_focus.js';
+import { beginPixiTextEntry, isReturnPress } from '../input_focus.js';
 import { MenuControls } from './menu_controls.js';
 
 // The plain system dialog from the reference screenshots
@@ -168,7 +168,7 @@ export class QuantityDialog {
         if (!this.container.visible) {
             return;
         }
-        if (event.key === 'Enter') {
+        if (isReturnPress(event)) {
             this.confirm();
             return;
         }

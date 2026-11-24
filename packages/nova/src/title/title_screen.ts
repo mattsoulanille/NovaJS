@@ -3,7 +3,7 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { texturesFromFrames } from '../display/textures_from_frames.js';
-import { isTextEntryActive } from '../input_focus.js';
+import { isReturnPress, isTextEntryActive } from '../input_focus.js';
 
 /** The six title-screen commands, one per corner button. */
 export type TitleAction =
@@ -399,7 +399,7 @@ export class TitleScreen {
      * selection, and the six letter hotkeys. These get the button-down /
      * button-up snds, mirroring a mouse press. */
     private isActivationKey(event: KeyboardEvent): boolean {
-        return event.key === 'Enter' || event.key === ' '
+        return isReturnPress(event) || event.key === ' '
             || hotkeyActionFor(event) !== undefined;
     }
 
@@ -450,7 +450,7 @@ export class TitleScreen {
                 break;
             case 'Enter':
             case ' ':
-                if (this.selected >= 0) {
+                if (this.selected >= 0 && !event.altKey) {
                     this.activate(this.buttons[this.selected]);
                     event.preventDefault();
                 }

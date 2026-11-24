@@ -529,9 +529,15 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         }));
         // Consume the client-local FPS meter toggle before menu routing so
         // Option+F works everywhere (in space and over menus) without ever
-        // leaking into menus or simulation inputs (#371 R4).
+        // leaking into menus or simulation inputs (#371 R4). `fullscreen`
+        // (Option+Return) is dropped the same way: the page-lifetime
+        // shortcut (client/fullscreen.ts, installed by browser.ts) already
+        // toggled it inside this same keydown.
         const remainingEvents: ControlEvent[] = [];
         for (const controlEvent of controlEvents) {
+            if (controlEvent.action === 'fullscreen') {
+                continue;
+            }
             if (fpsMeter.handleControlEvent(controlEvent)) {
                 if (event.type !== 'keyup') {
                     event.preventDefault();

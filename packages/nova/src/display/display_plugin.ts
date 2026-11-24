@@ -13,7 +13,6 @@ import { BeamDisplayPlugin } from "./beam_display_plugin.js";
 import { CloakSoundPlugin } from "./cloak_sound_plugin.js";
 import { CursorPlugin } from "./cursor_plugin.js";
 import { ExplosionPlugin } from "./explosion_plugin.js";
-import { FullscreenPlugin } from "./fullscreen_plugin.js";
 import { GateAnimationPlugin } from "./gate_animation_plugin.js";
 import { GateMapPlugin } from "./gate_map_plugin.js";
 import { JumpFadePlugin } from "./jump_fade_plugin.js";
@@ -163,7 +162,6 @@ export const Display: Plugin = {
         world.addSystem(CenterShipSystem);
         await world.addPlugin(TargetCornersPlugin);
         await world.addPlugin(ParticlesPlugin);
-        await world.addPlugin(FullscreenPlugin);
         await world.addPlugin(ExplosionPlugin);
         await world.addPlugin(AsteroidDisplayPlugin);
         await world.addPlugin(BeamDisplayPlugin);
@@ -237,7 +235,6 @@ export const Display: Plugin = {
         await world.removePlugin(ProjectileSpinPlugin);
         await world.removePlugin(AsteroidDisplayPlugin);
         await world.removePlugin(ExplosionPlugin);
-        await world.removePlugin(FullscreenPlugin);
         await world.removePlugin(ParticlesPlugin);
         await world.removePlugin(TargetCornersPlugin);
 

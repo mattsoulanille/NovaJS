@@ -24,6 +24,10 @@ import {
     savePilotSettings,
 } from './pilot_registry.js';
 import { ENHANCEMENTS, resolveEnhancements } from '../enhancements.js';
+import {
+    fullscreenShortcutLabel, wireFullscreenButton,
+} from '../client/fullscreen.js';
+import { isReturnPress } from '../input_focus.js';
 
 // ---------------------------------------------------------------------------
 // Shared modal scaffolding.
@@ -255,7 +259,7 @@ export function showNewPilotDialog(): Promise<PilotProfile | null> {
         };
         const abort = () => { cleanup(); resolve(null); };
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            if (isReturnPress(e)) { e.preventDefault(); submit(); }
             else if (e.key === 'Escape') { e.preventDefault(); abort(); }
         };
         ok.addEventListener('click', submit);
@@ -529,7 +533,7 @@ export function showOpenPilotDialog(entries: PilotEntry[],
         const abort = () => { cleanup(); resolve(null); };
         const onKey = (e: KeyboardEvent) => {
             if (suspended) { return; }
-            if (e.key === 'Enter') { e.preventDefault(); confirm(); }
+            if (isReturnPress(e)) { e.preventDefault(); confirm(); }
             else if (e.key === 'Escape') { e.preventDefault(); abort(); }
         };
         open.addEventListener('click', confirm);
@@ -879,7 +883,7 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
         const onKey = (e: KeyboardEvent) => {
             // While capturing a key, let the capture handler consume it.
             if (activeCapture) { return; }
-            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (isReturnPress(e)) { e.preventDefault(); commit(); }
             else if (e.key === 'Escape') { e.preventDefault(); abort(); }
         };
         ok.addEventListener('click', commit);
@@ -1002,7 +1006,7 @@ export function showEnhancementsSheet(settings: GameSettingsOverride,
     // Capture phase, so the Preferences dialog underneath never sees the
     // Enter / Escape meant for this sheet.
     const onKey = (e: KeyboardEvent) => {
-        if (e.key === 'Enter') {
+        if (isReturnPress(e)) {
             e.preventDefault();
             e.stopPropagation();
             close(true);
@@ -1151,8 +1155,45 @@ function buildSoundVolume(settings: GameSettingsOverride): HTMLElement {
 }
 
 /**
- * The Display tab: the two scale sliders, then the hotkeys that move
- * them.
+ * The Display tab's "Fullscreen" button (client/fullscreen.ts
+ * wireFullscreenButton: its label follows the document's state), with the
+ * shortcut beside it: Option+Return on a Mac, Alt+Enter elsewhere.
+ */
+function buildFullscreenRow(): HTMLDivElement {
+    const row = document.createElement('div');
+    Object.assign(row.style, {
+        display: 'flex', alignItems: 'center', gap: '10px',
+        margin: '0 0 8px',
+    } as Partial<CSSStyleDeclaration>);
+    const name = document.createElement('div');
+    name.textContent = 'Fullscreen:';
+    name.style.width = '110px';
+    row.appendChild(name);
+
+    const btn = aquaButton('Fullscreen', 'prefs-fullscreen', false);
+    Object.assign(btn.style, {
+        width: '120px', padding: '0 12px',
+    } as Partial<CSSStyleDeclaration>);
+    wireFullscreenButton(btn);
+    if (btn.disabled) {
+        btn.style.cursor = 'default';
+        btn.style.color = '#bbb';
+    }
+    row.appendChild(btn);
+
+    const hint = document.createElement('div');
+    hint.dataset.testid = 'prefs-fullscreen-shortcut';
+    hint.textContent = fullscreenShortcutLabel();
+    Object.assign(hint.style, {
+        color: '#777', fontSize: '11px',
+    } as Partial<CSSStyleDeclaration>);
+    row.appendChild(hint);
+    return row;
+}
+
+/**
+ * The Display tab: the Fullscreen button, the two scale sliders, then the
+ * hotkeys that move them.
  *
  * The sliders apply LIVE (the point of a display setting is seeing what
  * it does), and the client persists each move; Cancel restores whatever
@@ -1166,6 +1207,7 @@ function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
     Object.assign(wrap.style, {
         padding: '0 20px',
     } as Partial<CSSStyleDeclaration>);
+    wrap.appendChild(buildFullscreenRow());
 
     if (!displayScale) {
         const none = document.createElement('div');

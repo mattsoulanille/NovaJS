@@ -83,7 +83,12 @@
   "accept": "KeyA",
   "properties": "KeyP",
   "missions": "KeyI",
-  "fullscreen": "Enter",
+  "fullscreen": {
+    "key": "Enter",
+    "modifiers": [
+      "Alt"
+    ]
+  },
   "uiScaleUp": "BracketRight",
   "uiScaleDown": "BracketLeft",
   "globalScaleUp": "Equal",

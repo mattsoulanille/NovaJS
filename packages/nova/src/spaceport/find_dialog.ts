@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { ControlEvent } from '../nova_plugin/core/index.js';
-import { beginPixiTextEntry } from '../input_focus.js';
+import { beginPixiTextEntry, isReturnPress } from '../input_focus.js';
 import { MenuControls } from './menu_controls.js';
 
 // The starmap's Find dialog, drawn after the original's native Aqua alert
@@ -230,7 +230,7 @@ export class FindDialog {
         // game's controls (typing a name full of 'd's and 'm's...).
         event.stopImmediatePropagation();
         event.preventDefault();
-        if (event.key === 'Enter') {
+        if (isReturnPress(event)) {
             this.close(this.text);
             return;
         }

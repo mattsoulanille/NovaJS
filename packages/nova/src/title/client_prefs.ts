@@ -182,7 +182,60 @@ export type ControlsOverride = Record<string, ControlsOverrideValue>;
 
 /** Loads persisted control-binding overrides (empty object if none). */
 export function loadControlsOverride(storage?: PrefsStorage): ControlsOverride {
-    return readJson<ControlsOverride>(CONTROLS_OVERRIDE_KEY, storage) ?? {};
+    return migrateControlsOverride(
+        readJson<ControlsOverride>(CONTROLS_OVERRIDE_KEY, storage) ?? {});
+}
+
+/**
+ * Served defaults that have since moved, by action: the binding a saved
+ * override can still hold from before the move.
+ *
+ * `fullscreen` was plain Return until Matthew's 2026-11-24 ruling moved it
+ * to Option+Return (Alt+Enter) and left Return to the original's default
+ * buttons.
+ */
+const RETIRED_DEFAULTS: Record<string, NormalizedBinding[]> = {
+    fullscreen: [{ key: 'Enter', modifiers: [] }],
+};
+
+/**
+ * Drops overrides that only restate a RETIRED served default, so the
+ * current default applies. The pilot registry, the legacy single slot and
+ * an imported pilot file all read through here (loadControlsOverride,
+ * pilot_registry loadPilotControls), and the Preferences OK writes the
+ * migrated map back.
+ *
+ * Only an exact match migrates: a binding the player chose themselves
+ * (another key, Return with a modifier, an explicit unbind '') is theirs
+ * and stays. Returns a new map when anything changed, else the input.
+ */
+export function migrateControlsOverride(override: ControlsOverride):
+    ControlsOverride {
+    let migrated: ControlsOverride | undefined;
+    for (const [action, retired] of Object.entries(RETIRED_DEFAULTS)) {
+        if (!Object.prototype.hasOwnProperty.call(override, action)) {
+            continue;
+        }
+        const value = override[action];
+        if (value === '' || (Array.isArray(value) && value.length === 0)) {
+            continue;
+        }
+        if (sameBindings(normalizeBindings(value), retired)) {
+            migrated ??= { ...override };
+            delete migrated[action];
+        }
+    }
+    return migrated ?? override;
+}
+
+function sameBindings(a: readonly NormalizedBinding[],
+    b: readonly NormalizedBinding[]): boolean {
+    const key = ({ key, modifiers }: NormalizedBinding) =>
+        `${[...modifiers].sort().join('+')}+${key}`;
+    const left = a.map(key).sort();
+    const right = b.map(key).sort();
+    return left.length === right.length
+        && left.every((k, i) => k === right[i]);
 }
 
 /** Persists control-binding overrides. */
