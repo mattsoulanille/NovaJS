@@ -491,6 +491,7 @@ export class HireEscortDialog {
         this.itemGrid = new ItemGrid(this.displayAssets, pool);
         this.gridContainer.addChild(this.itemGrid.container);
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
+        this.itemGrid.scrolled.subscribe(() => this.updateArrows());
         this.itemGrid.drawGrid();
         this.updateArrows();
 

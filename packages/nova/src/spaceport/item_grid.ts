@@ -1,7 +1,9 @@
 import * as PIXI from 'pixi.js';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { displayName } from '../nova_plugin/core/index.js';
+import { enhancementEnabled } from '../enhancements.js';
+import { WheelRowStepper } from './grid_wheel.js';
 
 
 const TILE_SIZE = [83, 54];
@@ -348,15 +350,52 @@ export const ITEM_GRID_NAME = 'ItemGrid';
 export class ItemGrid<I extends Item> {
     public activeTile = new BehaviorSubject<ItemTile<I> | undefined>(undefined);
     public container = new PIXI.Container();
+    /** Fires after the wheel scrolled the page, so the owner can update
+     * its scroll arrows (the arrow and key paths update them directly). */
+    readonly scrolled = new Subject<void>();
     private selectionIndex = -1;
     private scroll = 0;
     private tilesDict = new Map<string, ItemTile<I>>();
     private tiles: ItemTile<I>[];
+    private readonly wheel = new WheelRowStepper();
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private items: I[]) {
         this.container.name = ITEM_GRID_NAME;
         this.tiles = items.map(item => this.tileFor(item));
+        // The wheel over the grid, empty cells included (NovaJS
+        // Enhancements, "Scroll wheel in shops"; the original's wheel does
+        // nothing here). Read per event, so the toggle applies at once.
+        this.container.eventMode = 'static';
+        this.container.hitArea = new PIXI.Rectangle(0, 0,
+            BOX_COUNT[0] * TILE_SIZE[0] + 1, BOX_COUNT[1] * TILE_SIZE[1] + 1);
+        this.container.on('wheel', (event: PIXI.FederatedWheelEvent) => {
+            const native = event.nativeEvent as WheelEvent & {
+                wheelDeltaY?: number };
+            this.onWheel({
+                deltaX: event.deltaX, deltaY: event.deltaY,
+                deltaMode: event.deltaMode, ctrlKey: event.ctrlKey,
+                wheelDeltaY: typeof native?.wheelDeltaY === 'number'
+                    ? native.wheelDeltaY : undefined,
+                timeStamp: event.timeStamp,
+            });
+        });
+    }
+
+    /**
+     * One wheel event over the grid: scrolls the page by whole rows (see
+     * WheelRowStepper) when the "Scroll wheel in shops" enhancement is on,
+     * and does nothing at all when it is off. Public for specs and
+     * headless driving.
+     */
+    onWheel(sample: Parameters<WheelRowStepper['rows']>[0]): void {
+        if (!enhancementEnabled('enhShopScrollWheel')) {
+            return;
+        }
+        const rows = this.wheel.rows(sample);
+        if (rows !== 0 && this.scrollBy(rows)) {
+            this.scrolled.next();
+        }
     }
 
     /** The tile for an item, built (and cached) on first use. Tiles are
@@ -482,6 +521,23 @@ export class ItemGrid<I extends Item> {
         }
         this.scroll = Math.min(this.maxScroll, this.scroll + BOX_COUNT[1]);
         this.drawGrid();
+    }
+
+    /** Scrolls the visible page by `rows` (negative = up), clamped to the
+     * list. The selection stays where it is. Returns whether it moved. */
+    scrollBy(rows: number): boolean {
+        const next = Math.max(0, Math.min(this.maxScroll, this.scroll + rows));
+        if (next === this.scroll) {
+            return false;
+        }
+        this.scroll = next;
+        this.drawGrid();
+        return true;
+    }
+
+    /** The top visible row (0 = the first). */
+    get scrollRow(): number {
+        return this.scroll;
     }
 
     setCounts(items: Map<string, number>) {

@@ -400,6 +400,7 @@ export class Outfitter extends Menu<Entity> {
         // likewise a pixel lower than the shipyard's (see INFO_ROWS).
         this.itemGrid.container.position.y = -152;
         this.itemGrid.activeTile.subscribe(this.setOutfitSelected.bind(this));
+        this.itemGrid.scrolled.subscribe(() => this.updateArrows());
         this.updateArrows();
 
         // On top of everything, so its modal shield covers the screen.

@@ -221,6 +221,7 @@ export class Shipyard extends Menu<Entity> {
         this.itemGrid.container.position.x = -373;
         this.itemGrid.container.position.y = -153;
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
+        this.itemGrid.scrolled.subscribe(() => this.updateArrows());
         this.updateArrows();
 
         // Keyboard navigation can scroll the page too.
