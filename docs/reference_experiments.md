@@ -5365,6 +5365,27 @@ escort goal when its ship is disabled; refuse a hail to a disabled ship
 with the no-response line; refuse boarding a live mission's ShipBehav-1
 ship with "You can't board this ship.".
 
+**Applied (three of the five).**
+- **1b74bf24**, the repair: `repairHulk` no longer touches the shield.
+  The armor margin is unchanged, `REPAIR_MARGIN_FRACTION` (threshold +
+  10% of max, 43% = 1300 of 3000 on the kit hull): inside the measured
+  33%-53% bracket, and one 600 blast re-disables it as on the original.
+- **e0b875ea**, mission allies: the own-escort repair skips mission ships
+  (boarding a disabled mission ally opens the plunder dialog); an escort
+  goal fails the tick its ship is disabled (`shipDisabled`); the display
+  prints "Mission failed." (STR# 2002 #283) when a ship goal fails in
+  flight, and Mission Info hides that mission. OnFailure still runs at
+  the next landing, as for every sim-marked failure. The other in-flight
+  goal failures (an escorted ship killed, a disable target destroyed) get
+  the same line, unmeasured. Specs in 46e6c671.
+- **d973307e**, the hail: a disabled target gets "No response." (STR#
+  2002 #52, the dead-moon line) and no channel, before any hail offer.
+  Every stock derelict përs offers on boarding (0x0200), so none is lost.
+- **Not applied:** "You can't board this ship." for a live mission's
+  ShipBehav-1 ship. The refusal was measured on goal-5 rescue ships only
+  (ShipBehav 1 and -1 alike, so ShipBehav is not its cause), and see the
+  next section for why that refusal is not applied either.
+
 Confidence: high for 1 and 3 (one run each, unambiguous messages and
 dialogs); medium for the armor bound in 2 (blast damage at that distance
 assumed full; one re-disable).
@@ -5421,6 +5442,24 @@ Boarding: NovaJS lets the player board a live mission's rescue hulk
 (`N/display/boarding_plugin.ts` presents board / rescue goals through the
 boarding dialog); whether the original's refusal also holds for përs
 rescue ships is untested, so leave that until the përs run.
+
+**Applied in a86f321b** (finding 1): `deferredAutoAbort(mission,
+replacesPers)` defers only when the in-flight ship-offer accept replaced
+the offering përs (përs Flags 0x0040, carried as
+`MissionOffer.replacesPers`); every other board/rescue auto-abort takes
+the immediate path (OnAbort at the ships' creation, no CompReward, no
+reversal). The përs case keeps today's deferral: still unmeasured, and it
+is every stock user (the four Refuel Traders, nova:141/650-652, offered
+only by 0x0040 përs).
+
+**Not applied** (finding 2, the boarding refusal for a live mission's
+non-përs rescue ship). Stock data argues against reading it as a rule:
+mïsn nova:394 "Rescue Raczak" is ShipGoal 5 with no përs and no
+auto-abort, and the refusal would make it uncompletable, along with any
+plug-in rescue mission offered from a board or bar. The cause is still
+inferred; a run against nova:394 itself would settle whether a stock
+rescue ship refuses the board the same way or whether something about
+the kit missions causes it.
 
 Confidence: high for 1 (one run, bits and record read back); medium for
 2 (two runs, every press refused; the cause is inferred).
