@@ -99,8 +99,11 @@ export function formatCredits(credits: number): string {
 
 /**
  * The standard commodities abbreviate to fit the cargo column exactly as the
- * original status bar shows them ("Ind", "Med", "LuxG", "Met", "Equ"). Junk
- * and other names fall back to their first few characters.
+ * original status bar shows them ("Ind", "Med", "LuxG", "Met", "Equ"; the
+ * reference's wave-15 readout "Ind / LuxG / Equ"). Other names fall back to
+ * their first few characters. Jünk never comes here: it is named on the
+ * "Special:" line by its own Abbrev field (status_bar_cargo.ts's
+ * specialJunkName).
  */
 const STANDARD_CARGO_ABBREV: Readonly<Record<string, string>> = {
     'Food': 'Food',
@@ -116,15 +119,18 @@ export function abbreviateCargoName(name: string): string {
 }
 
 /**
- * Summarizes the "Special:" mission-cargo line: nothing when the player carries
- * no mission cargo (the label goes too: 390_medical_supplies.png's hold of
- * plain commodities shows only "Free:" and "Credits:"), the single cargo's
- * STR# 4002 abbreviation when there's exactly one ("Raczak", "Probe"), and
- * "Multiple" when several missions contribute cargo. "Multiple" is stock STR#
- * 2002 index 20, stored right after the readout's own labels at 18 "Free:"
- * and 19 "Special:"; no reference capture shows two mission cargos aboard.
- * Counting per MISSION (two missions with the same cargo type still read
- * "Multiple") is a guess.
+ * Summarizes the "Special:" line from the names that contribute to it
+ * (status_bar_cargo.ts's cargoDisplayOf passes the missions' cargo names, or,
+ * with no mission cargo aboard, the jünks'): nothing when there are none (the
+ * label goes too: 390_medical_supplies.png's hold of plain commodities shows
+ * only "Free:" and "Credits:"), the single name when there's exactly one
+ * ("Raczak", "Probe", "Contraband"), and "Multiple" when there are several.
+ * "Multiple" is stock STR# 2002 index 20, stored right after the readout's
+ * own labels at 18 "Free:" and 19 "Special:". MEASURED: the count is per
+ * MISSION, so two missions with the SAME cargo type read "Multiple"
+ * (docs/reference_experiments.md, "Status bar "Special:" with two missions
+ * of one cargo type, and #381 commodity rows, wave 15": two 3 t Military
+ * Stores missions read "Special: Multiple", docked and in flight).
  */
 export function specialCargoSummary(names: readonly string[]): string | null {
     if (names.length === 0) {

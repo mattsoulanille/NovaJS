@@ -84,12 +84,15 @@ describe('cargoDisplayOf', () => {
         expect(special).toBeNull();
     });
 
-    it('lists jünk commodities and summarizes mission cargo as Special', () => {
+    it('keeps jünk off the manifest and names mission cargo as Special', () => {
         const cargo = new Map([['junk:5', 4], ['mission:m1', 3]]);
         const { free, lines, special } = cargoDisplayOf(cargo, 50, gameData);
         expect(free).toBe(43); // 50 - (4 + 3)
-        expect(lines).toEqual([{ name: 'Gz', quantity: 4 }]);
+        expect(lines).toEqual([]);
         expect(special).toBe('Cargo');
+        // Jünk alone: its Abbrev on the Special line.
+        expect(cargoDisplayOf(new Map([['junk:5', 4]]), 50, gameData).special)
+            .toBe('Gz');
     });
 
     it('omits zero-quantity commodities from the manifest', () => {

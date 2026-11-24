@@ -28,8 +28,14 @@ import { cargoDisplayOf, specialCargoName } from './status_bar_cargo.js';
 const NAMES = ['Food', '*Admiral Raczak', 'Artwork', '*Space Probe'];
 const ABBREVS = ['Food', 'Raczak', 'Artwork', 'Probe'];
 
+const JUNKS: Record<string, { name: string, abbrev: string }> = {
+    // The reference's kit jünk 203.
+    'kit:203': { name: 'Kit Contraband', abbrev: 'Contraband' },
+    'kit:204': { name: 'Kit Bees', abbrev: 'Bees' },
+    'kit:205': { name: 'Kit Unabbreviated', abbrev: '' },
+};
 const gameData = {
-    data: { Junk: { getCached: () => undefined } },
+    data: { Junk: { getCached: (id: string) => JUNKS[id] } },
 } as unknown as SimulationGameDataInterface;
 
 describe('missionCargoAbbrev', () => {
@@ -82,6 +88,71 @@ describe('the Special readout', () => {
         expect(cargoDisplayOf(cargo, 200, gameData, source).special)
             .toBe('Multiple');
     });
+
+    it('reads "Multiple" for two missions with the SAME cargo type '
+        + '(reference w15_special)', () => {
+            // mïsn 1085 and 1086, 3 t of one cargo type each.
+            const same = new Map([['kit:1085', { cargoType: 3 }],
+                ['kit:1086', { cargoType: 3 }]]);
+            const one = new Map([[missionCargoKey('kit:1085'), 3]]);
+            expect(cargoDisplayOf(one, 200, gameData,
+                { ...source, missions: same }).special).toBe('Probe');
+            const both = new Map([[missionCargoKey('kit:1085'), 3],
+                [missionCargoKey('kit:1086'), 3]]);
+            expect(cargoDisplayOf(both, 200, gameData,
+                { ...source, missions: same }).special).toBe('Multiple');
+        });
+
+    it('packs the commodity rows in commodity order, with no gaps '
+        + '(reference w15_special, #381)', () => {
+            // Equipment 9, Luxury 7, Industrial 5, filled out of order.
+            const cargo = new Map([['cargo:5', 9], ['cargo:3', 7],
+                ['cargo:1', 5]]);
+            const display = cargoDisplayOf(cargo, 200, gameData, source);
+            expect(display.lines).toEqual([
+                { name: 'Ind', quantity: 5 },
+                { name: 'LuxG', quantity: 7 },
+                { name: 'Equ', quantity: 9 },
+            ]);
+            expect(display.free).toBe(179);
+            expect(display.special).toBeNull();
+        });
+
+    it('names jünk on the Special line by its Abbrev, never as a row '
+        + '(reference w15_several, 11-gate.png)', () => {
+            const cargo = new Map([['junk:kit:203', 10]]);
+            const display = cargoDisplayOf(cargo, 200, gameData, source);
+            expect(display.lines).toEqual([]);
+            expect(display.special).toBe('Contraband');
+            expect(display.free).toBe(190);
+            // An empty Abbrev falls back to the name; uncached, "Cargo".
+            expect(cargoDisplayOf(new Map([['junk:kit:205', 1]]), 200,
+                gameData).special).toBe('Kit Unabbreviated');
+            expect(cargoDisplayOf(new Map([['junk:kit:999', 1]]), 200,
+                gameData).special).toBe('Cargo');
+        });
+
+    it('names the mission cargo, not the jünk, when both are aboard '
+        + '(reference w15_several, 08-bought.png / 09-left.png)', () => {
+            // 10 t of Kit Contraband and the 0x0020 mission's 1 t of Food.
+            const cargo = new Map([['junk:kit:203', 10],
+                [missionCargoKey('kit:1084'), 1]]);
+            const display = cargoDisplayOf(cargo, 200, gameData, {
+                ...source, missions: new Map([['kit:1084', { cargoType: 0 }]]),
+            });
+            expect(display.special).toBe('Food');
+            expect(display.lines).toEqual([]);
+            expect(display.free).toBe(189);
+        });
+
+    it('reads "Multiple" for two jünk types and no mission cargo (guess)',
+        () => {
+            const cargo = new Map([['junk:kit:203', 10], ['junk:kit:204', 2],
+                ['cargo:0', 4]]);
+            const display = cargoDisplayOf(cargo, 200, gameData, source);
+            expect(display.special).toBe('Multiple');
+            expect(display.lines).toEqual([{ name: 'Food', quantity: 4 }]);
+        });
 
     it('is absent with only plain commodities aboard', () => {
         const cargo = new Map([['cargo:2', 390]]);

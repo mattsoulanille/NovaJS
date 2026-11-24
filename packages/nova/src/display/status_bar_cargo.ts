@@ -262,49 +262,81 @@ export function specialCargoName(key: string,
 }
 
 /**
+ * The "Special:" name of a jünk held under CargoComponent key `key`
+ * ("junk:<jünk id>"): the jünk's Abbrev field ("Status bar
+ * abbreviation", the Bible's jünk resource), in full. MEASURED: 10 t of
+ * the kit jünk 203 (name "Kit Contraband", Abbrev "Contraband") read
+ * "Special: Contraband" in flight (docs/reference_experiments.md, "Status
+ * bar "Special:" ... wave 15", `several/11-gate.png`). Falls back to the
+ * jünk's name, then "Cargo" while its data is not cached yet.
+ */
+export function specialJunkName(key: string,
+    gameData: SimulationGameDataInterface): string {
+    const junk = gameData.data.Junk.getCached(key.slice('junk:'.length));
+    return junk?.abbrev?.trim() || junk?.name?.trim() || 'Cargo';
+}
+
+/**
  * The cargo panel's readout values (free space, manifest lines, and the
- * mission-cargo "Special:" summary) for a cargo hold and capacity. Shared
- * by the in-flight and docked paths. A jünk name not cached yet reads
- * "Cargo" until it is; `special` names the mission cargo (see
- * {@link specialCargoName}).
+ * "Special:" summary) for a cargo hold and capacity. Shared by the
+ * in-flight and docked paths.
+ *
+ * MEASURED on the original (docs/reference_experiments.md, "Status bar
+ * "Special:" with two missions of one cargo type, and #381 commodity
+ * rows, wave 15"):
+ *  - the manifest lists only the STANDARD commodities, packed from the
+ *    first row with no gaps, in commodity order (Industrial, Luxury and
+ *    Equipment aboard: "Ind / LuxG / Equ" on rows one to three);
+ *  - jünk is never a manifest row: it is named on the "Special:" line,
+ *    by its Abbrev (specialJunkName), but only when no mission cargo is
+ *    aboard. With 10 t of jünk and one mission's 1 t of Food aboard the
+ *    line read "Food" (`several/09-left.png`, `08-bought.png`, docked and
+ *    in flight), and "Contraband" once the mission had gone
+ *    (`11-gate.png`);
+ *  - two missions read "Multiple", even with the same cargo type
+ *    (specialCargoSummary counts per mission).
+ * GUESS: two jünk types and no mission cargo read "Multiple" as two
+ * missions do.
  */
 export function cargoDisplayOf(cargo: ReadonlyMap<string, number> | undefined,
     capacity: number, gameData: SimulationGameDataInterface,
     special: SpecialCargoSource = {}):
     { free: number, lines: CargoLine[], special: string | null } {
-    const lines: CargoLine[] = [];
-    const specialNames: string[] = [];
+    const rows: Array<{ index: number, line: CargoLine }> = [];
+    const missionNames: string[] = [];
+    const junkNames: string[] = [];
+    let used = 0;
     if (cargo) {
         for (const [key, quantity] of cargo) {
+            used += quantity;
             if (quantity <= 0) {
                 continue;
             }
             const stdIndex = standardCargoIndex(key);
             if (stdIndex !== null) {
-                lines.push({
-                    name: abbreviateCargoName(
-                        STANDARD_CARGO_NAMES[stdIndex] ?? `Cargo ${stdIndex}`),
-                    quantity,
+                rows.push({
+                    index: stdIndex,
+                    line: {
+                        name: abbreviateCargoName(STANDARD_CARGO_NAMES[stdIndex]
+                            ?? `Cargo ${stdIndex}`),
+                        quantity,
+                    },
                 });
             } else if (key.startsWith('junk:')) {
-                const junk = gameData.data.Junk.getCached(key.slice(5));
-                lines.push({
-                    name: abbreviateCargoName(junk?.abbrev || 'Cargo'),
-                    quantity,
-                });
+                junkNames.push(specialJunkName(key, gameData));
             } else if (key.startsWith('mission:')) {
-                specialNames.push(specialCargoName(key, special));
+                missionNames.push(specialCargoName(key, special));
             }
         }
     }
-    let used = 0;
-    if (cargo) {
-        for (const quantity of cargo.values()) {
-            used += quantity;
-        }
-    }
+    rows.sort((a, b) => a.index - b.index);
     const free = Math.max(0, capacity - used);
-    return { free, lines, special: specialCargoSummary(specialNames) };
+    return {
+        free,
+        lines: rows.map(row => row.line),
+        special: specialCargoSummary(
+            missionNames.length > 0 ? missionNames : junkNames),
+    };
 }
 
 /**
