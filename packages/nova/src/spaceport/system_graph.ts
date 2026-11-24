@@ -257,6 +257,7 @@ export class SystemGraph {
 
         bindMapPointer(this.container, size, {
             // The minimap is a fixed glance around the current system.
+            fixed: this.miniMap,
             pan: (dx, dy) => {
                 if (!this.miniMap) {
                     this.pan(dx, dy);
