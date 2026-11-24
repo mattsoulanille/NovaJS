@@ -248,6 +248,8 @@ export class Shipyard extends Menu<Entity> {
             map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
+        // Return presses Done, as in the outfitter (it buys nothing).
+        this.controls.defaultButton = this.done.bind(this);
     }
 
     /** Every ship loaded once, as the grid's pool (see refreshGrid). */

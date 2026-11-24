@@ -1,4 +1,5 @@
 import { Observable, Subscription } from "rxjs";
+import { isReturnPress, isTextEntryActive } from '../input_focus.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
 
 /**
@@ -36,12 +37,51 @@ export class MenuControls {
      */
     readonly repeatableActions = new Set<ControlAction>(REPEATABLE);
 
+    /**
+     * What Return does on this surface: press its default button (Leave
+     * in the spaceport, Done in the outfitter, shipyard and trade center,
+     * Leave in the bar and the Mission BBS; docs/reference_experiments.md,
+     * "The UI screen x key matrix, wave 11", and the wave-10 key notes).
+     * It must do exactly what clicking that button does. A surface without
+     * one ignores Return, and the surfaces under it never see the key.
+     *
+     * Not a ControlAction: Return is the Mac's default-button key, not a
+     * rebindable game control, and it never reaches the simulation (in
+     * flight no surface is focused, so it does nothing there). The
+     * control relay hands the raw key event to {@link pressDefaultButton}.
+     */
+    defaultButton?: () => void;
+
     private controlsSubscription: Subscription | undefined;
     /** Set by {@link release}: this surface is dead and must never take
      * the keyboard again. */
     private released = false;
     constructor(private controlEvents: Observable<ControlEvent>,
         public controls: { [index in ControlAction]?: () => void } = {}) { }
+
+    /**
+     * Return on the landed UI: presses the focused surface's
+     * {@link defaultButton}. Plain Return only ({@link isReturnPress}:
+     * Option+Return is the fullscreen shortcut), never a key repeat (a
+     * held Return that closes a venue must not go on to leave the
+     * spaceport under it), and never while a text field owns the keyboard
+     * (the quantity dialog, the map's Find field and the shop search keep
+     * their own Return). Returns whether a button was pressed, so the
+     * relay can consume the key.
+     */
+    static pressDefaultButton(event: {
+        key: string, altKey?: boolean, repeat?: boolean,
+    }): boolean {
+        if (!isReturnPress(event) || event.repeat || isTextEntryActive()) {
+            return false;
+        }
+        const press = MenuControls.focused?.defaultButton;
+        if (!press) {
+            return false;
+        }
+        press();
+        return true;
+    }
 
     bind() {
         this.unbind();

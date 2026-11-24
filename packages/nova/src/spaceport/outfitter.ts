@@ -432,6 +432,9 @@ export class Outfitter extends Menu<Entity> {
             map: () => this.onMapKey?.(),
             depart: this.done.bind(this),
         };
+        // Return presses Done (the original closes the outfitter on
+        // Return and buys nothing: wave-10 key notes).
+        this.controls.defaultButton = this.done.bind(this);
         // OS key-repeat should repeat buys/sells (each re-checked by the
         // handler, so denials still apply). Scoped to this menu's
         // controls so global actions (jump, land, fire) keep firing once

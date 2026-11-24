@@ -389,6 +389,10 @@ export class Spaceport extends Menu<Entity> {
             // Abort, are in-flight only (mission_info_plugin.ts).
             depart: () => void this.leave(),
         });
+        // Return presses Leave, the original's default button here (K1,
+        // and the wave-11 UI key matrix): the same leave() as the click,
+        // so the escort-deal settlement and the commit run once.
+        this.controls.defaultButton = () => void this.leave();
     }
 
     /**

@@ -519,6 +519,15 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
         if (event.key === 'Tab') {
             event.preventDefault();
         }
+        // Return presses the default button of the landed screen (or
+        // dialog) that holds the keyboard: Leave in the spaceport, Done in
+        // a venue (MenuControls.defaultButton). Main thread only, like any
+        // menu key; in flight nothing is focused and Return does nothing.
+        if (event.type === 'keydown'
+            && MenuControls.pressDefaultButton(event)) {
+            event.preventDefault();
+            return;
+        }
         // A key-up releases what its press pressed, whatever the
         // modifiers are now (Alt let go before C: key_actions.ts).
         const actions = keyActions.resolve(controls, event);

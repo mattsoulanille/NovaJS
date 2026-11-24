@@ -220,6 +220,9 @@ export class MissionBoard extends Menu<Entity> {
             map: () => void this.openMap(),
             depart: this.done.bind(this),
         };
+        // Return presses Leave: the original closes the BBS on Return and
+        // accepts nothing (wave-10 key notes).
+        this.controls.defaultButton = this.done.bind(this);
     }
 
     /**
