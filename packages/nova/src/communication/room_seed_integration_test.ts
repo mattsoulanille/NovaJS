@@ -202,9 +202,15 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // goal, and comes in under the arrival speed instead of
             // flipping across it): the NPCs fly different paths. Genesis
             // and both Random states did not move.
+            //
+            // Thessaly's stepped hash re-pinned again for the aggressor
+            // attribution fix (npc_targeting.ts's responsibleShip: a hit
+            // records its firing group's root, not the concrete firer):
+            // a fleet escort's shot now names the fleet's leader. Genesis,
+            // Kestrel and both Random states did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '54afcf19', 'b28fb506',
+                [THESSALY, '54afcf19', 'fab7c2ff',
                     [3151324470, 1269255679, 2221342106, 396450743]],
                 [SYNTHETIC.systems.kestrel, '71fa40dd', '3859c45c',
                     [1138059186, 670859187, 378276492, 1491742351]],

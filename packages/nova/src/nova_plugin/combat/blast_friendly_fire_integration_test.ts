@@ -235,8 +235,10 @@ describe('splash damage inside a flock', () => {
                 .withContext('direct hit + no double blast').toBe(1);
             expect(hitsOn('leader').length)
                 .withContext('the splash reaches the leader').toBe(1);
+            // ...against the FLEET, named for its leader: the escort's shot
+            // roots at its firing group (npc_targeting.ts's responsibleShip).
             expect(aggressorOf(outsider))
-                .withContext('a real victim still retaliates').toBe('escort');
+                .withContext('a real victim still retaliates').toBe('leader');
             expect(aggressorOf(leader)).toBeUndefined();
         });
 

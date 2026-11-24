@@ -1,14 +1,16 @@
-import { Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
-import { DamagedEvent, ShieldComponent } from '../ship/index.js';
+import {
+    DamagedEvent, DisabledComponent, FiringGroupComponent, OwnerComponent,
+    ShieldComponent, ShipComponent, SourceComponent,
+} from '../ship/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import { NpcComponent } from './npc_component.js';
 import { sameFlock } from './allegiance.js';
 import { addDamageLoad } from './npc_retreat.js';
-import { SourceComponent } from '../ship/index.js';
 
 /**
  * Target selection primitives shared by the NPC decision step: the
@@ -40,11 +42,86 @@ export function chooseNearest(
 
 // --- Aggression tracking ---
 
-const DamagerSourceQuery = new Query([Optional(SourceComponent)] as const);
+/** How many SourceComponent hops responsibleShip follows from a weapon
+ * to the ship that fired it: a submunition names its parent projectile, a
+ * sub of a sub that one's, and so on. Stock and plug-in sub chains are a
+ * few generations deep; the bound only stops a malformed cycle. */
+const MAX_SOURCE_HOPS = 8;
+
+/**
+ * The SHIP responsible for a weapon entity's hit (a DamagedEvent's
+ * `damager`: a projectile, beam or blast), for an NPC's aggressor record.
+ *
+ *  1. The weapon's FIRING-GROUP ROOT (FiringGroupComponent.group) when that
+ *     ship is still in the world: a lone ship's own uuid, a fleet's leader,
+ *     the carrier (or the carrier's fleet leader) for a bay fighter's shots,
+ *     the player for a hired escort's or player fighter's. The same answer
+ *     the player-side hostility (aggression_plugin's damagerRoot), kill
+ *     credit (DamageAttributionSystem) and a guided lock's provocation
+ *     (flock.ts's provokeGuidedLock, which already wrote the root into
+ *     npc.aggressor) give, so "who is attacking me" has one answer for a
+ *     whole flock. Recording the concrete firer instead made a ship fighting
+ *     a carrier alternate between the carrier (its missile lock, its own
+ *     guns) and each bay fighter (their guns) hit by hit, and a fleeing
+ *     trader swung its flee heading to each in turn.
+ *  2. Else its owner-chain root (OwnerComponent.owner) if still in the
+ *     world.
+ *  3. Else the firing ship itself, walking SourceComponent through any
+ *     parent projectiles: a SUBMUNITION's SourceComponent is the projectile
+ *     it split from (fire_weapon_plugin's fireSubs), and recording that
+ *     verbatim left aggressors like `nova:443:projectile:243` behind,
+ *     which no ship query ever matches (the trader stopped reacting, then
+ *     the next think forgot it). Stops at the first ship: a bay fighter
+ *     carries a SourceComponent of its own (its carrier).
+ *
+ * A root or owner that has left the world (a fleet whose leader died, whose
+ * escorts still share its group) or lies disabled (a hulked carrier whose
+ * fighters fight on) falls through to the concrete firer, so the victim
+ * still has a live attacker to flee from or fight: the decision step never
+ * treats a hulk as one. Undefined when
+ * nothing resolves to an entity in the world (a sub whose parent and firer
+ * are both gone): the caller then keeps the aggressor it had.
+ *
+ * Pure over synced, serializer-registered components, so every peer
+ * reaches the same answer.
+ */
+export function responsibleShip(damager: Entity | undefined,
+    getEntity: (uuid: string) => Entity | undefined): string | undefined {
+    if (!damager) {
+        return undefined;
+    }
+    const active = (uuid: string | undefined) => {
+        const entity = uuid !== undefined ? getEntity(uuid) : undefined;
+        return entity !== undefined
+            && !entity.components.has(DisabledComponent);
+    };
+    const group = damager.components.get(FiringGroupComponent)?.group;
+    if (active(group)) {
+        return group;
+    }
+    const owner = damager.components.get(OwnerComponent)?.owner;
+    if (active(owner)) {
+        return owner;
+    }
+    let source = damager.components.get(SourceComponent);
+    for (let hop = 0; hop < MAX_SOURCE_HOPS && source !== undefined; hop++) {
+        const entity = getEntity(source);
+        if (!entity) {
+            return undefined;
+        }
+        const next = entity.components.get(SourceComponent);
+        if (entity.components.has(ShipComponent) || next === undefined) {
+            return source;
+        }
+        source = next;
+    }
+    return undefined;
+}
 
 /**
  * Records who last damaged an NPC. The damager of a DamagedEvent is
- * the projectile/beam/blast entity; its SourceComponent is the firing ship.
+ * the projectile/beam/blast entity; the ship recorded is the one
+ * responsibleShip resolves it to (the firing group's root while it lives).
  *
  * Never a ship of the victim's OWN FLOCK (allegiance.ts's sameFlock). Direct
  * hits pass through a flock, but damage from inside it still lands: a blast
@@ -64,13 +141,14 @@ const DamagerSourceQuery = new Query([Optional(SourceComponent)] as const);
 export const NpcAggressionSystem = new System({
     name: 'NpcAggressionSystem',
     events: [DamagedEvent],
-    args: [DamagedEvent, NpcComponent, UUID, RunQuery, Entities,
+    args: [DamagedEvent, NpcComponent, UUID, Entities,
         Optional(GovtComponent), Optional(ShieldComponent), TimeResource,
         SimulationGameDataResource] as const,
-    step({ damager, damage, scale = 1 }, npc, uuid, runQuery, entities,
+    step({ damager, damage, scale = 1 }, npc, uuid, entities,
         govt, shield, time, gameData) {
-        const source = runQuery(DamagerSourceQuery, damager)[0]?.[0];
-        if (source && !sameFlock(source, uuid, id => entities.get(id))) {
+        const getEntity = (id: string) => entities.get(id);
+        const source = responsibleShip(entities.get(damager), getEntity);
+        if (source && !sameFlock(source, uuid, getEntity)) {
             npc.aggressor = source;
             // getCached is deterministic here for the reason
             // npc_decision.ts's lookupGovt gives: every assigned govt is

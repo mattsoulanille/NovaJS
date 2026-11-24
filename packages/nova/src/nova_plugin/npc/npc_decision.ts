@@ -489,10 +489,11 @@ export const NpcDecisionSystem = new System({
                     return;
                 }
                 // Dropped with the aggressor itself, not on every think
-                // its entry is missing: in a live game the aggressor was
-                // sometimes recorded as a PROJECTILE uuid for a moment
-                // (not in the ships query), and a cloaked attacker drops
-                // out too; neither should cost the trader its record.
+                // its entry is missing: a cloaked or disabled attacker
+                // drops out of the ships query for a while (and, before
+                // npc_targeting.ts's responsibleShip, a submunition left a
+                // PROJECTILE uuid here for a moment); neither should cost
+                // the trader its record.
                 if (npc.reachedAggressor !== undefined
                     && npc.aggressor === undefined) {
                     delete npc.reachedAggressor;
