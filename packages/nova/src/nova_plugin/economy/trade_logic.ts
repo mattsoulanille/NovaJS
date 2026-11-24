@@ -2,8 +2,7 @@ import { JunkData } from 'novadatainterface/junk_data';
 import { PlanetData, TradeTier } from 'novadatainterface/planet_data';
 import { Cargo, cargoUsed } from '../ship/index.js';
 import { evaluateNCBTest, NCBParseError } from '../ncb/index.js';
-import { STANDARD_CARGO_NAMES } from '../missions/index.js';
-import { numericId } from '../missions/mission_ids.js';
+import { numericId, STANDARD_CARGO_NAMES } from '../missions/index.js';
 
 /**
  * Commodity-exchange rules, kept pure so they can be unit tested.
