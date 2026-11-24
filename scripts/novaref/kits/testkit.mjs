@@ -343,7 +343,8 @@ function pointerShip(id, name, rledId, size, frames, set) {
  *  Added during the wave (capture): shïp 829 Kit Live Pointer (the pointer
  *      hulk of the NEUTRAL gövt 363, AI 4, not a derelict: the player
  *      disables it), düde 312, sÿst/spöb 2039 Kit Board Live; shïp 831 the
- *      same with crew 20, düde 314, sÿst/spöb 2040.
+ *      same with crew 20, düde 314, sÿst/spöb 2040; 832 / 833 / 834 / 835
+ *      crew 15 / 40 / 5 / 10, düde 315-318, sÿst/spöb 2041-2044.
  */
 function wave8Resources() {
     const out = [];
@@ -397,6 +398,17 @@ function wave8Resources() {
     liveSystem(2039, 312, 829, "Live");
     out.push(...shareRled(831, "Kit Live Pointer Crew 20", 1959, 24, { ...hulkSet, crew: 20 }));
     liveSystem(2040, 314, 831, "Live Crew 20");
+    // And crew 15 / 40 (shïp 832 / 833, düde 315 / 316, sÿst 2041 / 2042)
+    // to see how the odds fall with the crew ratio.
+    out.push(...shareRled(832, "Kit Live Pointer Crew 15", 1959, 24, { ...hulkSet, crew: 15 }));
+    liveSystem(2041, 315, 832, "Live Crew 15");
+    out.push(...shareRled(833, "Kit Live Pointer Crew 40", 1959, 24, { ...hulkSet, crew: 40 }));
+    liveSystem(2042, 316, 833, "Live Crew 40");
+    // And crew 5 / 10 (shïp 834 / 835, düde 317 / 318, sÿst 2043 / 2044).
+    out.push(...shareRled(834, "Kit Live Pointer Crew 5", 1959, 24, { ...hulkSet, crew: 5 }));
+    liveSystem(2043, 317, 834, "Live Crew 5");
+    out.push(...shareRled(835, "Kit Live Pointer Crew 10", 1959, 24, { ...hulkSet, crew: 10 }));
+    liveSystem(2044, 318, 835, "Live Crew 10");
 
     // --- B: the anchored carrier's guns without a bay.
     out.push(...ship(828, "Kit Gun Carrier Anchored", 143, { armor: 3000, shield: 3000, weapons: [365, -1, -1, -1], weaponCounts: [2, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 100, crew: 40, speed: 0, accel: 0 }));
