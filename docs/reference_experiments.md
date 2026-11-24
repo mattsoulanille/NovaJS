@@ -9507,13 +9507,29 @@ case may never arise for traffic.
 - 3: `N/nova_plugin/npc/npc_cloak.ts:30` (0x0400 / 0x2000 not read):
   **matches**.
 
-**Proposed fixes (not applied).**
+**Proposed fixes (applied, see below).**
 - Contraband: an interceptor that has scanned a ship keeps station on it
   until the ship leaves the system (lands or jumps), not 30 s
   (`CONTRABAND_SCAN_HOLD_MS` -> the visit).
 - W1: nothing for the burn; the "close-in turning fight" GUESS comment in
   npc_afterburner.ts can go.
 - C1: nothing.
+
+**Applied (wave-18 fixes, 2026-11-24).**
+- Contraband (c7c3cd75): `CONTRABAND_SCAN_HOLD_MS` is gone;
+  `holdingScan` (`N/nova_plugin/npc/contraband_target.ts`) is "the ship
+  carries this visit's scanned marker", so the interceptors sit on it
+  until it leaves the world (a landing or a jump). `chooseScanTarget`
+  puts a ship still due a scan before the sit (a second pilot is still
+  buzzed), the decision step's enemy / aggressor check (piracy policing)
+  comes first as before, and a passing-through AI 4 stops sitting at its
+  departure time. GUESSES: the cutter follows a ship that flies off, at
+  any distance; after a landing it does not come back (the pilot is not
+  due a scan). Specs: `N/nova_plugin/npc/contraband_scan_test.ts` (sits
+  9 minutes; lets go when the ship leaves; follows a ship 4000 px off; a
+  second pilot is buzzed; an aggressor pulls it off; a passing-through
+  one departs), replacing "sits 30 s, then lets it be".
+- W1: the GUESS comment in `npc_afterburner.ts` now cites this run.
 
 Confidence: high for 1 (8 minutes, three or four cutters, no movement),
 high for 2 (one hull, 7,651 frame pairs), medium-low for 3 (three
@@ -9611,7 +9627,7 @@ read the popup, Lower Price / Accept Price).
   **matches** for fuel, **mismatch** for a disabled pilot (refused on the
   original).
 
-**Proposed fixes (not applied).**
+**Proposed fixes (applied, see below).**
 - P1: drop `SELF_DEFENCE_WINDOW_MS` (no self-defence exemption for a
   player-side attacker: the police react to any hit on a non-enemy victim,
   whatever it is doing to the player).
@@ -9622,6 +9638,43 @@ read the popup, Lower Price / Accept Price).
   are measured: base -1,000 (not below 1,000) when cash is under some
   threshold (5,000 here), +1,000 at a negative record. ränk 0x0800: free
   fuel only; a disabled pilot is refused (95-99) as without the ränk.
+
+**Applied (wave-18 fixes, 2026-11-24).**
+- P1 (477831f7): `SELF_DEFENCE_WINDOW_MS` and `selfDefence` are gone
+  (`N/nova_plugin/npc/piracy_police.ts`): no excuse for any player-side
+  attacker, ESCORTS INCLUDED (GUESS: one rule for the player's side; the
+  police evidently do not look at what the victim is doing). The NpcState
+  field `aggressorHitAt`, read only by that test, is removed: schema-only
+  under protocol 8 (note in `N/communication/rollback_protocol.ts`), wire
+  fingerprint 7110220773935a73 -> 51a63184211e887b (the pre-wave-17
+  value). Specs: `N/nova_plugin/npc/piracy_police_test.ts` (a victim
+  firing on the player now, an old hit, an escort fired on first: all
+  policed), replacing "self-defence is not piracy" and the escort's 5 s
+  window.
+- H1 (286fdb62), `N/nova_plugin/reputation/hail.ts`:
+  - `fuelAskingBase` (GUESS for the rule): a pilot with less than
+    `FUEL_SALE_POOR_CASH` 10,000 credits is asked the LOWEST base, 1,000,
+    whatever the mood (rests on the 5,000- and 300-credit rows; the flat
+    1,000 fits both for certain, where "base - 1,000" needs both neutral
+    ships to have drawn 2,000; the 10,000 cut is a round number above
+    5,000); a record below 0 in the CURRENT system (`recordHere`) adds
+    1,000 (rests on the two record -5 rows; whether a deeper record adds
+    more is open). The +1,000 an ask and the 3/4 counter apply on top.
+  - A price the pilot cannot pay: Accept Price stays live; Accept or Lower
+    Price answers `cantAffordText` (STR# 3000 60-64), closes the popup,
+    dispatches nothing and is not an ask (`N/spaceport/hail_dialog.ts`
+    'cantAfford'); `applyHail` ignores a Lower Price over a price the
+    pilot cannot pay, and its Accept already took nothing.
+  - `assistIsFree(govt, rankFreeRepair, need)`: a ränk 0x0800 is free for
+    FUEL only, answered "Okay, I'm on my way." (145-149) at once with no
+    popup; a disabled holder is refused (95-99) as without the ränk.
+  Specs: `N/nova_plugin/encounters/hail_sim_test.ts`,
+  `N/nova_plugin/reputation/hail_test.ts`,
+  `N/display/hail_dialog_plugin_test.ts` ("greys Accept Price for a pilot
+  who cannot pay" overturned), and the STR# pin in
+  `N/nova_plugin/ncb/string_table_integration_test.ts`; the "criminal
+  record where its law does not run" sim spec now pays 1,000 more (its
+  -500 record is in the current system).
 
 Confidence: medium for 1 (one run, bolts seen, hits not), medium for 3
 (one ship, two answers), medium for 4 (two fuel helpers, three refusals),
@@ -9691,7 +9744,15 @@ shown system's own record: **matches** 3. Only the comments change: the
 measured. Whether NovaJS shows "Uninhabited System" for a stellar-less
 system on the map was not checked.
 
-**Proposed** (not applied): comment and doc updates only.
+**Proposed** (applied): comment and doc updates only.
+
+**Applied (wave-18 fixes, 2026-11-24).** No code change: the GUESS at
+`crimeRecordChange` (`N/nova_plugin/reputation/system_records.ts`) and the
+"(a guess)" in `N/spaceport/starmap_properties.ts` now cite this run, and
+docs/npc_behavior_gaps.md "Legal records per system" guesses 1, 6 (the
+disable; a boarding is still a guess) and 11 are marked MEASURED.
+"Uninhabited System" on NovaJS's map for a stellar-less system is still
+unchecked.
 
 Confidence: high for 1 and 2 (exact values in three systems each), high
 for 3 (two labels and the blank).

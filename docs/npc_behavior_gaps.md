@@ -109,13 +109,13 @@ traders, wave 15").
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements and waves 14-15 (R: "S1 / I1 wave 11", "S1 and S2 wave 12", "Contraband wave 14", "A14 / contraband wave 15"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty. Illegal jünk: "…your attempt to smuggle <LCName> through this system…", ScanFine, SmugPenalty. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. ScanFine 0 and below: no fine, no fine sentence (not the Bible's percent of cash; Matthew 2026-11-24: match the original). SmugPenalty by the A14 rule: the owner or its ally scanning costs the scanner's SmugPenalty, anyone else (nosy) raises the record by half the owner's; no spread. A detection turns the scanning govt's hunters on the pilot until he lands or leaves, whatever its CrimeTol. One scan per stay between arrivals by jump, unless the ship carries contraband its last scan did not find (the marker remembers what it found): a landing does not reset it, but taking off with new illegal cargo brings a rescan (wave 15). Several finds: one line naming the hold's cargo before an outfit (the jünk over the pod, measured), one fine, one record change; a 0x0020 mission among them fails silently. An ally of the owner scanning charges its own SmugPenalty (measured, wave 15). A 0x0020 mission fails only on a scan that finds its cargo illegal. A CLEAN ship is approached and scanned too, once a visit, in silence, and the interceptor sits on any ship it has scanned for 30 s (wave 16; the 30 s is a GUESS). A fine above the pilot's cash takes all the cash and no more, and the line names the whole ScanFine with a thousands separator ("fined 5,000 credits", wave 16). Per player: each pilot is scanned, charged and told separately. Status bar: jünk shows on the "Special:" line by its Abbrev when no mission cargo is aboard, never as a commodity row (wave 15). | Guesses left below ("Contraband scan: guesses to measure"): plain mission cargo vs an outfit on the line, contraband gained in space, how long the interceptor sits on a scanned ship, the unimplemented "prepare to be scanned" line. | (done) |
+| **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements and waves 14-15 (R: "S1 / I1 wave 11", "S1 and S2 wave 12", "Contraband wave 14", "A14 / contraband wave 15"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty. Illegal jünk: "…your attempt to smuggle <LCName> through this system…", ScanFine, SmugPenalty. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. ScanFine 0 and below: no fine, no fine sentence (not the Bible's percent of cash; Matthew 2026-11-24: match the original). SmugPenalty by the A14 rule: the owner or its ally scanning costs the scanner's SmugPenalty, anyone else (nosy) raises the record by half the owner's; no spread. A detection turns the scanning govt's hunters on the pilot until he lands or leaves, whatever its CrimeTol. One scan per stay between arrivals by jump, unless the ship carries contraband its last scan did not find (the marker remembers what it found): a landing does not reset it, but taking off with new illegal cargo brings a rescan (wave 15). Several finds: one line naming the hold's cargo before an outfit (the jünk over the pod, measured), one fine, one record change; a 0x0020 mission among them fails silently. An ally of the owner scanning charges its own SmugPenalty (measured, wave 15). A 0x0020 mission fails only on a scan that finds its cargo illegal. A CLEAN ship is approached and scanned too, once a visit, in silence, and the interceptors sit on any ship they have scanned for the WHOLE VISIT (MEASURED, R: "Contraband / W1 / C1, wave 18": four cutters, 8+ minutes; applied 2026-11-24, `holdingScan` is the scanned marker), until it lands or jumps, or an enemy, an aggressor (piracy) or a ship still due a scan calls them off. A fine above the pilot's cash takes all the cash and no more, and the line names the whole ScanFine with a thousands separator ("fined 5,000 credits", wave 16). Per player: each pilot is scanned, charged and told separately. Status bar: jünk shows on the "Special:" line by its Abbrev when no mission cargo is aboard, never as a commodity row (wave 15). | Guesses left below ("Contraband scan: guesses to measure"): plain mission cargo vs an outfit on the line, contraband gained in space, whether a cutter follows a ship that flies off, the unimplemented "prepare to be scanned" line. | (done) |
 | **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Done:** a scan that finds the mission's cargo illegal fails it ("Your ship has been scanned - mission failed."), no fine, no record (R: "S1 and S2 wave 12"), not even the CompGovt's -R/2 of CompReward (6b38f9bf: the sim marks the failure `failCause` 'scan', and compRewardDelta's 'scanned' outcome is 0). ScanMask and the flag are frozen onto the ActiveMission at accept (mission_accept_offer.ts). | Does ANY scan fail it, or only a matching one? (S3.) **51 stock 0x0020 missions have ScanMask 0**, so they can never fail by scan under the current reading. | (done) |
 | **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT and illegal JÜNK, as measured (waves 11-15): the record of the system the scan happened in (records are per system since ruling #380; no spread), by the A14 rule (the owner or its ally scanning: minus the scanner's SmugPenalty; a nosy scanner elsewhere: plus half the owner's). Not for mission cargo (measured). | A nosy scanner in an independent system (guess: no change). | (done) |
-| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 in the system (MEASURED, waves 16-17: police 300, 2500, 5000 and 9000 px away all reacted at once; applied 2026-11-24, no range test) records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies): measured in "P1 wave 15" (still hostile after 60 s, gone after a jump out and back; pinned in 9e56b637). Non-nosy police ignore an unrelated victim (wave 13). No record change. A hostile's posture is no excuse (wave 16: a non-firing 0x0004 raider shot by the player still drew nosy police), nor is a hit long past (wave 17: a 0x0004 ship that hit the player once, 72 s before, still hostile: policed); only a victim that hit the attacker within the last 5 s is exempt (`SELF_DEFENCE_WINDOW_MS`, GUESS: a hostile firing continuously, unmeasured). NPC raiders are not policed (MEASURED, wave 16); the victim's own and allied warships and interceptors defend it instead (N/nova_plugin/npc/allied_defenders.ts, see the distress row; an allied AI 4 measured in wave 17). | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
+| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 in the system (MEASURED, waves 16-17: police 300, 2500, 5000 and 9000 px away all reacted at once; applied 2026-11-24, no range test) records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies): measured in "P1 wave 15" (still hostile after 60 s, gone after a jump out and back; pinned in 9e56b637). Non-nosy police ignore an unrelated victim (wave 13). No record change. A hostile's posture is no excuse (wave 16: a non-firing 0x0004 raider shot by the player still drew nosy police), nor is a hit long past (wave 17: a 0x0004 ship that hit the player once, 72 s before, still hostile: policed), nor one firing at the player at that moment (wave 18: a bolt every 1.2 s, the last about 1 s before the beam: policed). So there is NO self-defence exemption (applied 2026-11-24: `SELF_DEFENCE_WINDOW_MS` and NpcState `aggressorHitAt` are gone; escorts included, GUESS). NPC raiders are not policed (MEASURED, wave 16); the victim's own and allied warships and interceptors defend it instead (N/nova_plugin/npc/allied_defenders.ts, see the distress row; an allied AI 4 measured in wave 17). | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
 | **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Done (2026-11-24)** with the piracy police: nosy police ignore an attack on a ship whose govt sets 0x0020 (R: "P1 wave 14", finding 2). "Nosy" is gövt 0x0002 (measured). It does not shield a victim from an ALLIED govt's police (measured: R "P1 wave 15", finding 2, pinned in 9e56b637), nor, by the Bible's "non-allied", from its own govt's (GUESS). | The own-govt case with 0x0020 (untested). | (done) |
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Done** (13567336, ruling #376; per-system records since ruling #380): N/nova_plugin/reputation/local_law.ts. A govt enforces where it owns the system, is allied with the owner either way, or is nosy; it attacks when the player's record IN THE CURRENT SYSTEM is below its own CrimeTol (R: "A14", "A14 wave 5": all 21 cells, c2 included). | — | (done) |
-| **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). | (done) |
+| **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). MEASURED in "A14 wave 18" (NovaJS already matched; comments updated): a disable alone spreads like a kill (-400 / -260 / -65), a crime inside an unowned system is charged there by the quarter rule at 0 jumps (-600), and the map shows a selected destination's own record. | (done) |
 | **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Done (2026-11-24)**, to "P1 waves 14-16" (R): a NON-MISSION trader (AI 1/2) hit in an attack by an NPC that is not on a player's side sends "<ship name>: <random STR# 5003 line>" to the status line of every player in the system, at most once per 8 s per ship (the life of one line), never when its govt sets Flags2 0x0008 or its hull inherits it. Mission ships never call (wave 16: seven silent mission victims). N/nova_plugin/npc/distress.ts (rules, DistressCallEvent), NpcAggressionSystem (the trigger and the PRNG draw), N/display/status_message_plugin.ts `ShowDistressCallMessage` (the line; 8 s, then cleared at once, no fade). **Nobody answers a call** (MEASURED, wave 16): the help comes from the alliance, call or no call: the victim's own govt's warships join against its NPC attacker at once, an allied govt's after 20 s (N/nova_plugin/npc/allied_defenders.ts; unrelated warships and police, nosy or not, ignore it). The player's own victims never call: measured in five runs (R "P1 wave 15", finding 1; pinned in 9e56b637). | Whether AI 4s of the own or an allied govt defend (GUESS: yes); the defenders' range (none) and the ally's delay (one run). Guesses below. | (done) |
 | **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Parsed only:** D/system_data.ts:34-45. 344 of 545 stock systems have one. | R19 in the catalogue: trigger, delay (ReinfTime), cooldown (ReinfIntrval), the "Sensors detect xxx reinforcement fleet approaching." line. | M |
 | **Planet defence fleets and tribute** (spöb DefenseDude/DefCount, in waves) | B:2823-2836 | **Parsed only:** D/planet_data.ts:34-40 (tracker #353). 289 of 411 stock stellars have one; their düdes are mostly AI 3 (16), some AI 4 (4). | R18 in the catalogue. | L |
@@ -156,7 +156,7 @@ traders, wave 15").
 | **NPC plunder** (gövt 0x1000: warships plunder trader-type enemies, the player included, before destroying them) | B:1078-1079 | **Done**, with ruled guesses: N/nova_plugin/npc/npc_plunder.ts (rules; credits taken from a player :109), N/nova_plugin/npc/npc_plunder_board.ts:74. mïsn 0x8000 "fails if boarded by pirates" is wired (N/nova_plugin/encounters/boarding_plugin.ts:1479). | A9: do pirates board a disabled player, and what do they take? | — |
 | **Bribes** (gövt 0x0200 / 0x2000 / 0x4000 / 0x8000) | B:1071-1086 | **Done**, numbers guessed: N/nova_plugin/reputation/hail.ts:64-104 (10% / 30% of cash, minimum 500), N/nova_plugin/encounters/hail_plugin.ts:233 (2 min reprieve). | R7 (price) and A8 (duration). | — |
 | **Greetings and hail answers** (gövt CommName, greetings STR#, Flags 0x0400, Flags2 0x0001/0x0008) | B:1072, B:1088-1098, Appendix III | **Done** (ruling #297): N/nova_plugin/reputation/hail.ts. | — | — |
-| **Request assistance: repair / refuel** (and Roadside Assistance, Flags2 0x0010; ränk 0x0800) | B:1099-1100, B:2261-2262 | **Done:** the helper flies over and restores armor, shield and fuel to full (N/nova_plugin/encounters/hail_plugin.ts AssistBehaviorSystem; willingness N/nova_plugin/reputation/hail.ts `assistWillingness`) — for FREE help only: a Roadside Assistance govt, a ränk 0x0800, a ränk 0x0400's warship (GUESS). **A non-hostile ship, applied 2026-11-24** to R "W1 / C1 / H1 wave 16" and "H1 wave 17" (H1; de713e35): it refuses a disabled pilot flat (STR# 3000 95-99, "Not a chance." / "Yeah, right!"), at record +2000 and when his hull is of an ALLIED govt too, and SELLS a fuelless one a jump of fuel, trader or warship: its mood line (good 115-119 at 1,000; neutral 140-144 at 2,000-3,000; bad 120-124 at 3,000) over a "Pay me N credits." popup with Lower Price / Accept Price; every repeated ask adds 1,000; Lower Price counters with floor(0.75 x P / 100) x 100 or withdraws the offer ("If that's the way you feel ...", 155-159), and always withdraws a counter; Accept Price takes the price on the table at once ("Okay, I'm on my way.", 145-149) and the ship comes over with 100 fuel, no repair (`lowerPrice` hail input, FuelHaggle on the NPC). A ränk 0x0400 trader refuses. | The **guesses** in "Assistance from a neutral ship: guesses to measure" below. | — |
+| **Request assistance: repair / refuel** (and Roadside Assistance, Flags2 0x0010; ränk 0x0800) | B:1099-1100, B:2261-2262 | **Done:** the helper flies over and restores armor, shield and fuel to full (N/nova_plugin/encounters/hail_plugin.ts AssistBehaviorSystem; willingness N/nova_plugin/reputation/hail.ts `assistWillingness`) — for FREE help only: a Roadside Assistance govt, a ränk 0x0800, a ränk 0x0400's warship (GUESS). **A non-hostile ship, applied 2026-11-24** to R "W1 / C1 / H1 wave 16" and "H1 wave 17" (H1; de713e35): it refuses a disabled pilot flat (STR# 3000 95-99, "Not a chance." / "Yeah, right!"), at record +2000 and when his hull is of an ALLIED govt too, and SELLS a fuelless one a jump of fuel, trader or warship: its mood line (good 115-119 at 1,000; neutral 140-144 at 2,000-3,000; bad 120-124 at 3,000) over a "Pay me N credits." popup with Lower Price / Accept Price; every repeated ask adds 1,000; Lower Price counters with floor(0.75 x P / 100) x 100 or withdraws the offer ("If that's the way you feel ...", 155-159), and always withdraws a counter; Accept Price takes the price on the table at once ("Okay, I'm on my way.", 145-149) and the ship comes over with 100 fuel, no repair (`lowerPrice` hail input, FuelHaggle on the NPC). A ränk 0x0400 trader refuses. **Applied 2026-11-24** to R "P1 / H1 wave 18": the first ask reads the pilot (`fuelAskingBase`, GUESS for the rule: under 10,000 credits the lowest base, 1,000; a record below 0 in the current system +1,000); a price the pilot cannot pay keeps Accept Price live and answers "You can't fool me - you can't afford it." (60-64), taking nothing and not counting as an ask; a ränk 0x0800 refuels for free at once ("Okay, I'm on my way.", no popup) and does NOT repair. | The **guesses** in "Assistance from a neutral ship: guesses to measure" below. | — |
 | **Battle assistance** (ränk 0x0400 "request battle assistance ... who will also call in reinforcements"; STR# 3000 "Help is on the way.", "I'm busy.") | B:2257-2260 | **Missing** with a ränk 0x0400: assistance is repair/refuel only; a willing warship does not fight the player's attackers. **Without the ränk, measured and applied** (R "W1 / C1 / H1 wave 15", H1; 13c164af): a healthy player under attack who asks a neutral ship for help is turned down from STR# 3000 95-99 ("Yeah, right!", "No way."), whatever his record, and nothing happens (N/display/hail_dialog_plugin.ts `assistAnswer`, hail.ts `underFireRefusalText`); with nobody attacking him the answer stays 70-74. | A ränk 0x0400 WARSHIP's answer (keeps 70-74 for now; its TRADER refuses from 95-99, measured in R "H1 wave 17" and applied in de713e35); a disabled or fuelless pilot under attack (busy, then the neutral refusal / fuel sale of wave 16, unmeasured under fire). Brief **H1**. | S-M |
 | **Hail info** (düde InfoTypes: good prices, disaster info, specific advice STR# 7500+, generic hails; përs 0x8000 disaster info) | B:832-839, B:2184 | **Not plumbed** (D/dude_data.ts:23-24). 130 of 147 stock düdes and 76 përs set it. | Where the text appears (the comm dialog's greeting?). One look at a stock trader's hail settles it. | S |
 | **përs HailQuote / CommQuote / LinkMission** | B:2139-2185 | **Done:** N/display/ship_mission_offer_plugin.ts:418-570, N/spaceport/ship_mission_offer.ts:140-180. | — | — |
@@ -295,9 +295,17 @@ sensible default, marked GUESS in the code, and wants a reference run:
 9. **A clean ship** MEASURED (wave 16, applied): a cutter came to a
    clean pilot and sat on it (0-10 px) for 30+ s, and nothing was said;
    NovaJS scans every ship once a visit, clean or not, silently when
-   nothing is found. Still guesses: the interceptor sits on a scanned ship
-   30 s from the scan (CONTRABAND_SCAN_HOLD_MS; the end was not seen),
-   and a second interceptor that arrives after the scan sits too. (Wave
+   nothing is found. MEASURED (wave 17: four of four cutters; wave 18:
+   the same four sat 23-51 px off, not moving, for 8+ minutes; applied
+   2026-11-24): the interceptors sit on a scanned ship for the WHOLE
+   VISIT (`holdingScan`: the ship carries the scanned marker; the 30 s
+   CONTRABAND_SCAN_HOLD_MS is gone), until it lands or jumps. Still
+   guesses: the cutter FOLLOWS a ship that flies off, anywhere in the
+   system (the reference pilot sat still); a ship due a scan (a second
+   pilot) and an enemy or aggressor (piracy) call a sitting cutter off; a
+   passing-through AI 4 does not sit past its departure time; after a
+   landing the cutters do not come back to the pilot (not due a scan);
+   an interceptor arriving after the scan does not come to sit. (Wave
    14's w14_s3_clean also had both cutters parked beside a clean pilot;
    wave 11's "never approached" pilot sat 1000 px from the port.)
 10. **The scanner's name** on the line is the target pane's (a përs's or
@@ -314,9 +322,11 @@ guess in the code:
 1. **An independent system's share of a crime:** MEASURED for neighbours
    (R: "A14 / contraband wave 16", finding 1; applied): minus a quarter of
    the VICTIM's scaled fields, each halved twice and truncated (-76 / -49
-   / -20). Still a guess: a crime IN an independent system is charged
-   there by the same quarter at 0 jumps. Gövt 128 still gives an
-   independent system its InitialRec and CrimeTol (Bible, Appendix II).
+   / -20). MEASURED too (R: "A14 wave 18", finding 2; NovaJS already
+   matched): a crime IN an independent system is charged there by the
+   same quarter at 0 jumps (Disab 400 + Kill 2000: -600), its owned
+   neighbours by the own-victim rule (-1560 / -1014). Gövt 128 still gives
+   an independent system its InitialRec and CrimeTol (Bible, Appendix II).
 2. **"The owner's or an ally's ship"** counts an alliance in either
    direction (local_law.ts's alliedEitherWay); only the owner listing the
    victim's class was measured (wave 12's 340 / 341).
@@ -329,8 +339,10 @@ guess in the code:
    variant of a system is walked like any other, and every system stacked
    on one map position (270 of 545 in stock) is that place's jump count
    away, 0 for the crime system's own twins.
-6. **A disable alone and a boarding spread like a kill** (only their own
-   system's -30 / +50 were measured).
+6. **A disable alone and a boarding spread like a kill:** MEASURED for
+   the disable (R: "A14 wave 18", finding 1; NovaJS already matched): Disab
+   400 alone gave -400 at 0 jumps, -260 one jump out and -65 in the unowned
+   neighbour. Still a guess for a boarding (the board loop failed).
 7. **A CompReward never touches an independent system**, even with
    CompGovt 128; a PayVal or oütf ModType 21 cleaning of a govt cleans the
    systems that govt (and its allies / classmates) OWNS, never an
@@ -346,8 +358,11 @@ guess in the code:
     override.
 11. **The map's Legal Status** shows the record of the system the panel
     describes: the current one (measured, wave 13) or a selected
-    destination (its own record; not measured). The `p` screen shows the
-    current system's (measured).
+    destination (its own record, against its own govt: MEASURED, R: "A14
+    wave 18", finding 3; NovaJS already matched). The `p` screen shows the
+    current system's (measured). Not checked: whether NovaJS shows the
+    original's "Uninhabited System" and no legal line for a system with no
+    stellar.
 12. **Hails and the comm dialog** judge hostility by the current system's
     record (local_law.ts), as the AI does; the ränk and outfit / ship
     requirements read no record.
@@ -471,13 +486,14 @@ code and wants a second run:
    the reference ship circled the player once more first. Bays never
    count as spent (a carrier's fighters are out, not gone); a ship
    protecting a player never leaves for it.
-4. **0x0040, when it burns:** the whole attack, thrusting or coasting
-   (wave 16's median speed of 1.9x the control's). Wave 15's first 36 s at
-   ordinary speed within about 140 px of the player is read as a turning
-   fight close in, where no cap is reached; NovaJS's attack arm has no
-   such fight (it coasts inside its 250 px stand-off), so a frame-by-frame
-   look at a close-in fight is still wanted. Fleeing, travelling and
-   patrolling never burn (not measured).
+4. **0x0040, when it burns:** MEASURED (wave 18, one hull alone,
+   7,651 frame pairs): the whole attack, close passes included (97-100%
+   of frames boosted within 250 px), slow only at its turnarounds about
+   350 px out; wave 15's slow 36 s was two magenta hulls confused. NovaJS
+   burns for the whole attack: matches. The original's attack geometry
+   (passes out to about 350 px and back) is not NovaJS's 250 px
+   stand-off coast, a separate gap. Fleeing, travelling and patrolling
+   never burn (not measured).
 5. **0x0040, how much:** 1.6x top speed (measured: 5.6 vs 3.5 px a
    frame), and 1.6x acceleration (guess, as the player's afterburner
    boosts both). No fuel is burned. The player's afterburner keeps its
@@ -541,19 +557,40 @@ in the code:
    the popup shows the countered price (the captures read the popup).
 5. **How much fuel:** one jump (100), read off the fuel bar twice (0 to
    about 3% of 3000): medium confidence.
-6. **The record:** +2000 changed nothing; a negative record and a pilot
-   with little cash (pilot `w17_fuel_poor`, 5,000 credits) are unmeasured.
-   The 160-164 group ("Okay, since your reputation is so good.") is unused.
+6. **The pilot's side of the price** (R: "P1 / H1 wave 18", finding 2;
+   one ship per case; applied 2026-11-24 as `fuelAskingBase`): +2000
+   changed nothing (wave 17). CASH: with 5,000 and with 300 credits a
+   neutral-mood ship asked 1,000 (2,000-3,000 at 1,000,000); NovaJS asks
+   any pilot under 10,000 credits the lowest base, 1,000, whatever the
+   mood. GUESSES: the 10,000 cut (between 5,000 and 1,000,000), and the
+   flat 1,000 rather than "base - 1,000, not below 1,000" (which fits too
+   if both neutral ships drew 2,000). RECORD: at record -5 a bad-mood
+   warship asked 4,000 and a good-mood trader 2,000 (1,000 above record
+   0); NovaJS adds 1,000 for any record below 0 in the current system
+   (`recordHere`). GUESS: a deeper record adds no more, and the hailed
+   govt's own law does not matter. The 160-164 group ("Okay, since your
+   reputation is so good.") is unused.
 7. **Allies:** a disabled pilot is refused (measured); a fuelless pilot is
    sold fuel like by a neutral ship (unmeasured).
 8. **A ränk 0x0400 warship:** still helps for free (none met on the
    reference); its trader refuses (measured).
 9. **A disabled pilot with no fuel** is refused (being disabled decides).
-10. **A pilot who cannot pay:** Accept Price is greyed (unmeasured; the
-   60-64 "come back when you actually have some money" group may be the
-   original's answer).
+10. **A pilot who cannot pay:** MEASURED (wave 18, one warship, 300
+   credits; applied): Accept Price is NOT greyed; Accept Price and Lower
+   Price answer "You can't fool me - you can't afford it." (STR# 3000
+   60-64), the popup closes, nothing is taken, nobody comes, and the next
+   ask names the same price. GUESS: which line of the group is a hash of
+   the ship, like every other comm line; affordability is judged against
+   the price on the table when the popup opened.
 11. **A withdrawn seller turning hostile** (the pirate's 150-154 "Die,
    cheapskate!"): never seen in 13 withdrawals; NovaJS never does.
+12. **ränk 0x0800:** MEASURED (wave 18, applied): ships of the affiliated
+   govt refuel a fuelless holder for free at once ("Okay, I'm on my way.",
+   no popup) and REFUSE a disabled one (three warships: "You wish." / "No
+   way." / "Not a chance."). Still guesses: ships merely ALLIED with the
+   affiliated govt (the Bible's wording; the kit govt had no allies, and
+   NovaJS honours the affiliated govt only); a Roadside Assistance govt
+   still repairs and refuels for free, with the granted line.
 
 ### Piracy police and distress calls: guesses to measure
 
@@ -572,19 +609,17 @@ reference run:
    non-nosy police; nosy police were not tested with a board.
 4. **Every hit that provokes the victim provokes the witnesses,** stray
    player hits included.
-5. **Self-defence is not piracy:** a hostile's POSTURE is no excuse
-   (MEASURED, wave 16: the player beamed a 0x0004 raider standing off 500
-   px that had not fired, and the nosy police turned hostile; applied).
-   Wave 17 MEASURED a hostile that HAD fired first: one 1200-damage bolt
-   at the player, 72 s before the player beamed it (still hostile, its gun
-   reloading): the police turned hostile all the same (applied). Still a
-   GUESS: no witness reacts to hits on a victim that hit the attacker
-   within the last 5 s (`SELF_DEFENCE_WINDOW_MS`: the player's
-   AggressionComponent entry, or an escort's `aggressorHitAt`), so a
-   hostile firing continuously is excused, as NovaJS did before (within
-   30 s then, the bracket window; for an escort, with no time limit). To
-   measure: a 0x0004 hull firing every second at a weak player beside
-   nosy police, and the player fires back.
+5. ~~**Self-defence is not piracy.**~~ **MEASURED: there is no
+   self-defence exemption.** A hostile's posture is no excuse (wave 16: a
+   0x0004 raider standing off 500 px that had not fired), nor a hit 72 s
+   old (wave 17), nor a hostile firing at the player at that very moment
+   (wave 18: the Kit Pest put a bolt toward the player every 1.2 s, the
+   last about 1 s before his beam, and the nosy police turned hostile).
+   Applied 2026-11-24: `SELF_DEFENCE_WINDOW_MS`, `selfDefence` and NpcState
+   `aggressorHitAt` are gone. Still a GUESS: a player's ESCORT has no
+   exemption either (unmeasured; one rule for every player-side
+   attacker, since the police evidently do not look at what the victim is
+   doing).
 6. **Alliances:** a one-way alliance counts (the A14 enforcement rule;
    only a two-way one was measured), and 0x0020 does not shield a victim
    from its own govt's police (the ALLY's police: measured in P1 wave 15).

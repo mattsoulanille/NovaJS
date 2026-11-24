@@ -129,10 +129,11 @@ export function systemProperties(system: SystemData | undefined,
     // gövt 128's for an independent system (Bible, Appendix II) — read
     // through the same function as the 'p' dialog, InitialRec fallback
     // included, so the two screens never disagree about one record. The
-    // original's map was measured for the CURRENT system only (reference
-    // "A14 ... wave 13"); a selected destination shows its own record, the
-    // natural reading of a per-system record (a guess). Only a status govt
-    // this universe cannot resolve leaves the slot empty.
+    // CURRENT system was measured in reference "A14 ... wave 13"; a
+    // selected DESTINATION shows its own record against its own govt
+    // (MEASURED, "A14 wave 18": "Wanted Criminal" at -600 under gövt
+    // 128's CrimeTol, "No Convictions" at -1560 under 30000). Only a
+    // status govt this universe cannot resolve leaves the slot empty.
     const legalStatus = legalStatusInSystem(legalRecords, system.id,
         system.govt, id => universe.getGovt(id));
     if (legalStatus !== undefined) {

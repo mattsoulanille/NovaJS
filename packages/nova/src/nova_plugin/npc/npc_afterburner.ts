@@ -43,11 +43,18 @@ import { NpcComponent, NpcState } from './npc_component.js';
  * back at the boosted speed, and its thrust is boosted whenever it thrusts.
  * Wave 15's first-pass rule (burn only while thrusting at the target,
  * beyond the stand-off) let the boost bleed off on every coast and could
- * not give wave 16's median. Wave 15's slow 36 s is read as a turning
- * fight close in, where a ship cannot build speed whatever its cap — GUESS;
- * NovaJS's attack arm has no close-in turning fight (it coasts inside its
- * 250 px stand-off). NpcAfterburnerSystem applies the boost on top of what
- * travel's EffectiveMovementPhysicsSystem wrote this tick.
+ * not give wave 16's median.
+ *
+ * Reference "Contraband / W1 / C1, wave 18" (ONE such hull alone in its
+ * system, 7,651 frame pairs) MEASURED the rest: it burns through its whole
+ * attack, close passes included (97% of frames boosted within 50 px, 100%
+ * at 50-250 px), slow only where it turns round about 340-360 px out. So
+ * wave 15's slow first 36 s was two magenta hulls confused, not a close-in
+ * turning fight, and the whole-attack burn here matches. (The original's
+ * attack geometry, passes through the target out to about 350 px and back,
+ * is not NovaJS's 250 px stand-off coast: a separate gap.)
+ * NpcAfterburnerSystem applies the boost on top of what travel's
+ * EffectiveMovementPhysicsSystem wrote this tick.
  *
  * GUESSES (docs/npc_behavior_gaps.md W1): whether it also burns to flee,
  * travel or close on a non-combat goal (not measured: the rule leaves those

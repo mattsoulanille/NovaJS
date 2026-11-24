@@ -313,7 +313,10 @@ export const KillCreditSystem = new System({
 /**
  * Applies the disable penalty once per disablement: when a govt ship
  * carries DisabledComponent and its last damager root has legal
- * records, that player takes the DisabPenalty.
+ * records, that player takes the DisabPenalty, spread to linked systems
+ * exactly like a kill's (MEASURED, reference "A14 wave 18": Disab 400
+ * alone gave -400 / -260 / -65 at 0 jumps, 1 jump and the unowned
+ * neighbour).
  * The guard resets when the ship is repaired, so disabling it again
  * counts again. Dead ships (armor 0 — a hulk mid-explosion is
  * "below the disable threshold" too) are KillCreditSystem's, which

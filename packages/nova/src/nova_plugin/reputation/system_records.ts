@@ -267,9 +267,11 @@ function crimeFields(govt: GovtData, crimes: readonly Crime[]): number[] {
  *  - victim === owner, or allied with it either way: minus the VICTIM's
  *    scaled fields (wave 12's -130 and -60, wave 14's -8002 / -5201);
  *  - no owner: minus a quarter of the VICTIM's scaled fields, each halved
- *    twice and truncated (wave 16's -76 / -49, wave 15's -20). Measured
- *    for neighbours only; a crime in an independent system charges that
- *    system the same way at 0 jumps (GUESS);
+ *    twice and truncated (wave 16's -76 / -49, wave 15's -20), and a crime
+ *    IN an independent system charges that system the same way at 0
+ *    jumps (MEASURED, "A14 wave 18": Disab 400 + Kill 2000 there gave
+ *    -(100 + 500) = -600, its owned neighbours the own-victim rule at 1
+ *    and 2 jumps, -1560 / -1014);
  *  - otherwise: plus half of the OWNER's scaled fields, each halved and
  *    truncated (+9, +65, +17, +11, +7, +48, +2600 ... +301, +32, +67).
  */
