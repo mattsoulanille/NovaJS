@@ -4666,11 +4666,25 @@ starburst, read per frame from the recording.
 - `N/nova_plugin/combat/beam_plugin.ts:192-194` subs every beam at its
   end when it expires (not measured either way).
 
-**Proposed fix (not applied).** Keep the sprite hitbox for every shot and
+**Proposed fix.** Keep the sprite hitbox for every shot and
 add the prox circle (ProxRadius plus part of the target's radius, see 2)
 as a separate test; in `ProjectileCollisionSystem`, fire subs only when
 the prox test, not the hitbox overlap, triggered the detonation. A shot
 with ProxRadius 0 never subs on impact. Beams: leave until measured.
+
+**Applied in d9e989c2.** The rule lives in one function
+(`N/nova_plugin/combat/submunition_rule.ts` `submunitionFires`: a direct
+hit never subs, a prox detonation always does, an expiry unless Flags2
+0x0020), which `fireSubs` asks per submunition entry. A prox shot keeps
+its sprite hurtbox; the fuse is `ProjectileProximityFuseSystem`
+(`projectile_plugin.ts`, after the collision pass, so a same-tick tie
+goes to the body), firing at ProxRadius + 2/3 of the target's hull
+radius (`PROX_FUSE_TARGET_RADIUS_FACTOR_FITTED`: +8 px on the 24 px
+disc, +32 on the 96 px one, at or just outside every measured
+detonation). Body and fuse share one strike predicate, ProxSafety
+included. Beams: one that ends with its ray on a body fires no subs (the
+measured case); one that ends untouched keeps the old subs (still
+unmeasured), as does one that hit earlier but not on its last frame.
 
 Confidence: high for "no subs on a direct hit" (18 hits over three runs,
 none subbed; every prox detonation and every expiry did); medium for the
@@ -4744,7 +4758,7 @@ its shield. The shooter stayed at 100% throughout.
   stray hit from an ally, a neutral or (via beam/blast) its own govt turns
   the victim on the shooter. The original: the victim ignored it.
 
-**Proposed fix (not applied).** Set the same-govt clause on for
+**Proposed fix.** Set the same-govt clause on for
 projectile collisions only (a `weaponKind` argument, or a separate check
 in `ProjectileCollisionSystem`), keep beams and blasts as they are; in
 `NpcAggressionSystem`, record an aggressor only when the source was
@@ -4756,6 +4770,13 @@ aggressor; strays from its own, allied or neutral govts do not). Not
 measured: whether a victim turns
 when it is the shooter's own target but of the same govt, and longer
 than 45 s.
+
+**Applied in 96168bb4** (the immunity half): `SAME_GOVT_FIRING_IMMUNITY`
+(`N/nova_plugin/ship/firing_group.ts`) is a per-effect table, projectile
+on, beam and blast off, and `firingImmune` takes the effect kind. It
+covers every projectile, guided ones and submunitions included (a
+missile locked on a same-govt ship now passes through it too; not
+measured). The retaliation half is the 39e150d4 entry above.
 
 Confidence: high for 1-3 in this geometry (one run each, 45 s, 100+
 shots per run).
