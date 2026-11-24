@@ -40,7 +40,6 @@ import {
 import {
     playerDiscovery, PlayerNamesComponent,
 } from '../nova_plugin/player/index.js';
-import { loadPilotProfile } from '../title/client_prefs.js';
 import { ShipNamePrompt } from './ship_name_prompt.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { shipGateContext } from './ship_gate_context.js';
@@ -189,6 +188,8 @@ export class Shipyard extends Menu<Entity> {
             this.itemGrid?.setFilter(query);
             this.updateArrows();
         });
+        // Option-click asks the same prompt and makes the same purchase
+        // (wave 16, finding 4).
         buttons.buy.click.subscribe(() => void this.buyShip());
         buttons.done.click.subscribe(this.done.bind(this));
 
@@ -529,8 +530,8 @@ export class Shipyard extends Menu<Entity> {
     /**
      * Buy Ship: the purchase is checked, the player names the new ship
      * ("Please name your new <ship>:", ship_name_prompt.ts), and only then
-     * is anything bought. Cancel buys nothing (GUESS, until the reference
-     * measures it): no credits move, the hull stays, no set string runs.
+     * is anything bought. Cancel buys nothing, as in the original (wave 16,
+     * finding 1): no credits move, the hull stays, no set string runs.
      * Resolves once the purchase is done or abandoned.
      */
     async buyShip(): Promise<void> {
@@ -546,8 +547,7 @@ export class Shipyard extends Menu<Entity> {
         try {
             // On top of everything the shipyard draws.
             this.container.addChild(this.namePrompt.container);
-            name = await this.namePrompt.ask(newShip.name,
-                loadPilotProfile()?.shipNumber);
+            name = await this.namePrompt.ask(newShip.name);
         } finally {
             this.naming = false;
         }

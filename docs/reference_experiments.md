@@ -8732,6 +8732,16 @@ files this wave read; the hub asked for the measurement). **Proposed:** a
 100-999>", Cancel aborting, an empty name allowed, names cut to 31
 characters (what a pilot file can hold).
 
+**Applied** (2026-11-24, the ship name branch): spaceport/ship_name_prompt.ts
+and shipyard.ts ask it on Buy Ship (Option-click too), prefilled with a
+fresh random 100-999 and selected; Cancel buys nothing; an emptied field
+buys the ship with a blank name; the field takes 64 characters and the
+stored name (player/player_names.ts PlayerNames, saved as `shipName`) keeps
+31. Still a GUESS: a mission Cxxx / Exxx / Hxxx change of hull keeps the
+stored name (missions/mission_ship_change.ts). NovaJS's own buy-and-keep
+(the Ship storage enhancement, not on main yet) should call the same
+prompt when it lands.
+
 Confidence: high for 1-4 (screenshots), medium for 5 (the limit not
 bisected; the 31-character cut read from one pilot).
 

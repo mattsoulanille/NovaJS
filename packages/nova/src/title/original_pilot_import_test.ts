@@ -126,9 +126,14 @@ describe('original pilot import', () => {
         pilot.shipName = 'Ring\u0007 of\nGlory';
         expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
             .toBe('Ring ofGlory');
+        // A blank name stays blank, as the original shows it.
         pilot.shipName = '';
         expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
-            .toBeUndefined();
+            .toBe('');
+        // The file's 64-byte field: the first 31 characters are the name.
+        pilot.shipName = 'A123456789B123456789C123456789D' + 'junkjunk';
+        expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
+            .toBe('A123456789B123456789C123456789D');
     });
 
     it('imports the exploration map at its original three levels', () => {

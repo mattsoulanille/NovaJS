@@ -1,8 +1,6 @@
 import { Observable } from 'rxjs';
 import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
-import {
-    derivedShipName, MAX_PLAYER_NAME_LENGTH, sanitizePlayerName,
-} from '../nova_plugin/player/index.js';
+import { sanitizeShipName } from '../nova_plugin/player/index.js';
 import { AlertPromptDialog, AlertPromptLayout } from './alert_prompt.js';
 
 /**
@@ -10,7 +8,8 @@ import { AlertPromptDialog, AlertPromptLayout } from './alert_prompt.js';
  * prefilled with "<ship> <number>" and all of it selected, Cancel and OK
  * (reference 20261123-w11 mass_trade 09-buy-confirm.png, the original at
  * 1x in an 832x604 window). The original asks it after the price is
- * accepted, as a plain Mac alert over the shipyard.
+ * accepted, as a plain Mac alert over the shipyard, for Buy Ship and
+ * Option-click Buy Ship alike (wave 16, finding 4).
  *
  * Measured off that capture: the panel is x236..595, y233..370 (360 x
  * 138), centred on the window; the icon at (7, 5) as in the Find dialog;
@@ -40,27 +39,49 @@ export function shipNamePromptText(shipType: string): string {
 }
 
 /**
- * The name a confirmed prompt gives the ship: what was typed, cleaned
- * (player_names.ts sanitizePlayerName), or the prefill when nothing usable
- * is left. GUESS: the original's handling of an empty name has not been
- * measured; falling back to the prefill keeps every ship named.
+ * How many characters the field takes. The original's took 64 and refused
+ * 80 (the limit lies between, not bisected), but only the first 31 reach
+ * the pilot file, which is what confirmedShipName keeps (wave 16, finding
+ * 5).
  */
-export function confirmedShipName(entered: string, prefill: string): string {
-    return sanitizePlayerName(entered) ?? prefill;
+export const SHIP_NAME_FIELD_LENGTH = 64;
+
+/**
+ * The prefill's number: "<class name> <random 100-999>", a fresh three
+ * digits at every prompt (711, 151, 753, 386 for one hull, 275 for another;
+ * wave 16, finding 2), not a counter. Client-side and outside the
+ * simulation: only the name the player confirms enters player state.
+ */
+export function prefillShipNumber(random: () => number = Math.random):
+    number {
+    return 100 + Math.floor(random() * 900);
+}
+
+/**
+ * The name a confirmed prompt gives the ship: what was typed, cleaned and
+ * cut to 31 characters (player_names.ts sanitizeShipName). An emptied
+ * field is accepted and names the ship with nothing: the original's `p`
+ * screen then shows a blank Ship Name (wave 16, finding 3).
+ */
+export function confirmedShipName(entered: string): string {
+    return sanitizeShipName(entered) ?? '';
 }
 
 /**
  * The prompt itself. `ask` resolves with the name to give the new ship,
  * or undefined when the player cancelled — which aborts the whole
- * purchase (GUESS until the reference measures it: credits and ship stay
- * as they were).
+ * purchase: credits, hull and trade-in stay as they were (wave 16,
+ * finding 1).
+ *
+ * Measured in docs/reference_experiments.md, "The shipyard's \"Please
+ * name your new <ship>:\" prompt, wave 16".
  */
 export class ShipNamePrompt {
     private dialog: AlertPromptDialog;
 
     constructor(controlEvents: Observable<ControlEvent>) {
         this.dialog = new AlertPromptDialog(controlEvents, 'ShipNamePrompt',
-            SHIP_NAME_PROMPT_LAYOUT, MAX_PLAYER_NAME_LENGTH);
+            SHIP_NAME_PROMPT_LAYOUT, SHIP_NAME_FIELD_LENGTH);
     }
 
     get container() {
@@ -74,19 +95,17 @@ export class ShipNamePrompt {
 
     /**
      * Asks for the name of a new `rawShipName` (the shïp's name, "; note"
-     * and all), prefilled with its derived name for `shipNumber`.
+     * and all), prefilled with "<class name> <random 100-999>".
      */
-    async ask(rawShipName: string, shipNumber?: number):
+    async ask(rawShipName: string, random: () => number = Math.random):
         Promise<string | undefined> {
         const shipType = displayName(rawShipName);
-        const prefill = derivedShipName(shipType, shipNumber);
         const entered = await this.dialog.show({
             prompt: shipNamePromptText(shipType),
             confirm: 'OK',
-            initial: prefill,
+            initial: `${shipType} ${prefillShipNumber(random)}`,
             selectAll: true,
         });
-        return entered === undefined
-            ? undefined : confirmedShipName(entered, prefill);
+        return entered === undefined ? undefined : confirmedShipName(entered);
     }
 }

@@ -106,10 +106,10 @@ describe('the shipyard\'s ship name prompt', () => {
             await settle();
             const prompt = shipyard.namePrompt.alert;
             expect(prompt.shown).toBeTrue();
-            // Prefilled with "<type> <number>", all of it selected (no
-            // profile under node, so the number is 1).
-            expect(prompt.value).toEqual(
-                { text: 'Kit Mass Roomy 300 1', selected: true });
+            // Prefilled with "<class name> <random 100-999>", all of it
+            // selected.
+            expect(prompt.value.selected).toBeTrue();
+            expect(prompt.value.text).toMatch(/^Kit Mass Roomy 300 [1-9]\d\d$/);
             // Nothing is bought while the prompt is up.
             expect(purchased.length).toBe(0);
             prompt.type('Rocinante');
@@ -128,8 +128,8 @@ describe('the shipyard\'s ship name prompt', () => {
                 .toBe('Rocinante');
         });
 
-    it('an emptied field names the ship with the prefill (GUESS)',
-        async () => {
+    it('an emptied field buys the ship with a blank name (wave 16, '
+        + 'finding 3)', async () => {
             const { shipyard, shown, purchased } =
                 await openOnNewHull(player());
             const buying = shipyard.buyShip();
@@ -137,8 +137,9 @@ describe('the shipyard\'s ship name prompt', () => {
             shipyard.namePrompt.alert.type('');
             shipyard.namePrompt.alert.confirm();
             await buying;
+            expect(purchased[0].components.get(ShipComponent)?.id).toBe(NEW);
             expect(purchased[0].components.get(PlayerNamesComponent)?.ship)
-                .toBe('Kit Mass Roomy 300 1');
+                .toBe('');
             shipyard.dismiss();
             await shown;
         });

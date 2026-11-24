@@ -8,7 +8,8 @@ import {
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import {
-    confirmedShipName, SHIP_NAME_PROMPT_LAYOUT, ShipNamePrompt,
+    confirmedShipName, prefillShipNumber, SHIP_NAME_FIELD_LENGTH,
+    SHIP_NAME_PROMPT_LAYOUT, ShipNamePrompt,
     shipNamePromptText,
 } from './ship_name_prompt.js';
 
@@ -92,18 +93,30 @@ describe('the ship name prompt', () => {
                 - SHIP_NAME_PROMPT_LAYOUT.buttonWidth).toBe(12);
         });
 
-    it('falls back to the prefill for an empty name (GUESS) and cleans '
-        + 'what was typed', () => {
-        expect(confirmedShipName('', 'Shuttle 552')).toBe('Shuttle 552');
-        expect(confirmedShipName('  \t', 'Shuttle 552')).toBe('Shuttle 552');
-        expect(confirmedShipName(' Rocinante ', 'Shuttle 552'))
-            .toBe('Rocinante');
+    it('accepts an empty name as a blank one, and keeps 31 of the 64 '
+        + 'characters the field takes (wave 16, findings 3 and 5)', () => {
+        expect(confirmedShipName('')).toBe('');
+        expect(confirmedShipName('  \t')).toBe('');
+        expect(confirmedShipName(' Rocinante ')).toBe('Rocinante');
+        const typed = 'A123456789B123456789C123456789D123456789'
+            + 'E123456789F123456789G123';
+        expect(typed.length).toBe(SHIP_NAME_FIELD_LENGTH);
+        expect(confirmedShipName(typed))
+            .toBe('A123456789B123456789C123456789D');
+    });
+
+    it('prefills a fresh random 100-999 at every prompt (wave 16, '
+        + 'finding 2)', () => {
+        expect(prefillShipNumber(() => 0)).toBe(100);
+        expect(prefillShipNumber(() => 0.999999)).toBe(999);
+        expect(prefillShipNumber(() => 889.5 / 900)).toBe(989);
     });
 
     it('opens prefilled and selected, owns the keyboard while up, and '
         + 'resolves with the name on OK', async () => {
         const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
-        const answer = prompt.ask('Kit Mass Roomy 300; test kit', 989);
+        const answer = prompt.ask('Kit Mass Roomy 300; test kit',
+            () => 889.5 / 900);
         expect(prompt.alert.shown).toBeTrue();
         expect(prompt.alert.value).toEqual(
             field('Kit Mass Roomy 300 989', true));
@@ -120,7 +133,7 @@ describe('the ship name prompt', () => {
 
     it('resolves undefined on Cancel', async () => {
         const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
-        const answer = prompt.ask('Shuttle', 5);
+        const answer = prompt.ask('Shuttle');
         prompt.alert.cancel();
         expect(await answer).toBeUndefined();
         expect(isTextEntryActive()).toBeFalse();
@@ -128,9 +141,18 @@ describe('the ship name prompt', () => {
 
     it('keeps the prefill on an untouched OK', async () => {
         const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
-        const answer = prompt.ask('Shuttle', 5);
+        const answer = prompt.ask('Shuttle', () => 0.5);
         prompt.alert.confirm();
-        expect(await answer).toBe('Shuttle 5');
+        expect(await answer).toBe('Shuttle 550');
+    });
+
+    it('takes up to 64 characters in the field', async () => {
+        const prompt = new ShipNamePrompt(new Subject<ControlEvent>());
+        const answer = prompt.ask('Shuttle');
+        prompt.alert.type('x'.repeat(80));
+        expect(prompt.alert.value.text.length).toBe(64);
+        prompt.alert.confirm();
+        expect(await answer).toBe('x'.repeat(31));
     });
 
     it('draws as one alert container, named for headless driving', () => {

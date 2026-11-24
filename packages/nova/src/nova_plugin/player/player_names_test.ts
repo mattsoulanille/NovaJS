@@ -1,6 +1,7 @@
 import 'jasmine';
 import {
     derivedShipName, MAX_PLAYER_NAME_LENGTH, playerPilotName, playerShipName,
+    sanitizeShipName,
     sanitizePlayerName,
 } from './player_names.js';
 
@@ -50,6 +51,18 @@ describe('player names', () => {
         });
     });
 
+    it('keeps an empty SHIP name as a blank one, cleaned the same way',
+        () => {
+            expect(sanitizeShipName('')).toBe('');
+            expect(sanitizeShipName(` ${ch(7)}\n`)).toBe('');
+            expect(sanitizeShipName(`Roci${ch(0)}nante`)).toBe('Rocinante');
+            expect(sanitizeShipName('z'.repeat(64))).toBe('z'.repeat(31));
+            expect(sanitizeShipName(undefined)).toBeUndefined();
+            expect(sanitizeShipName(3)).toBeUndefined();
+            // A blank stored name is the name: no derived fallback.
+            expect(playerShipName({ ship: '' }, 'Shuttle', 5)).toBe('');
+        });
+
     it('derives "<type> <number>", the number defaulting to 1', () => {
         expect(derivedShipName('Heavy Shuttle', 244))
             .toBe('Heavy Shuttle 244');
@@ -63,7 +76,7 @@ describe('player names', () => {
             expect(playerShipName({ ship: `Bad${ch(10)}Name` }, 'Shuttle'))
                 .toBe('BadName');
             expect(playerShipName({ ship: '   ' }, 'Shuttle', 5))
-                .toBe('Shuttle 5');
+                .toBe('');
             expect(playerShipName(undefined, 'Shuttle', 5)).toBe('Shuttle 5');
             expect(playerShipName(undefined, undefined)).toBeUndefined();
         });

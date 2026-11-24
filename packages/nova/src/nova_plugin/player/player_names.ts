@@ -36,10 +36,11 @@ export const PlayerNamesComponent =
 
 /**
  * The longest name kept, in characters (Unicode code points). The
- * original's names are Mac Pascal strings (Str31: a pilot file is named
- * after its pilot, and a Mac file name is at most 31 characters). GUESS
- * for the ship's name: the reference has not measured the prompt's own
- * limit yet, so it gets the same Str31 cap.
+ * original's names are Mac Pascal strings (Str31): a pilot file is named
+ * after its pilot, and a Mac file name is at most 31 characters; and the
+ * ship name prompt's field takes 64 characters but the pilot file keeps
+ * only the first 31 (docs/reference_experiments.md, "The shipyard's
+ * \"Please name your new <ship>:\" prompt, wave 16", finding 5).
  */
 export const MAX_PLAYER_NAME_LENGTH = 31;
 
@@ -60,36 +61,46 @@ const STRIPPED = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u20
  * empty once cleaned — the caller's fallback stands in for it.
  */
 export function sanitizePlayerName(raw: unknown): string | undefined {
+    const name = sanitizeShipName(raw);
+    return name === '' ? undefined : name;
+}
+
+/**
+ * A SHIP's name cleaned as {@link sanitizePlayerName} cleans any name,
+ * except that an empty name is kept as one: the original accepts an
+ * emptied prompt and the ship then has a blank name (the `p` screen shows
+ * "Ship Name:" with nothing after it; wave 16, finding 3). Undefined only
+ * for a value that is not a string — no name stored at all.
+ */
+export function sanitizeShipName(raw: unknown): string | undefined {
     if (typeof raw !== 'string') {
         return undefined;
     }
     const cleaned = raw.replace(STRIPPED, '').trim();
     const chars = Array.from(cleaned);
-    const name = (chars.length > MAX_PLAYER_NAME_LENGTH
+    return (chars.length > MAX_PLAYER_NAME_LENGTH
         ? chars.slice(0, MAX_PLAYER_NAME_LENGTH).join('') : cleaned).trim();
-    return name === '' ? undefined : name;
 }
 
 /**
  * The ship name a pilot has before naming one: the hull's type name and
  * the pilot's stable ship number ("Heavy Shuttle 244" on the reference's
- * `p` screen, "Starbridge 525" in the sigma bar's greeting). Also the
- * shipyard prompt's prefill ("Kit Mass Roomy 300 989" for a Kit Mass
- * Roomy 300). GUESS: the number is the pilot profile's shipNumber, as the
- * title screen has always used; the reference has not measured where the
- * original's comes from.
+ * `p` screen, "Starbridge 525" in the sigma bar's greeting), as the title
+ * screen has always shown it. The shipyard prompt's prefill has the same
+ * shape with a fresh random number instead (ship_name_prompt.ts).
  */
 export function derivedShipName(shipType: string, shipNumber = 1): string {
     return sanitizePlayerName(`${shipType} ${shipNumber}`) ?? shipType;
 }
 
 /**
- * The player's ship's name: the stored one, else the derived one (for an
- * entity that has never been through player_start — specs, tooling).
+ * The player's ship's name: the stored one (blank when the player emptied
+ * the prompt), else the derived one (for an entity that has never been
+ * through player_start — specs, tooling).
  */
 export function playerShipName(names: PlayerNames | undefined,
     shipType: string | undefined, shipNumber?: number): string | undefined {
-    return sanitizePlayerName(names?.ship)
+    return sanitizeShipName(names?.ship)
         ?? (shipType !== undefined
             ? derivedShipName(shipType, shipNumber) : undefined);
 }

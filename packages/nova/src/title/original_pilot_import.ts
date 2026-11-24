@@ -46,7 +46,7 @@ import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
 import {
     dayNumber, daysInMonth, DISCOVERY_UNKNOWN, toDiscoveryLevel, ActiveMission,
-    sanitizePlayerName,
+    sanitizeShipName,
 } from '../nova_plugin/player/index.js';
 import { SaveData, saveDefaults } from '../nova_plugin/pilot/index.js';
 import { PilotProfile } from './client_prefs.js';
@@ -324,7 +324,7 @@ export function convertOriginalPilot(pilot: PilotData,
     };
     // The ship's name, as the player named it in the original (its
     // pilot file keeps it), cleaned like any typed name (player_names.ts).
-    const shipName = sanitizePlayerName(pilot.shipName);
+    const shipName = sanitizeShipName(pilot.shipName);
     if (shipName !== undefined) {
         save.shipName = shipName;
     }

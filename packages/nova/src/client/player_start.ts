@@ -24,7 +24,7 @@ import {
 import {
     playerDiscovery, PlayerShipSelector, CreditsComponent, GameDateComponent,
     ControlledByComponent, StrictPlayComponent, PlayerNamesComponent,
-    PlayerNames, derivedShipName, sanitizePlayerName,
+    PlayerNames, derivedShipName, sanitizePlayerName, sanitizeShipName,
 } from '../nova_plugin/player/index.js';
 import { displayName } from '../nova_plugin/core/index.js';
 import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
@@ -347,7 +347,7 @@ export function startingPlayerNames(stored: PlayerNames | undefined,
     pilotName: string | undefined, shipType: string,
     shipNumber: number | undefined): PlayerNames {
     const names: PlayerNames = {
-        ship: sanitizePlayerName(stored?.ship)
+        ship: sanitizeShipName(stored?.ship)
             ?? derivedShipName(shipType, shipNumber),
     };
     const pilot = sanitizePlayerName(pilotName);

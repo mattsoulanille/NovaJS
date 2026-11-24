@@ -30,7 +30,7 @@ import {
     PendingAutoAbortShipsComponent,
     PendingAutoAbortShipsType,
     PlayerNamesComponent,
-    sanitizePlayerName,
+    sanitizeShipName,
 } from '../player/index.js';
 import { PlayerEscortComponent } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
@@ -404,7 +404,7 @@ export function extractSaveData(entity: Entity, systemId: string,
     if (controlBits) {
         save.plugins = [...controlBits.resolver.pluginOrder];
     }
-    const shipName = sanitizePlayerName(
+    const shipName = sanitizeShipName(
         entity.components.get(PlayerNamesComponent)?.ship);
     if (shipName !== undefined) {
         save.shipName = shipName;
@@ -459,7 +459,7 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     // The ship's name, cleaned; the pilot's name is the profile's
     // (player_start.ts sets it, and the derived ship name for a save that
     // has none). Replaced rather than merged into, so nothing is shared.
-    const shipName = sanitizePlayerName(save.shipName);
+    const shipName = sanitizeShipName(save.shipName);
     const names = { ...entity.components.get(PlayerNamesComponent) };
     if (shipName !== undefined) {
         names.ship = shipName;

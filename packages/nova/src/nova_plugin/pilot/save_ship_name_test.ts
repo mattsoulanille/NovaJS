@@ -74,14 +74,21 @@ describe('the ship name in the save', () => {
         const restored = reload(save);
         const name = restored.components.get(PlayerNamesComponent)?.ship;
         expect(name).toBe(`Long${'z'.repeat(27)}`);
-        // A name that cleans to nothing is no name at all.
+        // A name that cleans to nothing is a blank name, as an emptied
+        // prompt gives (wave 16, finding 3), not the derived one.
         save.shipName = '\t\n';
         expect(reload(save).components.get(PlayerNamesComponent)?.ship)
-            .toBeUndefined();
+            .toBe('');
     });
 
-    it('does not write a name that cleans to nothing', () => {
-        expect(extractSaveData(pilot({ ship: '\u0007' }), 'nova:130')!
-            .shipName).toBeUndefined();
+    it('keeps a blank ship name through a save and a load', () => {
+        const save = extractSaveData(pilot({ ship: '' }), 'nova:130')!;
+        expect(save.shipName).toBe('');
+        const restored = reload(save);
+        expect(restored.components.get(PlayerNamesComponent)?.ship).toBe('');
+        expect(startingPlayerNames(
+            restored.components.get(PlayerNamesComponent), 'Matt',
+            'Shuttle', 552))
+            .toEqual({ ship: '', pilot: 'Matt' });
     });
 });

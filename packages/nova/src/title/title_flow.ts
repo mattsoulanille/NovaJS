@@ -27,7 +27,7 @@ import type { PlayerStartOptions } from '../client/player_start.js';
 import type { ClientRuntime } from '../client/runtime.js';
 import { isMuted } from '../client/mute.js';
 import { isTextEntryActive } from '../input_focus.js';
-import { resetDiscovery, sanitizePlayerName } from '../nova_plugin/player/index.js';
+import { resetDiscovery, sanitizePlayerName, sanitizeShipName } from '../nova_plugin/player/index.js';
 import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
 import { combatRatingName } from '../nova_plugin/reputation/index.js';
 import { loadSave } from '../nova_plugin/pilot/index.js';
@@ -204,7 +204,7 @@ async function computeTitleStatus(runtime: ClientRuntime):
     }
     // The name the player gave the ship (the save's `shipName`), else the
     // derived "<class> <number>" a pilot has before naming one.
-    const shipName = sanitizePlayerName(save.shipName)
+    const shipName = sanitizeShipName(save.shipName)
         ?? `${shipClass} ${profile?.shipNumber ?? 1}`;
     const kills = save.combatRatings
         ?.find(([category]) => category === 'kills')?.[1] ?? 0;
