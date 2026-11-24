@@ -9,6 +9,7 @@ import {
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { PlayerInfoDialog } from '../spaceport/player_info.js';
+import { getActivePilot } from '../title/pilot_registry.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
@@ -65,6 +66,10 @@ export const PlayerInfoPlugin: Plugin = {
         const dialog = new PlayerInfoDialog(displayAssets, simulationData,
             controls, () => world.resources.get(SystemIdResource),
             () => screenSize);
+        // A pilot whose profile has no name (a pre-title-screen save
+        // adopted as "Pilot", say) shows its pilot-list label there rather
+        // than nothing; nothing is written anywhere for it.
+        dialog.pilotLabel = () => getActivePilot()?.name;
         let opening = false;
         stage.addChild(dialog.container);
         // Centred on the live UI size, and kept there through resizes

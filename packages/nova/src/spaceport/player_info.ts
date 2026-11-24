@@ -7,6 +7,7 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
     formatDate, CreditsComponent, GameDateComponent, MissionsComponent,
+    PlayerNamesComponent, playerPilotName, playerShipName,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, ArmorComponent, FuelComponent, ShieldComponent, OutfitsState,
@@ -361,6 +362,12 @@ export class PlayerInfoDialog {
     private rankData = new Map<string, RankData>();
     /** Ship classes of the escorts on the player's payroll, for Expenses. */
     private payrollShips = new Map<string, ShipData>();
+    /**
+     * The "Pilot Name:" row's quiet fallback for a ship that carries no
+     * pilot name: the active pilot file's label in the pilot list (set by
+     * display/player_info_plugin.ts). Without one the row shows "-".
+     */
+    pilotLabel?: () => string | undefined;
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private simulationData: SimulationGameDataInterface,
@@ -694,10 +701,16 @@ export class PlayerInfoDialog {
         const legal = systemId
             ? this.systemLegalStatus(systemId, records) ?? '-' : '-';
 
+        // The pilot's and the ship's names are player state
+        // (PlayerNamesComponent, player_names.ts): "Pilot Name: Matt" and
+        // "Ship Name: Heavy Shuttle 244" on p_properties/general.png. Drawn
+        // as plain PIXI text, like every row here.
+        const names = entity.components.get(PlayerNamesComponent);
+        const shipClass = this.shipData
+            ? displayName(this.shipData.name) : undefined;
         const left: InfoRow[] = [
-            // Pilot naming isn't modeled (the original shows the
-            // save-file pilot's name here).
-            { label: 'Pilot Name:', value: '-' },
+            { label: 'Pilot Name:',
+                value: playerPilotName(names, this.pilotLabel?.()) ?? '-' },
             { label: 'Current Date:', value: date ? formatDate(date) : '-' },
             { label: 'System:', value: this.systemName ?? '-' },
             { label: 'Legal Status:', value: legal },
@@ -716,10 +729,13 @@ export class PlayerInfoDialog {
             ...budgetRows(this.budget(entity, credits?.credits ?? 0)),
         ];
         const right: InfoRow[] = [
-            // Player ship naming isn't modeled; both rows show the
-            // class (the original's Ship Name is the pilot's own).
-            { label: 'Ship Name:', value: this.shipData?.name ?? '-' },
-            { label: 'Ship Class:', value: this.shipData?.name ?? '-' },
+            // The name the player gave the ship at the shipyard (or the
+            // derived "<class> <number>" before they named one), and the
+            // hull's class. An entity that never went through player_start
+            // (a spec) has no stored name and shows the class in both.
+            { label: 'Ship Name:',
+                value: playerShipName(names, undefined) ?? shipClass ?? '-' },
+            { label: 'Ship Class:', value: shipClass ?? '-' },
             ...physicsRows(physics),
             { label: 'Credits:',
                 value: credits ? credits.credits.toLocaleString() : '-' },
