@@ -29,6 +29,9 @@ import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityCompone
 import { CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from '../core/index.js';
 import { DamagedEvent, knockbackDirection } from '../ship/index.js';
 import { registerEntityDeriver } from '../core/index.js';
+import {
+    AsteroidComponent, AsteroidType, DebrisComponent, DebrisType,
+} from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { IdFactory, IdFactoryResource } from '../core/index.js';
 import { DecoyTargetComponent } from './jamming_plugin.js';
@@ -141,35 +144,15 @@ const DEBRIS_RADIUS = 4;
 /** Hitbox radius fallback when an asteroid's sprite hull is unknown. */
 const DEFAULT_ASTEROID_RADIUS = 20;
 
-/**
- * A live asteroid. `id` is the röid's global id, `health` its remaining
- * strength. The tumble is purely cosmetic (TumbleAnimationComponent,
- * rendered by TumbleDrawSystem); the sim rotation stays fixed.
- * Queryable by NPC AI (e.g. future mining behavior) to find asteroids
- * to shoot.
- */
-export const AsteroidType = t.type({
-    id: t.string, // Not a UUID. A nova id.
-    health: t.number,
-});
-export type AsteroidType = t.TypeOf<typeof AsteroidType>;
-export const AsteroidComponent = new Component<AsteroidType>('Asteroid');
+// AsteroidComponent and DebrisComponent are defined in core (the NPC
+// miner reads them, and npc sits below combat); re-exported here so the
+// asteroid field's whole surface is still importable from combat.
+export {
+    AsteroidComponent, AsteroidType, DebrisComponent, DebrisType,
+} from '../core/index.js';
 
 /** Static röid data; shared, never mutated. */
 export const AsteroidDataComponent = new Component<AsteroidData>('AsteroidData');
-
-/**
- * A scoopable resource-box ejected by a destroyed asteroid. `commodity`
- * is the cargo key it grants (see CargoComponent), `expires` the sim
- * time (ms) at which it fades away. Queryable by NPC AI to find debris
- * to scoop.
- */
-export const DebrisType = t.type({
-    commodity: t.string,
-    expires: t.number,
-});
-export type DebrisType = t.TypeOf<typeof DebrisType>;
-export const DebrisComponent = new Component<DebrisType>('Debris');
 
 /**
  * Per-system asteroid field state, attached to a dedicated entity with

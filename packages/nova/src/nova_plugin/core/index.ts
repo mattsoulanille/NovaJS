@@ -19,6 +19,7 @@ export * from './game_data_ref.js';
 export * from './collisions_plugin.js';
 export * from './projectile_data.js';
 export * from './animation_plugin.js';
+export * from './asteroid_components.js';
 export * from './controls.js';
 export * from './control_state_event.js';
 export * from './platform_plugin.js';
