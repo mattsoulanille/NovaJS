@@ -48,8 +48,8 @@ export const FiringGroup = t.intersection([t.type({
 }), t.partial({
     /**
      * The firing ship's government (GovtData id) at fire time, carried
-     * on WEAPON entities only (ships read their own GovtComponent).
-     * Unused until the same-govt clause below is enabled.
+     * on WEAPON entities only (ships read their own GovtComponent), for
+     * the same-govt clause below (SAME_GOVT_FIRING_IMMUNITY).
      */
     govt: t.string,
     /**
@@ -63,16 +63,31 @@ export const FiringGroup = t.intersection([t.type({
 export type FiringGroup = t.TypeOf<typeof FiringGroup>;
 export const FiringGroupComponent = new Component<FiringGroup>('FiringGroup');
 
+/** The weapon effect a friendly-fire check is made for. */
+export type FiringWeaponKind = 'projectile' | 'beam' | 'blast';
+
 /**
- * Whether friendly-fire immunity extends to ALL ships of the same
- * government, not just the same fleet/owner group.
+ * Which weapon effects extend friendly-fire immunity to EVERY ship of
+ * the firer's government, not just its fleet/owner group.
  *
- * DISABLED pending Matthew's research: he suspects the original game
- * MAY make all NPCs of the same govt immune to each other's fire, but
- * is not sure. The clause is wired end to end (both collision sides'
- * govt ids reach firingImmune), so enabling it is this one-line flip.
+ * Measured on the original (docs/reference_experiments.md, "NPC friendly
+ * fire wave 10"): an NPC's unguided bolts flew THROUGH a ship of its own
+ * government on the line of fire (100% shield over ~45 s) and hit the
+ * player behind it, but its beam stopped on that ship and took its
+ * shield down, and its bolt's 150 px blast splashed it. Allied and
+ * neutral governments get no immunity at all (their ships took the
+ * bolts), so only an exact govt match counts. A guided missile hits only
+ * its target anyway (proxHitAll), so the projectile row decides nothing
+ * new for it.
+ *
+ * Not measured: whether the clause outlasts the victim being disabled
+ * (firingImmune's carve-out cancels it with the group immunity).
  */
-export const SAME_GOVT_FIRING_IMMUNITY = false;
+export const SAME_GOVT_FIRING_IMMUNITY: Readonly<Record<FiringWeaponKind, boolean>> = {
+    projectile: true,
+    beam: false,
+    blast: false,
+};
 
 /**
  * ============================================================================
@@ -141,6 +156,12 @@ export function blastFriendlyFire(rule: BlastFlockRule,
  * group/govt pass through (NOT hit) a victim with the given effective
  * group/govt?
  *
+ * `kind` is the weapon effect being judged: a projectile also passes
+ * through every ship of its firer's government, a beam or a blast does
+ * not (SAME_GOVT_FIRING_IMMUNITY). Undefined (a caller with no weapon
+ * effect in hand, like the guided-lock provocation in flock.ts) leaves
+ * only the group test.
+ *
  * A weapon with no group (none of our creation paths produce one, but
  * wire/legacy entities might) is never immune to anything: with
  * undefined on both sides an ownerless weapon would otherwise match
@@ -157,16 +178,16 @@ export function blastFriendlyFire(rule: BlastFlockRule,
 export function firingImmune(
     weaponGroup: string | undefined, victimGroup: string | undefined,
     weaponGovt: string | undefined, victimGovt: string | undefined,
-    victimDisabled = false): boolean {
+    victimDisabled = false, kind?: FiringWeaponKind): boolean {
     if (victimDisabled) {
         return false;
     }
     if (weaponGroup !== undefined && weaponGroup === victimGroup) {
         return true;
     }
-    // Same-govt immunity (see SAME_GOVT_FIRING_IMMUNITY): present but
-    // disabled pending Matthew's research on the original game.
-    if (SAME_GOVT_FIRING_IMMUNITY
+    // Same-govt immunity, for the weapon effects that have it (see
+    // SAME_GOVT_FIRING_IMMUNITY).
+    if (kind !== undefined && SAME_GOVT_FIRING_IMMUNITY[kind]
         && weaponGovt !== undefined && weaponGovt === victimGovt) {
         return true;
     }

@@ -52,7 +52,10 @@ export const BlastCollisionSystem = new System({
             // The blast carries the projectile's SourceComponent for
             // exactly this test (review r13 LOW).
             disabledCancelsImmunity(collision.other,
-                other.components.has(DisabledComponent), source))) {
+                other.components.has(DisabledComponent), source),
+            // A blast DOES splash ships of its firer's government
+            // (measured: SAME_GOVT_FIRING_IMMUNITY).
+            'blast')) {
             return;
         }
         // A ship's own final explosion can hurt but never disable or

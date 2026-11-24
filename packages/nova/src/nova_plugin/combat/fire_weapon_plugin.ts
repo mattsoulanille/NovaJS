@@ -395,8 +395,8 @@ export abstract class WeaponEntry {
      * filtered by the friendly-fire pair predicate (see
      * firing_group.ts). The group is the firer's own group when it has
      * one (fleet members, bay fighters, parent projectiles), else the
-     * firer's owner-chain root; the govt rides along for the (disabled)
-     * same-govt immunity clause.
+     * firer's owner-chain root; the govt rides along for the same-govt
+     * immunity clause (projectiles only, SAME_GOVT_FIRING_IMMUNITY).
      */
     protected stampFiringGroup(spawned: Entity, firer: Entity,
         ownerUuid: string) {

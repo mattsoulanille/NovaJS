@@ -41,13 +41,15 @@ import { styleForTarget } from './hostility.js';
  * a fix, whichever answer the original gives, has to flip these
  * expectations on purpose:
  *
- *  1. CAN THEY HIT? Yes. Friendly-fire immunity is per FIRING GROUP (one
- *     fleet, one carrier and its fighters; ship/firing_group.ts), not per
- *     government: the same-govt clause is wired but switched off
- *     (SAME_GOVT_FIRING_IMMUNITY), and nothing at all checks alliances. An
- *     unguided shot or a beam at the player connects with any other ship
- *     of the shooter's government (or an ally's) in the way. A GUIDED
- *     missile is the exception: it only hits its own target (proxHitAll).
+ *  1. CAN THEY HIT? Settled by reference "NPC friendly fire wave 10" and
+ *     applied: a PROJECTILE passes through every ship of its firer's own
+ *     government (SAME_GOVT_FIRING_IMMUNITY, ship/firing_group.ts), but a
+ *     BEAM or a BLAST still hits it, and allies get no immunity at all
+ *     (nothing checks alliances): a bolt at the player connects with an
+ *     ally's ship in the way. A GUIDED missile only hits its own target
+ *     (proxHitAll). Friendly-fire immunity is otherwise per FIRING GROUP
+ *     (one fleet, one carrier and its fighters). So the same-govt stray
+ *     specs below use a stray BEAM, the stray that still lands.
  *  2. DO THEY TURN? No, not over a STRAY: reference "NPC friendly fire
  *     wave 10" (docs/reference_experiments.md) saw a ship of the
  *     shooter's own, an allied or a neutral government take bolts, a beam
@@ -200,10 +202,11 @@ describe('NPC friendly fire between same-govt / allied ships '
         pin(ships.victim, 1000, 850);
     }
 
-    it('runs with same-govt firing immunity switched off', () => {
-        // The one-line switch a "can't hit allies" answer would flip
-        // (and extend to allies). Everything below assumes it is off.
-        expect(SAME_GOVT_FIRING_IMMUNITY).toBeFalse();
+    it('runs with same-govt immunity for projectiles only', () => {
+        // Measured (reference "NPC friendly fire wave 10"): bolts pass
+        // through their own govt's ships, beams and blasts do not.
+        expect(SAME_GOVT_FIRING_IMMUNITY)
+            .toEqual({ projectile: true, beam: false, blast: false });
     });
 
     it('both raiders hunt the player on sight, never each other', async () => {
@@ -230,20 +233,43 @@ describe('NPC friendly fire between same-govt / allied ships '
         step(40);
     }
 
-    it('a blaster shot at the player hits the same-govt ship in the way, '
-        + 'which does not take the shooter as its aggressor', async () => {
+    /** The same with a Lance Beam (220 px): a beam still hits a ship of
+     * its firer's government, so this is the same-govt stray that lands
+     * now that a bolt passes through. */
+    async function strayBeam(ships: { player: Entity, shooter: Entity,
+        victim: Entity }) {
+        aim(ships.shooter, 'player');
+        pinScene(ships);
+        damaged = [];
+        await fire(BEAM, 'shooter');
+        step(15);
+        expect(hitsOn('victim').length)
+            .withContext('the stray beam reaches the victim')
+            .toBeGreaterThan(0);
+    }
+
+    it('a blaster shot at the player flies THROUGH the same-govt ship in '
+        + 'the way', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         await strayBolt(ships);
 
-        // (1) The shot connects: different firing groups, and the govt
-        // clause is off.
-        expect(hitsOn('victim').length)
-            .withContext('the blaster bolt hits the raider in the way')
-            .toBe(1);
-        expect(hitsOn('player'))
-            .withContext('the bolt ended in the victim').toEqual([]);
-        // (2) A stray: the shooter's lock was on the player, so the victim
-        // records nothing (reference wave 10: no retaliation).
+        // (1) Same govt: the bolt passes through (SAME_GOVT_FIRING_IMMUNITY).
+        expect(hitsOn('victim'))
+            .withContext('the blaster bolt passes the raider in the way')
+            .toEqual([]);
+        // (2) Nothing landed, so nothing provokes the victim.
+        expect(npcOf(ships.victim).aggressor).toBeUndefined();
+    });
+
+    it('a blaster bolt AIMED at a same-govt ship passes through it too, so '
+        + 'even a deliberate bolt provokes nothing', async () => {
+        const ships = await scene(RAIDERS, RAIDERS);
+        aim(ships.shooter, 'victim');
+        pinScene(ships);
+        damaged = [];
+        await fire(BLASTER, 'shooter');
+        step(40);
+        expect(hitsOn('victim')).toEqual([]);
         expect(npcOf(ships.victim).aggressor).toBeUndefined();
     });
 
@@ -251,7 +277,7 @@ describe('NPC friendly fire between same-govt / allied ships '
         + 'it', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { victim } = ships;
-        await strayBolt(ships);
+        await strayBeam(ships);
         pinScene(ships);
         wake(victim);
         step(1);
@@ -262,7 +288,7 @@ describe('NPC friendly fire between same-govt / allied ships '
     it('and does not engage it once the player has gone', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { victim } = ships;
-        await strayBolt(ships);
+        await strayBeam(ships);
         world.entities.delete('player');
         wake(victim);
         step(10);
@@ -270,13 +296,13 @@ describe('NPC friendly fire between same-govt / allied ships '
         expect(npcOf(victim).mode).not.toBe('attack');
     });
 
-    it('one stray bolt provokes nothing: 45 s on, the victim has not fired '
+    it('one stray beam provokes nothing: 45 s on, the victim has not fired '
         + 'at the shooter and does not remember it', async () => {
         // Before reference wave 10 this was "one stray bolt is enough": the
         // victim shot its own government's ship to a hulk.
         const ships = await scene(RAIDERS, RAIDERS);
         const { shooter, victim } = ships;
-        await strayBolt(ships);
+        await strayBeam(ships);
         world.entities.delete('player');
         aim(shooter, undefined);
         wake(victim);
@@ -292,7 +318,7 @@ describe('NPC friendly fire between same-govt / allied ships '
     it('the two raiders do not fight each other over it', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { shooter, victim } = ships;
-        await strayBolt(ships);
+        await strayBeam(ships);
         world.entities.delete('player');
         wake(victim);
         wake(shooter);

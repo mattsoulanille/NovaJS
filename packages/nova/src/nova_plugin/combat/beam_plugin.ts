@@ -439,7 +439,10 @@ export const BeamCollisionSystem = new System({
             firingGroup?.govt,
             other.components.get(GovtComponent)?.id,
             disabledCancelsImmunity(collision.other,
-                other.components.has(DisabledComponent), source))) {
+                other.components.has(DisabledComponent), source),
+            // A beam DOES hit ships of its firer's government (measured:
+            // SAME_GOVT_FIRING_IMMUNITY).
+            'beam')) {
             return;
         }
 

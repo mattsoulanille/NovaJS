@@ -437,7 +437,9 @@ function projectileMayStrike(shot: ShotContext, otherUuid: string,
     const gameData = world.resources.get(SimulationGameDataResource);
     // Friendly-fire immunity: don't collide with anything in our
     // firing group — the firer itself, its fleet (leader+escorts),
-    // its carrier/fighters — see firing_group.ts. The owner uuid is the fallback group for weapons
+    // its carrier/fighters — nor, for a projectile, any ship of the
+    // firer's own government (SAME_GOVT_FIRING_IMMUNITY) — see
+    // firing_group.ts. The owner uuid is the fallback group for weapons
     // that predate group stamping; the predicate never matches when the
     // weapon has neither (an ownerless projectile must not match every
     // group-less entity and pass through e.g. asteroids).
@@ -448,7 +450,8 @@ function projectileMayStrike(shot: ShotContext, otherUuid: string,
     if (firingImmune(firingGroup?.group ?? owner?.owner, victimGroup,
         firingGroup?.govt, other.components.get(GovtComponent)?.id,
         disabledCancelsImmunity(otherUuid,
-            other.components.has(DisabledComponent), source))) {
+            other.components.has(DisabledComponent), source),
+        'projectile')) {
         return false;
     }
 

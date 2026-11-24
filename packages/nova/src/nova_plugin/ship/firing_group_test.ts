@@ -22,7 +22,8 @@ import { DisabledComponent } from './disabled_component.js';
 import { FireSubs, OwnerComponent, SourceComponent } from '../combat/index.js';
 import {
     BLAST_FLOCK_RULE, blastFriendlyFire, disabledCancelsImmunity,
-    FiringGroupComponent, firingImmune, victimFiringGroup,
+    FiringGroupComponent, firingImmune, SAME_GOVT_FIRING_IMMUNITY,
+    victimFiringGroup,
 } from './firing_group.js';
 import { GovtComponent } from '../core/index.js';
 import { ProjectileDataComponent } from '../core/index.js';
@@ -61,14 +62,35 @@ describe('firingImmune (pair-immunity predicate)', () => {
             .toBeTrue();
     });
 
-    it('keeps the same-govt clause DISABLED (pending research)', () => {
-        // Same govt, different groups: NOT immune while
-        // SAME_GOVT_FIRING_IMMUNITY is false. Flipping that constant
-        // (firing_group.ts) is the one-line enable.
+    it('lets a PROJECTILE pass through any ship of its firer\'s govt '
+        + '(reference "NPC friendly fire wave 10")', () => {
+        expect(SAME_GOVT_FIRING_IMMUNITY)
+            .toEqual({ projectile: true, beam: false, blast: false });
+        expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:200',
+            false, 'projectile')).toBeTrue();
+        expect(firingImmune(undefined, 'ship-1', 'nova:200', 'nova:200',
+            false, 'projectile')).toBeTrue();
+        // Another govt (an ally or a neutral alike) is hit.
+        expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:201',
+            false, 'projectile')).toBeFalse();
+        // A governmentless shooter or victim (the player) matches nothing.
+        expect(firingImmune('fleet-1', 'fleet-2', undefined, undefined,
+            false, 'projectile')).toBeFalse();
+    });
+
+    it('but a beam or a blast still hits its own govt', () => {
+        for (const kind of ['beam', 'blast'] as const) {
+            expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:200',
+                false, kind)).withContext(kind).toBeFalse();
+        }
+        // No kind (flock.ts's guided-lock check): the group test alone.
         expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:200'))
             .toBeFalse();
-        expect(firingImmune(undefined, 'ship-1', 'nova:200', 'nova:200'))
-            .toBeFalse();
+    });
+
+    it('a disabled victim loses the govt immunity too', () => {
+        expect(firingImmune('fleet-1', 'fleet-2', 'nova:200', 'nova:200',
+            true, 'projectile')).toBeFalse();
     });
 });
 
@@ -296,14 +318,24 @@ describe('ProjectileCollisionSystem filtering', () => {
                 expect(hits('leader')).toEqual([]);
             });
 
-        it('same govt does NOT confer immunity while the clause is off', () => {
+        it('a projectile passes through a ship of its firer\'s govt', () => {
             addShip('same-govt-ship').components
                 .set(GovtComponent, { id: 'nova:200' });
             addProjectile('shot', {}).components
                 .set(FiringGroupComponent,
                     { group: 'fleet-1', govt: 'nova:200' });
             collide('shot', 'same-govt-ship');
-            expect(hits('same-govt-ship').length).toBe(1);
+            expect(hits('same-govt-ship')).toEqual([]);
+        });
+
+        it('but hits a ship of another govt', () => {
+            addShip('other-govt-ship').components
+                .set(GovtComponent, { id: 'nova:201' });
+            addProjectile('shot', {}).components
+                .set(FiringGroupComponent,
+                    { group: 'fleet-1', govt: 'nova:200' });
+            collide('shot', 'other-govt-ship');
+            expect(hits('other-govt-ship').length).toBe(1);
         });
     });
 
