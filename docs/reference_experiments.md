@@ -3392,6 +3392,10 @@ original greyed it out.
 prices are not enough to fit a rule (a fixed share fails: 2.5% vs 5%; a
 line through both is 833 + price / 120); a third and fourth price, and a
 bigger hull for the range, would settle it before changing NovaJS.
+**Applied in ef61904a** (ruling #378, "match the original fully"), with the
+data of waves 7-8: a square range from both sprites (`boardingRange`, 12 px
+for this 24 px pair), the money rule of wave 8 (`creditBooty`), and no
+capture of a derelict (`capturable`). Details under wave 8.
 
 Confidence: high for the range (five boards, about twenty "not close
 enough" stops, every boundary within 2 px); high that the money is fixed
@@ -3604,6 +3608,10 @@ not close enough" band.
 relative speed is over about 13 px/s (the midpoint of 11-16), at any
 distance; between the two, answer "not close enough" (it is what the
 original prints) or, if that quirk is not wanted, "too fast".
+**Applied in ef61904a** (ruling #378): `BOARD_MAX_REL_SPEED` 7.5 px/s
+(boarded at 7.3, refused at 7.8); `BOARD_TOO_FAST_REL_SPEED` 13.5 px/s,
+checked first at any distance; between the two the gate answers 'tooFar',
+"not close enough", as the original does.
 
 **2. Money booty, a bigger hull, capture.** `scenarios/board_hulk.json`
 (wave 6's walk-and-board loop) on new hulks, each the only traffic of its
@@ -3666,6 +3674,7 @@ max(1,000, price / 40) up to at least 100,000; for dearer ships more
 boards are needed (500,000 gave 19,500-21,500); capture of a ship
 that started disabled (gövt 0x0800) not offered, pending a test of a
 hulk disabled by gunfire.
+**Applied in ef61904a**, as refined by wave 8 (below).
 
 Confidence: high for the speed gate's order and the two message bands
 (every press of nine passes agrees), medium for the gate value (7.3
@@ -4217,6 +4226,13 @@ capture of a gövt 0x0800 derelict (Capture greyed, odds 0%); cap the
 odds at 75%; below that, interpolate the measured points (10 boarders
 vs 1 / 5 / 10 / 15 / 20 / 40 defenders: 75 / 34 / 20 / 18 / 17.5 / 7%)
 until a formula is found.
+**Applied in ef61904a** (ruling #378): `isDerelict` (gövt Flags1 0x0800,
+read off the government, so a ShipGoal 5 rescue hulk is not one) makes
+`capturable` false for both capture routes, and the plunder dialog shows
+"Capture Odds: 0%" with Capture Ship greyed and no note. `captureChance`
+interpolates `CAPTURE_ODDS_BY_CREW_RATIO` linearly in boarder / defender
+crew (0 / 0.25 / 0.5 / 2/3 / 1 / 2 / 10 -> 0 / 7 / 17.5 / 18 / 20 / 34 /
+75%) and caps at `CAPTURE_CHANCE_MAX` 75%; the old 5% floor is gone.
 
 **NovaJS (base b38635bd).**
 - Alignment: `N/nova_plugin/ship/boarding_component.ts:236`
@@ -4230,6 +4246,11 @@ until a formula is found.
   line). **Proposed (not applied):** tolerance about 30° (π/6); show no
   message for 'notAligned' (or keep the hint deliberately, as a UI
   choice).
+  **Applied in ef61904a** (ruling #378): `AXIS_ALIGN_TOLERANCE_RAD` 29°
+  (between the largest clean board, 28, and the repeated silence at 30),
+  checked last, after range and both speed gates; 'notAligned' has no
+  message (`boardingBlockedMessage` returns '', which clears the status
+  line, and no cant-do beep plays).
 - One board per hulk: `plunderSpent` (`boarding_component.ts:318`) and the
   'alreadyBoarded' refusal (`N/nova_plugin/encounters/boarding_plugin.ts:612-614`,
   "You can't board this ship.", `status_bar_content.ts:262`) **match**,
@@ -4242,11 +4263,23 @@ until a formula is found.
   case). **Proposed (not applied):** max(|dx|, |dy|) <= half the
   target's sprite size (plus a little for a big boarder), the landing
   zone's shape.
+  **Applied in ef61904a** (ruling #378): `boardingDistance` = max(|dx|,
+  |dy|) <= `boardingRange` = (7 T + B) / 16, T and B the target's and
+  boarder's `spriteFrameWidth` (48 when unknown): 12 for 24/24, 43.5 for
+  96/24, 16.5 for 24/96, all inside the brackets above; 13.5 for 24/48,
+  1.5 px under the Lightning's rough centroid figure of about 15.
 - Money: `creditBooty` (`:323`, 10% of the price): **mismatch**.
   **Proposed (not applied):** max(1,000, price / 40) plus a random part
   that is zero at 50,000 and reaches about price / 40 for dear hulls (one
   shape that fits: uniform 0 to price / 40 - 1,500, in steps of 250), from
   the seeded RandomResource like the capture roll.
+  **Applied in ef61904a** (ruling #378), with a tighter shape that every
+  board fits: every amount over the floor is price / 40 plus a whole
+  number of thousands. `creditBooty` = max(1,000, B + 1,000 k), B = price
+  / 40 rounded down to 250, k uniform in [0, floor(B / 1,000)) from ONE
+  seeded draw per board (made as the plunder session opens, so the draw
+  count never depends on the price). The 50,000 hull has a single step,
+  hence 1,250 on all 24 boards; 750,000's 35,750 is its top step (k = 17).
 
 Confidence: high that alignment is the silent refusal (nine sweeps, each
 silent at a fixed spot until only a turn opened the dialog; nine more
