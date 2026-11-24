@@ -164,9 +164,9 @@ describe('in-flight mission info key (wave 11)', () => {
 
     it('aborts in flight through an abortMission record', async () => {
         const courier = SYNTHETIC.missions.courier;
-        const { dialog, aborts, pressI } =
+        const { dialog, aborts } =
             await openWith([[courier, active(courier)]]);
-        const { abort, description } = parts(dialog);
+        const { abort } = parts(dialog);
         expect(abort.state).withContext('Abort is live in flight')
             .toBe('normal');
         abort.click.next({});
@@ -176,10 +176,9 @@ describe('in-flight mission info key (wave 11)', () => {
         expect(aborts).toEqual([{
             missionId: courier, bitsCleared: [BITS.courierAccepted],
         }]);
-        // Off the list at once, without waiting for the simulation.
-        expect(description.text).toBe(NO_MISSIONS);
-        expect(abort.state).toBe('grey');
-        pressI();
+        // The WHOLE dialog closes at once, no confirmation, without
+        // waiting for the simulation (reference "Aborting a mission in
+        // flight from the `i` dialog, wave 13").
         await settle();
         expect(dialog.container.visible).toBeFalse();
     });
