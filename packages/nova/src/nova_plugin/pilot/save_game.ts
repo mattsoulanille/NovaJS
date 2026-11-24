@@ -29,6 +29,8 @@ import {
     MissionsComponent,
     PendingAutoAbortShipsComponent,
     PendingAutoAbortShipsType,
+    PlayerNamesComponent,
+    sanitizePlayerName,
 } from '../player/index.js';
 import { PlayerEscortComponent } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
@@ -280,6 +282,14 @@ export const SaveData = t.intersection([
         // CarriedEscort.priorPlayer). Absent means "unknown", which
         // disables the phantom-fighter cleanup (see SavedFleetOwner).
         playerUuid: t.string,
+        // The name the player gave their ship at the shipyard's Buy Ship
+        // prompt (PlayerNamesComponent; player_names.ts), or the derived
+        // "<type> <number>" a pilot has before buying one. Optional, with
+        // no migration: a save written before ship names existed reads as
+        // that derived name (client/player_start.ts fills it in). Cleaned
+        // on the way out and on the way in, since a save file is as
+        // untrusted as any typed name.
+        shipName: t.string,
     }),
 ]);
 export type SaveData = t.TypeOf<typeof SaveData>;
@@ -394,6 +404,11 @@ export function extractSaveData(entity: Entity, systemId: string,
     if (controlBits) {
         save.plugins = [...controlBits.resolver.pluginOrder];
     }
+    const shipName = sanitizePlayerName(
+        entity.components.get(PlayerNamesComponent)?.ship);
+    if (shipName !== undefined) {
+        save.shipName = shipName;
+    }
     return save;
 }
 
@@ -441,6 +456,17 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     const restored: RestoredPlayerState = { parkedControlBits: [] };
     entity.components.set(CreditsComponent, { credits: save.credits });
     entity.components.set(GameDateComponent, { ...save.date });
+    // The ship's name, cleaned; the pilot's name is the profile's
+    // (player_start.ts sets it, and the derived ship name for a save that
+    // has none). Replaced rather than merged into, so nothing is shared.
+    const shipName = sanitizePlayerName(save.shipName);
+    const names = { ...entity.components.get(PlayerNamesComponent) };
+    if (shipName !== undefined) {
+        names.ship = shipName;
+    } else {
+        delete names.ship;
+    }
+    entity.components.set(PlayerNamesComponent, names);
     entity.components.set(MissionsComponent, new Map(
         save.missions.map(([id, mission]) => [id, { ...mission }])));
     if (save.controlBits) {

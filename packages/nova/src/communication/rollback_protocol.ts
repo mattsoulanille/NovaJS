@@ -508,6 +508,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    (0c6eeff124ceccf1 -> 86cef0d44be60ecd on its own; 4ba45ea2f8ce4634 ->
 //    90e66780d5561a8d on top of the scan-failure note above), and the join gate
 //    keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the pilot's and the ship's names (the
+//    shipyard's "Please name your new <ship>:" prompt). A new
+//    delta-registered player component, PlayerNames (player/
+//    player_names.ts, `{pilot?, ship?}`, both OPTIONAL strings), set on
+//    the player's ship at the session start and by a shipyard purchase,
+//    and carried across hull changes. Names are cleaned (control and
+//    text-direction characters stripped, 31 characters at most) where
+//    they are written and where they are read. No sim rule reads it. No
+//    input kind or message kind changes. The derived wire schema
+//    fingerprint changes (90e66780d5561a8d -> e730831c2453dc18), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

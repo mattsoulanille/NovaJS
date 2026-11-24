@@ -119,6 +119,18 @@ describe('original pilot import', () => {
                 .toBeFalse();
         });
 
+    it('imports the ship\'s name, cleaned like a typed one', () => {
+        const pilot = parsePilotBytes(buildPltPilotFile('Ring of Glory'));
+        expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
+            .toBe(pilot.shipName.trim());
+        pilot.shipName = 'Ring\u0007 of\nGlory';
+        expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
+            .toBe('Ring ofGlory');
+        pilot.shipName = '';
+        expect(convertOriginalPilot(pilot, 'x.plt', CTX).save.shipName)
+            .toBeUndefined();
+    });
+
     it('imports the exploration map at its original three levels', () => {
         // The file's `exploration` array is indexed by sÿst id - 128 and
         // holds "<= 0 unexplored, 1 visited, 2 visited and landed within"

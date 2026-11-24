@@ -23,7 +23,7 @@ import {
     ControlledByComponent, CreditsComponent, CronStatesComponent,
     EscortPayrollComponent, GameDateComponent, MissionsComponent,
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    PlayerShipSelector, StrictPlayComponent,
+    PlayerNamesComponent, PlayerShipSelector, StrictPlayComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import {
@@ -161,6 +161,13 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // Strict play (StrictPlayComponent) is the PILOT's setting: a strict
     // pilot who buys a ship still flies it at the strict top speed.
     StrictPlayComponent,
+    // The pilot's name and the ship's name (player_names.ts). The pilot's
+    // is the pilot's whatever they fly. The ship's name follows a Cxxx /
+    // Exxx / Hxxx change of hull unchanged: GUESS — the original keeps one
+    // ship-name string in the pilot file and no prompt is known to run
+    // outside the shipyard's Buy Ship, which writes a new one over it
+    // (spaceport/shipyard.ts). Replaced, never mutated, so safe to share.
+    PlayerNamesComponent,
     // The contraband scan's scanned-this-visit marker
     // (npc/contraband_target.ts). It outlives a landing (the original
     // rescans only after an arrival by jump), so a hull bought at the

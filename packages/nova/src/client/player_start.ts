@@ -23,8 +23,10 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import {
     playerDiscovery, PlayerShipSelector, CreditsComponent, GameDateComponent,
-    ControlledByComponent, StrictPlayComponent,
+    ControlledByComponent, StrictPlayComponent, PlayerNamesComponent,
+    PlayerNames, derivedShipName, sanitizePlayerName,
 } from '../nova_plugin/player/index.js';
+import { displayName } from '../nova_plugin/core/index.js';
 import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
@@ -306,6 +308,15 @@ export async function preparePlayerStart(runtime: ClientRuntime,
     } else {
         ship.components.delete(StrictPlayComponent);
     }
+    // The pilot's and the ship's names (player_names.ts), on the entity
+    // for the same reason: every peer reads the same names. The pilot's
+    // is the profile's; the ship's is the save's (restorePlayerState put
+    // it there), else the derived "<type> <ship number>" a pilot has
+    // before naming a ship (a new pilot, or a save from before names),
+    // which the next save then keeps.
+    ship.components.set(PlayerNamesComponent, startingPlayerNames(
+        ship.components.get(PlayerNamesComponent), profile?.name,
+        displayName(shipData.name || shipId), profile?.shipNumber));
 
     // ?system=nova:131 picks the starting system; otherwise the saved
     // system, otherwise the chär's start system, otherwise the default.
@@ -326,4 +337,22 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         }
     }
     return { ship, systemId };
+}
+
+/**
+ * The names a player's ship starts a session with: the profile's pilot
+ * name, and the stored ship name or else the derived one. Pure, for specs.
+ */
+export function startingPlayerNames(stored: PlayerNames | undefined,
+    pilotName: string | undefined, shipType: string,
+    shipNumber: number | undefined): PlayerNames {
+    const names: PlayerNames = {
+        ship: sanitizePlayerName(stored?.ship)
+            ?? derivedShipName(shipType, shipNumber),
+    };
+    const pilot = sanitizePlayerName(pilotName);
+    if (pilot !== undefined) {
+        names.pilot = pilot;
+    }
+    return names;
 }

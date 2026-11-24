@@ -5,6 +5,7 @@ import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MissionEventTypeType } from './mission_event_type.js';
 import { ShipObjectiveType } from './mission_ship_state.js';
+import { PlayerNamesComponent, PlayerNamesType } from './player_names.js';
 
 /**
  * Serializable per-player gameplay state: the game date, credits, and
@@ -365,6 +366,9 @@ export const PlayerStatePlugin: Plugin = {
         });
         deltaMaker.addComponent(StrictPlayComponent, {
             componentType: StrictPlayType,
+        });
+        deltaMaker.addComponent(PlayerNamesComponent, {
+            componentType: PlayerNamesType,
         });
     }
 };

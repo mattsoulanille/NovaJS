@@ -11,7 +11,8 @@
  *   cargo + jünk aboard, legal records (see below), and active missions
  *   WITHOUT special ships (see below). Nickname / gender / strict play
  *   feed the profile; the pilot's NAME is not stored in the file (only the
- *   ship's), so the file's name stands in.
+ *   ship's, which becomes the save's `shipName`), so the file's name
+ *   stands in.
  *
  *   Legal status: the original keeps it PER SYSTEM; NovaJS keeps records
  *   PER GOVERNMENT (reputation.ts). Each system's status is attributed to
@@ -45,6 +46,7 @@ import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
 import {
     dayNumber, daysInMonth, DISCOVERY_UNKNOWN, toDiscoveryLevel, ActiveMission,
+    sanitizePlayerName,
 } from '../nova_plugin/player/index.js';
 import { SaveData, saveDefaults } from '../nova_plugin/pilot/index.js';
 import { PilotProfile } from './client_prefs.js';
@@ -320,6 +322,12 @@ export function convertOriginalPilot(pilot: PilotData,
         combatRatings: [['kills', kills]],
         discovery,
     };
+    // The ship's name, as the player named it in the original (its
+    // pilot file keeps it), cleaned like any typed name (player_names.ts).
+    const shipName = sanitizePlayerName(pilot.shipName);
+    if (shipName !== undefined) {
+        save.shipName = shipName;
+    }
 
     const baseName = fileName.replace(/\.[^.]*$/, '').trim();
     const profile: PilotProfile = {

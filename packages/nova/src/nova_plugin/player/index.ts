@@ -20,6 +20,7 @@ export * from './mission_event_type.js';
 export * from './mission_ship_component.js';
 export * from './mission_ship_state.js';
 export * from './player_escort.js';
+export * from './player_names.js';
 export * from './player_ship_plugin.js';
 export * from './player_state_plugin.js';
 export * from './ship_control.js';
