@@ -101,19 +101,22 @@ describe('crimePenalty', () => {
         expect(crimePenalty(pirateHater, 'board')).toBe(20);
     });
 
-    it('reads a NEGATIVE field as "no penalty", not as a bounty (#108)',
+    it('applies a NEGATIVE field SIGNED: the crime raises the record '
+        + '(reference "A14 with system traffic as the victims, wave 12")',
         () => {
-            // Stock nova:159 "Wraith" (the derelict variant) sets every
-            // penalty field to -1. `record -= -1` would reward the kill.
-            const wraith = makeGovt('nova:159', {
-                killPenalty: -1, disablePenalty: -1, boardPenalty: -1,
+            // Measured: a kill of a -100 / -100 govt's ship raised the
+            // record by 200 (Disab + Kill). This replaces #108's "no
+            // penalty" reading.
+            const negative = makeGovt('nova:369', {
+                killPenalty: -100, disablePenalty: -100, boardPenalty: -100,
             });
-            expect(crimePenalty(wraith, 'kill')).toBe(0);
-            expect(crimePenalty(wraith, 'disable')).toBe(0);
-            expect(crimePenalty(wraith, 'board')).toBe(0);
+            expect(crimePenalty(negative, 'kill')).toBe(-100);
+            expect(crimePenalty(negative, 'disable')).toBe(-100);
+            expect(crimePenalty(negative, 'board')).toBe(-100);
             const records: LegalRecords = new Map();
-            applyCrime(records, wraith, 'kill');
-            expect(records.size).toBe(0);
+            applyCrime(records, negative, 'disable');
+            applyCrime(records, negative, 'kill');
+            expect(records.get('nova:369')).toBe(200);
         });
 });
 

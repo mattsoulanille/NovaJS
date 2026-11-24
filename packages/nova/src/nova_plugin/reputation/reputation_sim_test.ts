@@ -60,7 +60,8 @@ describe('reputation in a live world', () => {
         return player;
     }
 
-    it('credits a kill: record drop (Meridian only) and rating', async () => {
+    it('credits a kill: record drop of Disab + Kill (Meridian only) and '
+        + 'rating', async () => {
         const { gameData, world } = await makeWorld();
         const player = await addPlayer(world, gameData);
 
@@ -94,7 +95,10 @@ describe('reputation in a live world', () => {
         expect(victim.components.get(DamageAttributionComponent))
             .toEqual({ root: PLAYER, killCredited: true, disabledAtHit: false });
         const records = player.components.get(LegalRecordsComponent)!;
-        expect(records.get(MERIDIAN)).toBe(-MERIDIAN_KILL_PENALTY);
+        // A one-hit kill costs the Disab too (reference "A14 with system
+        // traffic as the victims, wave 12": -(30 + 100) for one hit).
+        const killCost = MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY;
+        expect(records.get(MERIDIAN)).toBe(-killCost);
         // No ally or enemy propagation (reference "A14 wave 5", ruling
         // #376): the Amber Compact (Meridian's ally) and the Verge
         // Raiders (its enemy) are untouched, over the scenario's real
@@ -114,7 +118,7 @@ describe('reputation in a live world', () => {
             damager: SHOT,
         }, [VICTIM]);
         world.step();
-        expect(records.get(MERIDIAN)).toBe(-MERIDIAN_KILL_PENALTY);
+        expect(records.get(MERIDIAN)).toBe(-killCost);
     });
 
     /**
@@ -166,7 +170,7 @@ describe('reputation in a live world', () => {
                 .toEqual(new Set());
         });
 
-    it('credits a disable: the disable penalty, once, and not on kill',
+    it('credits a disable: the disable penalty, once',
         async () => {
             const { gameData, world } = await makeWorld();
             const player = await addPlayer(world, gameData);
@@ -201,6 +205,82 @@ describe('reputation in a live world', () => {
             // Steps while it stays disabled do not re-charge.
             world.step();
             expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+        });
+
+    it('a kill after the same player\'s disable charges the Disab once, '
+        + 'not twice (reference A14 wave 12: -130, not -160)', async () => {
+            const { gameData, world } = await makeWorld();
+            const player = await addPlayer(world, gameData);
+
+            const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
+            const victim = makeShip(victimData);
+            victim.components.set(GovtComponent, { id: MERIDIAN });
+            await completeEntity(world, victim);
+            world.entities.set(VICTIM, victim);
+            const shot = new Entity(SHOT);
+            shot.components.set(FiringGroupComponent, { group: PLAYER });
+            world.entities.set(SHOT, shot);
+            world.step();
+
+            const hit = (armorDamage: number) => world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: armorDamage, ionization: 0,
+                    ionizationColor: 0, knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            const armor = victim.components.get(ArmorComponent)!;
+            victim.components.get(ShieldComponent)!.current = 0;
+            hit(armor.max * 0.7);
+            for (let i = 0; i < 3; i++) {
+                world.step();
+            }
+            expect(victim.components.has(DisabledComponent)).toBeTrue();
+            const records = player.components.get(LegalRecordsComponent)!;
+            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+
+            // Then finished off.
+            hit(1e9);
+            world.step();
+            expect(armor.current).toBe(0);
+            expect(records.get(MERIDIAN)).toBe(
+                -(MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY));
+        });
+
+    it('a kill of a ship somebody else disabled charges the killer Disab + '
+        + 'Kill', async () => {
+            const { gameData, world } = await makeWorld();
+            const player = await addPlayer(world, gameData);
+
+            const victimData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
+            const victim = makeShip(victimData);
+            victim.components.set(GovtComponent, { id: MERIDIAN });
+            await completeEntity(world, victim);
+            world.entities.set(VICTIM, victim);
+            const shot = new Entity(SHOT);
+            shot.components.set(FiringGroupComponent, { group: PLAYER });
+            world.entities.set(SHOT, shot);
+            world.step();
+
+            // Disabled by an unattributed cause (no records charged).
+            const armor = victim.components.get(ArmorComponent)!;
+            victim.components.get(ShieldComponent)!.current = 0;
+            armor.current = 0.3 * armor.max;
+            world.step();
+            world.step();
+            expect(victim.components.has(DisabledComponent)).toBeTrue();
+
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 1e9, ionization: 0,
+                    ionizationColor: 0, knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            world.step();
+            expect(player.components.get(LegalRecordsComponent)!
+                .get(MERIDIAN)).toBe(
+                    -(MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY));
         });
 
     it('does not credit a disable for a hit on a ship that was already ' +

@@ -79,6 +79,14 @@ export const DamageAttributionType = t.partial({
     killCredited: t.boolean,
     disableCredited: t.boolean,
     /**
+     * The root DisableCreditSystem charged the DisabPenalty to for the
+     * current disablement (cleared with `disableCredited` on repair), so
+     * a kill by that same root does not charge the Disab a second time
+     * (KillCreditSystem). Additive: records without it read as "nobody
+     * was charged".
+     */
+    disableChargedTo: t.string,
+    /**
      * Whether the ship was ALREADY disabled when `root` was last
      * written. A hit on a hulk (a spawn-disabled derelict, a mïsn
      * rescue target, a ship disabled by an unattributed cause) must
@@ -185,8 +193,18 @@ const DamageAttributionSystem = new System({
  * Credits a kill when a ship's armor reaches zero: the responsible
  * root's combat rating grows by the victim's shïp Strength (Appendix
  * I), and — when the victim has a government — the root's legal
- * records take that govt's kill penalty (no ally/enemy propagation).
- * Roots without the components (NPCs) are unaffected.
+ * records take that govt's DisabPenalty + KillPenalty (no ally/enemy
+ * propagation). Roots without the components (NPCs) are unaffected.
+ *
+ * Disab + Kill on EVERY kill, the Disab never twice: measured
+ * (reference "A14 with system traffic as the victims, wave 12"), a
+ * one-hit kill and a kill of a ship that vanished between two frames
+ * both cost -(Disab 30 + Kill 100), and a kill after the player's own
+ * visible disable cost the same -130, not -160. So the Disab is charged
+ * here unless DisableCreditSystem already charged it to this same root
+ * for this disablement (`disableChargedTo`). Unmeasured: a kill of a
+ * ship someone ELSE disabled (an NPC, a derelict spawn) charges the
+ * killer the Disab too, as "every kill" reads.
  */
 export const KillCreditSystem = new System({
     name: 'KillCreditSystem',
@@ -225,6 +243,9 @@ export const KillCreditSystem = new System({
         if (govt) {
             const govtData = gameData.data.Govt.getCached(govt.id);
             if (govtData) {
+                if (attribution?.disableChargedTo !== attribution?.root) {
+                    chargeCrime(root, govtData, 'disable', gameData, govts);
+                }
                 chargeCrime(root, govtData, 'kill', gameData, govts);
             }
         }
@@ -237,7 +258,9 @@ export const KillCreditSystem = new System({
  * records, that player takes the DisabPenalty.
  * The guard resets when the ship is repaired, so disabling it again
  * counts again. Dead ships (armor 0 — a hulk mid-explosion is
- * "below the disable threshold" too) charge the KILL penalty only.
+ * "below the disable threshold" too) are KillCreditSystem's, which
+ * charges the Disab with the Kill unless this system already charged it
+ * to the killer (`disableChargedTo`).
  *
  * Only a hit that landed while the ship was still ENABLED can have
  * disabled it (`disabledAtHit`, recorded with the root above). A ship
@@ -257,6 +280,9 @@ export const DisableCreditSystem = new System({
         if (!disabled) {
             if (attribution.disableCredited) {
                 attribution.disableCredited = false;
+            }
+            if (attribution.disableChargedTo !== undefined) {
+                delete attribution.disableChargedTo;
             }
             return;
         }
@@ -281,6 +307,7 @@ export const DisableCreditSystem = new System({
         const govtData = gameData.data.Govt.getCached(govt.id);
         if (govtData) {
             chargeCrime(root, govtData, 'disable', gameData, govts);
+            attribution.disableChargedTo = attribution.root;
         }
     },
     // #237 pin (shared: *): ReputationPlugin registers after OutfitPlugin.

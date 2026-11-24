@@ -92,7 +92,8 @@ describe('reputation against real Nova data', () => {
                 .toBe(DEFAULT_BOARD_PENALTY);
         });
 
-    it('charges nothing for the derelict Wraiths, whose fields are -1 (#108)',
+    it('the derelict Wraiths\' -1 fields apply signed: a kill raises the '
+        + 'record (reference A14 wave 12, replacing #108)',
         async () => {
             const gameData = await getIntegrationGameData();
             const wraith = await gameData.data.Govt.get('nova:159');
@@ -101,7 +102,8 @@ describe('reputation against real Nova data', () => {
             expect(wraith.killPenalty).toBe(-1);
             expect(wraith.disablePenalty).toBe(-1);
             expect(wraith.boardPenalty).toBe(-1);
-            expect(crimePenalty(wraith, 'kill')).toBe(0);
+            expect(crimePenalty(wraith, 'kill')).toBe(-1);
+            expect(crimePenalty(wraith, 'disable')).toBe(-1);
             // ...while the living Wraiths charge as written.
             const living = await gameData.data.Govt.get('nova:138');
             expect(living.name).toBe('Wraith');

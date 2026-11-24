@@ -18,7 +18,11 @@ import { GovtData } from 'novadatainterface/govt_data';
  *
  * CRIME (Bible, gövt): destroying a govt's ship adds KillPenalty
  * evilness with that govt, disabling adds DisabPenalty, boarding adds
- * BoardPenalty (smuggling: SmugPenalty — not wired yet).
+ * BoardPenalty (smuggling: SmugPenalty — not wired yet). Measured, a
+ * KILL costs DisabPenalty + KillPenalty, also when one hit destroys the
+ * ship without a visible disable, and the Disab only once when the same
+ * player disabled it first (reference "A14 with system traffic as the
+ * victims, wave 12"; reputation_plugin.ts's KillCreditSystem).
  *
  * NO PROPAGATION. The Bible says allies "communicate your actions" and
  * enemies approve, but the original, measured, does not spread a crime
@@ -106,23 +110,21 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
 export type Crime = 'kill' | 'disable' | 'board';
 
 /**
- * A crime's base penalty: the govt's field, or the engine default for a
- * zero field — and NO PENALTY AT ALL for a negative one.
+ * A crime's base penalty: the govt's field, SIGNED, or the engine default
+ * for a zero field.
  *
- * The Bible describes every penalty field as "the amount of evilness"
- * a crime earns and never gives a negative one a meaning, while "-1
- * means unused" is the format's convention everywhere else (SalaryCap,
- * AvailRating, the -1 ids). Exactly one stock gövt writes negatives:
- * nova:159 "Wraith" — the DERELICT variant (Flags 0x0800 "start out
- * disabled", can't be hailed, no assistance or mercy) — sets Smug,
- * Disab, Board, Kill AND the "currently ignored" ShootPenalty all to
- * -1, the copy-paste signature of "not applicable" rather than of a
- * bounty; its living siblings nova:138/139 charge a KillPenalty of 16.
- * Read literally (record -= -1) a pilot would be REWARDED a point of
- * Wraith standing for shooting a derelict, and read as "unset -> engine
- * default" they would be charged as for a typical govt; neither is what
- * that author meant. So a negative field is "this govt does not care":
- * the crime costs nothing (#108).
+ * A NEGATIVE field is applied as written: the crime RAISES the record.
+ * Measured (docs/reference_experiments.md, "A14 with system traffic as
+ * the victims, wave 12"): one kill of a ship whose govt sets Disab and
+ * Kill to -100 raised the record by 200. This replaces #108's "a negative
+ * field is no penalty" reading (#320 item 2), which rested on wave 10's
+ * "no change" — a run whose victim was a goal-less mission ship, which
+ * is no crime at all (wave 11), so it never tested the sign.
+ *
+ * The one stock gövt that writes negatives is nova:159 "Wraith", the
+ * DERELICT variant (Flags 0x0800 "start out disabled"), with -1 in every
+ * penalty field: destroying one now raises the Wraith record by 2 (Disab
+ * -1 + Kill -1), as the original's arithmetic would.
  */
 export function crimePenalty(govt: GovtData, crime: Crime): number {
     const field = crime === 'kill' ? govt.killPenalty
@@ -131,22 +133,28 @@ export function crimePenalty(govt: GovtData, crime: Crime): number {
     const fallback = crime === 'kill' ? DEFAULT_KILL_PENALTY
         : crime === 'disable' ? DEFAULT_DISABLE_PENALTY
             : DEFAULT_BOARD_PENALTY;
-    if (field < 0) {
-        return 0;
-    }
     return field !== 0 ? field : fallback;
 }
 
 /**
  * Applies a crime against `victimGovt` to `records`: the full penalty
  * with the victim's govt, and nothing with any other govt (reference
- * "A14 wave 5", ruling #376; see the module comment).
+ * "A14 wave 5", ruling #376; see the module comment). A negative
+ * penalty raises the record (crimePenalty).
+ *
+ * TODO(needs Matthew's ruling): reference "A14 with system traffic as the
+ * victims, wave 12" found that killing a ship whose govt is NEITHER the
+ * system's owner NOR its ally RAISES the system's record by half the
+ * OWNER's Disab + Kill (each halved and truncated), instead of costing
+ * the victim's govt anything. How that maps onto NovaJS's per-govt
+ * records (ruling #376) is Matthew's call; until then every kill charges
+ * the victim's govt, wherever it happens.
  */
 export function applyCrime(records: LegalRecords, victimGovt: GovtData,
     crime: Crime): void {
     const penalty = crimePenalty(victimGovt, crime);
     if (penalty === 0) {
-        return; // A govt that does not care (negative field): no entry.
+        return;
     }
     addRecord(records, victimGovt.id, victimGovt, -penalty);
 }

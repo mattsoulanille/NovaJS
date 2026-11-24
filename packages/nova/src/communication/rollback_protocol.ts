@@ -371,6 +371,16 @@ export const STATE_HASH_INTERVAL = 60;
 //    MissionShipCleanupSystem. New union member, so the derived wire schema
 //    fingerprint changes (55c212da798ebf7a); every existing kind and field
 //    is unchanged, and the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): kill penalties (reference "A14 with system
+//    traffic as the victims, wave 12"). An OPTIONAL `disableChargedTo`
+//    field on DamageAttribution (reputation/reputation_plugin.ts): the
+//    root DisableCreditSystem charged the DisabPenalty to, so a kill by
+//    that root charges Kill alone while every other kill charges Disab +
+//    Kill. Sim-rule change alongside: negative penalty fields apply
+//    signed. No input kind or message kind changes. The derived wire
+//    schema fingerprint changes (4ff3c1a7ae09af99), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
