@@ -36,6 +36,7 @@ import {
 } from './npc_cloak.js';
 import { NpcComponent, NpcState } from './npc_component.js';
 import { outOfAmmo } from './npc_out_of_ammo.js';
+import { STANDOFF_HULL_DISTANCE } from './npc_steering.js';
 
 /**
  * ============================================================================
@@ -49,6 +50,9 @@ import { outOfAmmo } from './npc_out_of_ammo.js';
  *  - Flags2 0x0800 trader with the stock Wraith Cloaking Device: seen only
  *    pulling away from the port; hostile 0x0800 + 0x1000 warships VISIBLE
  *    while attacking (npc_cloak.ts).
+ * And "W1 / C1 / contraband / the shipyard prompt, wave 17": the Flags2
+ * 0x0002 (standoff) hull, Tab-targeted, held still about 450 px from the
+ * player for 80 s (npc_steering.ts STANDOFF_HULL_DISTANCE).
  * ============================================================================
  */
 
@@ -72,6 +76,7 @@ const MISSILE_ONLY_NO_FLAG = 'test:missile-only-no-flag';
 const GUN_AND_MISSILE = 'test:gun-and-missile';
 const BURNER = 'test:burner';
 const CONTROL = 'test:control';
+const STANDOFF = 'test:standoff';
 const CLOAKER = 'test:cloaker';
 const CLOAKER_NO_DEVICE = 'test:cloaker-no-device';
 const TARGET_HULL = 'test:target';
@@ -139,6 +144,7 @@ async function hullWorld() {
             { [GUN_OUTFIT]: 1, [MISSILE_OUTFIT]: 1, [MISSILES]: 5 }),
         hull(BURNER, { alwaysHasAfterburner: true }, { [GUN_OUTFIT]: 1 }),
         hull(CONTROL, {}, { [GUN_OUTFIT]: 1 }),
+        hull(STANDOFF, { prefersStandoff: true }, { [GUN_OUTFIT]: 1 }),
         hull(CLOAKER, flyingAround, { [CLOAK]: 1 }),
         hull(CLOAKER_NO_DEVICE, flyingAround, {}),
         hull(TARGET_HULL, {}, {}, {
@@ -387,6 +393,58 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
             expect(npcOf(world, 'burner')?.mode).toBe('patrol');
             expect(top).toBeLessThanOrEqual(SPEED + 1e-6);
         });
+    });
+
+    describe('standoff (shïp Flags2 0x0002)', () => {
+        /** Distance from `uuid` to the enemy at the origin. */
+        function range(world: World, uuid: string) {
+            return world.entities.get(uuid)!.components
+                .get(MovementStateComponent)!.position.length;
+        }
+
+        it('holds still about 450 px from its target and never closes (W1 '
+            + 'wave 17); the control closes in', async () => {
+                const { world, addShip } = await hullWorld();
+                await addShip('enemy', TARGET_HULL, 0, 0, THEM);
+                await addShip('standoff', STANDOFF, -1200, 0, US,
+                    { aiType: 3 });
+                await addShip('control', CONTROL, 1200, 0, US, { aiType: 3 });
+                let closest = Infinity;
+                let controlClosest = Infinity;
+                runFor(world, 30, () => {
+                    closest = Math.min(closest, range(world, 'standoff'));
+                    controlClosest = Math.min(controlClosest,
+                        range(world, 'control'));
+                });
+                expect(npcOf(world, 'standoff')?.mode).toBe('attack');
+                // The last 20 s: parked in the band, nearly still.
+                const ranges: number[] = [];
+                const speeds: number[] = [];
+                runFor(world, 20, () => {
+                    ranges.push(range(world, 'standoff'));
+                    speeds.push(speedOf(world, 'standoff'));
+                });
+                expect(Math.min(...ranges))
+                    .toBeGreaterThan(STANDOFF_HULL_DISTANCE - 75);
+                expect(Math.max(...ranges))
+                    .toBeLessThan(STANDOFF_HULL_DISTANCE + 75);
+                expect(Math.max(...speeds)).toBeLessThan(0.5 * SPEED);
+                expect(closest).toBeGreaterThan(STANDOFF_HULL_DISTANCE - 75);
+                expect(controlClosest).toBeLessThan(300);
+            });
+
+        it('backs off to its distance when the target comes to it',
+            async () => {
+                const { world, addShip } = await hullWorld();
+                await addShip('enemy', TARGET_HULL, 0, 0, THEM);
+                await addShip('standoff', STANDOFF, -100, 0, US,
+                    { aiType: 3 });
+                runFor(world, 30);
+                expect(range(world, 'standoff'))
+                    .toBeGreaterThan(STANDOFF_HULL_DISTANCE - 75);
+                expect(range(world, 'standoff'))
+                    .toBeLessThan(STANDOFF_HULL_DISTANCE + 75);
+            });
     });
 
     describe('NPC cloaking (shïp Flags2 0x0800)', () => {

@@ -25,7 +25,7 @@ import {
     SCOOP_ARRIVE_SPEED,
 } from './npc_mining.js';
 import { EscortLandingComponent } from '../player/index.js';
-import { ShipPhysicsComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import { heldInSystem } from './system_hold.js';
 import {
     SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, SHUTTLE_ONE_STOP_DWELL_MS,
@@ -79,6 +79,21 @@ export const ARRIVE_GOAL_PULL_FRACTION = 0.25;
 export const ARRIVE_APPROACH_SPEED_FRACTION = 0.9;
 /** Attackers stop thrusting toward their target inside this range. */
 const ATTACK_STANDOFF = 250;
+/**
+ * A STANDOFF hull's attack distance (shïp Flags2 0x0002, "Ship prefers
+ * standoff attacks"; ShipAIFlags.prefersStandoff): it holds still this
+ * many px from its target and never closes. MEASURED (reference "W1 / C1 /
+ * H1 wave 16" and "W1 / C1 / contraband / the shipyard prompt, wave 17"):
+ * the Tab-targeted 0x0002 hull's radar blip sat still about 14 radar px
+ * (about 450 px) from the player from 40 s to 120 s while the other hulls
+ * circled, and in wave 16 two still contacts sat about 500 px out for
+ * five minutes; none came on screen in three runs.
+ */
+export const STANDOFF_HULL_DISTANCE = 450;
+/** ...within this many px either side of it (steerStandoff's band). A
+ * steering tuning value, not a measurement: the band the retreat
+ * stand-off holds (60 px) at the same hold speed. */
+export const STANDOFF_HULL_BAND = 30;
 /** An orbiting ship (steerOrbit) that is this far off its circle steers
  * 45° off the tangent toward it; nearer, proportionally less. Fitted: a
  * gentle return (a fighter-speed hull covers it in about a second) that
@@ -285,24 +300,25 @@ export function steerOrbit(movement: MovementState, physics: {
 }
 
 /**
- * The gövt 0x0010 stand-off (npc_retreat.ts): get to the band
- * RETREAT_STANDOFF_MIN-MAX px from the enemy, on the line through it, and
- * once there (and slow) turn to face it so forward guns bear. Uses the
- * arrival primitive, so a ship running in at speed brakes rather than
- * sailing through the band. With the two ships on top of each other the
- * escape heading is the ship's own facing.
+ * Holds a stand-off: get to the band `min`-`max` px from the enemy, on the
+ * line through it, and once there (and slow) turn to face it so forward
+ * guns bear. Uses the arrival primitive, so a ship running in at speed
+ * brakes rather than sailing through the band. With the two ships on top
+ * of each other the escape heading is the ship's own facing. By default
+ * the gövt 0x0010 retreat's band (npc_retreat.ts, RETREAT_STANDOFF_MIN-
+ * MAX); a standoff hull (Flags2 0x0002) holds STANDOFF_HULL_DISTANCE.
  */
 export function steerStandoff(movement: MovementState, physics: {
     acceleration: number, turnRate: number, speed: number,
-}, targetUuid: string, enemy: Position) {
+}, targetUuid: string, enemy: Position, min = RETREAT_STANDOFF_MIN,
+    max = RETREAT_STANDOFF_MAX) {
     const fromEnemy = movement.position.subtract(enemy);
-    const mid = (RETREAT_STANDOFF_MIN + RETREAT_STANDOFF_MAX) / 2;
+    const mid = (min + max) / 2;
     const offset = fromEnemy.lengthSquared > 1e-12
         ? fromEnemy.normalize(mid)
         : movement.rotation.getUnitVector().scale(mid);
     const held = steerArrive(movement, physics, enemy.add(offset),
-        (RETREAT_STANDOFF_MAX - RETREAT_STANDOFF_MIN) / 2,
-        RETREAT_STANDOFF_HOLD_SPEED);
+        (max - min) / 2, RETREAT_STANDOFF_HOLD_SPEED);
     if (held) {
         movement.turnTo = targetUuid;
     }
@@ -573,6 +589,16 @@ export const NpcSteeringSystem = new System({
                     // instead of closing (npc_retreat.ts).
                     steerStandoff(movement, physics, target.target!,
                         Position.fromVectorLike(other.position));
+                    break;
+                }
+                if (entity.components.get(ShipDataComponent)
+                    ?.aiFlags.prefersStandoff) {
+                    // A standoff hull (Flags2 0x0002) holds still about
+                    // 450 px out and never closes (W1 waves 16-17).
+                    steerStandoff(movement, physics, target.target!,
+                        Position.fromVectorLike(other.position),
+                        STANDOFF_HULL_DISTANCE - STANDOFF_HULL_BAND,
+                        STANDOFF_HULL_DISTANCE + STANDOFF_HULL_BAND);
                     break;
                 }
                 const toTarget = other.position.subtract(movement.position);
