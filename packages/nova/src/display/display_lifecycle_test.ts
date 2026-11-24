@@ -1,5 +1,6 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
+import { Plugin } from 'nova_ecs/plugin';
 import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
@@ -24,22 +25,33 @@ import { BoardingDisplayPlugin } from './boarding_plugin.js';
 import { CursorPlugin } from './cursor_plugin.js';
 import { GateMapPlugin } from './gate_map_plugin.js';
 import { HailDialogPlugin, HailDialogResource } from './hail_dialog_plugin.js';
-import { MissionInfoPlugin, OpenMissionInfoResource } from './mission_info_plugin.js';
+import {
+    MissionInfoPlugin, MissionInfoResource, OpenMissionInfoResource,
+} from './mission_info_plugin.js';
 import {
     MissionShipDonePlugin, ShipDonePopupResource,
 } from './mission_ship_done_plugin.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 import { PlanetCornersPlugin } from './planet_corners_plugin.js';
-import { OpenPlayerInfoResource, PlayerInfoPlugin } from './player_info_plugin.js';
-import { DisplayScaleResource, ScreenSize } from './screen_size_plugin.js';
-import { ShipMissionOfferPlugin } from './ship_mission_offer_plugin.js';
+import {
+    OpenPlayerInfoResource, PlayerInfoPlugin, PlayerInfoResource,
+} from './player_info_plugin.js';
+import {
+    CentredUiResource, CentreUiSystem, DisplayScaleResource, ResizeEvent,
+    ResizeSystem, ScreenSize, WorldScreenSize,
+} from './screen_size_plugin.js';
+import {
+    ShipMissionOfferPlugin, ShipOfferPopupResource,
+} from './ship_mission_offer_plugin.js';
 import { CameraFocus, Space } from './space_resource.js';
 import {
     LeaveSpaceportEvent, OpenSpaceportEvent, SpaceportComponent,
     SpaceportPlugin,
 } from './spaceport_plugin.js';
 import { Stage } from './stage_resource.js';
-import { OpenStarmapResource, StarmapPlugin } from './starmap_plugin.js';
+import {
+    OpenStarmapResource, StarmapPlugin, StarmapResource,
+} from './starmap_plugin.js';
 import { StatusBarPlugin } from './status_bar.js';
 import { StatusMessagePlugin } from './status_message_plugin.js';
 import { TargetCornersPlugin } from './target_corners_plugin.js';
@@ -491,6 +503,98 @@ describe('display world UI lifecycle', () => {
                 expect(answered).toBe(false);
                 expect(MenuControls.focused).toBeUndefined();
             });
+    });
+
+    describe('in-flight dialogs are centred on the whole viewport', () => {
+        /** The in-flight dialogs, and how to reach each one's container. */
+        const dialogs: [string, Plugin, (world: World) => PIXI.Container][] = [
+            ['ship offer', ShipMissionOfferPlugin,
+                w => w.resources.get(ShipOfferPopupResource)!.container],
+            ['ship-done text', MissionShipDonePlugin,
+                w => w.resources.get(ShipDonePopupResource)!.container],
+            ['hail', HailDialogPlugin,
+                w => w.resources.get(HailDialogResource)!.container],
+            ['mission info', MissionInfoPlugin,
+                w => w.resources.get(MissionInfoResource)!.container],
+            ['player info', PlayerInfoPlugin,
+                w => w.resources.get(PlayerInfoResource)!.container],
+            ['starmap', StarmapPlugin,
+                w => w.resources.get(StarmapResource)!.container],
+        ];
+
+        /**
+         * A display world built the way the client builds one: ScreenSize
+         * still holds ScreenSizePlugin's CSS-pixel seed while the UI
+         * plugins build, and the scale-corrected size arrives afterwards
+         * as a ResizeEvent (system_entry → applyDisplayScale).
+         */
+        async function seededWorld(css: { x: number, y: number }) {
+            const world = await displayWorld();
+            world.resources.set(ScreenSize, { ...css });
+            world.resources.set(WorldScreenSize, { ...css });
+            world.resources.set(CentredUiResource, new Set());
+            world.addSystem(ResizeSystem);
+            world.addSystem(CentreUiSystem);
+            for (const [, plugin] of dialogs) {
+                await world.addPlugin(plugin);
+            }
+            return world;
+        }
+
+        function resize(world: World, ui: { x: number, y: number }) {
+            world.emit(ResizeEvent, { ...ui, worldX: ui.x, worldY: ui.y });
+            world.step();
+        }
+
+        function expectAllAt(world: World, x: number, y: number,
+            when: string) {
+            for (const [name, , container] of dialogs) {
+                const { position } = container(world);
+                expect({ x: position.x, y: position.y })
+                    .withContext(`${name} ${when}`).toEqual({ x, y });
+            }
+        }
+
+        it('follow the first scale-corrected size, not the build-time '
+            + 'CSS seed (the boarding mission text sat bottom-right)',
+            async () => {
+                // Matthew's report: a 2000x1125 window. At UI scale 1.5 the
+                // UI-logical viewport is 1333.3x750; the dialogs used to
+                // stay at the seed's (1000, 563) UI units, i.e. (1500, 844)
+                // on screen — against the status bar.
+                const world = await seededWorld({ x: 2000, y: 1125 });
+                resize(world, { x: 2000 / 1.5, y: 1125 / 1.5 });
+                expectAllAt(world, 667, 375, 'after the first resize');
+            });
+
+        it('re-centre when the window resizes, open or not', async () => {
+            const world = await seededWorld({ x: 1920, y: 1080 });
+            resize(world, { x: 1920, y: 1080 });
+            // The original's 1920x1080 captures: every dialog about x 960
+            // (the whole screen's centre, not the space view's ~863).
+            expectAllAt(world, 960, 540, 'at 1920x1080');
+
+            const popup = world.resources.get(ShipDonePopupResource)!;
+            void popup.show('The fighting is still raging outside the '
+                + 'door.', { accept: 'Okay' });
+            resize(world, { x: 1024, y: 701 });
+            // Rounded to a whole pixel (screenCentre): 701 / 2 = 350.5.
+            expectAllAt(world, 512, 351, 'after shrinking to 1024x701');
+            expect(popup.container.visible).toBe(true);
+            popup.dismiss();
+        });
+
+        it('stop being centred once their plugin is removed', async () => {
+            const world = await seededWorld({ x: 1920, y: 1080 });
+            const centred = world.resources.get(CentredUiResource)!;
+            expect(centred.size).toBe(dialogs.length);
+            for (const [, plugin] of [...dialogs].reverse()) {
+                await world.removePlugin(plugin);
+            }
+            expect(centred.size).toBe(0);
+            // A resize after teardown touches no destroyed container.
+            expect(() => resize(world, { x: 800, y: 600 })).not.toThrow();
+        });
     });
 
     describe('plugin teardown (review #40)', () => {

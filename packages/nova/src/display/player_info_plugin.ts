@@ -9,10 +9,12 @@ import {
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { PlayerInfoDialog } from '../spaceport/player_info.js';
-import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import {
+    keepCentred, ScreenSize, stopCentring,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 
-const PlayerInfoResource = new Resource<PlayerInfoDialog>('PlayerInfo');
+export const PlayerInfoResource = new Resource<PlayerInfoDialog>('PlayerInfo');
 const PlayerInfoControlsSubscription =
     new Resource<Subscription>('PlayerInfoControlsSubscription');
 /**
@@ -65,6 +67,9 @@ export const PlayerInfoPlugin: Plugin = {
             () => screenSize);
         let opening = false;
         stage.addChild(dialog.container);
+        // Centred on the live UI size, and kept there through resizes
+        // while open (CentredUiResource).
+        keepCentred(world, dialog.container);
         world.resources.set(PlayerInfoResource, dialog);
         const openPlayerInfo = async (entity?: Entity): Promise<void> => {
             if (dialog.container.visible || opening) {
@@ -80,8 +85,6 @@ export const PlayerInfoPlugin: Plugin = {
                 // so it opens over the spaceport (whose container is
                 // added after this plugin's).
                 stage.addChild(dialog.container);
-                dialog.container.position.set(
-                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 await dialog.show(ship);
             } finally {
                 opening = false;
@@ -109,6 +112,9 @@ export const PlayerInfoPlugin: Plugin = {
         // Release the keyboard if the dialog is still open while its world
         // is torn down (jumped with it up); see Menu.dismiss.
         dialog?.dismiss();
+        if (dialog) {
+            stopCentring(world, dialog.container);
+        }
         if (stage && dialog) {
             stage.removeChild(dialog.container);
         }

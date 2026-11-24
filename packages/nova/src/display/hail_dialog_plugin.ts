@@ -63,7 +63,9 @@ import {
     ShipyardContext, shipStockGatesPass,
 } from '../spaceport/shipyard_stock_rules.js';
 import { ShipData } from 'novadatainterface/ship_data';
-import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import {
+    keepCentred, ScreenSize, stopCentring,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { showStatusMessage } from './status_message_plugin.js';
@@ -1058,6 +1060,9 @@ export const HailDialogPlugin: Plugin = {
             playSound: (id: string) => world.emit(SoundEvent, { id }),
         });
         stage.addChild(dialog.container);
+        // Centred on the live UI size, and kept there through resizes
+        // while open (CentredUiResource).
+        keepCentred(world, dialog.container);
         world.resources.set(HailDialogResource, dialog);
         if (typeof window !== 'undefined') {
             window.novaHailDialog = dialog;
@@ -1135,8 +1140,6 @@ export const HailDialogPlugin: Plugin = {
                 currentBribePurpose = computed.context.bribe?.purpose;
                 // Re-add to move above later-added containers (spaceport).
                 stage.addChild(dialog.container);
-                dialog.container.position.set(
-                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 await dialog.show(computed.context);
             } finally {
                 opening = false;
@@ -1162,6 +1165,9 @@ export const HailDialogPlugin: Plugin = {
         // with 'h' up) would otherwise keep its MenuControls bound for
         // the rest of the session (see HailDialog.dismiss).
         dialog?.dismiss();
+        if (dialog) {
+            stopCentring(world, dialog.container);
+        }
         // The dialog is per-world; destroying it (children included) frees
         // its Text canvases and Graphics rather than just detaching them —
         // every system transit used to leak a dialog's worth (review #40).

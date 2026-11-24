@@ -29,12 +29,14 @@ import {
 } from '../spaceport/mini_map.js';
 import type { SystemGraph } from '../spaceport/system_graph.js';
 import { DockedShipResource } from './docked_ship.js';
-import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import {
+    keepCentred, ScreenSize, stopCentring,
+} from './screen_size_plugin.js';
 import { StatusBarResource } from './status_bar_resource.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
 
-const StarmapResource = new Resource<Starmap>("Starmap");
+export const StarmapResource = new Resource<Starmap>("Starmap");
 const StarmapControlsSubscription = new Resource<Subscription>('StarmapControlsSubscription');
 /** Marks the plugin's openStarmap as torn down (see remove). */
 const StarmapDisposer = new Resource<() => void>('StarmapDisposer');
@@ -257,6 +259,9 @@ export const StarmapPlugin: Plugin = {
         // stale route back into the next system's state.
         let disposed = false;
         stage.addChild(starmap.container);
+        // Centred on the live UI size, and kept there through resizes
+        // while open (CentredUiResource).
+        keepCentred(world, starmap.container);
         world.resources.set(StarmapResource, starmap);
         // Debug/headless-driving handle, like window.displayWorld.
         if (typeof window !== 'undefined') {
@@ -288,8 +293,6 @@ export const StarmapPlugin: Plugin = {
                 // spaceport's container is added after the starmap's,
                 // so a docked map would otherwise open underneath it.
                 stage.addChild(starmap.container);
-                const centre = screenCentre(screenSize);
-                starmap.container.position.set(centre.x, centre.y);
                 starmap.openOptions = options ?? {};
                 const route = await starmap.show(jumpRoute?.route ?? []);
                 if (disposed) {
@@ -460,6 +463,9 @@ export const StarmapPlugin: Plugin = {
         // not be flown in the next system.
         world.resources.get(StarmapDisposer)?.();
         starmap?.dismiss();
+        if (starmap) {
+            stopCentring(world, starmap.container);
+        }
         if (stage && starmap) {
             stage.removeChild(starmap.container);
         }

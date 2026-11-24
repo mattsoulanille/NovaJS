@@ -11,11 +11,13 @@ import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionInfoDialog } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import {
+    keepCentred, ScreenSize, stopCentring,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
 
-const MissionInfoResource = new Resource<MissionInfoDialog>('MissionInfo');
+export const MissionInfoResource = new Resource<MissionInfoDialog>('MissionInfo');
 const MissionInfoControlsSubscription =
     new Resource<Subscription>('MissionInfoControlsSubscription');
 /**
@@ -70,6 +72,9 @@ export const MissionInfoPlugin: Plugin = {
             controls);
         let opening = false;
         stage.addChild(dialog.container);
+        // Centred on the live UI size, and kept there through resizes
+        // while open (CentredUiResource).
+        keepCentred(world, dialog.container);
         world.resources.set(MissionInfoResource, dialog);
         // A planetId marks a DOCKED open: it enables the functional
         // Abort button (session-backed, spaceport commit pattern).
@@ -89,8 +94,6 @@ export const MissionInfoPlugin: Plugin = {
                 // it opens over the spaceport (whose container is added
                 // after this plugin's).
                 stage.addChild(dialog.container);
-                dialog.container.position.set(
-                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
                 await dialog.show(ship, planetId
                     ? { gameData: simulationData, planetId, transaction }
@@ -123,6 +126,9 @@ export const MissionInfoPlugin: Plugin = {
         // Release the keyboard if the dialog is still open while its world
         // is torn down (jumped with it up); see Menu.dismiss.
         dialog?.dismiss();
+        if (dialog) {
+            stopCentring(world, dialog.container);
+        }
         if (stage && dialog) {
             stage.removeChild(dialog.container);
         }

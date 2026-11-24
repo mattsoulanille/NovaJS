@@ -22,7 +22,9 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import { markShipDoneTextShown } from '../spaceport/ship_done_shown.js';
-import { ScreenSize, screenCentre } from './screen_size_plugin.js';
+import {
+    keepCentred, ScreenSize, stopCentring,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { PersHailQuoteSystem } from "./ship_mission_offer_plugin.js";
 
@@ -440,8 +442,11 @@ export const MissionShipDonePlugin: Plugin = {
         }
         const popup = new OfferPopup(displayAssets, controls);
         popup.container.name = 'ShipDonePopup';
-        const centre = screenCentre(screenSize);
-        popup.container.position.set(centre.x, centre.y);
+        // Centred on the live UI size and on every resize, not once here:
+        // at build ScreenSize still holds the CSS-pixel seed (see
+        // CentredUiResource), which put the popup bottom-right under any
+        // UI scale above 1.
+        keepCentred(world, popup.container);
         stage.addChild(popup.container);
         world.resources.set(ShipDonePopupResource, popup);
         world.resources.set(ShipDoneStateResource, {
@@ -453,7 +458,11 @@ export const MissionShipDonePlugin: Plugin = {
         world.removeSystem(MissionShipDoneSystem);
         // Destroyed, not just detached: the popup is per-world, and its
         // Text canvases leaked with every system transit (review #40).
-        world.resources.get(ShipDonePopupResource)?.destroy();
+        const popup = world.resources.get(ShipDonePopupResource);
+        if (popup) {
+            stopCentring(world, popup.container);
+            popup.destroy();
+        }
         world.resources.delete(ShipDonePopupResource);
         world.resources.delete(ShipDoneStateResource);
     },

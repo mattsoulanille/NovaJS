@@ -2,6 +2,7 @@ import { Resource } from 'nova_ecs/resource';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { System } from 'nova_ecs/system';
+import { World } from 'nova_ecs/world';
 
 /**
  * The window changed size, or the player changed a display scale.
@@ -66,6 +67,65 @@ export function screenCentre(screen: { x: number, y: number }):
     return { x: Math.round(screen.x / 2), y: Math.round(screen.y / 2) };
 }
 
+/** Anything with a PIXI-style position and an optional destroyed flag:
+ * kept structural so this module needs no PIXI import. */
+export interface Centrable {
+    position: { set(x: number, y: number): void };
+    destroyed?: boolean;
+}
+
+/** Puts `container`'s origin on the centre of `screen` (see screenCentre). */
+export function centreOn(container: Centrable,
+    screen: { x: number, y: number }) {
+    const { x, y } = screenCentre(screen);
+    container.position.set(x, y);
+}
+
+/**
+ * The UI containers that stay centred on the whole viewport: the in-flight
+ * dialogs (ship offers, mission ship-done text, the comm channel, the
+ * mission and player info boxes, the full map), every one drawn about its
+ * own origin.
+ *
+ * The original centres them on the WHOLE screen, not on the space view the
+ * status bar leaves: at 1920x1080 the plunder dialog spans x 806..1114,
+ * the comm dialog 749..1171 and the desc+pict mission text 636..1280 — all
+ * centred on x 960, none on the ~863 of the 1726px space view — and all at
+ * y 540 (board_ship.png, hail.png, 5_sigma_1_mission_text_with_pict.png).
+ *
+ * Centring once at build was the bug: the plugins build while ScreenSize
+ * still holds ScreenSizePlugin's CSS-pixel seed, before the client's first
+ * ResizeEvent hands the world its UI-logical size, so with any UI or
+ * global scale above 1 a dialog sat at (cssW/2, cssH/2) UI units — down
+ * and to the right, against the status bar — and it never followed a
+ * window resize either. Registered containers are centred on the live
+ * size now and on every ResizeEvent (CentreUiSystem).
+ */
+export const CentredUiResource = new Resource<Set<Centrable>>('CentredUi');
+
+/**
+ * Centres `container` on the world's current ScreenSize now and keeps it
+ * centred through every resize. The owner calls stopCentring in its
+ * plugin's remove() before destroying the container.
+ */
+export function keepCentred(world: World, container: Centrable) {
+    const screen = world.resources.get(ScreenSize);
+    if (screen) {
+        centreOn(container, screen);
+    }
+    let centred = world.resources.get(CentredUiResource);
+    if (!centred) {
+        centred = new Set();
+        world.resources.set(CentredUiResource, centred);
+    }
+    centred.add(container);
+}
+
+/** Undoes keepCentred (safe when it was never registered). */
+export function stopCentring(world: World, container: Centrable) {
+    world.resources.get(CentredUiResource)?.delete(container);
+}
+
 /** The shape `clientToWorld` / `clientToUi` need. */
 export type DisplayScales = { ui: number, global: number };
 
@@ -96,6 +156,23 @@ export const ResizeSystem = new System({
     }
 });
 
+/** Re-centres every CentredUiResource container on a resize. */
+export const CentreUiSystem = new System({
+    name: 'CentreUiSystem',
+    events: [ResizeEvent],
+    args: [ResizeEvent, CentredUiResource] as const,
+    step(resize, centred) {
+        for (const container of centred) {
+            if (!container.destroyed) {
+                centreOn(container, resize);
+            }
+        }
+    },
+    // #156 pin (shared: ResizeEvent): after the size resources update, so
+    // a handler that reads ScreenSize sees the same size this one used.
+    after: [ResizeSystem],
+});
+
 export const ScreenSizePlugin: Plugin = {
     name: 'ScreenSize',
     build(world) {
@@ -109,10 +186,16 @@ export const ScreenSizePlugin: Plugin = {
         if (!world.resources.has(DisplayScaleResource)) {
             world.resources.set(DisplayScaleResource, { ui: 1, global: 1 });
         }
+        if (!world.resources.has(CentredUiResource)) {
+            world.resources.set(CentredUiResource, new Set());
+        }
         world.addSystem(ResizeSystem);
+        world.addSystem(CentreUiSystem);
     },
     remove(world) {
+        world.removeSystem(CentreUiSystem);
         world.removeSystem(ResizeSystem);
+        world.resources.delete(CentredUiResource);
         world.resources.delete(ScreenSize);
         world.resources.delete(WorldScreenSize);
         world.resources.delete(DisplayScaleResource);
