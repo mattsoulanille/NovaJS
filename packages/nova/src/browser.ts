@@ -53,6 +53,7 @@ import {
 import {
     DisplayScaleResource, ResizeEvent,
 } from "./display/screen_size_plugin.js";
+import { installNoLigatures } from "./display/no_ligatures.js";
 import { Stage } from "./display/stage_resource.js";
 import { showStatusMessage } from "./display/status_message_plugin.js";
 import { ControlEvent, Controls, SavedControls } from './nova_plugin/core/index.js';
@@ -100,6 +101,9 @@ window.novaScaleLayout = () => scaleLayout;
 PIXI.settings.RESOLUTION = scaleLayout.resolution;
 PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
 setDefaultTextResolution(scaleLayout.textResolution);
+// The original's bitmap fonts have no "fi"/"fl" ligatures; ours must not
+// either (display/no_ligatures.ts). Before any text is drawn.
+installNoLigatures();
 
 // TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
 // this will likely change in the future.
