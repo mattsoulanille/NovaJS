@@ -628,18 +628,11 @@ describe('world', () => {
             .toThrowError(`A component with name ${component1.name} already exists`);
     });
 
-    xit('catches component name conflicts when adding them to entities', () => {
-        const component1 = new Component<string>('TestComponent');
-        const component2 = new Component<string>('TestComponent');
-
-        const uuid = v4();
-        world.entities.set(uuid, new Entity()
-            .addComponent(component1, 'foobar'));
-        const handle = world.entities.get(uuid);
-
-        expect(() => handle!.components.set(component2, 'foobar'))
-            .toThrowError(`A component with name ${component1.name} already exists`);
-    });
+    // Name conflicts are caught where components are REGISTERED (the two
+    // specs above, and Serializer.addComponent, #88), not per entity
+    // (#346): a per-entity check would only see a conflict both halves of
+    // which sit on one entity, a subset of what registration already
+    // rejects, at a cost on every component add and snapshot restore.
 
     it('provides systems with access to the entity handle', () => {
         const fooValues = new Set<number>();
