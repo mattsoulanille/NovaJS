@@ -117,8 +117,14 @@ export function abbreviateCargoName(name: string): string {
 
 /**
  * Summarizes the "Special:" mission-cargo line: nothing when the player carries
- * no mission cargo, the single cargo's name when there's exactly one, and
- * "Multiple" when several missions contribute cargo (as the original shows).
+ * no mission cargo (the label goes too: 390_medical_supplies.png's hold of
+ * plain commodities shows only "Free:" and "Credits:"), the single cargo's
+ * STR# 4002 abbreviation when there's exactly one ("Raczak", "Probe"), and
+ * "Multiple" when several missions contribute cargo. "Multiple" is stock STR#
+ * 2002 index 20, stored right after the readout's own labels at 18 "Free:"
+ * and 19 "Special:"; no reference capture shows two mission cargos aboard.
+ * Counting per MISSION (two missions with the same cargo type still read
+ * "Multiple") is a guess.
  */
 export function specialCargoSummary(names: readonly string[]): string | null {
     if (names.length === 0) {

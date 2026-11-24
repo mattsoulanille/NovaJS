@@ -11,9 +11,12 @@ import {
     CargoComponent, OutfitsState, OutfitsStateComponent, sumOutfitField, ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
-import { STANDARD_CARGO_NAMES } from "../nova_plugin/missions/index.js";
+import {
+    missionCargoAbbrev, STANDARD_CARGO_NAMES,
+} from "../nova_plugin/missions/index.js";
 import {
     PlayerEscortComponent, PlayerShipSelector, CreditsComponent,
+    MissionsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     entityCarriesFleetCargo, FleetMemberCargo, sumFleetCargo,
@@ -56,6 +59,13 @@ export class CargoPane {
         special: PIXI.Text, creditsLabel: PIXI.Text, credits: PIXI.Text,
     };
     private lastCargo?: string;
+    /**
+     * The scenario's STR# 4000 / 4002 cargo tables, for the "Special:"
+     * readout. Loaded once by StatusBarPlugin; empty falls back to the
+     * stock names. Not per-build, so an ïntf reload keeps it.
+     */
+    cargoTables: { names: string[], abbrevs: string[] } =
+        { names: [], abbrevs: [] };
 
     build(parent: PIXI.Container, data: StatusBarData, fonts: StatusBarFonts) {
         const cargo = data.dataAreas.cargo;
@@ -222,12 +232,45 @@ export function cargoCapacityOf(shipId: string, outfits: OutfitsState | undefine
 }
 
 /**
+ * What the "Special:" readout needs to name a mission's cargo: the
+ * player's active missions (MissionsComponent, for each one's resolved
+ * cargo type) and the scenario's STR# 4000 / 4002 tables.
+ */
+export interface SpecialCargoSource {
+    missions?: ReadonlyMap<string, { cargoType: number }>;
+    /** STR# 4000, PlayerStartData.cargoNames. */
+    names?: readonly string[];
+    /** STR# 4002, PlayerStartData.cargoAbbrevs. */
+    abbrevs?: readonly string[];
+}
+
+/**
+ * The "Special:" name of the mission cargo held under CargoComponent key
+ * `key` ("mission:<mïsn id>"): the carrying mission's STR# 4002
+ * abbreviation (missionCargoAbbrev). "Cargo" when the mission is not
+ * among `missions` or carries no cargo type.
+ */
+export function specialCargoName(key: string,
+    source: SpecialCargoSource): string {
+    const active = source.missions?.get(key.slice('mission:'.length));
+    if (!active || active.cargoType < 0) {
+        return 'Cargo';
+    }
+    return missionCargoAbbrev(active.cargoType,
+        source.names?.length ? source.names : undefined,
+        source.abbrevs?.length ? source.abbrevs : undefined);
+}
+
+/**
  * The cargo panel's readout values (free space, manifest lines, and the
- * mission-cargo "Special:" summary) for a cargo hold and capacity. Undefined
- * if a jünk name isn't cached yet. Shared by the in-flight and docked paths.
+ * mission-cargo "Special:" summary) for a cargo hold and capacity. Shared
+ * by the in-flight and docked paths. A jünk name not cached yet reads
+ * "Cargo" until it is; `special` names the mission cargo (see
+ * {@link specialCargoName}).
  */
 export function cargoDisplayOf(cargo: ReadonlyMap<string, number> | undefined,
-    capacity: number, gameData: SimulationGameDataInterface):
+    capacity: number, gameData: SimulationGameDataInterface,
+    special: SpecialCargoSource = {}):
     { free: number, lines: CargoLine[], special: string | null } {
     const lines: CargoLine[] = [];
     const specialNames: string[] = [];
@@ -250,7 +293,7 @@ export function cargoDisplayOf(cargo: ReadonlyMap<string, number> | undefined,
                     quantity,
                 });
             } else if (key.startsWith('mission:')) {
-                specialNames.push('Cargo');
+                specialNames.push(specialCargoName(key, special));
             }
         }
     }
@@ -346,9 +389,9 @@ export const DrawStatusBarCargo = new System({
         ShipComponent, Optional(OutfitsStateComponent),
         SimulationGameDataResource, Entities, UUID,
         Optional(CargoReadoutTime), TimeResource, GetEntity,
-        PlayerShipSelector] as const,
+        Optional(MissionsComponent), PlayerShipSelector] as const,
     step(statusBar, cargo, credits, ship, outfits, gameData, entities, uuid,
-        readoutTime, { time }, entity) {
+        readoutTime, { time }, entity, missions) {
         // First draw immediately (a fresh player entity has no stamp),
         // then at most once per period.
         if (readoutTime
@@ -367,7 +410,10 @@ export const DrawStatusBarCargo = new System({
                 playerEscortEntities(entities, uuid), gameData),
         ]);
         const { free, lines, special } =
-            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
+            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData, {
+                missions: missions ?? undefined,
+                ...statusBar.cargo.cargoTables,
+            });
         statusBar.cargo.drawCargo(free, credits?.credits ?? 0, lines, special);
         // Stamped only after a real draw, so a frame that bailed on
         // uncached data retries next frame instead of waiting a period.

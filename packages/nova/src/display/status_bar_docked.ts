@@ -5,7 +5,7 @@ import {
     ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
-import { CreditsComponent } from "../nova_plugin/player/index.js";
+import { CreditsComponent, MissionsComponent } from "../nova_plugin/player/index.js";
 import { sumFleetCargo } from "../spaceport/fleet_cargo.js";
 import { DockedShipResource } from "./docked_ship.js";
 import { cargoCapacityOf, cargoDisplayOf, DrawStatusBarCargo, fleetCargoMembers } from "./status_bar_cargo.js";
@@ -73,7 +73,10 @@ export const DrawDockedStatus = new System({
                     gameData),
             ]);
         const { free, lines, special } =
-            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
+            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData, {
+                missions: docked.component(MissionsComponent),
+                ...statusBar.cargo.cargoTables,
+            });
         statusBar.cargo.drawCargo(free, credits, lines, special);
     },
     // #156 pin (shared: *): StatusBarPlugin's registration order.

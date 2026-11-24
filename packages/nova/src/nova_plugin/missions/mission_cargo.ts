@@ -1,5 +1,5 @@
 import {
-    DEFAULT_CARGO_NAMES, DEFAULT_CARGO_NAMES_LOWER,
+    DEFAULT_CARGO_ABBREVS, DEFAULT_CARGO_NAMES, DEFAULT_CARGO_NAMES_LOWER,
 } from 'novadatainterface/player_start_data';
 import { cargoUsed } from '../ship/index.js';
 import type { MissionWorkingState } from './mission_machinery.js';
@@ -87,6 +87,35 @@ export function missionCargoName(cargoType: number,
         lower: lower.text,
         quantityless: upper.quantityless || lower.quantityless,
     };
+}
+
+/** The standard cargo abbreviations (STR# 4002 in stock Nova), the
+ * fallback for the built-in six. */
+export const STANDARD_CARGO_ABBREVS = [...DEFAULT_CARGO_ABBREVS];
+
+/**
+ * What the status bar's "Special:" readout shows for a mission carrying
+ * cargo type `cargoType`: its STR# 4002 abbreviation ("Cargo
+ * abbreviations for status display", Bible Appendix III), with the '*'
+ * rule's mark stripped. The original shows "Raczak" for stock STR# 4000
+ * 27 "*Admiral Raczak" (reference "Boarding a rescue ship", wave 13)
+ * and "Probe" for 75 "*Space Probe" (p_properties/cargo_with_stuff.png);
+ * no stock 4002 entry carries a '*', but a plug-in's would not be shown.
+ *
+ * Fallbacks, mirroring missionCargoName: a scenario's own 4002 entry,
+ * else the stock one only when the proper-case name is the stock one
+ * too, else (a GUESS: no reference shows a cargo type that STR# 4002
+ * does not cover) the STR# 4000 name without its '*'.
+ */
+export function missionCargoAbbrev(cargoType: number,
+    names: readonly string[] = STANDARD_CARGO_NAMES,
+    abbrevs: readonly string[] = STANDARD_CARGO_ABBREVS): string {
+    const raw = abbrevs[cargoType]
+        || (names[cargoType] ? undefined
+            : STANDARD_CARGO_ABBREVS[cargoType]);
+    return raw !== undefined
+        ? parseCargoName(raw).text
+        : parseCargoName(cargoName(cargoType, names)).text;
 }
 
 /** `text` with its first letter capitalized ("space probe" ->

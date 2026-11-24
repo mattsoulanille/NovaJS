@@ -234,6 +234,24 @@ export const StatusBarPlugin: Plugin = {
             }
         }
 
+        // The scenario's cargo tables for the "Special:" readout (STR#
+        // 4000 / 4002), read once from the default chär as the status
+        // line does. A failed load keeps the stock fallbacks.
+        try {
+            const ids = await simulationData.ids;
+            if (ids.PlayerStart.length > 0) {
+                const starts = await Promise.all(ids.PlayerStart.map(
+                    id => simulationData.data.PlayerStart.get(id)));
+                const start = starts.find(s => s.isDefault) ?? starts[0];
+                statusBar.cargo.cargoTables = {
+                    names: [...(start?.cargoNames ?? [])],
+                    abbrevs: [...(start?.cargoAbbrevs ?? [])],
+                };
+            }
+        } catch (e) {
+            console.warn('Failed to load the cargo abbreviations:', e);
+        }
+
         await statusBar.buildPromise;
         stage.addChild(statusBar.container);
         // Anchored to the UI-logical right edge (ScreenSize), not the
