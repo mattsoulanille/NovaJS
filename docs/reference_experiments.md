@@ -5008,6 +5008,9 @@ even with ordinary positive penalties (four runs, "A14 follow-ups wave
 11"), and this run's victim was such a ship, so the result below may
 come from that rule and not from the negative penalties; re-run with
 system traffic as the victim before relying on it.
+**Wave 12: re-run with system traffic, and refuted:** a kill of the
+-100 / -100 govt's own traffic RAISED the record by 200 ("A14 with system
+traffic as the victims, wave 12"); the "matches" below no longer holds.
 
 **Finding.** A negative penalty is not applied in either direction: the
 crime neither lowers nor raises the record (no "reward for the crime",
@@ -5830,6 +5833,489 @@ run); medium for "a clean ship is not scanned" (one run, 2.7 min).
 (the first run in each folder is take 1; the pod run `20261123-232524-*`: `04-w-00.png` .. `07-w-03.png` the
 message, `recording.mp4`).
 
+### The "Fight to be Thurokiir" duel, wave 12: disabled duellists, stray fire, and who fails the mission (2026-11-24)
+
+**Question (Matthew, playing stock mïsn 674 "Fight to be Thurokiir":
+5 Duellists of gövt 175, ShipGoal 1 "disable but don't destroy", ShipBehav
+0).** (i) Does an NPC's bolt aimed at the player stop on a DISABLED ship
+of its own govt? (ii) Does an NPC's kill of a duellist (stray bolt or
+blast) fail the mission, disabled or not? (iii) Does the player killing a
+duellist he already disabled fail it? (NovaJS: (i) yes, (ii) only if the
+victim was not disabled yet, (iii) no.)
+
+**Rig (`kits/testkit.mjs` wave 12, "D").** Kit FF Range (wave 10's
+friendly-fire geometry): the player (Kit Ring Tank, 30000 / 30000, wëap
+282 Kit Duel Gun: a 100-damage turret) at Kit FF Port; an anchored
+duellist shooter of gövt 355 Kit Duellist (stock 175's 0x0002, CrimeTol
+0, no penalties; ShipBehav 0, no goal) 260 px north, the spaceport offer;
+the duellist under test 110 px north on its line of fire, a Mission BBS
+job (mïsn 1052: shïp 856, the magenta pointer, shield 200 / armor 1500,
+anchored, ShipGoal 1, ShipBehav 0, OnSuccess b9101, OnFailure b9102).
+`scenarios/duel.json`: click the duellist, tap the gun until the panel
+reads Disabled (`loops/disable.mjs`), watch 52 s, then fire until it is
+gone, `i`, land, leave, pull. Shooters: Kit FF Shooter (10-damage bolt,
+pilot `w12_duel_bolt`), Kit Duel Shooter Blast (100 damage, 150 px blast,
+`w12_duel_blast`); `scenarios/duel_beam.json` with Kit Duel Shooter Beam
+(ONE frame of 5000 damage, turreted; a beam stops on its own govt, wave 10)
+and a shield-0 duellist (mïsn 1053, shïp 865), `w12_duel_big`.
+
+| run | what killed the duellist | when | status line | pilot after |
+|---|---|---|---|---|
+| bolt | nothing for 52 s while DISABLED under the shooter's 10-damage bolts (about 1.5 a second, aimed at the player; 500 armor left would have gone in about 33 s); then the PLAYER's gun | after the player's burst | **"Mission failed."** at the kill | b9102 (OnFailure), the job gone from the `i` list; combat rating 0 -> 10 |
+| blast | the shooter's 150 px BLAST aimed at the player, 110 px away | about 6 s after it went Disabled (the player had stopped firing) | **"Mission failed."** | b9102; combat rating 0 (no credit to the player) |
+| beam | the shooter's one-frame beam, which stopped on the HEALTHY duellist and destroyed it in that frame (never disabled) | about 1.5 s after takeoff | **"Mission failed."** | b9102; combat rating 0 |
+
+Bolt pass-through, frame-counted (`recording.mp4` frames 1510-3050, the
+52 s while the duellist sat Disabled): orange bolt pixels on the line of
+fire ABOVE the duellist in 724 frames and BELOW it (between it and the
+player) in 417, about the same per pixel of strip (the bolts are slower
+to cross the shorter lower strip): every bolt went through; the hulk
+lived until the player's own burst.
+
+**Finding.**
+1. **(i) No: a same-govt bolt passes through a DISABLED ship of its own
+   govt** just as through a live one (wave 10's same-govt immunity
+   outlasts the disable). Beams and blasts hit it, disabled or not.
+2. **(ii) Yes, both: any destruction of a ShipGoal-1 ship fails the
+   mission**, by an NPC's blast after the disable or by an NPC's beam
+   before it. Nobody's disable credit survives the kill.
+3. **(iii) Yes: the player killing a duellist he had already disabled
+   fails the mission** ("Mission failed." at the kill).
+4. Brackets: the ShipBehav-0 duellist showed RED corners until disabled,
+   grey after (matches K9 / K10).
+
+**NovaJS today (base 2b744c80): three mismatches.**
+- (i) `N/nova_plugin/ship/firing_group.ts:181-184` `firingImmune`: a
+  `victimDisabled` victim loses all immunity (passed from
+  `N/nova_plugin/combat/projectile_plugin.ts:453` `disabledCancelsImmunity`),
+  so the duellists' own bolts stop on a disabled duellist and finish it
+  off. The original keeps the same-govt projectile immunity.
+- (ii) and (iii) `N/nova_plugin/player/mission_ship_state.ts:212-216`
+  (`shipDied`, GOAL_DISABLE) fails the goal only when the ship dies
+  before it was disabled; `shipDisabled` (`:248-254`) has already counted
+  it as satisfied, whoever disabled it. The original fails the mission on
+  ANY destruction of a goal-1 ship, disabled or not, whoever destroys it.
+
+**Proposed fix (not applied).** In `firingImmune`, let the disabled
+carve-out cancel only the FLOCK (group) immunity and keep the same-govt
+projectile clause (`SAME_GOVT_FIRING_IMMUNITY.projectile`) for a disabled
+victim; in `shipDied`, fail GOAL_DISABLE on every death (and un-count
+the satisfied disable), not only before the disable. Not measured: what
+happens to the mission when an NPC disables the ship and nobody kills it
+(the blast run's duellist was disabled by the player's gun and the blast
+together).
+
+Confidence: high (three runs, each with the status line, the OnFailure
+bit and, for (i), 52 s of frame-counted bolts).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/duel/{bolt,blast,beam}/*/`
+(the blast folder's first run is a failed take: a stock BBS job took the
+Accept; the kit's BBS jobs now carry DispWeight 30000 and the scenario
+clicks the first row).
+
+### IFF of an NPC fighting another NPC, wave 12 (2026-11-24)
+
+**Question (Matthew).** NovaJS showed the hostile orange-red bracket on a
+ship attacking another NPC (which then killed it and ignored him). On the
+original, what bracket does a ship get while it attacks a third party,
+and does it then turn on the player?
+
+**Rig.** gövt 356 Kit Hunter and 357 Kit Prey, each listing the other's
+class as an enemy, both neutral to the player (record 0), AI 3, Kit Raider
+Guns. Take 1 (`scenarios/hunt_watch.json`, sÿst 2071 Kit Hunt Range,
+system traffic): the pairs fought 600-1400 px away, off screen, so no
+bracket was readable. Take 2 (`hunt_arena.json`, sÿst 2077: one of each
+as mission ships on the port, own AI): readable for the first seconds,
+then they flew off. Take 3 (`hunt_anchored.json`, pilot `w12_arena2`):
+ANCHORED copies in Kit FF Range, the hunter (yellow disc, mïsn 1060) on
+the far mark and the prey (cyan, mïsn 1061) on the near mark, 150 px
+apart, trading turret fire above the player (Kit Ring Tank + Kit
+Tickler). Tab through them (shots, `analysis/brackets.mjs`), then target
+the prey (`loops/tab_to.mjs`) and tickle it for 6 s (frame-counted: the
+Tickler's bolts cross the strip between the player and the prey in 36 of
+171 frames during the hold and in none before or after), Tab again, and
+watch the player's shield for 16 s.
+
+| case | hunter's corners | prey's corners | turned on the player? |
+|---|---|---|---|
+| each attacking the other (takes 2 and 3; shields 97 -> 82% and 99 -> 93%) | **yellow** (neutral) | **yellow** | no |
+| the player tickles the prey too (6 s of 1-damage hits) | **yellow** | **yellow**, and it kept firing at the hunter | no: the player's shield bar stayed at 149 px throughout (takes 2 and 3) |
+
+**Finding.** A neutral ship's corners stay YELLOW while it attacks
+another NPC, and stay yellow while the player attacks the same victim;
+an AI 3 warship busy with its enemy did not even turn on the player
+when the player shot it (6 s, 1-damage hits; wave 11 saw an idle AI 1
+target turn red at the first hit). Red corners are for ships attacking
+the player or that will on sight (K9). Not tested: a same-govt victim (a
+ship never attacks its own govt except through gövt 0x0001, which also
+attacks the player) and longer or heavier provocation.
+
+**NovaJS today.** `N/nova_plugin/combat/hostility.ts:221-233`
+`onSightDisposition` and the behavioural tier (`:102-118`, red only for
+a ship attacking the PLAYER) give the same yellow for a ship fighting an
+NPC: matches. What Matthew saw fits the duel instead: duellists are
+ShipBehav 0 (always attack the player), red on the original too (see the
+duel above). Not run headless: whether NovaJS's prey turns on a player
+who tickles it mid-fight (`N/nova_plugin/npc/npc_targeting.ts:217-228`
+records an aimed hit's shooter as the `aggressor`); the original's did
+not.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/{hunt,hunt_arena,hunt_anchored}/*/`.
+
+### A14 with system traffic as the victims, wave 12: whose record a kill changes, enemies, negative penalties (2026-11-24)
+
+**Question (wave-11 leftovers).** (a) A crime against govt V's ship in a
+system owned by a different govt O; (b) killing an ENEMY of the owner;
+(c) a kill through "disabled" (Disab + Kill?); and wave 10's negative
+penalties, all with SYSTEM traffic as the victim (wave 11 found that a
+goal-less mission ship is no crime).
+
+**Rig.** shïp 861 Kit Bare Trader (AI 1, shield 0, armor 1000) as the only
+traffic of each system; the player (Kit Lancer, record 0 everywhere) at
+the system's port with wëap 283 Kit One Shot (one 10000-damage bolt: the
+trader dies in ONE hit) or wëap 284 Kit Gun 300 (300 damage a hit). Tab,
+fire, land, map, leave, pull (`scenarios/a14_traffic.json`,
+`a14_disable_kill.json`). Penalties (Disab / Board / Kill): gövt 350 Kit
+Victim 30 / 5 / 100, 351 Kit Owner 7 / 3 / 13, 352 Kit Law 30 / 5 / 100
+and 353 Kit Pirate 20 / 5 / 40 (each the other's enemy), 340 Kit Ally
+Owner 30 / 5 / 100 listing 341 Kit Ally Victim (20 / 5 / 40) as an ally,
+369 Kit Negative -100 / -100 / -100.
+
+| system (owner) | victim's govt | kill | record afterwards (only that system changed) | rating |
+|---|---|---|---|---|
+| 2074 Kit Victim Traffic (350) | 350, the owner | one hit | **-130** = -(Disab 30 + Kill 100) | +4 |
+| 2074 (350) | 350 | Kit Gun 300: 40% armor, then gone between two frames (off screen, the panel never read Disabled) | **-130** | +4 |
+| 2080 Kit Victim Anchored (350) | 350, an IMMOBILE trader (shïp 870) | Kit Duel Gun until the panel read **Disabled** (7 hits), 8 s, then fired until it was gone | **-130** (not -160: the Disab is charged once) | +4 |
+| 2078 Kit Ally Traffic (340) | 341, the owner's ally | one hit | **-60** = -(the VICTIM's Disab 20 + Kill 40) | +4 |
+| 2072 Kit Owner Traffic (351) | 350, no relation to the owner | one hit | **+9** = +(the OWNER's Disab 7 / 2 + Kill 13 / 2, each truncated: 3 + 6) | +4 |
+| 2073 Kit Law Traffic (352) | 353, the owner's enemy | one hit | **+65** = +(the owner's 30 / 2 + 100 / 2) | +4 |
+| 2075 Kit Negative Traffic (369, penalties -100) | 369, the owner | one hit | **+200** = -(-100 + -100) | +4 |
+
+(Kit Gun 300 take 1, wëap 282 at 100 damage: the trader fled out of reach
+at 70% armor and no record changed; take 2 is the row above.)
+
+**Finding.**
+1. **A kill of the owner's own (or an allied) ship costs the VICTIM
+   govt's DisabPenalty + KillPenalty** in the system's record, also when
+   one hit destroys it without a visible disable (-130, -60). BoardPenalty
+   is not part of it.
+2. **(a) and (b): a kill of a ship whose govt is neither the system's
+   owner nor its ally RAISES the system's record by half the OWNER's
+   Disab + Kill** (each halved and truncated): +9 for an unrelated victim
+   in Kit Owner Traffic, +65 for the owner's enemy in Kit Law Traffic. The
+   victim's own penalties play no part, and enmity is not needed. This
+   also explains wave 11's unexplained +130 in Kit Victim Home 3 (owner
+   350): two kills of non-350 ships at +65 each.
+3. **Negative penalties ARE applied, signed:** a kill of a -100 / -100
+   govt's own ship raised the record by 200. Wave 10's "no change" came
+   from the mission-ship exemption (wave 11), not from the sign.
+4. **(c): a kill through a visible disable costs Disab + Kill once**
+   (-130 after 8 s of the hulk sitting Disabled), the same as a one-hit
+   kill: so "Disab + Kill on every kill", never the Disab twice. A
+   disable alone was not read (two takes: no traffic in the system, then
+   the trader out of the gun's reach).
+
+**NovaJS today (base 2b744c80; per-govt records, ruling #376): four
+mismatches.**
+- `N/nova_plugin/reputation/reputation_plugin.ts:191-236`
+  (`KillCreditSystem`) charges KillPenalty only, and
+  `DisableCreditSystem` (`:251-290`) skips a ship already at armor 0
+  (`:264`), so a one-hit kill costs 100 where the original takes 130 (a
+  kill after a seen disable costs Disab, then Kill: -130, matches).
+- `N/nova_plugin/reputation/reputation.ts:145-152` (`applyCrime`) charges
+  the victim's govt for every kill and never credits anyone, so killing
+  a ship of a govt that is neither the local owner nor its ally costs
+  that govt standing instead of RAISING the local owner's.
+- `reputation.ts:127-139` (`crimePenalty`) returns 0 for a negative
+  field (#108); the original applies it signed (the crime raises the
+  record).
+
+**Proposed fix (not applied; the reward rule needs Matthew's ruling on
+how it maps onto per-govt records).** Charge DisabPenalty + KillPenalty
+for every kill (one entry, whether or not the disable was seen); when the
+victim's govt is neither the system's owner nor an ally of it, instead
+credit the owner's record with floor(Disab / 2) + floor(Kill / 2) of the
+OWNER's penalties; apply negative penalties signed (revisit #108's
+"negative = does not care" reading).
+
+Confidence: high for 1-4 (seven clean runs, each a single kill, read from
+the pulled pilot); the halving rule rests on two owners' penalty sets
+plus wave 11's +130.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/a14/{victim_one,victim_dis,victim_dis2,dis3_kill,dis3_only,ally,owner,enemy,negpen}/*/`
+(`pilot-after/`, `05-map.png`).
+
+### A trader shot by the player's escort: whom does it fight? wave 12 (2026-11-24)
+
+**Rig.** sÿst 2076 Kit Brave Range: one AI 2 Kit Brave Trader (green disc,
+gövt 363 neutral, 3000 / 3000, two Kit Raider Guns). The player (Kit Ring
+Tank, unarmed, 30000 shield) with one hired Kit Escort (two Kit Escort
+Guns). Target the trader (`loops/tab_to.mjs` green), `f` (escorts attack
+my target), then 40 s of shots (`scenarios/brave_escort.json`, pilot
+`w12_brave`).
+
+**Result.** "New escort orders assigned. All ships attacking target.";
+the trader's corners turned from **yellow to RED** within a second of the
+order (before it was hit much); its shield fell 94 -> 67 -> 33 -> 1% ->
+"Shields Down" over 40 s as the escort chased it out of the screen; the
+**player's shield bar never moved** (149 / 148 px of 161 at every shot):
+the trader never fired at the player, though it sat beside the player
+when the fight began.
+
+**Finding.** A trader shot by the player's escort fights (or flees) the
+ESCORT, not the player, even while its brackets read hostile.
+
+**NovaJS today.** `N/nova_plugin/npc/npc_targeting.ts:55-60`
+(`responsibleShip`): a hired escort's hits make the PLAYER (its
+firing-group root) the victim's aggressor, so a provoked trader goes
+after the player. **Mismatch. Proposed fix (not applied):** record the
+concrete firing ship (the escort) as the aggressor for an NPC's reaction,
+and keep the root for kill credit and legal records (where the original
+charges the player: not measured here). The red corners match NovaJS's
+"recent aggression against the player" tier only if hits by the
+player's flock count as the player's; the original paints it red anyway.
+
+Confidence: medium (one run; who the trader shot is inferred from the
+player's untouched shield, the fight left the screen).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/brave/*/`
+(`07-ordered.png`, `brackets.mjs` on it: red; `recording.mp4`).
+
+### Submunition fuse vs an elongated target, wave 12 (2026-11-24)
+
+**Question.** NovaJS sizes the target by its sprite mask's farthest point
+(`PROX_FUSE_TARGET_RADIUS_FACTOR_FITTED`: fuse at ProxRadius + 2/3 of
+that radius), so on a long hull the fuse fires far out. How does the
+original's fuse treat a long target from the side and from the end?
+
+**Rig.** Kit Sub Range as in "Submunitions wave 10": the slow parents
+268-273 (Speed 200, 2-3 px a frame, prox 0 / 8 / 12 / 16 / 20 / 30, the
+16 px sprite) fired one at a time at an immobile 76 x 14 magenta bar
+150 px north, the same on every frame of its 80 x 80 sheet: lying across
+the line of fire (shïp 863, pilot `w12_sub_side`) or upright, end-on
+(shïp 864, `w12_sub_end`). `scenarios/sub_bar.json`; the shot's last
+position and the starburst read per frame from the recording (`subtrack.py` in the
+evidence folder, distances from the bar's centre along the line of fire).
+
+| prox | side-on (face 7 px from the centre) | end-on (face 38 px from the centre) | NovaJS model (radius 38.6: fuse at prox + 25.7) |
+|---|---|---|---|
+| 0 | hit the body (gone by 17-20 px), no subs | hit (45.5 px), no subs | hit |
+| 8 | **subs at 32.5 px** | hit (47), no subs | 33.7: side subs, end hit |
+| 12 | subs at 33.5 | hit (45.5), no subs | 37.7: side subs, end hit |
+| 16 | subs at 36.5 | hit (46), no subs | 41.7: side subs, end hit |
+| 20 | subs at 38 | **subs at 47** (a near tie with the body) | 45.7: side subs, end tie |
+| 30 | subs at 42 | subs at 55.5 | 55.7 |
+
+**Finding.**
+1. The fuse is not a circle around the centre: end-on the bar's tip is
+   38 px out and the fuse reached past it only from prox 20 (fired at
+   about prox + 25 px from the centre); side-on the fuse fired from prox 8
+   at 32-42 px from the centre, growing only about 0.45 px per px of prox.
+2. Every one of the twelve yes/no outcomes (subs or a body hit) matches
+   NovaJS's model; the DISTANCES match end-on and side-on for small prox,
+   but side-on the original's fuse fires 4-14 px closer than NovaJS's for
+   prox 12-30 (33.5-42 vs 37.7-55.7).
+
+**NovaJS (base 2b744c80).** `N/nova_plugin/combat/projectile_plugin.ts:619-624`:
+the outcomes match; the side-on distances for larger fuses do not
+(cosmetic: where the starburst appears). No fix proposed; a fit would need
+more shapes than one bar.
+
+Confidence: medium-high (one shot per cell, ±3 px).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/sub/{side,end}/*/recording.mp4`
+(triggers at the `down ctrl` stamps in `recording.events.json`).
+
+### Scrolling: long mission text and the shop scroll arrows, wave 12 (2026-11-24)
+
+**Question (Matthew).** How do scrolling dialogs scroll on the original:
+single arrow / Page key presses, held keys, single and held clicks on the
+scroll arrows, the track, the mouse wheel; and does a shipyard /
+outfitter arrow click move one row or a page?
+
+**Rig.** Pilot `w12_scroll` at Kit Port: mïsn 1057 offers a 60-line
+numbered text on landing (12 px a line; 22 lines show); mïsn 1058 is a
+Mission BBS job with the same text; the kit fills the outfitter and the
+shipyard (4 x 5 cells of 54 px rows). `scenarios/scroll_explore.json`
+(keys, shots), `scroll_measure.json` (recorded: clicks, 3 s holds on the
+arrows with novaref's new `click --hold-ms`, Down held 3 s, Page keys),
+`scroll_wheel.json` (novaref's new `wheel`). Offsets frame by frame from
+the recording (`scrolltrack.py` in the evidence folder: the row profile's
+shift between frames) and from shots (`bands.py`).
+
+**Original.**
+
+| widget | input | effect |
+|---|---|---|
+| mission offer text (arrows right of No / Yes; no track, no thumb) | one click on an arrow (60 ms down) | **5 px** (2-3 frames of the glide below), no jump |
+| | arrow HELD 3 s | starts 3 frames after the press, **2 px every video frame (about 60 px/s), steady, no delay, no acceleration**, stops at the release (181 px in 90 frames) |
+| | Down / Up key | **10 px** a press |
+| | Down HELD 3 s | **10 px once: no key repeat** |
+| | PageDown / PageUp | **250 px** (about 21 lines); clamped at the end |
+| | Home / End | top / bottom |
+| | mouse wheel (1 and 3 notches, line units) | nothing |
+| outfitter grid (arrows at its bottom-left) | one click | **one ROW (54 px), on the RELEASE** |
+| | held 3 s | still one row, at the release: **no auto-repeat** |
+| | wheel, PageDown, End | nothing (Down moves the selection) |
+| shipyard grid | one click / held 3 s | one row on the release / one row on the release |
+| Mission BBS job text | Down, PageDown | nothing: the text is clipped at 8 lines, with no arrows (it never scrolls) |
+| arrows at either end | | drawn dark (disabled): the up arrow at the top, the down arrow at the bottom |
+
+**NovaJS (headless, PORT 8557, base 2b744c80, new pilot landed at nova:164;
+`showOfferPopup` with the same 60 lines; no console errors).**
+
+| widget | input | NovaJS | original |
+|---|---|---|---|
+| offer text | one click | **12 px jump** (one line) on the press | 5 px (glide only) |
+| | held | 12 px jump, then **after 300 ms** a glide at 60 px/s (Line 16 after 3 s) | no jump, no delay, 60 px/s from the press |
+| | Down / Up | 12 px | 10 px |
+| | Down held (OS key repeat) | **repeats** (12 px per repeat) | no repeat |
+| | PageDown / PageUp / Home / End | **nothing** | 250 px / 250 px / top / bottom |
+| | wheel | nothing | nothing (matches) |
+| outfitter / shipyard grid | one click | **a PAGE (5 rows)** on the release | one ROW on the release |
+| | held | one page on the release | one row on the release (no repeat: matches in kind) |
+| | wheel / PageDown / End | nothing | nothing (matches) |
+
+Code: `N/spaceport/item_grid.ts:472-485` (`scrollUp` / `scrollDown` move
+`BOX_COUNT[1]` rows), `N/spaceport/offer_popup.ts:324-357`
+(`bindScrollButton`: a `POPUP_SCROLL_STEP` jump on press, then the hold),
+`N/spaceport/popup_layout.ts:94-98` (`POPUP_SCROLL_STEP` = a line,
+`POPUP_SCROLL_HOLD_DELAY` 300 ms, `POPUP_SCROLL_HOLD_SPEED` 60 px/s),
+`N/spaceport/menu_controls.ts:22` (`REPEATABLE` up / down: OS key repeat).
+
+**Proposed fix (not applied).** Grid arrows: one row per click
+(`scrollUp` / `scrollDown` by 1, still on the release, no hold). Offer
+text arrows: no jump and no delay, a 60 px/s glide from the press to the
+release; arrow keys 10 px a press without repeat (drop up / down from
+`repeatableActions` on the popup); add PageUp / PageDown (250 px) and
+Home / End. (The BBS text not scrolling at all is not checked in NovaJS.)
+
+Confidence: high for the step sizes and the release timing (frame
+counts); the 60 px/s glide is 2 px per 30 fps video frame, so the game's
+own rate is 1 px per rendered frame or 2 px per physics tick. The wheel
+result rests on synthetic line-unit wheel events (the harness cannot show
+that a real mouse's events differ).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/scroll/{explore,measure,wheel}/*/`
+(`measure`: the input stamps in `recording.events.json`); NovaJS:
+`scroll/novajs/` (`scroll.log`, `shots/`, the driver `scroll.mjs`).
+
+### Trade center at Schmoo, and the trade-in's outfits, wave 12 (2026-11-24)
+
+**Schmoo (stock spöb 322).** Stock data, no plug-in, record 0; land and
+open the exchange (`scenarios/trade_schmoo.json`; take 3,
+`trade_schmoo_ok2.json`, closes a random stock notice first). Schmoo is in
+the BoughtAt list of jünk 145 Seafood Delicacies, 146 Opals and 149
+Durknen Girns (BuyOn `b43`, SellOn empty); none of them is SoldAt there.
+
+| pilot | rows shown | NovaJS model (9b0c62de) |
+|---|---|---|
+| `w12_schmoo` (bit 43 clear) | Food (Med 75), Medical Supplies (Med 750), Luxury Goods (High 1125), blank slots for the other three standard goods, then **Opals (High 1500) only** | Durknen Girns + Opals |
+| `w12_schmoo43` (bit 43 set) | the same goods, then **Durknen Girns (High 3750) only**: Opals is gone | Durknen Girns + Opals |
+
+**Finding.**
+1. **The exchange has ONE High (sell-here, BoughtAt) jünk row and ONE
+   Low (buy-here, SoldAt) jünk row**, each taken by the highest-id jünk
+   that qualifies. This fits every table so far: Kit Port wave 1
+   (Widgets Low + Gadgets High), Kit Port wave 10 (Doodads High + Low;
+   Widgets 200 and Gadgets 201 lose their slots to Doodads 202), Kit
+   Market (Widgets High + Gadgets Low) and both Schmoo takes (three
+   BoughtAt jünks, one row).
+2. **A jünk's BuyOn gates its row at a stellar in its BoughtAt list**
+   (the stellar buys it): Durknen Girns (BuyOn b43) qualifies only with
+   b43 set, and then pushes Opals out. (SellOn presumably gates the SoldAt
+   row; not tested.)
+
+**NovaJS (base 2b744c80): two mismatches.**
+`N/nova_plugin/economy/trade_logic.ts:185` `junkExchangeRows` keeps the
+two highest-id jünk rows of either tier (Schmoo: two High rows), and
+`:131` / `:141` gate a BoughtAt row with `sellOn` and a SoldAt row with
+`buyOn`. **Proposed fix (not applied):** one High slot (BoughtAt rows that
+pass `buyOn`) and one Low slot (SoldAt rows that pass `sellOn`), each the
+highest jünk id that qualifies, High listed above Low.
+
+**Trade-in (wave 11's 27,500 vs NovaJS's 26,250).** Pilots on Kit Mass
+Roomy 100 (100,000), each buying Kit Mass Roomy 300 at Kit Port
+(`scenarios/tradein_food.json`, the confirm dialog's Trade-In):
+
+| aboard | Trade-In |
+|---|---|
+| 50 t of food, no outfits (`w12_tradein_food`) | **25,000** (cargo does not count) |
+| 5 Kit Plain Mass (Cost 1,000 each), empty hold (`w12_tradein_plain`) | **27,500** |
+| 2 Kit Mass Keep (persistent 0x0404, Cost 1,000), empty hold (`w12_tradein_keep`) | **25,000** (persistent outfits stay with the pilot and do not count) |
+
+**Finding.** Trade-in = 25% of the hull's price + **50%** of the
+non-persistent outfits' price (25,000 + 2,500): the outfits at their
+resale value, the hull at a quarter. Wave 11's 27,500 is the same sum.
+**NovaJS (`N/spaceport/shipyard_rules.ts:216-228` `tradeInValue`):
+25% of hull + outfits = 26,250. Mismatch. Proposed fix (not applied):**
+`floor(0.25 x hull + 0.5 x outfits)` (the rounding of each part not
+measured).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/trade/{schmoo,schmoo43*,tradein,tradein_plain,tradein_keep}/*/`.
+
+### S1 and S2 wave 12: scanned without a jump, the record after a scan, illegal mission cargo (2026-11-24)
+
+**S1 run 3 + the record.** Pilot `w12_scan_inside` (Kit Lancer + one Kit
+Contraband Pod, ScanMask 0x0001) STARTS beside Kit Scan Port in Kit Scan
+Range (no jump): "Kit Customs Cutter: w12-scan-inside, your posession of
+a kit contraband pod has been detected. You have been fined 500
+credits." on the status line in the first 1.5 s after Enter Ship; after
+landing and leaving, credits 1,000,000 -> 999,500 and **the 2069 record
+-50** (gövt 354's SmugPenalty 50). So a scan does not need an arrival by
+jump, and a detected illegal OUTFIT costs ScanFine and SmugPenalty
+(wave 11's inference confirmed). `scenarios/scan_inside.json`.
+
+**S2: illegal MISSION cargo.** Pilots `w12_s2a` / `w12_s2b` (Kit Lancer,
+nothing illegal aboard) land at Kit Scan Port and accept 1 t of food with
+ScanMask 0x0001 for Kit Scan Gate Port (mïsn 1062 with Flags 0x0020,
+1063 without; CompGovt 354, CompReward 10), take off and wait 24 s
+(`scenarios/s2_scan.json`), then land and leave.
+
+| mission | status line (within about 4 s of takeoff) | credits | mission | records |
+|---|---|---|---|---|
+| 0x0020 | **"Your ship has been scanned - mission failed."** | unchanged (no fine) | failed: OnFailure b9114 set, gone from the list | none changed |
+| plain | **"Kit Customs Cutter: w12-s2b, your attempt to smuggle illegal cargo through this system has been detected. You have been fined 500 credits."** | -500 | still active | **none changed** (no SmugPenalty) |
+
+**Finding (S1 + S2).** A scan finds what the govt's ScanMask matches, in
+outfits and mission cargo alike, as soon as an interceptor reaches the
+player (no jump needed). An illegal OUTFIT: "your possession of a <item>"
++ ScanFine + SmugPenalty on the system's record. Illegal mission cargo of
+a 0x0020 mission: the mission fails at once ("Your ship has been scanned
+- mission failed.") and nothing else happens (no fine, no record).
+Illegal mission cargo of an ordinary mission: "your attempt to smuggle
+illegal cargo" + ScanFine, the mission continues, and **no SmugPenalty**
+(the Bible's SmugPenalty text speaks of mission cargo; the record moved
+only for the outfit). Not tested: ScanFine 0, rescans, S3 (a scanner
+whose ScanMask does not match the cargo).
+
+**NovaJS:** scanning is not implemented (wave 11's entry).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/scan/{inside,s2a,s2b}/*/`.
+
+### P1 run 1 wave 12: a police interceptor watching the player attack a third party (2026-11-24, first pass)
+
+**Rig.** sÿst 2079 Kit Police Range, owned by gövt 342 Kit Police (AI 4
+red discs, one Kit Escort Gun), with traffic of gövt 343 Kit Shipping (AI 1
+green discs, 3000 / 3000, unarmed); no relations between them; the player
+(Kit Lancer + Kit Tickler) at the port. Tab survey, target a Kit Shipping
+(`tab_to` green, found on screen about 160 px away), hold the trigger
+15 s, Tab again, watch 16 s, land, leave (`scenarios/p1_police.json`,
+pilot `w12_p1`).
+
+**Result.** Every Kit Police corner read was YELLOW, before and after
+(nine shots); the player's shield bar never moved; the 2079 record stayed
+0 and the rating 0. The targeted trader left the screen within a second
+of the trigger and was gone ("No Target") by the end of the hold, so the
+number of Tickler hits is not known (1-damage hits on a 3000 shield do not
+move the panel). **Read as:** a police AI 4 of the system's owner did not
+react to the player shooting at a ship of an unrelated govt, with no crime
+recorded (gövt 343's ShootPenalty is 0); the brief's other runs (disable
+and board, distress calls, 0x0020 / Flags2 0x0008, fleet escorts) are
+still open, and this one should be repeated with a hit that registers.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w12/p1/run1/*/`.
+
 ### Reliability notes (for anyone running the reference)
 
 - **Kit hulls had their running lights on until wave 11 (Matthew).**
@@ -5857,6 +6343,17 @@ message, `recording.mp4`).
   (`panel_hits`, `region_lit`, `radar_blips`, `world_motion`,
   `planet_track`) are unaffected.
 
+- **BBS jobs: a stock job can sit above the kit's (wave 12).** The
+  Mission BBS lists stock random jobs too, and Accept takes the selected
+  (first) row: in the first duel take a "Delivery to Earth" got the
+  Accept. The kit's BBS jobs now carry DispWeight 30000 and the scenarios
+  click the first row (window 213,238) before Accept.
+- **System traffic is placed anywhere in the system (wave 12).** Fights
+  between traffic happen 600-1400 px away, off screen (no brackets to
+  read), and an AvgShips-1 system can come up empty. Put the ships under
+  test on marks as mission ships (or anchored hulls) when the picture
+  matters; kit target panels show only a NAME, no picture
+  (`loops/tab_to.mjs` reads the brackets instead).
 - **Tab never targets the player's own escorts (wave 9).** To target an
   escort, click it: `loops/click_targets.mjs` finds the ship sprites in a
   shot and clicks each. A click on a stellar sets the nav target instead
@@ -5971,9 +6468,10 @@ message, `recording.mp4`).
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix applied in c43cddcc). Tab skips escorts (matches); whether `r` picks an escort is still open. |
-| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). |
+| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). **Wave 12 (traffic victims):** the owner's or an ally's ship costs the VICTIM govt's Disab + Kill in the system's record; any other govt's ship (enemy or not) RAISES it by floor(Disab / 2) + floor(Kill / 2) of the OWNER's penalties (explains wave 11's +130); negative penalties apply signed. |
 | Wave 10 leftovers | Submunitions: the fuse-distance formula's target-size term (two sizes measured). Friendly fire: does a same-govt or allied victim turn when it IS the shooter's target, and after more than 45 s. #321: which jünk rows survive the 8-row cap. #316: strict play on a second hull (2/3 vs 0.68), an NPC. #324: does a jump (not only a landing) refresh NCB-gated system visibility. #320.3: the DEFERRED auto-abort (board / rescue goal). Item 11: an installed 0x0400 item on a trade-in; base vs loaded mass; stock Carbon Fiber. M1: the click window's exact end (6.8-9.3 s after the show); ships or planets under the hidden minimap. Not started: brief items 5 (reviving a disabled mission ally) and 6 (the UI screen/key matrix; side findings so far: `i` in flight opens "Currently active missions", Escape in the spaceport leaves, Return in the outfitter closes it, in the BBS Return closes it, the BBS has no map button) | **Wave 10** (items 0, 0b, 1-4, 7-11 answered above: "Submunitions wave 10" ... "Outfits that scale with the ship's mass") |
 | Wave 11 leftovers | #320.3: the DEFERRED auto-abort needs a përs whose ship a goal-2/5 special ship replaces (the kit has no përs; non-përs goal-5 ships could not be boarded at all). A14 (a)-(c): mission ships with no goal are no crime, so re-run with SYSTEM traffic as the victim (and re-check wave 10's negative-penalty run the same way); explain the +130 after killing a stock-art Leviathan / Viper in Kit Victim Home 3. Trade-in 27,500 vs 26,250 (one run with an empty hold). AppearOn: a mixed düde (one admissible class). UI matrix: the original's in-game preferences key (neither `cmd+,` in flight nor in the spaceport opened anything); `e` with escorts from inside a venue. Item 6 (npc_behavior_gaps.md): only S1 / I1 started (see "S1 / I1 wave 11"); T1, N2, N1, P1 not started. The plain-NPC revive case (an AI 1 neutral fled the blast; wave 8's plunder dialog stands). | **Wave 11** |
+| Wave 12 leftovers | Duel: what an NPC's DISABLE (not kill) of a goal-1 ship does to the mission. IFF: a long or heavy provocation of a busy NPC; the same-govt victim case. A14: a disable alone (Disab charged at the disable?); the reward rule's mapping onto NovaJS's per-govt records (needs a ruling). Escort vs trader: a second run with the fight on screen; who pays the legal penalty for an escort's kill. Subs: more shapes for a side-on fit; whether a guided missile locked on a same-govt ship passes through it (an NPC locks its own govt only through gövt 0x0001; not set up). Scrolling: the bar / hire-escort lists, the BBS in NovaJS, a real mouse's wheel. Trade: SellOn on a SoldAt row; the trade-in's rounding. S1-S3: ScanFine 0, rescans, S3, the clean pilot's I1 radar track (300 s). P1: runs 2-6 and run 1 with registered hits; T1, N2, N1 not started. | **Wave 12** (duel, IFF, A14 (a)-(c) + negative penalties, escort vs trader, subs vs a bar, scrolling, Schmoo, trade-in, S1 / S2, P1 run 1: the "... wave 12" sections above) |
 
 ## Catalogue
 
