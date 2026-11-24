@@ -12,6 +12,7 @@ import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { GovtComponent } from '../core/index.js';
+import { SystemIdResource } from '../core/system_id_resource.js';
 import { makeSystem } from '../make_system.js';
 import { FormationComponent, NpcComponent } from '../npc/index.js';
 import { ControlledByComponent } from '../player/index.js';
@@ -421,7 +422,8 @@ describe('NPC friendly fire between same-govt / allied ships '
             const player = world.entities.get('player')!;
             return styleForTarget('shooter', ship, 'player', player,
                 gameData, id => world.entities.get(id),
-                world.resources.get(TimeResource)!.time);
+                world.resources.get(TimeResource)!.time,
+                world.resources.get(SystemIdResource));
         }
 
         it('stray hits past the threshold paint a neutral warship red, '
