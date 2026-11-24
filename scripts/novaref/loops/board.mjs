@@ -110,11 +110,30 @@ export function headingFromShift(before, after, minPx = 12) {
     return Math.hypot(...d) >= minPx ? bearing(d) : null;
 }
 
+/**
+ * The key string for a full-speed pass over the target (wave 7, the
+ * boarding speed gate): an optional turn, a short thrust (an inertialess
+ * hull keeps the speed it reaches), `b` every `pressGapMs` until the hull
+ * is `overPx` past the target's centre, then Down to stop. Returns
+ * {seq, presses}.
+ */
+export function passKeys({ turn = null, dist, speedPxS, overPx = 60, pressGapMs = 100, thrustMs = 250, brakeMs = 500 }) {
+    const crossMs = (dist + overPx) / speedPxS * 1000;
+    const presses = Math.max(3, Math.ceil((crossMs - thrustMs) / pressGapMs));
+    // hold 40 + gap 20 per key, so each press takes about 60 ms plus its wait.
+    const each = `b wait ${Math.max(0, pressGapMs - 60)}`;
+    const seq = `${turn ? turn + " wait 250 " : ""}hold:40 gap:20 down:Up wait ${thrustMs} up:Up ${Array(presses).fill(each).join(" ")} down:Down wait ${brakeMs} up:Down wait 300`;
+    return { seq, presses };
+}
+
 export default async function board(api, args = {}) {
     const speed = args.speedPxS ?? 44; // Kit Crawler 100
     const turnRate = args.turnDegS ?? 87.1;
     const near = args.near ?? 160;
     const stepMs = args.stepMs ?? 250;
+    // How long Down is held to stop: 400 ms stops an Accel-2000 Crawler;
+    // a soft hull (Kit Crawler Soft, Accel 200) needs about 1.5 s.
+    const brakeMs = args.brakeMs ?? 400;
     const maxLegs = args.maxLegs ?? 14;
     const maxSteps = args.maxSteps ?? 30;
     let shotN = 0;
@@ -132,7 +151,7 @@ export default async function board(api, args = {}) {
     };
     /** Target offset from the player: on screen exact, else from the radar. */
     const locate = (png) => {
-        const d = findColour(png, isMagenta);
+        const d = findColour(png, isMagenta, 12); // 12: a disc half under the player still counts (wave 7)
         if (d) return { on: true, o: [d.x - CX, d.y - CY] };
         const st = [-pos[0] / WORLD_PER_RADAR_PX, -pos[1] / WORLD_PER_RADAR_PX];
         // The player's own blip sits at the centre; a stellar is a bigger
@@ -157,7 +176,7 @@ export default async function board(api, args = {}) {
     api.log({ start: loc });
     if (!loc.o) return { ok: false, error: "target not found", legs };
     const calMs = args.calMs ?? 1500;
-    await api.step({ keys: `down:Up wait ${calMs} up:Up down:Down wait 400 up:Down wait 300` });
+    await api.step({ keys: `down:Up wait ${calMs} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
     s = await shoot("cal");
     const after = locate(s.png);
     if (loc.on && after.on) heading = headingFromShift(loc.o, after.o);
@@ -182,7 +201,7 @@ export default async function board(api, args = {}) {
         const keys = turnKeys(wrapDeg(want - heading), turnRate);
         const run = Math.min(dist - near * 0.6, args.maxLegPx ?? 900);
         const ms = Math.max(200, Math.round(run / speed * 1000));
-        await api.step({ keys: `${keys ? keys + " wait 150 " : ""}down:Up wait ${ms} up:Up down:Down wait 400 up:Down wait 300` });
+        await api.step({ keys: `${keys ? keys + " wait 150 " : ""}down:Up wait ${ms} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
         heading = want;
         s = await shoot("leg");
         const next = locate(s.png);
@@ -195,12 +214,47 @@ export default async function board(api, args = {}) {
     }
     if (!loc.o || !loc.on) return { ok: false, error: "target not on screen after the approach", legs };
 
-    // Step in, pressing b at each stop.
+    // Step in, pressing b at each stop (or, with args.pass, cross the
+    // target at full speed pressing b all the way).
     const steps = [];
+    const pass = args.pass;
     for (let k = 0; k < maxSteps; k++) {
         const dist = Math.hypot(...loc.o);
         const want = bearing(loc.o);
-        const keys = dist > 12 ? turnKeys(wrapDeg(want - heading), turnRate) : null;
+        if (pass) {
+            const before = loc.o;
+            const tk = turnKeys(wrapDeg(want - heading), turnRate);
+            if (dist > pass.fromPx + 35) {
+                // One aimed leg to about fromPx, then re-measure.
+                const ms = Math.max(150, Math.round((dist - pass.fromPx) / speed * 1000));
+                await api.step({ keys: `${tk ? tk + " wait 150 " : ""}down:Up wait ${ms} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
+                heading = want;
+                s = await shoot("step");
+                loc = locate(s.png);
+                if (!loc.o || !loc.on) break;
+                const measured = headingFromShift(before, loc.o, 5);
+                if (measured !== null) heading = measured;
+                continue;
+            }
+            const keys = passKeys({ turn: tk, dist, speedPxS: speed, brakeMs: Math.max(500, brakeMs), ...pass });
+            api.log({ pass: { dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), aimed: Math.round(want), from: Math.round(heading), presses: keys.presses } });
+            await api.step({ keys: keys.seq });
+            const reply = await shoot("pass");
+            const lit = brightShare(reply.png) - brightShare(s.png);
+            const dialog = lit > (args.dialogShare ?? 0.03);
+            steps.push({ k, pass: true, dist: +dist.toFixed(1), o: loc.o.map((v) => +v.toFixed(1)), presses: keys.presses, shot: reply.file, dialog, lit: +lit.toFixed(3) });
+            if (dialog) {
+                for (const [x, y, label] of args.dialogClicks ?? []) {
+                    await api.step({ click: [x, y], win: true });
+                    await api.step({ wait: 1000 });
+                    await shoot(`dialog-${label}`);
+                }
+            }
+            break;
+        }
+        // Wave 7: face the target at every stop, however close (was > 12 px):
+        // close stops that skipped the turn often got no answer at all.
+        const keys = dist > (args.faceMinPx ?? 3) ? turnKeys(wrapDeg(want - heading), turnRate) : null;
         if (keys) heading = want;
         await api.step({ keys: `${keys ? keys + " wait 150 " : ""}wait 200 b wait 700` });
         const reply = await shoot("b");
@@ -225,10 +279,16 @@ export default async function board(api, args = {}) {
         }
         if (dist < 6) break;
         const before = loc.o;
-        await api.step({ keys: `down:Up wait ${stepMs} up:Up down:Down wait 400 up:Down wait 300` });
+        await api.step({ keys: `down:Up wait ${stepMs} up:Up down:Down wait ${brakeMs} up:Down wait 300` });
         s = await shoot("step");
         loc = locate(s.png);
-        if (!loc.o || !loc.on) break;
+        if (!loc.o || !loc.on) {
+            // Wave 7: a step that ends with the hulk hidden under the
+            // player's sprite used to end the walk without a single `b` on
+            // top of it. Press once more there (dist 0, then stop).
+            if (dist < 30) { loc = { on: true, o: [0, 0], hidden: true }; continue; }
+            break;
+        }
         const measured = headingFromShift(before, loc.o, 5);
         if (measured !== null) heading = measured;
     }

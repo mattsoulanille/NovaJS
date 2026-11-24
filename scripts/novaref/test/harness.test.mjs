@@ -268,6 +268,32 @@ test("board loop: turn keys, heading from a shift, colour blobs", async () => {
     assert.ok(brightShare(png) < 0.01);
 });
 
+test("magenta_track: finds the hulk even on top of the player's sprite", async () => {
+    const { magentaIn } = await import("../analysis/magenta_track.mjs");
+    const W = 832, H = 604, rgb = Buffer.alloc(W * H * 3);
+    const paint = (x0, y0, n, c) => { for (let y = y0; y < y0 + n; y++) for (let x = x0; x < x0 + n; x++) rgb.set(c, (y * W + x) * 3); };
+    paint(300, 290, 30, [200, 200, 200]); // the player's sprite at the centre
+    paint(320, 295, 6, [255, 0, 255]); // a hulk 5 px right of centre, under the player
+    const m = magentaIn(rgb);
+    assert.deepEqual([m.x, m.y, m.n], [322.5, 297.5, 36]);
+    assert.equal(magentaIn(Buffer.alloc(W * H * 3)), null);
+});
+
+test("board loop: passKeys crosses the target pressing b at the given spacing", async () => {
+    const { passKeys } = await import("../loops/board.mjs");
+    // 75 px before + 60 px after at 44 px/s = 3068 ms; 250 ms of thrust, then b every 100 ms.
+    const k = passKeys({ turn: "Left@200", dist: 75, speedPxS: 44, overPx: 60, pressGapMs: 100 });
+    assert.equal(k.presses, 29);
+    assert.equal((k.seq.match(/\bb wait 40\b/g) ?? []).length, 29);
+    assert.ok(k.seq.startsWith("Left@200 wait 250 hold:40 gap:20 down:Up wait 250 up:Up b wait 40"));
+    assert.ok(k.seq.endsWith("down:Down wait 500 up:Down wait 300"));
+    assert.ok(!/Escape/.test(k.seq));
+    // No turn, and a floor of three presses.
+    const short = passKeys({ dist: 1, speedPxS: 1000, overPx: 0 });
+    assert.equal(short.presses, 3);
+    assert.ok(short.seq.startsWith("hold:40"));
+});
+
 test("runScriptStep: a closed-loop script runs ordinary steps and may not press Escape", async () => {
     const { runScriptStep } = await import("../novaref.mjs");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "novaref-script-"));
