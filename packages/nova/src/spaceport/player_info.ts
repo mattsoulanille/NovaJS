@@ -767,8 +767,10 @@ export class PlayerInfoDialog {
     /**
      * Loads the current system's name and the player's "Legal Status:"
      * there: the starmap's very reading (reputation.ts's
-     * legalStatusInSystem — the record with the system's status
-     * government, InitialRec when none, against its CrimeTol). Undefined
+     * legalStatusInSystem — the player's record IN THIS SYSTEM, the system's
+     * status government's InitialRec when none, against that govt's
+     * CrimeTol; reference "A14 ... wave 13": the `p` screen shows the
+     * CURRENT system's record). Undefined
      * (drawn "-") until the system and that govt are cached, which load()
      * sees to before the first render (stageSystemStatus); the kick-off
      * here covers a dialog that outlives a system change.
@@ -781,8 +783,8 @@ export class PlayerInfoDialog {
             return undefined;
         }
         this.systemName = displayName(cached.name);
-        return legalStatusInSystem(records ?? new Map(), cached.govt,
-            id => this.simulationData.data.Govt.getCached(id));
+        return legalStatusInSystem(records ?? new Map(), systemId,
+            cached.govt, id => this.simulationData.data.Govt.getCached(id));
     }
 
     private renderCargo(entity: Entity) {

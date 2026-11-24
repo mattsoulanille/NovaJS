@@ -131,12 +131,12 @@ export function missionMatchesLocation(mission: MissionData,
         || mission.availRecord === AVAIL_RECORD_DOMINATED_ANY) {
         return false;
     }
-    // AvailRecord: the record with this stellar's govt (independent
-    // stellars judge by govt 128, per the Bible's Appendix II rule for
-    // independent systems).
+    // AvailRecord: the record in this stellar's system (independent
+    // systems judge by govt 128's InitialRec, per the Bible's Appendix II
+    // rule for independent systems).
     if (!availRecordOk(mission.availRecord,
         stellarRecord(ctx.stellar, ctx.records ?? new Map(),
-            prefix, ctx.getGovt))) {
+            prefix, ctx.getGovt, ctx))) {
         return false;
     }
     if (!availRatingOk(mission.availRating, ctx.combatRating ?? 0)) {

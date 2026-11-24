@@ -210,29 +210,39 @@ describe('planetClearance', () => {
         }).cleared).toBeFalse();
     });
 
-    it('judges the record with the stellar\'s OWNING govt', () => {
-        const fed = govt({ id: 'nova:128', initialRecord: 0 });
-        const records: LegalRecords = new Map([
-            ['nova:128', -50], ['nova:129', 900]]);
-        expect(planetClearance({
-            planet: shut, planetGovt: fed, records,
-        }).cleared).toBeFalse();
-        expect(planetClearance({
-            planet: shut, planetGovt: govt({ id: 'nova:129' }), records,
-        }).cleared).toBeTrue();
-    });
+    it('judges the record IN THE CURRENT SYSTEM (per-system records, '
+        + 'ruling #380), whoever owns the stellar', () => {
+            const fed = govt({ id: 'nova:128', initialRecord: 0 });
+            const records: LegalRecords = new Map([
+                ['sys:here', -50], ['sys:there', 900]]);
+            expect(planetClearance({
+                planet: shut, planetGovt: fed, records,
+                systemId: 'sys:here', systemStatusGovt: fed,
+            }).cleared).toBeFalse();
+            // A stellar of another govt in the same system: the same record.
+            expect(planetClearance({
+                planet: shut, planetGovt: govt({ id: 'nova:129' }), records,
+                systemId: 'sys:here', systemStatusGovt: fed,
+            }).cleared).toBeFalse();
+            expect(planetClearance({
+                planet: shut, planetGovt: fed, records,
+                systemId: 'sys:there', systemStatusGovt: fed,
+            }).cleared).toBeTrue();
+        });
 
-    it('reads an absent record as the govt InitialRec', () => {
-        expect(stellarRecord(govt({ initialRecord: 7 }), new Map())).toEqual(7);
-        // An independent stellar has no govt to hold a record with.
-        expect(stellarRecord(undefined, new Map([['nova:128', -900]])))
-            .toEqual(0);
+    it("reads an absent record as the system's status govt InitialRec", () => {
+        expect(stellarRecord(new Map(), 'sys:here',
+            govt({ initialRecord: 7 }))).toEqual(7);
+        expect(stellarRecord(new Map([['sys:here', -900]]), 'sys:here',
+            govt({ initialRecord: 7 }))).toEqual(-900);
+        expect(stellarRecord(undefined, undefined, undefined)).toEqual(0);
     });
 
     it('is a pure function of its inputs — two evaluations agree', () => {
         const args = {
             planet: shut, planetGovt: govt({ require: '3' }),
-            records: new Map([['nova:128', 4]]) as LegalRecords,
+            records: new Map([['sys:here', 4]]) as LegalRecords,
+            systemId: 'sys:here',
             contribute: 0b11n, bribedUntil: 10, now: 5,
         };
         expect(planetClearance(args)).toEqual(planetClearance(args));
@@ -340,7 +350,8 @@ describe('stellarClearance against real Nova data', () => {
             })).toEqual({ cleared: false, reason: 'hostile' });
             expect(planetClearance({
                 planet: spacedock, planetGovt: fed,
-                records: new Map([['nova:128', 2]]),
+                records: new Map([['sys:here', 2]]),
+                systemId: 'sys:here', systemStatusGovt: fed,
             }).cleared).toBeTrue();
         });
 
@@ -352,7 +363,8 @@ describe('stellarClearance against real Nova data', () => {
         }).cleared).toBeTrue();
         expect(planetClearance({
             planet: earth, planetGovt: fed,
-            records: new Map([['nova:128', -1]]),
+            records: new Map([['sys:here', -1]]),
+            systemId: 'sys:here', systemStatusGovt: fed,
         })).toEqual({ cleared: false, reason: 'hostile' });
     });
 
@@ -363,7 +375,8 @@ describe('stellarClearance against real Nova data', () => {
         expect(newIreland.flags.uninhabited).toBeTrue();
         expect(newIreland.minStatus).toBe(-50);
         expect(planetClearance({
-            planet: newIreland, records: new Map([['nova:144', -30000]]),
+            planet: newIreland, records: new Map([['sys:here', -30000]]),
+            systemId: 'sys:here',
         }).cleared).toBeTrue();
     });
 

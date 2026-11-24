@@ -3,8 +3,8 @@ import { MissionData } from 'novadatainterface/mission_data';
 import { setStringPrefix } from './mission_ids.js';
 import { MissionMachineryContext } from './mission_machinery.js';
 import {
-    addRecord, applyCompletionReward, cleanRecords, compRewardDelta,
-    MissionOutcome, PayValEffect,
+    applyCompletionReward, applyGovtRecordChange, cleanRecords,
+    compRewardDelta, MissionOutcome, PayValEffect,
 } from '../reputation/index.js';
 
 /**
@@ -50,17 +50,19 @@ function missionGovt(machinery: MissionMachineryContext,
 /**
  * Applies a mission outcome's CompGovt/CompReward record change
  * (Bible: complete grants CompReward; failure costs half — "that govt
- * will take it personally"; abort costs 5x under mïsn flag 0x0040).
- * A completion also reaches the CompGovt's allies (+R/2), enemies and
- * xenophobes (-R/2), as measured on the original
- * (applyCompletionReward); the failure and abort stay with the CompGovt.
- * A TimeLimit failure ('timeout') changes nothing, as measured
- * (compRewardDelta).
+ * will take it personally"; abort costs 5x under mïsn flag 0x0040), in
+ * the systems of the govts it reaches: a completion in every system of the
+ * CompGovt, +R/2 in its allies', -R/2 in its enemies' and the
+ * xenophobes', as measured on the original (applyCompletionReward); the
+ * failure and abort in every system of the CompGovt alone
+ * (applyGovtRecordChange). A TimeLimit failure ('timeout') changes
+ * nothing, as measured (compRewardDelta).
  */
 export function applyOutcomeReputation(machinery: MissionMachineryContext,
     mission: MissionData, outcome: MissionOutcome): void {
     const { state } = machinery;
-    if (!state.records || mission.compGovt < 128) {
+    const geography = machinery.legalGeography?.();
+    if (!state.records || !geography || mission.compGovt < 128) {
         return;
     }
     const delta = compRewardDelta(mission.compReward, outcome,
@@ -70,11 +72,11 @@ export function applyOutcomeReputation(machinery: MissionMachineryContext,
     }
     const govt = missionGovt(machinery, mission, mission.compGovt);
     if (outcome === 'complete') {
-        applyCompletionReward(state.records, govt.id, govt.data, delta,
-            machinery.allGovts?.() ?? []);
+        applyCompletionReward(state.records, geography, govt.id, govt.data,
+            delta);
         return;
     }
-    addRecord(state.records, govt.id, govt.data, delta);
+    applyGovtRecordChange(state.records, geography, govt.id, delta);
 }
 
 /**
@@ -112,13 +114,14 @@ export function applyPayVal(machinery: MissionMachineryContext,
             state.credits.credits = Math.max(0,
                 state.credits.credits - pay.amount);
             return undefined;
-        case 'cleanRecord':
-            if (state.records) {
-                cleanRecords(state.records, pay.scope,
-                    missionGovt(machinery, mission, pay.govtResourceId).data,
-                    machinery.allGovts?.() ?? []);
+        case 'cleanRecord': {
+            const geography = machinery.legalGeography?.();
+            if (state.records && geography) {
+                cleanRecords(state.records, geography, pay.scope,
+                    missionGovt(machinery, mission, pay.govtResourceId).data);
             }
             return undefined;
+        }
         case 'none':
             return undefined;
     }

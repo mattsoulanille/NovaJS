@@ -24,7 +24,7 @@ import { localLaw } from './local_law.js';
 
 /** An independent system: no record is passed below, so the law in force
  * does not matter to any of these politics-only calls. */
-const NOWHERE = localLaw(undefined, () => undefined);
+const NOWHERE = localLaw(undefined, undefined, () => undefined);
 
 function stellar(over: Partial<PlanetData> = {}): PlanetData {
     return { ...getDefaultPlanetData(), ...over };

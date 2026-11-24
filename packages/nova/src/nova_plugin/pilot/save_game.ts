@@ -33,7 +33,7 @@ import {
     sanitizeShipName,
 } from '../player/index.js';
 import { PlayerEscortComponent } from '../player/index.js';
-import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
+import { CombatRatingComponent, LegalGeography, LegalRecordsComponent, systemRecordsFromGovtRecords } from '../reputation/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bit_namespaces';
@@ -204,9 +204,11 @@ export const SaveData = t.intersection([
         cargo: t.array(t.tuple([t.string, t.number])),
         // Per-cron progress, keyed by cron id.
         cronStates: t.array(t.tuple([t.string, CronStateType])),
-        // Legal records, keyed by gövt id ('nova:128'). A govt absent
-        // here reads as its InitialRec (see reputation.ts).
-        reputations: t.array(t.tuple([t.string, t.number])),
+        // Legal records PER SYSTEM, keyed by sÿst id ('nova:130'). A
+        // system absent here reads as its status govt's InitialRec (see
+        // reputation/system_records.ts). Was the per-gövt `reputations`
+        // through v5.
+        legalRecords: t.array(t.tuple([t.string, t.number])),
         // Combat ratings, keyed by category; 'kills' holds the
         // Appendix I kill points. This build always writes a 'kills'
         // entry and the v2 -> v3 migration adds one to a pre-v3 list
@@ -290,6 +292,11 @@ export const SaveData = t.intersection([
         // on the way out and on the way in, since a save file is as
         // untrusted as any typed name.
         shipName: t.string,
+        // A v5-or-older save's PER-GÖVT legal records, parked here by the
+        // v5 -> v6 migration (which cannot see game data) for
+        // restorePlayerState to seed into `legalRecords` with the
+        // scenario's systems in hand. Never written by this build.
+        govtRecords: t.array(t.tuple([t.string, t.number])),
     }),
 ]);
 export type SaveData = t.TypeOf<typeof SaveData>;
@@ -365,8 +372,8 @@ export function extractSaveData(entity: Entity, systemId: string,
         cargo: [...entity.components.get(CargoComponent) ?? defaults.cargo],
         cronStates: [...entity.components.get(CronStatesComponent)
             ?? defaults.cronStates],
-        reputations: [...entity.components.get(LegalRecordsComponent)
-            ?? defaults.reputations],
+        legalRecords: [...entity.components.get(LegalRecordsComponent)
+            ?? defaults.legalRecords],
         combatRatings: [['kills',
             entity.components.get(CombatRatingComponent)?.kills ?? 0]],
         // Escorts are not on the entity; player_save.ts fills these two
@@ -448,10 +455,14 @@ export interface RestoredPlayerState {
  * plug-in set that redefines a rank. Without a lookup the set is left
  * empty, which is the pre-rank behaviour and what the bare-entity callers
  * (specs, tooling) already saw.
+ *
+ * Legal records: per system (`legalRecords`); an older save's per-govt
+ * records (`govtRecords`, parked by the v5 -> v6 migration) are seeded
+ * into the systems of `geography` (restoredLegalRecords).
  */
 export function restorePlayerState(entity: Entity, save: SaveData,
     resolver: ControlBitResolver = new ControlBitResolver(),
-    getRank?: RankLookup):
+    getRank?: RankLookup, geography?: LegalGeography):
     RestoredPlayerState {
     const restored: RestoredPlayerState = { parkedControlBits: [] };
     entity.components.set(CreditsComponent, { credits: save.credits });
@@ -526,7 +537,8 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     entity.components.set(CargoComponent, new Map(save.cargo));
     entity.components.set(CronStatesComponent, new Map(
         save.cronStates.map(([id, state]) => [id, { ...state }])));
-    entity.components.set(LegalRecordsComponent, new Map(save.reputations));
+    entity.components.set(LegalRecordsComponent,
+        restoredLegalRecords(save, geography));
     // Every save this build writes and every pre-v3 save it migrates has a
     // 'kills' entry, but the codec only requires `[string, number]` pairs,
     // so a v3 payload hand-edited (or written by another tool) to a list
@@ -549,6 +561,36 @@ export function restorePlayerState(entity: Entity, save: SaveData,
             })));
     }
     return restored;
+}
+
+/**
+ * The save's per-system legal records, plus — for a save written before
+ * records were per system (v5 and older, migrated: `govtRecords`) — each
+ * system seeded from its status govt's old per-govt record
+ * (systemRecordsFromGovtRecords), over the scenario's `geography`. An entry
+ * already in `legalRecords` wins. Without a geography the old records
+ * cannot be placed and are dropped, with a warning: only bare callers
+ * (specs, tooling) restore without one.
+ */
+function restoredLegalRecords(save: SaveData,
+    geography: LegalGeography | undefined): Map<string, number> {
+    const records = new Map(save.legalRecords);
+    const govtRecords = save.govtRecords ?? [];
+    if (govtRecords.length === 0) {
+        return records;
+    }
+    if (!geography) {
+        console.warn('An older save\'s per-government legal records could '
+            + 'not be placed in systems (no system data); dropped.');
+        return records;
+    }
+    for (const [systemId, record] of
+        systemRecordsFromGovtRecords(govtRecords, geography)) {
+        if (!records.has(systemId)) {
+            records.set(systemId, record);
+        }
+    }
+    return records;
 }
 
 /** The legacy `novaControlBits` field as numbers (garbage skipped). */

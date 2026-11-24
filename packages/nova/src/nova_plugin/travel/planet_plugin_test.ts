@@ -521,7 +521,6 @@ describe('AttemptLandingSystem landing window', () => {
  */
 describe('AttemptLandingSystem landing clearance', () => {
     const COLDHARBOUR = `planet ${SYNTHETIC.planets.coldharbour}`;
-    const COMPACT = SYNTHETIC.govts.compact;
 
     /** Puts the ship on Coldharbour, at a dead stop, with it selected. */
     function overColdharbour(world: World, ship: Entity) {
@@ -537,7 +536,7 @@ describe('AttemptLandingSystem landing clearance', () => {
             overColdharbour(world, ship);
             // A record below Coldharbour's MinStatus of 0.
             ship.components.set(LegalRecordsComponent,
-                new Map([[COMPACT, -1]]));
+                new Map([[SYSTEM, -1]]));
 
             const { lands, blocked } = pressLand(world);
 
@@ -557,7 +556,7 @@ describe('AttemptLandingSystem landing clearance', () => {
             const { world, ship } = await makeHarness();
             overColdharbour(world, ship);
             ship.components.set(LegalRecordsComponent,
-                new Map([[COMPACT, 0]]));
+                new Map([[SYSTEM, 0]]));
 
             const { lands, blocked } = pressLand(world);
 
@@ -569,7 +568,7 @@ describe('AttemptLandingSystem landing clearance', () => {
         const { world, ship } = await makeHarness();
         const stellar = overColdharbour(world, ship);
         ship.components.set(LegalRecordsComponent,
-            new Map([[COMPACT, -1000]]));
+            new Map([[SYSTEM, -1000]]));
         place(ship,
             new Position(stellar.position.x + 5000, stellar.position.y));
 
@@ -584,7 +583,7 @@ describe('AttemptLandingSystem landing clearance', () => {
     // stellar for — its gates are ordinary MinStatus -32767 rings.
     it('lets a criminal through the working hypergates, whose MinStatus '
         + '32767 is not a shut port', async () => {
-            const FEDERATION = 'nova:128';
+            const SOL = 'nova:130';
             const { world } = await makeHarness(getIntegrationGameData(),
                 'nova:130');
             // Sol's stellars include the collapsed HG-Aldebaran; find any
@@ -601,8 +600,9 @@ describe('AttemptLandingSystem landing clearance', () => {
             expect(stellarClearanceFor({
                 planetData: data,
                 gameData: (await getIntegrationGameData()) as never,
-                records: new Map([[FEDERATION, -30000]]),
+                records: new Map([[SOL, -30000]]),
                 planetId: gate[1].components.get(PlanetComponent)!.id,
+                systemId: SOL,
                 now: 0,
             }).cleared).toBeTrue();
         }, 30_000);
@@ -612,7 +612,6 @@ describe('planet bribes', () => {
     /** Coldharbour: MinStatus 0, and its govt's worlds take bribes. */
     const PORT = `planet ${SYNTHETIC.planets.coldharbour}`;
     const PORT_ID = SYNTHETIC.planets.coldharbour;
-    const COMPACT = SYNTHETIC.govts.compact;
 
     async function shutOutHarness() {
         const { world, ship } = await makeHarness();
@@ -620,7 +619,7 @@ describe('planet bribes', () => {
         ship.components.get(PlanetTargetComponent)!.target = stellar.uuid;
         place(ship, stellar.position);
         ship.components.set(LegalRecordsComponent,
-            new Map([[COMPACT, -1]]));
+            new Map([[SYSTEM, -1]]));
         ship.components.set(CreditsComponent, { credits: 10_000 });
         return { world, ship, stellar };
     }
@@ -666,7 +665,7 @@ describe('planet bribes', () => {
     it('will not sell clearance the player already has', async () => {
         const { world, ship } = await makeHarness();
         ship.components.set(CreditsComponent, { credits: 10_000 });
-        ship.components.set(LegalRecordsComponent, new Map([[COMPACT, 0]]));
+        ship.components.set(LegalRecordsComponent, new Map([[SYSTEM, 0]]));
 
         applyHail(world, undefined, { kind: 'bribe', target: PORT });
 

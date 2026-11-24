@@ -97,7 +97,8 @@ describe('the Legal Status row', () => {
     const geese = { ...getDefaultGovtData(), id: 'nova:144', crimeTol: 3 };
     const getGovt = (id: string) => [fed, geese].find(g => g.id === id);
     const status = (record: number, govt: { id: string }) =>
-        legalStatusInSystem(new Map([[govt.id, record]]), govt.id, getGovt);
+        legalStatusInSystem(new Map([['sys:here', record]]), 'sys:here',
+            govt.id, getGovt);
 
     it('prints exactly what the starmap prints for the same record', () => {
         for (const record of [-5000, -400, -30, -7, -6, -1, 0, 1, 25, 30,
@@ -111,8 +112,8 @@ describe('the Legal Status row', () => {
     });
 
     it('judges an independent system by gövt 128', () => {
-        expect(legalStatusInSystem(new Map([['nova:128', -13]]), null,
-            getGovt)).toBe('Minor Offender');
+        expect(legalStatusInSystem(new Map([['sys:here', -13]]), 'sys:here',
+            null, getGovt)).toBe('Minor Offender');
     });
 
     it('scales by the govt\'s own tolerance, as the map does', () => {

@@ -32,7 +32,8 @@ import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/missions/index.js';
 import {
-    initialRecordsFromGovtStatuses, CombatRatingComponent, LegalRecordsComponent,
+    initialRecordsFromGovtStatuses, CombatRatingComponent, LegalGeography,
+    LegalRecordsComponent, lawSystemOf,
 } from '../nova_plugin/reputation/index.js';
 import {
     getActiveSaveKey, loadSave, missingSaveContent, MissingSaveContentError,
@@ -231,23 +232,40 @@ export async function preparePlayerStart(runtime: ClientRuntime,
         console.warn('Failed to load the rank table:', e);
     }
     const getRank = (id: string) => gameData.data.Rank.getCached(id);
-    if (save) {
-        saves.controlBits.parked = restorePlayerState(ship, save,
-            controlBitResolver, getRank).parkedControlBits;
-    } else if (playerStart) {
-        // chär Govt1-4/Status1-4: the status applies to the govt and its
-        // allies, negated for its enemies (reputation.ts). The pilot-file
-        // importer extracts the same shape, so a future pilot import
-        // lands here too.
+    // Every sÿst and gövt, for the per-system legal records (ruling #380):
+    // an older save's per-govt records seed the systems each govt owns,
+    // and a chär's starting statuses land in the systems of its govts.
+    // Only needed for those two, so loaded only then (the browser has the
+    // systems warm from the preload bundle anyway).
+    const loadGeography = async () => {
         try {
-            const govtIds = [...ids.Govt].sort();
-            const allGovts = await Promise.all(govtIds.map(async id =>
-                [id, await gameData.data.Govt.get(id)] as const));
+            const [systems, govts] = await Promise.all([
+                Promise.all([...ids.System].sort().map(
+                    id => gameData.data.System.get(id))),
+                Promise.all([...ids.Govt].sort().map(async id =>
+                    [id, await gameData.data.Govt.get(id)] as const)),
+            ]);
+            return new LegalGeography(systems.map(lawSystemOf), govts);
+        } catch (e) {
+            console.warn('Failed to load the systems for legal records:', e);
+            return undefined;
+        }
+    };
+    if (save) {
+        const geography = (save.govtRecords?.length ?? 0) > 0
+            ? await loadGeography() : undefined;
+        saves.controlBits.parked = restorePlayerState(ship, save,
+            controlBitResolver, getRank, geography).parkedControlBits;
+    } else if (playerStart) {
+        // chär Govt1-4/Status1-4: the status applies in the systems of the
+        // govt and its allies, negated in its enemies' (system_records.ts).
+        // The pilot-file importer extracts the same shape, so a future
+        // pilot import lands here too.
+        const geography = await loadGeography();
+        if (geography) {
             ship.components.set(LegalRecordsComponent,
                 initialRecordsFromGovtStatuses(
-                    playerStart.govtStatuses, allGovts));
-        } catch (e) {
-            console.warn('Failed to set starting legal records:', e);
+                    playerStart.govtStatuses, geography));
         }
         ship.components.set(CombatRatingComponent,
             { kills: Math.max(0, playerStart.combatRating) });

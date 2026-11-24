@@ -42,9 +42,9 @@ export const DebugCheatSystem = new System({
         if (controls.get('debugGiveCredits') === 'start' && credits) {
             credits.credits += DEBUG_CREDITS_GRANT;
         }
-        // "Clear Legal Record": drop every stored per-govt record so each
-        // govt reads as its neutral default (InitialRec, 0 for stock
-        // govts) again — a previously hostile record (record < -CrimeTol)
+        // "Clear Legal Record": drop every stored per-system record so each
+        // system reads as its neutral default (its status govt's
+        // InitialRec, 0 for most stock govts) again — a previously hostile record (record < -CrimeTol)
         // returns to neutral. Mutated in place like applyCrime's set().
         if (controls.get('debugClearRecord') === 'start' && records) {
             records.clear();

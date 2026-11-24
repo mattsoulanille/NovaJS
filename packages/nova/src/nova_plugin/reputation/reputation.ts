@@ -5,37 +5,33 @@ import { GovtData } from 'novadatainterface/govt_data';
  * Legal records and combat ratings: the pure math (EVN Bible)
  * ============================================================================
  *
- * LEGAL RECORD (Bible, gövt section + Appendix II): an integer per
- * government. 0 is neutral, positive is good, negative is "evilness".
- * NovaJS keys records by gövt id; the original game keys them by
- * SYSTEM, seeded from the system owner's InitialRec — the per-govt
- * model is the sanctioned simplification (one record per polity
- * instead of per star), and it is what the save schema reserved.
+ * LEGAL RECORD (Bible, gövt section + Appendix II): an integer PER SYSTEM.
+ * 0 is neutral, positive is good, negative is "evilness". NovaJS keys a
+ * player's records by sÿst global id, as the original does (its pilot file
+ * holds one record per system and none per govt: reference "A14 ... wave
+ * 13", finding 4; ruling #380, Matthew 2026-11-24, which ended ruling
+ * #376's one-record-per-govt simplification). An absent entry reads as the
+ * InitialRec of the system's STATUS govt (statusGovtOf: its owner, or gövt
+ * 128 when independent), the Bible's "initial legal record in systems
+ * controlled by this govt", so a fresh pilot needs no initialization pass.
  *
- * A govt whose record is absent from the map reads as its InitialRec
- * (the Bible's starting record), so fresh pilots need no per-govt
- * initialization pass.
+ * CRIME (Bible, gövt): destroying a ship costs KillPenalty, disabling it
+ * DisabPenalty, boarding it BoardPenalty. Measured, a KILL costs
+ * DisabPenalty + KillPenalty, also when one hit destroys the ship without a
+ * visible disable, and the Disab only once when the same player disabled it
+ * first (reference "A14 with system traffic as the victims, wave 12";
+ * reputation_plugin.ts's KillCreditSystem). Whose record, and how far it
+ * reaches, is system_records.ts's: the crime's system and every system
+ * linked to it, scaled 0.65 per jump, each by its own owner's view of the
+ * victim — a penalty when the victim is that owner's or an ally's ship, the
+ * "Good Citizen" reward of half the owner's own penalties otherwise.
  *
- * CRIME (Bible, gövt): destroying a govt's ship adds KillPenalty
- * evilness with that govt, disabling adds DisabPenalty, boarding adds
- * BoardPenalty (smuggling: SmugPenalty — not wired yet). Measured, a
- * KILL costs DisabPenalty + KillPenalty, also when one hit destroys the
- * ship without a visible disable, and the Disab only once when the same
- * player disabled it first (reference "A14 with system traffic as the
- * victims, wave 12"; reputation_plugin.ts's KillCreditSystem).
- *
- * NO PROPAGATION. The Bible says allies "communicate your actions" and
- * enemies approve, but the original, measured, does not spread a crime
- * at all: one kill changed ONLY the current system's record (-150 =
- * DisabPenalty 50 + KillPenalty 100), leaving the owner's nine other
- * systems and the ally's home system at 0 (docs/reference_experiments.md
- * "A14 wave 5"). Ruling #376 (Matthew, 2026-11-23) applied that: the
- * crime is charged to the victim's govt alone — which, with per-govt
- * records, is "the record in the systems it owns" — and its allies and
- * enemies are untouched (this superseded #320 item 1, the size of the
- * propagated fraction, by removing it). The allies still CARE: they
- * enforce the owner's record in its systems (local_law.ts), which is how
- * the original makes an ally hostile to a criminal.
+ * The Bible's "allies communicate your actions ... enemies approve" is NOT
+ * a govt-wide propagation on the original: an ally's or enemy's home system
+ * changes only through the per-jump spread, by its own owner's view
+ * (reference "A14 spread, wave 14", finding 3), and an unlinked system of
+ * the same owner not at all (wave 5). Allies still CARE: they enforce the
+ * record of the system they are in (local_law.ts).
  *
  * Most stock gövts DO set their penalty fields (57 of the 68 stock
  * govts carry a non-zero KillPenalty — the Federation's is 5, the
@@ -63,7 +59,8 @@ import { GovtData } from 'novadatainterface/govt_data';
  * exactly Appendix I's kill-point tiers).
  */
 
-/** Per-player legal records: gövt global id (e.g. 'nova:128') -> record. */
+/** Per-player legal records: sÿst global id (e.g. 'nova:130') -> record
+ * (system_records.ts). */
 export type LegalRecords = Map<string, number>;
 
 /**
@@ -82,24 +79,27 @@ export const DEFAULT_BOARD_PENALTY = 3;
 const RECORD_MIN = -32767;
 const RECORD_MAX = 32767;
 
-function clampRecord(value: number): number {
+export function clampRecord(value: number): number {
     return Math.max(RECORD_MIN, Math.min(RECORD_MAX, Math.trunc(value)));
 }
 
 /**
- * The player's record with a govt: the stored value, else the govt's
- * InitialRec, else 0 for an unknown govt.
+ * The player's record in a system: the stored value, else the InitialRec of
+ * the system's status govt `statusGovt` (statusGovtOf), else 0 when that
+ * govt is unknown.
  */
-export function recordWith(records: ReadonlyMap<string, number>,
-    govtId: string, govtData?: GovtData): number {
-    return records.get(govtId) ?? govtData?.initialRecord ?? 0;
+export function recordIn(records: ReadonlyMap<string, number>,
+    systemId: string | undefined, statusGovt?: GovtData): number {
+    return (systemId === undefined ? undefined : records.get(systemId))
+        ?? statusGovt?.initialRecord ?? 0;
 }
 
-/** Adds `delta` to the record with `govt`, materializing the entry. */
-export function addRecord(records: LegalRecords, govtId: string,
-    govtData: GovtData | undefined, delta: number): void {
-    records.set(govtId,
-        clampRecord(recordWith(records, govtId, govtData) + delta));
+/** Adds `delta` to the record in a system, materializing the entry (and
+ * clamping it to the pilot file's int16 range). */
+export function addRecordIn(records: LegalRecords, systemId: string,
+    statusGovt: GovtData | undefined, delta: number): void {
+    records.set(systemId,
+        clampRecord(recordIn(records, systemId, statusGovt) + delta));
 }
 
 function intersects(a: readonly number[], b: readonly number[]): boolean {
@@ -137,79 +137,12 @@ export function crimePenalty(govt: GovtData, crime: Crime): number {
 }
 
 /**
- * Applies a crime against `victimGovt` to `records`: the full penalty
- * with the victim's govt, and nothing with any other govt (reference
- * "A14 wave 5", ruling #376; see the module comment). A negative
- * penalty raises the record (crimePenalty).
- *
- * TODO(needs Matthew's ruling): reference "A14 with system traffic as the
- * victims, wave 12" found that killing a ship whose govt is NEITHER the
- * system's owner NOR its ally RAISES the system's record by half the
- * OWNER's Disab + Kill (each halved and truncated), instead of costing
- * the victim's govt anything. How that maps onto NovaJS's per-govt
- * records (ruling #376) is Matthew's call; until then every kill charges
- * the victim's govt, wherever it happens.
- */
-export function applyCrime(records: LegalRecords, victimGovt: GovtData,
-    crime: Crime): void {
-    const penalty = crimePenalty(victimGovt, crime);
-    if (penalty === 0) {
-        return;
-    }
-    addRecord(records, victimGovt.id, victimGovt, -penalty);
-}
-
-/**
  * Whether a govt with `crimeTol` treats a player whose record with it
  * is `record` as a criminal to attack (Bible: warships attack once
  * accumulated evilness exceeds the tolerance).
  */
 export function recordHostile(record: number, crimeTol: number): boolean {
     return record < -Math.max(0, crimeTol);
-}
-
-/**
- * Cleans (raises to at least 0) the record with one govt, and per
- * `scope` also with its allies or classmates. Used by the mïsn PayVal
- * -10xxx/-20xxx/-30xxx encodings and oütf ModType 21. Never lowers a
- * good record. Scope 'all' cleans every govt (ModType 21 ModVal -1).
- */
-export function cleanRecords(records: LegalRecords,
-    scope: 'govt' | 'allies' | 'classmates' | 'all',
-    govtData: GovtData | undefined,
-    allGovts: Iterable<readonly [string, GovtData]>): void {
-    const clean = (id: string, data: GovtData | undefined) => {
-        const current = recordWith(records, id, data);
-        if (current < 0) {
-            records.set(id, 0);
-        }
-    };
-    if (scope === 'all') {
-        for (const [id, govt] of allGovts) {
-            clean(id, govt);
-        }
-        return;
-    }
-    if (!govtData) {
-        return;
-    }
-    clean(govtData.id, govtData);
-    if (scope === 'govt') {
-        return;
-    }
-    for (const [id, govt] of allGovts) {
-        if (id === govtData.id) {
-            continue;
-        }
-        const related = scope === 'allies'
-            // The named govt's allies: govts whose classes intersect
-            // its ally class numbers.
-            ? intersects(govtData.allies, govt.classes)
-            : intersects(govtData.classes, govt.classes);
-        if (related) {
-            clean(id, govt);
-        }
-    }
 }
 
 // --- Mission availability (mïsn AvailRecord / AvailRating) ---
@@ -290,23 +223,23 @@ export function statusGovtOf(systemGovt: string | null | undefined): string {
 /**
  * The "Legal Status:" line for a system — the ONE reading shared by the
  * starmap's properties column and the player-info ('p') dialog, so the
- * two can never disagree (#119): the player's record with the system's
- * status government (its own, or gövt 128 for an independent one),
- * against that government's CrimeTol. An absent record reads as the
- * govt's InitialRec, exactly as the simulation reads it (recordWith) —
- * a fresh pilot in a nova:147 (InitialRec -5) system is not "No Record"
- * on one screen and an offender on the other. Undefined when the status
- * govt is unknown to `getGovt`, which is the caller's "no line" case.
+ * two can never disagree (#119): the player's record IN THAT SYSTEM
+ * (`systemId`, whose sÿst govt is `systemGovt`), against the CrimeTol of
+ * its status government (its owner, or gövt 128 for an independent one).
+ * An absent record reads as that govt's InitialRec, exactly as the
+ * simulation reads it (recordIn) — a fresh pilot in a nova:147 (InitialRec
+ * -5) system is not "No Record" on one screen and an offender on the
+ * other. Undefined when the status govt is unknown to `getGovt`, which is
+ * the caller's "no line" case.
  */
 export function legalStatusInSystem(records: ReadonlyMap<string, number>,
-    systemGovt: string | null | undefined,
+    systemId: string, systemGovt: string | null | undefined,
     getGovt: (id: string) => GovtData | undefined): string | undefined {
-    const govtId = statusGovtOf(systemGovt);
-    const govt = getGovt(govtId);
+    const govt = getGovt(statusGovtOf(systemGovt));
     if (!govt) {
         return undefined;
     }
-    return legalStatusName(recordWith(records, govtId, govt), govt.crimeTol);
+    return legalStatusName(recordIn(records, systemId, govt), govt.crimeTol);
 }
 
 /**
@@ -503,78 +436,3 @@ export function govtRelation(a: GovtData, b: GovtData):
     return 'neutral';
 }
 
-/**
- * Applies a COMPLETED mission's CompReward R, which on the original is
- * govt-wide (reference "A14 spread, wave 14", finding 5): +R with the
- * CompGovt; +trunc(R / 2) with every govt allied to it (govtRelation);
- * -trunc(R / 2) with every govt that is its enemy, or that is
- * xenophobic (gövt Flags 0x0001: Pirate, Houseless Warriors) and not its
- * ally. Unlike a crime it does not spread by jumps: every system of a
- * govt took the same change however far away, which is exactly a
- * per-govt record change.
- *
- * Only completion spreads. The 0x0040 abort's -5R was measured to hit
- * the CompGovt alone (finding 6); a failure's -R/2 was not measured and
- * stays with the CompGovt as the Bible words it ("that govt will take
- * it personally"), and a TimeLimit or scan failure costs nothing at all
- * (compRewardDelta: "A14 / contraband wave 15" finding 2, "S1 and S2
- * wave 12"). Truncating the half (also for a negative R, which seven
- * stock missions use) is the reference doc's proposal: R = 10 and
- * 1000 measured +5 / +500, which no rounding rule tells apart.
- *
- * Without `compGovt` data (a number no loaded set defines) only the
- * CompGovt's own record changes, as before.
- */
-export function applyCompletionReward(records: LegalRecords,
-    compGovtId: string, compGovt: GovtData | undefined, reward: number,
-    allGovts: Iterable<readonly [string, GovtData]>): void {
-    addRecord(records, compGovtId, compGovt, reward);
-    const half = Math.trunc(reward / 2);
-    if (!compGovt || half === 0) {
-        return;
-    }
-    for (const [id, govt] of allGovts) {
-        if (id === compGovtId || id === compGovt.id) {
-            continue;
-        }
-        const relation = govtRelation(compGovt, govt);
-        if (relation === 'ally') {
-            addRecord(records, id, govt, half);
-        } else if (relation === 'enemy' || govt.flags.xenophobic) {
-            addRecord(records, id, govt, -half);
-        }
-    }
-}
-
-// --- chär starting statuses ---
-
-/**
- * Builds a fresh pilot's records from chär Govt1-4/Status1-4 (Bible:
- * the status applies to the govt and its allies, and the NEGATIVE of
- * the status to its enemies).
- */
-export function initialRecordsFromGovtStatuses(
-    statuses: readonly { govt: string, status: number }[],
-    allGovts: Iterable<readonly [string, GovtData]>): LegalRecords {
-    const records: LegalRecords = new Map();
-    const govts = [...allGovts];
-    for (const { govt: govtId, status } of statuses) {
-        const named = govts.find(([id]) => id === govtId)?.[1];
-        records.set(govtId, clampRecord(status));
-        if (!named) {
-            continue;
-        }
-        for (const [id, other] of govts) {
-            if (id === govtId) {
-                continue;
-            }
-            const relation = govtRelation(named, other);
-            if (relation === 'ally') {
-                records.set(id, clampRecord(status));
-            } else if (relation === 'enemy') {
-                records.set(id, clampRecord(-status));
-            }
-        }
-    }
-    return records;
-}

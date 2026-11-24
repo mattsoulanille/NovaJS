@@ -46,7 +46,7 @@ import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
-import { GovtComponent } from '../core/index.js';
+import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
@@ -58,7 +58,7 @@ import {
 } from '../player/index.js';
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecords } from '../reputation/index.js';
-import { chargeCrime, GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
+import { chargeCrime, GovtsResource, LegalGeography, LegalGeographyResource, LegalRecordsComponent } from '../reputation/index.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from '../player/index.js';
@@ -204,16 +204,28 @@ function boardingGovtLookup(govts: ReadonlyMap<string, GovtData> | undefined,
     return govtId => govts?.get(govtId) ?? gameData.data.Govt.getCached(govtId);
 }
 
+/** Where a boarding happens, for its record change (chargeCrime). */
+interface BoardCrimeScene {
+    gameData: SimulationGameDataInterface;
+    govts: ReadonlyMap<string, GovtData> | undefined;
+    geography: LegalGeography | undefined;
+    systemId: string | undefined;
+}
+
 /**
  * Charges the BoardPenalty crime ("board") against the victim's
- * government. Shared by the plunder session's once-per-session charge and
- * by the bay-capture shortcut, so a capture carries exactly the same legal
- * consequence however it happened. A victim with no government (your own
- * escorts, and anything already stripped of its GovtComponent) is a no-op.
+ * government, in the system the boarding happens in and, by the spread,
+ * the systems linked to it (a board of a ship the owner does not care for
+ * is the A14 reward instead: +50 for a board in Kit Police Range,
+ * reference "P1 wave 13" run 2). Shared by the plunder session's
+ * once-per-session charge and by the bay-capture shortcut, so a capture
+ * carries exactly the same legal consequence however it happened. A
+ * victim with no government (your own escorts, and anything already
+ * stripped of its GovtComponent) is a no-op.
  */
 function applyBoardCrime(boarder: Entity, records: LegalRecords | undefined,
-    govtId: string | undefined, gameData: SimulationGameDataInterface,
-    govts: ReadonlyMap<string, GovtData> | undefined): void {
+    govtId: string | undefined, scene: BoardCrimeScene): void {
+    const { gameData, govts } = scene;
     if (!records || !govtId) {
         return;
     }
@@ -222,7 +234,8 @@ function applyBoardCrime(boarder: Entity, records: LegalRecords | undefined,
         // Records AND the ränk 0x0040 revocation ("any crime against the
         // affiliated government"), through the one charge the kill and
         // disable credits use (reputation_plugin.ts).
-        chargeCrime(boarder, govtData, 'board', gameData, govts);
+        chargeCrime(boarder, govtData, ['board'], scene.systemId,
+            scene.geography, gameData, govts);
     }
 }
 
@@ -453,10 +466,11 @@ const BoardingGateSystem = new System({
         Optional(OutfitsStateComponent), Optional(WeaponsStateComponent),
         Optional(LegalRecordsComponent), Optional(GovtsResource),
         GetEntity, UUID, Entities, SimulationGameDataResource, RandomResource,
-        Emit] as const,
+        Emit, Optional(LegalGeographyResource),
+        Optional(SystemIdResource)] as const,
     step(controls, movement, shipData, target, boarding, boarderOutfits,
         boarderWeapons, records, govts, entity, uuid, entities, gameData,
-        random, emit) {
+        random, emit, geography, systemId) {
         if (controls.get('board') !== 'start') {
             return;
         }
@@ -564,7 +578,8 @@ const BoardingGateSystem = new System({
         const targetGovtId = targetEntity!.components.get(GovtComponent)?.id;
         if (captureBay !== undefined && stowCaptureIntoBay(
             targetUuid!, captureBay, entity, entities, gameData)) {
-            applyBoardCrime(entity, records, targetGovtId, gameData, govts);
+            applyBoardCrime(entity, records, targetGovtId,
+                { gameData, govts, geography, systemId });
             // Same memory sweep the plunder-dialog capture runs: the hull
             // is gone from the world, so nothing can shoot it any more,
             // but no NPC is left carrying an aggressor slot or a target
@@ -1252,10 +1267,11 @@ const BoardingActionSystem = new System({
         Optional(LegalRecordsComponent), Optional(OutfitsStateComponent),
         Optional(WeaponsStateComponent), GetEntity, UUID, Entities,
         RandomResource, Optional(GovtsResource), SimulationGameDataResource,
-        Emit] as const,
+        Emit, Optional(LegalGeographyResource),
+        Optional(SystemIdResource)] as const,
     step(controls, boarding, shipData, cargo, physics, credits, fuel, records,
         boarderOutfits, boarderWeapons, entity, uuid, entities, random, govts,
-        gameData, emit) {
+        gameData, emit, geography, systemId) {
         const target = entities.get(boarding.target);
 
         // Charges the BoardPenalty crime once per session, the first
@@ -1266,7 +1282,8 @@ const BoardingActionSystem = new System({
             }
             boarding.crimeApplied = true;
             applyBoardCrime(entity, records,
-                target?.components.get(GovtComponent)?.id, gameData, govts);
+                target?.components.get(GovtComponent)?.id,
+                { gameData, govts, geography, systemId });
         };
 
         // The boarding produced a MISSION OFFER and nothing else (përs

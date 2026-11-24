@@ -130,9 +130,9 @@ describe('the docked starmap\'s control bits', () => {
     it('judges Legal Status by the records the landed caller passes',
         async () => {
             const starmap = await dockedMap(
-                () => new Map([['nova:128', 30]]));
+                () => new Map([[KANIA, 30]]));
             starmap.openOptions = {
-                legalRecords: new Map([['nova:128', -30]]),
+                legalRecords: new Map([[KANIA, -30]]),
             };
             const shown = starmap.show([]);
             await new Promise(resolve => setTimeout(resolve, 0));
@@ -146,7 +146,7 @@ describe('the docked starmap\'s control bits', () => {
     it('judges Legal Status by the plugin\'s records when none are passed',
         async () => {
             const starmap = await dockedMap(
-                () => new Map([['nova:128', 30]]));
+                () => new Map([[KANIA, 30]]));
             const shown = starmap.show([]);
             await new Promise(resolve => setTimeout(resolve, 0));
             const lines = propertyLines(starmap);
@@ -164,7 +164,7 @@ describe('the docked starmap\'s control bits', () => {
             let armed = false;
             const starmap = await dockedMap(() => {
                 if (armed) throw new Error('records unavailable');
-                return new Map([['nova:128', 30]]);
+                return new Map([[KANIA, 30]]);
             });
             const shown = starmap.show([]);
             await new Promise(resolve => setTimeout(resolve, 0));

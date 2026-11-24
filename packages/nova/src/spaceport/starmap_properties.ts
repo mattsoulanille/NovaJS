@@ -124,13 +124,16 @@ export function systemProperties(system: SystemData | undefined,
     addLine(PropSlot.Government, 'Government:',
         [govt ? displayName(govt.name) : 'Independent']);
 
-    // The player's standing with the system's status government —
+    // The player's record IN THE SYSTEM SHOWN (records are per system,
+    // ruling #380), against the CrimeTol of its status government —
     // gövt 128's for an independent system (Bible, Appendix II) — read
     // through the same function as the 'p' dialog, InitialRec fallback
-    // included, so the two screens never disagree about one record.
-    // Only a status govt this universe cannot resolve leaves the slot
-    // empty.
-    const legalStatus = legalStatusInSystem(legalRecords,
+    // included, so the two screens never disagree about one record. The
+    // original's map was measured for the CURRENT system only (reference
+    // "A14 ... wave 13"); a selected destination shows its own record, the
+    // natural reading of a per-system record (a guess). Only a status govt
+    // this universe cannot resolve leaves the slot empty.
+    const legalStatus = legalStatusInSystem(legalRecords, system.id,
         system.govt, id => universe.getGovt(id));
     if (legalStatus !== undefined) {
         addLine(PropSlot.LegalStatus, 'Legal Status:', [legalStatus]);

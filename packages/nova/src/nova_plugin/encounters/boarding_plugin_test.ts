@@ -1,4 +1,5 @@
 import 'jasmine';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
@@ -1922,6 +1923,12 @@ describe('bay-capture shortcut', () => {
         gameData.data.Govt.map.set(GOVT, {
             ...getDefaultGovtData(), id: GOVT,
         });
+        // The victim's govt owns the system, so the board is a crime here
+        // (records are per system, ruling #380: in an unowned system a
+        // board of the default 3 would fall to a zero quarter).
+        gameData.data.System.map.set('test:system', {
+            ...getDefaultSystemData(), id: 'test:system', govt: GOVT,
+        });
         for (const id of [FIGHTER_SHIP, OTHER_SHIP]) {
             gameData.data.Ship.map.set(id, {
                 ...getDefaultShipData(), id, crew: 4,
@@ -2199,8 +2206,8 @@ describe('bay-capture shortcut', () => {
     it('charges the same board crime a plunder capture would', async () => {
         const { world, boarder } = await bayWorld();
         press(world, BOARDER, 'board');
-        expect(boarder.components.get(LegalRecordsComponent)!.get(GOVT))
-            .toBeLessThan(0);
+        expect(boarder.components.get(LegalRecordsComponent)!
+            .get('test:system')).toBeLessThan(0);
     });
 
     it('draws nothing from the seeded PRNG', async () => {

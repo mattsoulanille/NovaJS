@@ -520,6 +520,25 @@ export const STATE_HASH_INTERVAL = 60;
 //    input kind or message kind changes. The derived wire schema
 //    fingerprint changes (90e66780d5561a8d -> e730831c2453dc18), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): legal records PER SYSTEM (ruling #380,
+//    reputation/system_records.ts). The player's record map is keyed by
+//    sÿst id instead of gövt id, and its component is registered under a
+//    new name, 'SystemLegalRecords' (was 'LegalRecords'; the codec, a map
+//    of string to number, is unchanged), so a snapshot or delta of the old
+//    per-govt map can never be read as the new one. The set-string
+//    effects' `recordsDelta` (acceptMission / refuseMission /
+//    abortMission) carries sÿst ids now, a delta over the record as read
+//    (an absent entry is the system's InitialRec on both sides). Sim-rule
+//    changes alongside: a kill, disable or boarding charges the crime's
+//    system and every system linked to it, 0.65 per jump, each by its own
+//    owner's view (the #379 reward included); hostility, landing clearance
+//    and the contraband scan read the current system's record. makeSystem
+//    stages every sÿst into the new LegalGeographyResource for it. No
+//    input kind or message kind changes. The derived wire schema
+//    fingerprint changes (90e66780d5561a8d -> 388761e4c9993a00 on its own; e730831c2453dc18 ->
+//    COMBINEDFP on top of the ship-names note above), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

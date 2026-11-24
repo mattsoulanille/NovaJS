@@ -4,7 +4,7 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { displayName } from '../core/index.js';
 import { ActiveMission, Credits, Missions } from '../player/index.js';
 import {
-    addRecord, alliedWithOwner, enforcesHere, LegalRecords, LocalLaw,
+    addRecordIn, alliedWithOwner, enforcesHere, LegalRecords, LocalLaw,
 } from '../reputation/index.js';
 import { Cargo, OutfitsState } from '../ship/index.js';
 
@@ -268,9 +268,10 @@ export function smugglingPenalty(govt: GovtData | undefined): number {
  *    the OWNER's SmugPenalty, truncated (owner SmugPenalty 70: +35; owner
  *    SmugPenalty 0: no change).
  * Smuggling does not spread to linked systems (the nosy scanner's own
- * system, linked to the one it scanned in, did not move), so on NovaJS's
- * per-govt records it is ONE change, to the system's status govt
- * (law.recordGovtId), as the doc proposes. When an ALLY of the owner
+ * system, linked to the one it scanned in, did not move), so it is ONE
+ * change, to the record of the system the scan happened in (law.systemId;
+ * records are per system, ruling #380), unlike a crime's
+ * (system_records.ts's applyCrime). When an ALLY of the owner
  * scans, the ally's own SmugPenalty is charged (MEASURED, wave 15,
  * `w15_scan_ally`: -50 where the owner's is 70). GUESS: in an independent
  * system there is no owner, so a nosy scanner's detection changes no
@@ -302,10 +303,9 @@ export interface ContrabandScanResult {
  * Applies a scan's findings to the scanned pilot's synced state, in
  * place: flagged missions fail, a detection (an outfit, jünk or a plain
  * mission's cargo) costs the govt's ScanFine once, and an outfit or jünk
- * also moves the record of the system the scan happened in by
- * smugglingRecordChange (law.recordGovtId: the system's status govt, the
- * per-govt stand-in for the original's per-system record, as
- * local_law.ts reads it). Pure apart from those mutations; no PRNG.
+ * also moves the record of the system the scan happened in (law.systemId,
+ * and only that one: smuggling does not spread) by smugglingRecordChange.
+ * Pure apart from those mutations; no PRNG.
  */
 export function applyContrabandScan(findings: ContrabandFindings,
     scanner: GovtData, law: LocalLaw, pilot: {
@@ -326,8 +326,8 @@ export function applyContrabandScan(findings: ContrabandFindings,
         }
         const change = smugglingRecordChange(scanner, law);
         if ((findings.outfit || findings.junk) && pilot.records
-            && change !== 0) {
-            addRecord(pilot.records, law.recordGovtId, law.recordGovt,
+            && change !== 0 && law.systemId !== undefined) {
+            addRecordIn(pilot.records, law.systemId, law.recordGovt,
                 change);
         }
     }

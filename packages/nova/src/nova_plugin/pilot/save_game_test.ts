@@ -124,7 +124,8 @@ describe('save_game schema', () => {
         const withReserved: SaveData = {
             ...SAMPLE,
             credits: 12345,
-            reputations: [['nova:gov1', -50]],
+            legalRecords: [['nova:sys1', -50]],
+            govtRecords: [['nova:gov1', -5]],
         };
         const decoded = decodeSave(encodeSave(withReserved));
         expect(decoded).toEqual(withReserved);

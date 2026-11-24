@@ -14,10 +14,10 @@
  *   ship's, which becomes the save's `shipName`), so the file's name
  *   stands in.
  *
- *   Legal status: the original keeps it PER SYSTEM; NovaJS keeps records
- *   PER GOVERNMENT (reputation.ts). Each system's status is attributed to
- *   that system's gövt, and a gövt with several systems keeps the value of
- *   largest magnitude — a rough carry-over, noted on import.
+ *   Legal status: kept PER SYSTEM by both (ruling #380), so each system's
+ *   value maps straight across to the same sÿst id. A value equal to what
+ *   an absent entry would read anyway (the system's status govt's
+ *   InitialRec) is left out; systems this data set lacks are skipped.
  *
  *   Missions: an active slot maps onto ActiveMission when it has no
  *   special ships (a special-ship goal's runtime state — the mission ship
@@ -88,6 +88,12 @@ export interface OriginalPilotContext {
         string | undefined;
     /** A system's gövt id, or null/undefined for independent/unknown. */
     govtOfSystem(systemId: string): string | null | undefined;
+    /**
+     * What an ABSENT record entry reads as in a known system: its status
+     * govt's InitialRec (reputation/system_records.ts). Optional; without
+     * it every non-zero value is imported and zeroes are left out.
+     */
+    initialRecordIn?(systemId: string): number;
     /** Where a pilot goes when its last stellar is unknown. */
     fallbackSystem: string;
 }
@@ -228,27 +234,19 @@ export function convertOriginalPilot(pilot: PilotData,
         }
     });
 
-    // Legal status per system -> record per gövt (largest magnitude wins).
+    // Legal status per system -> record per system, straight across (both
+    // keep it per sÿst; ruling #380). Unknown systems are skipped, and a
+    // value an absent entry would read as anyway is not materialized.
     const records = new Map<string, number>();
-    let attributed = 0;
     player.legalStatus.forEach((status, i) => {
-        if (status === 0) {
+        const systemId = globalId(i);
+        if (ctx.govtOfSystem(systemId) === undefined) {
             return;
         }
-        const govt = ctx.govtOfSystem(globalId(i));
-        if (!govt) {
-            return;
-        }
-        attributed++;
-        const current = records.get(govt);
-        if (current === undefined || Math.abs(status) > Math.abs(current)) {
-            records.set(govt, status);
+        if (status !== (ctx.initialRecordIn?.(systemId) ?? 0)) {
+            records.set(systemId, status);
         }
     });
-    if (attributed > 0) {
-        notes.push('Legal status was per system in the original; each '
-            + 'government keeps its strongest value.');
-    }
 
     // Missions without special ships.
     const missions: [string, ActiveMission][] = [];
@@ -318,7 +316,7 @@ export function convertOriginalPilot(pilot: PilotData,
         novaControlBits,
         ranks: ranks.sort(),
         cargo,
-        reputations: [...records],
+        legalRecords: [...records],
         combatRatings: [['kills', kills]],
         discovery,
     };

@@ -518,7 +518,7 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
     it('a criminal record: the trader is yellow, the warship and the '
         + 'interceptor red', () => {
             const { drawRadar, world, player } =
-                radarWorld(new Map([['test:370', -500]]));
+                radarWorld(new Map([[OWN_370_SYSTEM, -500]]));
             addShip(world, 'trader', 'test:370', 1);
             addShip(world, 'warship', 'test:370', 3);
             addShip(world, 'interceptor', 'test:370', 4);

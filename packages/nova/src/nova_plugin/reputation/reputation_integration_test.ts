@@ -1,7 +1,6 @@
 import 'jasmine';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import {
-    applyCrime,
     availRatingOk,
     availRecordOk,
     crimePenalty,
@@ -17,6 +16,7 @@ import {
     LegalRecords,
     recordHostile,
 } from './reputation.js';
+import { applyCrime, lawSystemOf, LegalGeography } from './system_records.js';
 import { GovtData } from 'novadatainterface/govt_data';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
@@ -30,8 +30,8 @@ import { ControlBitsComponent } from '../ncb/index.js';
 
 /**
  * Reputation against the REAL Nova game data: pins the stock govts'
- * penalty landscape (a crime charges the victim's govt alone, ruling
- * #376), and real missions' AvailRecord/AvailRating/PayVal
+ * penalty landscape and how a crime lands on the stock map's per-system
+ * records (ruling #380), and real missions' AvailRecord/AvailRating/PayVal
  * encodings.
  *
  * NOTE: these tests parse base "Nova Files" only. An earlier version
@@ -50,6 +50,21 @@ describe('reputation against real Nova data', () => {
         return Promise.all(ids.map(async id =>
             [id, await gameData.data.Govt.get(id)] as const));
     }
+
+    /** Every stock sÿst and gövt, as the simulation stages them. */
+    async function stockGeography(): Promise<LegalGeography> {
+        const gameData = await getIntegrationGameData();
+        const ids = [...(await gameData.ids).System]
+            .filter(id => id.startsWith('nova:')).sort();
+        const systems = await Promise.all(ids.map(
+            id => gameData.data.System.get(id)));
+        return new LegalGeography(systems.map(lawSystemOf), await allGovts());
+    }
+
+    /** Stock sÿst nova:128 Kania (Federation): linked to Tichel (nova:129)
+     * and Altair (nova:135), both Federation, and to three independent
+     * systems (Polaris nova:199, NGC-2051 nova:200, NGC-1743 nova:202). */
+    const KANIA = 'nova:128';
 
     it('pins the stock Federation gövt penalty fields', async () => {
         const gameData = await getIntegrationGameData();
@@ -146,72 +161,105 @@ describe('reputation against real Nova data', () => {
             expect(fed.initialRecord).toBe(0);
             const getGovt = (id: string) => gameData.data.Govt.getCached(id);
             const fresh = new Map<string, number>();
-            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
-                .toBe(legalStatusName(-5, rebels.crimeTol));
-            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
-                .not.toBe(LEGAL_STATUS_NO_RECORD);
-            // An independent system is judged by the Federation, with
-            // whom a fresh pilot really has no record...
-            expect(legalStatusInSystem(fresh, null, getGovt))
+            expect(legalStatusInSystem(fresh, 'sys:rebel', 'nova:147',
+                getGovt)).toBe(legalStatusName(-5, rebels.crimeTol));
+            expect(legalStatusInSystem(fresh, 'sys:rebel', 'nova:147',
+                getGovt)).not.toBe(LEGAL_STATUS_NO_RECORD);
+            // An independent system is judged by the Federation, whose
+            // InitialRec gives a fresh pilot really no record...
+            expect(legalStatusInSystem(fresh, 'sys:indep', null, getGovt))
                 .toBe(LEGAL_STATUS_NO_RECORD);
             // ...and by the Federation's tolerance once they have one.
-            expect(legalStatusInSystem(new Map([['nova:128', -15]]), null,
-                getGovt)).toBe('Minor Offender');
+            expect(legalStatusInSystem(new Map([['sys:indep', -15]]),
+                'sys:indep', null, getGovt)).toBe('Minor Offender');
         });
 
-    it('killing a Federation ship charges the Federation alone (A14 wave 5)',
+    it('a Federation kill in Kania costs -5 there and -3 in the Federation '
+        + 'systems one jump out, nothing in the independent ones (A14 spread)',
         async () => {
-            const govts = await allGovts();
-            const fed = govts.find(([id]) => id === 'nova:128')![1];
-            const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill');
-
+            const geography = await stockGeography();
+            const fed = geography.govt('nova:128')!;
             // The Federation's OWN KillPenalty (5), not the engine
             // default — the two happen to be the same number, so pin
             // the source explicitly.
             expect(fed.killPenalty).toBe(5);
-            expect(records.get('nova:128')).toBe(-fed.killPenalty);
-            // No propagation (ruling #376): the Bureau (its ally), the
-            // Auroran Empire (its enemy) and the Polaris (unrelated) are
-            // all untouched.
-            expect(records.has('nova:153')).toBe(false);
-            expect(records.has('nova:129')).toBe(false);
-            expect(records.has('nova:130')).toBe(false);
-            expect(records.size).toBe(1);
+            const records: LegalRecords = new Map();
+            applyCrime(records, geography, KANIA, fed, ['kill']);
+            expect(records.get(KANIA)).toBe(-5);
+            // floor(5 x 0.65) = 3 in the two Federation neighbours...
+            for (const id of ['nova:129', 'nova:135']) {
+                expect(records.get(id)).withContext(id).toBe(-3);
+            }
+            // ...and a quarter of it, floor(floor(3 / 2) / 2) = 0, in the
+            // three independent ones (reference "A14 / contraband wave 16").
+            for (const id of ['nova:199', 'nova:200', 'nova:202']) {
+                expect(records.has(id)).withContext(id).toBeFalse();
+            }
+            // Nothing is charged where the scaled field has fallen to 0:
+            // the spread fades out long before it crosses the galaxy.
+            expect(records.size).toBeLessThan(geography.systemIds.length);
         });
 
-    it('two Federation kills cross CrimeTol 6 and turn them hostile',
-        async () => {
-            const govts = await allGovts();
-            const fed = govts.find(([id]) => id === 'nova:128')![1];
+    it('two Federation kills in Kania cross CrimeTol 6 there, and only '
+        + 'there', async () => {
+            const geography = await stockGeography();
+            const fed = geography.govt('nova:128')!;
             // Stock: KillPenalty 5 against CrimeTol 6, so one kill
             // (-5) is tolerated and the second (-10) is not.
             expect(fed.killPenalty).toBe(5);
             expect(fed.crimeTol).toBe(6);
 
             const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill');
-            expect(records.get('nova:128')).toBe(-5);
-            expect(recordHostile(records.get('nova:128')!, fed.crimeTol))
+            applyCrime(records, geography, KANIA, fed, ['kill']);
+            expect(records.get(KANIA)).toBe(-5);
+            expect(recordHostile(records.get(KANIA)!, fed.crimeTol))
                 .toBe(false);
 
-            applyCrime(records, fed, 'kill');
-            expect(records.get('nova:128')).toBe(-10);
-            expect(recordHostile(records.get('nova:128')!, fed.crimeTol))
+            applyCrime(records, geography, KANIA, fed, ['kill']);
+            expect(records.get(KANIA)).toBe(-10);
+            expect(recordHostile(records.get(KANIA)!, fed.crimeTol))
                 .toBe(true);
+            // Tichel, one jump away, took -3 twice: still tolerated.
+            expect(records.get('nova:129')).toBe(-6);
+            expect(recordHostile(records.get('nova:129')!, fed.crimeTol))
+                .toBe(false);
+        });
+
+    it('killing a PIRATE in Kania raises the record: the Good Citizen '
+        + 'reward (#379)', async () => {
+            const geography = await stockGeography();
+            const pirate = geography.govt('nova:137')!;
+            expect(pirate.flags.xenophobic).toBeTrue();
+            const records: LegalRecords = new Map();
+            applyCrime(records, geography, KANIA, pirate, ['disable', 'kill']);
+            // Half the Federation's own Disab 1 + Kill 5, per term.
+            expect(records.get(KANIA)).toBe(0 + 2);
+        });
+
+    it('a stacked story variant of a system is the same place: 0 jumps',
+        async () => {
+            const geography = await stockGeography();
+            // nova:130 and nova:531 share one map position.
+            expect(geography.jumpsFrom('nova:130').get('nova:531')).toBe(0);
+            const owner = geography.owner('nova:130')!;
+            const records: LegalRecords = new Map();
+            applyCrime(records, geography, 'nova:130', owner, ['kill']);
+            expect(records.get('nova:531')).toBe(records.get('nova:130'));
         });
 
     it('the Vell-os turn hostile on the very first kill (KillPenalty 40 '
         + 'vs CrimeTol 9)', async () => {
-            const govts = await allGovts();
-            const vellos = govts.find(([id]) => id === 'nova:136')![1];
+            const geography = await stockGeography();
+            const vellos = geography.govt('nova:136')!;
             expect(vellos.killPenalty).toBe(40);
             expect(vellos.crimeTol).toBe(9);
+            const home = geography.systemIds.find(
+                id => geography.system(id)!.govt === vellos.id)!;
 
             const records: LegalRecords = new Map();
-            applyCrime(records, vellos, 'kill');
-            expect(records.get('nova:136')).toBe(-40);
-            expect(recordHostile(records.get('nova:136')!, vellos.crimeTol))
+            applyCrime(records, geography, home, vellos, ['kill']);
+            expect(records.get(home)).toBe(-40);
+            expect(recordHostile(records.get(home)!, vellos.crimeTol))
                 .toBe(true);
         });
 

@@ -185,7 +185,7 @@ const ROWS: Row[] = [
                 .addComponent(NpcComponent, { aiType: 3 }),
             root: new Entity(ROOT)
                 .addComponent(LegalRecordsComponent,
-                    new Map([['nova:157', -30_000]])),
+                    new Map([[CIVVIE_SPACE, -30_000]])),
         }),
     },
     {
@@ -200,7 +200,7 @@ const ROWS: Row[] = [
                 .addComponent(NpcComponent, { aiType: 3 }),
             root: new Entity(ROOT)
                 .addComponent(LegalRecordsComponent,
-                    new Map([['nova:157', -30_000]])),
+                    new Map([[CIVVIE_SPACE, -30_000]])),
         }),
     },
     {
@@ -265,7 +265,7 @@ const ROWS: Row[] = [
                 .addComponent(NpcComponent, { aiType: 1, mode: 'travel' }),
             root: new Entity(ROOT)
                 .addComponent(LegalRecordsComponent,
-                    new Map([['nova:157', -30_000]])),
+                    new Map([[CIVVIE_SPACE, -30_000]])),
         }),
     },
     {
@@ -278,7 +278,7 @@ const ROWS: Row[] = [
                 .addComponent(NpcComponent, { aiType: 4, mode: 'patrol' }),
             root: new Entity(ROOT)
                 .addComponent(LegalRecordsComponent,
-                    new Map([['nova:157', -30_000]])),
+                    new Map([[CIVVIE_SPACE, -30_000]])),
         }),
     },
     {

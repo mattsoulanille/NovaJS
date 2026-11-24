@@ -643,7 +643,7 @@ export const DrawRadar = new System({
                         // Bribe expiries are SIM-clock stamps (0-based
                         // logical time); this world's TimeResource is the
                         // wall clock, ~50 years past every expiry.
-                        planetId: planet.id, now: simTime.time,
+                        planetId: planet.id, systemId, now: simTime.time,
                     })
                     : { cleared: true } as const;
                 const color = planetBlipColor(

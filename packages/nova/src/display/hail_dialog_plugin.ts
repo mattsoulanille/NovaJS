@@ -933,6 +933,7 @@ export async function computeContext(world: World,
                 // own TimeResource is the wall clock and would judge every
                 // paid bribe already expired.
                 planetId,
+                systemId: world.resources.get(SystemIdResource),
                 now: world.resources.get(SimulationTimeResource)?.time ?? 0,
             })
             : { cleared: true as const };

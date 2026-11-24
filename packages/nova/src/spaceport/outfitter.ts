@@ -399,6 +399,12 @@ export class Outfitter extends Menu<Entity> {
         // rather than failing the whole shop over it (#130).
         this.govts = await loadEachOrSkip('Outfitter', 'govt', govtIds,
             async id => [id, await this.simulationData.data.Govt.get(id)] as const);
+        // ...and the systems they own: records are per system (ruling
+        // #380), so a clean reaches the systems of the govt (the shared
+        // universe's legal geography). A failed load leaves the
+        // geography empty and the clean touching only stored entries.
+        await MissionUniverse.shared(this.simulationData).load()
+            .catch(e => console.warn('Outfitter: universe load failed:', e));
         this.ammoSellStrings = await this.loadAmmoSellStrings();
         const itemGrid = await this.makeOutfitsGrid();
         this.itemGrid = itemGrid;
@@ -784,11 +790,14 @@ export class Outfitter extends Menu<Entity> {
         this.visitPurchases.set(outfit.id,
             this.visitPurchases.get(outfit.id) + units);
         // ModType 21: buying the outfit cleans (raises to at least 0)
-        // the player's legal record with the ModVal govt, or with every
-        // govt when ModVal is -1. Applies once, at purchase.
+        // the player's legal record in every system of the ModVal govt,
+        // or in every system when ModVal is -1. Applies once, at
+        // purchase.
         if (outfit.cleanLegalRecord !== null) {
+            const geography = MissionUniverse.shared(this.simulationData)
+                .legalGeography();
             if (outfit.cleanLegalRecord === -1) {
-                cleanRecords(this.records, 'all', undefined, this.govts);
+                cleanRecords(this.records, geography, 'all', undefined);
             } else {
                 // The gövt number resolves stock-first under the outfit's
                 // own writer prefix, like every other numbered reference
@@ -798,9 +807,8 @@ export class Outfitter extends Menu<Entity> {
                 const govtId = resolveNumberedResource(outfit.cleanLegalRecord,
                     setStringPrefix(outfit),
                     id => this.govts.some(([g]) => g === id));
-                cleanRecords(this.records, 'govt',
-                    this.govts.find(([id]) => id === govtId)?.[1],
-                    this.govts);
+                cleanRecords(this.records, geography, 'govt',
+                    this.govts.find(([id]) => id === govtId)?.[1]);
             }
         }
         // ModType 16: a map is information, not equipment. Buying it

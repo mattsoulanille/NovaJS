@@ -16,7 +16,7 @@ import { spawnNpcs } from "./spawn/index.js";
 import { deriveEntityComponents, SimulationGameDataResource } from "./core/index.js";
 import { makePlanet } from "./travel/index.js";
 import { Platform, PlatformResource } from "./core/index.js";
-import { GovtsResource } from "./reputation/index.js";
+import { GovtsResource, LegalGeography, LegalGeographyResource, lawSystemOf } from "./reputation/index.js";
 import { SystemIdResource } from "./core/index.js";
 import { SystemPlugin } from "./system_plugin.js";
 import { assertWireRegistryCovers } from "../communication/wire_snapshot_components.js";
@@ -167,6 +167,17 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // staging would warm only the peer that made them.
     const junks = Promise.all([...allIds.Junk].sort().map(
         id => gameData.data.Junk.get(id)));
+    // Stage EVERY sÿst, for the legal-record spread (ruling #380,
+    // reputation/system_records.ts): a crime here changes the record of
+    // every system linked to this one, however far, each judged by ITS
+    // owner's penalties, and the walk goes by map position. The kill
+    // credit reads them synchronously mid-step, so they are staged here
+    // on every peer — the browser worker has them warm from the preload
+    // bundle, but the server archive stages only this system and its
+    // links otherwise — and reduced to what the rule reads (owner, links,
+    // position) in LegalGeographyResource.
+    const allSystems = Promise.all([...allIds.System].sort().map(
+        id => gameData.data.System.get(id)));
     // Stage the linked systems' metadata too: starting a hyperspace
     // jump reads the destination's map position synchronously
     // (getCached) to compute the travel heading, and every peer builds
@@ -194,11 +205,13 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
         : []);
     const npcTables = options.npcs !== false
         ? buildNpcSpawnTables(world, systemId, systemData) : undefined;
-    const [govts, , , planetEntities] = await Promise.all(
+    const [govts, , , planetEntities, , , , systems] = await Promise.all(
         [govtEntries, ranks, links, planets, asteroidTypes, npcTables,
-            junks]);
+            junks, allSystems]);
 
     world.resources.set(GovtsResource, new Map(govts));
+    world.resources.set(LegalGeographyResource,
+        new LegalGeography(systems.map(lawSystemOf), govts));
     // The system's inherent sensor interference confuses Seeker 0x0008 missiles
     // (see jamming_plugin.ts). Set deterministically here, before the world
     // steps, so it is identical for every peer in a room.

@@ -1,6 +1,6 @@
 import { GovtData } from 'novadatainterface/govt_data';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { recordHostile, recordWith, statusGovtOf } from './reputation.js';
+import { recordHostile, recordIn, statusGovtOf } from './reputation.js';
 
 /**
  * ============================================================================
@@ -24,24 +24,30 @@ import { recordHostile, recordWith, statusGovtOf } from './reputation.js';
  *     Records anywhere else, including G's own home systems, never count
  *     (c5, c7, c14, c16, c17).
  *
- * The original keeps records per SYSTEM. NovaJS keeps them per GOVERNMENT
- * (the sanctioned simplification), so "the record in this system" is the
- * record with the system's STATUS govt — its owner, or gövt 128 for an
- * independent system (reputation.ts's statusGovtOf, the same key the
- * map's and the 'p' dialog's "Legal Status:" line read). The one cell
- * that per-govt records cannot express is c2: a criminal in one of the
- * owner's systems is a criminal in all of them.
+ * The record is kept PER SYSTEM, as on the original (ruling #380, which
+ * ended #376's per-govt simplification): "the record in this system" is the
+ * player's record keyed by the current sÿst id, an absent entry reading as
+ * the InitialRec of the system's STATUS govt — its owner, or gövt 128 for an
+ * independent system (reputation.ts's statusGovtOf, the same reading the
+ * map's and the 'p' dialog's "Legal Status:" line make). So all 21 cells
+ * hold, c2 included: a criminal in one of the owner's systems is NOT a
+ * criminal in its others, except as far as the crime's spread to linked
+ * systems reached them (system_records.ts).
  *
  * The political tiers (gövt enemies classes, xenophobic, 0x0004
  * always-attacks, never-attacks, ränk 0x0100) are not this module's
  * business; govt_disposition's govtDispositionTo layers them around it.
  */
 export interface LocalLaw {
+    /** The current system (sÿst global id): the key of "the player's
+     * record in this system". Undefined only when nobody knows where the
+     * reader is; the record then reads as the status govt's InitialRec. */
+    readonly systemId: string | undefined;
     /** The current system's owning government, or undefined when it is
      * independent (or not known). Decides who ENFORCES here. */
     readonly owner: GovtData | undefined;
-    /** The government keying "the player's record in this system":
-     * statusGovtOf(owner) — the owner, or gövt 128 when independent. */
+    /** The system's STATUS government: statusGovtOf(owner) — the owner,
+     * or gövt 128 when independent. */
     readonly recordGovtId: string;
     /** That government's data, for its InitialRec (an absent record entry
      * reads as InitialRec, exactly as everywhere else). */
@@ -54,14 +60,15 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
 }
 
 /**
- * The law in force in a system whose sÿst govt is `systemGovtId` (null or
- * undefined: independent).
+ * The law in force in the system `systemId`, whose sÿst govt is
+ * `systemGovtId` (null or undefined: independent).
  */
-export function localLaw(systemGovtId: string | null | undefined,
+export function localLaw(systemId: string | undefined,
+    systemGovtId: string | null | undefined,
     getGovt: (id: string) => GovtData | undefined): LocalLaw {
     const owner = systemGovtId ? getGovt(systemGovtId) : undefined;
     const recordGovtId = statusGovtOf(systemGovtId);
-    return { owner, recordGovtId, recordGovt: getGovt(recordGovtId) };
+    return { systemId, owner, recordGovtId, recordGovt: getGovt(recordGovtId) };
 }
 
 /**
@@ -75,7 +82,8 @@ export function localLawIn(gameData: SimulationGameDataInterface,
     systemId: string | undefined): LocalLaw {
     const systemGovt = systemId
         ? gameData.data.System.getCached(systemId)?.govt : undefined;
-    return localLaw(systemGovt, id => gameData.data.Govt.getCached(id));
+    return localLaw(systemId, systemGovt,
+        id => gameData.data.Govt.getCached(id));
 }
 
 /**
@@ -93,7 +101,9 @@ export async function loadLocalLaw(gameData: SimulationGameDataInterface,
         gameData.data.Govt.get(id).catch(() => undefined);
     const owner = system?.govt ? await load(system.govt) : undefined;
     const recordGovtId = statusGovtOf(system?.govt);
-    return { owner, recordGovtId, recordGovt: await load(recordGovtId) };
+    return {
+        systemId, owner, recordGovtId, recordGovt: await load(recordGovtId),
+    };
 }
 
 /**
@@ -127,6 +137,12 @@ export function alliedWithOwner(self: GovtData, owner: GovtData): boolean {
     return alliedEitherWay(self, owner);
 }
 
+/** The player's record in the system `law` is in force in. */
+export function recordHere(records: ReadonlyMap<string, number>,
+    law: LocalLaw): number {
+    return recordIn(records, law.systemId, law.recordGovt);
+}
+
 /**
  * Whether ships of `self` count a pilot with `records` as a criminal to
  * attack here: rules 1 and 2 above. Only ships with legal records (player
@@ -135,6 +151,5 @@ export function alliedWithOwner(self: GovtData, owner: GovtData): boolean {
 export function criminalHere(self: GovtData,
     records: ReadonlyMap<string, number>, law: LocalLaw): boolean {
     return enforcesHere(self, law.owner)
-        && recordHostile(recordWith(records, law.recordGovtId, law.recordGovt),
-            self.crimeTol);
+        && recordHostile(recordHere(records, law), self.crimeTol);
 }

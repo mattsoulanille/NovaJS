@@ -1204,6 +1204,8 @@ describe('computeContext: hailing a STELLAR', () => {
         };
 
         const world = new World();
+        // The port's system: records are per system (ruling #380).
+        world.resources.set(SystemIdResource, 'test:earth-system');
         const player = new Entity()
             .addComponent(PlayerShipSelector, undefined);
         if (opts.bribedUntil !== undefined) {
@@ -1213,7 +1215,7 @@ describe('computeContext: hailing a STELLAR', () => {
         world.entities.set(PLAYER, player
             .addComponent(CreditsComponent, { credits: opts.credits ?? 10_000 })
             .addComponent(LegalRecordsComponent,
-                new Map([['nova:128', opts.record ?? 0]]))
+                new Map([['test:earth-system', opts.record ?? 0]]))
             .addComponent(PlanetTargetComponent, { target: PLANET }));
         world.entities.set(PLANET, new Entity()
             .addComponent(PlanetComponent, { id: 'nova:128' })
@@ -1975,8 +1977,9 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
                 time: NOW, delta_ms: 16, delta_s: 0.016, frame: 3600,
             });
             const player = world.entities.get(PLAYER)!;
+            // Criminal in the lawful govt's system (records per system).
             player.components.set(LegalRecordsComponent,
-                new Map([[LAWFUL, -500]]));
+                new Map([[LAWFUL_SPACE, -500]]));
             player.components.set(CreditsComponent, { credits: 100_000 });
             player.components.set(DisabledComponent, { repairAt: null });
             return built;

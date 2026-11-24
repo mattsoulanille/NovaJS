@@ -171,6 +171,8 @@ async function originalPilotContext(runtime: ClientRuntime):
         knownJunk: id => junk.has(id),
         systemOfPlanet: (id, bits) => universe.systemIdOfPlanet(id, bits),
         govtOfSystem: id => universe.getSystemInfo(id)?.govt,
+        initialRecordIn: id => universe.legalGeography().recordIn(
+            new Map(), id),
         fallbackSystem,
     };
 }

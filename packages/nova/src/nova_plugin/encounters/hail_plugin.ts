@@ -302,6 +302,7 @@ function applyPlanetBribe(world: World, player: Entity, target: Entity) {
         ranks: player.components.get(ActiveRanksComponent),
         missions: player.components.get(MissionsComponent),
         bribes, planetId, now,
+        systemId: world.resources.get(SystemIdResource),
     });
     if (clearance.cleared) {
         return;

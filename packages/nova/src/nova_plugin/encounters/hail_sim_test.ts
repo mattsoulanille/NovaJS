@@ -686,8 +686,9 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                 { ...getDefaultSystemData(), id: 'test:system', govt: owner });
             // Re-got, so the synchronous caches applyHail reads see it.
             await gameData.data.System.get('test:system');
+            // Criminal IN this system (records are per system, #380).
             player(world).components.set(LegalRecordsComponent,
-                new Map([[LAWFUL, -500]]));
+                new Map([['test:system', -500]]));
             player(world).components.set(DisabledComponent, { repairAt: null });
             await addShip('target', 150, 0, ship => {
                 ship.components.set(GovtComponent, { id: LAWFUL });

@@ -200,8 +200,14 @@ function runUntilScanned(world: World, ship: Entity, maxSteps = 1200): boolean {
 }
 
 const credits = (ship: Entity) => ship.components.get(CreditsComponent)!.credits;
-const record = (ship: Entity, govtId = CUSTOMS) =>
-    ship.components.get(LegalRecordsComponent)!.get(govtId) ?? 0;
+/** The pilot's record in the scan's system (records are per system, ruling
+ * #380: whoever owns it, the scan changes this one key). */
+const record = (ship: Entity) =>
+    ship.components.get(LegalRecordsComponent)!.get(SYSTEM) ?? 0;
+/** The systems the pilot holds a record for: never more than the scan's
+ * own, since smuggling does not spread. */
+const recordSystems = (ship: Entity) =>
+    [...ship.components.get(LegalRecordsComponent)!.keys()];
 
 describe('Contraband scan (AI 4 interceptors)', () => {
     it('buzzes a pilot carrying an illegal outfit, fines him, charges '
@@ -367,7 +373,7 @@ describe('Contraband scan (AI 4 interceptors)', () => {
         + 'scanning him', async () => {
             const { world, pilot, cutter } = await scanWorld(
                 { pilot: { outfits: { [POD]: 1 } } });
-            pilot.components.get(LegalRecordsComponent)!.set(CUSTOMS, -500);
+            pilot.components.get(LegalRecordsComponent)!.set(SYSTEM, -500);
             run(world, 120);
             expect(cutter.components.get(NpcComponent)?.mode).toBe('attack');
             expect(pilot.components.has(ContrabandScannedComponent)).toBeFalse();
@@ -558,9 +564,8 @@ describe('Contraband scan (AI 4 interceptors)', () => {
                 missionFailed: false, fine: 500,
             }]);
             expect(credits(pilot)).toBe(START_CREDITS - 500);
-            expect(record(pilot, NEIGHBOUR)).toBe(-50);
-            expect(pilot.components.get(LegalRecordsComponent)!.has(CUSTOMS))
-                .toBeFalse();
+            expect(record(pilot)).toBe(-50);
+            expect(recordSystems(pilot)).toEqual([SYSTEM]);
         });
 
     it('a nosy scanner in another govt\'s system fines, and RAISES the '
@@ -578,10 +583,10 @@ describe('Contraband scan (AI 4 interceptors)', () => {
                 expect(runUntilScanned(world, pilot)).toBeTrue();
                 expect(credits(pilot)).toBe(START_CREDITS - 500);
                 expect(scans[0].scan.fine).toBe(500);
-                expect(record(pilot, NEIGHBOUR)).toBe(expected);
-                // The scanner's own record does not move: no spread.
-                expect(pilot.components.get(LegalRecordsComponent)!.has(CUSTOMS))
-                    .toBeFalse();
+                expect(record(pilot)).toBe(expected);
+                // The scanner's own system does not move: no spread.
+                expect(recordSystems(pilot))
+                    .toEqual(expected === 0 ? [] : [SYSTEM]);
             }
         });
 
@@ -659,7 +664,7 @@ describe('Contraband rules', () => {
             govt(NEIGHBOUR, { classes: [3], smugglePenalty: 70, ...extra });
         const scanner = govt(CUSTOMS, { classes: [7], smugglePenalty: 50 });
         const lawOf = (o: GovtData | undefined) =>
-            localLaw(o?.id ?? null, id => id === o?.id ? o : undefined);
+            localLaw(SYSTEM, o?.id ?? null, id => id === o?.id ? o : undefined);
         // The owner itself: minus its SmugPenalty.
         expect(smugglingRecordChange(scanner, lawOf(scanner))).toBe(-50);
         // The owner's ally, either direction: minus the SCANNER's (guess).
@@ -680,7 +685,7 @@ describe('Contraband rules', () => {
 
     it('turns only the detecting govt\'s ships on the pilot', () => {
         const self = govt(CUSTOMS, { classes: [7], crimeTol: 30000 });
-        const law = localLaw(CUSTOMS, () => self);
+        const law = localLaw(SYSTEM, CUSTOMS, () => self);
         const records = new Map<string, number>();
         expect(govtDispositionTo(self, undefined, records, law)).toBe('neutral');
         expect(govtDispositionTo(self, undefined, records, law, false, CUSTOMS))
@@ -712,10 +717,11 @@ describe('Contraband rules', () => {
     it('charges the record of the system scanned in, once, for an outfit '
         + 'or jünk and never for mission cargo', () => {
         // An owner allied to the customs govt: the scanner's SmugPenalty
-        // comes off the OWNER's record (the system's status govt).
+        // comes off the record IN THIS SYSTEM (per system, ruling #380).
         const owner = govt(NEIGHBOUR, { classes: [3], allies: [7] });
         const scanner = { ...customs, classes: [7] };
-        const law = localLaw(NEIGHBOUR, id => id === NEIGHBOUR ? owner : undefined);
+        const law = localLaw(SYSTEM, NEIGHBOUR,
+            id => id === NEIGHBOUR ? owner : undefined);
         const scan = (findings: ContrabandFindings) => {
             const records = new Map<string, number>();
             const pilot = { credits: { credits: 1000 }, records, missions: new Map() };
@@ -731,7 +737,7 @@ describe('Contraband rules', () => {
             outfit: 'pod', junk: 'junk', smuggled: true, missionFailed: false,
             fine: 500,
         });
-        expect([...both.records]).toEqual([[NEIGHBOUR, -50]]);
+        expect([...both.records]).toEqual([[SYSTEM, -50]]);
         expect(both.credits).toBe(500);
         const cargoOnly = scan({
             smuggled: true, failMissions: [], items: ['mission:m'],
@@ -755,15 +761,15 @@ describe('Contraband rules', () => {
 
     it('scans only where the govt enforces, and only with a ScanMask', () => {
         const self = govt(CUSTOMS, { classes: [7], scanMask: 1 });
-        expect(scansHere(self, localLaw(CUSTOMS, () => self))).toBeTrue();
-        expect(scansHere(self, localLaw(null, () => undefined))).toBeFalse();
+        expect(scansHere(self, localLaw(SYSTEM, CUSTOMS, () => self))).toBeTrue();
+        expect(scansHere(self, localLaw(SYSTEM, null, () => undefined))).toBeFalse();
         const nosy = govt(CUSTOMS, {
             scanMask: 1,
             flags: { ...getDefaultGovtData().flags, attacksPlayerIfCriminal: true },
         });
-        expect(scansHere(nosy, localLaw(null, () => undefined))).toBeTrue();
+        expect(scansHere(nosy, localLaw(SYSTEM, null, () => undefined))).toBeTrue();
         expect(scansHere(govt(CUSTOMS, { scanMask: 0 }),
-            localLaw(CUSTOMS, () => self))).toBeFalse();
+            localLaw(SYSTEM, CUSTOMS, () => self))).toBeFalse();
     });
 
     it('composes the stock status lines', () => {

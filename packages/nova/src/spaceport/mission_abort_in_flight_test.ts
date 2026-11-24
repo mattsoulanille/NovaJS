@@ -42,6 +42,7 @@ import { buildMissionAbort } from './ship_mission_accept.js';
 describe('aborting a mission in flight', () => {
     const COURIER = SYNTHETIC.missions.courier;
     const MERIDIAN = SYNTHETIC.govts.meridian;
+    const THESSALY = SYNTHETIC.systems.thessaly;
     const CARGO = missionCargoKey(COURIER);
 
     function courier(): ActiveMission {
@@ -71,7 +72,7 @@ describe('aborting a mission in flight', () => {
             new Set<number>([BITS.courierAccepted]));
         ship.components.set(ActiveRanksComponent, new Set());
         ship.components.set(CargoComponent, new Map(cargo));
-        ship.components.set(LegalRecordsComponent, new Map([[MERIDIAN, 30]]));
+        ship.components.set(LegalRecordsComponent, new Map([[THESSALY, 30]]));
         ship.components.set(OutfitsStateComponent, new Map());
         await completeEntity(world, ship);
         return ship;
@@ -146,7 +147,7 @@ describe('aborting a mission in flight', () => {
             .toBeFalse();
         expect([...ship.components.get(CargoComponent)!]).toEqual([['cargo:0', 6]]);
         // No CompReward reversal without mïsn Flags 0x0040.
-        expect(ship.components.get(LegalRecordsComponent)!.get(MERIDIAN)).toBe(30);
+        expect(ship.components.get(LegalRecordsComponent)!.get(THESSALY)).toBe(30);
         expect(world.entities.has('special')).toBeTrue();
         world.step();
         expect(world.entities.has('special'))
@@ -206,10 +207,14 @@ describe('aborting a mission in flight', () => {
         }));
         const abort = await buildMissionAbort(a, COURIER, gameData, universe,
             { systemId });
-        // CompReward 2 to the Concord: -5 x 2.
-        expect(abort!.record.recordsDelta).toEqual([[MERIDIAN, -10]]);
+        // CompReward 2 to the Concord: -5 x 2, in each of its systems
+        // (Thessaly Reach and Vael Hollow; records are per system).
+        expect(abort!.record.recordsDelta).toEqual(
+            [[THESSALY, -10], [SYNTHETIC.systems.vael, -10]]);
         await apply(world, 'a', abort!.record);
-        expect(world.entities.get('ship a')!.components
-            .get(LegalRecordsComponent)!.get(MERIDIAN)).toBe(20);
+        const records = world.entities.get('ship a')!.components
+            .get(LegalRecordsComponent)!;
+        expect(records.get(THESSALY)).toBe(20);
+        expect(records.get(SYNTHETIC.systems.vael)).toBe(-10);
     });
 });

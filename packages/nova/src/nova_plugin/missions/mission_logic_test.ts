@@ -348,23 +348,32 @@ describe('missionMatchesLocation', () => {
     it('judges AvailRecord at an independent stellar by STOCK govt 128, '
         + 'even for a plug-in\'s mission (#107)', () => {
             // Appendix II: an independent system is judged by "the first
-            // government's [ID 128]". A plug-in mission used to key a
-            // phantom `<plug>:128` record no crime ever writes.
-            const fed = makeGovt('nova:128', { crimeTol: 6 });
+            // government's [ID 128]": its InitialRec is what an absent
+            // record in an independent system reads as (records are per
+            // system, ruling #380). A plug-in mission used to key a
+            // phantom `<plug>:128` govt no gövt backs.
+            const fed = makeGovt('nova:128', { crimeTol: 6, initialRecord: 40 });
             const getGovt = (id: string) => id === fed.id ? fed : undefined;
-            const records = new Map([['nova:128', 40]]);
-            expect(stellarRecord(makeStellar({ govt: null }), records,
-                'arpia', getGovt)).toBe(40);
+            const where = {
+                systems: [{ id: 'sys:indep', govt: null, links: [] }],
+                systemIdOfStellar: () => 'sys:indep',
+            };
+            const stellar = makeStellar({ govt: null });
+            expect(stellarRecord(stellar, new Map(), 'arpia', getGovt, where))
+                .toBe(40);
+            expect(stellarRecord(stellar, new Map([['sys:indep', 7]]),
+                'arpia', getGovt, where)).toBe(7);
             const plugMission = makeMission({
                 id: 'arpia:600', prefix: 'arpia', writerPrefix: 'arpia',
                 availRecord: 30,
             });
             expect(missionMatchesLocation(plugMission,
                 LOCATION_MISSION_COMPUTER,
-                makeContext({ records, getGovt }))).toBe(true);
+                makeContext({ stellar, getGovt, ...where }))).toBe(true);
             expect(missionMatchesLocation(plugMission,
                 LOCATION_MISSION_COMPUTER,
-                makeContext({ records: new Map(), getGovt }))).toBe(false);
+                makeContext({ stellar, records: new Map([['sys:indep', 0]]),
+                    getGovt, ...where }))).toBe(false);
         });
 
     // Exxx in AvailBits: "Returns 1 if the player has explored system ID

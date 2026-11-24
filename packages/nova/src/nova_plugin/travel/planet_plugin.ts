@@ -31,7 +31,7 @@ import { ExplodingFinishedSystem, ShipComponent, ShipDataComponent } from '../sh
 import { Target } from '../ship/index.js';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
-import { LegalRecords } from '../reputation/index.js';
+import { LegalRecords, statusGovtOf } from '../reputation/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { ActiveRanks, ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowLanding } from '../ncb/index.js';
@@ -266,9 +266,21 @@ export function stellarClearanceFor(opts: {
      */
     sameStellar?: (a: string, b: string) => boolean,
     planetId: string,
+    /**
+     * The system the stellar is in — the player's current system, whose
+     * record MinStatus is judged on (records are per system, ruling #380).
+     * Its sÿst must be warm in the cache (makeSystem stages the world's
+     * own system on every peer).
+     */
+    systemId: string | undefined,
     now: number,
 }): StellarClearance {
     const govtId = opts.planetData.govt ?? undefined;
+    const lookupGovt = (id: string) =>
+        opts.govts?.get(id) ?? opts.gameData.data.Govt.getCached(id);
+    const systemStatusGovt = lookupGovt(statusGovtOf(opts.systemId
+        ? opts.gameData.data.System.getCached(opts.systemId)?.govt
+        : undefined));
     const planetGovt = govtId
         ? (opts.govts?.get(govtId)
             ?? opts.gameData.data.Govt.getCached(govtId))
@@ -293,6 +305,8 @@ export function stellarClearanceFor(opts: {
         planet: opts.planetData,
         planetGovt,
         records: opts.records,
+        systemId: opts.systemId,
+        systemStatusGovt,
         contribute: contributeBits(opts.shipData?.contribute,
             outfitContributes),
         bribedUntil: opts.bribes?.get(opts.planetId),
@@ -316,10 +330,10 @@ const AttemptLandingSystem = new System({
         Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
-        Optional(TimeResource)] as const,
+        Optional(TimeResource), Optional(SystemIdResource)] as const,
     step(planets, playerUuid, { position, velocity }, planetTarget, controls,
         emit, records, shipData, outfits, bribes, ranks, missions, gameData,
-        govts, time) {
+        govts, time, systemId) {
         if (controls.get('land') !== 'start') {
             return;
         }
@@ -365,7 +379,7 @@ const AttemptLandingSystem = new System({
                 } else if (planetData && !stellarClearanceFor({
                     planetData, gameData, govts, records, shipData, outfits,
                     bribes, ranks, missions,
-                    planetId: id, now: time?.time ?? 0,
+                    planetId: id, systemId, now: time?.time ?? 0,
                 }).cleared) {
                     // CLEARANCE. A port that is shut to this pilot answers
                     // "Landing request denied." (STR# 2002 index 82; index 81

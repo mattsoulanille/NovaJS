@@ -8,6 +8,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { displayName, isInhabited } from '../nova_plugin/core/index.js';
 import { evaluateNCBTest } from '../nova_plugin/ncb/index.js';
 import { StellarInfo, stellarInfoOf, SystemInfo } from '../nova_plugin/missions/index.js';
+import { LegalGeography, lawSystemOf } from '../nova_plugin/reputation/index.js';
 import { loadOrSkip } from './skip_failed_loads.js';
 
 /** A system's Visibility test against the player's bits (blank = visible;
@@ -82,6 +83,7 @@ export class MissionUniverse {
     private planetVisibilities = new Map<string, string[]>();
     /** Canonical "same stellar" key (name + map coords) per placed planet. */
     private stellarKeyById = new Map<string, string>();
+    private geography?: LegalGeography;
     private loadPromise?: Promise<void>;
 
     private static instances =
@@ -296,7 +298,24 @@ export class MissionUniverse {
         }));
         this.systemInfosById = new Map(
             this.systemInfos.map(info => [info.id, info]));
+        this.geography = undefined;
         return skipped;
+    }
+
+    /**
+     * Every loaded sÿst and gövt as the per-system legal records see them
+     * (reputation/system_records.ts): the record changes the spaceport
+     * makes past one system — a CompReward, a PayVal record cleaning, an
+     * oütf ModType 21 — and the reads of a system's InitialRec. Built on
+     * first use after each load; empty before the universe has loaded.
+     */
+    legalGeography(): LegalGeography {
+        if (!this.geography) {
+            this.geography = new LegalGeography(
+                [...this.systemsById.values()].map(lawSystemOf),
+                this.govtsById);
+        }
+        return this.geography;
     }
 
     getSystemInfo(systemId: string): SystemInfo | undefined {

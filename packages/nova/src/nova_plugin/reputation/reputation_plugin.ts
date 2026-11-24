@@ -14,9 +14,10 @@ import { DisabledComponent } from '../ship/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { SourceComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
-import { GovtComponent } from '../core/index.js';
+import { GovtComponent, SystemIdResource } from '../core/index.js';
 import { ArmorComponent, CloakDecloakOnHitSystem, ExplodingClearedSystem, KnockbackSystem, OutfitWeaponProvider } from '../ship/index.js';
-import { applyCrime, Crime } from './reputation.js';
+import { Crime } from './reputation.js';
+import { applyCrime, LegalGeography, lawSystemOf } from './system_records.js';
 import { ShipDataComponent } from '../ship/index.js';
 import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { revokeRanksForCrime, suppressAggressionGovts } from '../ncb/index.js';
@@ -31,7 +32,8 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
  * The pure math lives in reputation.ts; this module owns the
  * components and the simulation systems that feed them.
  *
- * STATE MODEL: LegalRecordsComponent and CombatRatingComponent live on
+ * STATE MODEL: LegalRecordsComponent (the player's record PER SYSTEM,
+ * keyed by sÿst id; system_records.ts) and CombatRatingComponent live on
  * PLAYER ship entities only (ensurePlayerStateComponents /
  * browser.ts), like Credits and Missions — but unlike those, they are
  * mutated INSIDE the simulation (kill/disable credit), so they are
@@ -58,8 +60,14 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
 
 export const LegalRecordsType = map(t.string, t.number);
 export type LegalRecordsState = t.TypeOf<typeof LegalRecordsType>;
+/**
+ * The player's legal records, sÿst global id -> record (ruling #380).
+ * Registered as 'SystemLegalRecords': the per-govt map it replaced was
+ * 'LegalRecords', and the new name keeps a snapshot or wire value of the
+ * one from ever being read as the other.
+ */
 export const LegalRecordsComponent =
-    new Component<LegalRecordsState>('LegalRecords');
+    new Component<LegalRecordsState>('SystemLegalRecords');
 
 export const CombatRatingType = t.type({
     /** Appendix I kill points: summed strengths of destroyed ships. */
@@ -109,39 +117,86 @@ export const DamageAttributionComponent =
 export const GovtsResource =
     new Resource<Map<string, GovtData>>('GovtsResource');
 
+/**
+ * Every sÿst (owner, links, map position) and every gövt of the scenario,
+ * set by makeSystem before the world steps: a crime's record change
+ * reaches every system linked to the crime's, each judged by its own
+ * owner's penalties (system_records.ts), so the simulation must read
+ * arbitrary systems and govts synchronously and identically on every
+ * peer. Static data, never mutated (its jump tables are a pure cache).
+ */
+export const LegalGeographyResource =
+    new Resource<LegalGeography>('LegalGeographyResource');
+
+/**
+ * The geography a crime in `systemId` is charged over: the staged
+ * resource, else (a world makeSystem did not build) one made of the
+ * current system alone from the warm caches, which charges the crime's
+ * own system and spreads nowhere.
+ */
+export function crimeGeography(geography: LegalGeography | undefined,
+    systemId: string, gameData: SimulationGameDataInterface,
+    govts: ReadonlyMap<string, GovtData> | undefined): LegalGeography {
+    if (geography) {
+        return geography;
+    }
+    const system = gameData.data.System.getCached(systemId);
+    const govtIds = [system?.govt, 'nova:128'].filter(
+        (id): id is string => typeof id === 'string');
+    return new LegalGeography(
+        system ? [lawSystemOf(system)] : [],
+        govtIds.flatMap(id => {
+            const govt = govts?.get(id) ?? gameData.data.Govt.getCached(id);
+            return govt ? [[id, govt] as const] : [];
+        }));
+}
+
 const DamagerQuery = new Query([Optional(FiringGroupComponent),
     Optional(SourceComponent)] as const);
 
 /**
- * Charges a crime against `victimGovt` to the responsible root entity —
- * a player's ship — in full: the legal-record penalty with the victim's
- * govt (reputation.ts's applyCrime; no ally/enemy propagation) AND the
- * ränk revocations the crime triggers (rank_logic's revokeRanksForCrime, flags 0x0004 / 0x0040),
- * re-baking the 0x0100 suppression set the NPC brains read whenever a
- * rank falls. One entry point for the kill, disable and boarding credit
- * systems, so a crime carries the same consequences however it was
- * committed. A root without the player components (an NPC) is
- * unaffected.
+ * Charges a crime against `victimGovt`, committed in the system
+ * `systemId`, to the responsible root entity — a player's ship — in full:
+ * the legal-record change in that system and every system linked to it
+ * (system_records.ts's applyCrime: the victim's penalties where it is the
+ * owner's or an ally's ship, the owner's halved reward elsewhere, 0.65 per
+ * jump) AND the ränk revocations each crime triggers (rank_logic's
+ * revokeRanksForCrime, flags 0x0004 / 0x0040), re-baking the 0x0100
+ * suppression set the NPC brains read whenever a rank falls. `crimes` is
+ * every penalty field one event charges together: a kill's Disab + Kill,
+ * or the Kill alone. One entry point for the kill, disable and boarding
+ * credit systems, so a crime carries the same consequences however it was
+ * committed. A root without the player components (an NPC) is unaffected.
  *
+ * The geography is the world's staged LegalGeographyResource (every sÿst
+ * and gövt, staged by makeSystem), so the spread reads no data mid-step.
  * The ränk lookup is the simulation's own cache, warm because makeSystem
  * stages the whole ränk table at world genesis; a rank it still cannot
  * resolve is simply kept, as rank_logic keeps unknown ids everywhere.
  */
 export function chargeCrime(root: Entity, victimGovt: GovtData,
-    crime: Crime, gameData: SimulationGameDataInterface,
+    crimes: readonly Crime[], systemId: string | undefined,
+    geography: LegalGeography | undefined,
+    gameData: SimulationGameDataInterface,
     govts: ReadonlyMap<string, GovtData> | undefined): void {
     const records = root.components.get(LegalRecordsComponent);
-    if (records) {
-        applyCrime(records, victimGovt, crime);
+    if (records && systemId !== undefined) {
+        applyCrime(records,
+            crimeGeography(geography, systemId, gameData, govts),
+            systemId, victimGovt, crimes);
     }
     const ranks = root.components.get(ActiveRanksComponent);
     if (!ranks || ranks.size === 0) {
         return;
     }
     const getRank = (id: string) => gameData.data.Rank.getCached(id);
-    const dropped = revokeRanksForCrime(ranks, victimGovt, crime, getRank,
-        id => govts?.get(id) ?? gameData.data.Govt.getCached(id));
-    if (dropped.length > 0) {
+    let droppedAny = false;
+    for (const crime of crimes) {
+        const dropped = revokeRanksForCrime(ranks, victimGovt, crime, getRank,
+            id => govts?.get(id) ?? gameData.data.Govt.getCached(id));
+        droppedAny ||= dropped.length > 0;
+    }
+    if (droppedAny) {
         // Both halves together, as commitActiveRanks writes them: the
         // sim reads 0x0100 off the baked set, never off the ranks.
         root.components.set(AggressionSuppressGovtsComponent,
@@ -193,8 +248,9 @@ const DamageAttributionSystem = new System({
  * Credits a kill when a ship's armor reaches zero: the responsible
  * root's combat rating grows by the victim's shïp Strength (Appendix
  * I), and — when the victim has a government — the root's legal
- * records take that govt's DisabPenalty + KillPenalty (no ally/enemy
- * propagation). Roots without the components (NPCs) are unaffected.
+ * records take the crime of DisabPenalty + KillPenalty in this system and
+ * the systems linked to it (chargeCrime). Roots without the components
+ * (NPCs) are unaffected.
  *
  * Disab + Kill on EVERY kill, the Disab never twice: measured
  * (reference "A14 with system traffic as the victims, wave 12"), a
@@ -212,9 +268,10 @@ export const KillCreditSystem = new System({
     args: [ZeroArmorEvent, ShipDataComponent, Optional(GovtComponent),
         Optional(DamageAttributionComponent), GetEntity, Entities,
         Optional(GovtsResource), SimulationGameDataResource,
-        Optional(ArmorComponent)] as const,
+        Optional(ArmorComponent), Optional(LegalGeographyResource),
+        Optional(SystemIdResource)] as const,
     step(_time, shipData, govt, attribution, { components }, entities,
-        govts, gameData, armor) {
+        govts, gameData, armor, geography, systemId) {
         if (attribution?.killCredited) {
             return;
         }
@@ -243,10 +300,11 @@ export const KillCreditSystem = new System({
         if (govt) {
             const govtData = gameData.data.Govt.getCached(govt.id);
             if (govtData) {
-                if (attribution?.disableChargedTo !== attribution?.root) {
-                    chargeCrime(root, govtData, 'disable', gameData, govts);
-                }
-                chargeCrime(root, govtData, 'kill', gameData, govts);
+                const crimes: Crime[] =
+                    attribution?.disableChargedTo !== attribution?.root
+                        ? ['disable', 'kill'] : ['kill'];
+                chargeCrime(root, govtData, crimes, systemId, geography,
+                    gameData, govts);
             }
         }
     },
@@ -275,8 +333,10 @@ export const DisableCreditSystem = new System({
     name: 'DisableCreditSystem',
     args: [DamageAttributionComponent, Optional(DisabledComponent),
         Optional(ArmorComponent), Optional(GovtComponent), Entities,
-        Optional(GovtsResource), SimulationGameDataResource] as const,
-    step(attribution, disabled, armor, govt, entities, govts, gameData) {
+        Optional(GovtsResource), SimulationGameDataResource,
+        Optional(LegalGeographyResource), Optional(SystemIdResource)] as const,
+    step(attribution, disabled, armor, govt, entities, govts, gameData,
+        geography, systemId) {
         if (!disabled) {
             if (attribution.disableCredited) {
                 attribution.disableCredited = false;
@@ -306,7 +366,8 @@ export const DisableCreditSystem = new System({
         }
         const govtData = gameData.data.Govt.getCached(govt.id);
         if (govtData) {
-            chargeCrime(root, govtData, 'disable', gameData, govts);
+            chargeCrime(root, govtData, ['disable'], systemId, geography,
+                gameData, govts);
             attribution.disableChargedTo = attribution.root;
         }
     },

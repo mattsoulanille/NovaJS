@@ -87,6 +87,7 @@ describe('makeSystem stages the ränk table', () => {
                 govts: undefined,
                 ranks,
                 planetId: GATE,
+                systemId: undefined,
                 now: 0,
             });
             // MinStatus 32767 is "player can never land".

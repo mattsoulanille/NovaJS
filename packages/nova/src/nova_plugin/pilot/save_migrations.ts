@@ -32,13 +32,21 @@ import { latestVersion, Migration } from '../../common/migrations.js';
  *                    `pendingUpgrade` / `pendingSale` flag pair — the first
  *                    migration that reaches INSIDE the escort blobs (see
  *                    save_game.ts's WIRE COMPATIBILITY note).
- *   v5 (this build)  ids and namespaces of a plug-in whose id-space prefix
+ *   v5 (2026-10-03)  ids and namespaces of a plug-in whose id-space prefix
  *                    changed with issue #310 (the prefix was the text
  *                    before its name's FIRST dot; it is now the whole base
  *                    name minus one known extension) are re-keyed from the
  *                    old prefix to the new one, by the static table
  *                    PLUGIN_PREFIX_RENAMES — a TEMPORARY transition (see
  *                    the table for what removing it entails).
+ *   v6 (this build)  legal records are PER SYSTEM (ruling #380):
+ *                    `legalRecords` ([sÿst id, record] pairs) replaces the
+ *                    per-gövt `reputations`. The migration cannot see game
+ *                    data, so it parks the old per-gövt list as
+ *                    `govtRecords`, and the restore (save_game.ts's
+ *                    restorePlayerState) seeds each system from its status
+ *                    govt's old record with the scenario's systems in hand
+ *                    (system_records.ts's systemRecordsFromGovtRecords).
  *
  * FORWARD COMPATIBILITY (a save written by this build, read by the
  * previous one). The previous build's decodeSave refuses any envelope
@@ -69,7 +77,8 @@ export type RawSaveData = Record<string, unknown>;
  * (spaceport/mission_session.ts) to fill with the same value:
  *
  *   credits 0, the default game date, no missions, no cargo, no cron
- *   progress, no legal records (every gövt at its InitialRec), no kills,
+ *   progress, no legal records (every system at its status govt's
+ *   InitialRec), no kills,
  *   no ranks, no escorts, nothing discovered, no auto-abort squad queued.
  *
  * Also what extractSaveData writes for an entity that lacks the component
@@ -88,7 +97,7 @@ export function saveDefaults() {
         missions: [] as never[],
         cargo: [] as never[],
         cronStates: [] as never[],
-        reputations: [] as never[],
+        legalRecords: [] as never[],
         combatRatings: [['kills', 0]] as [string, number][],
         ranks: [] as string[],
         escorts: [] as never[],
@@ -106,9 +115,16 @@ export function saveDefaults() {
  * `combatRatings` is a keyed list, so "present" is not enough: the
  * 'kills' entry is what the restore reads, and a list without one meant
  * zero kills to the previous build.
+ *
+ * The legal records are filled in their v3 SHAPE, the per-gövt
+ * `reputations` list, not today's `legalRecords`: v5 -> v6 is what moves
+ * them, and it must still find them where v3 kept them.
  */
 function materialiseDefaults(raw: RawSaveData): RawSaveData {
-    const defaults: Record<string, unknown> = saveDefaults();
+    const { legalRecords: _perSystem, ...current } = saveDefaults();
+    const defaults: Record<string, unknown> = {
+        ...current, reputations: [] as never[],
+    };
     for (const [key, value] of Object.entries(defaults)) {
         if (raw[key] === undefined) {
             raw[key] = value;
@@ -373,6 +389,27 @@ function renamePluginPrefixes(raw: RawSaveData): RawSaveData {
     return out;
 }
 
+/**
+ * v5 -> v6: legal records per system (ruling #380). The v5 `reputations`
+ * list was keyed by GÖVT id; it moves, untouched, to `govtRecords`, which
+ * the restore turns into per-system records once it has the scenario's
+ * systems (a migration is a pure function of the JSON and cannot know who
+ * owns which system). `legalRecords` starts empty. Idempotent: a payload
+ * that already has `legalRecords` is v6 and passes through.
+ */
+function recordsPerSystem(raw: RawSaveData): RawSaveData {
+    if (raw.legalRecords !== undefined) {
+        return raw;
+    }
+    const { reputations, ...rest } = raw;
+    return {
+        ...rest,
+        legalRecords: [],
+        ...(Array.isArray(reputations) && reputations.length > 0
+            ? { govtRecords: reputations } : {}),
+    };
+}
+
 export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
     {
         from: 1, to: 2,
@@ -400,6 +437,13 @@ export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
             + '#310 (first dot -> full base name) are re-keyed to the new '
             + 'prefix (temporary transition: PLUGIN_PREFIX_RENAMES)',
         migrate: renamePluginPrefixes,
+    },
+    {
+        from: 5, to: 6,
+        summary: 'legal records are per system (#380): the per-gövt '
+            + '`reputations` list moves to `govtRecords`, which the restore '
+            + 'seeds into the new per-system `legalRecords`',
+        migrate: recordsPerSystem,
     },
 ];
 

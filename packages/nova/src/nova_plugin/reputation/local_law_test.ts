@@ -27,18 +27,18 @@ import { LegalRecordsComponent } from './reputation_plugin.js';
  * ============================================================================
  *
  * docs/reference_experiments.md, "A14" (wave 2) and "A14 wave 5", re-run as
- * NovaJS specs (ruling #376). The kit's governments and systems are
+ * NovaJS specs (rulings #376 and #380). The kit's governments and systems are
  * reproduced exactly (scripts/novaref/kits/testkit.mjs a14Resources and the
  * wave-5 one-way-alliance govts): every govt has CrimeTol 10 and MaxOdds
  * 1000 unless named "Hi"; the player sits with a -500 record ("Criminal")
  * in ONE system and never fires; each system spawns warships (AI 3) or
  * interceptors (AI 4) of ONE government.
  *
- * Records are per SYSTEM in the original and per GOVERNMENT in NovaJS (the
- * sanctioned simplification), so "-500 in system S" is "-500 with S's
- * status govt" here: its owner, or gövt 128 when it is independent. That
- * mapping is the one place the two can disagree, and they do in exactly
- * one cell, c2 (see below).
+ * Records are per SYSTEM, in the original and (since ruling #380) in
+ * NovaJS, so "-500 in system S" is the record keyed by S's sÿst id, and all
+ * 21 cells match the original, c2 included: a criminal in one of the
+ * owner's systems is NOT a criminal in its others. (Under #376's per-govt
+ * records c2 was the one cell NovaJS got wrong.)
  */
 
 const OWNER = 'nova:370';
@@ -103,11 +103,6 @@ const SYSTEMS: { readonly [id: string]: string | null } = {
     'nova:2003': OWNER2, // A14 OtoG (wave 5)
 };
 
-/** The govt keying "the record in system S" under per-govt records. */
-function recordGovtOf(systemId: string): string {
-    return SYSTEMS[systemId] ?? 'nova:128';
-}
-
 interface Cell {
     cell: string;
     /** Where the player is, and whose ships are there. */
@@ -166,40 +161,30 @@ const CELLS: readonly Cell[] = [
         criminalIn: 'nova:2003', originalAttacked: true },
 ];
 
-/**
- * c2 is the per-govt simplification's one casualty: "-500 in another of
- * the Owner's systems" IS "-500 with the Owner" here, so the Owner's
- * warships attack where the original's did not. Pinned as the known,
- * sanctioned difference rather than skipped, so a change to it is seen.
- */
-const PER_GOVT_SIMPLIFICATION = new Set(['c2']);
-
+/** Every cell now matches the original (ruling #380). */
 function expectedInNovaJs(cell: Cell): boolean {
-    return PER_GOVT_SIMPLIFICATION.has(cell.cell)
-        ? !cell.originalAttacked : cell.originalAttacked;
+    return cell.originalAttacked;
 }
 
+/** The -500 record, keyed by the sÿst it was set in. */
 function recordsFor(cell: Cell): Map<string, number> {
     return cell.criminalIn === null ? new Map()
-        : new Map([[recordGovtOf(cell.criminalIn), -500]]);
+        : new Map([[cell.criminalIn, -500]]);
 }
 
 function lawFor(systemId: string): LocalLaw {
-    return localLaw(SYSTEMS[systemId], id => GOVT_BY_ID.get(id));
+    return localLaw(systemId, SYSTEMS[systemId], id => GOVT_BY_ID.get(id));
 }
 
 describe('reference A14: whose record makes a ship attack (pure rule)', () => {
     it('covers every measured cell', () => {
         expect(CELLS.length).toBe(21);
-        expect(CELLS.filter(c => PER_GOVT_SIMPLIFICATION.has(c.cell))
-            .map(c => c.cell)).toEqual(['c2']);
     });
 
     for (const cell of CELLS) {
         const expected = expectedInNovaJs(cell);
-        it(`${cell.cell}: ${expected ? 'attacks' : 'leaves the player be'}`
-            + (PER_GOVT_SIMPLIFICATION.has(cell.cell)
-                ? ' (per-govt records; the original did not)' : ''), () => {
+        it(`${cell.cell}: ${expected ? 'attacks' : 'leaves the player be'}`,
+            () => {
                 const law = lawFor(cell.system);
                 const self = GOVT_BY_ID.get(cell.shipGovt)!;
                 const records = recordsFor(cell);
@@ -235,11 +220,14 @@ describe('reference A14: whose record makes a ship attack (pure rule)', () => {
 
     it("reads an absent record as the system owner's InitialRec", () => {
         const owner = govt('nova:600', { initialRecord: -50 });
-        const law = localLaw('nova:600', id =>
+        const law = localLaw('sys:600', 'nova:600', id =>
             id === 'nova:600' ? owner : undefined);
         expect(criminalHere(owner, new Map(), law)).toBeTrue();
-        expect(criminalHere(owner, new Map([['nova:600', 0]]), law))
+        expect(criminalHere(owner, new Map([['sys:600', 0]]), law))
             .toBeFalse();
+        // A record under the GOVT's id is no record here any more.
+        expect(criminalHere(owner, new Map([['nova:600', 0]]), law))
+            .toBeTrue();
     });
 
     it('localLawIn reads the system owner out of the game data', () => {
@@ -253,6 +241,7 @@ describe('reference A14: whose record makes a ship attack (pure rule)', () => {
         return Promise.all([gameData.data.System.get('nova:2110'),
             gameData.data.Govt.get(OWNER)]).then(() => {
                 const law = localLawIn(gameData as never, 'nova:2110');
+                expect(law.systemId).toBe('nova:2110');
                 expect(law.owner?.id).toBe(OWNER);
                 expect(law.recordGovtId).toBe(OWNER);
                 const nowhere = localLawIn(gameData as never, undefined);

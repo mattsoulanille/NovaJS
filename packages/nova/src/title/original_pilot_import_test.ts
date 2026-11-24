@@ -58,6 +58,21 @@ describe('original pilot import', () => {
         expect(simpleCrypt(scrambled)).toEqual(plain);
     });
 
+    it('maps legal status per system, leaving out what an absent entry '
+        + 'reads anyway and the systems this data set lacks', () => {
+            // nova:135 starts at InitialRec -20 here (so its -20 needs no
+            // entry), nova:136 at -5 (so its 0 does); nova:137 is unknown.
+            const { save } = convertOriginalPilotBytes(
+                buildPltPilotFile('Ring of Glory'), 'Cade.plt', {
+                    ...CTX,
+                    govtOfSystem: id => id === 'nova:137' ? undefined
+                        : CTX.govtOfSystem(id),
+                    initialRecordIn: id => id === 'nova:135' ? -20
+                        : id === 'nova:136' ? -5 : 0,
+                });
+            expect(save.legalRecords).toEqual([['nova:136', 0]]);
+        });
+
     it('converts a synthetic Windows .plt pilot', () => {
         const { save, profile, notes } = convertOriginalPilotBytes(
             buildPltPilotFile('Ring of Glory'), 'Cade Connelly.plt', CTX);
@@ -74,8 +89,9 @@ describe('original pilot import', () => {
             ['cargo:0', 1], ['cargo:1', 2], ['cargo:2', 3],
             ['cargo:3', 4], ['cargo:4', 5], ['cargo:5', 6],
         ]);
-        // legalStatus[7] = -20 -> system nova:135 -> gövt nova:128.
-        expect(save.reputations).toEqual([['nova:128', -20]]);
+        // legalStatus[7] = -20 -> system nova:135, straight across (both
+        // keep the record per system, ruling #380).
+        expect(save.legalRecords).toEqual([['nova:135', -20]]);
         // The .plt builder leaves mission slot 0 active but blank
         // (missionId -1): unknown mission -> skipped with a note.
         expect(save.missions).toEqual([]);

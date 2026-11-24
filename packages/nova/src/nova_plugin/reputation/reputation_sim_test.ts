@@ -14,6 +14,9 @@ import { CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponen
 import { TargetComponent } from '../ship/index.js';
 import { ArmorComponent, ShieldComponent } from '../ship/index.js';
 import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/index.js';
+import { hashWorld } from 'nova_ecs/plugins/world_hash';
+import { restoreWorld, snapshotWorld } from 'nova_ecs/plugins/snapshot_plugin';
+import { deriveEntityComponents } from '../core/index.js';
 
 /**
  * The victim throughout is a Concord of Meridian ship, so the penalties
@@ -21,12 +24,21 @@ import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/i
  * fallbacks: KillPenalty 20, DisabPenalty 5.
  */
 const MERIDIAN = SYNTHETIC.govts.meridian;
-/** Meridian's allies list names its class (1). */
-const ALLY = SYNTHETIC.govts.compact;
 /** The Verge Raiders' enemies list names Meridian's class. */
 const ENEMY = SYNTHETIC.govts.raiders;
 const MERIDIAN_KILL_PENALTY = 20;
 const MERIDIAN_DISABLE_PENALTY = 5;
+/**
+ * Records are per SYSTEM (ruling #380). The world is Thessaly Reach
+ * (Meridian), linked to Kestrel Drift (the Verge Raiders, Meridian's
+ * enemy: Disab 5, Kill 15) and Ossory Shoal (independent: its InitialRec
+ * is gövt 128's, which in this scenario IS Meridian); Vael Hollow (Meridian) is two
+ * jumps out, through Kestrel.
+ */
+const THESSALY = SYNTHETIC.systems.thessaly;
+const KESTREL = SYNTHETIC.systems.kestrel;
+const OSSORY = SYNTHETIC.systems.ossory;
+const VAEL = SYNTHETIC.systems.vael;
 
 /**
  * The reputation pipeline in a LIVE world (parsed game data, the full
@@ -98,14 +110,20 @@ describe('reputation in a live world', () => {
         // A one-hit kill costs the Disab too (reference "A14 with system
         // traffic as the victims, wave 12": -(30 + 100) for one hit).
         const killCost = MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY;
-        expect(records.get(MERIDIAN)).toBe(-killCost);
-        // No ally or enemy propagation (reference "A14 wave 5", ruling
-        // #376): the Amber Compact (Meridian's ally) and the Verge
-        // Raiders (its enemy) are untouched, over the scenario's real
-        // relation map.
-        expect(records.has(ALLY)).toBeFalse();
-        expect(records.has(ENEMY)).toBeFalse();
-        expect(records.size).toBe(1);
+        expect(records.get(THESSALY)).toBe(-killCost);
+        // The spread (reference "A14 spread, wave 14"), each system by its
+        // own owner's view of a Meridian victim, 0.65 per jump:
+        //  - Kestrel, the Raiders' (one jump): not their ship, so half
+        //    their own scaled fields, floor(3 / 2) + floor(9 / 2) = +5,
+        //    over the Raiders' InitialRec of -10 (the absent entry): -5;
+        //  - Ossory, independent (one jump): minus a quarter of the
+        //    victim's scaled fields, -(floor(3/4) + floor(13/4)) = -3
+        //    (reference "A14 / contraband wave 16");
+        //  - Vael, Meridian's (two jumps): -(floor(2.1) + floor(8.4)) = -10.
+        expect(Object.fromEntries(records)).toEqual({
+            [THESSALY]: -killCost, [KESTREL]: -10 + 5, [OSSORY]: -3,
+            [VAEL]: -10,
+        });
         expect(player.components.get(CombatRatingComponent)!.kills)
             .toBe(victimData.strength);
 
@@ -118,7 +136,7 @@ describe('reputation in a live world', () => {
             damager: SHOT,
         }, [VICTIM]);
         world.step();
-        expect(records.get(MERIDIAN)).toBe(-killCost);
+        expect(records.get(THESSALY)).toBe(-killCost);
     });
 
     /**
@@ -158,9 +176,13 @@ describe('reputation in a live world', () => {
             }, [VICTIM]);
             world.step();
 
-            // The record still drops as before...
-            expect(player.components.get(LegalRecordsComponent)!
-                .get(ENEMY)).toBeLessThan(0);
+            // The record: a Raider killed in Meridian space is the Good
+            // Citizen reward there (half Meridian's 5 / 20: +12), and a
+            // crime in the Raiders' own Kestrel next door (-(3 + 9), over
+            // their InitialRec of -10)...
+            const records = player.components.get(LegalRecordsComponent)!;
+            expect(records.get(THESSALY)).toBe(2 + 10);
+            expect(records.get(KESTREL)).toBe(-10 - 12);
             // ...the cover is gone, the Meridian warrant (permanent,
             // another govt) untouched...
             expect(player.components.get(ActiveRanksComponent))
@@ -201,10 +223,10 @@ describe('reputation in a live world', () => {
             }
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+            expect(records.get(THESSALY)).toBe(-MERIDIAN_DISABLE_PENALTY);
             // Steps while it stays disabled do not re-charge.
             world.step();
-            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+            expect(records.get(THESSALY)).toBe(-MERIDIAN_DISABLE_PENALTY);
         });
 
     it('a kill after the same player\'s disable charges the Disab once, '
@@ -237,13 +259,13 @@ describe('reputation in a live world', () => {
             }
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+            expect(records.get(THESSALY)).toBe(-MERIDIAN_DISABLE_PENALTY);
 
             // Then finished off.
             hit(1e9);
             world.step();
             expect(armor.current).toBe(0);
-            expect(records.get(MERIDIAN)).toBe(
+            expect(records.get(THESSALY)).toBe(
                 -(MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY));
         });
 
@@ -279,7 +301,7 @@ describe('reputation in a live world', () => {
             }, [VICTIM]);
             world.step();
             expect(player.components.get(LegalRecordsComponent)!
-                .get(MERIDIAN)).toBe(
+                .get(THESSALY)).toBe(
                     -(MERIDIAN_DISABLE_PENALTY + MERIDIAN_KILL_PENALTY));
         });
 
@@ -309,7 +331,7 @@ describe('reputation in a live world', () => {
             world.step();
             expect(victim.components.has(DisabledComponent)).toBeTrue();
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(records.get(MERIDIAN)).toBeUndefined();
+            expect(records.get(THESSALY)).toBeUndefined();
 
             // A stray player shot at the hulk: it did not disable it.
             world.emit(DamagedEvent, {
@@ -324,7 +346,7 @@ describe('reputation in a live world', () => {
             }
             expect(victim.components.get(DamageAttributionComponent)!.root)
                 .toBe(PLAYER);
-            expect(records.get(MERIDIAN)).toBeUndefined();
+            expect(records.get(THESSALY)).toBeUndefined();
 
             // Repaired and then genuinely disabled by the player: charged.
             armor.current = armor.max;
@@ -341,7 +363,7 @@ describe('reputation in a live world', () => {
                 world.step();
             }
             expect(victim.components.has(DisabledComponent)).toBeTrue();
-            expect(records.get(MERIDIAN)).toBe(-MERIDIAN_DISABLE_PENALTY);
+            expect(records.get(THESSALY)).toBe(-MERIDIAN_DISABLE_PENALTY);
         });
 
     it('a Meridian warship hunts a player with a criminal Meridian record',
@@ -350,7 +372,7 @@ describe('reputation in a live world', () => {
             const player = await addPlayer(world, gameData);
             // Deep in criminal territory (Meridian's CrimeTol is 20).
             player.components.set(LegalRecordsComponent,
-                new Map([[MERIDIAN, -100]]));
+                new Map([[THESSALY, -100]]));
 
             // A Meridian warship with the NPC warship brain.
             const warship = makeShip(
@@ -370,6 +392,69 @@ describe('reputation in a live world', () => {
             expect(warship.components.get(TargetComponent)!.target)
                 .toBe(PLAYER);
         });
+
+    it('a criminal record in ANOTHER Meridian system does not make him a '
+        + 'criminal here (c2: per-system records)', async () => {
+            const { gameData, world } = await makeWorld();
+            const player = await addPlayer(world, gameData);
+            player.components.set(LegalRecordsComponent,
+                new Map([[VAEL, -100]]));
+            const warship = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.warden));
+            warship.components.set(GovtComponent, { id: MERIDIAN });
+            warship.components.set(NpcComponent, { aiType: 3 });
+            warship.components.set(TargetComponent, { target: undefined });
+            await completeEntity(world, warship);
+            world.entities.set('meridian warship', warship);
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(warship.components.get(NpcComponent)!.mode)
+                .not.toBe('attack');
+        });
+
+    it('replays a spreading kill identically after a rollback', async () => {
+        const { gameData, world } = await makeWorld();
+        const player = await addPlayer(world, gameData);
+        const victim = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+        victim.components.set(GovtComponent, { id: MERIDIAN });
+        await completeEntity(world, victim);
+        world.entities.set(VICTIM, victim);
+        const shot = new Entity(SHOT);
+        shot.components.set(FiringGroupComponent, { group: PLAYER });
+        world.entities.set(SHOT, shot);
+        world.step();
+        const before = snapshotWorld(world);
+        const run = () => {
+            const victimNow = world.entities.get(VICTIM)!;
+            victimNow.components.get(ShieldComponent)!.current = 0;
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 1e9, ionization: 0, ionizationColor: 0,
+                    knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            const hashes: string[] = [];
+            for (let i = 0; i < 30; i++) {
+                world.step();
+                hashes.push(hashWorld(world).hash);
+            }
+            return {
+                hashes,
+                records: [...world.entities.get(PLAYER)!.components
+                    .get(LegalRecordsComponent)!],
+            };
+        };
+        const first = run();
+        expect(first.records.length).toBe(4);
+        restoreWorld(world, before, deriveEntityComponents);
+        expect(world.entities.get(PLAYER)!.components
+            .get(LegalRecordsComponent)!.size).toBe(0);
+        expect(run()).toEqual(first);
+        void player;
+    });
 
     it('a Meridian warship ignores a player with a clean record',
         async () => {

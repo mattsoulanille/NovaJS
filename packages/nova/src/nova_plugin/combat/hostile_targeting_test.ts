@@ -215,8 +215,9 @@ describe('the brain and the brackets agree on who is hostile (K9)', () => {
         await built.addShip('player', 0, ship => {
             ship.components.set(ControlledByComponent, { peerId: PEER });
             if (criminal) {
+                // Criminal IN this system (records are per system).
                 ship.components.set(LegalRecordsComponent,
-                    new Map([[LAWFUL, -500]]));
+                    new Map([['test:system', -500]]));
             }
         });
         await built.addShip('trader', 300, ship => {

@@ -13,7 +13,7 @@ import {
     stellarClearanceFor, StellarBribesComponent,
 } from '../nova_plugin/travel/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import { SimulationGameDataResource, SystemIdResource } from '../nova_plugin/core/index.js';
 import { ActiveRanksComponent } from '../nova_plugin/ncb/index.js';
 import {
     OutfitsStateComponent, ShipComponent, ShipDataComponent,
@@ -268,6 +268,7 @@ export const GateAnimationSystem = new System({
             const cleared = !records || !gameData || stellarClearanceFor({
                 planetData, gameData, records, shipData, outfits, bribes,
                 ranks, missions, planetId: planet.id,
+                systemId: world.resources.get(SystemIdResource),
                 now: simTime?.time ?? 0,
             }).cleared;
             if (cleared) {

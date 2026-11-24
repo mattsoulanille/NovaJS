@@ -134,7 +134,7 @@ export class MissionSession {
             offerContext: () => session.offerContext(),
             // Player-local: only resulting state reaches the sim.
             random: Math.random,
-            allGovts: () => universe.govts(),
+            legalGeography: () => universe.legalGeography(),
             sameStellar: (a, b) => universe.sameStellar(a, b),
             getRank: id => universe.getRank(id),
             outfitExists: id => universe.hasOutfit(id),

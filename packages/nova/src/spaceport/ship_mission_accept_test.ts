@@ -14,7 +14,7 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import { Stat } from '../nova_plugin/core/index.js';
 import { NpcComponent } from '../nova_plugin/npc/index.js';
-import { recordWith, CombatRatingComponent } from '../nova_plugin/reputation/index.js';
+import { CombatRatingComponent } from '../nova_plugin/reputation/index.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
     buildShipMissionAccept, buildShipMissionOffer,
@@ -435,12 +435,16 @@ describe('buildShipMissionAccept (the input record)', () => {
             if (decoded._tag === 'Right') {
                 expect(decoded.right.returnPlanet).toEqual('nova:128');
             }
-            // The Federation record: materialized from the gövt's
-            // InitialRec on the client, then -1 for the failure.
-            const fed = universe.getGovt('nova:128');
-            const [[govtId, delta]] = record.recordsDelta!;
-            expect(govtId).toEqual('nova:128');
-            expect(delta).toEqual(recordWith(new Map(), 'nova:128', fed) - 1);
+            // The failure's -1, in every Federation system (records are
+            // per system, ruling #380; the CompGovt's failure reaches all
+            // of its systems), each read over its InitialRec on both
+            // sides, so the delta is exactly -1.
+            const geography = universe.legalGeography();
+            const fedSystems = geography.systemIds.filter(
+                id => geography.system(id)!.govt === 'nova:128');
+            expect(fedSystems).toContain('nova:128');
+            expect(record.recordsDelta!).toEqual(
+                fedSystems.map(id => [id, -1] as [string, number]));
             // The mirror is untouched.
             expect(player.components.get(MissionsComponent)!.has('nova:614'))
                 .toBeTrue();

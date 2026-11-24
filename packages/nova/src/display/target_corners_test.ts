@@ -263,10 +263,11 @@ describe('styleForTarget: hostility is the ship\'s, not its govt\'s (K9)',
             'nova:137': pirates,
         });
         const plainPlayer = new Entity('player');
-        // -500 with govt 370, as in the K9 run: "Criminal" at CrimeTol 10.
+        // -500 in govt 370's system, as in the K9 run: "Criminal" at
+        // CrimeTol 10 (records are per system, ruling #380).
         const criminalPlayer = new Entity('player')
             .addComponent(LegalRecordsComponent,
-                new Map([['nova:370', -500]]));
+                new Map([[OWN_370_SYSTEM, -500]]));
 
         function ship(govtId: string, aiType: number,
             mode: 'travel' | 'patrol' | 'attack' = 'travel') {

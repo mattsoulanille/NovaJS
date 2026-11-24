@@ -9,16 +9,16 @@ import { applyOutcomeReputation } from './mission_payval.js';
 
 /**
  * A mission's CompReward against the stock scenario, through the real
- * MissionSession wiring (its machinery's allGovts is what reaches the
- * allies and enemies).
+ * MissionSession wiring (its machinery's legal geography is what reaches
+ * the allies' and enemies' systems).
  *
  * Ground truth: the original, completing stock "Rescue Raczak" (mïsn
  * nova:394, CompGovt 144 Wild Geese, CompReward 10), changed the record
  * +10 in the 4 systems Wild Geese owns, +5 in 173 others and -5 in 121
  * (docs/reference_experiments.md, "Boarding a rescue ship: stock "Rescue
  * Raczak" (nova:394), wave 13", finding 4; the rule is "A14 spread, wave
- * 14", finding 5). NovaJS's records are per govt, so the spec maps each
- * stock system to its owner's record change and counts.
+ * 14", finding 5). Records are per system (ruling #380), so the spec
+ * counts each stock system's change over what it read before.
  */
 describe('CompReward against stock data (Rescue Raczak)', () => {
     async function sessionAndRaczak() {
@@ -35,7 +35,18 @@ describe('CompReward against stock data (Rescue Raczak)', () => {
         const session = await MissionSession.create(
             entity, gameData, universe, dockedAt.id);
         const raczak = universe.getMission('nova:394')!;
-        return { gameData, session, raczak };
+        const geography = universe.legalGeography();
+        /** Every system's change, over what an absent entry reads. */
+        const changes = (records: ReadonlyMap<string, number>) =>
+            new Map(geography.systemIds.flatMap(id => {
+                const change = geography.recordIn(records, id)
+                    - geography.recordIn(new Map(), id);
+                return change === 0 ? [] : [[id, change] as const];
+            }));
+        /** The systems a govt owns. */
+        const ownedBy = (govt: string) => geography.systemIds.filter(
+            id => geography.system(id)!.govt === govt);
+        return { gameData, session, raczak, changes, ownedBy };
     }
 
     it('reads Rescue Raczak as CompGovt 144, CompReward 10', async () => {
@@ -48,48 +59,49 @@ describe('CompReward against stock data (Rescue Raczak)', () => {
 
     it('changes the records the original changed on completion: '
         + '4 systems +10, 173 +5, 121 -5', async () => {
-            const { gameData, session, raczak } = await sessionAndRaczak();
+            const { session, raczak, changes, ownedBy } =
+                await sessionAndRaczak();
             const records = session.state.records!;
             expect(records.size).toBe(0);
             applyOutcomeReputation(session.machinery, raczak, 'complete');
+            const changed = changes(records);
 
-            expect(records.get('nova:144')).toBe(10);
+            const ofGovt = (govt: string) => new Set(
+                ownedBy(govt).map(id => changed.get(id)));
+            expect(ofGovt('nova:144')).toEqual(new Set([10]));
             // A one-way ally each way (Wild Geese lists the Federation's
             // class; Polaris lists Wild Geese's), a one-way enemy each way
             // (Wild Geese lists the Aurorans'; Family Vella lists Wild
             // Geese's), and the xenophobic Pirates.
-            expect(records.get('nova:128')).toBe(5);
-            expect(records.get('nova:130')).toBe(5);
-            expect(records.get('nova:129')).toBe(-5);
-            expect(records.get('nova:133')).toBe(-5);
-            expect(records.get('nova:137')).toBe(-5);
+            expect(ofGovt('nova:128')).toEqual(new Set([5]));
+            expect(ofGovt('nova:130')).toEqual(new Set([5]));
+            expect(ofGovt('nova:129')).toEqual(new Set([-5]));
+            expect(ofGovt('nova:133')).toEqual(new Set([-5]));
+            expect(ofGovt('nova:137')).toEqual(new Set([-5]));
 
             const counts = new Map<number, number>();
-            const ids = await gameData.ids;
-            for (const id of [...ids.System].sort()) {
-                const owner = (await gameData.data.System.get(id)).govt;
-                const change = owner ? records.get(owner) ?? 0 : 0;
-                if (change !== 0) {
-                    counts.set(change, (counts.get(change) ?? 0) + 1);
-                }
+            for (const change of changed.values()) {
+                counts.set(change, (counts.get(change) ?? 0) + 1);
             }
             expect(Object.fromEntries(counts))
                 .toEqual({ 10: 4, 5: 173, [-5]: 121 });
         });
 
     it('keeps a failure\'s -R/2 with the CompGovt', async () => {
-        const { session, raczak } = await sessionAndRaczak();
+        const { session, raczak, changes, ownedBy } = await sessionAndRaczak();
         applyOutcomeReputation(session.machinery, raczak, 'fail');
-        expect([...session.state.records!]).toEqual([['nova:144', -5]]);
+        expect(changes(session.state.records!)).toEqual(new Map(
+            ownedBy('nova:144').map(id => [id, -5] as const)));
     });
 
     it('keeps the 0x0040 abort\'s -5R with the CompGovt', async () => {
-        const { session, raczak } = await sessionAndRaczak();
+        const { session, raczak, changes, ownedBy } = await sessionAndRaczak();
         const flagged = {
             ...raczak,
             flags: { ...raczak.flags, lose5xCompRewardOnAbort: true },
         };
         applyOutcomeReputation(session.machinery, flagged, 'abort');
-        expect([...session.state.records!]).toEqual([['nova:144', -50]]);
+        expect(changes(session.state.records!)).toEqual(new Map(
+            ownedBy('nova:144').map(id => [id, -50] as const)));
     });
 });

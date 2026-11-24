@@ -4,12 +4,9 @@ import { govtDispositionTo } from './govt_disposition.js';
 import { shipDisposition } from './iff_plugin.js';
 import { LocalLaw, localLaw } from './local_law.js';
 import {
-    addRecord,
-    applyCompletionReward,
-    applyCrime,
+    addRecordIn,
     availRatingOk,
     availRecordOk,
-    cleanRecords,
     combatRatingName,
     compRewardDelta,
     crimePenalty,
@@ -19,15 +16,15 @@ import {
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
     INDEPENDENT_STATUS_GOVT,
-    initialRecordsFromGovtStatuses,
     LEGAL_STATUS_NO_RECORD,
     legalStatusInSystem,
     legalStatusName,
     LegalRecords,
     recordHostile,
-    recordWith,
+    recordIn,
     statusGovtOf,
 } from './reputation.js';
+import { applyCrime, LegalGeography } from './system_records.js';
 
 function makeGovt(id: string, partial: Partial<GovtData> = {}): GovtData {
     return { ...getDefaultGovtData(), id, ...partial };
@@ -47,6 +44,12 @@ const allGovts: (readonly [string, GovtData])[] = [
     [fed.id, fed], [auroran.id, auroran], [bureau.id, bureau],
     [bystander.id, bystander]];
 
+/** The one system each govt owns in these specs (records are per
+ * system: ruling #380), and the independent one. */
+function systemOf(owner: GovtData | undefined): string {
+    return owner ? `sys:${owner.id}` : 'sys:independent';
+}
+
 /** The law in force in a system owned by `owner` (undefined:
  * independent), over the little landscape above. */
 function lawOf(owner: GovtData | undefined,
@@ -55,33 +58,35 @@ function lawOf(owner: GovtData | undefined,
     for (const govt of extra) {
         govts.set(govt.id, govt);
     }
-    return localLaw(owner?.id, id => govts.get(id));
+    return localLaw(systemOf(owner), owner?.id, id => govts.get(id));
 }
 /** The Federation's own space. */
 const FED_SPACE = lawOf(fed);
+const FED_SYS = systemOf(fed);
 
-describe('recordWith / addRecord', () => {
-    it('reads absent entries as the govt InitialRec', () => {
+describe('recordIn / addRecordIn', () => {
+    it("reads absent entries as the system's status govt InitialRec", () => {
         const records: LegalRecords = new Map();
-        expect(recordWith(records, 'nova:128', fed)).toBe(0);
-        expect(recordWith(records, 'nova:128',
+        expect(recordIn(records, 'sys:a', fed)).toBe(0);
+        expect(recordIn(records, 'sys:a',
             makeGovt('nova:128', { initialRecord: -25 }))).toBe(-25);
-        expect(recordWith(records, 'nova:999')).toBe(0);
+        expect(recordIn(records, 'sys:a')).toBe(0);
+        expect(recordIn(new Map([['sys:a', 3]]), undefined, fed)).toBe(0);
     });
 
     it('materializes entries from InitialRec when adding', () => {
         const records: LegalRecords = new Map();
         const hostile = makeGovt('nova:150', { initialRecord: -10 });
-        addRecord(records, hostile.id, hostile, -5);
-        expect(records.get('nova:150')).toBe(-15);
+        addRecordIn(records, 'sys:h', hostile, -5);
+        expect(records.get('sys:h')).toBe(-15);
     });
 
     it('clamps to the pilot-file int16 range', () => {
-        const records: LegalRecords = new Map([['nova:128', 32760]]);
-        addRecord(records, 'nova:128', fed, 100);
-        expect(records.get('nova:128')).toBe(32767);
-        addRecord(records, 'nova:128', fed, -100000);
-        expect(records.get('nova:128')).toBe(-32767);
+        const records: LegalRecords = new Map([['sys:a', 32760]]);
+        addRecordIn(records, 'sys:a', fed, 100);
+        expect(records.get('sys:a')).toBe(32767);
+        addRecordIn(records, 'sys:a', fed, -100000);
+        expect(records.get('sys:a')).toBe(-32767);
     });
 });
 
@@ -116,41 +121,13 @@ describe('crimePenalty', () => {
             expect(crimePenalty(negative, 'disable')).toBe(-100);
             expect(crimePenalty(negative, 'board')).toBe(-100);
             const records: LegalRecords = new Map();
-            applyCrime(records, negative, 'disable');
-            applyCrime(records, negative, 'kill');
-            expect(records.get('nova:369')).toBe(200);
+            const own = new LegalGeography([{
+                id: 'sys:neg', govt: negative.id, links: [], position: [0, 0],
+            }], [[negative.id, negative]]);
+            applyCrime(records, own, 'sys:neg', negative, ['disable']);
+            applyCrime(records, own, 'sys:neg', negative, ['kill']);
+            expect(records.get('sys:neg')).toBe(200);
         });
-});
-
-describe('applyCrime', () => {
-    /**
-     * Reference "A14 wave 5" and ruling #376: one kill changed ONLY the
-     * record of the system it happened in; the ally's home stayed at 0.
-     * There is no ally hatred and no enemy approval (this superseded
-     * #320 item 1, the size of that propagation).
-     */
-    it('penalizes the victim govt alone: no ally or enemy propagation',
-        () => {
-            const records: LegalRecords = new Map();
-            applyCrime(records, fed, 'kill');
-            // Full penalty with the wronged govt...
-            expect(records.get(fed.id)).toBe(-6);
-            // ...and nothing anywhere else: not its ally, not its enemy,
-            // not a bystander.
-            expect(records.has(bureau.id)).toBe(false);
-            expect(records.has(auroran.id)).toBe(false);
-            expect(records.has(bystander.id)).toBe(false);
-            expect(records.size).toBe(1);
-        });
-
-    it('charges a disable and a kill separately, and accumulates', () => {
-        const records: LegalRecords = new Map();
-        applyCrime(records, fed, 'disable');
-        applyCrime(records, fed, 'kill');
-        applyCrime(records, fed, 'kill');
-        expect(records.get(fed.id)).toBe(-2 - 6 - 6);
-        expect(records.size).toBe(1);
-    });
 });
 
 describe('recordHostile', () => {
@@ -225,54 +202,6 @@ describe('legalStatusName (#119)', () => {
         expect(legalStatusName(5, 0)).toBe('Good Citizen');
         expect(legalStatusName(-2, 0)).toBe('Minor Offender');
         expect(legalStatusName(-2, -7)).toBe('Minor Offender');
-    });
-});
-
-describe('cleanRecords', () => {
-    it('raises a bad record to 0 and leaves good records alone', () => {
-        const records: LegalRecords = new Map([
-            [fed.id, -40], [bureau.id, 7]]);
-        cleanRecords(records, 'govt', fed, allGovts);
-        expect(records.get(fed.id)).toBe(0);
-        expect(records.get(bureau.id)).toBe(7);
-    });
-
-    it('cleans a negative InitialRec govt that has no entry', () => {
-        const hated = makeGovt('nova:150', { initialRecord: -100 });
-        const records: LegalRecords = new Map();
-        cleanRecords(records, 'govt', hated,
-            [[hated.id, hated] as const]);
-        expect(records.get('nova:150')).toBe(0);
-    });
-
-    it("scope 'allies' cleans the govt and its allies only", () => {
-        const records: LegalRecords = new Map([
-            [fed.id, -40], [bureau.id, -40], [auroran.id, -40],
-            [bystander.id, -40]]);
-        cleanRecords(records, 'allies', fed, allGovts);
-        expect(records.get(fed.id)).toBe(0);
-        expect(records.get(bureau.id)).toBe(0);
-        expect(records.get(auroran.id)).toBe(-40);
-        expect(records.get(bystander.id)).toBe(-40);
-    });
-
-    it("scope 'classmates' cleans govts sharing a class", () => {
-        const twin = makeGovt('nova:400', { classes: [1] });
-        const records: LegalRecords = new Map([
-            [fed.id, -40], [twin.id, -40], [auroran.id, -40]]);
-        cleanRecords(records, 'classmates', fed,
-            [...allGovts, [twin.id, twin] as const]);
-        expect(records.get(fed.id)).toBe(0);
-        expect(records.get(twin.id)).toBe(0);
-        expect(records.get(auroran.id)).toBe(-40);
-    });
-
-    it("scope 'all' cleans everyone (ModType 21 ModVal -1)", () => {
-        const records: LegalRecords = new Map([
-            [fed.id, -40], [auroran.id, -40]]);
-        cleanRecords(records, 'all', undefined, allGovts);
-        expect(records.get(fed.id)).toBe(0);
-        expect(records.get(auroran.id)).toBe(0);
     });
 });
 
@@ -389,87 +318,10 @@ describe('govtRelation', () => {
     });
 });
 
-describe('applyCompletionReward', () => {
-    const pirate = makeGovt('nova:137', { classes: [20] });
-    pirate.flags = { ...pirate.flags, xenophobic: true };
-    const friendlyXeno = makeGovt('nova:170', { classes: [21], allies: [1] });
-    friendlyXeno.flags = { ...friendlyXeno.flags, xenophobic: true };
-    const landscape: (readonly [string, GovtData])[] = [
-        ...allGovts, [pirate.id, pirate], [friendlyXeno.id, friendlyXeno]];
-
-    it('gives +R to the CompGovt, +R/2 to allies, -R/2 to enemies and '
-        + 'xenophobes, nothing to the unrelated', () => {
-            const records: LegalRecords = new Map();
-            applyCompletionReward(records, fed.id, fed, 1000, landscape);
-            expect(Object.fromEntries(records)).toEqual({
-                [fed.id]: 1000,
-                [bureau.id]: 500,
-                [auroran.id]: -500,
-                [pirate.id]: -500,
-                // A xenophobe allied to the CompGovt is an ally.
-                [friendlyXeno.id]: 500,
-            });
-            expect(records.has(bystander.id)).toBe(false);
-        });
-
-    it('truncates the half toward zero', () => {
-        const records: LegalRecords = new Map();
-        applyCompletionReward(records, fed.id, fed, 3, landscape);
-        expect(records.get(bureau.id)).toBe(1);
-        expect(records.get(auroran.id)).toBe(-1);
-
-        const negative: LegalRecords = new Map();
-        applyCompletionReward(negative, fed.id, fed, -51, landscape);
-        expect(negative.get(fed.id)).toBe(-51);
-        expect(negative.get(bureau.id)).toBe(-25);
-        expect(negative.get(auroran.id)).toBe(25);
-
-        // R = 1: the half truncates to 0 and touches no other record.
-        const one: LegalRecords = new Map();
-        applyCompletionReward(one, fed.id, fed, 1, landscape);
-        expect([...one]).toEqual([[fed.id, 1]]);
-    });
-
-    it('adds to existing records and starts absent ones from InitialRec',
-        () => {
-            const wary = makeGovt('nova:129', { classes: [2], enemies: [1],
-                initialRecord: -30 });
-            const records: LegalRecords = new Map([[bureau.id, 7]]);
-            applyCompletionReward(records, fed.id, fed, 10,
-                [[fed.id, fed], [bureau.id, bureau], [wary.id, wary]]);
-            expect(records.get(bureau.id)).toBe(12);
-            expect(records.get(wary.id)).toBe(-35);
-        });
-
-    it('changes only the CompGovt without its data', () => {
-        const records: LegalRecords = new Map();
-        applyCompletionReward(records, 'nova:999', undefined, 10, landscape);
-        expect([...records]).toEqual([['nova:999', 10]]);
-    });
-});
-
-describe('initialRecordsFromGovtStatuses', () => {
-    it('applies the status to the govt and its allies, negated for enemies',
-        () => {
-            const records = initialRecordsFromGovtStatuses(
-                [{ govt: fed.id, status: 30 }], allGovts);
-            expect(records.get(fed.id)).toBe(30);
-            expect(records.get(bureau.id)).toBe(30);
-            expect(records.get(auroran.id)).toBe(-30);
-            expect(records.has(bystander.id)).toBe(false);
-        });
-
-    it('still sets the named govt when it is not in the govt list', () => {
-        const records = initialRecordsFromGovtStatuses(
-            [{ govt: 'nova:999', status: 12 }], allGovts);
-        expect(records.get('nova:999')).toBe(12);
-    });
-});
-
 describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
     it('flips a neutral govt to enemy exactly below -CrimeTol', () => {
-        const atTol: LegalRecords = new Map([[fed.id, -10]]);
-        const belowTol: LegalRecords = new Map([[fed.id, -11]]);
+        const atTol: LegalRecords = new Map([[FED_SYS, -10]]);
+        const belowTol: LegalRecords = new Map([[FED_SYS, -11]]);
         expect(govtDispositionTo(fed, undefined, atTol, FED_SPACE))
             .toBe('neutral');
         expect(govtDispositionTo(fed, undefined, belowTol, FED_SPACE))
@@ -488,7 +340,7 @@ describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
     it('never flips a neverAttacksPlayer govt', () => {
         const pacifist = makeGovt('nova:500', { crimeTol: 0 });
         pacifist.flags = { ...pacifist.flags, neverAttacksPlayer: true };
-        const criminal: LegalRecords = new Map([[pacifist.id, -9999]]);
+        const criminal: LegalRecords = new Map([[systemOf(pacifist), -9999]]);
         expect(govtDispositionTo(pacifist, undefined, criminal,
             lawOf(pacifist, [pacifist]))).toBe('neutral');
     });
@@ -500,14 +352,13 @@ describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
             lawOf(hated, [hated]))).toBe('enemy');
     });
 
-    // Reference A14 (docs/reference_experiments.md) and ruling #376: the
-    // record that counts is the one IN THIS SYSTEM, and only a govt that
-    // enforces this system's law acts on it.
+    // Reference A14 (docs/reference_experiments.md), rulings #376 and
+    // #380: the record that counts is the one IN THIS SYSTEM, and only a
+    // govt that enforces this system's law acts on it.
     it('judges the record in THIS system, not the one with its own govt',
         () => {
-            // Criminal with the Federation, standing in Federation space:
-            // the Fed hunts (c1)...
-            const fedCriminal: LegalRecords = new Map([[fed.id, -500]]);
+            // Criminal in this Federation system: the Fed hunts (c1)...
+            const fedCriminal: LegalRecords = new Map([[FED_SYS, -500]]);
             expect(govtDispositionTo(fed, undefined, fedCriminal, FED_SPACE))
                 .toBe('enemy');
             // ...but not in a system it has no tie to (c5: the home
@@ -516,12 +367,17 @@ describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
                 lawOf(bystander))).toBe('neutral');
             expect(govtDispositionTo(fed, undefined, fedCriminal,
                 lawOf(undefined))).toBe('neutral');
-            // An ALLY of the owner enforces the owner's record (c3), and
-            // its own record with the ally does not matter (c14).
+            // ...nor in ANOTHER Federation system, whose record is its own
+            // (c2: per-system records, ruling #380).
+            expect(govtDispositionTo(fed, undefined, fedCriminal,
+                localLaw('sys:fed-elsewhere', fed.id,
+                    id => new Map(allGovts).get(id)))).toBe('neutral');
+            // An ALLY of the owner enforces this system's record (c3), and
+            // a record in the ally's own system does not matter (c14).
             expect(govtDispositionTo(bureau, undefined, fedCriminal,
                 FED_SPACE)).toBe('enemy');
             expect(govtDispositionTo(bureau, undefined,
-                new Map([[bureau.id, -500]]), FED_SPACE)).toBe('neutral');
+                new Map([[systemOf(bureau), -500]]), FED_SPACE)).toBe('neutral');
             // An unrelated govt ignores a local criminal (c4).
             expect(govtDispositionTo(bystander, undefined, fedCriminal,
                 FED_SPACE)).toBe('neutral');
@@ -531,8 +387,8 @@ describe('criminal hostility: sim disposition (govtDispositionTo)', () => {
 describe('criminal hostility: display disposition (shipDisposition)', () => {
     it('shows hostile radar/corners below -CrimeTol, same as the sim',
         () => {
-            const atTol: LegalRecords = new Map([[fed.id, -10]]);
-            const belowTol: LegalRecords = new Map([[fed.id, -11]]);
+            const atTol: LegalRecords = new Map([[FED_SYS, -10]]);
+            const belowTol: LegalRecords = new Map([[FED_SYS, -11]]);
             expect(shipDisposition(fed, undefined, atTol, FED_SPACE))
                 .toBe('neutral');
             expect(shipDisposition(fed, undefined, belowTol, FED_SPACE))
@@ -542,7 +398,7 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
     it('a criminal record beats political friendliness', () => {
         // Sharing the Federation's government but wanted by it: the
         // record flip outranks the same-govt friendly rule.
-        const criminal: LegalRecords = new Map([[fed.id, -999]]);
+        const criminal: LegalRecords = new Map([[FED_SYS, -999]]);
         expect(shipDisposition(fed, fed, criminal, FED_SPACE))
             .toBe('hostile');
         expect(shipDisposition(fed, fed, new Map(), FED_SPACE))
@@ -557,7 +413,7 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
     });
 
     it('agrees with the sim about whose law counts (A14)', () => {
-        const fedCriminal: LegalRecords = new Map([[fed.id, -500]]);
+        const fedCriminal: LegalRecords = new Map([[FED_SYS, -500]]);
         for (const [self, law] of [
             [fed, FED_SPACE], [fed, lawOf(bystander)], [bureau, FED_SPACE],
             [bystander, FED_SPACE], [fed, lawOf(undefined)],
@@ -586,25 +442,25 @@ describe('legalStatusInSystem (one reading for the map and the dialog)', () => {
     it("reads an absent record as the govt's InitialRec, as the sim does",
         () => {
             const fresh = new Map<string, number>();
-            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+            expect(legalStatusInSystem(fresh, 'sys:rebel', 'nova:147', getGovt))
                 .toBe(legalStatusName(-5, 3));
-            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+            expect(legalStatusInSystem(fresh, 'sys:rebel', 'nova:147', getGovt))
                 .not.toBe(LEGAL_STATUS_NO_RECORD);
             // A govt with no InitialRec really is a clean slate.
-            expect(legalStatusInSystem(fresh, 'nova:128', getGovt))
+            expect(legalStatusInSystem(fresh, 'sys:fed', 'nova:128', getGovt))
                 .toBe(LEGAL_STATUS_NO_RECORD);
         });
 
     it('prefers the stored record, scaled by that govt\'s own CrimeTol',
         () => {
-            const records = new Map([['nova:147', -13], ['nova:128', -13]]);
+            const records = new Map([['sys:rebel', -13], ['sys:fed', -13]]);
             // -13 is 2.2 Federation tolerances but 4.3 Rebel ones.
-            expect(legalStatusInSystem(records, 'nova:128', getGovt))
+            expect(legalStatusInSystem(records, 'sys:fed', 'nova:128', getGovt))
                 .toBe('Minor Offender');
-            expect(legalStatusInSystem(records, 'nova:147', getGovt))
+            expect(legalStatusInSystem(records, 'sys:rebel', 'nova:147', getGovt))
                 .toBe('Offender');
-            expect(legalStatusInSystem(new Map([['nova:147', 30]]),
-                'nova:147', getGovt)).toBe(legalStatusName(30, 3));
+            expect(legalStatusInSystem(new Map([['sys:rebel', 30]]),
+                'sys:rebel', 'nova:147', getGovt)).toBe(legalStatusName(30, 3));
         });
 
     it('judges an independent system by gövt 128 (Bible, Appendix II)',
@@ -612,16 +468,16 @@ describe('legalStatusInSystem (one reading for the map and the dialog)', () => {
             expect(statusGovtOf(null)).toBe(INDEPENDENT_STATUS_GOVT);
             expect(statusGovtOf(undefined)).toBe('nova:128');
             expect(statusGovtOf('nova:147')).toBe('nova:147');
-            expect(legalStatusInSystem(new Map([['nova:128', -30]]), null,
-                getGovt)).toBe(legalStatusName(-30, 6));
-            expect(legalStatusInSystem(new Map(), null, getGovt))
+            expect(legalStatusInSystem(new Map([['sys:indep', -30]]),
+                'sys:indep', null, getGovt)).toBe(legalStatusName(-30, 6));
+            expect(legalStatusInSystem(new Map(), 'sys:indep', null, getGovt))
                 .toBe(LEGAL_STATUS_NO_RECORD);
         });
 
     it('has no line for a status govt the caller cannot resolve', () => {
-        expect(legalStatusInSystem(new Map(), 'arpia:600', getGovt))
+        expect(legalStatusInSystem(new Map(), 'sys:x', 'arpia:600', getGovt))
             .toBeUndefined();
-        expect(legalStatusInSystem(new Map(), null, () => undefined))
+        expect(legalStatusInSystem(new Map(), 'sys:x', null, () => undefined))
             .toBeUndefined();
     });
 });

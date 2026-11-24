@@ -15,7 +15,7 @@ import {
 import { MissionShipComponent } from '../player/index.js';
 import { NpcComponent } from '../npc/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
-import { addRecord } from '../reputation/index.js';
+import { addRecordIn, LegalGeographyResource } from '../reputation/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { ShipPhysicsComponent } from '../ship/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
@@ -222,12 +222,14 @@ const SET_STRING_EFFECT_PROPS = {
     missionsStarted: t.array(t.tuple([t.string, EncodedActiveMissionType])),
     missionsEnded: t.array(t.string),
     /**
-     * Signed per-gövt legal-record change (LegalRecordsComponent), keyed
-     * by global gövt id: PayVal's record-cleaning encodings on an
+     * Signed per-system legal-record change (LegalRecordsComponent), keyed
+     * by global sÿst id: PayVal's record-cleaning encodings on an
      * `applyPayOnAutoAbort` auto-abort, and a CompGovt change from a
      * sibling mission an `Axxx`/`Fxxx` ended. The detached copy carried
-     * the component but the diff never read it. A delta, like credits,
-     * and clamped to the pilot file's int16 range on apply (addRecord).
+     * the component but the diff never read it. A delta over the record as
+     * READ (an absent entry is the system's InitialRec on both sides:
+     * ship_mission_accept.ts's diff and the apply below), like credits,
+     * and clamped to the pilot file's int16 range on apply.
      */
     recordsDelta: t.array(t.tuple([t.string, t.number])),
     /**
@@ -694,10 +696,13 @@ export function applySetStringEffects(world: World, uuid: string,
     if ((effects.recordsDelta?.length ?? 0) > 0) {
         const records = player.components.get(LegalRecordsComponent)
             ?? new Map<string, number>();
-        for (const [govtId, delta] of effects.recordsDelta ?? []) {
-            // No gövt data in the simulation: an entry the diff produced
-            // was materialized on the client, so it is read back raw.
-            addRecord(records, govtId, undefined, delta);
+        const geography = world.resources.get(LegalGeographyResource);
+        for (const [systemId, delta] of effects.recordsDelta ?? []) {
+            // Over the record as read, InitialRec included, as the
+            // client's diff read it (the staged geography; without one —
+            // a world makeSystem did not build — an absent entry is 0).
+            addRecordIn(records, systemId, geography?.statusGovt(systemId),
+                delta);
         }
         player.components.set(LegalRecordsComponent, records);
     }

@@ -9,6 +9,7 @@
 export * from './reputation.js';
 export * from './govt_disposition.js';
 export * from './local_law.js';
+export * from './system_records.js';
 // Explicit so `stellarRecord` (by the planet's govt) does not collide with
 // missions' stellarRecord(StellarInfo, ...) — which the missions index
 // re-exports — for a module importing both domains; every other export

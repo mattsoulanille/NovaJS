@@ -8,7 +8,7 @@ import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { CreditsComponent } from '../player/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
-import { recordHostile, recordWith } from '../reputation/index.js';
+import { recordHostile, recordIn } from '../reputation/index.js';
 import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 
 /**
@@ -69,22 +69,24 @@ describe('debug cheats in a live world', () => {
     it('Clear Legal Record restores a hostile record to neutral',
         async () => {
             const { gameData, world } = await makeWorld();
-            // Deep in criminal Meridian territory (record < -CrimeTol).
+            // Deep in criminal Meridian territory (record < -CrimeTol in
+            // Thessaly Reach, a Meridian system; records are per system).
+            const THESSALY = SYNTHETIC.systems.thessaly;
             const player = await addPlayer(world, gameData,
-                new Map([[MERIDIAN, -100]]));
+                new Map([[THESSALY, -100]]));
             world.step();
 
             const govt = await gameData.data.Govt.get(MERIDIAN);
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(recordHostile(records.get(MERIDIAN)!, govt.crimeTol))
+            expect(recordHostile(records.get(THESSALY)!, govt.crimeTol))
                 .toBeTrue();
 
             press(world, 'debugClearRecord');
 
-            // Every stored record is gone, so the govt reads as its
-            // neutral default and is no longer hostile.
+            // Every stored record is gone, so the system reads as its
+            // owner's neutral default and is no longer hostile.
             expect(records.size).toBe(0);
-            expect(recordHostile(recordWith(records, MERIDIAN, govt),
+            expect(recordHostile(recordIn(records, THESSALY, govt),
                 govt.crimeTol)).toBeFalse();
         });
 });

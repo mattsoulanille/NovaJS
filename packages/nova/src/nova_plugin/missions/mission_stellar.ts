@@ -4,7 +4,8 @@ import { isInhabited, landable } from '../core/index.js';
 import type { MissionContext } from './mission_context.js';
 import { resolveNumberedResource, sameNumberedResource } from './mission_ids.js';
 import { evaluateNCBTest } from '../ncb/index.js';
-import { LegalRecords, recordWith } from '../reputation/index.js';
+import { LegalRecords, recordIn } from '../reputation/index.js';
+import type { SystemInfo } from './mission_ship_logic.js';
 
 /**
  * Stellar matching for missions: the flattened StellarInfo, sÿst
@@ -197,22 +198,46 @@ export function stellarAdjacencyOf(ctx: MissionContext):
     };
 }
 
+const systemIndexes = new WeakMap<readonly SystemInfo[], Map<string, SystemInfo>>();
+
+/** `systems` by id, built once per list (MissionUniverse keeps one list
+ * per load). */
+function systemIndex(systems: readonly SystemInfo[]): Map<string, SystemInfo> {
+    let index = systemIndexes.get(systems);
+    if (!index) {
+        index = new Map(systems.map(system => [system.id, system]));
+        systemIndexes.set(systems, index);
+    }
+    return index;
+}
+
 /**
- * The player's legal record at a stellar: the record with its govt,
- * or — for an independent stellar — with govt 128, the Bible's rule
- * for independent systems (Appendix II).
+ * The player's legal record at a stellar, for mïsn AvailRecord (Bible:
+ * "what your legal record in this system must be"): the record IN THE
+ * STELLAR'S SYSTEM (records are per system, ruling #380), an absent entry
+ * reading as the InitialRec of that system's status govt — its owner, or
+ * for an independent system govt 128, the Bible's rule for independent
+ * systems (Appendix II).
+ *
+ * The system comes from the context's `systemIdOfStellar` and its owner
+ * from `systems`; a context without them (bare specs) falls back to the
+ * stellar's own govt for the status govt, with no record entry to read.
  */
 export function stellarRecord(stellar: StellarInfo, records: LegalRecords,
     missionPrefix: string,
-    getGovt: (id: string) => GovtData | undefined): number {
+    getGovt: (id: string) => GovtData | undefined,
+    where: Pick<MissionContext, 'systems' | 'systemIdOfStellar'> = {}): number {
+    const systemId = where.systemIdOfStellar?.(stellar.id);
+    const system = systemId !== undefined && where.systems
+        ? systemIndex(where.systems).get(systemId) : undefined;
+    const ownerId = system ? system.govt : stellar.govt;
     // The Bible's "first government [ID 128]" is a bare number, so it
     // resolves stock-first like every other one: `nova:128` whenever
     // stock defines it (it always does), and only a plug-in's own 128
     // when a total conversion has replaced the stock govts. Keyed on
     // the writer alone, a plug-in mission at an independent stellar was
-    // judged against a phantom `<plug>:128` record that no crime ever
-    // writes and no govt backs (#107).
-    const govtId = stellar.govt ?? resolveNumberedResource(128,
+    // judged against a phantom `<plug>:128` govt that no gövt backs (#107).
+    const govtId = ownerId ?? resolveNumberedResource(128,
         missionPrefix, id => getGovt(id) !== undefined);
-    return recordWith(records, govtId, getGovt(govtId));
+    return recordIn(records, systemId, getGovt(govtId));
 }

@@ -1,7 +1,7 @@
 import { GovtData } from 'novadatainterface/govt_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { isInhabited } from '../core/index.js';
-import { LegalRecords, recordWith } from './reputation.js';
+import { LegalRecords, recordIn } from './reputation.js';
 
 /**
  * ============================================================================
@@ -81,14 +81,12 @@ import { LegalRecords, recordWith } from './reputation.js';
  *    and a conservative one: the worst case is that the override does not fire
  *    for a hidden duplicate, never that it fires when it should not.
  *
- * "YOUR RECORD IN THE CURRENT SYSTEM": the original keys legal records by
- * SYSTEM, seeded from the system owner's InitialRec. NovaJS keys them by
- * GOVERNMENT (reputation.ts's sanctioned simplification), so the record a
- * stellar judges you on is your record with the stellar's OWNING govt — which
- * for a stock system is the same number the original would have used, because
- * a stock system's stellars belong to the government that owns the system.
- * An INDEPENDENT stellar (spöb Govt -1, `govt: null`) has no government to
- * hold a record with and reads as 0.
+ * "YOUR RECORD IN THE CURRENT SYSTEM": legal records are kept PER SYSTEM, as
+ * on the original (ruling #380), seeded from the InitialRec of the system's
+ * status govt (its owner, or gövt 128 when independent). So the record a
+ * stellar judges you on is the player's record in the system the stellar is
+ * in — the current system — whoever owns the stellar itself (the stellar's
+ * govt still decides the travel permit and the ränk 0x0200 override).
  *
  * ONE EXEMPTION, from the data rather than from taste: UNINHABITED stellars
  * (spöb Flags 0x0020) — the Bible's own parenthesis. There is no traffic
@@ -156,7 +154,7 @@ export interface ClearanceStellar {
 
 /** The player half: who they are to this stellar right now. */
 export interface ClearancePlayer {
-    /** The player's legal record with the stellar's owning govt. */
+    /** The player's legal record in the current system. */
     record: number;
     /**
      * The owning gövt's 64-bit Require mask (GovtData.require, a DECIMAL
@@ -304,21 +302,20 @@ export function clearanceDenial(clearance: StellarClearance):
 }
 
 /**
- * The player's legal record with a stellar's owning government — "your record
- * in the current system", under NovaJS's per-govt record model. Independent
- * stellars (no govt) read 0.
+ * The player's legal record at a stellar: "your record in the current
+ * system" (Bible, MinStatus), the record keyed by the current system's id,
+ * an absent entry reading as the InitialRec of that system's status govt
+ * `statusGovt` (its owner, or gövt 128 when independent).
  */
-export function stellarRecord(planetGovt: GovtData | undefined,
-    records: LegalRecords | undefined): number {
-    if (!planetGovt || !records) {
-        return planetGovt?.initialRecord ?? 0;
-    }
-    return recordWith(records, planetGovt.id, planetGovt);
+export function stellarRecord(records: LegalRecords | undefined,
+    systemId: string | undefined, statusGovt: GovtData | undefined): number {
+    return recordIn(records ?? new Map(), systemId, statusGovt);
 }
 
 /**
  * The whole decision from the pieces every caller already has: the stellar's
- * parsed data, its government, the player's records, Contribute bits, and
+ * parsed data, its government, the player's records in the current system,
+ * Contribute bits, and
  * bribe map. `bribedUntil` is the expiry read out of StellarBribesComponent
  * (planet_plugin) and `now` the simulation clock — a bribe whose expiry has
  * passed simply isn't applied, so no one has to prune the map.
@@ -327,6 +324,10 @@ export function planetClearance(opts: {
     planet: Pick<PlanetData, 'minStatus' | 'flags'>,
     planetGovt?: GovtData,
     records?: LegalRecords,
+    /** The current system (the record's key) and its status govt (whose
+     * InitialRec an absent record reads as). */
+    systemId?: string,
+    systemStatusGovt?: GovtData,
     contribute?: bigint,
     bribedUntil?: number,
     now?: number,
@@ -338,7 +339,8 @@ export function planetClearance(opts: {
     const bribed = opts.bribedUntil !== undefined
         && opts.bribedUntil > (opts.now ?? 0);
     return stellarClearance(opts.planet, {
-        record: stellarRecord(opts.planetGovt, opts.records),
+        record: stellarRecord(opts.records, opts.systemId,
+            opts.systemStatusGovt),
         govtRequire: opts.planetGovt?.require,
         contribute: opts.contribute,
         bribed,

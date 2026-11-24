@@ -8,7 +8,7 @@ import { MissionEventType } from '../player/index.js';
 import { ShipChangeMode } from '../ncb/index.js';
 import { ActiveRanks } from '../ncb/index.js';
 import { Missions, PendingAutoAbortShip } from '../player/index.js';
-import { LegalRecords } from '../reputation/index.js';
+import { LegalGeography, LegalRecords } from '../reputation/index.js';
 
 /**
  * The shapes mission processing operates on: the UI-facing MissionEvent,
@@ -103,12 +103,13 @@ export interface MissionMachineryContext {
     offerContext(): MissionContext;
     random(): number;
     /**
-     * Every govt (deterministic order), for ally/classmate scopes of
-     * the PayVal record-cleaning encodings and a completed mission's
-     * CompReward reaching the CompGovt's allies and enemies. Optional;
-     * both degrade to the named govt only when absent.
+     * Every system and govt (deterministic order) as the per-system legal
+     * records see them (reputation/system_records.ts): a CompReward or a
+     * PayVal record cleaning changes the systems of a govt (and of its
+     * allies, enemies or classmates). Optional; without it neither
+     * changes any record.
      */
-    allGovts?(): Iterable<readonly [string, GovtData]>;
+    legalGeography?(): LegalGeography;
     /**
      * Whether two stellar ids denote the "same stellar" — identical name
      * and map coordinates — so landing on one fulfils a travel/return

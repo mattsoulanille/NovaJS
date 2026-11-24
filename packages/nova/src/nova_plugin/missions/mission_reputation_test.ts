@@ -22,13 +22,21 @@ import {
 import { isRight } from 'fp-ts/lib/Either.js';
 import { applyContrabandScan } from '../npc/index.js';
 import { ActiveMissionType, Missions } from '../player/index.js';
-import { LegalRecords, localLaw } from '../reputation/index.js';
+import {
+    LegalGeography, LegalRecords, localLaw,
+} from '../reputation/index.js';
 
 /**
  * Mission-layer reputation: AvailRecord/AvailRating gating,
  * CompGovt/CompReward outcome changes, and the PayVal negative
  * encodings. Kept separate from mission_logic_test so the reputation
  * layer's tests live together.
+ *
+ * Records are per SYSTEM (ruling #380). Each govt here owns one system
+ * whose sÿst id is the govt's own number (as stock sÿst nova:128 is a
+ * Federation system), so a record keyed 'nova:128' is the one in the
+ * Federation's system; stellar nova:128 is in it, stellar nova:129 in the
+ * Aurorans'.
  */
 
 function makeStellar(partial: Partial<StellarInfo> = {}): StellarInfo {
@@ -63,6 +71,22 @@ const auroran = makeGovt('nova:129', { classes: [2], enemies: [1] });
 const govts = new Map([[fed.id, fed], [bureau.id, bureau],
     [auroran.id, auroran]]);
 const getGovt = (id: string) => govts.get(id);
+const SYSTEMS = [
+    { id: 'nova:128', govt: fed.id, links: [] as string[] },
+    { id: 'nova:153', govt: bureau.id, links: [] as string[] },
+    { id: 'nova:129', govt: auroran.id, links: [] as string[] },
+    { id: 'sys:indep', govt: null, links: [] as string[] },
+    // Systems of the plug-in govts the prefix specs below resolve to.
+    { id: 'bigplug:200', govt: 'bigplug:200', links: [] as string[] },
+    { id: 'nova:200', govt: 'nova:200', links: [] as string[] },
+    { id: 'bigplug:250', govt: 'bigplug:250', links: [] as string[] },
+];
+const geography = new LegalGeography(SYSTEMS.map((system, i) => ({
+    ...system, position: [i * 10, 0] as [number, number],
+})), govts);
+/** Stellar nova:N sits in sÿst nova:N; 'nova:777' in the independent one. */
+const systemIdOfStellar = (id: string) =>
+    id === 'nova:777' ? 'sys:indep' : id;
 
 function makeContext(partial: Partial<MissionContext> = {}): MissionContext {
     return {
@@ -75,6 +99,8 @@ function makeContext(partial: Partial<MissionContext> = {}): MissionContext {
         random: () => 0.5,
         getGovt,
         currentDay: 1000,
+        systems: SYSTEMS,
+        systemIdOfStellar,
         ...partial,
     };
 }
@@ -115,7 +141,7 @@ function makeMachinery(state: MissionWorkingState,
             failMission,
         },
         random: () => 0.5,
-        allGovts: () => [...govts],
+        legalGeography: () => geography,
     };
 }
 
@@ -149,10 +175,10 @@ describe('AvailRecord gating', () => {
             ctxWith(new Map()))).toBe(false);
     });
 
-    it('judges the record with the STELLAR\'s govt', () => {
+    it('judges the record in the STELLAR\'s system', () => {
         const mission = makeMission({ availRecord: 5 });
-        // Criminal with the Federation but upstanding with the
-        // Aurorans: available on an Auroran world only.
+        // Criminal in the Federation's system but upstanding in the
+        // Aurorans': available on an Auroran world only.
         const records: LegalRecords = new Map([
             ['nova:128', -20], ['nova:129', 8]]);
         expect(missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
@@ -160,15 +186,21 @@ describe('AvailRecord gating', () => {
         expect(missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
             makeContext({
                 records,
-                stellar: makeStellar({ govt: 'nova:129' }),
+                stellar: makeStellar({ id: 'nova:129', govt: 'nova:129' }),
             }))).toBe(true);
     });
 
-    it('judges independent stellars by govt 128 (Appendix II)', () => {
-        const records: LegalRecords = new Map([['nova:128', 7]]);
-        expect(stellarRecord(makeStellar({ govt: null }), records,
-            'nova', getGovt)).toBe(7);
-    });
+    it('judges independent stellars by their own system\'s record, '
+        + 'absent reading as govt 128\'s InitialRec (Appendix II)', () => {
+            const stellar = makeStellar({ id: 'nova:777', govt: null });
+            const where = { systems: SYSTEMS, systemIdOfStellar };
+            expect(stellarRecord(stellar, new Map([['sys:indep', 7]]),
+                'nova', getGovt, where)).toBe(7);
+            const wary = new Map(govts);
+            wary.set('nova:128', { ...fed, initialRecord: -3 });
+            expect(stellarRecord(stellar, new Map([['nova:128', 7]]),
+                'nova', id => wary.get(id), where)).toBe(-3);
+        });
 
     it('still fails closed on the domination sentinels', () => {
         expect(missionMatchesLocation(
@@ -297,7 +329,7 @@ describe('CompGovt/CompReward', () => {
             const result = applyContrabandScan({
                 smuggled: false, failMissions: [mission.id],
                 items: [`mission:${mission.id}`],
-            }, fed, localLaw(fed.id, getGovt), {
+            }, fed, localLaw('nova:128', fed.id, getGovt), {
                 credits: state.credits, records: state.records,
                 missions: state.missions,
             });

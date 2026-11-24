@@ -19,7 +19,7 @@ import {
     ControlBitsComponent,
 } from '../nova_plugin/ncb/index.js';
 import {
-    CombatRatingComponent, LegalRecordsComponent,
+    CombatRatingComponent, LegalGeography, LegalRecordsComponent,
 } from '../nova_plugin/reputation/index.js';
 import { MissionSession, replaceMap } from './mission_session.js';
 import { warmChangeShipTargets } from './change_ship_targets.js';
@@ -111,6 +111,28 @@ function diffCounts(before: ReadonlyMap<string, number>,
     const deltas: [string, number][] = [];
     for (const key of keys) {
         const delta = (after.get(key) ?? 0) - (before.get(key) ?? 0);
+        if (delta !== 0) {
+            deltas.push([key, delta]);
+        }
+    }
+    return deltas;
+}
+
+/**
+ * Signed differences between two per-system record maps, each read as the
+ * simulation reads it (an absent entry is the system's InitialRec), so a
+ * record cleaned from an absent negative InitialRec to 0 is a change the
+ * apply (mission_accept.ts's applySetStringEffects) composes over the same
+ * reading. Zeroes dropped, systems sorted.
+ */
+function diffRecords(before: ReadonlyMap<string, number>,
+    after: ReadonlyMap<string, number>,
+    geography: LegalGeography): [string, number][] {
+    const keys = [...new Set([...before.keys(), ...after.keys()])].sort();
+    const deltas: [string, number][] = [];
+    for (const key of keys) {
+        const delta = geography.recordIn(after, key)
+            - geography.recordIn(before, key);
         if (delta !== 0) {
             deltas.push([key, delta]);
         }
@@ -334,7 +356,8 @@ async function detachedSession(player: Entity,
  */
 function diffSetStringEffects(before: Entity, after: Entity,
     missionId: string,
-    outcome: { shipChange?: ShipChange, moveToSystem?: SystemMove }):
+    outcome: { shipChange?: ShipChange, moveToSystem?: SystemMove },
+    geography: LegalGeography):
     SetStringEffects {
     const creditsBefore = before.components.get(CreditsComponent)?.credits ?? 0;
     const creditsAfter = after.components.get(CreditsComponent)?.credits ?? 0;
@@ -381,9 +404,9 @@ function diffSetStringEffects(before: Entity, after: Entity,
         .map(([id, started]) => [id, ActiveMissionType.encode(started)]);
     const missionsEnded = [...missionsBefore.keys()]
         .filter(id => id !== missionId && !missionsNow.has(id));
-    const records = diffCounts(
+    const records = diffRecords(
         before.components.get(LegalRecordsComponent) ?? new Map(),
-        after.components.get(LegalRecordsComponent) ?? new Map());
+        after.components.get(LegalRecordsComponent) ?? new Map(), geography);
     return {
         ...(creditsAfter !== creditsBefore
             ? { creditsDelta: creditsAfter - creditsBefore } : {}),
@@ -454,7 +477,7 @@ export async function buildShipMissionAccept(player: Entity,
     // OnAccept `Cxxx` / `Exxx` / `Hxxx` swapped in.
     const after = session.target;
     const effects = diffSetStringEffects(before, after, offer.data.id,
-        outcome);
+        outcome, universe.legalGeography());
 
     const active = missionsAfter(after, offer.data.id);
     // An IMMEDIATE auto-abort mission never becomes active
@@ -535,7 +558,7 @@ export async function buildShipMissionRefusal(player: Entity,
     refuseOffer(session.machinery, offer, session.outfits);
     const events = session.commit();
     const effects = diffSetStringEffects(before, session.target,
-        offer.data.id, outcome);
+        offer.data.id, outcome, universe.legalGeography());
     if (Object.keys(effects).length === 0) {
         return null;
     }
@@ -586,6 +609,6 @@ export async function buildMissionAbort(player: Entity, missionId: string,
     abortMission(session.machinery, missionId, session.outfits);
     const events = session.commit();
     const effects = diffSetStringEffects(before, session.target, missionId,
-        outcome);
+        outcome, universe.legalGeography());
     return { events, record: { missionId, ...effects } };
 }

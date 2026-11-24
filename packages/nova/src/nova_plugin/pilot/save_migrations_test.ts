@@ -16,8 +16,9 @@ import {
     PendingAutoAbortShipsComponent,
 } from '../player/index.js';
 import {
-    CombatRatingComponent, LegalRecordsComponent,
+    CombatRatingComponent, LegalGeography, LegalRecordsComponent,
 } from '../reputation/index.js';
+import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import {
     decodeSave, decodeSaveDetailed, encodeSave, MIN_READABLE_SAVE_VERSION,
     restorePlayerState, SaveData, SavedEscort, SAVE_VERSION,
@@ -146,6 +147,19 @@ const V1_MINIMAL = {
     ship: 'nova:164', outfits: pairs([['nova:200', 1]]), system: 'nova:130',
 };
 
+/**
+ * The scenario's systems for seeding a pre-v6 save's per-govt records
+ * (restorePlayerState): sÿst nova:130 is owned by gövt nova:128, nova:133
+ * by an unrelated nova:999.
+ */
+const GEOGRAPHY = new LegalGeography([
+    { id: 'nova:130', govt: 'nova:128', links: [], position: [0, 0] },
+    { id: 'nova:133', govt: 'nova:999', links: [], position: [10, 0] },
+], [
+    ['nova:128', { ...getDefaultGovtData(), id: 'nova:128' }],
+    ['nova:999', { ...getDefaultGovtData(), id: 'nova:999' }],
+]);
+
 /** The current shape of V1_MINIMAL, with `overrides` on top. */
 function current(overrides: Partial<SaveData> = {}): SaveData {
     return { ...saveDefaults(), ...V1_MINIMAL, ...overrides };
@@ -181,14 +195,16 @@ const HISTORY: HistoricalSave[] = [
             credits: 40000,
             missions: MISSIONS,
             novaControlBits: pairs([['13', 1], ['342', 1]]),
-            reputations: pairs([['nova:128', -15]]),
+            // v6: the per-gövt list, parked for the restore.
+            govtRecords: pairs([['nova:128', -15]]),
             combatRatings: pairs([['kills', 420]]),
         }),
         restored: {
             ...FRESH_VIEW,
             credits: { credits: 40000 },
             missions: new Map(MISSIONS),
-            reputations: new Map([['nova:128', -15]]),
+            // Seeded into the systems gövt nova:128 owns (#380).
+            reputations: new Map([['nova:130', -15]]),
             combatRating: { kills: 420 },
             controlBits: new Set([13, 342]),
         },
@@ -353,7 +369,7 @@ describe('save_migrations list', () => {
             expect(migration.summary.length).toBeGreaterThan(0);
         });
         expect(SAVE_VERSION).toBe(FIRST_SAVE_VERSION + SAVE_MIGRATIONS.length);
-        expect(SAVE_VERSION).toBe(5);
+        expect(SAVE_VERSION).toBe(6);
     });
 
     it('every migration is idempotent on its own output', () => {
@@ -504,8 +520,10 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
 
     /** A v4 pilot owning `prefix`'s outfit, ranks, crons and bit b918. */
     function v4Pilot(prefix: string): Record<string, unknown> {
+        // v4 kept per-gövt `reputations`, not v6's `legalRecords`.
+        const { legalRecords: _v6, ...v4Shape } = current();
         return {
-            ...current(),
+            ...v4Shape,
             ship: `${prefix}:128`,
             outfits: pairs([['nova:200', 1], [`${prefix}:447`, 1]]),
             missions: [[`${prefix}:200`, {
@@ -552,9 +570,9 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
             }
             expect(result.version).toBe(4);
             // Exactly what this build reads for the same pilot written
-            // under the new prefix.
+            // under the new prefix (by a v5 build: only v5 -> v6 runs).
             const expected = decodeSaveDetailed(JSON.stringify(
-                { version: SAVE_VERSION, data: v4Pilot(NEW) }));
+                { version: 5, data: v4Pilot(NEW) }));
             expect(expected.ok).toBeTrue();
             expect(result.data).toEqual(expected.ok ? expected.data : undefined!);
             const save = result.data;
@@ -571,8 +589,9 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
             expect(save.missions[0][0]).toBe(`${NEW}:200`);
             expect(save.missions[0][1].id).toBe(`${NEW}:200`);
             expect(save.missions[0][1].acceptedAt).toBe(`${NEW}:128`);
-            expect(save.reputations).toEqual(
+            expect(save.govtRecords).toEqual(
                 [[`${NEW}:128`, 5], ['nova:128', -15]]);
+            expect(save.legalRecords).toEqual([]);
             expect(save.discovery).toEqual([[`${NEW}:130`, 2], ['nova:130', 1]]);
             expect(save.autoAbortShips[0].missionId).toBe(`${NEW}:614`);
             expect(save.autoAbortShips[0].shipObjective.dudeId)
@@ -711,12 +730,12 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
             const written = JSON.parse(encodeSave(current({
                 outfits: pairs([[`${NEW}:447`, 1]]),
             })));
-            expect(written.version).toBe(5);
+            expect(written.version).toBe(SAVE_VERSION);
             expect(migrateRaw('save', FIRST_SAVE_VERSION, v4Build,
                 written.version, written.data)).toEqual({
                 ok: false,
-                reason: 'The save was written by a newer build (version 5; '
-                    + 'this build reads up to 4).',
+                reason: `The save was written by a newer build (version ${
+                    SAVE_VERSION}; this build reads up to 4).`,
             });
         });
 });
@@ -735,7 +754,8 @@ describe('save_migrations historical fixtures', () => {
             expect(result.data).toEqual(fixture.expected);
 
             const entity = new Entity('restored');
-            restorePlayerState(entity, result.data);
+            restorePlayerState(entity, result.data, undefined, undefined,
+                GEOGRAPHY);
             expect(restoredView(entity)).toEqual(fixture.restored);
 
             // Written back by this build, it is a current save that needs
