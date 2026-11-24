@@ -5,11 +5,13 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import {
     DamagedEvent, DisabledComponent, FiringGroupComponent, OwnerComponent,
-    ShieldComponent, ShipComponent, SourceComponent,
+    ShieldComponent, ShipComponent, SourceComponent, TargetComponent,
 } from '../ship/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
+import { ControlledByComponent } from '../player/index.js';
+import { govtDisposition } from '../reputation/index.js';
 import { NpcComponent } from './npc_component.js';
-import { sameFlock } from './allegiance.js';
+import { flockPlayer, sameFlock } from './allegiance.js';
 import { addDamageLoad } from './npc_retreat.js';
 
 /**
@@ -103,6 +105,17 @@ export function responsibleShip(damager: Entity | undefined,
     if (active(owner)) {
         return owner;
     }
+    return firingShip(damager, getEntity);
+}
+
+/**
+ * The ship that actually fired a weapon entity: its SourceComponent,
+ * followed through any parent projectiles (a submunition names the
+ * projectile it split from) to the first ship. Undefined once the chain
+ * leaves the world. See responsibleShip.
+ */
+export function firingShip(damager: Entity,
+    getEntity: (uuid: string) => Entity | undefined): string | undefined {
     let source = damager.components.get(SourceComponent);
     for (let hop = 0; hop < MAX_SOURCE_HOPS && source !== undefined; hop++) {
         const entity = getEntity(source);
@@ -119,9 +132,46 @@ export function responsibleShip(damager: Entity | undefined,
 }
 
 /**
+ * Whether a hit on `victim` was AIMED at it: the weapon itself was fired
+ * at it (its TargetComponent, set at fire time and carried by guided and
+ * unguided shots alike, and by a submunition from its parent), or the ship
+ * that fired it, or that ship's flock root (`responsible`), is targeting it
+ * now. Not a blast's own call: a blast carries no target, so it is
+ * deliberate when its firer is after the victim.
+ */
+export function aimedAt(victim: string, damager: Entity,
+    responsible: string,
+    getEntity: (uuid: string) => Entity | undefined): boolean {
+    const targets = (entity: Entity | undefined) =>
+        entity?.components.get(TargetComponent)?.target === victim;
+    if (targets(damager) || targets(getEntity(responsible))) {
+        return true;
+    }
+    const firer = firingShip(damager, getEntity);
+    return firer !== undefined && targets(getEntity(firer));
+}
+
+/**
  * Records who last damaged an NPC. The damager of a DamagedEvent is
  * the projectile/beam/blast entity; the ship recorded is the one
  * responsibleShip resolves it to (the firing group's root while it lives).
+ *
+ * Only an ATTACK is recorded, not every hit (provokes, below):
+ *  - a hit AIMED at this ship (aimedAt: the shot, its firer or the firer's
+ *    flock root targets it);
+ *  - any hit from a player's side (a player's ship, or a ship in a
+ *    player's flock), deliberate or stray, exactly as before: the
+ *    player-side rules are not this change's to move;
+ *  - any hit from a ship whose government this ship's government already
+ *    counts as an ENEMY (govtDisposition): it is at war with the shooter,
+ *    so a stray from it is still an enemy's fire. (Not measured; no
+ *    reference run had a hostile-govt bystander.)
+ * A STRAY from anyone else (its own government, an ally, a neutral, firing
+ * at somebody else) provokes nothing. Reference "NPC friendly fire wave
+ * 10" (docs/reference_experiments.md): a ship hit for about 45 s by bolts,
+ * a beam or a blast aimed at the player, from a ship of its own, an
+ * allied or a neutral government, never fired back. Recording those
+ * strays made two same-govt warships fight each other over one bolt.
  *
  * Never a ship of the victim's OWN FLOCK (allegiance.ts's sameFlock). Direct
  * hits pass through a flock, but damage from inside it still lands: a blast
@@ -147,20 +197,35 @@ export const NpcAggressionSystem = new System({
     step({ damager, damage, scale = 1 }, npc, uuid, entities,
         govt, shield, time, gameData) {
         const getEntity = (id: string) => entities.get(id);
-        const source = responsibleShip(entities.get(damager), getEntity);
-        if (source && !sameFlock(source, uuid, getEntity)) {
-            npc.aggressor = source;
+        const weapon = entities.get(damager);
+        const source = responsibleShip(weapon, getEntity);
+        if (source && weapon && !sameFlock(source, uuid, getEntity)) {
             // getCached is deterministic here for the reason
             // npc_decision.ts's lookupGovt gives: every assigned govt is
             // staged.
-            if (npc.aiType === 3 && shield && shield.max > 0 && govt
-                && gameData.data.Govt.getCached(govt.id)
-                    ?.flags.warshipsRetreatAt25) {
+            const govtData = govt
+                ? gameData.data.Govt.getCached(govt.id) : undefined;
+            // The damage load counts every hit, stray or not: it measures
+            // how badly the fight is going, not who started it.
+            if (npc.aiType === 3 && shield && shield.max > 0
+                && govtData?.flags.warshipsRetreatAt25) {
                 const dealt = Math.max(0, damage.shield * scale,
                     damage.armor * scale);
                 addDamageLoad(npc, dealt / shield.max, time.time);
             }
+            const shooterGovt = getEntity(source)
+                ?.components.get(GovtComponent);
+            const provokes = aimedAt(uuid, weapon, source, getEntity)
+                || getEntity(source)?.components.has(ControlledByComponent)
+                || flockPlayer(source, getEntity) !== undefined
+                || govtDisposition(govtData, shooterGovt
+                    ? gameData.data.Govt.getCached(shooterGovt.id)
+                    : undefined) === 'enemy';
+            if (!provokes) {
+                return;
+            }
             // React at the next think, not next frame: reaction time.
+            npc.aggressor = source;
             // A bribe (hail beg-for-mercy) only lasts "until the player
             // provokes them again": if the briber is the one now shooting
             // us, the reprieve is void — clear it so NpcDecisionSystem stops

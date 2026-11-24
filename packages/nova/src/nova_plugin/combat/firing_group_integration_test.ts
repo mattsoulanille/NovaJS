@@ -14,7 +14,7 @@ import {
     completeEntity, loadShipGameData, loadWeaponsGameData,
 } from '../spawn/index.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../ship/index.js';
+import { FiringGroupComponent, TargetComponent } from '../ship/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem } from '../make_system.js';
 import { NpcComponent } from '../npc/index.js';
@@ -155,6 +155,9 @@ describe('firing group friendly fire against parsed game data', () => {
         pin(leader, 1000, 1000);
         pin(escort, 3000, 3000); // Out of the line of fire.
         pin(outsider, 1000, 1060);
+        // Aimed at the leader: a stray from a non-hostile ship provokes
+        // nothing (npc_targeting.ts's NpcAggressionSystem).
+        outsider.components.set(TargetComponent, { target: 'leader' });
         const hostile = gun!.fireFromEntity('outsider', false);
         expect(hostile).withContext('outsider shot spawned').toBeDefined();
         for (let i = 0; i < 30; i++) {

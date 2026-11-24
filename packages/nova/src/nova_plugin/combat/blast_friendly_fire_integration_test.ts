@@ -228,6 +228,8 @@ describe('splash damage inside a flock', () => {
             pin(escort, 1000, 1060);
             pin(leader, 1045, 870);
             pin(outsider, 1000, 860);
+            // Aimed at the outsider: only an aimed hit is an attack.
+            escort.components.set(TargetComponent, { target: 'outsider' });
             await fire(SCATTER_ROCKET, 'escort');
             step(40);
 

@@ -48,20 +48,19 @@ import { styleForTarget } from './hostility.js';
  *     unguided shot or a beam at the player connects with any other ship
  *     of the shooter's government (or an ally's) in the way. A GUIDED
  *     missile is the exception: it only hits its own target (proxHitAll).
- *  2. DO THEY TURN? Yes. NpcAggressionSystem (npc/npc_targeting.ts)
- *     records the firing ship as `npc.aggressor` on ANY damage from
- *     outside the victim's flock, with no government check, no damage
- *     threshold and no "was it aiming at me" test; NpcDecisionSystem
- *     (npc/npc_decision.ts) then adds the aggressor to a warship's
- *     engageable list at any range (nearest of {hostiles, aggressor}
- *     wins), and the memory never lapses on time: only the aggressor
- *     leaving the world, a bribe, a capture or the victim's death clear
- *     it. A DISABLED aggressor is dropped as a target but stays
- *     remembered, so one stray bolt ends with the shooter shot to a hulk
- *     by its own government's ship.
- *  3. Once the victim shoots back, its shots land on the shooter, which
- *     records it in turn: the two fight each other.
- *  4. It does not SPREAD by itself: the victim's own fleet escorts have no
+ *  2. DO THEY TURN? No, not over a STRAY: reference "NPC friendly fire
+ *     wave 10" (docs/reference_experiments.md) saw a ship of the
+ *     shooter's own, an allied or a neutral government take bolts, a beam
+ *     or a blast aimed at the player for about 45 s and never fire back.
+ *     NpcAggressionSystem (npc/npc_targeting.ts) records an aggressor
+ *     only for a hit AIMED at the victim (the shot, its firer or the
+ *     firer's flock root targets it), a hit from a player's side, or a
+ *     hit from a government the victim's counts as an enemy. Before that,
+ *     any hit from outside the flock was recorded, and one stray bolt
+ *     ended with the shooter shot to a hulk by its own government's ship.
+ *  3. So the two do not fight each other over it.
+ *  4. A DELIBERATE hit is still an attack, whatever the government, and it
+ *     does not SPREAD by itself: the victim's own fleet escorts have no
  *     shared memory of the victim's aggressor and keep their own targets.
  *
  * Built on the synthetic data set: two Verge Raiders warships (xenophobic,
@@ -232,7 +231,7 @@ describe('NPC friendly fire between same-govt / allied ships '
     }
 
     it('a blaster shot at the player hits the same-govt ship in the way, '
-        + 'which takes the shooter as its aggressor', async () => {
+        + 'which does not take the shooter as its aggressor', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         await strayBolt(ships);
 
@@ -243,103 +242,92 @@ describe('NPC friendly fire between same-govt / allied ships '
             .toBe(1);
         expect(hitsOn('player'))
             .withContext('the bolt ended in the victim').toEqual([]);
-        // (2) The victim records its own government's ship as aggressor,
-        // though the shooter's lock was on the player.
-        expect(npcOf(ships.victim).aggressor).toBe('shooter');
+        // (2) A stray: the shooter's lock was on the player, so the victim
+        // records nothing (reference wave 10: no retaliation).
+        expect(npcOf(ships.victim).aggressor).toBeUndefined();
     });
 
-    it('the victim engages the shooter when it is the nearest of its '
-        + 'enemies (the player 300 px ahead, the shooter 150 px behind)',
-    async () => {
+    it('the victim keeps after the player, not the shooter 150 px behind '
+        + 'it', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { victim } = ships;
         await strayBolt(ships);
         pinScene(ships);
         wake(victim);
         step(1);
-        expect(targetOf(victim)).toBe('shooter');
+        expect(targetOf(victim)).toBe('player');
         expect(npcOf(victim).mode).toBe('attack');
     });
 
-    it('and engages it outright once the player has gone', async () => {
+    it('and does not engage it once the player has gone', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { victim } = ships;
         await strayBolt(ships);
         world.entities.delete('player');
         wake(victim);
         step(10);
-        expect(targetOf(victim)).toBe('shooter');
-        expect(npcOf(victim).mode).toBe('attack');
+        expect(targetOf(victim)).not.toBe('shooter');
+        expect(npcOf(victim).mode).not.toBe('attack');
     });
 
-    it('one stray bolt is enough: the victim fights a shooter that never '
-        + 'fires again until it is DISABLED, and still remembers it 45 s on',
-    async () => {
+    it('one stray bolt provokes nothing: 45 s on, the victim has not fired '
+        + 'at the shooter and does not remember it', async () => {
+        // Before reference wave 10 this was "one stray bolt is enough": the
+        // victim shot its own government's ship to a hulk.
         const ships = await scene(RAIDERS, RAIDERS);
         const { shooter, victim } = ships;
         await strayBolt(ships);
         world.entities.delete('player');
         aim(shooter, undefined);
         wake(victim);
-        // The shooter sleeps (no think, no fire) throughout, so nothing
-        // provokes the victim again after the one bolt.
-        let disabledAfter: number | undefined;
         for (let second = 1; second <= 45; second++) {
             step(60);
-            if (disabledAfter === undefined
-                && shooter.components.has(DisabledComponent)) {
-                disabledAfter = second;
-            }
         }
-        expect(disabledAfter)
-            .withContext('the victim shot its own govt\'s ship to a hulk')
-            .toBeDefined();
-        expect(hitsOn('shooter').length).toBeGreaterThan(10);
-        // A warship drops a disabled target (npc_decision.ts), and the
-        // raiders' disposition to their own is not 'enemy', so it does not
-        // plunder it either: it goes back to patrolling...
-        expect(targetOf(victim)).toBeUndefined();
-        expect(npcOf(victim).mode).toBe('patrol');
-        // ...but the memory itself never lapsed: past the player-side
-        // AGGRESSION_WINDOW_MS (30 s), which NPC memory does not use, it
-        // still names the shooter, ready to resume if it is repaired.
-        expect(npcOf(victim).aggressor).toBe('shooter');
+        expect(shooter.components.has(DisabledComponent)).toBeFalse();
+        expect(hitsOn('shooter')).toEqual([]);
+        expect(targetOf(victim)).not.toBe('shooter');
+        expect(npcOf(victim).aggressor).toBeUndefined();
     });
 
-    it('the shooter turns on the victim when its return fire lands: the '
-        + 'two raiders fight each other', async () => {
+    it('the two raiders do not fight each other over it', async () => {
         const ships = await scene(RAIDERS, RAIDERS);
         const { shooter, victim } = ships;
         await strayBolt(ships);
         world.entities.delete('player');
         wake(victim);
         wake(shooter);
-        let mutual = false;
-        for (let second = 0; second < 30 && !mutual; second++) {
+        for (let second = 0; second < 30; second++) {
             step(60);
-            mutual = npcOf(shooter).aggressor === 'victim'
-                && targetOf(shooter) === 'victim'
-                && targetOf(victim) === 'shooter';
+            expect(targetOf(shooter)).not.toBe('victim');
+            expect(targetOf(victim)).not.toBe('shooter');
         }
-        expect(npcOf(shooter).aggressor)
-            .withContext('the victim\'s return fire lands on the shooter')
-            .toBe('victim');
-        expect(mutual)
-            .withContext('each is targeting the other').toBeTrue();
+        expect(npcOf(shooter).aggressor).toBeUndefined();
+        expect(npcOf(victim).aggressor).toBeUndefined();
     });
 
-    it('an ALLIED victim (Compact, ally of Meridian) turns on a Meridian '
-        + 'shooter just the same', async () => {
+    it('an ALLIED victim (Compact, ally of Meridian) ignores a Meridian '
+        + 'shooter\'s stray just the same', async () => {
         const ships = await scene(MERIDIAN, COMPACT);
         const { victim } = ships;
         await strayBolt(ships);
         expect(hitsOn('victim').length).toBe(1);
-        expect(npcOf(victim).aggressor).toBe('shooter');
+        expect(npcOf(victim).aggressor).toBeUndefined();
         world.entities.delete('player');
         wake(victim);
         step(10);
-        expect(targetOf(victim)).toBe('shooter');
-        expect(npcOf(victim).mode).toBe('attack');
+        expect(targetOf(victim)).not.toBe('shooter');
+        expect(npcOf(victim).mode).not.toBe('attack');
+    });
+
+    it('an ENEMY government\'s stray still counts: a raider hit by a '
+        + 'Meridian bolt meant for the player takes the shooter', async () => {
+        // Not measured on the original (no reference run had a hostile
+        // bystander): a ship at war with the shooter treats its fire as
+        // an enemy's, aimed or not (npc_targeting.ts).
+        const ships = await scene(MERIDIAN, RAIDERS);
+        await strayBolt(ships);
+        expect(hitsOn('victim').length).toBe(1);
+        expect(npcOf(ships.victim).aggressor).toBe('shooter');
     });
 
     it('a beam swept through a same-govt ship does the same', async () => {
@@ -352,6 +340,18 @@ describe('NPC friendly fire between same-govt / allied ships '
         expect(hitsOn('victim').length)
             .withContext('the Lance Beam (220 px) reaches the victim')
             .toBeGreaterThan(0);
+        expect(npcOf(ships.victim).aggressor).toBeUndefined();
+    });
+
+    it('a beam AIMED at a same-govt ship is an attack: it takes the '
+        + 'shooter as its aggressor', async () => {
+        const ships = await scene(RAIDERS, RAIDERS);
+        aim(ships.shooter, 'victim');
+        pinScene(ships);
+        damaged = [];
+        await fire(BEAM, 'shooter');
+        step(15);
+        expect(hitsOn('victim').length).toBeGreaterThan(0);
         expect(npcOf(ships.victim).aggressor).toBe('shooter');
     });
 
@@ -373,8 +373,8 @@ describe('NPC friendly fire between same-govt / allied ships '
         expect(npcOf(ships.victim).aggressor).toBeUndefined();
     });
 
-    it('it does not spread: the victim\'s fleet escort keeps its own target',
-        async () => {
+    it('a deliberate hit does not spread: the victim\'s fleet escort keeps '
+        + 'its own target', async () => {
             const ships = await scene(RAIDERS, RAIDERS);
             const { victim } = ships;
             victim.components.set(FiringGroupComponent, { group: 'victim' });
@@ -386,7 +386,13 @@ describe('NPC friendly fire between same-govt / allied ships '
             });
             step(20);
             pin(escort, 1060, 880);
-            await strayBolt(ships);
+            // A beam aimed at the victim: deliberate, so the victim takes
+            // the shooter (a stray would provoke nothing at all).
+            aim(ships.shooter, 'victim');
+            pinScene(ships);
+            await fire(BEAM, 'shooter');
+            step(15);
+            pin(escort, 1060, 880);
             expect(npcOf(victim).aggressor).toBe('shooter');
             pinScene(ships);
             wake(victim);

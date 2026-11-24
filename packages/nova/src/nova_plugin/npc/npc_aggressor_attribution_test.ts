@@ -21,7 +21,7 @@ import {
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { NpcComponent } from './npc_component.js';
-import { responsibleShip } from './npc_targeting.js';
+import { aimedAt, responsibleShip } from './npc_targeting.js';
 
 /**
  * An NPC records the SHIP that attacked it, and one ship per attacking
@@ -91,6 +91,26 @@ describe('responsibleShip', () => {
         const sub = new Entity().addComponent(SourceComponent, 'parent');
         expect(responsibleShip(sub, lookup({}))).toBeUndefined();
         expect(responsibleShip(undefined, lookup({}))).toBeUndefined();
+    });
+});
+
+describe('aimedAt (only an aimed hit is an attack)', () => {
+    it("reads the shot's own target, its firer's, or the root's", () => {
+        const firer = ship();
+        const leader = ship();
+        const shot = new Entity().addComponent(SourceComponent, 'firer');
+        const get = lookup({ firer, leader });
+        expect(aimedAt('victim', shot, 'leader', get)).toBeFalse();
+        firer.components.set(TargetComponent, { target: 'victim' });
+        expect(aimedAt('victim', shot, 'leader', get)).toBeTrue();
+        firer.components.set(TargetComponent, { target: 'player' });
+        leader.components.set(TargetComponent, { target: 'victim' });
+        expect(aimedAt('victim', shot, 'leader', get)).toBeTrue();
+        leader.components.set(TargetComponent, { target: undefined });
+        expect(aimedAt('victim', shot, 'leader', get)).toBeFalse();
+        // Fired at the victim, though the firer has since switched.
+        shot.components.set(TargetComponent, { target: 'victim' });
+        expect(aimedAt('victim', shot, 'leader', get)).toBeTrue();
     });
 });
 

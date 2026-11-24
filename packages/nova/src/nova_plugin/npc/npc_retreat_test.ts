@@ -17,7 +17,7 @@ import { deriveEntityComponents, GovtComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import {
     DamagedEvent, makeShip, ShieldComponent, ShipDataComponent,
-    SourceComponent,
+    SourceComponent, TargetComponent,
 } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { JumpComponent } from '../travel/index.js';
@@ -314,6 +314,9 @@ async function tankFight(govtId: string, random?: Random) {
     attacker.components.set(ShipDataComponent, {
         ...attacker.components.get(ShipDataComponent)!, strength: 1,
     });
+    // Aiming at the tank: only a hit aimed at it is an attack
+    // (npc_targeting.ts's NpcAggressionSystem).
+    attacker.components.set(TargetComponent, { target: 'tank' });
     await addShip('tank', 600, ship => {
         ship.components.set(GovtComponent, { id: govtId });
         ship.components.set(NpcComponent, { aiType: 3 });
