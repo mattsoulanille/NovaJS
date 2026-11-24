@@ -223,8 +223,11 @@ export function shopScenarios() {
                 + 'prints the shïp Long Name ("Sigma Shipyards Alpha class '
                 + 'Shuttle"), not the resource name, and the seven left-column '
                 + 'stat rows sit on a flat 12px pitch with ink tops at screen '
-                + 'y 719..791. The ship photograph above legitimately differs '
-                + 'in gamma/scaling and is not in any region here.',
+                + 'y 719..791. The 600x400 info PICT is blitted 1:1 in the '
+                + 'frame\'s well at screen x 660..1259, y 278..677 (all three '
+                + 'shipyard/*_info.png captures); the picture region covers it '
+                + 'plus the bevel around it, so a scaled or offset picture '
+                + 'shows up as a gap inside the bevel.',
             params: { ship: 'nova:164', system: 'nova:130' },
             hideDebug: true,
             setup: async (page, driver) => {
@@ -241,6 +244,8 @@ export function shopScenarios() {
                 { name: 'shuttle_info', file: 'shipyard/shuttle_info.png' },
             ],
             regions: [
+                region('shipinfo_pict', 'Picture well incl. bevel',
+                    653, 272, 614, 412),
                 region('shipinfo_name_strip', 'Long Name strip',
                     655, 682, 610, 30),
                 region('shipinfo_stats_left', 'Speed..Turrets column',
