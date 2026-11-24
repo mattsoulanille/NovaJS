@@ -16,7 +16,10 @@ import {
 import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js';
 import { FormationComponent } from './npc_formation.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
-import { CONTRABAND_SCAN_RANGE } from './contraband.js';
+import {
+    CONTRABAND_SCAN_RANGE, CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED,
+} from './contraband.js';
+import { holdingScan } from './contraband_target.js';
 import {
     MINE_HOLD_SPEED, MINE_STANDOFF_FRACTION, miningReach, SCOOP_ARRIVE_RADIUS,
     SCOOP_ARRIVE_SPEED,
@@ -499,19 +502,25 @@ export const NpcSteeringSystem = new System({
                 // itself is ContrabandScanSystem's, in uuid order, once
                 // within CONTRABAND_SCAN_RANGE. Flown at top speed
                 // ("buzzes"), so the ship closes fast and brakes only as
-                // it comes up on a slow target.
-                const quarry = npc.scanTarget
-                    ? entities.get(npc.scanTarget)?.components
-                        .get(MovementStateComponent)
-                    : undefined;
-                if (!quarry) {
+                // it comes up on a slow target. Once the ship is scanned it
+                // SITS on it for the hold (contraband_target.ts's
+                // holdingScan; the reference cutter sat 0-10 px from the
+                // pilot): a slow, tight arrival that settles instead of
+                // sweeping through the ship at top speed.
+                const quarryShip = npc.scanTarget
+                    ? entities.get(npc.scanTarget) : undefined;
+                const quarry = quarryShip?.components
+                    .get(MovementStateComponent);
+                if (!quarryShip || !quarry) {
                     npc.mode = undefined;
                     delete npc.scanTarget;
                     return;
                 }
+                const sitting = holdingScan(quarryShip, time.time);
                 steerArrive(movement, physics,
                     Position.fromVectorLike(quarry.position),
-                    CONTRABAND_SCAN_RANGE / 2, physics.speed);
+                    sitting ? CONTRABAND_SIT_RADIUS : CONTRABAND_SCAN_RANGE / 2,
+                    sitting ? CONTRABAND_SIT_SPEED : physics.speed);
                 break;
             }
             case 'mine': {

@@ -16,8 +16,8 @@ import {
     applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband,
 } from './contraband.js';
 import {
-    ContrabandScannedComponent, contrabandAboard, needsScan, scannable,
-    scannedMarker,
+    ContrabandScannedComponent, contrabandAboard, holdingScan, needsScan,
+    scannable, scannedMarker,
 } from './contraband_target.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcFireControlSystem } from './npc_fire_control.js';
@@ -48,7 +48,10 @@ import { NpcSteeringSystem } from './npc_steering.js';
  *
  * Measured (reference S1 / S2, waves 11-12): the scan comes within about
  * 3 s of an arrival, by jump or not, from a cutter that comes up beside
- * the player; a clean ship is never approached; one fine only.
+ * the player; one fine only. A CLEAN ship is approached too, and the
+ * cutter sits on it, saying nothing ("A14 / contraband wave 16",
+ * `w16_clean_several`; wave 11 had read "a clean ship is never
+ * approached"): see needsScan and CONTRABAND_SCAN_HOLD_MS.
  */
 
 
@@ -70,7 +73,9 @@ export interface ContrabandScanEventData {
     smuggled: boolean;
     /** A mission with Flags 0x0020 failed. */
     missionFailed: boolean;
-    /** Credits fined (0: none, or a warning). */
+    /** The fine the line names: the govt's whole ScanFine (0: none, or a
+     * warning), even when the pilot had less cash and lost only that
+     * (contraband.ts's statedFine). */
     fine: number;
 }
 export const ContrabandScanEventType = t.intersection([t.type({
@@ -106,9 +111,17 @@ registerSimulationBridgeEvent({ event: ContrabandScanEvent });
  * pod pilot rescanned at takeoff after buying illegal jünk). A rescan
  * applies everything aboard as one scan: one line, one fine.
  *
- * A scan that finds nothing (the hold was emptied en route) still marks
- * the ship, and says nothing (GUESS: the stock "Have a nice day." line,
- * STR# 2002 #389, may belong here; the reference never saw a clean scan).
+ * A scan that finds nothing (a clean ship, or the hold was emptied en
+ * route) still marks the ship, and says nothing: MEASURED, "A14 /
+ * contraband wave 16" (no status line at all while a cutter sat on a clean
+ * pilot; the stock "Have a nice day." line, STR# 2002 #389, was not shown).
+ *
+ * After the scan the interceptor STAYS on the ship (mode 'scan', steered
+ * onto it) until CONTRABAND_SCAN_HOLD_MS after the scan (holdingScan), then
+ * goes back to its business: the reference cutter sat on the clean pilot
+ * for 30+ s; what ends it is a GUESS. A detection's hostility takes over at
+ * the interceptor's next think (the decision step attacks before it
+ * scans).
  *
  * Why a once-per-tick sweep in UUID order rather than an arm of the
  * steering system: two interceptors can reach the same ship on the same
@@ -158,10 +171,14 @@ export const ContrabandScanSystem = new System({
             const findings = contrabandAboard(target, govt.scanMask, gameData);
             if (target.components.has(ContrabandScannedComponent)
                 && !needsScan(target, findings)) {
-                // Scanned this visit with nothing new aboard: beaten to it
-                // by another interceptor earlier in this very sweep, or
-                // the new contraband went overboard en route.
-                giveUp();
+                // Scanned this visit with nothing new aboard: this
+                // interceptor sitting on the ship it scanned, or one beaten
+                // to it by another interceptor (it sits too), or the new
+                // contraband went overboard en route. It stays
+                // until the hold runs out.
+                if (!holdingScan(target, time.time)) {
+                    giveUp();
+                }
                 continue;
             }
             target.components.set(ContrabandScannedComponent,
@@ -172,10 +189,11 @@ export const ContrabandScanSystem = new System({
                     records: target.components.get(LegalRecordsComponent),
                     missions: target.components.get(MissionsComponent),
                 });
-                emit(ContrabandScanEvent, { scanner: uuid, ...result },
+                const { taken: _taken, ...line } = result;
+                emit(ContrabandScanEvent, { scanner: uuid, ...line },
                     [npc.scanTarget!]);
             }
-            giveUp();
+            // No giveUp: it sits on the ship while holdingScan.
         }
     },
     // Pinned into the NPC chain right after the plunder claim, the other

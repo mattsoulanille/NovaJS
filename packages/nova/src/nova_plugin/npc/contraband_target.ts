@@ -9,8 +9,8 @@ import {
     ExplodingComponent, isTargetable, OutfitsStateComponent,
 } from '../ship/index.js';
 import {
-    CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings, findContraband,
-    hasContraband, isDetection, newContraband,
+    CONTRABAND_SCAN_HOLD_MS, CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings,
+    findContraband, isDetection, newContraband,
 } from './contraband.js';
 import { chooseNearest } from './npc_targeting.js';
 
@@ -154,17 +154,32 @@ export function scannable(ship: Entity | undefined): ship is Entity {
 
 /**
  * Whether `ship`, on which a scan would find `findings`, is due one: it
- * carries something illegal, and either has not been scanned this visit
- * or carries contraband its last scan did not find (the marker's
- * `found`; see ContrabandScannedType for the measurements).
+ * has not been scanned this visit, CLEAN OR NOT, or it carries contraband
+ * its last scan did not find (the marker's `found`; see
+ * ContrabandScannedType for the measurements).
+ *
+ * A clean ship is scanned too, once a visit: reference "A14 / contraband
+ * wave 16", `w16_clean_several`, a cutter came up to a pilot carrying
+ * nothing illegal and sat on it, and nothing was said (one cutter, one
+ * run; the scan of a clean ship says nothing, ContrabandScanSystem). This
+ * replaces wave 11's "a clean ship is never approached".
  */
 export function needsScan(ship: Entity, findings: ContrabandFindings):
     boolean {
-    if (!hasContraband(findings)) {
-        return false;
-    }
     const scanned = ship.components.get(ContrabandScannedComponent);
     return !scanned || newContraband(findings, scanned.found).length > 0;
+}
+
+/**
+ * Whether an interceptor that is on `ship` for a scan stays there at sim
+ * time `now`: the ship was scanned less than CONTRABAND_SCAN_HOLD_MS ago
+ * (its marker's `at`). The reference cutter sat on the clean pilot it had
+ * scanned (contraband.ts's CONTRABAND_SCAN_HOLD_MS; the end is a GUESS).
+ */
+export function holdingScan(ship: Entity, now: number): boolean {
+    const scanned = ship.components.get(ContrabandScannedComponent);
+    return scanned !== undefined
+        && now - scanned.at < CONTRABAND_SCAN_HOLD_MS;
 }
 
 /**
@@ -173,25 +188,27 @@ export function needsScan(ship: Entity, findings: ContrabandFindings):
  * the decision system has already dropped its own side, a briber, the
  * disabled, the cloaked and every ship it is about to attack). One is
  * taken when it is within CONTRABAND_SCAN_SEEK_RANGE and is due a scan
- * by `govtMask` (needsScan: something illegal aboard, and not scanned
- * this visit or carrying new contraband since). STICKY, like the
- * plunder run: the ship it is already flying to is kept while it still
- * qualifies; otherwise the nearest (uuid tie-break, chooseNearest). Reads
+ * by `govtMask` (needsScan: not scanned this visit, clean or not, or
+ * carrying new contraband since). STICKY, like the plunder run: the ship
+ * it is already flying to is kept while it still qualifies, or while the
+ * interceptor is SITTING on it after the scan (holdingScan, at sim time
+ * `now`); otherwise the nearest (uuid tie-break, chooseNearest). Reads
  * synced state and staged caches only; no PRNG.
  */
 export function chooseScanTarget(current: string | undefined,
     candidates: ReadonlyArray<readonly [string, number]>, govtMask: number,
     getEntity: (uuid: string) => Entity | undefined,
-    gameData: SimulationGameDataInterface): string | undefined {
-    const qualifying = candidates.filter(([uuid, d2]) => {
-        if (d2 > CONTRABAND_SCAN_SEEK_RANGE * CONTRABAND_SCAN_SEEK_RANGE) {
-            return false;
-        }
-        const ship = getEntity(uuid);
-        return scannable(ship)
-            && needsScan(ship, contrabandAboard(ship, govtMask, gameData));
+    gameData: SimulationGameDataInterface, now: number): string | undefined {
+    const inReach = candidates.filter(([uuid, d2]) =>
+        d2 <= CONTRABAND_SCAN_SEEK_RANGE * CONTRABAND_SCAN_SEEK_RANGE
+        && scannable(getEntity(uuid)));
+    const qualifying = inReach.filter(([uuid]) => {
+        const ship = getEntity(uuid)!;
+        return needsScan(ship, contrabandAboard(ship, govtMask, gameData));
     });
-    if (current !== undefined && qualifying.some(([u]) => u === current)) {
+    if (current !== undefined && (qualifying.some(([u]) => u === current)
+        || (inReach.some(([u]) => u === current)
+            && holdingScan(getEntity(current)!, now)))) {
         return current;
     }
     return chooseNearest(qualifying);

@@ -363,8 +363,10 @@ export function playerPlunderedMessage(credits: number): string {
  * kept), 375-377 "your attempt to smuggle" / "illegal cargo" / "through
  * this system" (a jünk's LCName replaces 376), 378 "has been detected",
  * 379 "You have been fined", 392 / 393 "a" / "an", and 285 for the
- * mission line. The fine is printed as the reference showed it ("500", no
- * separator).
+ * mission line. The fine is the govt's whole ScanFine with a thousands
+ * separator ("500", "5,000": "A14 / contraband wave 16", `w16_bigfine`, a
+ * 5000 fine on a pilot holding 1200 credits read "You have been fined
+ * 5,000 credits." and took the 1200), never the amount taken.
  *
  * SEVERAL FINDS (measured, "A14 / contraband wave 15", `w15_several`: the
  * pod, 10 t of illegal jünk and a Flags 0x0020 mission's illegal cargo in
@@ -391,7 +393,8 @@ export function contrabandScanMessage(scan: {
         : `your posession of ${/^[aeiou]/i.test(scan.outfit) ? 'an' : 'a'} ${scan.outfit}`;
     const address = scan.pilot ? `${scan.pilot}, ` : '';
     const fined = scan.fine > 0
-        ? ` You have been fined ${Math.floor(scan.fine)} credits.` : '';
+        ? ` You have been fined ${Math.floor(scan.fine).toLocaleString('en-US')} credits.`
+        : '';
     return `${scan.scanner}: ${address}${what} has been detected.${fined}`;
 }
 

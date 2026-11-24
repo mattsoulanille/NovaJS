@@ -75,6 +75,22 @@ export const CONTRABAND_SCAN_SEEK_RANGE = 3000;
 /** The scan happens when the interceptor is within this distance of the
  * ship ("a cutter beside the player"). */
 export const CONTRABAND_SCAN_RANGE = 150;
+/**
+ * How long an interceptor stays ON a ship it has scanned before it goes
+ * back to its patrol (contraband_target.ts's holdingScan). Reference "A14 /
+ * contraband wave 16", `w16_clean_several`: a cutter flew in from 300 px
+ * to a CLEAN pilot sitting at the port and sat on it (0-10 px) for 30+ s,
+ * until the watch ended; nothing was said. What ends the sit was not
+ * measured: GUESS, a fixed time from the scan, the measured lower bound,
+ * so an interceptor never sits on a pilot for the whole visit.
+ */
+export const CONTRABAND_SCAN_HOLD_MS = 30_000;
+/** While it sits on a scanned ship, the interceptor holds within this
+ * many px of it (the reference cutter sat 0-10 px from the pilot)... */
+export const CONTRABAND_SIT_RADIUS = 10;
+/** ...matching its speed to within this many px/s, so it settles on the
+ * ship instead of buzzing back and forth through it at top speed. */
+export const CONTRABAND_SIT_SPEED = 20;
 
 /** Whether two ScanMasks share a bit. */
 export function scanMaskMatches(govtMask: number, itemMask: number): boolean {
@@ -229,8 +245,10 @@ export function findContraband(govtMask: number, hold: ScannedHold,
 /**
  * The fine a gövt ScanFine charges a pilot holding `credits`: 1 and up,
  * that amount; 0 AND BELOW, nothing (the detection line goes without its
- * fine sentence). Never more than the pilot has (guess: the original's
- * behaviour with too little cash is not measured).
+ * fine sentence). Never more than the pilot has: MEASURED, "A14 /
+ * contraband wave 16", `w16_bigfine`: a ScanFine-5000 govt took all of a
+ * 1200-credit pilot's cash and no more (credits 0, no debt). The line still
+ * names the whole ScanFine (statedFine).
  *
  * THE ORIGINAL OVER THE BIBLE. The Bible (B:977-985) reads ScanFine -1
  * and below as "fine this percent of the player's cash" (-5 would be
@@ -242,6 +260,18 @@ export function findContraband(govtMask: number, hold: ScannedHold,
 export function contrabandFine(scanFine: number, credits: number): number {
     const cash = Math.max(0, Math.floor(credits));
     return scanFine > 0 ? Math.min(Math.floor(scanFine), cash) : 0;
+}
+
+/**
+ * The fine the detection line NAMES ("You have been fined 5,000
+ * credits."): the govt's whole ScanFine, whatever the pilot could pay
+ * (contrabandFine); 0 when ScanFine is 0 or below (no fine sentence).
+ * MEASURED with a pilot holding less than the fine ("A14 / contraband wave
+ * 16": 1200 credits, "fined 5,000 credits", credits 0); a pilot with no
+ * cash at all hearing the same line is a GUESS.
+ */
+export function statedFine(scanFine: number): number {
+    return scanFine > 0 ? Math.floor(scanFine) : 0;
 }
 
 /**
@@ -295,8 +325,12 @@ export interface ContrabandScanResult {
     smuggled: boolean;
     /** At least one Flags 0x0020 mission failed. */
     missionFailed: boolean;
-    /** Credits taken (0 for a warning, or when only missions failed). */
+    /** The fine the line names (statedFine: the govt's whole ScanFine; 0
+     * for a warning, or when only missions failed). */
     fine: number;
+    /** Credits actually taken (contrabandFine: never more than the pilot
+     * had). Not on the status line. */
+    taken: number;
 }
 
 /**
@@ -319,10 +353,12 @@ export function applyContrabandScan(findings: ContrabandFindings,
         }
     }
     let fine = 0;
+    let taken = 0;
     if (isDetection(findings)) {
+        fine = statedFine(scanner.scanFine);
         if (pilot.credits) {
-            fine = contrabandFine(scanner.scanFine, pilot.credits.credits);
-            pilot.credits.credits -= fine;
+            taken = contrabandFine(scanner.scanFine, pilot.credits.credits);
+            pilot.credits.credits -= taken;
         }
         const change = smugglingRecordChange(scanner, law);
         if ((findings.outfit || findings.junk) && pilot.records
@@ -337,5 +373,6 @@ export function applyContrabandScan(findings: ContrabandFindings,
         smuggled: findings.smuggled,
         missionFailed: findings.failMissions.length > 0,
         fine,
+        taken,
     };
 }

@@ -11,6 +11,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import {
     restoreWorld, snapshotWorld, SnapshotPoliciesResource,
 } from 'nova_ecs/plugins/snapshot_plugin';
@@ -32,9 +33,11 @@ import {
 import { completeEntity } from '../spawn/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
-    applyContrabandScan, contrabandFine, ContrabandFindings, findContraband,
-    hasContraband, missionIllegal, newContraband, scansHere,
-    smugglingPenalty, smugglingRecordChange,
+    applyContrabandScan, CONTRABAND_SCAN_HOLD_MS, CONTRABAND_SCAN_RANGE,
+    CONTRABAND_SIT_RADIUS,
+    contrabandFine, ContrabandFindings, findContraband, hasContraband,
+    missionIllegal, newContraband, scansHere, smugglingPenalty,
+    smugglingRecordChange, statedFine,
 } from './contraband.js';
 import { ContrabandScanEvent, ContrabandScanEventData } from './contraband_scan.js';
 import { ContrabandScannedComponent } from './contraband_target.js';
@@ -239,22 +242,60 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(scans.length).toBe(1);
         });
 
-    it('never approaches a clean ship', async () => {
-        const { world, pilot, cutter, scans } = await scanWorld({
-            pilot: {
-                outfits: { [LEGAL_GUN]: 2 },
-                cargo: { [`junk:${LEGAL_JUNK}`]: 5, 'cargo:0': 10 },
-                missions: [mission('test:legal-mission', { scanMask: 0x0002 })],
-            },
+    it('approaches a CLEAN ship too, says nothing, sits on it for '
+        + 'CONTRABAND_SCAN_HOLD_MS, then lets it be (A14 / contraband wave '
+        + '16, w16_clean_several)', async () => {
+            const { world, pilot, cutter, scans } = await scanWorld({
+                pilot: {
+                    outfits: { [LEGAL_GUN]: 2 },
+                    cargo: { [`junk:${LEGAL_JUNK}`]: 5, 'cargo:0': 10 },
+                    missions: [mission('test:legal-mission', { scanMask: 0x0002 })],
+                },
+            });
+            const npc = () => cutter.components.get(NpcComponent)!;
+            const now = () => world.resources.get(TimeResource)!.time;
+            const gap = () => cutter.components.get(MovementStateComponent)!
+                .position.subtract(pilot.components
+                    .get(MovementStateComponent)!.position).length;
+            expect(npc().mode).toBe('scan');
+            expect(npc().scanTarget).toBe(PILOT);
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            const marker = pilot.components.get(ContrabandScannedComponent)!;
+            expect(marker.found).toBeUndefined();
+            expect(marker.hostile).toBeUndefined();
+            // It stays on the ship (the reference cutter sat on the pilot
+            // 0-10 px for 30+ s), in mode 'scan' the whole hold: once it
+            // has braked from its run in, within scan range, and settled
+            // close beside the pilot for the second half.
+            let settling = 0;
+            let settled = 0;
+            while (now() < marker.at + CONTRABAND_SCAN_HOLD_MS - 100) {
+                world.step();
+                expect(npc().mode).toBe('scan');
+                if (now() > marker.at + CONTRABAND_SCAN_HOLD_MS / 2) {
+                    settled = Math.max(settled, gap());
+                } else if (now() > marker.at + 5000) {
+                    settling = Math.max(settling, gap());
+                }
+            }
+            expect(settling).toBeLessThanOrEqual(CONTRABAND_SCAN_RANGE);
+            expect(settled).toBeLessThanOrEqual(4 * CONTRABAND_SIT_RADIUS);
+            // GUESS: the hold ends; it does not sit on him all visit.
+            const modes = new Set<string | undefined>();
+            run(world, 1200, () => modes.add(npc().mode));
+            expect(npc().mode).not.toBe('scan');
+            expect(npc().scanTarget).toBeUndefined();
+            // Nothing was ever said or charged.
+            expect(credits(pilot)).toBe(START_CREDITS);
+            expect(record(pilot)).toBe(0);
+            expect(scans).toEqual([]);
+            // Not approached again this visit.
+            const later = new Set<string | undefined>();
+            run(world, 1200, () => later.add(npc().mode));
+            expect(later.has('scan')).toBeFalse();
+            expect(pilot.components.get(ContrabandScannedComponent)!.at)
+                .toBe(marker.at);
         });
-        const modes = new Set<string | undefined>();
-        run(world, 1200, () => modes.add(
-            cutter.components.get(NpcComponent)?.mode));
-        expect(modes.has('scan')).toBeFalse();
-        expect(pilot.components.has(ContrabandScannedComponent)).toBeFalse();
-        expect(credits(pilot)).toBe(START_CREDITS);
-        expect(scans).toEqual([]);
-    });
 
     it('fails a 0x0020 mission whose cargo is illegal, with no fine and no '
         + 'record change (S2a)', async () => {
@@ -294,11 +335,13 @@ describe('Contraband scan (AI 4 interceptors)', () => {
                 .get('test:s3')!.failed).toBeUndefined();
             expect(credits(withPod.pilot)).toBe(START_CREDITS - 500);
             expect(withPod.scans.map(s => s.scan.missionFailed)).toEqual([false]);
-            // w14_s3_clean: a clean ship carrying it is never approached.
+            // w14_s3_clean: a clean ship carrying it is never fined or
+            // failed (scanned, silently: "A14 / contraband wave 16").
             const clean = await scanWorld({ pilot: { missions: [drop()] } });
             run(clean.world, 600);
-            expect(clean.pilot.components.has(ContrabandScannedComponent))
-                .toBeFalse();
+            expect(clean.pilot.components.get(MissionsComponent)!
+                .get('test:s3')!.failed).toBeUndefined();
+            expect(credits(clean.pilot)).toBe(START_CREDITS);
             expect(clean.scans).toEqual([]);
         });
 
@@ -341,12 +384,16 @@ describe('Contraband scan (AI 4 interceptors)', () => {
         const later = mission('test:later', {
             scanMask: 1, failIfScanned: true, cargoLoaded: false,
         });
-        const { world, pilot, cutter } = await scanWorld(
+        const { world, pilot, scans } = await scanWorld(
             { pilot: { missions: [later] } });
+        // Scanned as a clean ship (wave 16): nothing found, nothing said.
+        expect(runUntilScanned(world, pilot)).toBeTrue();
         run(world, 600);
-        expect(cutter.components.get(NpcComponent)?.mode).not.toBe('scan');
+        expect(pilot.components.get(ContrabandScannedComponent)!.found)
+            .toBeUndefined();
         expect(pilot.components.get(MissionsComponent)!.get('test:later')!
             .failed).toBeUndefined();
+        expect(scans).toEqual([]);
     });
 
     it('does not scan where its govt does not enforce the law (guess)',
@@ -656,7 +703,30 @@ describe('Contraband rules', () => {
         expect(contrabandFine(0, 1_000_000)).toBe(0);
         expect(contrabandFine(-5, 1_000)).toBe(0);
         expect(contrabandFine(-500, 1_000)).toBe(0);
+        // The line names the whole ScanFine, whatever was taken.
+        expect(statedFine(5000)).toBe(5000);
+        expect(statedFine(0)).toBe(0);
+        expect(statedFine(-5)).toBe(0);
     });
+
+    it('a fine above the pilot\'s cash takes all of it and no more, and the '
+        + 'line names the WHOLE ScanFine with a separator (A14 / contraband '
+        + 'wave 16, w16_bigfine)', async () => {
+            const { world, pilot, scans } = await scanWorld({
+                customs: { scanFine: 5000 },
+                pilot: { outfits: { [POD]: 1 }, credits: 1200 },
+            });
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            expect(credits(pilot)).toBe(0);
+            expect(record(pilot)).toBe(-50);
+            expect(scans.map(s => s.scan.fine)).toEqual([5000]);
+            expect(contrabandScanMessage({
+                ...scans[0].scan, scanner: 'Kit Customs Cutter',
+                pilot: 'w16-bigfine',
+            })).toBe('Kit Customs Cutter: w16-bigfine, your posession of a '
+                + 'kit contraband pod has been detected. You have been fined '
+                + '5,000 credits.');
+        });
 
     it('moves the record by the A14 rule with the scanner as the victim',
         () => {
@@ -735,7 +805,7 @@ describe('Contraband rules', () => {
         });
         expect(both.result).toEqual({
             outfit: 'pod', junk: 'junk', smuggled: true, missionFailed: false,
-            fine: 500,
+            fine: 500, taken: 500,
         });
         expect([...both.records]).toEqual([[SYSTEM, -50]]);
         expect(both.credits).toBe(500);

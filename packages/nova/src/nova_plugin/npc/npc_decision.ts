@@ -897,18 +897,21 @@ export const NpcDecisionSystem = new System({
                 // CONTRABAND SCAN (Bible AI 4: "buzzes incoming ships to
                 // scan them for illegal cargo"; contraband_scan.ts). With
                 // nobody to fight, an interceptor of a govt that scans
-                // here flies to an unscanned player ship carrying
-                // something illegal to it. Ordered after the engagement
-                // decision (a criminal is attacked, not scanned: the
-                // Bible's ScanFine applies only to a pilot "not yet evil
-                // enough to attack") and before departure, so it does not
-                // leave with a scan pending. A clean ship is never
-                // approached (reference S1 wave 11).
+                // here flies to a player ship it has not scanned this
+                // visit (clean or not), or one carrying contraband its
+                // last scan did not find, and sits on it a while after the
+                // scan (chooseScanTarget, holdingScan). Ordered after the
+                // engagement decision (a criminal is attacked, not
+                // scanned: the Bible's ScanFine applies only to a pilot
+                // "not yet evil enough to attack") and before departure,
+                // so it does not leave with a scan pending. A clean ship
+                // is approached too (reference "A14 / contraband wave 16";
+                // wave 11 had read the opposite).
                 if (scans && govtData) {
                     const hostileSet = new Set(hostiles.map(([u]) => u));
                     const scanTarget = chooseScanTarget(npc.scanTarget,
                         scanCandidates.filter(([u]) => !hostileSet.has(u)),
-                        govtData.scanMask, getEntity, gameData);
+                        govtData.scanMask, getEntity, gameData, time.time);
                     if (scanTarget !== undefined) {
                         npc.mode = 'scan';
                         npc.scanTarget = scanTarget;
