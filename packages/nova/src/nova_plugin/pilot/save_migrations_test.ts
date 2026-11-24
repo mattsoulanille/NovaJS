@@ -13,7 +13,7 @@ import {
 import {
     ActiveMission, CreditsComponent, CronState, CronStatesComponent,
     GameDateComponent, MissionsComponent, PendingAutoAbortShip,
-    PendingAutoAbortShipsComponent,
+    PendingAutoAbortShipsComponent, StoredShipsComponent,
 } from '../player/index.js';
 import {
     CombatRatingComponent, LegalGeography, LegalRecordsComponent,
@@ -369,7 +369,7 @@ describe('save_migrations list', () => {
             expect(migration.summary.length).toBeGreaterThan(0);
         });
         expect(SAVE_VERSION).toBe(FIRST_SAVE_VERSION + SAVE_MIGRATIONS.length);
-        expect(SAVE_VERSION).toBe(6);
+        expect(SAVE_VERSION).toBe(7);
     });
 
     it('every migration is idempotent on its own output', () => {
@@ -738,6 +738,50 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
                     SAVE_VERSION}; this build reads up to 4).`,
             });
         });
+});
+
+describe('save_migrations 6 -> 7: stored ships (ship storage)', () => {
+    const STORED = {
+        ship: 'nova:130', name: 'Courier', storedAt: 'nova:128',
+        outfits: [['nova:150', 2], ['nova:151', 40]] as [string, number][],
+        cargo: [['cargo:0', 5]] as [string, number][], fuel: 250,
+    };
+
+    it('a v6 save stored nothing: it loads with an empty list', () => {
+        const { storedShips: _none, ...v6 } = current();
+        const result = decodeSaveDetailed(
+            JSON.stringify({ version: 6, data: v6 }));
+        expect(result).toEqual({ ok: true, version: 6, data: current() });
+        const entity = new Entity('restored');
+        restorePlayerState(entity, current());
+        expect(entity.components.has(StoredShipsComponent)).toBeFalse();
+    });
+
+    it('a stored ship survives the save, field for field', () => {
+        const data = current({ storedShips: [STORED] });
+        const result = decodeSaveDetailed(encodeSave(data));
+        expect(result).toEqual({ ok: true, version: SAVE_VERSION, data });
+        const entity = new Entity('restored');
+        restorePlayerState(entity, data);
+        expect(entity.components.get(StoredShipsComponent)).toEqual([STORED]);
+        // Restored as copies: the save's arrays are not the component's.
+        expect(entity.components.get(StoredShipsComponent)![0].outfits)
+            .not.toBe(STORED.outfits);
+    });
+
+    it('a v7 save is refused by a v6 build\'s version gate', () => {
+        const v6Build = SAVE_MIGRATIONS.slice(0, 5);
+        const written = JSON.parse(encodeSave(current({
+            storedShips: [STORED],
+        })));
+        expect(written.version).toBe(7);
+        expect(migrateRaw('save', FIRST_SAVE_VERSION, v6Build,
+            written.version, written.data)).toEqual({
+            ok: false,
+            reason: 'The save was written by a newer build (version 7; '
+                + 'this build reads up to 6).',
+        });
+    });
 });
 
 describe('save_migrations historical fixtures', () => {

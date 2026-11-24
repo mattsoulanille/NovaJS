@@ -654,6 +654,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    rolls. The derived wire
 //    schema fingerprint changes (d3e842c4cfaedd4b -> 8389fa45cd30d491),
 //    and the join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): ship storage (docs/ship_storage.md). A new
+//    delta-registered player component, StoredShips (player/
+//    stored_ships.ts: a list of {ship, name, outfits, cargo, fuel,
+//    storedAt} records), present only on a pilot who has stored a ship
+//    and carried across every change of hull. It is edited only while the
+//    pilot is docked and reaches peers in the lift-off's addEntity record,
+//    like the credits; nothing in the simulation reads it. No sim rule,
+//    input kind or message kind changes; a pilot without stored ships has
+//    the same components and hash input as before. The derived wire
+//    schema fingerprint changes (bd5a38e8cda8904e), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

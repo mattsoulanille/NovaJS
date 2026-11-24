@@ -9,6 +9,7 @@ import { PlayerNamesComponent, PlayerNamesType } from './player_names.js';
 import {
     ReinforcementCallsComponent, ReinforcementCallsType,
 } from './reinforcement_calls.js';
+import { StoredShipsComponent, StoredShipsType } from './stored_ships.js';
 
 /**
  * Serializable per-player gameplay state: the game date, credits, and
@@ -375,6 +376,11 @@ export const PlayerStatePlugin: Plugin = {
         });
         deltaMaker.addComponent(ReinforcementCallsComponent, {
             componentType: ReinforcementCallsType,
+        });
+        // The pilot's stored ships (stored_ships.ts): player-scoped state
+        // that rides the lift-off's insertion record like the credits.
+        deltaMaker.addComponent(StoredShipsComponent, {
+            componentType: StoredShipsType,
         });
     }
 };

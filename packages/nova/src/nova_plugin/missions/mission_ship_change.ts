@@ -24,7 +24,7 @@ import {
     EscortPayrollComponent, GameDateComponent, MissionsComponent,
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
     PlayerNamesComponent, PlayerShipSelector, ReinforcementCallsComponent,
-    StrictPlayComponent,
+    StoredShipsComponent, StrictPlayComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import {
@@ -181,6 +181,12 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // the hull's. Replaced, never mutated (spawn/reinforcements.ts), so
     // safe to share.
     ReinforcementCallsComponent,
+    // The pilot's STORED SHIPS (player/stored_ships.ts) are the pilot's
+    // property, not the hull's: every change of hull carries the list.
+    // Safe to share by reference: the hangar (spaceport/ship_storage.ts)
+    // always writes a NEW array, never edits one in place, so the hull a
+    // trade leaves behind keeps the list it had.
+    StoredShipsComponent,
 ];
 
 /**

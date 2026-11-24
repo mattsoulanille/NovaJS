@@ -39,7 +39,7 @@ import { latestVersion, Migration } from '../../common/migrations.js';
  *                    old prefix to the new one, by the static table
  *                    PLUGIN_PREFIX_RENAMES — a TEMPORARY transition (see
  *                    the table for what removing it entails).
- *   v6 (this build)  legal records are PER SYSTEM (ruling #380):
+ *   v6 (2026-11-24)  legal records are PER SYSTEM (ruling #380):
  *                    `legalRecords` ([sÿst id, record] pairs) replaces the
  *                    per-gövt `reputations`. The migration cannot see game
  *                    data, so it parks the old per-gövt list as
@@ -47,6 +47,10 @@ import { latestVersion, Migration } from '../../common/migrations.js';
  *                    restorePlayerState) seeds each system from its status
  *                    govt's old record with the scenario's systems in hand
  *                    (system_records.ts's systemRecordsFromGovtRecords).
+ *   v7 (this build)  + required `storedShips` (ship storage, docs/
+ *                    ship_storage.md): the hulls the pilot owns but is not
+ *                    flying. Every older save had none, so the migration
+ *                    writes an empty list.
  *
  * FORWARD COMPATIBILITY (a save written by this build, read by the
  * previous one). The previous build's decodeSave refuses any envelope
@@ -103,6 +107,7 @@ export function saveDefaults() {
         escorts: [] as never[],
         discovery: [] as never[],
         autoAbortShips: [] as never[],
+        storedShips: [] as never[],
     };
 }
 
@@ -410,6 +415,18 @@ function recordsPerSystem(raw: RawSaveData): RawSaveData {
     };
 }
 
+/**
+ * v6 -> v7: the pilot's stored ships (ship storage). A v6 pilot could not
+ * store a ship, so its list is empty. Fills only an ABSENT key, like
+ * materialiseDefaults, so a payload that already has one passes through.
+ */
+function noStoredShips(raw: RawSaveData): RawSaveData {
+    if (raw.storedShips === undefined) {
+        raw.storedShips = [];
+    }
+    return raw;
+}
+
 export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
     {
         from: 1, to: 2,
@@ -444,6 +461,12 @@ export const SAVE_MIGRATIONS: readonly Migration<RawSaveData>[] = [
             + '`reputations` list moves to `govtRecords`, which the restore '
             + 'seeds into the new per-system `legalRecords`',
         migrate: recordsPerSystem,
+    },
+    {
+        from: 6, to: 7,
+        summary: 'storedShips (ship storage) is a required list; every '
+            + 'older save stored nothing, so it is written empty',
+        migrate: noStoredShips,
     },
 ];
 

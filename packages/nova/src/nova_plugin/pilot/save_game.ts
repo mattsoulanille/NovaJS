@@ -32,6 +32,8 @@ import {
     PlayerNamesComponent,
     ReinforcementCallsComponent,
     sanitizeShipName,
+    StoredShipsComponent,
+    StoredShipsType,
 } from '../player/index.js';
 import { PlayerEscortComponent } from '../player/index.js';
 import { CombatRatingComponent, LegalGeography, LegalRecordsComponent, systemRecordsFromGovtRecords } from '../reputation/index.js';
@@ -237,6 +239,11 @@ export const SaveData = t.intersection([
         // first system entry drains it as the lift-off would have.
         // (PR #142 review finding 2.)
         autoAbortShips: PendingAutoAbortShipsType,
+        // The hulls the pilot owns but is neither flying nor has with them
+        // as escorts (player/stored_ships.ts; ship storage, save v7). Empty
+        // for a pilot who has stored nothing, which is what the v6 -> v7
+        // migration gives every older save.
+        storedShips: StoredShipsType,
     }),
     t.partial({
         // Set Nova control bits as PHYSICAL bit numbers, keyed by decimal
@@ -403,6 +410,11 @@ export function extractSaveData(entity: Entity, systemId: string,
                     live: new Map(batch.shipObjective.live),
                 },
             })),
+        // Copied entry by entry: the save must not share arrays with the
+        // live component (the hangar replaces the list, but a save is
+        // written while the pilot is docked and may be held a while).
+        storedShips: (entity.components.get(StoredShipsComponent)
+            ?? defaults.storedShips).map(copyStoredShip),
     };
 
     const bits = entity.components.get(ControlBitsComponent);
@@ -571,6 +583,14 @@ export function restorePlayerState(entity: Entity, save: SaveData,
         kills: save.combatRatings
             .find(([category]) => category === 'kills')?.[1] ?? 0,
     });
+    // The stored ships (player/stored_ships.ts), which a pilot with none
+    // carries no component for.
+    if (save.storedShips.length > 0) {
+        entity.components.set(StoredShipsComponent,
+            save.storedShips.map(copyStoredShip));
+    } else {
+        entity.components.delete(StoredShipsComponent);
+    }
     if (save.autoAbortShips.length > 0) {
         // Back on the entity as it was; buildMissionShipSpawns drains it at
         // the restored pilot's first system entry.
@@ -614,6 +634,16 @@ function restoredLegalRecords(save: SaveData,
         }
     }
     return records;
+}
+
+/** A stored-ship record with none of its arrays shared. */
+function copyStoredShip<T extends SaveData['storedShips'][number]>(
+    stored: T): T {
+    return {
+        ...stored,
+        outfits: stored.outfits.map(([id, count]) => [id, count]),
+        cargo: stored.cargo.map(([key, tons]) => [key, tons]),
+    };
 }
 
 /** The legacy `novaControlBits` field as numbers (garbage skipped). */

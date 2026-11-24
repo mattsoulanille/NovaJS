@@ -42,6 +42,8 @@ import {
     MissionsComponent,
     PendingAutoAbortShips,
     PendingAutoAbortShipsComponent,
+    StoredShips,
+    StoredShipsComponent,
 } from '../player/index.js';
 import {
     collectEscortsToSave,
@@ -276,6 +278,34 @@ describe('save_game schema', () => {
             restorePlayerState(bare, decodeSave(encodeSave(emptied))!);
             expect(bare.components.has(PendingAutoAbortShipsComponent))
                 .toBe(false);
+        });
+
+    it('round-trips the pilot\'s stored ships, and writes an empty list '
+        + 'for a pilot with none', () => {
+            const stored: StoredShips = [{
+                ship: 'nova:130', name: 'Shuttle', storedAt: 'nova:128',
+                outfits: [['nova:128', 1], ['nova:131', 20]],
+                cargo: [['cargo:2', 7]], fuel: 180,
+            }];
+            const entity = new Entity('player');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            entity.components.set(StoredShipsComponent, stored);
+            const saved = extractSaveData(entity, 'nova:130')!;
+            expect(saved.storedShips).toEqual(stored);
+            expect(saved.storedShips).not.toBe(stored);
+            const decoded = decodeSave(encodeSave(saved))!;
+            expect(decoded).toEqual(saved);
+            const restored = new Entity('restored');
+            restorePlayerState(restored, decoded);
+            expect(restored.components.get(StoredShipsComponent))
+                .toEqual(stored);
+
+            entity.components.delete(StoredShipsComponent);
+            const none = extractSaveData(entity, 'nova:130')!;
+            expect(none.storedShips).toEqual([]);
+            const bare = new Entity('bare');
+            restorePlayerState(bare, decodeSave(encodeSave(none))!);
+            expect(bare.components.has(StoredShipsComponent)).toBeFalse();
         });
 
     it('decodes an active mission saved before <SN> ship names existed',
