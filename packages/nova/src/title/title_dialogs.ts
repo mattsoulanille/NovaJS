@@ -23,6 +23,7 @@ import {
     loadPilotControls, loadPilotSettings, savePilotControls,
     savePilotSettings,
 } from './pilot_registry.js';
+import { ENHANCEMENTS, resolveEnhancements } from '../enhancements.js';
 
 // ---------------------------------------------------------------------------
 // Shared modal scaffolding.
@@ -826,11 +827,29 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
 
         const cancel = aquaButton('Cancel', 'prefs-cancel', false);
         const ok = aquaButton('OK', 'prefs-ok', true);
+        // NovaJS's own departures from the original get a sheet of their
+        // own rather than a seventh tab: six already fill the window's
+        // width. The button sits bottom-left, apart from Cancel / OK, as
+        // a native window's secondary action does. Its edits land in the
+        // same working copy, so this dialog's OK / Cancel commit or drop
+        // them with everything else.
+        const enhancements = aquaButton('NovaJS Enhancements…',
+            'prefs-enhancements', false);
+        Object.assign(enhancements.style, {
+            width: 'auto', padding: '0 12px', marginRight: 'auto',
+        } as Partial<CSSStyleDeclaration>);
+        enhancements.addEventListener('click', () => {
+            activeCapture?.();
+            activeCapture = showEnhancementsSheet(settings, () => {
+                activeCapture = undefined;
+            });
+        });
         const row = document.createElement('div');
         Object.assign(row.style, {
             display: 'flex', justifyContent: 'flex-end', gap: '13px',
             marginTop: '10px',
         } as Partial<CSSStyleDeclaration>);
+        row.appendChild(enhancements);
         row.appendChild(cancel);
         row.appendChild(ok);
         modal.panel.appendChild(row);
@@ -868,6 +887,135 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>,
         document.addEventListener('keydown', onKey);
         showTab(0);
     });
+}
+
+/**
+ * The "NovaJS Enhancements" sheet: one checkbox per deliberate departure
+ * from the original (enhancements.ts), each with the one line saying what
+ * the original does instead, which is what unchecking it brings back.
+ *
+ * It edits a copy of the Preferences dialog's working `settings`; its OK
+ * copies the boxes back into them (the Preferences OK then persists them
+ * with the pilot), its Cancel or Escape drops them. Returns a function
+ * that closes it as a Cancel, which the Preferences dialog calls when it
+ * closes first. `onClose` runs once, however it closes.
+ */
+export function showEnhancementsSheet(settings: GameSettingsOverride,
+    onClose: () => void): () => void {
+    const modal = makeModal('enhancements-dialog');
+    Object.assign(modal.panel.style, {
+        width: '560px', minWidth: '0', maxWidth: 'none',
+        padding: '0 20px 18px', boxSizing: 'border-box',
+        borderRadius: '5px', overflow: 'hidden',
+        boxShadow: '0 10px 36px rgba(0,0,0,0.55), '
+            + '0 0 0 1px rgba(0,0,0,0.25)',
+    } as Partial<CSSStyleDeclaration>);
+    modal.backdrop.style.background = 'rgba(0,0,0,0.2)';
+
+    const title = document.createElement('div');
+    title.textContent = 'NovaJS Enhancements';
+    Object.assign(title.style, {
+        margin: '0 -20px', height: '22px', lineHeight: '22px',
+        textAlign: 'center', color: '#4d4d4d',
+        background: 'linear-gradient(#ebebeb, #d5d5d5)',
+        borderBottom: '1px solid #c2c2c2', boxSizing: 'border-box',
+    } as Partial<CSSStyleDeclaration>);
+    modal.panel.appendChild(title);
+
+    const intro = document.createElement('div');
+    intro.textContent = 'Small changes NovaJS makes to the original game. '
+        + 'Uncheck one to get the original\'s behaviour back.';
+    Object.assign(intro.style, {
+        margin: '12px 0 10px', color: '#333',
+    } as Partial<CSSStyleDeclaration>);
+    modal.panel.appendChild(intro);
+
+    const box = document.createElement('div');
+    Object.assign(box.style, {
+        background: '#e2e2e2', border: '1px solid #d6d6d6',
+        borderRadius: '4px', padding: '6px 14px',
+    } as Partial<CSSStyleDeclaration>);
+    modal.panel.appendChild(box);
+
+    const working = resolveEnhancements(settings);
+    for (const spec of ENHANCEMENTS) {
+        const row = document.createElement('label');
+        row.dataset.testid = `enh-row-${spec.key}`;
+        row.title = `NovaJS: ${spec.novajs}`;
+        Object.assign(row.style, {
+            display: 'flex', alignItems: 'flex-start', gap: '6px',
+            padding: '5px 0', cursor: 'pointer',
+        } as Partial<CSSStyleDeclaration>);
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.dataset.testid = `enh-${spec.key}`;
+        check.checked = working[spec.key];
+        Object.assign(check.style, {
+            width: '14px', height: '14px', margin: '1px 0 0',
+            accentColor: '#3b99fc', flex: 'none',
+        } as Partial<CSSStyleDeclaration>);
+        check.addEventListener('change', () => {
+            working[spec.key] = check.checked;
+        });
+        const text = document.createElement('div');
+        const label = document.createElement('div');
+        label.textContent = spec.label;
+        label.style.color = '#111';
+        const original = document.createElement('div');
+        original.textContent = `Original: ${spec.original}`;
+        Object.assign(original.style, {
+            color: '#666', fontSize: '11px', marginTop: '1px',
+        } as Partial<CSSStyleDeclaration>);
+        text.appendChild(label);
+        text.appendChild(original);
+        row.appendChild(check);
+        row.appendChild(text);
+        box.appendChild(row);
+    }
+
+    const cancel = aquaButton('Cancel', 'enh-cancel', false);
+    const ok = aquaButton('OK', 'enh-ok', true);
+    const buttons = document.createElement('div');
+    Object.assign(buttons.style, {
+        display: 'flex', justifyContent: 'flex-end', gap: '13px',
+        marginTop: '12px',
+    } as Partial<CSSStyleDeclaration>);
+    buttons.appendChild(cancel);
+    buttons.appendChild(ok);
+    modal.panel.appendChild(buttons);
+
+    let closed = false;
+    const close = (commit: boolean) => {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        if (commit) {
+            for (const { key } of ENHANCEMENTS) {
+                settings[key] = working[key];
+            }
+        }
+        document.removeEventListener('keydown', onKey, true);
+        modal.close();
+        onClose();
+    };
+    // Capture phase, so the Preferences dialog underneath never sees the
+    // Enter / Escape meant for this sheet.
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            close(true);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            close(false);
+        }
+    };
+    ok.addEventListener('click', () => close(true));
+    cancel.addEventListener('click', () => close(false));
+    document.addEventListener('keydown', onKey, true);
+    return () => close(false);
 }
 
 /**

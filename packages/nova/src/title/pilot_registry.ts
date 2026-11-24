@@ -43,6 +43,7 @@ import {
 import {
     convertOriginalPilotBytes, OriginalPilotContext,
 } from './original_pilot_import.js';
+import { invalidateEnhancements } from '../enhancements.js';
 
 /** localStorage key: the pilot registry. */
 export const PILOT_REGISTRY_KEY = 'novajs:pilots';
@@ -356,6 +357,9 @@ export function saveRegistry(registry: PilotRegistry,
     } catch (e) {
         console.warn('Failed to write the pilot registry', e);
     }
+    // The active pilot, or its settings, may have changed: the live
+    // NovaJS Enhancements values are re-read on their next use.
+    invalidateEnhancements();
 }
 
 /** Every pilot in the registry, in creation order. */

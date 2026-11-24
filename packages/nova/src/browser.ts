@@ -61,7 +61,13 @@ import { GateDestinationResolver } from "./nova_plugin/travel/index.js";
 import {
     DisplaySettings, loadDisplaySettings, mergeControls, saveDisplaySettings,
 } from "./title/client_prefs.js";
-import { applyActivePilot, loadPilotControls } from "./title/pilot_registry.js";
+import {
+    applyActivePilot, loadPilotControls, loadPilotSettings,
+} from "./title/pilot_registry.js";
+import {
+    currentEnhancements, Enhancements, overrideEnhancements,
+    setEnhancementsSource,
+} from "./enhancements.js";
 import { runTitle } from "./title/title_flow.js";
 import { liveSystem } from "./client/client_state.js";
 import "./window_hooks.js";
@@ -201,6 +207,18 @@ function setDisplaySettings(next: Partial<DisplaySettings>): DisplaySettings {
     return { ...displaySettings };
 }
 window.novaDisplayScale = { get: getDisplaySettings, set: setDisplaySettings };
+
+// The NovaJS Enhancements toggles (enhancements.ts) read the ACTIVE
+// pilot's settings; the registry clears their cache on every write, so a
+// Preferences OK or a pilot switch applies at once. Console / harness:
+// `novaSettings.enhancements` reads them all, and assigning a partial
+// record overrides them for this session only (never persisted).
+setEnhancementsSource(() => loadPilotSettings());
+Object.defineProperty((window.novaSettings ??= {}), 'enhancements', {
+    get: (): Enhancements => currentEnhancements(),
+    set: (next: Partial<Enhancements>) => overrideEnhancements(next ?? {}),
+    configurable: true,
+});
 
 /**
  * The in-flight scale hotkeys ('[' / ']' for the UI, '-' / '=' for

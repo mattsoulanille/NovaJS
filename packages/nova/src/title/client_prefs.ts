@@ -10,6 +10,7 @@
  * kept beside the save (see save_game.ts).
  */
 import { clampScale } from '../display/display_scale.js';
+import { EnhancementKey, invalidateEnhancements } from '../enhancements.js';
 
 /** localStorage key: control-binding overrides (action -> event.code). */
 export const CONTROLS_OVERRIDE_KEY = 'novajs:controls';
@@ -80,8 +81,11 @@ function writeJson(key: string, value: unknown, storage?: PrefsStorage): void {
 
 /** The player-editable game settings shown on the "Game Settings" tab.
  * Keys mirror the original's toggles; values persist even when a given
- * toggle has no wired effect in this browser build yet. */
-export interface GameSettingsOverride {
+ * toggle has no wired effect in this browser build yet. The NovaJS
+ * Enhancements toggles (enhancements.ts) ride along as flat `enh*`
+ * booleans, absent meaning ON. */
+export interface GameSettingsOverride
+    extends Partial<Record<EnhancementKey, boolean>> {
     shipAnimations?: boolean;
     engineGlows?: boolean;
     runningLights?: boolean;
@@ -104,6 +108,7 @@ export function loadGameSettings(storage?: PrefsStorage): GameSettingsOverride {
 export function saveGameSettings(settings: GameSettingsOverride,
     storage?: PrefsStorage): void {
     writeJson(SETTINGS_OVERRIDE_KEY, settings, storage);
+    invalidateEnhancements();
 }
 
 /**

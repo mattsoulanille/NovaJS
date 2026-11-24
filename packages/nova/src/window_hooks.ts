@@ -34,6 +34,7 @@ import type { JumpVisual } from './display/jump_fade_plugin.js';
 import type { GpuParticleSystem } from './display/gpu_particles.js';
 import type { ControlEvent } from './nova_plugin/core/index.js';
 import type { DisplaySettings } from './title/client_prefs.js';
+import type { Enhancements } from './enhancements.js';
 import type { TitleMusic } from './title/title_music.js';
 import type { TitleScreen } from './title/title_screen.js';
 
@@ -47,6 +48,10 @@ import type { TitleScreen } from './title/title_screen.js';
 export interface LiveSettings {
     /** How a hyperspace jump is drawn (jump_fade_plugin). */
     jumpVisual?: JumpVisual;
+    /** The NovaJS Enhancements toggles (enhancements.ts, browser.ts):
+     * reads every live value; assigning a partial record overrides them
+     * for this session only. */
+    enhancements?: Partial<Enhancements>;
 }
 
 declare global {
