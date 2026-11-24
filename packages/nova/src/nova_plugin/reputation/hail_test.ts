@@ -17,7 +17,8 @@ import {
     fuelHaggleAfterAccept,
     fuelLowerPriceCounters,
     fuelSalePrice,
-    fuelSaleTerms,
+    fuelSaleTerms, fuelAskingBase, FUEL_SALE_POOR_CASH, cantAffordText,
+    CANT_AFFORD_FALLBACK, CANT_AFFORD_FIRST_INDEX, CANT_AFFORD_COUNT,
     isTraderAiType,
     laterFuelHaggle,
     lowerFuelPrice,
@@ -493,6 +494,31 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
                 .toEqual({ mood: 'neutral', base: 3000 });
         });
 
+    it('the first ask reads the pilot: a poor one is asked 1,000, a '
+        + 'negative record here adds 1,000 (reference P1 / H1 wave 18, '
+        + 'finding 2; GUESS for the rule)', () => {
+            const rich = 1_000_000;
+            // ship0: bad 3,000; ship1: good 1,000; ship3: neutral 3,000.
+            expect(fuelAskingBase('ship0', { credits: rich, record: 0 }))
+                .toBe(3000);
+            expect(fuelAskingBase('ship0', { credits: rich, record: 2000 }))
+                .toBe(3000);
+            // Record -5: bad 4,000, good 2,000 (the reference's two ships).
+            expect(fuelAskingBase('ship0', { credits: rich, record: -5 }))
+                .toBe(4000);
+            expect(fuelAskingBase('ship1', { credits: rich, record: -5 }))
+                .toBe(2000);
+            // 5,000 and 300 credits: neutral ships asked 1,000.
+            expect(fuelAskingBase('ship3', { credits: 5000, record: 0 }))
+                .toBe(1000);
+            expect(fuelAskingBase('ship3', { credits: 300, record: 0 }))
+                .toBe(1000);
+            expect(fuelAskingBase('ship3',
+                { credits: FUEL_SALE_POOR_CASH, record: 0 })).toBe(3000);
+            expect(fuelAskingBase('ship0', { credits: 300, record: -5 }))
+                .toBe(2000);
+        });
+
     it('Lower Price: a counter or a withdrawal on the asking price, always a '
         + 'withdrawal on a counter; a withdrawal ends the ask (finding 3)',
         () => {
@@ -581,6 +607,24 @@ describe('assistIsFree', () => {
     it('is free for Roadside Assistance govts', () => {
         expect(assistIsFree(withFlags2({ roadsideAssistance: true })))
             .toBe(true);
+        expect(assistIsFree(withFlags2({ roadsideAssistance: true }), false,
+            'fuel')).toBe(true);
+    });
+    it('a ränk 0x0800 refuels for free and does NOT repair (reference P1 / '
+        + 'H1 wave 18, finding 4)', () => {
+        expect(assistIsFree(govt(), true, 'fuel')).toBe(true);
+        expect(assistIsFree(govt(), true, 'disabled')).toBe(false);
+        expect(assistIsFree(govt(), true)).toBe(false);
+    });
+    it('answers a pilot who cannot pay from STR# 3000 60-64', () => {
+        expect(cantAffordText(undefined)).toBe(CANT_AFFORD_FALLBACK);
+        const strings = Array.from({ length: 70 }, (_, i) => `line ${i}`);
+        for (let seed = 0; seed < 10; seed++) {
+            const index = Number(cantAffordText(strings, seed).split(' ')[1]);
+            expect(index).toBeGreaterThanOrEqual(CANT_AFFORD_FIRST_INDEX);
+            expect(index).toBeLessThan(CANT_AFFORD_FIRST_INDEX
+                + CANT_AFFORD_COUNT);
+        }
     });
     it('is not (yet) free otherwise', () => {
         expect(assistIsFree(govt())).toBe(false);

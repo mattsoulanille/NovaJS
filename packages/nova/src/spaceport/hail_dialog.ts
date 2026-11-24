@@ -3,6 +3,7 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { EscortDeal } from '../nova_plugin/player/index.js';
+import { CANT_AFFORD_FALLBACK } from '../nova_plugin/reputation/index.js';
 import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 import { Button } from './button.js';
 import {
@@ -137,6 +138,12 @@ export interface HailContext {
          * 3000 155-159). Fuel offers only.
          */
         withdrawn?: string,
+        /**
+         * What the ship says to Accept Price or Lower Price on a price the
+         * pilot cannot pay ("You can't fool me - you can't afford it.",
+         * STR# 3000 60-64; reference "P1 / H1 wave 18"). Fuel offers only.
+         */
+        cantAfford?: string,
     };
     /**
      * Beg For Mercy offered to an IFF-hostile ship that will NOT be bought
@@ -616,6 +623,12 @@ export type HailPress =
      */
     | { kind: 'lowerPrice', counter?: HailContext['bribe'] }
     /**
+     * Accept Price or Lower Price on a fuel price the pilot cannot pay:
+     * the popup closes with "You can't fool me - you can't afford it." in
+     * the well, nothing is dispatched, and it is not an ask.
+     */
+    | { kind: 'cantAfford' }
+    /**
      * The escort box's three management rows. The first two TOGGLE a
      * queued deal and leave the channel open; only Release ends the
      * conversation (see the state machine below).
@@ -718,6 +731,17 @@ export function hailPress(state: HailPage, press: HailPress,
             // stays, and asking again gets a new (dearer) price.
             return { phase: 'main', context: {
                 ...context, body: context.bribe.withdrawn ?? context.body,
+            } };
+        case 'cantAfford':
+            if (phase !== 'haggle' || context.bribe?.purpose !== 'fuel') {
+                return state;
+            }
+            // Reference "P1 / H1 wave 18" (300 credits, a 1,000 price):
+            // the popup gone, the line in the well, Request Assistance
+            // still there, and the next ask named the same price.
+            return { phase: 'main', context: {
+                ...context,
+                body: context.bribe.cantAfford ?? CANT_AFFORD_FALLBACK,
             } };
         case 'pay': {
             const accepted = context.bribe?.accepted;
@@ -1344,12 +1368,19 @@ export class HailDialog {
             // A ship's fuel price (reference H1 waves 16 and 17): Lower
             // Price over Accept Price, the original's own captions (STR#
             // 150 30 and 29). Lower Price counters with 3/4 or withdraws
-            // the offer; Accept Price pays it and the ship comes. GUESS: a
-            // price the pilot cannot pay greys Accept Price (not measured).
+            // the offer; Accept Price pays it and the ship comes. A price
+            // the pilot cannot pay keeps BOTH buttons live (reference "P1
+            // / H1 wave 18": Accept Price was not greyed), and either
+            // answers "You can't fool me - you can't afford it." without
+            // dispatching anything.
             const lower =
                 this.placeButton('Lower Price', frame, originX, originY, 0);
             lower.click.subscribe(() => {
                 this.beep();
+                if (!bribe.canAfford) {
+                    this.apply({ kind: 'cantAfford' });
+                    return;
+                }
                 const counter = this.callbacks.lowerPrice();
                 this.apply(counter ? { kind: 'lowerPrice', counter }
                     : { kind: 'lowerPrice' });
@@ -1357,15 +1388,15 @@ export class HailDialog {
             this.content.addChild(lower.container);
             const accept =
                 this.placeButton('Accept Price', frame, originX, originY, 1);
-            if (bribe.canAfford) {
-                accept.click.subscribe(() => {
-                    this.beep();
-                    this.callbacks.bribe();
-                    this.apply({ kind: 'pay' });
-                });
-            } else {
-                accept.state = 'grey';
-            }
+            accept.click.subscribe(() => {
+                this.beep();
+                if (!bribe.canAfford) {
+                    this.apply({ kind: 'cantAfford' });
+                    return;
+                }
+                this.callbacks.bribe();
+                this.apply({ kind: 'pay' });
+            });
             this.content.addChild(accept.container);
             return;
         }

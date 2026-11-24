@@ -31,9 +31,8 @@ import { LegalRecords } from './reputation.js';
  *  - gövt Flags2 0x0010 "Roadside Assistance — always repair or refuel the
  *    player for free" (roadsideAssistance).
  *  - ränk Flags 0x0800 "Ships allied with the affiliated govt will always
- *    repair or refuel the player for free" (allied-repair): not applied here
- *    because per-player rank state is not yet modelled — a documented seam
- *    (see assistIsFree).
+ *    repair or refuel the player for free": MEASURED to REFUEL for free and
+ *    NOT to repair (reference "P1 / H1 wave 18"; see assistIsFree).
  *  - përs CommQuote (STR# 7100) is the comms-dialog greeting for a named
  *    person; resolved into PersData.commQuote and taking precedence.
  *  - OPENING A CHANNEL IS NOT A GREETING. hail/hail.png shows a freshly
@@ -315,14 +314,16 @@ export function canRequestAssistance(opts: {
  *                disabled ally was measured).
  *
  * Free help stays where the data says it is free: a Roadside Assistance govt
- * (Flags2 0x0010) and a ränk 0x0800 holder ({@link assistIsFree}), and a
- * ränk 0x0400 holder asking a warship (above). GUESS: a disabled pilot who
- * is also out of fuel is refused (being disabled is the bigger need, and a
- * neutral ship would not repair him). The player's legal record is not read:
- * a +2000 record changed neither the refusal nor the fuel price nor the mood
- * (wave 17, findings 5 and 6), and wave 15 refused a +1000 pilot under fire
- * alike (the table's "Okay, since your reputation is so good." group
- * 160-164 is unused until a run shows when it is said).
+ * (Flags2 0x0010), a ränk 0x0800 holder who needs FUEL only (a disabled one
+ * is refused as without the ränk: reference "P1 / H1 wave 18", finding 4;
+ * {@link assistIsFree}), and a ränk 0x0400 holder asking a warship (above).
+ * GUESS: a disabled pilot who is also out of fuel is refused (being disabled
+ * is the bigger need, and a neutral ship would not repair him). The
+ * player's legal record does not change the refusal (a +2000 record was
+ * refused, wave 17, findings 5 and 6, and wave 15 refused a +1000 pilot
+ * under fire alike; the table's "Okay, since your reputation is so good."
+ * group 160-164 is unused until a run shows when it is said); a NEGATIVE
+ * record raises the fuel price ({@link fuelAskingBase}).
  *
  * `need` is what the player needs help with ({@link assistNeed}); a request
  * with no need never reaches this function (the "You're not in any trouble."
@@ -342,7 +343,8 @@ export function assistWillingness(opts: {
     govt: GovtData | undefined,
     aiType: number | undefined,
     rankAlwaysAssists?: boolean,
-    /** {@link assistIsFree}: Roadside Assistance, or a ränk 0x0800. */
+    /** {@link assistIsFree} for this `need`: Roadside Assistance, or a
+     * ränk 0x0800 for fuel. */
     free?: boolean,
     /** Defaults to 'disabled' (the stricter answer). */
     need?: AssistNeed,
@@ -448,6 +450,9 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  * every comm line here, so the dialog (which must quote the price before
  * any record is applied) and applyHail (which charges it) agree on every
  * peer, and the ship keeps its mood for every pilot and every ask.
+ *
+ * This is the SHIP's side of the price, for a pilot with plenty of cash
+ * and a clean record; the pilot's side ({@link fuelAskingBase}) moves it.
  */
 export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
     const roll = hashString(`fuelSale:base:${shipUuid}`);
@@ -457,6 +462,51 @@ export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
             : hashString(`fuelSale:mood:${shipUuid}`) % 2 === 0
                 ? 'neutral' : 'bad';
     return { mood, base };
+}
+
+/** What the price reads about the pilot asking (synced state). */
+export interface FuelSalePilot {
+    /** The pilot's cash. */
+    credits: number;
+    /** The pilot's legal record in the CURRENT system (local_law.ts's
+     * recordHere: the per-system record). */
+    record: number;
+}
+
+/** Under this much cash a pilot is POOR to a fuel seller
+ * ({@link fuelAskingBase}). GUESS: 5,000 and 300 were poor and 1,000,000
+ * was not (reference "P1 / H1 wave 18"); the cut is somewhere between, and
+ * this is the round number just above the measured 5,000. */
+export const FUEL_SALE_POOR_CASH = 10_000;
+
+/**
+ * THE SHIP'S FIRST ASK TO THIS PILOT: its base ({@link fuelSaleTerms}),
+ * moved by the pilot's cash and record. Reference "P1 / H1 wave 18",
+ * finding 2 (one ship per case; GUESS for the rule, the data points are):
+ *
+ *  - POOR: with 5,000 credits a neutral-mood trader asked 1,000, and with
+ *    300 credits a neutral-mood warship asked 1,000 (neutral ships asked
+ *    2,000-3,000 of the 1,000,000-credit pilots of wave 17). So a pilot with
+ *    less than {@link FUEL_SALE_POOR_CASH} is asked the LOWEST base, 1,000,
+ *    whatever the ship's mood. (The reference write-up's "base - 1,000, not
+ *    below 1,000" fits too, but only if both neutral ships happened to draw
+ *    the 2,000 base; the flat 1,000 fits both rows for certain.)
+ *  - A NEGATIVE RECORD here: at record -5 (1,000,000 credits) a bad-mood
+ *    warship asked 4,000 and a good-mood trader 2,000, where bad asked 3,000
+ *    and good 1,000 at record 0 and +2000 (wave 17). So any record below 0
+ *    in the current system adds {@link FUEL_SALE_PRICE_STEP}. Only -5 was
+ *    measured: whether a deeper record adds more is open, and a positive
+ *    one adds nothing (+2000, wave 17).
+ *
+ * The +1,000 an ask and the 3/4 counter apply on top ({@link
+ * fuelSalePrice}). Pure over synced state, so the dialog's quote and
+ * applyHail's charge agree.
+ */
+export function fuelAskingBase(shipUuid: string, pilot: FuelSalePilot):
+    number {
+    const base = pilot.credits < FUEL_SALE_POOR_CASH
+        ? FUEL_SALE_PRICE_STEP : fuelSaleTerms(shipUuid).base;
+    return base + (pilot.record < 0 ? FUEL_SALE_PRICE_STEP : 0);
 }
 
 /**
@@ -792,6 +842,20 @@ export const FUEL_OFFER_WITHDRAWN_COUNT = RESPONSE_GROUP_SIZE;
 export const FUEL_OFFER_WITHDRAWN_FALLBACK = 'Ha ha ha. What a comedian.';
 
 /**
+ * "You can't fool me - you can't afford it." (STR# 3000 60-64, "Yeah, come
+ * back when you actually have some money." / ... / "You can't afford it.";
+ * 63 on the reference "P1 / H1 wave 18" capture) — a fuel seller's answer
+ * when the pilot presses Accept Price or Lower Price on a price he cannot
+ * pay. Accept Price is NOT greyed for it; the popup closes with this line
+ * in the well, nothing is taken, nobody comes, and it does NOT count as an
+ * ask (the next ask named the same 1,000).
+ */
+export const CANT_AFFORD_FIRST_INDEX = 60;
+export const CANT_AFFORD_COUNT = RESPONSE_GROUP_SIZE;
+export const CANT_AFFORD_FALLBACK =
+    'Yeah, come back when you actually have some money.';
+
+/**
  * The haggle popup's demand, "Pay me 1,000 credits." (reference H1 wave 16),
  * built the way the original builds it out of STR# 2002: "Pay me" (index
  * 186), the price with thousands separators, "credits" (index 32), and a
@@ -1013,6 +1077,13 @@ export function fuelSaleMoodText(strings: readonly string[] | undefined,
     }
 }
 
+/** A fuel price the pilot cannot pay, answered (STR# 3000 60-64). */
+export function cantAffordText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, CANT_AFFORD_FIRST_INDEX,
+        CANT_AFFORD_FALLBACK, seed);
+}
+
 /** A price for help answered with Lower Price (STR# 3000 155-159). */
 export function fuelOfferWithdrawnText(
     strings: readonly string[] | undefined, seed = 0): string {
@@ -1054,11 +1125,16 @@ export function hostileResponseText(strings: readonly string[] | undefined,
 }
 
 /**
- * Whether the assistance is free. Roadside-Assistance govts (Flags2 0x0010)
- * always repair/refuel for free, and so does an active ränk with Flags 0x0800
- * ("Ships allied with the affiliated govt will always repair or refuel the
- * player for free") affiliated with the hailed ship's government —
- * `rankFreeRepair`, from rank_logic.ts's ranksGiveFreeRepair.
+ * Whether the assistance with `need` is free. Roadside-Assistance govts
+ * (Flags2 0x0010) always repair/refuel for free (unmeasured); an active ränk
+ * with Flags 0x0800 ("Ships allied with the affiliated govt will always
+ * repair or refuel the player for free") affiliated with the hailed ship's
+ * government (`rankFreeRepair`, from rank_logic.ts's ranksGiveFreeRepair)
+ * REFUELS for free and does NOT repair: reference "P1 / H1 wave 18",
+ * finding 4 — with the ränk active, the affiliated govt's trader and
+ * warship said "Okay, I'm on my way." to a fuelless pilot at once, with no
+ * price, and came; three of its warships refused a disabled pilot ("You
+ * wish." / "No way." / "Not a chance."), as without the ränk.
  *
  * NARROWING: the Bible says ships ALLIED WITH the affiliated govt, not only
  * ships OF it. Allies are expressed through gövt class numbers rather than
@@ -1072,8 +1148,9 @@ export function hostileResponseText(strings: readonly string[] | undefined,
  * fuelless one fuel (reference H1 waves 16 and 17), allies included.
  */
 export function assistIsFree(govt: GovtData | undefined,
-    rankFreeRepair = false): boolean {
-    return rankFreeRepair || !!govt?.flags2.roadsideAssistance;
+    rankFreeRepair = false, need: AssistNeed = 'disabled'): boolean {
+    return (rankFreeRepair && need === 'fuel')
+        || !!govt?.flags2.roadsideAssistance;
 }
 
 /** Whether a hailed planet's government will take a bribe (hostile planets). */

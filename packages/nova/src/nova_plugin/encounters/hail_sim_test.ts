@@ -19,7 +19,8 @@ import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
-    FUEL_SALE_AMOUNT, fuelSaleTerms, LegalRecordsComponent,
+    FUEL_SALE_AMOUNT, FUEL_SALE_POOR_CASH, fuelSaleTerms,
+    LegalRecordsComponent,
 } from '../reputation/index.js';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { ActiveRanksComponent } from '../ncb/index.js';
@@ -737,13 +738,15 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                     { kind: 'requestAssistance', target: 'target' });
                 expect(target(world).components.has(AssistingComponent))
                     .toBeFalse();
-                // Repaired but out of fuel: the neutral price, not a bribe.
+                // Repaired but out of fuel: the neutral price, not a bribe
+                // — 1,000 dearer for the record below 0 HERE (reference
+                // "P1 / H1 wave 18": record -5, +1,000), whoever enforces.
                 player(world).components.delete(DisabledComponent);
                 player(world).components.get(FuelComponent)!.current = 0;
                 applyHail(world, PEER,
                     { kind: 'requestAssistance', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
-                    .toBe(100_000 - fuelSaleTerms('target').base);
+                    .toBe(100_000 - fuelSaleTerms('target').base - 1000);
                 expect(target(world).components.get(AssistingComponent))
                     .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
             });
@@ -1216,6 +1219,86 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
         expect(target(world).components.has(AssistingComponent)).toBeFalse();
     });
 
+    it('a pilot who cannot pay: Accept Price and Lower Price change '
+        + 'nothing and are not an ask (reference P1 / H1 wave 18: "You '
+        + 'can\'t fool me - you can\'t afford it.")', async () => {
+            const { world } = await neutralWorld(3);
+            fuelless(world);
+            player(world).components.set(CreditsComponent, { credits: 300 });
+            applyHail(world, PEER, assist);
+            applyHail(world, PEER, lower);
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(300);
+            expect(target(world).components.has(AssistingComponent))
+                .toBeFalse();
+            // No ask counted: the next one still names 1,000.
+            expect(haggle(world)).toBeUndefined();
+            player(world).components.set(CreditsComponent, { credits: 1000 });
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(0);
+            expect(target(world).components.get(AssistingComponent))
+                .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
+        });
+
+    /** A neutral ship whose own base is 3,000 (a bad or neutral mood). */
+    async function dearWorld(credits: number, record = 0) {
+        const made = await makeWorld();
+        const uuid = Array.from({ length: 100 }, (_, i) => `seller-${i}`)
+            .find(id => fuelSaleTerms(id).base === 3000)!;
+        await made.addShip(uuid, 150, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:neutral' });
+            ship.components.set(NpcComponent, { aiType: 3, mode: 'travel' });
+        });
+        fuelless(made.world);
+        player(made.world).components.set(CreditsComponent, { credits });
+        player(made.world).components.set(LegalRecordsComponent,
+            new Map([['test:system', record]]));
+        return { ...made, uuid };
+    }
+
+    it('a POOR pilot is asked the lowest base, 1,000, whatever the ship\'s '
+        + 'mood (reference P1 / H1 wave 18: 5,000 and 300 credits; GUESS '
+        + 'for the rule and the 10,000 cut)', async () => {
+            for (const cash of [5000, FUEL_SALE_POOR_CASH - 1]) {
+                const { world, uuid } = await dearWorld(cash);
+                applyHail(world, PEER, { kind: 'requestAssistance', target: uuid });
+                expect(credits(world)).withContext(`${cash}`)
+                    .toBe(cash - 1000);
+            }
+            // At the cut and above: the ship's own base.
+            const rich = await dearWorld(FUEL_SALE_POOR_CASH);
+            applyHail(rich.world, PEER,
+                { kind: 'requestAssistance', target: rich.uuid });
+            expect(credits(rich.world)).toBe(FUEL_SALE_POOR_CASH - 3000);
+        });
+
+    it('a NEGATIVE record here adds 1,000 (reference P1 / H1 wave 18: '
+        + 'record -5, bad 4,000 and good 2,000); a positive one nothing',
+        async () => {
+            const bad = await dearWorld(1_000_000, -5);
+            applyHail(bad.world, PEER,
+                { kind: 'requestAssistance', target: bad.uuid });
+            expect(credits(bad.world)).toBe(1_000_000 - 4000);
+            const { world } = await neutralWorld();
+            fuelless(world);
+            player(world).components.set(LegalRecordsComponent,
+                new Map([['test:system', -5]]));
+            applyHail(world, PEER, assist);
+            expect(credits(world)).toBe(100_000 - 2000);
+            // The record of ANOTHER system does not count.
+            const elsewhere = await neutralWorld();
+            fuelless(elsewhere.world);
+            player(elsewhere.world).components.set(LegalRecordsComponent,
+                new Map([['test:other', -500]]));
+            applyHail(elsewhere.world, PEER, assist);
+            expect(credits(elsewhere.world)).toBe(100_000 - 1000);
+            // Poor AND negative: 1,000 + 1,000.
+            const both = await dearWorld(5000, -5);
+            applyHail(both.world, PEER,
+                { kind: 'requestAssistance', target: both.uuid });
+            expect(credits(both.world)).toBe(5000 - 2000);
+        });
+
     it('a Roadside Assistance govt still repairs and refuels for free',
         async () => {
             const { world, addShip } = await makeWorld();
@@ -1330,5 +1413,43 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
             expect(target(warship.world).components.get(AssistingComponent))
                 .toEqual({ client: 'player' });
             expect(credits(warship.world)).toBe(100_000);
+        });
+
+    /** The player holds a ränk 0x0800 for `test:neutral`. */
+    async function freeRankWorld(aiType: number) {
+        const made = await neutralWorld(aiType);
+        const gameData = made.world.resources.get(
+            SimulationGameDataResource) as unknown as MockGameData;
+        const base = getDefaultRankData();
+        gameData.data.Rank.map.set('test:free', {
+            ...base, id: 'test:free', affilGovt: 'test:neutral',
+            rankFlags: { ...base.rankFlags, freeRefuelAndRepair: true },
+        });
+        await gameData.data.Rank.get('test:free');
+        player(made.world).components.set(ActiveRanksComponent,
+            new Set(['test:free']));
+        return made;
+    }
+
+    it('a ränk 0x0800 REFUELS for free and does NOT repair (reference P1 / '
+        + 'H1 wave 18, finding 4)', async () => {
+            for (const aiType of [1, 3]) {
+                const fuel = await freeRankWorld(aiType);
+                fuelless(fuel.world);
+                applyHail(fuel.world, PEER, assist);
+                expect(credits(fuel.world)).withContext(`AI ${aiType}`)
+                    .toBe(100_000);
+                expect(target(fuel.world).components.get(AssistingComponent))
+                    .withContext(`AI ${aiType}`).toEqual({ client: 'player' });
+
+                const disabled = await freeRankWorld(aiType);
+                player(disabled.world).components.set(DisabledComponent,
+                    { repairAt: null });
+                applyHail(disabled.world, PEER, assist);
+                expect(target(disabled.world).components
+                    .has(AssistingComponent)).withContext(`AI ${aiType}`)
+                    .toBeFalse();
+                expect(credits(disabled.world)).toBe(100_000);
+            }
         });
 });

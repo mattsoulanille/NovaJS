@@ -2122,6 +2122,7 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
         ship[146] = "Hold on, I'll be right there.";
         ship[156] =
             "If that's the way you feel, then you can sit here forever.";
+        ship[63] = "You can't fool me - you can't afford it.";
         const misc: string[] = [];
         misc[186] = 'Pay me';
         misc[32] = 'credits';
@@ -2242,12 +2243,82 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
             expect(answer.line).toBe(result.replies.refusal!);
         });
 
-    it('greys Accept Price for a pilot who cannot pay', async () => {
-        const { world, gameData } = neutralWorld(999);
-        const result = (await computeContext(world, gameData, assets()))!;
-        expect(assistAnswer(world, TARGET, result.replies).offer?.canAfford)
-            .toBeFalse();
-    });
+    it('a pilot who cannot pay is still offered the price (a poor pilot: '
+        + '1,000), with the line Accept / Lower Price answer (reference P1 / '
+        + 'H1 wave 18)', async () => {
+            const { world, gameData } = neutralWorld(300);
+            const result = (await computeContext(world, gameData, assets()))!;
+            const offer = assistAnswer(world, TARGET, result.replies).offer!;
+            expect(offer.amount).toBe(1000);
+            expect(offer.canAfford).toBeFalse();
+            expect(offer.cantAfford)
+                .toBe("You can't fool me - you can't afford it.");
+            expect(haggleText(offer)).toBe('Pay me 1,000 credits.');
+        });
+
+    it('quotes the pilot\'s side of the price: poor (5,000 credits) 1,000, '
+        + 'a negative record HERE 1,000 more (reference P1 / H1 wave 18)',
+        async () => {
+            const poor = neutralWorld(5000);
+            const poorContext = (await computeContext(poor.world,
+                poor.gameData, assets()))!;
+            expect(assistAnswer(poor.world, TARGET, poorContext.replies)
+                .offer?.amount).toBe(1000);
+
+            const { world, gameData } = neutralWorld();
+            world.resources.set(SystemIdResource, 'test:here');
+            world.entities.get(PLAYER)!.components.set(LegalRecordsComponent,
+                new Map([['test:here', -5], ['test:elsewhere', -900]]));
+            const result = (await computeContext(world, gameData, assets()))!;
+            // TARGET's own base is 2,000.
+            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
+                .toBe(3000);
+        });
+
+    it('a ränk 0x0800 of the ship\'s govt: free fuel at once, "Okay, I\'m '
+        + 'on my way." with no popup; a disabled holder is refused '
+        + '(reference P1 / H1 wave 18, finding 4)', async () => {
+            const rankHolder = async (disabled: boolean) => {
+                const built = neutralWorld();
+                const { world, gameData } = built;
+                world.entities.get(TARGET)!.components.set(GovtComponent,
+                    { id: 'test:navy' });
+                gameData.data.Govt.map.set('test:navy',
+                    { ...getDefaultGovtData(), id: 'test:navy' });
+                const base = getDefaultRankData();
+                gameData.data.Rank.map.set('test:free', {
+                    ...base, id: 'test:free', affilGovt: 'test:navy',
+                    rankFlags: { ...base.rankFlags, freeRefuelAndRepair: true },
+                });
+                await gameData.data.Rank.get('test:free');
+                world.entities.get(PLAYER)!.components.set(
+                    ActiveRanksComponent, new Set(['test:free']));
+                if (disabled) {
+                    world.entities.get(PLAYER)!.components.set(
+                        DisabledComponent, { repairAt: null });
+                }
+                return built;
+            };
+            const fuel = await rankHolder(false);
+            const fuelContext = (await computeContext(fuel.world,
+                fuel.gameData, assets()))!;
+            expect(fuelContext.context.assist).toEqual({ free: true });
+            const answer = assistAnswer(fuel.world, TARGET,
+                fuelContext.replies);
+            expect(answer).toEqual({
+                line: "Hold on, I'll be right there.", dispatch: true,
+                haggle: false,
+            });
+
+            const repair = await rankHolder(true);
+            const repairContext = (await computeContext(repair.world,
+                repair.gameData, assets()))!;
+            expect(repairContext.context.assist).toEqual({ free: false });
+            const refused = assistAnswer(repair.world, TARGET,
+                repairContext.replies);
+            expect(refused.dispatch).toBeFalse();
+            expect(refused.line).toBe(repairContext.replies.refusal!);
+        });
 
     it('a Roadside Assistance ship helps for free instead', async () => {
         const { world, gameData } = neutralWorld();
@@ -2321,6 +2392,26 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
                 const after = hailPress(next, { kind: 'lowerPrice' }) as HailPage;
                 expect(after.phase).toBe('main');
                 expect(after.context.body).toBe(offer.withdrawn!);
+            });
+
+        it('a price the pilot cannot pay: Accept Price (or Lower Price) '
+            + 'closes the popup with "You can\'t fool me - you can\'t afford '
+            + 'it." in the well (reference P1 / H1 wave 18)', () => {
+                const broke = {
+                    ...offer, canAfford: false,
+                    cantAfford: "You can't fool me - you can't afford it.",
+                };
+                const haggle = hailPress(main, {
+                    kind: 'assist', answer: mood, haggle: true, offer: broke,
+                }) as HailPage;
+                const next = hailPress(haggle, { kind: 'cantAfford' }) as HailPage;
+                expect(next.phase).toBe('main');
+                expect(next.context.body)
+                    .toBe("You can't fool me - you can't afford it.");
+                expect(commButtonSlots('ship', next.context))
+                    .toEqual(['greetings', 'assist', 'close']);
+                // Only from a fuel popup.
+                expect(hailPress(main, { kind: 'cantAfford' })).toBe(main);
             });
 
         it('Accept Price: "Hold on, I\'ll be right there." on the main page',

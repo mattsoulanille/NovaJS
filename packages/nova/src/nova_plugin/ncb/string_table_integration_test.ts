@@ -30,6 +30,8 @@ import {
     FUEL_SALE_MOOD_COUNT, FUEL_SALE_MOOD_FALLBACK, FUEL_SALE_MOOD_FIRST_INDEX,
     FUEL_SALE_BAD_MOOD_FIRST_INDEX, FUEL_SALE_BAD_MOOD_FALLBACK,
     fuelOfferWithdrawnText, fuelSaleMoodText, PAY_ME_INDEX, payMeText,
+    CANT_AFFORD_COUNT, CANT_AFFORD_FALLBACK, CANT_AFFORD_FIRST_INDEX,
+    cantAffordText,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -339,6 +341,16 @@ describe('StringTable against real Nova data', () => {
                     .toContain(fuelSaleMoodText(strings, 'neutral', seed));
                 expect(withdrawn)
                     .toContain(fuelOfferWithdrawnText(strings, seed));
+            }
+            // A price the pilot cannot pay (reference "P1 / H1 wave 18":
+            // "You can't fool me - you can't afford it.", 0-based 63).
+            const cantAfford = slice(CANT_AFFORD_FIRST_INDEX,
+                CANT_AFFORD_COUNT);
+            expect(cantAfford[0]).toBe(CANT_AFFORD_FALLBACK);
+            expect(strings[63]).toBe(
+                "You can't fool me - you can't afford it.");
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(cantAfford).toContain(cantAffordText(strings, seed));
             }
             const misc = (await gameData.data.StringTable
                 .get(MISC_STRING_TABLE)).strings;

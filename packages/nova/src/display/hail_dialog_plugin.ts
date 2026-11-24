@@ -30,7 +30,8 @@ import {
     MERCY_REFUSED_FALLBACK, assistNeed, disabledRefusalText, fuelSaleMoodText,
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
-    NO_FUEL_HAGGLE, rankBattleAssistance,
+    NO_FUEL_HAGGLE, rankBattleAssistance, fuelAskingBase, cantAffordText,
+    LocalLaw, recordHere,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -266,6 +267,14 @@ export function targetIsFighting(target: Entity): boolean {
 export interface AssistReplies {
     /** "All right, I'll help you." — accepted, the errand is dispatched. */
     granted: string;
+    /**
+     * "Okay, I'm on my way." (STR# 3000 145-149) — FREE FUEL from a ship of
+     * the govt a ränk 0x0800 is affiliated with, said at once with no price
+     * popup (reference "P1 / H1 wave 18", finding 4: "Okay, I'm on my
+     * way.", index 145). Present only for such a ship; the errand is
+     * dispatched.
+     */
+    freeFuel?: string;
     /** "I'm busy." — the ship is in the middle of a fight. */
     busy: string;
     /** "You're not in any trouble." — the player's ship is fine. */
@@ -326,6 +335,12 @@ export interface FuelSaleLines {
     withdrawn: string;
     /** "Hold on, I'll be right there." (145-149), after Accept Price. */
     accepted: string;
+    /** "You can't fool me - you can't afford it." (60-64), Accept Price or
+     * Lower Price on a price the pilot cannot pay. */
+    cantAfford: string;
+    /** The law of the system the channel opened in: the price reads the
+     * pilot's record HERE (hail.ts's fuelAskingBase). */
+    law: LocalLaw;
     /** STR# 2002, for the popup's "Pay me N credits." ({@link payMeText}). */
     miscStrings: readonly string[] | undefined;
 }
@@ -406,6 +421,9 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
     if (need === 'disabled' && replies.refusal !== undefined) {
         return { line: replies.refusal, dispatch: false, haggle: false };
     }
+    if (need === 'fuel' && replies.freeFuel !== undefined) {
+        return { line: replies.freeFuel, dispatch: true, haggle: false };
+    }
     if (need === 'fuel' && replies.fuelSale !== undefined && player
         && targetUuid) {
         const haggle = laterFuelHaggle(localHaggle,
@@ -419,22 +437,29 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
 }
 
 /**
- * The haggle popup's offer for the price on the table: `targetUuid`'s base
- * (hail.ts's fuelSaleTerms) and `haggle` (1,000 an earlier ask, or the 3/4
- * counter), the same figure applyHail charges on Accept Price.
+ * The haggle popup's offer for the price on the table: `targetUuid`'s first
+ * ask to this pilot (hail.ts's fuelAskingBase: the ship's base, the
+ * pilot's cash, his record in this system) and `haggle` (1,000 an earlier
+ * ask, or the 3/4 counter), the same figure applyHail charges on Accept
+ * Price. A price he cannot pay is still offered (Accept Price is not
+ * greyed); pressing either button answers `cantAfford`.
  */
 export function fuelOffer(world: World, targetUuid: string,
     sale: FuelSaleLines, haggle: FuelHaggleState):
     NonNullable<HailContext['bribe']> {
-    const price = fuelSalePrice(fuelSaleTerms(targetUuid).base, haggle);
-    const credits = getPlayerShip(world)?.entity.components
-        .get(CreditsComponent)?.credits ?? 0;
+    const entity = getPlayerShip(world)?.entity;
+    const credits = entity?.components.get(CreditsComponent)?.credits ?? 0;
+    const records = entity?.components.get(LegalRecordsComponent);
+    const price = fuelSalePrice(fuelAskingBase(targetUuid, {
+        credits, record: records ? recordHere(records, sale.law) : 0,
+    }), haggle);
     return {
         amount: price, canAfford: credits >= price,
         purpose: 'fuel',
         demand: payMeText(sale.miscStrings, price),
         accepted: sale.accepted,
         withdrawn: sale.withdrawn,
+        cantAfford: sale.cantAfford,
     };
 }
 
@@ -928,20 +953,28 @@ export async function computeContext(world: World,
         // #297: "They just refuse to help you or make you pay") — only a
         // Flags2 0x0001 govt (the Dechtakar) has none. Whether the ship
         // HELPS is the answer's business, below.
-        const free = assistIsFree(govt, ranksGiveFreeRepair(
-            hailRanks, getHailRank, govt?.id));
+        // ränk 0x0800 REFUELS for free and does not repair (reference
+        // "P1 / H1 wave 18"), so free help depends on the need.
+        const rankFree = ranksGiveFreeRepair(hailRanks, getHailRank, govt?.id);
+        const freeRepair = assistIsFree(govt, rankFree, 'disabled');
+        const freeFuel = assistIsFree(govt, rankFree, 'fuel');
+        // The caption says "(free)" when what the player needs right now
+        // (read as the channel opens) would be free.
         const assist = canRequestAssistance({
             govt, iffHostile, ship: shipData, rankAlwaysAssists,
-        }) ? { free } : undefined;
+        }) ? {
+            free: playerNeed(player) === 'fuel' ? freeFuel : freeRepair,
+        } : undefined;
         // The answer depends on WHAT the player needs (a non-hostile ship
         // refuses a repair and sells fuel, reference H1 waves 16 and 17),
         // which is read at the press; both answers are resolved here.
         const willingness = assistWillingness({
-            disposition, govt, aiType, rankAlwaysAssists, free,
+            disposition, govt, aiType, rankAlwaysAssists, free: freeRepair,
             need: 'disabled',
         });
         const fuelWillingness = assistWillingness({
-            disposition, govt, aiType, rankAlwaysAssists, free, need: 'fuel',
+            disposition, govt, aiType, rankAlwaysAssists, free: freeFuel,
+            need: 'fuel',
         });
         const miscStrings = fuelWillingness === 'sellFuel'
             ? await loadStrings(displayAssets, MISC_STRING_TABLE) : undefined;
@@ -966,6 +999,12 @@ export async function computeContext(world: World,
             ...(!othersShip && willingness === 'refuse'
                 ? { refusal: disabledRefusalText(shipStrings, shipSeed) }
                 : {}),
+            // A ränk 0x0800's free fuel: "Okay, I'm on my way." at once.
+            // (A Roadside Assistance govt keeps the granted line: its
+            // answer was never measured.)
+            ...(!othersShip && rankFree && fuelWillingness === 'willing'
+                ? { freeFuel: assistPaidText(shipStrings, shipSeed) }
+                : {}),
             ...(!othersShip && fuelWillingness === 'sellFuel'
                 ? {
                     fuelSale: {
@@ -976,7 +1015,9 @@ export async function computeContext(world: World,
                         withdrawn: fuelOfferWithdrawnText(shipStrings,
                             shipSeed),
                         accepted: assistPaidText(shipStrings, shipSeed),
+                        cantAfford: cantAffordText(shipStrings, shipSeed),
                         miscStrings,
+                        law,
                     },
                 }
                 : {}),
