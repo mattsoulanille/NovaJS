@@ -1533,7 +1533,7 @@ describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
             leviathan)).toBe(20_000);
     });
 
-    it('installs at ship mass x Mass / 100, rounded up to a whole ton', () => {
+    it('installs at max(Mass, floor(ship mass x Mass / 100))', () => {
         expect(installedMass(carbonFiber, leviathan)).toBe(100);
         // 25 x 1 / 100 = 0.25, shown as "Item Mass: 1 ton" in the capture.
         expect(installedMass(carbonFiber, heavyShuttle)).toBe(1);
@@ -1592,6 +1592,55 @@ describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
     it('is quoted unscaled with no hull in hand', () => {
         expect(outfitPrice(carbonFiber)).toBe(250);
         expect(installedMass(carbonFiber)).toBe(1);
+    });
+
+    describe("the original's five kit hulls (reference wave 10)", () => {
+        // docs/reference_experiments.md, "Outfits that scale with the
+        // ship's mass": Kit Mass Hull 37 / 50 / 100 / 155 / 300, each with
+        // 25 tons free; oütf 452 Kit Mass Price (0x0200, Cost 100, Mass
+        // 0), 453 Kit Mass Mass (0x0400, Mass 10, Cost 1000) and 454 Kit
+        // Mass Both (0x0600, Cost 100, Mass 10).
+        const kitMassPrice = makeOutfit('kit:452', {
+            price: 100, priceScalesWithShipMass: true,
+        });
+        const kitMassMass = makeOutfit('kit:453', {
+            price: 1000, massScalesWithShipMass: true,
+        }, { freeMass: 10 });
+        const kitMassBoth = makeOutfit('kit:454', {
+            price: 100, priceScalesWithShipMass: true,
+            massScalesWithShipMass: true,
+        }, { freeMass: 10 });
+        const hulls = [37, 50, 100, 155, 300].map(
+            mass => makeShip({ mass, freeMass: 25 }));
+
+        it('prices 0x0200 at hull Mass x Cost and refunds it in full the '
+            + 'same visit', () => {
+            expect(hulls.map(hull => outfitPrice(kitMassPrice, hull)))
+                .toEqual([3_700, 5_000, 10_000, 15_500, 30_000]);
+            // "charged / refunded (same visit)": 3,700 / 3,700 and so on.
+            expect(hulls.map(hull =>
+                sellRefund(kitMassPrice, 1, hull).credited))
+                .toEqual([3_700, 5_000, 10_000, 15_500, 30_000]);
+        });
+
+        it('installs 0x0400 at 10, 10, 10, 15 and 30 tons', () => {
+            expect(hulls.map(hull => installedMass(kitMassMass, hull)))
+                .toEqual([10, 10, 10, 15, 30]);
+        });
+
+        it('fits 2, 2, 2, 1 and 0 units in 25 free tons', () => {
+            expect(hulls.map(hull => maxBuyCount(kitMassMass, makeContext({
+                ship: hull, outfits: [kitMassMass], credits: 1_000_000,
+            })))).toEqual([2, 2, 2, 1, 0]);
+        });
+
+        it('combines both rules independently for 0x0600', () => {
+            expect(hulls.map(hull => [outfitPrice(kitMassBoth, hull),
+                installedMass(kitMassBoth, hull)])).toEqual([
+                [3_700, 10], [5_000, 10], [10_000, 10], [15_500, 15],
+                [30_000, 30],
+            ]);
+        });
     });
 });
 

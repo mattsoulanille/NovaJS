@@ -33,11 +33,25 @@ describe('installedOutfitMass (oütf flag 0x0400)', () => {
         expect(installedOutfitMass(carbonFiber, 98)).toBe(1);
     });
 
-    it('rounds a fractional ton UP (the Heavy Shuttle capture)', () => {
+    it('never goes below the written mass (the Heavy Shuttle capture)', () => {
         // earth_outfitter_carbon_fiber_cant_hold_any_more.png: a mass-25
         // hull reads "Item Mass: 1 ton" and cannot hold it in 0 tons.
         expect(installedOutfitMass(carbonFiber, 25)).toBe(1);
     });
+
+    it('is max(Mass, floor(hull Mass x Mass / 100)) on the five kit hulls',
+        () => {
+            // docs/reference_experiments.md, "Outfits that scale with the
+            // ship's mass" (wave 10): oütf 453 Kit Mass Mass (0x0400, Mass
+            // 10) read "Item Mass" off the original's outfitter on hulls
+            // of Mass 37 / 50 / 100 / 155 / 300.
+            const kitMassMass = outfit('kit:453', {
+                massScalesWithShipMass: true, physics: { freeMass: 10 },
+            });
+            expect([37, 50, 100, 155, 300].map(
+                hull => installedOutfitMass(kitMassMass, hull)))
+                .toEqual([10, 10, 10, 15, 30]);
+        });
 
     it('leaves a negative or zero mass alone ("positive-mass items only")',
         () => {

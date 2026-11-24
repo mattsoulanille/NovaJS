@@ -453,8 +453,8 @@ export function outfitPrice(outfit: OutfitData, ship?: ShipData): number {
 
 /**
  * The tonnage one unit of `outfit` occupies aboard `ship` — the oütf Mass,
- * or for flag 0x0400 the ship-mass-proportional figure. The rule and its
- * rounding ruling live in nova_plugin/ship/outfit_plugin.ts's
+ * or for flag 0x0400 the ship-mass-proportional figure. The rule (the
+ * original's measured max/floor) lives in nova_plugin/ship/outfit_plugin.ts's
  * installedOutfitMass, which is also what the sim's physics derivation
  * uses, so the free mass this shop shows is the free mass the ship
  * flies with. Like outfitPrice, a missing ship means "as written".

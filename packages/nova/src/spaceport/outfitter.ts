@@ -1209,7 +1209,7 @@ export class Outfitter extends Menu<Entity> {
         // The tonnage as installed on THIS hull (oütf 0x0400 scales it):
         // the carbon-fibre capture reads "Item Mass: 1 ton" on a mass-25
         // hull for an item whose written Mass is also 1, which the
-        // rounding ruling in installedOutfitMass reproduces.
+        // max(Mass, floor(...)) rule in installedOutfitMass reproduces.
         const mass = installedMass(outfitTile.item, this.shipData);
         if (mass > 0) {
             // Set mass text
