@@ -7174,7 +7174,7 @@ they parked beside the player and never fired.
   scanner in another govt's system costs that system's owner its record
   instead of raising it by half the owner's SmugPenalty.
 
-**Proposed fixes (not applied).**
+**Proposed fixes (applied in 11eb63bb, see below).**
 - Keep the scanned marker across landings (drop the
   `clearContrabandScan` call in `BoardingLandingResetSystem`); keep the
   crossing reset (`transition_prep.ts:110`), which the jump-back run
@@ -7192,6 +7192,30 @@ they parked beside the player and never fired.
   SmugPenalty / 2) (on per-govt records: to the owner's govt); no spread.
   Which govt's SmugPenalty applies when an ALLY of the owner scans was not
   measured.
+
+**Applied in 11eb63bb** (all five, plus finding 1 pinned by a spec,
+`contraband_scan_test.ts` "never fails a ScanMask-0 0x0020 mission"):
+- 2: `BoardingLandingResetSystem` calls `endContrabandHostility` instead
+  of `clearContrabandScan`; the crossing reset stays. The marker also
+  rides `PLAYER_STATE_COMPONENTS`, so a hull bought at the port keeps it
+  (unmeasured).
+- 3: the visit-long mark: a detection sets the marker's `hostile` to the
+  scanning govt (`contraband_scan.ts`), and `govtDispositionTo` /
+  `shipDisposition` (`otherDetectedBy` / `playerDetectedBy`) count the
+  pilot an enemy of that govt beside the criminal-record test, so its
+  hunters attack and the IFF goes red; a landing drops `hostile` and
+  keeps the marker. Guesses: a scan that only fails a 0x0020 mission is
+  no detection; never-attacks and a ränk 0x0100 suppress it as they do
+  the criminal record.
+- 5: `contrabandFine` returns 0 for ScanFine <= 0 (the Bible's reading is
+  kept in its comment).
+- 6: `ContrabandFindings.junk` (the first illegal jünk by sorted id, its
+  LCName), `ContrabandScanEvent.junk`, and `contrabandScanMessage`
+  prints STR# 2002 375 + LCName + 377; ScanFine and SmugPenalty.
+- 7: `smugglingRecordChange` (`contraband.ts`), with `alliedWithOwner`
+  split out of `local_law.ts`'s `enforcesHere`. Guesses: an ally of the
+  owner charges its own SmugPenalty; in an independent system a nosy
+  scanner's detection changes no record.
 
 Confidence: high for 1, 4, 6 and the fines / records of 5 and 7 (single
 runs, read back from the pilot, explicit status lines); medium for 2 (one
