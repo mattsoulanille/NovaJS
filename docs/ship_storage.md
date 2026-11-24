@@ -140,12 +140,11 @@ purchase:
 
 ## Settings
 
-The **Ship storage** preference (default on) only shows or hides the
-shipyard's Your Ships button. Turning it off changes nothing else: the stored
-ships stay stored and every simulation path stays the same. It is a minimal
-client preference (`spaceport/ship_storage_pref.ts`, localStorage key
-`novajs:enhancements:shipStorage`) until the NovaJS Enhancements prefs section
-lands; that section should read and write it through the same two functions.
+The **Ship storage** NovaJS Enhancement (`enhShipStorage` in
+`packages/nova/src/enhancements.ts`, default on; listed in
+`docs/novajs_enhancements.md`) only shows or hides the shipyard's Your Ships
+button and the Option-click buy-and-keep. Turning it off changes nothing
+else: the stored ships stay stored and every simulation path stays the same.
 
 ## Follow-ups (out of scope)
 

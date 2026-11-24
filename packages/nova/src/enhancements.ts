@@ -26,7 +26,8 @@ export type EnhancementKey =
     | 'enhShopScrollWheel'
     | 'enhTextScrollWheel'
     | 'enhShopSearch'
-    | 'enhMiniMapHiddenNoClicks';
+    | 'enhMiniMapHiddenNoClicks'
+    | 'enhShipStorage';
 
 /** One row of the NovaJS Enhancements dialog. */
 export interface EnhancementSpec {
@@ -90,6 +91,16 @@ export const ENHANCEMENTS: readonly EnhancementSpec[] = [
         novajs: 'Once the h minimap has faded, clicks there reach space.',
         original: 'Its hidden area still picks systems for about 8 s '
             + 'after it was shown.',
+    },
+    {
+        // Hides the UI only: the stored ships stay stored, and the
+        // landed transactions are the same for every peer either way
+        // (docs/ship_storage.md).
+        key: 'enhShipStorage',
+        label: 'Ship storage',
+        novajs: 'Shipyards keep your other ships: Your Ships, and '
+            + 'Option-click Buy Ship to keep your old one.',
+        original: 'No ship storage: you fly one ship and trade it in.',
     },
 ];
 

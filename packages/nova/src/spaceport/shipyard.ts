@@ -420,6 +420,10 @@ export class Shipyard extends Menu<Entity> {
         super.setInput(input);
         // A fresh visit: an empty search, shown when the enhancement is on.
         this.search.open(enhancementEnabled('enhShopSearch'));
+        // Ship storage (NovaJS Enhancements, enhancements.ts): OFF hides
+        // the Your Ships pill and nothing else.
+        this.hangarButton.container.visible =
+            enhancementEnabled('enhShipStorage');
         this.text.status.text = "";
         this.currentShipData = undefined;
         const shipId = input.components.get(ShipComponent)?.id;
@@ -533,7 +537,7 @@ export class Shipyard extends Menu<Entity> {
      * shipyard only re-quotes against whatever hull is docked now.
      */
     private async showHangar() {
-        if (!this.input) {
+        if (!this.input || !this.hangarButton.container.visible) {
             return;
         }
         this.controls.unbind();

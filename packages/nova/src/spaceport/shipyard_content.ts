@@ -133,21 +133,22 @@ export const SHIPYARD_BUTTONS = {
 } as const satisfies Record<string, ShipyardButtonSpec>;
 
 /**
+ * The hangar's Your Ships pill (ship storage, docs/ship_storage.md) — a
+ * NovaJS addition, so it has no reference position. It sits in the price
+ * pane, under "You Have:" and on the other pills' row, where the original
+ * draws nothing (shipyard/earth_spaceport.png: the pane is empty below its
+ * last row). Not on the bottom rail left of the scroll arrows: that is the
+ * shop search field's (shop_search.ts). Kept out of SHIPYARD_BUTTONS, which
+ * is the original's set as measured.
+ */
+export const HANGAR_BUTTON = {
+    label: 'Your Ships', width: 83, x: SHIPYARD_PRICE_COLUMNS.label, y: 128,
+} as const satisfies ShipyardButtonSpec;
+
+/**
  * How far right a pill reaches in container coordinates: its x plus the
  * tiling middle, plus a cap at each end.
  */
-/**
- * The hangar's Your Ships pill (ship storage, docs/ship_storage.md) — a
- * NovaJS addition, so it has no reference position. It sits in the empty
- * stretch of the bottom rail left of the grid's scroll arrows (screen x
- * 590..700 on shipyard/earth_spaceport.png, where the original draws
- * nothing), on the other pills' row. Kept out of SHIPYARD_BUTTONS, which is
- * the original's set as measured.
- */
-export const HANGAR_BUTTON = {
-    label: 'Your Ships', width: 83, x: -366, y: 128,
-} as const satisfies ShipyardButtonSpec;
-
 export function buttonRightEdge(spec: ShipyardButtonSpec): number {
     return spec.x + spec.width + 2 * BUTTON_CAP_WIDTH;
 }
