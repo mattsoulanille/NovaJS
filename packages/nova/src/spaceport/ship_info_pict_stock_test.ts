@@ -97,4 +97,17 @@ describe('ship info pict against real Nova data', () => {
         // common path and has to stay.
         expect(ships.filter(s => s.infoPict !== null).length).toBe(97);
     });
+
+    it('resolves the HUD target PICT, 3000 + id - 128, reusing a '
+        + 'same-looking ship\'s (EVN Bible ~:2700)', async () => {
+            expect((await ship('nova:128')).targetPict).toBe('nova:3000');
+            expect((await ship('nova:131')).targetPict).toBe('nova:3003');
+            // The second Shuttle entry and the second-hand Shuttles have
+            // no PICT 3060 / 3233 / 3234 of their own: they share the
+            // Shuttle's base sprite, so they take its target render.
+            for (const id of ['nova:188', 'nova:361', 'nova:362']) {
+                expect((await ship(id)).targetPict).withContext(id)
+                    .toBe('nova:3000');
+            }
+        });
 });

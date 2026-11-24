@@ -62,7 +62,7 @@ export class StatusBar {
                 renderer: PIXI.Renderer | PIXI.IRenderer) {
         this.radar = new RadarPane(statusBarData);
         this.gauges = new GaugesPane(statusBarData);
-        this.target = new TargetPane(renderer);
+        this.target = new TargetPane(renderer, displayAssets);
         this.buildPromise = this.build();
         this.container.name = 'StatusBar';
         this.addEnemyButton = new Button(displayAssets, 'Add Enemy', 60);

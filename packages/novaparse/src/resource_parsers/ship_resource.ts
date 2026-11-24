@@ -23,6 +23,8 @@ type Outfit = {
 class ShipResource extends BaseResource {
     /** PICT shown in the shipyard; always the ship's id mapped to 5000+. */
     pictID: number;
+    /** The HUD target render, PICT 3000 + id - 128 (EVN Bible ~:2700). */
+    targetPictID: number;
     /** dësc shown in the shipyard; always the ship's id mapped to 13000+. */
     descID: number;
 
@@ -108,6 +110,7 @@ class ShipResource extends BaseResource {
         const r = new Reader(this.data);
 
         this.pictID = this.id - 128 + 5000;
+        this.targetPictID = this.id - 128 + 3000;
         this.descID = this.id - 128 + 13000;
 
         this.cargoSpace = r.int16();

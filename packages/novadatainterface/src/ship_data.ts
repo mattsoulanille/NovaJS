@@ -173,6 +173,15 @@ export interface ShipData extends SpaceObjectData {
      * dialog falls back to `pict`. Plug-ins routinely omit it.
      */
     infoPict: string | null;
+    /**
+     * The 128x64 HUD target render the original's target display shows
+     * (PICT 3000 + shïp id - 128; a later ship with the same base sprite
+     * and none of its own reuses the first one's, EVN Bible ~:2700). Null
+     * when neither exists (plug-in ships routinely have none). NovaJS
+     * draws the live ship there instead unless the player turns the
+     * "Live target view" enhancement off.
+     */
+    targetPict: string | null;
     desc: string;
     outfits: { [index: string]: number }
     initialExplosion: string | null;
@@ -521,6 +530,7 @@ export function getDefaultShipData(): ShipData {
         physics: getDefaultShipPhysics(),
         pict: "default",
         infoPict: null,
+        targetPict: null,
         desc: "default",
         outfits: {},
         initialExplosion: null,

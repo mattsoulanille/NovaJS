@@ -131,6 +131,8 @@ export class NovaParse implements GameDataInterface {
     private shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
     private shipPICTMap: ShipPictMap;
+    /** shïp global id -> its HUD target render (PICT 3000 + id - 128). */
+    private shipTargetPictMap: ShipPictMap;
     private systemBacklinkMap: SystemBacklinkMap;
     private weaponOutfitMap: WeaponOutfitMap;
     private ammoOutfitMap: AmmoOutfitMap;
@@ -228,13 +230,16 @@ export class NovaParse implements GameDataInterface {
         this.controlBitNamespaces = this.controlBitMap.then(map => map.data);
         this.controlBitNamespaces.catch((_e: Error) => { });
 
-        this.shipPICTMap = this.makeShipPictMap();
+        this.shipPICTMap = this.makeShipPictMap(ship => ship.pictID,
+            "default");
+        this.shipTargetPictMap = this.makeShipPictMap(
+            ship => ship.targetPictID, null);
         this.systemBacklinkMap = this.makeSystemBacklinkMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.ammoOutfitMap = this.makeAmmoOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap,
             this.weaponOutfitMap, this.ammoOutfitMap, this.idSpace,
-            this.flagMap);
+            this.flagMap, this.shipTargetPictMap);
 
 
         // Holds spriteSheetMulti which gets split up
@@ -421,7 +426,13 @@ export class NovaParse implements GameDataInterface {
 
     // shïps whose corresponding PICT does not exist
     // use the PICT of the first shïp that had the same baseImage ID
-    private async makeShipPictMap(): ShipPictMap {
+    // (EVN Bible ~:2700 states the rule for the target picts; the shipyard
+    // picts get the same treatment). `pictIdOf` picks which of a ship's
+    // PICTs (the 5000 browse render, the 3000 target render); a ship with
+    // neither its own nor a same-looking predecessor's gets `fallback`, or
+    // no entry at all when that is null.
+    private async makeShipPictMap(pictIdOf: (ship: ShipResource) => number,
+        fallback: string | null): ShipPictMap {
         var idSpace = await this.idSpace;
         if (idSpace instanceof Error) {
             return {};
@@ -436,7 +447,7 @@ export class NovaParse implements GameDataInterface {
         // Populate baseImagePICTMap
         for (let shipGlobalID in idSpace.shïp) {
             var ship = idSpace.shïp[shipGlobalID];
-            var pict = ship.idSpace.PICT[ship.pictID];
+            var pict = ship.idSpace.PICT[pictIdOf(ship)];
 
             if (!pict) {
                 continue; // Ship has no corresponding pict, so don't set anything.
@@ -464,7 +475,7 @@ export class NovaParse implements GameDataInterface {
         // Populate shipPICTMap
         for (let shipGlobalID in idSpace.shïp) {
             var ship = idSpace.shïp[shipGlobalID];
-            var pict = ship.idSpace.PICT[ship.pictID];
+            var pict = ship.idSpace.PICT[pictIdOf(ship)];
 
             if (pict) {
                 // Then there is a pict for this ship.
@@ -480,10 +491,14 @@ export class NovaParse implements GameDataInterface {
                 }
                 var baseImageLocalID = shan.images.baseImage.ID;
                 var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID]?.globalID;
-                if (baseImageGlobalID) {
-                    shipPICTMap[shipGlobalID] = baseImagePICTMap[baseImageGlobalID];
-                } else {
-                    shipPICTMap[shipGlobalID] = "default";
+                const shared = baseImageGlobalID
+                    ? baseImagePICTMap[baseImageGlobalID] : undefined;
+                if (shared) {
+                    shipPICTMap[shipGlobalID] = shared;
+                } else if (!baseImageGlobalID && fallback !== null) {
+                    // (A base image no earlier ship has a PICT for stays
+                    // unmapped, which ShipParse reports as missing.)
+                    shipPICTMap[shipGlobalID] = fallback;
                 }
             }
         }

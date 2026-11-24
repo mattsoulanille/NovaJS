@@ -14,6 +14,8 @@ import {
     MissionShipComponent, PlayerEscortComponent, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { PersComponent } from "../nova_plugin/spawn/index.js";
+import type { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
+import { enhancementEnabled } from "../enhancements.js";
 import { AnimationGraphic } from "./animation_graphic.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import { targetGovtLabel } from "./status_bar_content.js";
@@ -25,6 +27,47 @@ import { StatusBarResource } from "./status_bar_resource.js";
 import { targetIdentity } from "./target_identity.js";
 import { targetReadout } from "./target_readout.js";
 import { DrawStatusBarSecondaryWeapon } from "./status_bar_weapon.js";
+
+/**
+ * What the target pane draws for the locked ship:
+ *  - 'live': the ship's own sprite, rendered as it flies (NovaJS; the
+ *    "Live target view" enhancement, ON by default);
+ *  - 'pict': the ship class's fixed HUD target render, PICT 3000 + id - 128
+ *    (ShipData.targetPict), as the original does — the enhancement OFF;
+ *  - 'none': nothing to draw yet.
+ * With the enhancement off, a ship with no target PICT (plug-in ships
+ * routinely have none) still gets the live render rather than a blank.
+ */
+export type TargetImageMode = 'live' | 'pict' | 'none';
+
+export function targetImageMode(liveView: boolean, hasGraphic: boolean,
+    targetPict: string | null | undefined): TargetImageMode {
+    if (!liveView && targetPict) {
+        return 'pict';
+    }
+    return hasGraphic ? 'live' : 'none';
+}
+
+/**
+ * The colour matrix that turns a HUD target PICT into the original's red
+ * target image: red = the PICT's BLUE channel, green = blue = 0.
+ *
+ * Why blue: the stock target PICTs are colour renders over a yellow
+ * scan-line wedge (R = G, B = 0), and the original's pane shows the ship
+ * in red with no wedge at all (space/in_space.png, the Leviathan: PICT
+ * 3003, the same picture at the same heading whatever the ship's real
+ * one). Of R, G, B, min, max and luminance, the blue channel correlates
+ * best with that capture's red (0.55 against 0.45 for red or luminance),
+ * and it is the one channel the wedge has none of. The capture also draws
+ * the picture about 1.5x wider than tall relative to the PICT, which is
+ * not reproduced: it is drawn 1:1.
+ */
+export const TARGET_PICT_MATRIX: readonly number[] = [
+    0, 0, 1, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 1, 0,
+];
 
 /**
  * The target pane: the locked ship's name, class subtitle and government,
@@ -55,7 +98,12 @@ export class TargetPane {
         subtitle: PIXI.Text, govt: PIXI.Text, imagePlaceholder: PIXI.Text,
     };
 
-    constructor(private renderer: PIXI.Renderer | PIXI.IRenderer) { }
+    /** Lazily made: the 'pict' mode's red-from-blue filter. */
+    private pictFilter?: PIXI.ColorMatrixFilter;
+
+    constructor(private renderer: PIXI.Renderer | PIXI.IRenderer,
+        private displayAssets?: Pick<DisplayAssetDataInterface,
+            'textureFromPict'>) { }
 
     build(parent: PIXI.Container, data: StatusBarData, fonts: StatusBarFonts) {
         this.container.addChild(this.sprite);
@@ -182,11 +230,14 @@ export class TargetPane {
         this.texts = undefined;
         this.renderTexture?.destroy(true);
         this.renderTexture = undefined;
+        this.pictFilter?.destroy();
+        this.pictFilter = undefined;
     }
 
     drawTarget(name: string, shield?: number, armor?: number,
         shipGraphic?: AnimationGraphic, disabled = false,
-        subtitle = "", government = "") {
+        subtitle = "", government = "", targetPict: string | null = null,
+        liveView = true) {
         // Mid-reload (an ïntf swap) the texts are destroyed and `texts`
         // is unset until build() has awaited the new PICT. The other
         // draw methods already wait it out; this one dereferenced
@@ -216,7 +267,21 @@ export class TargetPane {
             texts.percent.text = `${String(readout.percent)}%`;
         }
 
-        if (shipGraphic) {
+        const mode = targetImageMode(liveView, shipGraphic !== undefined,
+            this.displayAssets ? targetPict : null);
+        if (mode === 'pict' && targetPict && this.displayAssets) {
+            // The original's fixed picture, drawn red from its blue
+            // channel (TARGET_PICT_MATRIX). Textures are cached by PIXI,
+            // so asking every frame costs a map lookup.
+            this.sprite.texture = this.displayAssets.textureFromPict(
+                targetPict);
+            this.sprite.tint = 0xFFFFFF;
+            this.sprite.filters = [this.redFromBlue()];
+            this.sprite.scale.set(1, 1);
+            this.sprite.visible = true;
+        } else if (mode === 'live' && shipGraphic) {
+            this.sprite.tint = TARGET_SPRITE_TINT;
+            this.sprite.filters = null;
             const shipContainer = shipGraphic?.container;
             const width = shipGraphic.size.x;
             const height = shipGraphic.size.y;
@@ -255,6 +320,15 @@ export class TargetPane {
         }
 
     }
+    private redFromBlue(): PIXI.ColorMatrixFilter {
+        if (!this.pictFilter) {
+            this.pictFilter = new PIXI.ColorMatrixFilter();
+            this.pictFilter.matrix =
+                [...TARGET_PICT_MATRIX] as PIXI.ColorMatrix;
+        }
+        return this.pictFilter;
+    }
+
     clearTarget() {
         if (!this.texts) {
             return;
@@ -315,7 +389,9 @@ export const DrawStatusBarTarget = new System({
             // (and përs) names — the original never shows it in the target box.
             statusBar.target.drawTarget(displayName(identity.name),
                 shield?.percent, armor?.percent, shipGraphic,
-                disabled !== undefined, identity.subtitle, government);
+                disabled !== undefined, identity.subtitle, government,
+                shipData.targetPict ?? null,
+                enhancementEnabled('enhLiveTargetView'));
         } else {
             // The target exists but the query missed — e.g. a just-replicated
             // ship whose ShipDataComponent isn't in the display world yet. Clear

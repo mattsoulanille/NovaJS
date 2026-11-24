@@ -11,7 +11,9 @@ import { StatusBar } from './status_bar.js';
 import { CARGO_READOUT_PERIOD_MS, DrawStatusBarCargo } from './status_bar_cargo.js';
 import { statFullness } from './status_bar_gauges.js';
 import { StatusBarResource } from './status_bar_resource.js';
-import { TargetPane } from './status_bar_target.js';
+import {
+    TARGET_PICT_MATRIX, TargetPane, targetImageMode,
+} from './status_bar_target.js';
 
 /**
  * The stat bars' fullness. A stat whose max is 0 — the stock Escape Pod,
@@ -115,5 +117,35 @@ describe('DrawStatusBarCargo throttle', () => {
         expect(drawCargo).toHaveBeenCalledTimes(2);
         stepAt(3 * CARGO_READOUT_PERIOD_MS);
         expect(drawCargo).toHaveBeenCalledTimes(3);
+    });
+});
+
+/**
+ * "Live target view" (NovaJS Enhancements): ON draws the ship as it flies;
+ * OFF draws the class's fixed HUD target PICT, as the original does.
+ */
+describe('targetImageMode', () => {
+    it('draws the live ship with the enhancement on', () => {
+        expect(targetImageMode(true, true, 'nova:3000')).toBe('live');
+        expect(targetImageMode(true, true, null)).toBe('live');
+        expect(targetImageMode(true, false, 'nova:3000')).toBe('none');
+    });
+
+    it('draws the target PICT with the enhancement off', () => {
+        expect(targetImageMode(false, true, 'nova:3000')).toBe('pict');
+        expect(targetImageMode(false, false, 'nova:3000')).toBe('pict');
+    });
+
+    it('falls back to the live ship when there is no target PICT', () => {
+        expect(targetImageMode(false, true, null)).toBe('live');
+        expect(targetImageMode(false, false, undefined)).toBe('none');
+    });
+
+    it('maps the PICT\'s blue channel to red and drops green and blue', () => {
+        const m = TARGET_PICT_MATRIX;
+        // Row 0 (red out) reads only blue in; rows 1-2 are zero; alpha kept.
+        expect(m.slice(0, 5)).toEqual([0, 0, 1, 0, 0]);
+        expect(m.slice(5, 15).every(v => v === 0)).toBeTrue();
+        expect(m.slice(15, 20)).toEqual([0, 0, 0, 1, 0]);
     });
 });

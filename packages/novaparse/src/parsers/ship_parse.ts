@@ -74,12 +74,16 @@ export function ShipParseClosure(shipPictMap: ShipPictMap,
     // Namespaces the Require/Contribute bits per plug-in (flag_namespace.ts);
     // null (the default) passes the raw 64-bit values through.
     flagMapPromise: Promise<FlagNamespaceMap | null> = Promise.resolve(null),
+    // shïp global id -> its HUD target PICT, the shared-base-sprite reuse
+    // already applied (NovaParse.makeShipPictMap); empty means none.
+    targetPictMap: ShipPictMap = Promise.resolve({}),
 ): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
 
     // Returns the function ShipParse with shipPictMap already assigned
     return function(ship: ShipResource, notFoundFunction: (m: string) => void) {
         return ShipParse(ship, notFoundFunction, shipPictMap, weaponOutfitMap,
-            ammoOutfitMap, globalIDSpacePromise, flagMapPromise);
+            ammoOutfitMap, globalIDSpacePromise, flagMapPromise,
+            targetPictMap);
     }
 
 }
@@ -91,6 +95,7 @@ export async function ShipParse(ship: ShipResource,
     ammoOutfitMap: AmmoOutfitMap,
     globalIDSpacePromise: Promise<NovaResources | Error>,
     flagMapPromise: Promise<FlagNamespaceMap | null> = Promise.resolve(null),
+    targetPictMap: ShipPictMap = Promise.resolve({}),
 ): Promise<ShipData> {
 
     var globalIDSpace = await globalIDSpacePromise;
@@ -375,10 +380,16 @@ export async function ShipParse(ship: ShipResource,
         hyperspaceSpeedMod: 0,
     }
 
+    // The HUD target render (EVN Bible ~:2700): PICT 3000 + id - 128, or
+    // the first same-looking ship's. Absence is normal (plug-in ships) and
+    // not reported: the display draws the live ship instead.
+    const targetPict = (await targetPictMap)[base.id] ?? null;
+
     return {
         physics,
         pict: pictID,
         infoPict,
+        targetPict,
         desc: desc,
         outfits,
         initialExplosion: initialExplosionID,
