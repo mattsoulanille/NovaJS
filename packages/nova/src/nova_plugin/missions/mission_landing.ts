@@ -203,7 +203,10 @@ export function failExpiredMissions(machinery: MissionMachineryContext,
         const expired = active.deadlineDay !== null
             && currentDay > active.deadlineDay;
         if (expired || active.failed) {
-            failMission(machinery, active.id, outfits);
+            // A mission the sim already failed is not a timeout, even if
+            // its deadline has passed since.
+            failMission(machinery, active.id, outfits, 0,
+                active.failed ? 'fail' : 'timeout');
             failed++;
         }
     }
@@ -241,7 +244,12 @@ export function processLanding(machinery: MissionMachineryContext,
             continue;
         }
         if (active.deadlineDay !== null && currentDay > active.deadlineDay) {
-            failMission(machinery, active.id, outfits);
+            // A TimeLimit failure changes no record (failMission's
+            // 'timeout'), unless the sim had already failed it for
+            // another reason.
+            failMission(machinery, active.id, outfits, 0,
+                active.failed || active.shipObjective?.failed
+                    ? 'fail' : 'timeout');
             continue;
         }
         if (active.failed) {

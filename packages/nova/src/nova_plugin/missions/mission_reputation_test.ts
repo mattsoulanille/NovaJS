@@ -4,6 +4,7 @@ import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_da
 import {
     abortMission,
     acceptOffer,
+    failExpiredMissions,
     failMission,
     makeMissionOffer,
     MissionContext,
@@ -213,21 +214,63 @@ describe('CompGovt/CompReward', () => {
             });
         });
 
-    it('costs half the reward (truncated) on failure', () => {
+    // Overturns the Bible's -R/2 for this failure kind: reference "A14 /
+    // contraband wave 15" finding 2 (CompReward 1000, TimeLimit 1: no
+    // record changed anywhere).
+    it('changes NO record when the mission fails on its TimeLimit, '
+        + 'at a landing', () => {
+            const state = makeState();
+            const mission = makeMission({
+                compGovt: 128, compReward: 1000, timeLimit: 1,
+            });
+            const machinery = makeMachinery(state, [mission]);
+            const offer = makeMissionOffer(mission, machinery.offerContext())!;
+            acceptOffer(machinery, offer);
+            // Land far past the deadline: the mission fails.
+            processLanding(machinery, 'nova:999', 5000);
+            expect(state.records!.size).toBe(0);
+            expect(state.missions.size).toBe(0);
+            expect(state.events.some(e => e.type === 'failed')).toBe(true);
+        });
+
+    it('nor in flight (the date-advance sweep)', () => {
         const state = makeState();
         const mission = makeMission({
-            compGovt: 128, compReward: 3, timeLimit: 1,
+            compGovt: 128, compReward: 1000, timeLimit: 1,
         });
         const machinery = makeMachinery(state, [mission]);
-        const offer = makeMissionOffer(mission, machinery.offerContext())!;
-        acceptOffer(machinery, offer);
-        // Land far past the deadline: the mission fails.
-        processLanding(machinery, 'nova:999', 5000);
-        expect(state.records!.get('nova:128')).toBe(-1);
-        // The failure stays with the CompGovt (not measured to spread).
-        expect(state.records!.size).toBe(1);
+        acceptOffer(machinery,
+            makeMissionOffer(mission, machinery.offerContext())!);
+        expect(failExpiredMissions(machinery, 5000)).toBe(1);
+        expect(state.records!.size).toBe(0);
         expect(state.events.some(e => e.type === 'failed')).toBe(true);
     });
+
+    it('still costs half the reward (truncated) on an UNMEASURED failure: '
+        + 'an Fxxx, or one the sim flagged', () => {
+            const scripted = makeState();
+            let mission = makeMission({ compGovt: 128, compReward: 3 });
+            let machinery = makeMachinery(scripted, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            failMission(machinery, mission.id);
+            expect(scripted.records!.get('nova:128')).toBe(-1);
+            // The failure stays with the CompGovt (not measured to spread).
+            expect(scripted.records!.size).toBe(1);
+
+            // Flagged by the sim, and past its deadline by the landing:
+            // still the flagged failure, not a timeout.
+            const flagged = makeState();
+            mission = makeMission({
+                compGovt: 128, compReward: 3, timeLimit: 1,
+            });
+            machinery = makeMachinery(flagged, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            flagged.missions.get(mission.id)!.failed = true;
+            processLanding(machinery, 'nova:999', 5000);
+            expect(flagged.records!.get('nova:128')).toBe(-1);
+        });
 
     it('costs 5x on abort only under the 0x0040 flag', () => {
         const plain = makeState();

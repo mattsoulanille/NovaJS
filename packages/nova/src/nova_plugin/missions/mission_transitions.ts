@@ -72,9 +72,18 @@ function endByAbort(machinery: MissionMachineryContext,
     });
 }
 
-/** Fxxx / deadline passed: run OnFailure, drop cargo, remove. */
+/**
+ * Fxxx / deadline passed / sim-flagged: run OnFailure, drop cargo, remove.
+ *
+ * `cause` 'timeout' is a failure on the mission's TimeLimit (its deadline
+ * passed), which changes no record (compRewardDelta: measured on the
+ * original, reference "A14 / contraband wave 15" finding 2); every other
+ * failure ('fail', the default: an Fxxx, a sim-flagged failure, a ship goal
+ * made unachievable) still costs the CompGovt half the CompReward.
+ */
 export function failMission(machinery: MissionMachineryContext,
-    missionId: string, outfits?: Map<string, number>, depth = 0): void {
+    missionId: string, outfits?: Map<string, number>, depth = 0,
+    cause: 'fail' | 'timeout' = 'fail'): void {
     const { state } = machinery;
     const active = state.missions.get(missionId);
     if (!active) {
@@ -84,7 +93,7 @@ export function failMission(machinery: MissionMachineryContext,
     unloadMissionCargo(state, active);
     const mission = machinery.getMission(missionId);
     if (mission) {
-        applyOutcomeReputation(machinery, mission, 'fail');
+        applyOutcomeReputation(machinery, mission, cause);
         runMissionSetString(machinery, mission.onFailure,
             setStringPrefix(mission), outfits, depth);
     }

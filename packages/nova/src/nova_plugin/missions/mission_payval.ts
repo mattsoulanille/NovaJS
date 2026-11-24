@@ -4,7 +4,7 @@ import { setStringPrefix } from './mission_ids.js';
 import { MissionMachineryContext } from './mission_machinery.js';
 import {
     addRecord, applyCompletionReward, cleanRecords, compRewardDelta,
-    PayValEffect,
+    MissionOutcome, PayValEffect,
 } from '../reputation/index.js';
 
 /**
@@ -54,9 +54,11 @@ function missionGovt(machinery: MissionMachineryContext,
  * A completion also reaches the CompGovt's allies (+R/2), enemies and
  * xenophobes (-R/2), as measured on the original
  * (applyCompletionReward); the failure and abort stay with the CompGovt.
+ * A TimeLimit failure ('timeout') changes nothing, as measured
+ * (compRewardDelta).
  */
 export function applyOutcomeReputation(machinery: MissionMachineryContext,
-    mission: MissionData, outcome: 'complete' | 'fail' | 'abort'): void {
+    mission: MissionData, outcome: MissionOutcome): void {
     const { state } = machinery;
     if (!state.records || mission.compGovt < 128) {
         return;

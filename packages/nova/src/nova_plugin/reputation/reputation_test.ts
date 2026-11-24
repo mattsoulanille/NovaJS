@@ -348,6 +348,12 @@ describe('compRewardDelta', () => {
         expect(compRewardDelta(1, 'fail')).toBe(0);
     });
 
+    it('costs nothing when the TimeLimit ran out (reference "A14 / '
+        + 'contraband wave 15", finding 2)', () => {
+            expect(compRewardDelta(1000, 'timeout')).toBe(0);
+            expect(compRewardDelta(-1000, 'timeout')).toBe(0);
+        });
+
     it('costs 5x on abort only under the 0x0040 flag', () => {
         expect(compRewardDelta(4, 'abort')).toBe(0);
         expect(compRewardDelta(4, 'abort', true)).toBe(-20);

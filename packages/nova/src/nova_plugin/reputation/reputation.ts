@@ -439,16 +439,36 @@ export function decodePayVal(payVal: number): PayValEffect {
 // --- mïsn CompGovt / CompReward ---
 
 /**
+ * How a mission with a CompGovt ended, for its record change:
+ *  - 'complete': at its return stellar;
+ *  - 'timeout': its TimeLimit ran out (the deadline passed);
+ *  - 'fail': any other failure (an Fxxx set string, the owner disabled or
+ *    destroyed under Flags2 0x0004, a ship goal made unachievable, a
+ *    0x0020 mission's cargo found by a scan);
+ *  - 'abort': the player aborted it.
+ */
+export type MissionOutcome = 'complete' | 'timeout' | 'fail' | 'abort';
+
+/**
  * The record change for a mission outcome with a CompGovt (Bible):
  * completion grants the full CompReward; failure costs half ("that
  * govt will take it personally"), truncated; abort costs 5x when the
  * mïsn lose5xCompRewardOnAbort flag (0x0040) is set, else nothing.
+ *
+ * A TIMEOUT costs NOTHING, against the Bible: on the original a mission
+ * that failed on its TimeLimit (CompReward 1000) changed no record
+ * anywhere, not -500 with the CompGovt nor anything with its allies,
+ * enemies or the xenophobes (reference "A14 / contraband wave 15",
+ * finding 2). The other failure kinds keep the Bible's -R/2 for now:
+ * they were not measured (wave 12's scan failure of a 0x0020 mission
+ * also changed no record, but NovaJS cannot tell it from the owner's
+ * Flags2 0x0004 failure: both arrive as ActiveMission.failed).
  */
 export function compRewardDelta(compReward: number,
-    outcome: 'complete' | 'fail' | 'abort',
-    lose5xOnAbort = false): number {
+    outcome: MissionOutcome, lose5xOnAbort = false): number {
     switch (outcome) {
         case 'complete': return compReward;
+        case 'timeout': return 0;
         case 'fail': return -Math.trunc(compReward / 2);
         case 'abort': return lose5xOnAbort ? -5 * compReward : 0;
     }
@@ -492,7 +512,8 @@ export function govtRelation(a: GovtData, b: GovtData):
  * Only completion spreads. The 0x0040 abort's -5R was measured to hit
  * the CompGovt alone (finding 6); a failure's -R/2 was not measured and
  * stays with the CompGovt as the Bible words it ("that govt will take
- * it personally"). Truncating the half (also for a negative R, which
+ * it personally"), and a TimeLimit failure costs nothing at all
+ * (compRewardDelta, "A14 / contraband wave 15" finding 2). Truncating the half (also for a negative R, which
  * seven stock missions use) is the reference doc's proposal: R = 10 and
  * 1000 measured +5 / +500, which no rounding rule tells apart.
  *
