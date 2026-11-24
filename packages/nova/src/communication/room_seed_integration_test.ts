@@ -196,11 +196,17 @@ describe('Room seed (#140: a fresh population per room instance)', () => {
             // 7): every weapon state now carries its `reach`, so every armed
             // ship hashes differently from genesis. Neither Random state
             // moved: nothing in these 300 steps draws differently.
+            //
+            // Both stepped hashes were re-pinned for the arrival-heading fix
+            // (steerArrive aims along its velocity error plus a pull at the
+            // goal, and comes in under the arrival speed instead of
+            // flipping across it): the NPCs fly different paths. Genesis
+            // and both Random states did not move.
             const gameData = await getSyntheticGameData();
             const pins: Array<[string, string, string, number[]]> = [
-                [THESSALY, '54afcf19', '8fd14222',
+                [THESSALY, '54afcf19', 'b28fb506',
                     [3151324470, 1269255679, 2221342106, 396450743]],
-                [SYNTHETIC.systems.kestrel, '71fa40dd', '71d26b10',
+                [SYNTHETIC.systems.kestrel, '71fa40dd', '3859c45c',
                     [1138059186, 670859187, 378276492, 1491742351]],
             ];
             for (const [systemId, genesis, stepped, random] of pins) {

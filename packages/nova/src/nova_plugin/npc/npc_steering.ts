@@ -1,4 +1,5 @@
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
@@ -38,6 +39,26 @@ const PLANET_ARRIVE_RADIUS = 90;
 const PLANET_ARRIVE_SPEED = 50;
 /** Distance at which an arriving ship starts braking. */
 const ARRIVE_SLOW_RADIUS = 400;
+/** A cruising ship aims along its velocity error (cruise speed straight
+ * at the goal, minus its velocity) PLUS a pull of this fraction of its
+ * cruise speed straight at the goal (see steerArrive). The pull is what
+ * the heading follows once the error has shrunk to nothing, so the nose
+ * settles on the goal instead of on floating-point residue; it fades into
+ * the error as the error grows, so there is no band edge to flip across.
+ * Fitted, not measured: a quarter of cruise speed is far above the
+ * residue (the error that set the heading before) and well below the
+ * drift of the #316 Cargo Drone orbit the error-burn exists to cancel (a
+ * sideways velocity of top speed is an error of 1.4 x top speed). It is
+ * also the "on course" band for coasting in (ARRIVE_APPROACH_SPEED_FRACTION). */
+export const ARRIVE_GOAL_PULL_FRACTION = 0.25;
+/** Inside the slow radius, an arrival that must come in below top speed
+ * cruises at this fraction of its arrival speed (see steerArrive). Fitted:
+ * anything under 1 keeps a cruising ship out of the brake branch; 0.9
+ * keeps the last stretch about as quick as it was (the old controller
+ * hovered at the arrival speed), and the on-course band
+ * (ARRIVE_GOAL_PULL_FRACTION) around it is wide enough that a ship
+ * coasting in at just under the arrival speed is left alone. */
+export const ARRIVE_APPROACH_SPEED_FRACTION = 0.9;
 /** Attackers stop thrusting toward their target inside this range. */
 const ATTACK_STANDOFF = 250;
 
@@ -65,8 +86,13 @@ export function steerArrive(movement: MovementState, physics: {
     // brake when stopping distance (with margin) exceeds what's left.
     const stopDistance = physics.acceleration > 0
         ? speed * speed / (2 * physics.acceleration) : 0;
+    // An arrival at top speed (a patrol waypoint) has no speed to shed on
+    // the way in. Reading `speed > arriveSpeed` for it anyway braked a
+    // ship burning at its speed cap, which rounding leaves a hair over it.
+    const speedLimited = arriveSpeed < physics.speed;
     if (distance < Math.max(arriveRadius, stopDistance * 1.5)
-        || (distance < ARRIVE_SLOW_RADIUS && speed > arriveSpeed)) {
+        || (speedLimited && distance < ARRIVE_SLOW_RADIUS
+            && speed > arriveSpeed)) {
         // Brake: turn retrograde, thrust when roughly aligned.
         movement.turnTo = null;
         movement.turnBack = true;
@@ -80,7 +106,7 @@ export function steerArrive(movement: MovementState, physics: {
         }
         return false;
     }
-    // Cruise: thrust along (top speed straight at the goal) minus (the
+    // Cruise: thrust along (cruise speed straight at the goal) minus (the
     // current velocity), when roughly aligned. Pointing the nose at the
     // goal itself never burns off velocity ACROSS the line to it, and a
     // hull with a lot of top speed for its acceleration then orbits the
@@ -88,10 +114,48 @@ export function steerArrive(movement: MovementState, physics: {
     // Drone, Speed 400 / Accel 200, takes 5 s to reach top speed and did
     // exactly that). Burning along the velocity error cancels the drift
     // and reduces to "point at the goal" when there is none.
+    //
+    // The cruise speed is top speed, except on the last stretch (inside
+    // the slow radius) of an arrival that has to come in slower than top
+    // speed: there it is just under the arrival speed. Asking for top
+    // speed there drove a ship that had just braked to the arrival speed
+    // straight back over it, into the brake branch above, and it flipped
+    // between "retrograde" and "nose on the goal" every second or so all
+    // the way in (any hull faster than 50 px/s, at every planet).
     movement.turnBack = false;
-    const burn = toGoal.normalize(physics.speed)
+    const slowing = speedLimited && distance < ARRIVE_SLOW_RADIUS;
+    const cruiseSpeed = slowing
+        ? Math.min(physics.speed, ARRIVE_APPROACH_SPEED_FRACTION * arriveSpeed)
+        : physics.speed;
+    const burn = toGoal.normalize(cruiseSpeed)
         .subtract(Vector.fromVectorLike(movement.velocity));
-    const heading = burn.length > 1e-9 ? burn.angle : toGoal.angle;
+    const pull = ARRIVE_GOAL_PULL_FRACTION * cruiseSpeed;
+    if (slowing && speed >= cruiseSpeed && burn.length <= pull) {
+        // Coasting the last stretch in at (just under) the arrival speed,
+        // on course and typically nose-back from the brake: no burn
+        // wanted, so no turn either. The current heading, not null: a
+        // null turnTo leaves the ship turning at whatever rate it last
+        // turned.
+        movement.turnTo = Angle.fromAngleLike(movement.rotation);
+        movement.accelerating = 0;
+        return false;
+    }
+    // Aim along the error plus a steady pull at the goal. On course the
+    // error is a sliver whose DIRECTION is noise: at its speed cap a ship
+    // is left an error that is all cross-track, 90° off its course, whose
+    // sign flips as it flies. Steering by the bare error swung slow
+    // freighters (a Leviathan or a Pegasus pottering in to a planet at
+    // 40-50 px/s) back and forth by up to 90° every few seconds, all the
+    // way in (Matthew, 2026-11-23: "Why so much wiggling?"). With the
+    // pull the nose sits on the goal; the burn there tops the speed up,
+    // or at the cap just swings the velocity onto the nose, mopping up
+    // the drift. (A hard switch between "on the goal" and "along the
+    // error" made patrolling warships ride the switch, swinging between
+    // the two.)
+    const aim = burn.add(toGoal.normalize(pull));
+    // The aim can only vanish for a ship well over its cruise speed
+    // straight at the goal (overspeed bleeding off); nose on the goal.
+    const heading = aim.length > pull / 2 ? aim.angle : toGoal.angle;
     movement.turnTo = heading;
     const misalignment = movement.rotation.distanceTo(heading).angle;
     movement.accelerating = Math.abs(misalignment) < 0.6 ? 1 : 0;
