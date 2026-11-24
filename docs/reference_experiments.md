@@ -6344,6 +6344,15 @@ whose ScanMask does not match the cargo).
 
 **NovaJS:** scanning is not implemented (wave 11's entry).
 
+**Applied** with the contraband scan (waves 12-15). The S2 "no record"
+for the 0x0020 failure covered the CompGovt too, which NovaJS still
+charged -R/2 (CompReward) until **6b38f9bf**: the sim now writes a
+failure cause beside the failure mark (`ActiveMission.failCause` 'scan',
+`N/nova_plugin/npc/contraband.ts` `applyContrabandScan`), and
+`compRewardDelta`'s 'scanned' outcome is 0
+(`N/nova_plugin/missions/mission_transitions.ts` `simFailOutcome`). See
+"A14 / contraband wave 15", Applied in fdd020ac.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w12/scan/{inside,s2a,s2b}/*/`.
 
 ### P1 run 1 wave 12: a police interceptor watching the player attack a third party (2026-11-24, first pass)
@@ -7755,9 +7764,19 @@ NOT measured keep the Bible's -R/2 with the CompGovt alone: an Fxxx set
 string, the owner disabled or destroyed under Flags2 0x0004, a ship goal
 made unachievable (an escort died, a disable target destroyed), and a
 0x0020 mission failed by a scan. The last one WAS measured (wave 12's S2:
-no record change, CompReward 10) but arrives as the same `active.failed`
-mark as the 0x0004 failure, so telling them apart needs a failure cause on
-the ActiveMission (a schema change); left for a maintainer's call. Specs:
+no record change, CompReward 10) but arrived as the same `active.failed`
+mark as the 0x0004 failure. **Applied in 6b38f9bf:** the sim writes
+`ActiveMission.failCause` beside `failed` ('lost' for Flags2 0x0004,
+'plundered' for Flags 0x8000, 'scan' for a contraband scan; the first
+cause wins), and a 'scan' failure is the 'scanned' outcome, worth 0, in
+both sweeps (also when its deadline has passed since). 'lost',
+'plundered' and a saved mission without the field (an older save, an
+imported original pilot) keep -R/2. Schema: the OPTIONAL `failCause`
+("Also under 8" note; fingerprint c6ab0bdc34e2addd -> 4ba45ea2f8ce4634).
+Specs for 6b38f9bf: `mission_reputation_test.ts` "a Flags 0x0020 mission
+failed by a contraband SCAN" and the old-save spec; the cause is pinned in
+the world specs (`contraband_scan_test.ts`, `npc_boarding_test.ts`,
+`mission_ship_integration_test.ts`). fdd020ac's specs:
 `N/nova_plugin/missions/mission_reputation_test.ts` "CompGovt/CompReward"
 (the old "costs half the reward on failure" spec was a deadline failure
 and is overturned), `N/nova_plugin/reputation/reputation_test.ts`
