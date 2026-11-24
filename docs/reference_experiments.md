@@ -8435,7 +8435,13 @@ The difference is the mix, not the rule: NovaJS's fixed Sol genesis
 already has five AI 4 ships among its ten (the original's had one among
 six), and NovaJS's miners still leave. Before this change (wave 15's
 census above) Sol ended with 5-7 shuttles of about 7 slots by 10-18
-minutes.
+minutes. In a real browser room (headless Chrome, a fresh pilot in the
+stock Shuttle at Earth, Caps Lock 2x, 27.6 sim minutes; a server room's
+genesis is reseeded, so its mix differs from the census's) the AI 1
+traders and five AI 3 ships came and went in the first 7.5 minutes, and
+from then on the same FIVE ships stayed to the end: two AI 4 Vipers
+(there from genesis) and three shuttles (Heavy Shuttle, Shuttle, Cargo
+Drone), very like the original's frozen six.
 
 Confidence: high that Sol did not fill with shuttles and that the six ships
 did not change for 21 minutes (nine identical Tab cycles); medium for "AI 4
