@@ -7563,7 +7563,7 @@ no orange), so the düde's equal odds did not come out equal; not pursued.
   dwell -> `pickPlanet`) until its departure time; the original's traders
   made one stop per visit: **mismatch** (70 visits, no second stop).
 
-**Proposed fixes (not applied).**
+**Proposed fixes (applied in 1c6fdaf2, see below).**
 - Drop the shuttle's landing and take-off: a shuttle never departs (no
   `entities.delete` at `npc_decision.ts:644-648`; no departure time), and a
   respawned shuttle jumps in like any traffic (drop the `takeOffState`
@@ -7580,6 +7580,50 @@ no orange), so the düde's equal odds did not come out equal; not pursued.
   (`friendlyStellar`): never a stellar of an enemy of the trader's govt;
   `TRADER_DWELL_MS` 15000; after its one dwell an AI 1 trader departs
   (jump out) instead of picking another stellar.
+
+**Applied in 1c6fdaf2** (findings 1-6):
+- 1, 2: a shuttle never leaves: the end of a stop no longer deletes it,
+  whatever its departure roll; `takeOffState` is gone and a respawned
+  shuttle jumps in (`jumpInState`) like any traffic. So shuttles fill a
+  system as on the original: a spec on this rig (avgShips 6, half
+  shuttles; `npc_shuttle_test.ts`) holds six shuttles and no trader from
+  108 s on. **On stock data** (shïp 391-394 in düdes 247-250; 30 sim
+  minutes, four PRNG seeds each, node, no player): Sol (avgShips 6) 5-7
+  shuttles of about 7 slots by 10-18 min; Nesre Secundus (5) 5-6 of 6 by
+  12-16 min; Arcturus (4) 4-5 of 5 by 6-20 min; Rautherion (4) 3 of 3 by
+  13-20 min; Tri'lipra (2) 2 of 2 by 9-23 min; Kel'ariy (6) only 3 of 5-6
+  after 30 min (its other traffic stays longer). Every non-disabled ship
+  was a shuttle in 11 of the 24 runs within 30 min (6-23 min). In two Sol
+  runs a fleet that arrived at 22-27 min destroyed or disabled all six
+  shuttles; disabled NPC hulks (which never repair or leave) hold slots
+  too. No ruling was taken on keeping this: it is the measured behaviour.
+- 3: the lane is NpcState `laneEnd` (the other stop; the two swap at each
+  stop). Its first stop is one draw among `shuttleStops`, and the other
+  end is the stop NEAREST to the first, a tie broken by one more draw
+  (`shuttleLaneEnd`). The proposal above (a random second stop) would
+  have joined the Port in only half the lanes of this rig; every lane
+  seen did, which the nearest-stop rule gives every time. GUESS, in
+  docs/npc_behavior_gaps.md "Shuttles and miners: guesses to measure" 5.
+  The shuttle turns 70 px short of the stop's centre on the line to the
+  lane's other end (`shuttleTurnPoint`, `SHUTTLE_TURN_DISTANCE`; never
+  past half the lane; arrival within 30 px) after a 4 s pause
+  (`SHUTTLE_DWELL_MS`).
+- 5: `TRADER_DWELL_MS` 15000 (fixed; not drawn from the spread).
+- 6: `traderDestinations` (`npc_decision.ts`): the landing destinations
+  minus enemy govts' ports, one uniform draw; after its one dwell an AI 1
+  or AI 2 trader departs. A held ship (system_hold.ts) and a
+  passing-through mission ship (which keeps its own 30-40 s clock, wave 4)
+  go on to another port instead. That AI 2 does the same is a guess.
+- Schema: the optional `laneEnd`; Also under 8 (rollback_protocol.ts;
+  wire fingerprint c6ab0bdc34e2addd -> 4b5e1f31e4d8d1c9).
+- Specs: `npc_shuttle_test.ts` rewritten (the landing and take-off guesses
+  overturned; lane, turn, pause, respawn jump-in, fill, and the T1
+  trader's one 15 s stop at an own or neutral port); `npc_pass_through_test.ts`
+  ("ordinary traffic stays" overturned: it leaves after one stop) and
+  `npc_mining_test.ts` (the miner's trader loop is read as it leaves off
+  mining, since it may have left by the end) updated.
+- Wave 14's T1 proposal (prefer the first friendly stellar) is superseded
+  by finding 6.
 
 Confidence: high for 1-4 (one 19.4-minute run, every ship followed by
 colour, the trail picture unambiguous) and for 5-6 (70 visits in the

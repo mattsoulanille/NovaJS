@@ -86,7 +86,9 @@ Ordinary AI 1 traffic also visits stellars, lands, lingers about 20 s and
 jumps out (R: "A-series wave 5"). NovaJS already flies AI 1/2 traders
 planet to planet with a 12 s "dwell" standing in for a landing, then sends
 them out after 120-300 s (N/nova_plugin/npc/npc_decision.ts:508-557,
-N/nova_plugin/npc/npc_steering.ts:31-33). So traffic looks like trading
+N/nova_plugin/npc/npc_steering.ts:31-33). (Since 2026-11-24, to R: "Shuttles
+and T1 traders, wave 15": one 15 s park at one non-enemy port, then out;
+the original's traffic never lands.) So traffic looks like trading
 today, but:
 
 - shuttle hulls are not told apart: they leave like any trader, and
@@ -97,7 +99,9 @@ Neither game moves goods. Nothing in the Bible says NPC trading changes
 prices; düde Flags 0x0001-0x0040 only decide what a plundered ship yields
 (B:840-847). Size **S** for the shuttles; **M** for real landing and
 take-off. **Since 2026-11-24 shuttles shuttle** (R: "N2 wave 13"; see the
-inventory row); real landing for ordinary traffic is still open.
+inventory row). Real landing is not wanted after all: wave 15 saw no
+trader or shuttle land in 32 minutes of watching (R: "Shuttles and T1
+traders, wave 15").
 
 ## Inventory
 
@@ -119,9 +123,9 @@ inventory row); real landing for ordinary traffic is still open.
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **Traders visit stellars** (AI 1 "visits planets and runs away when attacked"; AI 2 fights back) | B:861-864 | **Done in shape.** The planet-to-planet loop is N/nova_plugin/npc/npc_decision.ts:508-557; destinations are landable non-wormhole stellars (`landingDestinations`, :158-161). Flee and fight-back are :440-506 (R: A7, A wave 7; applied). | The landed stay; how long a trader spends in the system; whether it only lands where its govt is welcome. NovaJS departs 120-300 s after spawning (:79-80, marked unmeasured). Brief **T1**. R: "T1 wave 13" (first pass): the shape matches (jump in, park beside a friendly port about 45 s including the approach, jump out from beside it; NovaJS parks 12 s); no change on one run. | — |
-| **Real landing and take-off** (traffic vanishes on a stellar and later takes off from one) | Not in the Bible; seen in R: "A-series wave 5" (ships converge on Traffic Port and vanish; one appears beside the Port and flies off) | **Stand-in:** a 12 s "dwell" parked beside the stellar (N/nova_plugin/npc/npc_steering.ts:31-33, 171-200). NPCs never take off; they spawn scattered at genesis or jump in at the edge (N/nova_plugin/spawn/npc_spawn_plugin.ts:984-1000). | Landed duration; whether a landed ship takes off again or a fresh one does; the share of arrivals by take-off vs jump-in; the "lingers about 20 s beside" stops seen at Traffic Market (wave 5) vs real landings. Brief **T1**. | M |
-| **In-system shuttles** (Flags3 0x0002 without a scoop: "shuttle back and forth between friendly stellars in the system") | B:2646-2650 | **Done (2026-11-24),** to R: "N2 wave 13" (never jumps; visits the friendly stellars, the uninhabited marker included; never an enemy's). N/nova_plugin/npc/npc_shuttle.ts; the AI 1/2 trader loop in npc_decision.ts picks a shuttle's stops with `shuttleStops` (every non-gate stellar not owned by an enemy govt, landable or not); when its stay is up it LANDS at the end of a stop (removed beside the stellar) instead of jumping out, and a respawned shuttle takes off from a stop (npc_spawn_plugin.ts `takeOffState`) instead of jumping in. Stock: shïp 391-394 in düdes 247-250. | The **guesses** below ("Shuttles and miners: guesses to measure"), the landing above all. | (done) |
+| **Traders visit stellars** (AI 1 "visits planets and runs away when attacked"; AI 2 fights back) | B:861-864 | **Done (2026-11-24),** to R: "T1 wave 13", "T1 / N1 wave 14" and "Shuttles and T1 traders, wave 15". An AI 1/2 trader jumps in, flies to ONE port and parks beside it for 15 s (`TRADER_DWELL_MS`, N/nova_plugin/npc/npc_steering.ts; measured median 15.2 s over 70 parks), then jumps out (npc_decision.ts trader loop; its 120-300 s departure roll no longer applies). Its destinations (`traderDestinations`, npc_decision.ts) are the landable non-wormhole ports not owned by an enemy of its govt, one uniform draw: own and neutral govts' ports alike (measured 21 / 25 / 24), never the enemy's, never an uninhabited marker. A held ship (system_hold.ts) goes on to another port instead of leaving. Flee and fight-back: R: A7, A wave 7 (applied). | The **guesses** below ("Shuttles and miners: guesses to measure", 10-12): AI 2 makes one stop like AI 1; a fixed 15 s park; wave 14's unvisited Market (1000 px out). | (done) |
+| **Real landing and take-off** (traffic vanishes on a stellar and later takes off from one) | Not in the Bible; seen in R: "A-series wave 5" (ships converge on Traffic Port and vanish; one appears beside the Port and flies off) | **Not what the original does** (R: "T1 wave 13", "T1 / N1 wave 14", "Shuttles and T1 traders, wave 15": in 32 minutes of colour-tracked traffic no trader or shuttle vanished on a stellar or appeared from one; every ship arrived by jump-in). NovaJS's park beside the stellar (`dwell`) is the measured behaviour, not a stand-in. NPCs spawn scattered at genesis or jump in at the edge (N/nova_plugin/spawn/npc_spawn_plugin.ts `jumpInState`). Wave 5's "vanish" was ships hidden in the stellar's radar square. | — | (done) |
+| **In-system shuttles** (Flags3 0x0002 without a scoop: "shuttle back and forth between friendly stellars in the system") | B:2646-2650 | **Done (2026-11-24),** to R: "N2 wave 13" and "Shuttles and T1 traders, wave 15". N/nova_plugin/npc/npc_shuttle.ts; the AI 1/2 trader loop in npc_decision.ts. A shuttle arrives like any traffic (genesis scatter, or a respawn's jump-in) and then NEVER LEAVES: no jump out, no landing, whatever its departure roll. It keeps ONE LANE between two of its stops (`shuttleStops`: every non-gate stellar not owned by an enemy govt, landable or not, the uninhabited marker included): the first stop is one draw, the other end the stop nearest to it (`shuttleLaneEnd`, a tie one more draw; GUESS, below), and it flies back and forth, turning 70 px short of each centre towards the other end (`shuttleTurnPoint`) after a 4 s pause (`SHUTTLE_DWELL_MS`; measured median 3.7 s). The lane is NpcState `laneEnd`. So the shuttles a system's respawns draw hold their slots for good and, as the other traffic leaves, fill the system (as measured: avgShips 6, half shuttles, no trader after 2 minutes). Stock: shïp 391-394 in düdes 247-250 (17 systems). | The **guesses** below ("Shuttles and miners: guesses to measure"). | (done) |
 | **Freighter cargo** (düde Flags 0x0001-0x0040 "carries food / industrial / ... / money"; flët 0x0001 random cargo) | B:840-847, B:924-925 | **Not plumbed:** D/dude_data.ts:23-24; D/fleet_data.ts:41-42. A boarded NPC yields its CargoComponent (N/nova_plugin/ship/boarding_component.ts:27-36), but spawned traders carry nothing. 29 stock düdes set carry flags; no stock flët sets 0x0001. | Amounts per flag (R20 covers money). | S |
 
 ### Asteroids
@@ -188,8 +192,9 @@ reference-Mac experiments to run first. Briefs follow.
      records are each player's own), so it is an NPC decision against one
      player ship plus a per-player event.
 2. **Shuttles, and real landing and take-off for traffic** (T1, N2).
-   **Shuttles done 2026-11-24** (see the inventory row); real landing for
-   ordinary traffic is still open.
+   **Done 2026-11-24** (see the inventory rows): shuttles keep a lane and
+   never leave; traders make one stop. Real landing is dropped: the
+   original's traffic never lands (R: "Shuttles and T1 traders, wave 15").
    - The shuttle is small: parse Flags3, give shuttle hulls a trader loop
      that never departs and only picks friendly stellars.
    - Real landing (vanish, later take off) replaces the dwell stand-in, and
@@ -296,25 +301,31 @@ The shuttles (N/nova_plugin/npc/npc_shuttle.ts) and miners
 something. Everything below is marked GUESS in the code and wants a
 reference run:
 
-1. **A shuttle lands.** When its ordinary stay (120-300 s) is up it is
-   removed at the end of a stop, and a respawn takes off from a stop. N2
-   saw no jump in 584 s and could not tell a landing from discs
-   overlapping over the port. The landing is there because a shuttle that
-   never leaves would, in mixed traffic (stock Sol: 30% shuttles), slowly
-   take every traffic slot. To measure: a long watch (20+ min) of a
-   mixed-traffic system, counting shuttles; or a lone shuttle in a
-   system whose stellars are all on screen.
+1. ~~**A shuttle lands.**~~ **Measured (R: "Shuttles and T1 traders,
+   wave 15"): it never does, and none takes off.** Shuttles now never
+   leave and respawns jump in, so shuttles fill a system's traffic as on
+   the original. On stock data (shïp 391-394, düdes 247-250) that takes
+   minutes: see the wave-15 entry's "Applied" note for the measured fill
+   times. Genesis shuttles are scattered like other traffic (GUESS).
 2. **Which stellars are stops:** every stellar not owned by an enemy of
    the shuttle's govt, uninhabited and non-landable ones included
-   (measured: the marker, medium confidence), but no hypergate or
-   wormhole (the rig had none). An allied or neutral govt's port counts.
+   (measured: the marker and a NEUTRAL govt's port, wave 15), but no
+   hypergate or wormhole (the rigs had none). An allied govt's port counts
+   (unmeasured).
 3. **A shuttle with one stop** goes back to it; **with none** (every
    stellar an enemy's) it jumps out like a trader, and a respawn jumps in.
 4. **A shuttle that is attacked** flees like any AI 1 trader, which can
-   end in a jump out at the rim. N2 had no attacks.
-5. **Only düde respawns** take off from a stop; a përs or a fleet with a
-   shuttle hull still jumps in. Genesis shuttles are scattered like other
-   traffic.
+   end in a jump out at the rim. Neither rig had attacks. Back from a
+   flight it resumes its lane.
+5. **The lane's two stops.** Wave 15 saw every lane join the Port to one
+   neighbour, but every neighbour was 220 px from the Port, so the rule
+   was not separated. NovaJS: the first stop is one draw among the stops,
+   the other end is the stop NEAREST to it, a tie broken by one more draw
+   (in the rig: the Port, or from the Port one of its three neighbours).
+   Alternatives the data also fits: the system's first own-govt port at
+   one end; the stop nearest the arrival point. To measure: a rig with
+   unequal spacing (a neighbour twice as far as another) and the player
+   not at the hub.
 6. **Who mines:** AI 1 and AI 2 hulls with Flags3 0x0001 (the stock
    Asteroid Miner). An AI 4 Zephyr (Flags3 0x0001, AI 4 düdes 200/201)
    keeps the interceptor brain: N1's AI 2/3/4 variants were not run.
@@ -327,9 +338,17 @@ reference run:
    jumps out straight from mining (N1: 39 jump-outs; how long each stayed
    was not separated). Whether it lands its haul instead was not seen.
 9. **A full hold:** a scooping miner whose hold is full stops mining and
-   flies the trader loop until it departs.
-10. **T1:** traders park about 45 s on the original (including the
-    approach) against NovaJS's 12 s dwell; left alone after one run.
+   flies the trader loop: since wave 15, one stop and out.
+10. **T1, measured (wave 15):** traders park 15.2 s (median of 70; NovaJS
+    15 s fixed, not drawn from the measured 12.2-17.9 s spread) at ONE port
+    per visit, then jump out.
+11. **AI 2 traders make one stop too** (the trader loop is shared; the
+    rigs only flew AI 1). A HELD trader (system_hold.ts) goes on to another
+    port instead of leaving, as before.
+12. **Wave 14's Market** (1000 px out, no visit in 526 s) is unexplained:
+    the uniform draw over the non-enemy ports (Port and Market there)
+    would have sent about half of the traffic to it. Wants a rig with the ports at unequal
+    distances.
 
 ### Hull AI flags and NPC cloaking: guesses to measure
 
