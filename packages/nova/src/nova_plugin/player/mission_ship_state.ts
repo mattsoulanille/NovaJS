@@ -30,8 +30,9 @@ import { map } from 'nova_ecs/datatypes/map';
  *                MissionShipTrackSystem reads the shared BoardedComponent
  *                record). Offered — see goalSupported.
  *    3 escort    "Escort them (keep them from getting killed)": the
- *                goal never blocks completion; a mission ship dying
- *                fails the mission. Stock escort missions use ShipSyst
+ *                goal never blocks completion; a mission ship dying, or
+ *                being DISABLED (measured on the original), fails the
+ *                mission. Stock escort missions use ShipSyst
  *                -6 (follow the player), so the ships are respawned
  *                alongside the player in each system they enter.
  *    4 observe   "Observe them": a ship that cannot cloak is observed
@@ -240,7 +241,18 @@ export function shipDeparted(objective: ShipObjective, uuid: string): void {
     updateCompletion(objective);
 }
 
-/** A tracked ship became disabled. */
+/**
+ * A tracked ship became disabled.
+ *
+ * An ESCORT goal fails here, not only at the ship's death: on the
+ * original, a mïsn ShipBehav 1 / ShipGoal 3 ally the player disabled
+ * failed its mission the moment it went Disabled ("Mission failed." on
+ * the status line, and `i` then answered "You have no active
+ * missions."), long before anything could destroy it (reference
+ * "Reviving a disabled ally, wave 11"). The Bible's "keep them from
+ * getting killed" is the author's gloss; a disabled escort is not being
+ * escorted anywhere.
+ */
 export function shipDisabled(objective: ShipObjective, uuid: string): void {
     const flags = objective.live.get(uuid);
     if (!flags || flags.disabled) {
@@ -250,6 +262,8 @@ export function shipDisabled(objective: ShipObjective, uuid: string): void {
     if (objective.goal === GOAL_DISABLE) {
         objective.satisfied++;
         updateCompletion(objective);
+    } else if (objective.goal === GOAL_ESCORT) {
+        objective.failed = true;
     }
 }
 

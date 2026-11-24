@@ -27,6 +27,7 @@ import {
 } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { PersHailQuoteSystem } from "./ship_mission_offer_plugin.js";
+import { showStatusMessage } from './status_message_plugin.js';
 
 /**
  * ============================================================================
@@ -143,6 +144,16 @@ export interface ShipDoneState {
     missions: Map<string, MissionData | null>;
     /** Mission ids with a lookup in flight. */
     loading: Set<string>;
+    /**
+     * Whether each of the player's missions' ship goal was already FAILED
+     * when this display world first saw it (see MISSION_FAILED_MESSAGE).
+     * Only a false -> true change seen here is announced, so a mission
+     * that failed in an earlier system (and waits for the landing to run
+     * its OnFailure) is not announced again by every display world the
+     * player jumps into. Optional so worlds and specs built without it
+     * simply never announce.
+     */
+    failed?: Map<string, boolean>;
 }
 export const ShipDoneStateResource =
     new Resource<ShipDoneState>('MissionShipDoneState');
@@ -386,8 +397,25 @@ export async function presentShipDoneText(world: World,
 }
 
 /**
+ * The status line the original prints the moment a mission's special-ship
+ * goal fails in flight: stock STR# 2002 ("misc strings") index 283,
+ * verbatim. Measured for an escort goal whose ship the player disabled
+ * (reference "Reviving a disabled ally, wave 11": "Mission failed." at
+ * the moment it went Disabled, and `i` then answered "You have no active
+ * missions."). The other in-flight goal failures (an escorted ship
+ * killed, a disable target destroyed) are announced the same way; they
+ * were not measured separately.
+ *
+ * The mission's OnFailure still runs at the next landing (processLanding
+ * reads `objective.failed`), like every other sim-marked failure; the
+ * Mission Info list hides it from this moment (spaceport/mission_info.ts).
+ */
+export const MISSION_FAILED_MESSAGE = 'Mission failed.';
+
+/**
  * Sweeps the local player's missions for ship goals the simulation has
- * just completed and shows their ShipDoneText.
+ * just completed and shows their ShipDoneText — and for ship goals it has
+ * just FAILED, which get MISSION_FAILED_MESSAGE on the status line.
  *
  * BOARD AND RESCUE GOALS ARE SKIPPED — boarding_plugin presents those, in
  * place of the plunder dialog (see the module note). Sorted by mission
@@ -404,6 +432,13 @@ export const MissionShipDoneSystem = new System({
             const objective = active.shipObjective;
             if (!objective) {
                 continue;
+            }
+            if (state.failed) {
+                const before = state.failed.get(missionId);
+                state.failed.set(missionId, objective.failed);
+                if (before === false && objective.failed) {
+                    showStatusMessage(world, MISSION_FAILED_MESSAGE);
+                }
             }
             // Warm the cache for every mission with special ships, so
             // the boarding dialog's synchronous status has an answer by
@@ -450,7 +485,9 @@ export const MissionShipDonePlugin: Plugin = {
         stage.addChild(popup.container);
         world.resources.set(ShipDonePopupResource, popup);
         world.resources.set(ShipDoneStateResource, {
-            shown: new Set(), missions: new Map(), loading: new Set(),
+            shown: new Set<string>(), missions: new Map(),
+            loading: new Set<string>(),
+            failed: new Map<string, boolean>(),
         });
         world.addSystem(MissionShipDoneSystem);
     },

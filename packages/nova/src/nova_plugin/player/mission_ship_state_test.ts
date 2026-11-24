@@ -192,6 +192,22 @@ describe('mission ship goal state machine', () => {
             expect(objectiveAllowsCompletion(objective)).toBe(false);
         });
 
+        it('fails the mission the moment an escorted ship is DISABLED '
+            + '(the original, reference wave 11)', () => {
+            const objective = makeObjective(GOAL_ESCORT);
+            registerShip(objective, 'a');
+            shipDisabled(objective, 'a');
+            expect(objective.failed).toBe(true);
+            expect(objectiveAllowsCompletion(objective)).toBe(false);
+            expect(shipsToSpawn(objective)).toBe(0);
+        });
+
+        it('a disable of an untracked ship fails nothing', () => {
+            const objective = makeObjective(GOAL_ESCORT);
+            shipDisabled(objective, 'stranger');
+            expect(objective.failed).toBe(false);
+        });
+
         it('tolerates an escorted ship jumping out', () => {
             const objective = makeObjective(GOAL_ESCORT);
             registerShip(objective, 'a');

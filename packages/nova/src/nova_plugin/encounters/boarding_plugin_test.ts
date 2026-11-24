@@ -1260,6 +1260,37 @@ describe('boarding in a live world', () => {
                 expect(repairs).toEqual([]);
             });
 
+        it('a MISSION ally flying in your formation is plundered, not '
+            + 'repaired (the original, reference wave 11)', async () => {
+                // mïsn ShipBehav 1 / ShipGoal 3: formation on the owner
+                // and the owner's firing group (mission_ship_spawn.ts), so
+                // the live flock chain reaches the boarder.
+                const { world, boarder, target } = await ownEscortWorld();
+                boarder.components.set(MissionsComponent, new Map([['nova:9999', {
+                    id: 'nova:9999', acceptedDay: 0,
+                    acceptedAt: SYNTHETIC.planets.port, travelPlanet: null,
+                    returnPlanet: SYNTHETIC.planets.port, cargoType: -1,
+                    cargoQty: 0, cargoLoaded: false, travelDone: false,
+                    deadlineDay: null,
+                }]]));
+                target.components.set(MissionShipComponent,
+                    { mission: 'nova:9999', owner: BOARDER });
+                target.components.set(FiringGroupComponent,
+                    { group: BOARDER });
+                world.step();
+                expect(isInFlock(TARGET, BOARDER,
+                    u => world.entities.get(u))).toBeTrue();
+                const repairs = recordRepairs(world);
+
+                press(world, BOARDER, 'board');
+
+                expect(repairs).toEqual([]);
+                expect(boarder.components.get(BoardingComponent)?.target)
+                    .toEqual(TARGET);
+                expect(target.components.has(BoardedComponent)).toBeTrue();
+                expect(target.components.has(DisabledComponent)).toBeTrue();
+            });
+
         /**
          * Item 5: a FORMER escort. Its live chain has lapsed (no
          * formation leader, no owner, no firing group pointing at the

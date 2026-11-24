@@ -9,7 +9,8 @@ import {
     ControlEvent, ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
 } from '../nova_plugin/core/index.js';
 import {
-    MissionShipComponent, GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE, ShipObjective, PlayerShipSelector,
+    MissionShipComponent, GOAL_BOARD, GOAL_DESTROY, GOAL_ESCORT, GOAL_RESCUE, ShipObjective,
+    PlayerShipSelector,
     ActiveMission, MissionsComponent,
 } from '../nova_plugin/player/index.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -19,9 +20,11 @@ import {
 } from '../spaceport/ship_done_shown.js';
 import { boardingDialogPhase } from './boarding_plugin.js';
 import {
-    boardShipDoneStatus, boardShipDoneStatusOf, MissionShipDonePlugin,
-    presentBoardShipDone, presentShipDoneText, ShipDonePopupResource,
+    boardShipDoneStatus, boardShipDoneStatusOf, MISSION_FAILED_MESSAGE,
+    MissionShipDonePlugin, presentBoardShipDone, presentShipDoneText,
+    ShipDonePopupResource,
 } from './mission_ship_done_plugin.js';
+import { StatusLineResource } from './status_message_plugin.js';
 import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
@@ -316,6 +319,33 @@ describe('presenting a ShipDoneText in flight', () => {
         expect(popup.shows[0].text).toContain('Heraan Prisoners');
         expect(takeShipDoneTextShown('nova:741')).toBeTrue();
     });
+
+    it('says "Mission failed." the moment a ship goal fails in flight, '
+        + 'once, and not for one that had already failed', async () => {
+            // The original (reference "Reviving a disabled ally, wave
+            // 11"): disabling a ShipGoal-3 escort printed "Mission
+            // failed." on the status line at that moment.
+            const { world, player } = await displayWorld();
+            const lines: string[] = [];
+            world.resources.set(StatusLineResource, {
+                setMessage: (message: string) => lines.push(message),
+            } as never);
+            const escort = objective({ goal: GOAL_ESCORT });
+            const earlier = objective({ goal: GOAL_ESCORT, failed: true });
+            const missions = player.components.get(MissionsComponent)!;
+            missions.set('nova:132', activeMission('nova:132', escort));
+            // Failed in an earlier system, still waiting for the landing.
+            missions.set('nova:668', activeMission('nova:668', earlier));
+            world.step();
+            expect(lines).toEqual([]);
+
+            escort.failed = true;
+            for (let i = 0; i < 3; i++) {
+                world.step();
+            }
+            expect(lines).toEqual([MISSION_FAILED_MESSAGE]);
+            expect(MISSION_FAILED_MESSAGE).toBe('Mission failed.');
+        });
 
     it('leaves boarding goals to the boarding dialog', async () => {
         // The sweep must not race BoardingUi for the same moment: a board

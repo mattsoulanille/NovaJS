@@ -77,8 +77,15 @@ export function listedMissions(entity: Entity, universe: MissionUniverse):
     [string, ActiveMission][] {
     const missions = entity.components.get(MissionsComponent);
     return missions
-        ? [...missions].filter(([id]) =>
-            !universe.getMission(id)?.flags.invisible)
+        ? [...missions].filter(([id, active]) =>
+            !universe.getMission(id)?.flags.invisible
+            // Not one whose special-ship goal the simulation has already
+            // FAILED in flight: on the original such a mission is gone the
+            // moment it fails ("Mission failed.", then `i` answers "You have
+            // no active missions."; reference "Reviving a disabled ally,
+            // wave 11"), while NovaJS keeps the record until the next
+            // landing runs its OnFailure.
+            && !active.shipObjective?.failed)
         : [];
 }
 
@@ -379,6 +386,24 @@ export class MissionInfoDialog {
             Math.max(0, this.missions.length - 1));
         this.refreshList();
         this.refreshDescription();
+    }
+
+    /**
+     * The missions the list shows: not the invisible ones (mïsn Flags
+     * "invisible": never listed), and not one whose special-ship goal the
+     * simulation has already FAILED in flight. On the original such a
+     * mission is gone the moment it fails — disabling a mission's escort
+     * printed "Mission failed." and `i` then answered "You have no active
+     * missions." (reference "Reviving a disabled ally, wave 11") — while
+     * NovaJS keeps the record until the next landing runs its OnFailure.
+     */
+    private listedMissions(entity: Entity): [string, ActiveMission][] {
+        const missions = entity.components.get(MissionsComponent);
+        return missions
+            ? [...missions].filter(([id, active]) =>
+                !this.universe.getMission(id)?.flags.invisible
+                && !active.shipObjective?.failed)
+            : [];
     }
 
     private moveSelection(delta: number) {

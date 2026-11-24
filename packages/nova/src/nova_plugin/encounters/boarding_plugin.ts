@@ -579,8 +579,19 @@ const BoardingGateSystem = new System({
         // off a player's control events), so the boarder IS the player
         // ship; widening it would need a flock-root walk for a case that
         // cannot arise today.
+        //
+        // A MISSION SHIP IS NOT YOUR ESCORT, even one flying in your
+        // formation (mïsn ShipBehav 1 / an escort goal puts it there,
+        // mission_ship_spawn.ts). On the original, disabling a ShipBehav-1
+        // / ShipGoal-3 ally failed its mission on the spot, and boarding
+        // the hulk then opened the ordinary plunder dialog, capture odds
+        // and all — no "Escort repaired." (reference "Reviving a disabled
+        // ally, wave 11"). So the live-flock route skips mission ships;
+        // they never carry PlayerEscortComponent (MarkPlayerEscortsSystem
+        // skips them), so the durable route cannot reach them either.
         const owned = targetEntity!.components.get(PlayerEscortComponent);
-        if (isInFlock(targetUuid!, uuid, u => entities.get(u))
+        const missionShip = targetEntity!.components.has(MissionShipComponent);
+        if ((!missionShip && isInFlock(targetUuid!, uuid, u => entities.get(u)))
             || owned?.player === uuid) {
             repairHulk(targetEntity!);
             // It was an escort, so it goes back to being one: formation
