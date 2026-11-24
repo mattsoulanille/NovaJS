@@ -2,7 +2,7 @@ import { dateFromDayNumber, formatDate, ActiveMission } from '../nova_plugin/pla
 import {
     acceptOffer,
     AcceptResult,
-    cargoName,
+    missionCargoName,
     makeMissionOffer,
     MissionOffer,
     missionMatchesLocation,
@@ -230,8 +230,11 @@ export function offerSubstitutions(universe: MissionUniverse,
         destinationSystem: universe.systemNameOfPlanet(travel ?? ret, bits),
         returnStellar: universe.planetName(ret),
         returnSystem: universe.systemNameOfPlanet(ret, bits),
+        // <CT>: the running-text (STR# 4001) name, '*' dropped ("1 ton
+        // of artwork" in the stock Un. Shipping Delivery briefing).
         cargoType: offer.cargoType >= 0
-            ? cargoName(offer.cargoType, universe.cargoNames) : undefined,
+            ? missionCargoName(offer.cargoType, universe.cargoNames,
+                universe.cargoNamesLower).lower : undefined,
         cargoQty: offer.cargoQty > 0 ? offer.cargoQty : undefined,
         deadline: deadlineDay !== null
             ? formatDate(dateFromDayNumber(deadlineDay)) : undefined,

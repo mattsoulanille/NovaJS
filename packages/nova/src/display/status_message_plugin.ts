@@ -16,7 +16,7 @@ import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/ind
 import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
-import { cargoName } from '../nova_plugin/missions/index.js';
+import { missionCargoName } from '../nova_plugin/missions/index.js';
 import { ContrabandScanEvent, PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
 import { MissionShipComponent } from '../nova_plugin/player/index.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
@@ -104,9 +104,11 @@ export function showStatusMessage(world: World, message: string) {
 }
 /** The scenario's date suffix (e.g. " NC"), fetched once at build. */
 const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffix');
-/** The scenario's cargo names (STR# 4000, from the player start), fetched
- * once at build: what a retrieved mission cargo is called. */
-const CargoNamesResource = new Resource<{ names: string[] }>('StatusLineCargoNames');
+/** The scenario's cargo names (STR# 4000 and the lowercase STR# 4001, from
+ * the player start), fetched once at build: what a retrieved mission cargo
+ * is called. */
+const CargoNamesResource = new Resource<{ names: string[], lower: string[] }>(
+    'StatusLineCargoNames');
 /** Marks that the arrival message has been shown for this system's world. */
 const ArrivalShownResource = new Resource<{ shown: boolean }>('StatusLineArrivalShown');
 
@@ -281,9 +283,9 @@ const ShowCargoRetrievedMessage = new System({
     events: [MissionCargoRetrievedEvent],
     args: [MissionCargoRetrievedEvent, StatusLineResource, TimeResource,
         CargoNamesResource, PlayerShipSelector] as const,
-    step({ cargoType }, statusLine, { time }, { names }) {
-        statusLine.setMessage(
-            cargoRetrievedMessage(cargoName(cargoType, names)), time);
+    step({ cargoType }, statusLine, { time }, { names, lower }) {
+        statusLine.setMessage(cargoRetrievedMessage(
+            missionCargoName(cargoType, names, lower)), time);
     },
 });
 
@@ -372,6 +374,7 @@ export const StatusMessagePlugin: Plugin = {
         // names, read once.
         let suffix = '';
         let cargoNames: string[] = [];
+        let cargoNamesLower: string[] = [];
         try {
             const ids = await simulationData.ids;
             if (ids.PlayerStart.length > 0) {
@@ -380,12 +383,14 @@ export const StatusMessagePlugin: Plugin = {
                 const start = starts.find(s => s.isDefault) ?? starts[0];
                 suffix = start?.dateSuffix ?? '';
                 cargoNames = [...(start?.cargoNames ?? [])];
+                cargoNamesLower = [...(start?.cargoNamesLower ?? [])];
             }
         } catch (e) {
             console.warn('Failed to load player start for date suffix:', e);
         }
         world.resources.set(DateSuffixResource, { suffix });
-        world.resources.set(CargoNamesResource, { names: cargoNames });
+        world.resources.set(CargoNamesResource,
+            { names: cargoNames, lower: cargoNamesLower });
         world.resources.set(ArrivalShownResource, { shown: false });
 
         const statusLine = new StatusLine();

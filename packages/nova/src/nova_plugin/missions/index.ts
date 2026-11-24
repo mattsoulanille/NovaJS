@@ -18,7 +18,9 @@ export * from './mission_auto_abort.js';
 // collide with economy's freeCargoSpace(TradeWorkingState) for a module
 // importing both domains; every other export keeps its name.
 export {
-    STANDARD_CARGO_NAMES, cargoName, missionCargoKey, loadMissionCargo,
+    STANDARD_CARGO_NAMES, STANDARD_CARGO_NAMES_LOWER, cargoName,
+    MissionCargoName, missionCargoName, parseCargoName, capitalizeFirst,
+    playerInfoMissionCargoLine, missionCargoKey, loadMissionCargo,
     unloadMissionCargo, freeCargoSpace as missionFreeCargoSpace,
 } from './mission_cargo.js';
 export * from './mission_ship_logic.js';

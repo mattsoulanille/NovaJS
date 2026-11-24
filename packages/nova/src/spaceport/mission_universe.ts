@@ -54,6 +54,8 @@ export class MissionUniverse {
     crons: CronData[] = [];
     /** Standard cargo display names (STR# 4000), parsed from any chär. */
     cargoNames: string[] = [];
+    /** Their lowercase running-text variants (STR# 4001), for <CT>. */
+    cargoNamesLower: string[] = [];
     stellarCandidates: StellarInfo[] = [];
     /** Systems, for special/aux ship spawn-system resolution. */
     systemInfos: SystemInfo[] = [];
@@ -225,11 +227,13 @@ export class MissionUniverse {
         // Standard cargo names (STR# 4000) ride on every chär; read the
         // first available one, falling back to the built-in names.
         let cargoNames: string[] = [];
+        let cargoNamesLower: string[] = [];
         try {
             const playerStartId = ids.PlayerStart[0];
             if (playerStartId) {
-                cargoNames = [...(await data.PlayerStart
-                    .get(playerStartId)).cargoNames];
+                const start = await data.PlayerStart.get(playerStartId);
+                cargoNames = [...start.cargoNames];
+                cargoNamesLower = [...start.cargoNamesLower];
             }
         } catch (e) {
             console.warn('Failed to load standard cargo names:', e);
@@ -245,6 +249,7 @@ export class MissionUniverse {
 
         this.missions = [...this.missionsById.values()];
         this.cargoNames = cargoNames;
+        this.cargoNamesLower = cargoNamesLower;
 
         // Only planets that appear in some system are candidate
         // destinations (spöbs can exist without being placed). Track every

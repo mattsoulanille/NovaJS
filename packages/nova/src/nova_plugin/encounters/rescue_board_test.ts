@@ -17,6 +17,7 @@ import {
 } from '../../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
 import { deriveEntityComponents, GovtComponent } from '../core/index.js';
+import { missionCargoName } from '../missions/index.js';
 import { makeSystem } from '../make_system.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import {
@@ -302,13 +303,21 @@ describe('boarding a rescue ship', () => {
 
     describe('the status line', () => {
         it('drops "the" and the asterisk for a quantityless name', () => {
-            expect(cargoRetrievedMessage('*Admiral Raczak'))
+            expect(cargoRetrievedMessage(missionCargoName(0,
+                ['*Admiral Raczak'], ['*Admiral Raczak'])))
                 .toBe('You retrieved Admiral Raczak from this ship.');
         });
 
         it('says "the" otherwise', () => {
-            expect(cargoRetrievedMessage('Sample'))
-                .toBe('You retrieved the Sample from this ship.');
+            expect(cargoRetrievedMessage(
+                missionCargoName(0, ['Sample'], ['sample'])))
+                .toBe('You retrieved the sample from this ship.');
+        });
+
+        it('uses the running-text name, the STR# 4000 one without it', () => {
+            expect(cargoRetrievedMessage(
+                missionCargoName(0, ['Wild Geese'], [])))
+                .toBe('You retrieved the Wild Geese from this ship.');
         });
 
         describe('against the stock strings', () => {
@@ -332,11 +341,16 @@ describe('boarding a rescue ship', () => {
                     const raczak = (await gameData.data.Mission
                         .get('nova:394'));
                     expect(raczak.cargoType).toBe(27);
-                    expect(cargoRetrievedMessage(
-                        start.cargoNames[raczak.cargoType]!))
+                    expect(start.cargoNames[raczak.cargoType])
+                        .toBe('*Admiral Raczak');
+                    expect(cargoRetrievedMessage(missionCargoName(
+                        raczak.cargoType, start.cargoNames,
+                        start.cargoNamesLower)))
                         .toBe('You retrieved Admiral Raczak from this ship.');
-                    expect(cargoRetrievedMessage('Sample')).toBe(
-                        `${misc[105]}${misc[106]} Sample ${misc[107]}`);
+                    // 31 "Sample" / "sample": not quantityless.
+                    expect(cargoRetrievedMessage(missionCargoName(31,
+                        start.cargoNames, start.cargoNamesLower))).toBe(
+                        `${misc[105]}${misc[106]} sample ${misc[107]}`);
                 });
         });
     });

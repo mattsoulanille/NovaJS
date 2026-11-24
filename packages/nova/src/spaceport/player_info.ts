@@ -13,7 +13,9 @@ import {
     OutfitsStateComponent, deriveShipPhysics, ShipComponent, ShipPhysicsComponent,
 } from '../nova_plugin/ship/index.js';
 import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
-import { cargoName, missionCargoKey } from '../nova_plugin/missions/index.js';
+import {
+    cargoName, missionCargoKey, missionCargoName, playerInfoMissionCargoLine,
+} from '../nova_plugin/missions/index.js';
 import {
     combatRatingName, legalStatusInSystem, statusGovtOf, CombatRatingComponent,
     LegalRecordsComponent,
@@ -350,6 +352,8 @@ export class PlayerInfoDialog {
     private cargoCapacity = 0;
     /** Standard cargo names (STR# 4000), loaded on first show. */
     private cargoNames: string[] = [];
+    /** Their lowercase running-text variants (STR# 4001), likewise. */
+    private cargoNamesLower: string[] = [];
     private outfitNames = new Map<string, ExtrasOutfitInfo>();
     /** The player's active ranks, loaded on show for the Honors page. */
     private ranks: RankData[] = [];
@@ -526,8 +530,10 @@ export class PlayerInfoDialog {
         if (this.cargoNames.length === 0) {
             const ids = await this.simulationData.ids;
             if (ids.PlayerStart[0]) {
-                this.cargoNames = [...(await this.simulationData.data
-                    .PlayerStart.get(ids.PlayerStart[0])).cargoNames];
+                const start = await this.simulationData.data
+                    .PlayerStart.get(ids.PlayerStart[0]);
+                this.cargoNames = [...start.cargoNames];
+                this.cargoNamesLower = [...start.cargoNamesLower];
             }
         }
         // The player's active ranks, for the Honors page. Only the ones
@@ -765,48 +771,12 @@ export class PlayerInfoDialog {
 
     private renderCargo(entity: Entity) {
         const cargo = entity.components.get(CargoComponent) ?? new Map();
-        const missions = entity.components.get(MissionsComponent);
-        const lines: string[] = ['Current cargo in your ship:'];
-        let held = 0;
-        const itemLines: string[] = [];
-        for (const [key, count] of cargo) {
-            if (count <= 0) {
-                continue;
-            }
-            held += count;
-            if (key.startsWith('cargo:')) {
-                const index = Number(key.slice('cargo:'.length));
-                itemLines.push(`${count} tons of `
-                    + `${cargoName(index, this.cargoNames)}.`);
-            } else if (key.startsWith('junk:')) {
-                itemLines.push(`${count} tons of cargo.`);
-            } else {
-                // Mission cargo: name it from the active mission that
-                // carries it, as the reference does ("Space probe.").
-                let named = false;
-                if (missions) {
-                    for (const [missionId, active] of missions) {
-                        if (missionCargoKey(missionId) === key
-                            && active.cargoType >= 0) {
-                            itemLines.push(cargoName(active.cargoType,
-                                this.cargoNames) + '.');
-                            named = true;
-                            break;
-                        }
-                    }
-                }
-                if (!named) {
-                    itemLines.push(`${count} tons of mission cargo.`);
-                }
-            }
-        }
-        if (itemLines.length === 0) {
-            itemLines.push('Nothing.');
-        }
-        lines.push(itemLines.join('\n'));
-        lines.push('Free cargo space: '
-            + `${Math.max(0, this.cargoCapacity - held)} tons`);
-        this.addProse(lines);
+        const { items, held } = cargoListing(cargo,
+            entity.components.get(MissionsComponent),
+            this.cargoNames, this.cargoNamesLower);
+        this.addProse(['Current cargo in your ship:', items.join('\n'),
+            'Free cargo space: '
+            + `${Math.max(0, this.cargoCapacity - held)} tons`]);
     }
 
     private renderExtras(entity: Entity) {
@@ -864,6 +834,52 @@ export interface ExtrasOutfitInfo {
     builtIn: boolean;
     /** oütf 0x2000: listed under Honors rather than Extras. */
     showAsRank: boolean;
+}
+
+/**
+ * The Cargo page's item lines ("Nothing." for an empty hold) and the tons
+ * they hold. Standard cargo and jünk read "N tons of ..."; a mission's
+ * cargo is named from the active mission that carries it, with the
+ * Bible's '*' rule (playerInfoMissionCargoLine: "Space probe.", as the
+ * reference does, and "Admiral Raczak." for stock "*Admiral Raczak").
+ */
+export function cargoListing(cargo: ReadonlyMap<string, number>,
+    missions: ReadonlyMap<string, { cargoType: number }> | undefined,
+    cargoNames: readonly string[], cargoNamesLower: readonly string[]):
+    { items: string[], held: number } {
+    let held = 0;
+    const items: string[] = [];
+    for (const [key, count] of cargo) {
+        if (count <= 0) {
+            continue;
+        }
+        held += count;
+        if (key.startsWith('cargo:')) {
+            const index = Number(key.slice('cargo:'.length));
+            items.push(`${count} tons of ${cargoName(index, cargoNames)}.`);
+        } else if (key.startsWith('junk:')) {
+            items.push(`${count} tons of cargo.`);
+        } else {
+            let named = false;
+            for (const [missionId, active] of missions ?? []) {
+                if (missionCargoKey(missionId) === key
+                    && active.cargoType >= 0) {
+                    items.push(playerInfoMissionCargoLine(missionCargoName(
+                        active.cargoType, cargoNames, cargoNamesLower),
+                    count));
+                    named = true;
+                    break;
+                }
+            }
+            if (!named) {
+                items.push(`${count} tons of mission cargo.`);
+            }
+        }
+    }
+    if (items.length === 0) {
+        items.push('Nothing.');
+    }
+    return { items, held };
 }
 
 /**
