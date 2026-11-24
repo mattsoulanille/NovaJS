@@ -18,6 +18,8 @@ import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
+import { ShopSearchField } from './shop_search.js';
+import { enhancementEnabled } from '../enhancements.js';
 import { ShipInfoDialog } from './ship_info.js';
 import {
     SHIPYARD_BUTTONS,
@@ -132,6 +134,8 @@ export class Shipyard extends Menu<Entity> {
      */
     private scrollUpArrow = new ScrollArrow('up');
     private scrollDownArrow = new ScrollArrow('down');
+    /** The search field over the grid (shop_search.ts). */
+    private search = new ShopSearchField();
 
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
@@ -165,6 +169,15 @@ export class Shipyard extends Menu<Entity> {
         });
         this.container.addChild(this.scrollUpArrow.container,
             this.scrollDownArrow.container);
+        // The search field (NovaJS Enhancements, "Shop search"): the
+        // frame's bottom strip, left of the scroll arrows and under the
+        // grid's left edge, its middle level with the arrows'.
+        this.search.placeAt(-370, 130);
+        this.container.addChild(this.search.container);
+        this.search.query.subscribe(query => {
+            this.itemGrid?.setFilter(query);
+            this.updateArrows();
+        });
         buttons.buy.click.subscribe(this.buyShip.bind(this));
         buttons.done.click.subscribe(this.done.bind(this));
 
@@ -222,6 +235,7 @@ export class Shipyard extends Menu<Entity> {
         this.itemGrid.container.position.y = -153;
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
         this.itemGrid.scrolled.subscribe(() => this.updateArrows());
+        this.itemGrid.setFilter(this.search.query.value);
         this.updateArrows();
 
         // Keyboard navigation can scroll the page too.
@@ -354,6 +368,8 @@ export class Shipyard extends Menu<Entity> {
 
     protected override setInput(input: Entity) {
         super.setInput(input);
+        // A fresh visit: an empty search, shown when the enhancement is on.
+        this.search.open(enhancementEnabled('enhShopSearch'));
         this.text.status.text = "";
         this.currentShipData = undefined;
         const shipId = input.components.get(ShipComponent)?.id;
@@ -535,6 +551,7 @@ export class Shipyard extends Menu<Entity> {
 
     /** Done: the visit (its purchases already adopted) is released. */
     protected override done() {
+        this.search.close();
         if (this.transaction && this.visit) {
             this.transaction.release(this.visit);
         }

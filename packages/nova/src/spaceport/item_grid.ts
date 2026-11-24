@@ -312,6 +312,29 @@ interface Item {
     shortName?: string,
 }
 
+/**
+ * Whether an item matches the shop search's query: a case-insensitive
+ * substring of the name the player reads — the resource name without its
+ * "; developer note" suffix, or the shïp ShortName caption the tile
+ * shows (its "\n" line breaks read as spaces). Names only: descriptions
+ * are long enough that a short query ("laser", "fed") would match half
+ * the shop, which is not what a search box over a grid of names promises.
+ * A blank query matches everything.
+ */
+export function itemMatches(item: { name: string, shortName?: string },
+    query: string): boolean {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+        return true;
+    }
+    const names = [displayName(item.name)];
+    if (item.shortName) {
+        names.push(item.shortName.replace(/\\n|\n/g, ' '));
+    }
+    return names.some(name =>
+        name.replace(/\s+/g, ' ').toLowerCase().includes(q));
+}
+
 const BOX_COUNT = [4, 5];
 /** Tiles on one page of the grid. */
 export const ITEM_GRID_PAGE_SIZE = BOX_COUNT[0] * BOX_COUNT[1];
@@ -358,10 +381,15 @@ export class ItemGrid<I extends Item> {
     private tilesDict = new Map<string, ItemTile<I>>();
     private tiles: ItemTile<I>[];
     private readonly wheel = new WheelRowStepper();
+    /** Every item the owner offers (setItems), before the search filter. */
+    private allItems: I[];
+    /** The shop search's query (setFilter); '' shows everything. */
+    private filterText = '';
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private items: I[]) {
         this.container.name = ITEM_GRID_NAME;
+        this.allItems = items;
         this.tiles = items.map(item => this.tileFor(item));
         // The wheel over the grid, empty cells included (NovaJS
         // Enhancements, "Scroll wheel in shops"; the original's wheel does
@@ -422,6 +450,38 @@ export class ItemGrid<I extends Item> {
      * end.
      */
     setItems(items: I[]) {
+        this.allItems = items;
+        this.showItems(this.allItems.filter(
+            item => itemMatches(item, this.filterText)));
+    }
+
+    /**
+     * Narrows the grid to the items whose name matches `query` (the shop
+     * search, a NovaJS Enhancement; see itemMatches). The page goes back
+     * to the top, and the selection stays on its item when that item
+     * still matches (it clears otherwise, as for setItems). '' shows every
+     * item again.
+     */
+    setFilter(query: string) {
+        if (query === this.filterText) {
+            return;
+        }
+        this.filterText = query;
+        this.scroll = 0;
+        this.setItems(this.allItems);
+    }
+
+    /** The current search query ('' when none). */
+    get filter(): string {
+        return this.filterText;
+    }
+
+    /** How many items the grid shows (after the search filter). */
+    get itemCount(): number {
+        return this.items.length;
+    }
+
+    private showItems(items: I[]) {
         const selectedId = this.items[this.selectionIndex]?.id;
         const shown = new Set(items.map(item => item.id));
         for (const [id, tile] of this.tilesDict) {

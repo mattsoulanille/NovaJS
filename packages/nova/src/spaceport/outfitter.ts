@@ -33,6 +33,8 @@ import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason,
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 import { ScrollArrow } from "./scroll_arrow.js";
+import { ShopSearchField } from "./shop_search.js";
+import { enhancementEnabled } from "../enhancements.js";
 import { changeShipTargets } from "./shipyard_rules.js";
 import { loadEachOrSkip } from "./skip_failed_loads.js";
 
@@ -274,6 +276,8 @@ export class Outfitter extends Menu<Entity> {
     // either end of the list (scroll_arrow.ts).
     private scrollUpArrow = new ScrollArrow('up');
     private scrollDownArrow = new ScrollArrow('down');
+    /** The search field over the grid (shop_search.ts). */
+    private search = new ShopSearchField();
 
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
@@ -297,6 +301,15 @@ export class Outfitter extends Menu<Entity> {
         });
         this.container.addChild(this.scrollUpArrow.container,
             this.scrollDownArrow.container);
+        // The search field (NovaJS Enhancements, "Shop search"): the
+        // frame's bottom strip, left of the scroll arrows and under the
+        // grid's left edge, its middle level with the arrows'.
+        this.search.placeAt(-370, 131);
+        this.container.addChild(this.search.container);
+        this.search.query.subscribe(query => {
+            this.itemGrid?.setFilter(query);
+            this.updateArrows();
+        });
 
         // Measured against outfitter/earth_outfitter.png. A Button's red
         // face starts 5px right of its container x and runs (width + 15)px
@@ -401,6 +414,7 @@ export class Outfitter extends Menu<Entity> {
         this.itemGrid.container.position.y = -152;
         this.itemGrid.activeTile.subscribe(this.setOutfitSelected.bind(this));
         this.itemGrid.scrolled.subscribe(() => this.updateArrows());
+        this.itemGrid.setFilter(this.search.query.value);
         this.updateArrows();
 
         // On top of everything, so its modal shield covers the screen.
@@ -1271,6 +1285,8 @@ export class Outfitter extends Menu<Entity> {
 
     protected override setInput(input: Entity) {
         super.setInput(input);
+        // A fresh visit: an empty search, shown when the enhancement is on.
+        this.search.open(enhancementEnabled('enhShopSearch'));
         // A fresh visit: clear same-visit purchase tracking so no prior
         // visit's purchases still qualify for the full refund.
         this.visitPurchases.clear();
@@ -1314,6 +1330,7 @@ export class Outfitter extends Menu<Entity> {
      * meanwhile (landed_transaction.ts, credit_commit.ts).
      */
     protected override done() {
+        this.search.close();
         this.stopFollowingShipChanges?.();
         this.stopFollowingShipChanges = undefined;
         if (this.transaction && this.visit) {
