@@ -9006,6 +9006,48 @@ Ship; Tab order; govt as the panel shows it):
   before any rule: a kit system whose traffic is ONLY AI 2 traders, and one
   with only AI 3 warships, watched for 20 minutes.
 
+**Applied (wave-17 fixes, 2026-11-24).**
+- Population: `populationTarget` (`N/nova_plugin/spawn/npc_spawn_plugin.ts`)
+  is AvgShips itself, capped at MAX_NPC_POPULATION (12), with no PRNG
+  draw (the old `rollPopulationTarget` +/- 50% roll is gone; a seeded
+  room's deferred target is set the same way). The 15 s refill is kept.
+  A fleet still arrives whole and can overshoot by its escorts (GUESS,
+  docs/npc_behavior_gaps.md "Traffic population").
+- Miners: a miner with rocks to work no longer leaves on its departure
+  roll (`npc_decision.ts` mining branch; the roll is still drawn, so no
+  other draw shifts). It leaves once its hold is full (the existing
+  full-hold rule: the trader loop, one stop and out). That is the GUESS
+  for the kit miners' 3-4 minute stays: AI type (1), flags (Flags3
+  0x0003) and outfits (scoop, Mining Blasters) were the same as the stock
+  hull's; the work was not (the kit hull 300 / accel 300 against the stock
+  135 / 36, in 16 rocks against Sol's 2 and Tau Ceti's 3), so the kit
+  miners could fill their 100-ton holds in minutes.
+- Not applied (one ship each, recorded as guesses): the Arcturus AI 3 Fed
+  Destroyer and AI 2 Pegasus that stayed.
+- Specs: `npc_spawn_test.ts` (`populationTarget`), `spawn_bits_test.ts`
+  (the deferred target, no draw), `npc_integration_test.ts` (Thessaly's
+  target is its AvgShips 6), `npc_traffic_stay_test.ts` (the stock-Sol-like
+  mix freezes with exactly 6), `npc_mining_test.ts` (a miner mines past an
+  expired roll; a full one dwells once and departs; replaces "jumps out
+  when its time is up, straight from mining"). Overturned: the +/- 50%
+  roll specs, and the miner-departure spec.
+- **NovaJS's census now** (headless, no player, 26 sim minutes, six PRNG
+  seeds after the fixed genesis; `scratchpad/w17_traffic/stock_fill_w17.mjs`,
+  disabled hulks counted):
+
+  | system (AvgShips) | count at the 2-minute samples | last arrival or departure | end |
+  |---|---|---|---|
+  | Sol (6) | 6 in five seeds from start to end; one seed 8 at 6-10 min (a fleet), back to 6 | 5.0-15.3 min (median 9) | 6: 2-6 AI 4 and 0-4 shuttles |
+  | Arcturus (4) | 4 in four seeds; 5 in two (a hulk) | 3.7-11.6 min | 4-5: shuttles, AI 4, the Asteroid Miner twice, 1-3 disabled hulks |
+  | Tau Ceti (4) | 4 in five seeds; one seed 5 from 6 min (a fleet escort that never leaves) | 3.7-9.3 min | 4-5: AI 4 (the Asteroid Miner once) |
+
+  So every run froze at AvgShips (the original: 6 / 6, 4 / 4, 4 / 4,
+  frozen by 5-9 minutes), and the Asteroid Miner, where drawn, stayed to
+  the end. Differences left: fleets overshoot by their escorts (an AI 4
+  escort then stays for good), disabled hulks hold slots (Arcturus ended
+  with up to three), and NovaJS's mixes lean harder on AI 4 (its genesis
+  has more of them) than the original's two shuttles and a miner.
+
 Confidence: high for 1 (three systems, 17 frozen censuses in all), high for
 2 and 3 (two systems each, with Sol), low for 4 (one ship of each).
 
@@ -9083,6 +9125,30 @@ is an anchored mission ship.
   player, e.g. the Kit Disabler gun with reload 30).
 - An NPC-on-NPC attack provokes the victim's own and allied govts' AI 3 AND
   AI 4 warships in the system (`alliedEitherWay`).
+
+**Applied (wave-17 fixes, 2026-11-24).**
+- 2: no watch range: `PIRACY_WATCH_RANGE` is gone, every AI 4 of a
+  defending govt in the system witnesses (`piracyWitnesses`,
+  `N/nova_plugin/npc/piracy_police.ts`).
+- 1: `selfDefence` excuses the attacker only while the victim's last hit
+  on it is under `SELF_DEFENCE_WINDOW_MS` (5 s, GUESS "the last few
+  seconds") old: the player's AggressionComponent entry (`at`), or, for an
+  escort, the new optional NpcState `aggressorHitAt` (stamped on each
+  direct hit, not on a witness's or a wingman's provocation). Before, the
+  player was excused for 30 s and an escort for as long as it remembered
+  its aggressor. A hostile firing continuously is still excused (GUESS,
+  as before).
+- 3: `alliedDefenceDelay` (`N/nova_plugin/npc/allied_defenders.ts`): an
+  allied govt's AI 4 joins at once (measured "within 10 s"), an allied
+  AI 3 after `ALLIED_DEFENCE_DELAY_MS` 20 s as before; own-govt AI 3 / 4 at
+  once.
+- Schema: the NpcState field, under protocol 8 (note in
+  `N/communication/rollback_protocol.ts`; fingerprint 51a63184211e887b ->
+  7110220773935a73). Specs: `N/nova_plugin/npc/piracy_police_test.ts`
+  (police 2500 / 5000 / 6000 / 9000 px all react, replacing "police out of
+  sight do not" and the 2500 px unit spec; an old hit is no excuse; the
+  escort's window; `aggressorHitAt` stamping; the allied AI 4 joining at
+  once).
 
 Confidence: high for 2 (two distances, hail status read), medium for 3 (one
 run, clear panels), medium-low for 1 (one take, one bolt 72 s earlier).
@@ -9292,6 +9358,19 @@ characters were all typed in).
   optional `acceptLength`; the Find dialog is unchanged).
 - 0x4000: keep it uncloaked (two runs saw no cloak); drop the wave-16
   "lost at once" reading.
+
+**Applied (wave-17 fixes, 2026-11-24).**
+- 1: a shïp Flags2 0x0002 hull (`aiFlags.prefersStandoff`) attacks from
+  `STANDOFF_HULL_DISTANCE` 450 px, held within +/- 30 px at the retreat's
+  hold speed (`N/nova_plugin/npc/npc_steering.ts`, `steerStandoff` now
+  takes a band). A commanded escort keeps the escort approach (GUESS).
+  Stock: 142 hulls, among them the Fed Destroyers (141, 212-214), Fed
+  Carriers and Aurora Carriers / Cruisers, so many stock warship fights
+  now happen at 450 px. Spec `npc_hull_ai_test.ts` ("standoff").
+- 2: 0x4000 stays unread (matches); docs/npc_behavior_gaps.md's guess 10
+  corrected (no cloak; the "No Target" is the target clearing).
+- 3 (the target clearing on hostility) and 4 (clean ships) were not part
+  of this fix wave; 5 is ad3c75b1 above.
 
 Confidence: high for 1 (white blip followed across three targets), medium
 for 2 (one anchored ship, 30 s), high for 4 (four cutters) and 5 (bisected

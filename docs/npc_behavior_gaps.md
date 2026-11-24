@@ -112,7 +112,7 @@ traders, wave 15").
 | **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements and waves 14-15 (R: "S1 / I1 wave 11", "S1 and S2 wave 12", "Contraband wave 14", "A14 / contraband wave 15"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty. Illegal jünk: "…your attempt to smuggle <LCName> through this system…", ScanFine, SmugPenalty. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. ScanFine 0 and below: no fine, no fine sentence (not the Bible's percent of cash; Matthew 2026-11-24: match the original). SmugPenalty by the A14 rule: the owner or its ally scanning costs the scanner's SmugPenalty, anyone else (nosy) raises the record by half the owner's; no spread. A detection turns the scanning govt's hunters on the pilot until he lands or leaves, whatever its CrimeTol. One scan per stay between arrivals by jump, unless the ship carries contraband its last scan did not find (the marker remembers what it found): a landing does not reset it, but taking off with new illegal cargo brings a rescan (wave 15). Several finds: one line naming the hold's cargo before an outfit (the jünk over the pod, measured), one fine, one record change; a 0x0020 mission among them fails silently. An ally of the owner scanning charges its own SmugPenalty (measured, wave 15). A 0x0020 mission fails only on a scan that finds its cargo illegal. A CLEAN ship is approached and scanned too, once a visit, in silence, and the interceptor sits on any ship it has scanned for 30 s (wave 16; the 30 s is a GUESS). A fine above the pilot's cash takes all the cash and no more, and the line names the whole ScanFine with a thousands separator ("fined 5,000 credits", wave 16). Per player: each pilot is scanned, charged and told separately. Status bar: jünk shows on the "Special:" line by its Abbrev when no mission cargo is aboard, never as a commodity row (wave 15). | Guesses left below ("Contraband scan: guesses to measure"): plain mission cargo vs an outfit on the line, contraband gained in space, how long the interceptor sits on a scanned ship, the unimplemented "prepare to be scanned" line. | (done) |
 | **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Done:** a scan that finds the mission's cargo illegal fails it ("Your ship has been scanned - mission failed."), no fine, no record (R: "S1 and S2 wave 12"), not even the CompGovt's -R/2 of CompReward (6b38f9bf: the sim marks the failure `failCause` 'scan', and compRewardDelta's 'scanned' outcome is 0). ScanMask and the flag are frozen onto the ActiveMission at accept (mission_accept_offer.ts). | Does ANY scan fail it, or only a matching one? (S3.) **51 stock 0x0020 missions have ScanMask 0**, so they can never fail by scan under the current reading. | (done) |
 | **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT and illegal JÜNK, as measured (waves 11-15): the record of the system the scan happened in (records are per system since ruling #380; no spread), by the A14 rule (the owner or its ally scanning: minus the scanner's SmugPenalty; a nosy scanner elsewhere: plus half the owner's). Not for mission cargo (measured). | A nosy scanner in an independent system (guess: no change). | (done) |
-| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 within 2500 px (wave 16: the measured lower bound) of the victim or the attacker records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies): measured in "P1 wave 15" (still hostile after 60 s, gone after a jump out and back; pinned in 9e56b637). Non-nosy police ignore an unrelated victim (wave 13). No record change. A hostile's posture is no excuse (wave 16: a non-firing 0x0004 raider shot by the player still drew nosy police); only a victim that has SHOT the attacker is exempt (GUESS). NPC raiders are not policed (MEASURED, wave 16); the victim's own and allied WARSHIPS defend it instead (N/nova_plugin/npc/allied_defenders.ts, see the distress row). | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
+| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 in the system (MEASURED, waves 16-17: police 300, 2500, 5000 and 9000 px away all reacted at once; applied 2026-11-24, no range test) records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies): measured in "P1 wave 15" (still hostile after 60 s, gone after a jump out and back; pinned in 9e56b637). Non-nosy police ignore an unrelated victim (wave 13). No record change. A hostile's posture is no excuse (wave 16: a non-firing 0x0004 raider shot by the player still drew nosy police), nor is a hit long past (wave 17: a 0x0004 ship that hit the player once, 72 s before, still hostile: policed); only a victim that hit the attacker within the last 5 s is exempt (`SELF_DEFENCE_WINDOW_MS`, GUESS: a hostile firing continuously, unmeasured). NPC raiders are not policed (MEASURED, wave 16); the victim's own and allied warships and interceptors defend it instead (N/nova_plugin/npc/allied_defenders.ts, see the distress row; an allied AI 4 measured in wave 17). | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
 | **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Done (2026-11-24)** with the piracy police: nosy police ignore an attack on a ship whose govt sets 0x0020 (R: "P1 wave 14", finding 2). "Nosy" is gövt 0x0002 (measured). It does not shield a victim from an ALLIED govt's police (measured: R "P1 wave 15", finding 2, pinned in 9e56b637), nor, by the Bible's "non-allied", from its own govt's (GUESS). | The own-govt case with 0x0020 (untested). | (done) |
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Done** (13567336, ruling #376; per-system records since ruling #380): N/nova_plugin/reputation/local_law.ts. A govt enforces where it owns the system, is allied with the owner either way, or is nosy; it attacks when the player's record IN THE CURRENT SYSTEM is below its own CrimeTol (R: "A14", "A14 wave 5": all 21 cells, c2 included). | — | (done) |
 | **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). | (done) |
@@ -133,7 +133,7 @@ traders, wave 15").
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **NPC mining** (Flags3 0x0001 destroys asteroids, 0x0002 scoops debris, with oütf ModType 31) | B:2645-2651, B:1900; röid YieldType/YieldQty B:2303-2315 | **Done (2026-11-24),** to R: "N1 wave 13" (closes on a rock, shoots it apart, flies over the debris, later jumps out). N/nova_plugin/npc/npc_mining.ts: an AI 1/2 hull with Flags3 0x0001 and a weapon with a reach shoots the nearest rock (mode 'mine', fired by npc_fire_control.ts: its asteroid-miner weapons if it has any, held until the rock is within reach and, for a fixed gun, under the nose); with 0x0002 and a scoop aboard it first flies over debris boxes (mode 'scoop'; ScoopSystem does the scooping); it departs at its ordinary time straight from mining; with nothing to mine (or a full hold) it flies the trader loop. Nothing was missing underneath: rocks take weapon damage and break into debris, and debris scoops into the hold (N/nova_plugin/combat/asteroid_plugin.ts). The Asteroid/Debris components moved to N/nova_plugin/core/asteroid_components.ts so the NPC brain can read them. | The **guesses** below; the AI 4 Zephyr variant (Flags3 0x0001 alone) was not run, so AI 3/4 hulls do not mine. | (done) |
+| **NPC mining** (Flags3 0x0001 destroys asteroids, 0x0002 scoops debris, with oütf ModType 31) | B:2645-2651, B:1900; röid YieldType/YieldQty B:2303-2315 | **Done (2026-11-24),** to R: "N1 wave 13" (closes on a rock, shoots it apart, flies over the debris, later jumps out). N/nova_plugin/npc/npc_mining.ts: an AI 1/2 hull with Flags3 0x0001 and a weapon with a reach shoots the nearest rock (mode 'mine', fired by npc_fire_control.ts: its asteroid-miner weapons if it has any, held until the rock is within reach and, for a fixed gun, under the nose); with 0x0002 and a scoop aboard it first flies over debris boxes (mode 'scoop'; ScoopSystem does the scooping); it STAYS while it has rocks to work, whatever its departure roll (R: "Stock traffic, wave 17": the stock Asteroid Miner never left Sol or Tau Ceti in 20+ minutes; applied 2026-11-24); with nothing to mine (or a full hold) it flies the trader loop, one stop and out. Nothing was missing underneath: rocks take weapon damage and break into debris, and debris scoops into the hold (N/nova_plugin/combat/asteroid_plugin.ts). The Asteroid/Debris components moved to N/nova_plugin/core/asteroid_components.ts so the NPC brain can read them. | The **guesses** below; the AI 4 Zephyr variant (Flags3 0x0001 alone) was not run, so AI 3/4 hulls do not mine. | (done) |
 
 ### Combat AI
 
@@ -141,11 +141,11 @@ traders, wave 15").
 |---|---|---|---|---|
 | **Warship hunting and MaxOdds** (AI 3) | B:865-866, B:1005-1023 | **Done, simplified.** N/nova_plugin/npc/npc_decision.ts:558-662 compares strength per pair; the Bible sums friends against enemies. | A6 in the catalogue. | — |
 | **gövt 0x0010 retreat** | B:1061-1062 | **Done, fitted** (N/nova_plugin/npc/npc_retreat.ts:138; R: A waves 4-7). | The exact rule (A leftovers). | — |
-| **Interceptor patrol** ("parks in orbit around a planet if he can't find any" enemies) | B:867-868 | **Approximation:** AI 4 circles its nearest landable stellar at 400 px (npc_steering.ts `steerOrbit`) and engages within 1800 px of itself or that stellar (N/nova_plugin/npc/npc_decision.ts, case 4). **Stays (2026-11-24):** an AI 4 of ordinary traffic never leaves on its departure roll (R: "Stock Sol, wave 16": three Fed interceptors stayed 21+ minutes while an AI 3 destroyer left within 5; applied in 4e5a888e); only a `passingThrough` one (a released mission ship, a përs sent on its way) leaves on its clock. So a system's slots end up with interceptors as well as shuttles and the traffic freezes, as in the original (NovaJS's stock Sol: six or seven AI 4 and none or one shuttle by 4-16 minutes; the original's: three AI 4, two shuttles and a miner by 5). | Does it really "park" (sit still) or circle? At what distance? "AI 4 never leaves" rests on one run (three ships); do mission-spawned goal-less AI 4 ships stay too (here they do, like their düde)? Brief **I1**; cheap to add to S1. | S |
+| **Interceptor patrol** ("parks in orbit around a planet if he can't find any" enemies) | B:867-868 | **Approximation:** AI 4 circles its nearest landable stellar at 400 px (npc_steering.ts `steerOrbit`) and engages within 1800 px of itself or that stellar (N/nova_plugin/npc/npc_decision.ts, case 4). **Stays (2026-11-24):** an AI 4 of ordinary traffic never leaves on its departure roll (R: "Stock Sol, wave 16": three Fed interceptors stayed 21+ minutes while an AI 3 destroyer left within 5; applied in 4e5a888e); only a `passingThrough` one (a released mission ship, a përs sent on its way) leaves on its clock. So a system's slots end up with interceptors as well as shuttles and the traffic freezes, as in the original (NovaJS's stock Sol: six or seven AI 4 and none or one shuttle by 4-16 minutes; the original's: three AI 4, two shuttles and a miner by 5). R: "Stock traffic, wave 17" confirmed it in Arcturus and Tau Ceti (five more AI 4, none leaving), and that a system fills to EXACTLY AvgShips and freezes there: the population target is AvgShips, no +/- 50% roll (N/nova_plugin/spawn/npc_spawn_plugin.ts `populationTarget`, applied 2026-11-24; see "Traffic population: guesses to measure" below). | Does it really "park" (sit still) or circle? At what distance? "AI 4 never leaves" rests on one run (three ships); do mission-spawned goal-less AI 4 ships stay too (here they do, like their düde)? Brief **I1**; cheap to add to S1. | S |
 | **Out of ammo: run away or dock** (shïp Flags2 0x0080) | B:2576-2577 | **Done, first pass (2026-11-24),** to R: "W1 / C1 / H1 wave 15" (a missile-only hull left after its five rounds; gun hulls stayed). N/nova_plugin/npc/npc_out_of_ammo.ts `outOfAmmo`, read in npc_decision.ts before the AI-type switch: a ship of such a hull whose EVERY mounted weapon draws from an outfit magazine and finds it empty departs (the ordinary jump-out) on its next think, whatever its AI type; not while held, already fleeing, or protecting a player. 278 of 288 stock hulls set it. | The **guesses** below ("Hull AI flags and NPC cloaking: guesses to measure"): the literal Bible reading (all missiles spent, guns or not), "dock", bays. | (done) |
-| **Swarming** (Flags2 0x0001) and **prefers standoff** (Flags2 0x0002) | B:2569-2570 | **Missing.** Every attacker uses one approach (`ATTACK_STANDOFF` 250 px, N/nova_plugin/npc/npc_steering.ts). Stock: 155 hulls swarm, 142 prefer standoff. R: "W1 / C1 / H1 wave 15" (first pass): the 0x0001 hull sat a little closer than the control (median 147 vs 175 px from the player; 35% vs 27% of the time under 100 px, one run); no 0x0002 ship was ever on screen in 6 minutes. Too weak to build on: no change. R: "W1 / C1 / H1 wave 16": again no 0x0002 ship on screen (35% of the draws), and two motionless radar contacts sat about 500 px from the player for five minutes (radar only, colour lost, not targeted): GUESS 9 below. Not implemented. | The geometry of each (range, orbiting, passes); a second W1 run with more swarmers and a visible 0x0002 ship. | M |
+| **Swarming** (Flags2 0x0001) and **prefers standoff** (Flags2 0x0002) | B:2569-2570 | **0x0002 done (2026-11-24),** to R: "W1 / C1 / contraband / the shipyard prompt, wave 17" (the Tab-targeted 0x0002 hull held still about 450 px from the player for 80 s): an NPC of a standoff hull attacks from `STANDOFF_HULL_DISTANCE` 450 px +/- 30 (N/nova_plugin/npc/npc_steering.ts, the retreat's `steerStandoff` with that band), never closing; a commanded escort keeps the escort framework's approach (GUESS). **Swarming missing:** every other attacker uses one approach (`ATTACK_STANDOFF` 250 px). Stock: 155 hulls swarm, 142 prefer standoff. R: "W1 / C1 / H1 wave 15" (first pass): the 0x0001 hull sat a little closer than the control (median 147 vs 175 px from the player; 35% vs 27% of the time under 100 px, one run); no 0x0002 ship was ever on screen in 6 minutes. Too weak to build on: no change. R: "W1 / C1 / H1 wave 16": again no 0x0002 ship on screen (35% of the draws), and two motionless radar contacts sat about 500 px from the player for five minutes (radar only, colour lost, not targeted): GUESS 9 below, confirmed and applied in wave 17. | Swarming's geometry (range, orbiting, passes); whether a 0x0002 hull fires from 450 px (a long-range weapon) or only waits (GUESS 9). | M |
 | **AI afterburner** (shïp Flags 0x0040 "always has afterburner (for AIs only)"; përs 0x0002 "uses escape pod & has afterburner") | B:2521, B:2156 | **Done for shïp 0x0040, first pass (2026-11-24),** to R: "W1 / C1 / H1 wave 15" (the frame track of the flagged hull: strafing runs at 1.6x the control's top speed, never over it while hanging close). N/nova_plugin/npc/npc_afterburner.ts: an NPC of such a hull burns for its WHOLE attack, thrusting or coasting (revised 2026-11-24 to "W1 / C1 / H1 wave 16": the flagged hull's MEDIAN speed was 1.9x the control's, so it flies boosted most of the time, not only on the closing leg as the first pass had it), at `AI_AFTERBURNER_FACTOR` 1.6 on top speed and acceleration, no fuel; `NpcAfterburnerSystem` applies it after travel's EffectiveMovementPhysicsSystem. 67 stock hulls. përs 0x0002 and shïp 0x0020 (advanced rating) are not read. | The **guesses** below: fleeing and travelling burns, fuel, the acceleration boost, the player's own afterburner factor (U4: still the unmeasured 2x). | (done) |
-| **NPC cloaking** (Flags2 0x0100-0x4000: cloak on burst reload, when running, when hyperspacing, when flying around, stay cloaked until close, when docking, when preemptively attacked; mïsn ShipStart 2 "appear randomly, cloaked") | B:2578-2585, B:1445 | **0x0800 for traders done, first pass (2026-11-24);** the other bits missing. R: "W1 / C1 / H1 wave 15": the 0x0800 trader was seen only pulling away from the port (4-5 s each time), never parked or arriving; hostile 0x0800 + 0x1000 warships were VISIBLE the whole time they attacked; 0x0400 / 0x2000 / 0x4000 ships were never seen cloaked. N/nova_plugin/npc/npc_cloak.ts `updateNpcCloak` (run by NpcSteeringSystem every tick): an AI 1/2 ship of a 0x0800 hull with a working cloak is cloaked while travelling, parked ('dwell') and departing, visible for 4 s after each stay ends, and uncloaked while fleeing, fighting, mining, under attack or disabled. Warships are never cloaked by it (they fight visible, which NovaJS already did). Stock 0x0800 hulls are only the Wraith (Adult) and (Youth), shïp 168/169 (with the Wraith Cloaking Device): as AI 2 in the "Wraith (nice)" düdes 143 and 187 they now travel cloaked; as AI 4 in "Wraith (nasty)" 144 they are unchanged. ShipStart 2 is still a gap (N/nova_plugin/missions/mission_ship_spawn.ts). 45 stock hulls carry cloak bits; 6 missions use ShipStart 2. R: "J wave 6" saw a stock-Wraith-flagged target cloak within 5 s of being fired on (0x4000 or 0x0200). R: "W1 / C1 / H1 wave 16" (low confidence): a 0x4000 AI 3 ship beamed by the player left the target panel ("No Target") and the radar within 3 s and was never found again; a cloak, or a jump-out in the same seconds: GUESS 10 below. Not implemented. | The **guesses** below; the 0x4000 / 0x0200 cloak when attacked (J wave 6), 0x1000's reveal distance, 0x0400 / 0x2000 at a jump / landing. | M |
+| **NPC cloaking** (Flags2 0x0100-0x4000: cloak on burst reload, when running, when hyperspacing, when flying around, stay cloaked until close, when docking, when preemptively attacked; mïsn ShipStart 2 "appear randomly, cloaked") | B:2578-2585, B:1445 | **0x0800 for traders done, first pass (2026-11-24);** the other bits missing. R: "W1 / C1 / H1 wave 15": the 0x0800 trader was seen only pulling away from the port (4-5 s each time), never parked or arriving; hostile 0x0800 + 0x1000 warships were VISIBLE the whole time they attacked; 0x0400 / 0x2000 / 0x4000 ships were never seen cloaked. N/nova_plugin/npc/npc_cloak.ts `updateNpcCloak` (run by NpcSteeringSystem every tick): an AI 1/2 ship of a 0x0800 hull with a working cloak is cloaked while travelling, parked ('dwell') and departing, visible for 4 s after each stay ends, and uncloaked while fleeing, fighting, mining, under attack or disabled. Warships are never cloaked by it (they fight visible, which NovaJS already did). Stock 0x0800 hulls are only the Wraith (Adult) and (Youth), shïp 168/169 (with the Wraith Cloaking Device): as AI 2 in the "Wraith (nice)" düdes 143 and 187 they now travel cloaked; as AI 4 in "Wraith (nasty)" 144 they are unchanged. ShipStart 2 is still a gap (N/nova_plugin/missions/mission_ship_spawn.ts). 45 stock hulls carry cloak bits; 6 missions use ShipStart 2. R: "J wave 6" saw a stock-Wraith-flagged target cloak within 5 s of being fired on (0x4000 or 0x0200). R: "W1 / C1 / H1 wave 16" read a 0x4000 AI 3 ship beamed by the player as cloaking at once ("No Target" in the panel); R: "W1 / C1 / contraband / the shipyard prompt, wave 17" CORRECTED that: an anchored 0x4000 ship provoked by the player did NOT cloak in 30 s, it turned hostile and fought, visible, and the "No Target" is the player's target clearing the moment the target turns hostile. So 0x4000 is not a cloak on being attacked first; NovaJS does not read it, which matches (GUESS 10 below). | The **guesses** below; J wave 6's cloak within 5 s of being fired on (0x0200, "when running away", now the likelier bit), 0x1000's reveal distance, 0x0400 / 0x2000 at a jump / landing; whether the player's target clears when it turns hostile (wave 17; NovaJS not checked). | M |
 | **përs traits:** grudge (0x0001), Aggress 1-3 (how close before attacking), Coward (flee % of shield), ShieldMod, extra weapons, escape pod (0x0002 / gövt 0x0100) | B:2094-2102, B:2129-2134, B:2153-2156; gövt 0x0100 B:1069 | **Spawning only.** N/nova_plugin/spawn/pers_plugin.ts:21-40 lists them as gaps (its "hailing and boarding do not exist" line is stale: both exist now). 148 of 516 stock përs hold grudges. | Aggress's ranges; whether Coward replaces gövt 0x0010; a grudge's memory across systems and saves (a per-player question in multiplayer). | M |
 | **Escape pods** (shïp PodCount, decorative) | B:2535-2539 | **Missing** (not parsed). | Cosmetic only. | S |
 
@@ -403,11 +403,23 @@ reference run:
    firing a fixed gun only within 0.25 rad of the rock. Which weapons
    fire: its asteroid-miner weapons (wëap Flags2 0x8000) if it has any,
    otherwise guns, beams and turrets, never guided weapons or bays.
-8. **How long a miner mines:** until its ordinary departure time, then it
-   jumps out straight from mining (N1: 39 jump-outs; how long each stayed
-   was not separated). Whether it lands its haul instead was not seen.
+8. ~~**How long a miner mines:** until its ordinary departure time.~~
+   **Measured (R: "Stock Sol, wave 16" and "Stock traffic, wave 17"): the
+   stock Asteroid Miner (shïp 379, AI 1) never left Sol or Tau Ceti in
+   20+ minutes;** applied: a miner with rocks to work ignores its
+   departure roll. Still a guess: why the wave-15 KIT miners (the same
+   AI 1, Flags3 0x0003, scoop and Mining Blasters) were gone after 3-4
+   minutes. AI type, flags and outfits did not differ; the work did (the
+   kit hull flew 300 / accel 300 against the stock 135 / 36, among 16 rocks
+   against Sol's 2 and Tau Ceti's 3), so NovaJS reads it as a FULL HOLD
+   (9). Their departure itself was never seen (they went off the radar,
+   and nothing replaced them for 9 minutes at avgShips 2, which also fits
+   two miners still out in the field). To measure: one kit miner in a
+   16-rock field, its hold read by boarding it or from its leaving time
+   against a 10-rock and a 2-rock field.
 9. **A full hold:** a scooping miner whose hold is full stops mining and
-   flies the trader loop: since wave 15, one stop and out.
+   flies the trader loop: one stop and out. Since wave 17 this is the
+   only way a miner with a field to work leaves (GUESS, 8).
 10. **T1, measured (wave 15):** traders park 15.2 s (median of 70; NovaJS
     15 s fixed, not drawn from the measured 12.2-17.9 s spread) at ONE port
     per visit, then jump out.
@@ -418,6 +430,27 @@ reference run:
     the uniform draw over the non-enemy ports (Port and Market there)
     would have sent about half of the traffic to it. Wants a rig with the ports at unequal
     distances.
+
+### Traffic population: guesses to measure
+
+R: "Stock Sol, wave 16" and "Stock traffic, wave 17" measured three stock
+systems filling to exactly AvgShips (6 / 6, 4 / 4, 4 / 4, never above in
+any census) and freezing there with nothing arriving. Applied: the
+population target is AvgShips (N/nova_plugin/spawn/npc_spawn_plugin.ts
+`populationTarget`), refilled one ship every 15 s while below it. Still
+GUESSES:
+
+1. **The refill rate** (`NPC_RESPAWN_INTERVAL_MS` 15 s): the censuses were
+   minutes apart, so arrival timing below that is unmeasured.
+2. **A fleet arrives whole** and can overshoot AvgShips by its escorts
+   until ships leave (the original's censuses never went above AvgShips,
+   but its Fed group in Arcturus counted four ships in a system of 4).
+3. **Who else stays:** in frozen Arcturus an AI 3 Fed Destroyer (the
+   reinforcement fleet's lead hull) and an AI 2 Pegasus of the Trader govt
+   stayed 21 minutes beside two shuttles. One ship each, so NOT applied:
+   NovaJS's AI 3 warships still leave on their roll and AI 2 traders after
+   their one stop. To measure: a kit system whose traffic is only AI 2
+   traders, and one with only AI 3 warships, watched 20 minutes.
 
 ### Hull AI flags and NPC cloaking: guesses to measure
 
@@ -463,19 +496,23 @@ code and wants a second run:
    are not implemented: none was seen cloaking in C1 (0x4000 was not
    provoked), and J wave 6's target with all of them cloaked within 5 s of
    being fired on.
-9. **0x0002 (prefers standoff), GUESS from wave 16 (not implemented):** a
-   standoff hull holds about 500 px from its target and waits there, never
-   closing: in two runs no 0x0002 ship came on screen, and two motionless
-   radar contacts sat about 500 px (16 radar px) out for five minutes. Read
-   off the radar only (colour lost, never targeted): medium-low confidence.
-   To confirm: Tab onto the still contacts, and see whether they fire from
-   there (a long-range weapon) or only wait.
-10. **0x4000 (cloak when preemptively attacked), GUESS from wave 16 (not
-   implemented):** a 0x4000 AI 3 ship beamed by the player was gone from
-   the target panel and the radar within 3 s and never found again —
-   consistent with cloaking when attacked first, but a jump-out in the same
-   seconds was not ruled out (the hit itself was not seen). To confirm:
-   anchor the ship on screen, or Tab every 0.5 s around the shot.
+9. **0x0002 (prefers standoff), MEASURED in wave 17, applied:** the
+   Tab-targeted 0x0002 hull's (white) radar blip sat still about 450 px
+   from the player from 40 s to 120 s while the other hulls circled; it
+   never came on screen (three runs). NovaJS: STANDOFF_HULL_DISTANCE 450,
+   held within +/- 30 px at the retreat's hold speed. Still GUESSES:
+   whether it fires from there (the rig's hull had short guns and the
+   player was never hit by it), what it does against a moving target (it
+   keeps the 450 px on the line to it here), and that a player's commanded
+   escort of such a hull keeps the escort approach.
+10. ~~**0x4000 (cloak when preemptively attacked), GUESS from wave 16:**
+   a beamed 0x4000 ship was lost at once.~~ **Corrected by wave 17:** an
+   ANCHORED 0x4000 AI 3 ship (the Wraith cloak aboard) provoked by the
+   player did not cloak in 30 s: it turned hostile and fought, fully drawn
+   and targetable. Wave 16's "No Target" was the player's target clearing
+   when it turned hostile (the reference's reliability notes). NovaJS does
+   not read 0x4000, which matches; GUESS: a MOBILE one does not cloak
+   either (wave 16's ship may simply have flown off radar).
 
 ### Assistance from a neutral ship: guesses to measure
 
@@ -525,9 +562,9 @@ The piracy police (N/nova_plugin/npc/piracy_police.ts) and distress calls
 something. Everything below is marked GUESS in the code and wants a
 reference run:
 
-1. **Watching range:** MEASURED at least 2500 px (wave 16, applied: a
-   nosy police anchored 2500 px away turned hostile at once). Still a
-   guess: nothing beyond 2500 (it may be the whole system).
+1. ~~**Watching range.**~~ **MEASURED: the whole system** (wave 16: 2500
+   px; wave 17: 5000 and 9000 px, all hostile at the first hail).
+   Applied: no range test.
 2. **Only player-side attackers are policed:** MEASURED (wave 16: a nosy
    police in its own system flew round a raider attacking a non-enemy
    trader and never fired).
@@ -538,10 +575,16 @@ reference run:
 5. **Self-defence is not piracy:** a hostile's POSTURE is no excuse
    (MEASURED, wave 16: the player beamed a 0x0004 raider standing off 500
    px that had not fired, and the nosy police turned hostile; applied).
-   Still a GUESS: no witness reacts to hits on a victim that has SHOT the
-   player within 30 s (or, for an escort as the attacker, that it has
-   recorded as its own aggressor). To measure: a hostile that fires first
-   beside nosy police, and the player fires back.
+   Wave 17 MEASURED a hostile that HAD fired first: one 1200-damage bolt
+   at the player, 72 s before the player beamed it (still hostile, its gun
+   reloading): the police turned hostile all the same (applied). Still a
+   GUESS: no witness reacts to hits on a victim that hit the attacker
+   within the last 5 s (`SELF_DEFENCE_WINDOW_MS`: the player's
+   AggressionComponent entry, or an escort's `aggressorHitAt`), so a
+   hostile firing continuously is excused, as NovaJS did before (within
+   30 s then, the bracket window; for an escort, with no time limit). To
+   measure: a 0x0004 hull firing every second at a weak player beside
+   nosy police, and the player fires back.
 6. **Alliances:** a one-way alliance counts (the A14 enforcement rule;
    only a two-way one was measured), and 0x0020 does not shield a victim
    from its own govt's police (the ALLY's police: measured in P1 wave 15).
@@ -562,11 +605,16 @@ reference run:
     applied; the original's take-off line, which NovaJS does not print,
     lasted about 4.5 s).
 11. **Allied defenders** (wave 16, applied: an own-govt AI 3 fought the
-    raider at once, an allied AI 3 joined about 20-25 s in). GUESSES:
-    AI 4s of the own or an allied govt defend too; no range limit (the
-    candidates sat 160-300 px off); the ally's 20 s delay is a rule and
-    not chance (one run each); a PLAYER attacking an own-govt ship draws
-    only the police and the record, not the govt's AI 3s (unmeasured).
+    raider at once, an allied AI 3 joined about 20-25 s in; wave 17,
+    applied: an allied AI 4 was already fighting at the first look, 10 s
+    in, and destroyed the raider within two minutes). GUESSES: an allied
+    AI 4 joins AT ONCE (only "within 10 s" was seen) while an allied AI 3
+    waits 20 s (`alliedDefenceDelay`): one run each, so whether the two
+    delays differ by rule (an interceptor watches like the police) or by
+    chance is open; the own govt's AI 4s defend too (unmeasured); no range
+    limit (the candidates sat 160-300 px off); a PLAYER attacking an
+    own-govt ship draws only the police and the record, not the govt's
+    AI 3s (unmeasured).
 
 ## Reference-Mac briefs
 
