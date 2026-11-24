@@ -3,6 +3,12 @@ import { attributesGovtId, interfaceGovtId, ShipParse } from "../../src/parsers/
 import { ShipResource } from "../../src/resource_parsers/ship_resource.js";
 import { NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { FPS } from "../../src/parsers/constants.js";
+import { NovaDataType } from "novadatainterface/nova_data_interface";
+import {
+    getDefaultShipAIFlags, ShipAICloakFlags, ShipData,
+} from "novadatainterface/ship_data";
+import { NovaParse } from "../../src/nova_parse.js";
+import { STOCK_DATA_MISSING, stockNovaParse } from "../stock_data.js";
 
 /**
  * A hand-made shïp resource with every numeric field zeroed and every
@@ -263,5 +269,162 @@ describe("ShipParse: jamming inherited from the attributes govt", () => {
             .toEqual([0, 0, 0, 0]);
         expect((await parse({ inherentGovt: 300 })).inheritedJamming)
             .toEqual([0, 0, 0, 0]);
+    });
+});
+
+describe("ShipParse AI hull flags (data only)", () => {
+    it("decodes the Flags / Flags2 AI bits to named booleans", async () => {
+        const ship = await parse({ flagsN: 0x0060, flags2N: 0x0083 });
+        expect(ship.aiFlags.alwaysHasAfterburner).toBe(true);       // 0x0040
+        expect(ship.aiFlags.afterburnerAtAdvancedRating).toBe(true); // 0x0020
+        expect(ship.aiFlags.swarms).toBe(true);                     // 0x0001
+        expect(ship.aiFlags.prefersStandoff).toBe(true);            // 0x0002
+        expect(ship.aiFlags.runsAwayWhenOutOfAmmo).toBe(true);      // 0x0080
+        expect(Object.values(ship.aiFlags.cloak).some(on => on)).toBe(false);
+    });
+
+    it("decodes each Flags2 cloak bit on its own", async () => {
+        const bits: Array<[number, keyof ShipAICloakFlags]> = [
+            [0x0100, "onBurstReload"],
+            [0x0200, "whenRunningAway"],
+            [0x0400, "whenHyperspacing"],
+            [0x0800, "whenFlyingAround"],
+            [0x1000, "untilCloseToTarget"],
+            [0x2000, "whenDocking"],
+            [0x4000, "whenPreemptivelyAttacked"],
+        ];
+        for (const [bit, name] of bits) {
+            const cloak = (await parse({ flags2N: bit })).aiFlags.cloak;
+            expect(Object.entries(cloak).filter(([, on]) => on)
+                .map(([key]) => key)).withContext(name).toEqual([name]);
+        }
+    });
+
+    it("leaves every AI flag off and PodCount 0 for a bare hull", async () => {
+        const ship = await parse({});
+        expect(ship.aiFlags).toEqual(getDefaultShipAIFlags());
+        expect(ship.podCount).toBe(0);
+    });
+
+    it("carries PodCount", async () => {
+        expect((await parse({ podCount: 10 })).podCount).toBe(10);
+    });
+
+    /** A ship whose DefaultItems are the given LOCAL oütf ids. */
+    function withDefaultItems(flags3N: number,
+        outfits: Array<{ id: number, functions: Array<[string, unknown]> }>) {
+        const oütf: Record<number, unknown> = {};
+        for (const { id, functions } of outfits) {
+            oütf[id] = { globalID: `nova:${id}`, functions };
+        }
+        return parse({
+            flags3N,
+            outfits: outfits.map(({ id }) => ({ id, count: 1 })),
+            idSpace: {
+                dësc: {}, bööm: {}, shän: {}, PICT: {}, oütf, wëap: {},
+                gövt: {}, shïp: {},
+            } as unknown as ShipResource["idSpace"],
+        });
+    }
+
+    it("reads Flags3 0x0001 as destroying asteroids", async () => {
+        const ai = (await parse({ flags3N: 0x0101 })).aiFlags;
+        expect(ai.destroysAsteroids).toBe(true);
+        expect(ai.scoopsAsteroidDebris).toBe(false);
+        expect(ai.shuttlesBetweenStellars).toBe(false);
+    });
+
+    it("makes Flags3 0x0002 with a default mining scoop a miner", async () => {
+        const ai = (await withDefaultItems(0x0003, [
+            { id: 200, functions: [["shield", 10]] },
+            { id: 271, functions: [["mining scoop", true]] },
+        ])).aiFlags;
+        expect(ai.scoopsAsteroidDebris).toBe(true);
+        expect(ai.shuttlesBetweenStellars).toBe(false);
+    });
+
+    it("makes Flags3 0x0002 WITHOUT a mining scoop an in-system shuttle",
+        async () => {
+            const ai = (await withDefaultItems(0x0002, [
+                { id: 200, functions: [["shield", 10]] },
+            ])).aiFlags;
+            expect(ai.scoopsAsteroidDebris).toBe(true);
+            expect(ai.shuttlesBetweenStellars).toBe(true);
+        });
+
+    it("does not make a scoop-carrying hull without Flags3 0x0002 a shuttle",
+        async () => {
+            const ai = (await withDefaultItems(0, [
+                { id: 271, functions: [["mining scoop", true]] },
+            ])).aiFlags;
+            expect(ai.scoopsAsteroidDebris).toBe(false);
+            expect(ai.shuttlesBetweenStellars).toBe(false);
+        });
+
+    describe("over the stock data", () => {
+        let np: NovaParse | null;
+        let ships: ShipData[];
+
+        beforeAll(async () => {
+            np = await stockNovaParse();
+            if (!np) {
+                return;
+            }
+            const shipData = np.data[NovaDataType.Ship];
+            ships = [];
+            for (const id of (await np.ids).Ship) {
+                ships.push(await shipData.get(id));
+            }
+        });
+
+        function idsWhere(test: (ship: ShipData) => boolean): string[] {
+            return ships.filter(test).map(ship => ship.id).sort();
+        }
+
+        function countWhere(test: (ship: ShipData) => boolean): number {
+            return ships.filter(test).length;
+        }
+
+        it("finds the miner, the Zephyrs and the shuttles", () => {
+            if (!np) {
+                pending(STOCK_DATA_MISSING);
+                return;
+            }
+            expect(ships.length).toBe(288);
+            expect(idsWhere(s => s.aiFlags.destroysAsteroids))
+                .toEqual(["nova:375", "nova:376", "nova:379"]);
+            expect(idsWhere(s => s.aiFlags.scoopsAsteroidDebris)).toEqual(
+                ["nova:379", "nova:391", "nova:392", "nova:393", "nova:394"]);
+            // The Asteroid Miner carries the Asteroid Scoop (oütf 271), so
+            // only the four "economy at work" hulls shuttle.
+            expect(idsWhere(s => s.aiFlags.shuttlesBetweenStellars)).toEqual(
+                ["nova:391", "nova:392", "nova:393", "nova:394"]);
+        });
+
+        it("matches the stock counts docs/npc_behavior_gaps.md cites", () => {
+            if (!np) {
+                pending(STOCK_DATA_MISSING);
+                return;
+            }
+            expect(countWhere(s => s.aiFlags.runsAwayWhenOutOfAmmo)).toBe(278);
+            expect(countWhere(s => s.aiFlags.swarms)).toBe(155);
+            expect(countWhere(s => s.aiFlags.prefersStandoff)).toBe(142);
+            expect(countWhere(s => Object.values(s.aiFlags.cloak)
+                .some(on => on))).toBe(45);
+            expect(countWhere(s => s.aiFlags.alwaysHasAfterburner)).toBe(67);
+            expect(countWhere(s => s.aiFlags.afterburnerAtAdvancedRating))
+                .toBe(197);
+        });
+
+        it("reads the decorative escape pods", () => {
+            if (!np) {
+                pending(STOCK_DATA_MISSING);
+                return;
+            }
+            // The Star Liner launches ten; the Viper none.
+            expect(ships.find(s => s.id === "nova:134")!.podCount).toBe(10);
+            expect(ships.find(s => s.id === "nova:128")!.podCount).toBe(0);
+            expect(countWhere(s => s.podCount > 0)).toBe(83);
+        });
     });
 });

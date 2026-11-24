@@ -328,6 +328,16 @@ export async function ShipParse(ship: ShipResource,
         jumpSpeedMult = 1.5;
     }
 
+    // shïp Flags3 0x0002 (EVN Bible ~:2646-2650) means "scoops asteroid
+    // debris" only when a mining scoop (oütf ModType 31) is among the
+    // DefaultItems; without one "the ship will instead shuttle back and
+    // forth between friendly stellars in the system". DefaultItems are
+    // LOCAL oütf ids, resolved through the ship's own id space.
+    const hasDefaultMiningScoop = ship.outfits.some(({ id }) =>
+        ship.idSpace.oütf[id]?.functions
+            .some(([name]) => name === "mining scoop") ?? false);
+    const scoopsAsteroidDebris = Boolean(ship.flags3N & 0x0002);
+
     var physics: ShipPhysics = {
         shield: ship.shield,
         shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
@@ -478,6 +488,29 @@ export async function ShipParse(ship: ShipResource,
             sides: Boolean(ship.flagsN & 0x2000),
             rear: Boolean(ship.flagsN & 0x4000),
         },
+        // AI hull flags, data only (see ShipAIFlags in ship_data.ts).
+        aiFlags: {
+            swarms: Boolean(ship.flags2N & 0x0001),
+            prefersStandoff: Boolean(ship.flags2N & 0x0002),
+            runsAwayWhenOutOfAmmo: Boolean(ship.flags2N & 0x0080),
+            alwaysHasAfterburner: Boolean(ship.flagsN & 0x0040),
+            afterburnerAtAdvancedRating: Boolean(ship.flagsN & 0x0020),
+            destroysAsteroids: Boolean(ship.flags3N & 0x0001),
+            scoopsAsteroidDebris,
+            shuttlesBetweenStellars:
+                scoopsAsteroidDebris && !hasDefaultMiningScoop,
+            cloak: {
+                onBurstReload: Boolean(ship.flags2N & 0x0100),
+                whenRunningAway: Boolean(ship.flags2N & 0x0200),
+                whenHyperspacing: Boolean(ship.flags2N & 0x0400),
+                whenFlyingAround: Boolean(ship.flags2N & 0x0800),
+                untilCloseToTarget: Boolean(ship.flags2N & 0x1000),
+                whenDocking: Boolean(ship.flags2N & 0x2000),
+                whenPreemptivelyAttacked: Boolean(ship.flags2N & 0x4000),
+            },
+        },
+        // shïp PodCount: decorative escape pods; data only.
+        podCount: ship.podCount,
         ...base
     }
 }

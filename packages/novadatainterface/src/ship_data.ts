@@ -51,6 +51,111 @@ export function getDefaultShipPhysics(): ShipPhysics {
     }
 }
 
+/**
+ * shïp Flags2 0x0100-0x4000 (EVN Bible ~:2578): when an AI-flown ship of
+ * this class turns its cloak on. Data only: NPC cloaking does not exist
+ * yet (docs/npc_behavior_gaps.md, brief C1). 45 of the 288 stock hulls set
+ * at least one bit (the Wraiths, the Zephyrs, the "Cloaking" variants).
+ */
+export interface ShipAICloakFlags {
+    /** 0x0100: "cloak when their weapon goes into burst reload". */
+    onBurstReload: boolean;
+    /** 0x0200: "cloak when running away". */
+    whenRunningAway: boolean;
+    /** 0x0400: "cloak when hyperspacing". */
+    whenHyperspacing: boolean;
+    /** 0x0800: "cloak when just flying around". */
+    whenFlyingAround: boolean;
+    /** 0x1000: "will not uncloak until close to their target". */
+    untilCloseToTarget: boolean;
+    /** 0x2000: "cloak when docking". No stock hull sets it. */
+    whenDocking: boolean;
+    /** 0x4000: "cloak when preemptively attacked". */
+    whenPreemptivelyAttacked: boolean;
+}
+
+export function getDefaultShipAICloakFlags(): ShipAICloakFlags {
+    return {
+        onBurstReload: false,
+        whenRunningAway: false,
+        whenHyperspacing: false,
+        whenFlyingAround: false,
+        untilCloseToTarget: false,
+        whenDocking: false,
+        whenPreemptivelyAttacked: false,
+    };
+}
+
+/**
+ * The shïp hull flags that tell an AI pilot how to fly the class, decoded
+ * to named booleans. DATA ONLY: nothing in the sim reads them yet; they are
+ * plumbed ahead of the NPC behaviours in docs/npc_behavior_gaps.md, whose
+ * details still wait on reference-Mac measurements (briefs W1, N1, N2, C1).
+ * Stock counts are over the 288 hulls of the base "Nova Files".
+ */
+export interface ShipAIFlags {
+    /** shïp Flags2 0x0001 (~:2569): "Ship exhibits swarming behavior". 155 stock hulls. */
+    swarms: boolean;
+    /** shïp Flags2 0x0002 (~:2570): "Ship prefers standoff attacks". 142 stock hulls. */
+    prefersStandoff: boolean;
+    /**
+     * shïp Flags2 0x0080 (~:2576): "AI ships of this type will run
+     * away/dock if out of ammo for all ammo-using weapons". 278 stock hulls.
+     */
+    runsAwayWhenOutOfAmmo: boolean;
+    /**
+     * shïp Flags 0x0040 (~:2521): "Ship always has afterburner (for AIs
+     * only)". 67 stock hulls.
+     */
+    alwaysHasAfterburner: boolean;
+    /**
+     * shïp Flags 0x0020 (~:2519): "Ship has afterburner when player has an
+     * advanced combat rating". The Bible does not say which threshold
+     * counts as advanced; in multiplayer it is also a per-player input to
+     * an NPC's loadout, which needs a ruling before anything reads it.
+     * 197 stock hulls.
+     */
+    afterburnerAtAdvancedRating: boolean;
+    /**
+     * shïp Flags3 0x0001 (~:2645): "Ship destroys asteroids". Stock: the
+     * two Mu'Hari Zephyrs (375, 376) and the Asteroid Miner (379).
+     */
+    destroysAsteroids: boolean;
+    /**
+     * shïp Flags3 0x0002 (~:2646): "Ship scoops asteroid debris". Stock:
+     * the Asteroid Miner (379) and the four in-system shuttles (391-394);
+     * see `shuttlesBetweenStellars` for how the two are told apart.
+     */
+    scoopsAsteroidDebris: boolean;
+    /**
+     * Flags3 0x0002 WITHOUT a mining scoop (oütf ModType 31) among the
+     * hull's DefaultItems: "If you set this flag but don't also provide a
+     * mining scoop in the DefaultItems, the ship will instead shuttle back
+     * and forth between friendly stellars in the system" (~:2647-2650).
+     * Derived at parse time so consumers need not resolve the outfits.
+     * Stock: shïp 391 Shuttle, 392 Heavy Shuttle, 393 Cargo Drone and 394
+     * Sprite; the Asteroid Miner carries the Asteroid Scoop (oütf 271), so
+     * it is a miner, not a shuttle.
+     */
+    shuttlesBetweenStellars: boolean;
+    /** shïp Flags2 0x0100-0x4000: when the AI cloaks. */
+    cloak: ShipAICloakFlags;
+}
+
+export function getDefaultShipAIFlags(): ShipAIFlags {
+    return {
+        swarms: false,
+        prefersStandoff: false,
+        runsAwayWhenOutOfAmmo: false,
+        alwaysHasAfterburner: false,
+        afterburnerAtAdvancedRating: false,
+        destroysAsteroids: false,
+        scoopsAsteroidDebris: false,
+        shuttlesBetweenStellars: false,
+        cloak: getDefaultShipAICloakFlags(),
+    };
+}
+
 export interface ShipData extends SpaceObjectData {
     physics: ShipPhysics;
     /**
@@ -394,6 +499,20 @@ export interface ShipData extends SpaceObjectData {
      * families are all rear-blind.
      */
     turretBlindSpots: TurretBlindSpots;
+    /**
+     * How an AI pilot flies this class (shïp Flags / Flags2 / Flags3 AI
+     * bits). Data only so far; see ShipAIFlags.
+     */
+    aiFlags: ShipAIFlags;
+    /**
+     * shïp PodCount (EVN Bible ~:2535): "the standard number of escape pods
+     * for an AI ship of this type to launch when destroyed, at a rate of
+     * one per second". Decorative only ("nothing to do with the përs
+     * field's escape pod flag"). Data only: nothing launches them yet.
+     * 83 stock hulls set it; the Star Liners and two Aurora Carriers
+     * launch the most, 10.
+     */
+    podCount: number;
 };
 
 export function getDefaultShipData(): ShipData {
@@ -448,5 +567,7 @@ export function getDefaultShipData(): ShipData {
         crew: 0,
         freeSpace: 0,
         turretBlindSpots: getDefaultTurretBlindSpots(),
+        aiFlags: getDefaultShipAIFlags(),
+        podCount: 0,
     }
 }
