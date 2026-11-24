@@ -221,3 +221,47 @@ describe("ShipParse: hail traits inherited from the attributes govt", () => {
             expect(none.inheritedNoGreetings).toBe(false);
         });
 });
+
+/**
+ * gövt InhJam inherited through the hull's ATTRIBUTES govt: the Bible's shïp
+ * InherentGovt says that govt is the one used "for inherent jamming ability",
+ * and the original jammed 98% of V 100 missiles at a hull whose own
+ * InherentGovt named an InhJam1 100 govt (reference_experiments.md, "J wave
+ * 7").
+ */
+describe("ShipParse: jamming inherited from the attributes govt", () => {
+    async function parseWithInhJam(inherentGovt: number, inhJam: number[]) {
+        return parse({
+            inherentGovt,
+            idSpace: {
+                dësc: {}, bööm: {}, shän: {}, PICT: {}, oütf: {}, wëap: {},
+                gövt: { 236: { globalID: "nova:236", inhJam } }, shïp: {},
+            } as unknown as ShipResource["idSpace"],
+        });
+    }
+
+    it("bakes the govt's InhJam1-4 for a both-associations InherentGovt",
+        async () => {
+            const ship = await parseWithInhJam(236, [100, 20, 5, 0]);
+            expect(ship.inheritedJamming).toEqual([100, 20, 5, 0]);
+        });
+
+    it("bakes it for an attributes-only InherentGovt (1128-1383)",
+        async () => {
+            const ship = await parseWithInhJam(1236, [50, 50, 35, 20]);
+            expect(ship.inheritedJamming).toEqual([50, 50, 35, 20]);
+        });
+
+    it("gives a COMBAT-only InherentGovt (2128-2383) no inherent jamming",
+        async () => {
+            const ship = await parseWithInhJam(2236, [100, 100, 100, 100]);
+            expect(ship.inheritedJamming).toEqual([0, 0, 0, 0]);
+        });
+
+    it("gives no govt, or a dangling one, no inherent jamming", async () => {
+        expect((await parse({ inherentGovt: -1 })).inheritedJamming)
+            .toEqual([0, 0, 0, 0]);
+        expect((await parse({ inherentGovt: 300 })).inheritedJamming)
+            .toEqual([0, 0, 0, 0]);
+    });
+});

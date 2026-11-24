@@ -264,6 +264,19 @@ export interface ShipData extends SpaceObjectData {
      * with greetings when hailed", inherited.
      */
     inheritedNoGreetings: boolean;
+    /**
+     * INHERENT JAMMING, from the class's ATTRIBUTES govt: that gövt's
+     * InhJam1-4 (0-100 per type), ordered [type1, type2, type3, type4] like
+     * outfit jamming. The Bible's shïp InherentGovt says the inherent
+     * attributes govt is the one used "for inherent jamming ability", and
+     * the original agrees: a hull whose own InherentGovt names an InhJam1 100
+     * govt jammed 98% of V 100 missiles, while the same govt given only
+     * through the düde jammed none (docs/reference_experiments.md, "J wave
+     * 7"). Read through the same 128-383 / 1128-1383 ranges as the hail
+     * traits above; a combat-only 2128-2383 govt, no govt or a dangling id
+     * gives all zeroes. Baked at parse time like them.
+     */
+    inheritedJamming: [number, number, number, number];
     /** Purchase price in credits (shïp Cost). */
     price: number;
     /**
@@ -415,6 +428,7 @@ export function getDefaultShipData(): ShipData {
         interfaceGovt: null,
         inheritedCantBeHailed: false,
         inheritedNoGreetings: false,
+        inheritedJamming: [0, 0, 0, 0],
         price: 0,
         techLevel: 0,
         hireRandom: 0,

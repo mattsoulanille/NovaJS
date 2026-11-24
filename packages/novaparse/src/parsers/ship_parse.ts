@@ -53,6 +53,15 @@ export function attributesGovtId(inherentGovt: number): number | null {
     return null;
 }
 
+/**
+ * A gövt's InhJam1-4 as a fresh four-tuple (missing govt or entries -> 0).
+ */
+function inheritedJamming(inhJam: readonly number[] | undefined)
+    : [number, number, number, number] {
+    return [inhJam?.[0] ?? 0, inhJam?.[1] ?? 0, inhJam?.[2] ?? 0,
+        inhJam?.[3] ?? 0];
+}
+
 export type ShipPictMap = Promise<{ [index: string]: string }>;
 export type WeaponOutfitMap = ShipPictMap;
 /** Maps a weapon's global id to the outfit that is its ammo. */
@@ -427,6 +436,10 @@ export async function ShipParse(ship: ShipResource,
         interfaceGovt: interfaceGovt,
         inheritedCantBeHailed: Boolean(attributesGovt?.cantBeHailed),
         inheritedNoGreetings: Boolean(attributesGovt?.noDistressMessages),
+        // gövt InhJam of the same attributes govt ("inherent jamming
+        // ability", shïp InherentGovt); the sim adds it to the hull's outfit
+        // jamming (jamming_plugin.ts deriveJamming).
+        inheritedJamming: inheritedJamming(attributesGovt?.inhJam),
         price: ship.cost,
         techLevel: ship.techLevel,
         hireRandom: ship.hireRandom,

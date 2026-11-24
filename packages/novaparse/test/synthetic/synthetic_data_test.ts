@@ -528,6 +528,14 @@ describe("the synthetic Nova data set", () => {
                 expect(raiders.inhJam).toEqual([7, 5, 0, 0]);
                 const meridian = await novaParse.data.Govt.get(SYNTHETIC.govts.meridian);
                 expect(meridian.inhJam).toEqual([0, 0, 0, 0]);
+                // A hull inherits its InherentGovt's InhJam (shïp
+                // InherentGovt: "inherent jamming ability").
+                const hulk = await novaParse.data.Ship.get(SYNTHETIC.ships.hulk);
+                expect(hulk.inheritedJamming).toEqual([50, 50, 35, 20]);
+                const ghost = await novaParse.data.Ship.get(SYNTHETIC.ships.ghost);
+                expect(ghost.inheritedJamming).toEqual([7, 5, 0, 0]);
+                const skiff = await novaParse.data.Ship.get(SYNTHETIC.ships.skiff);
+                expect(skiff.inheritedJamming).toEqual([0, 0, 0, 0]);
                 expect(meridian.flags.largerBribes).toBeFalse();
                 const wrecks = await novaParse.data.Govt.get(SYNTHETIC.govts.wrecks);
                 expect(wrecks.flags.startsDisabled).toBeTrue();
