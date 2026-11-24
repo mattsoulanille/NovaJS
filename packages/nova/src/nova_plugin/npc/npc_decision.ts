@@ -1,5 +1,4 @@
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
-import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
@@ -66,10 +65,9 @@ export const NPC_DECISION_INTERVAL_MS = 1000;
 const PATROL_HALF_SIZE = 2000;
 /** A patrol waypoint counts as reached within this distance. */
 export const WAYPOINT_RADIUS = 200;
-/** Interceptors orbit their home planet at this radius... */
-const INTERCEPTOR_ORBIT_RADIUS = 400;
-/** ...advancing their orbit waypoint by this angle when they reach it. */
-const INTERCEPTOR_ORBIT_STEP = Math.PI / 4;
+/** Interceptors orbit their home planet at this radius (steered smoothly
+ * by npc_steering.ts's steerOrbit). */
+export const INTERCEPTOR_ORBIT_RADIUS = 400;
 /** Interceptors engage enemies within this range of themselves or
  * their home planet. */
 export const INTERCEPTOR_ENGAGE_RANGE = 1800;
@@ -723,27 +721,14 @@ export const NpcDecisionSystem = new System({
                     }
                     break;
                 }
-                // Orbit: advance the waypoint around the home planet.
-                const homePosition = Position.fromVectorLike(home);
-                let orbitAngle: Angle;
-                if (npc.waypoint === undefined) {
-                    orbitAngle = position.subtract(homePosition).angle;
-                } else {
-                    const [x, y] = npc.waypoint;
-                    const toWaypoint = new Vector(
-                        x - position.x, y - position.y);
-                    if (toWaypoint.lengthSquared
-                        > WAYPOINT_RADIUS * WAYPOINT_RADIUS) {
-                        break; // Still flying to the current point.
-                    }
-                    orbitAngle = new Vector(x - homePosition.x,
-                        y - homePosition.y).angle
-                        .add(INTERCEPTOR_ORBIT_STEP);
-                }
-                const unit = orbitAngle.getUnitVector();
-                npc.waypoint = [
-                    homePosition.x + unit.x * INTERCEPTOR_ORBIT_RADIUS,
-                    homePosition.y + unit.y * INTERCEPTOR_ORBIT_RADIUS];
+                // Orbit the home planet: NpcSteeringSystem flies the circle
+                // itself (steerOrbit), so there is no waypoint to hand it.
+                // It used to chase a waypoint 45° ahead on the circle,
+                // re-aimed each time it came within WAYPOINT_RADIUS:
+                // fighter-speed hulls braked for each one and swung their
+                // nose about once a second (a Firebird ~135 reversals in
+                // 120 s).
+                npc.waypoint = undefined;
                 break;
             }
         }

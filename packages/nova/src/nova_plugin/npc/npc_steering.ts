@@ -10,7 +10,9 @@ import { DisabledComponent } from '../ship/index.js';
 import { EscortCommandComponent } from '../player/index.js';
 import { JumpComponent, JumpSequenceSystem, JUMP_DISTANCE } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
-import { NpcDecisionSystem, WAYPOINT_RADIUS } from './npc_decision.js';
+import {
+    INTERCEPTOR_ORBIT_RADIUS, NpcDecisionSystem, WAYPOINT_RADIUS,
+} from './npc_decision.js';
 import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js';
 import { FormationComponent } from './npc_formation.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
@@ -61,6 +63,21 @@ export const ARRIVE_GOAL_PULL_FRACTION = 0.25;
 export const ARRIVE_APPROACH_SPEED_FRACTION = 0.9;
 /** Attackers stop thrusting toward their target inside this range. */
 const ATTACK_STANDOFF = 250;
+/** An orbiting ship (steerOrbit) that is this far off its circle steers
+ * 45° off the tangent toward it; nearer, proportionally less. Fitted: a
+ * gentle return (a fighter-speed hull covers it in about a second) that
+ * does not have the nose chasing the radial error back and forth. */
+export const ORBIT_CORRECTION_DISTANCE = 200;
+/** ...and never more than atan(3), about 72° off the tangent, so a ship
+ * far outside the circle (just launched, back from a chase) spirals in
+ * rather than flying at the planet and having to turn through 90° at the
+ * circle. */
+const ORBIT_MAX_CORRECTION = 3;
+/** How fast (per second) an orbiting ship turns its velocity onto its
+ * course, on top of the circle's own rate: a velocity 0.1 rad off course
+ * is asked to turn 0.2 rad/s faster. Fitted: closes a course error in
+ * about half a second without overshooting it. */
+const ORBIT_COURSE_GAIN = 2;
 
 // --- Steering ---
 
@@ -160,6 +177,63 @@ export function steerArrive(movement: MovementState, physics: {
     const misalignment = movement.rotation.distanceTo(heading).angle;
     movement.accelerating = Math.abs(misalignment) < 0.6 ? 1 : 0;
     return false;
+}
+
+/**
+ * Circles `centre` at `radius` (an interceptor, AI 4, round its home
+ * planet), in the direction the old orbit waypoints advanced: the
+ * direction of increasing clock angle about the centre.
+ *
+ * The COURSE is the circle's tangent turned toward the circle by the
+ * radial error (ORBIT_CORRECTION_DISTANCE, ORBIT_MAX_CORRECTION). The ship
+ * flies it at top speed, thrusting whenever its nose is roughly where it
+ * wants it, and steers its VELOCITY onto the course by where it points
+ * that thrust: at top speed (the cap holds the speed) thrust at an angle
+ * φ off the velocity turns it at acceleration * sin φ / speed, so the nose
+ * leads the velocity by the φ that gives the turn rate wanted: the
+ * circle's own rate (speed / radius) plus ORBIT_COURSE_GAIN times the
+ * angle the velocity is off the course. On the circle that is a steady
+ * lead (Firebird: 62° inside its velocity, Aurora Carrier: 12°), and the
+ * nose turns round with the course at a steady rate, one way.
+ *
+ * Replaces chasing discrete orbit waypoints (45° apart, each re-aimed and
+ * braked for within WAYPOINT_RADIUS), which swung fighter-speed hulls'
+ * noses back and forth about once a second all the way round. A hull that
+ * cannot turn tightly enough for the circle at top speed (sin φ would pass
+ * 1) flies a wider one, held by the radial correction. Below a tenth of
+ * top speed (setting off) the velocity has no useful direction and the
+ * nose simply points along the course. No PRNG.
+ */
+export function steerOrbit(movement: MovementState, physics: {
+    acceleration: number, speed: number,
+}, centre: Position, radius: number) {
+    const fromCentre = movement.position.subtract(centre);
+    const distance = fromCentre.length;
+    // On the centre itself any radial will do; take the nose.
+    const radial = distance > 1e-9
+        ? Vector.fromVectorLike(fromCentre).normalize(1)
+        : movement.rotation.getUnitVector();
+    // The radial turned a quarter clockwise: unit vectors are
+    // (sin θ, -cos θ), so this is the unit vector at θ + π/2.
+    const tangent = new Vector(-radial.y, radial.x);
+    const correction = Math.max(-ORBIT_MAX_CORRECTION,
+        Math.min(ORBIT_MAX_CORRECTION,
+            (distance - radius) / ORBIT_CORRECTION_DISTANCE));
+    const course = tangent.subtract(radial.scale(correction)).angle;
+    const velocity = Vector.fromVectorLike(movement.velocity);
+    const speed = velocity.length;
+    let heading = course;
+    if (speed > 0.1 * physics.speed && physics.acceleration > 0) {
+        const offCourse = velocity.angle.distanceTo(course).angle;
+        const turnRate = speed / radius + ORBIT_COURSE_GAIN * offCourse;
+        const sinLead = Math.max(-1, Math.min(1,
+            turnRate * speed / physics.acceleration));
+        heading = velocity.angle.add(Math.asin(sinLead));
+    }
+    movement.turnBack = false;
+    movement.turnTo = heading;
+    const misalignment = movement.rotation.distanceTo(heading).angle;
+    movement.accelerating = Math.abs(misalignment) < 0.6 ? 1 : 0;
 }
 
 /**
@@ -265,6 +339,17 @@ export const NpcSteeringSystem = new System({
                 break;
             }
             case 'patrol': {
+                // An interceptor (AI 4) circles its home planet.
+                const home = npc.aiType === 4 && npc.destination
+                    ? entities.get(npc.destination)?.components
+                        .get(MovementStateComponent)?.position
+                    : undefined;
+                if (home) {
+                    steerOrbit(movement, physics,
+                        Position.fromVectorLike(home),
+                        INTERCEPTOR_ORBIT_RADIUS);
+                    break;
+                }
                 if (!npc.waypoint) {
                     return;
                 }
