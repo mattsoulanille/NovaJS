@@ -13,9 +13,10 @@ import { Stage } from "./stage_resource.js";
  */
 export const SPEED_BADGE_CICN = 'nova:20000';
 
-/** Top-left inset on the UI layer (`Stage`), matching the space view corner. */
-export const SPEED_INDICATOR_INSET_X = 8;
-export const SPEED_INDICATOR_INSET_Y = 8;
+/** Top-left inset on the UI layer (`Stage`): flush with the corner
+ * (Matthew, 2026-11-23: "shove the 2x indicator flush to the top left"). */
+export const SPEED_INDICATOR_INSET_X = 0;
+export const SPEED_INDICATOR_INSET_Y = 0;
 
 /**
  * Latest room speed status delivered by the simulation bridge
