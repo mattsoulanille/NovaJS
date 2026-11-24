@@ -468,6 +468,18 @@ export const STATE_HASH_INTERVAL = 60;
 //    (de1618493c2c83ef -> 188a53cfde98e2e0 on its own; 0c6eeff124ceccf1
 //    together with the piracy-police note above), and the join gate keeps
 //    older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-15 contraband fixes (reference "A14 /
+//    contraband wave 15", `w15_several`). The ContrabandScanned marker
+//    gains an OPTIONAL `found` field (the sorted keys of everything its
+//    scan found), so a ship already scanned this visit is scanned again
+//    only for contraband that scan did not find (a takeoff with new
+//    illegal jünk or mission cargo). Pilots never scanned, and scans that
+//    found nothing, carry no `found`, so their components and hash inputs
+//    are unchanged. Sim-rule change alongside: the rescan rule above. No
+//    input kind or message kind changes. The derived wire schema
+//    fingerprint changes (0c6eeff124ceccf1 -> c6ab0bdc34e2addd), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

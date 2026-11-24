@@ -10,7 +10,7 @@ import {
 } from '../ship/index.js';
 import {
     CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings, findContraband,
-    hasContraband,
+    hasContraband, isDetection, newContraband,
 } from './contraband.js';
 import { chooseNearest } from './npc_targeting.js';
 
@@ -23,18 +23,33 @@ import { chooseNearest } from './npc_targeting.js';
  */
 /**
  * The marker a scan leaves on the scanned ship: it has been scanned on
- * this visit and is not scanned again.
+ * this visit, and what that scan found (`found`). It is not scanned
+ * again on this visit unless it carries contraband the marker does not
+ * name.
  *
- * MEASURED (docs/reference_experiments.md, "Contraband wave 14"): the
- * visit is a stay in the system between two ARRIVALS BY JUMP, not
- * between landings. A pod pilot was fined once in a 5.5 min visit, not
- * again in 70 s after a landing and takeoff, and a pilot scanned before
- * landing was not rescanned on takeoff; a jump out to the linked system
- * and straight back was fined again within about 10 s of the arrival. So
- * the marker survives a landing (the ship leaves the world and comes back
- * with it) and goes only when the ship crosses into a fresh world
+ * THE RULE, from two measurements (docs/reference_experiments.md):
+ * a ship is scanned again on the same visit only when it carries
+ * contraband that its last scan did not find; a new visit (an arrival by
+ * jump) starts afresh.
+ *  - "Contraband wave 14": the visit is a stay in the system between two
+ *    ARRIVALS BY JUMP, not between landings. A pod pilot was fined once in
+ *    a 5.5 min visit, not again in 70 s after a landing and takeoff, and
+ *    a pilot scanned before landing (who then accepted a ScanMask-0
+ *    mission: nothing new that was illegal) was not rescanned on takeoff;
+ *    a jump out to the linked system and straight back was fined again
+ *    within about 10 s of the arrival.
+ *  - "A14 / contraband wave 15", `w15_several`: a pod pilot fined at
+ *    Enter Ship landed, bought illegal jünk and took a Flags 0x0020
+ *    mission whose cargo was illegal, and WAS scanned again at takeoff
+ *    (one line, naming the jünk; one more fine).
+ * So the marker survives a landing (the ship leaves the world and comes
+ * back with it) and goes only when the ship crosses into a fresh world
  * (pilot/transition_prep.ts clears it on every crossing: a jump, a
- * hypergate or wormhole transit, a mission's system move).
+ * hypergate or wormhole transit, a mission's system move); and while it
+ * stands, needsScan asks whether anything illegal aboard is missing from
+ * `found`. GUESSES: contraband gained in space (plunder) counts as new
+ * too, not only what a landing brings; and a second scanning govt with a
+ * different ScanMask scans for what the first did not find.
  *
  * `hostile` is the second half of the same measurement: after a
  * DETECTION (a fine line: an outfit, jünk or a mission's cargo), the
@@ -56,6 +71,10 @@ export const ContrabandScannedType = t.intersection([t.type({
     /** The government whose scan DETECTED contraband aboard, while its
      * ships still attack this pilot (until a landing). */
     hostile: t.string,
+    /** What the scan found (contraband.ts's ContrabandFindings.items:
+     * sorted "outfit:<id>" / "junk:<id>" / "mission:<id>" keys); absent
+     * when it found nothing. */
+    found: t.array(t.string),
 })]);
 export type ContrabandScannedState = t.TypeOf<typeof ContrabandScannedType>;
 export const ContrabandScannedComponent =
@@ -70,15 +89,31 @@ export function clearContrabandScan(entity: Entity): void {
 /**
  * A LANDING: the detection's hostility ends (the scanning govt's ships
  * were peaceful after the reference pilot took off again), but the
- * scanned marker stays, so the pilot is not scanned again until he
- * arrives by jump. Sets a fresh object rather than editing the stored
- * one (the component is synced state).
+ * scanned marker stays, with what it found, so the pilot is not scanned
+ * again until he arrives by jump or takes off with new contraband. Sets
+ * a fresh object rather than editing the stored one (the component is
+ * synced state).
  */
 export function endContrabandHostility(entity: Entity): void {
     const scanned = entity.components.get(ContrabandScannedComponent);
     if (scanned?.hostile !== undefined) {
-        entity.components.set(ContrabandScannedComponent, { at: scanned.at });
+        entity.components.set(ContrabandScannedComponent, {
+            at: scanned.at,
+            ...(scanned.found ? { found: scanned.found } : {}),
+        });
     }
+}
+
+/** The marker a scan with `findings` leaves, at sim time `at`, by
+ * `govtId`: a DETECTION names the govt as `hostile`, and whatever was
+ * found is remembered as `found`. */
+export function scannedMarker(at: number, govtId: string,
+    findings: ContrabandFindings): ContrabandScannedState {
+    return {
+        at,
+        ...(isDetection(findings) ? { hostile: govtId } : {}),
+        ...(findings.items.length > 0 ? { found: [...findings.items] } : {}),
+    };
 }
 
 /** The government whose contraband scan has turned its ships on `ship`
@@ -106,15 +141,30 @@ export function contrabandAboard(ship: Entity, govtMask: number,
 
 /**
  * Whether `ship` may be scanned at all right now: present, flying (not
- * disabled, not exploding), visible, and not yet scanned this visit.
+ * disabled, not exploding) and visible. Whether it NEEDS a scan is
+ * needsScan's question.
  */
 export function scannable(ship: Entity | undefined): ship is Entity {
     return ship !== undefined
         && ship.components.has(MovementStateComponent)
         && !ship.components.has(DisabledComponent)
         && !ship.components.has(ExplodingComponent)
-        && isTargetable(ship.components.get(CloakActiveComponent))
-        && !ship.components.has(ContrabandScannedComponent);
+        && isTargetable(ship.components.get(CloakActiveComponent));
+}
+
+/**
+ * Whether `ship`, on which a scan would find `findings`, is due one: it
+ * carries something illegal, and either has not been scanned this visit
+ * or carries contraband its last scan did not find (the marker's
+ * `found`; see ContrabandScannedType for the measurements).
+ */
+export function needsScan(ship: Entity, findings: ContrabandFindings):
+    boolean {
+    if (!hasContraband(findings)) {
+        return false;
+    }
+    const scanned = ship.components.get(ContrabandScannedComponent);
+    return !scanned || newContraband(findings, scanned.found).length > 0;
 }
 
 /**
@@ -122,8 +172,9 @@ export function scannable(ship: Entity | undefined): ship is Entity {
  * `candidates` ([uuid, distance²] of the player ships it may consider:
  * the decision system has already dropped its own side, a briber, the
  * disabled, the cloaked and every ship it is about to attack). One is
- * taken when it is within CONTRABAND_SCAN_SEEK_RANGE, unscanned this
- * visit, and carries something illegal to `govtMask`. STICKY, like the
+ * taken when it is within CONTRABAND_SCAN_SEEK_RANGE and is due a scan
+ * by `govtMask` (needsScan: something illegal aboard, and not scanned
+ * this visit or carrying new contraband since). STICKY, like the
  * plunder run: the ship it is already flying to is kept while it still
  * qualifies; otherwise the nearest (uuid tie-break, chooseNearest). Reads
  * synced state and staged caches only; no PRNG.
@@ -138,7 +189,7 @@ export function chooseScanTarget(current: string | undefined,
         }
         const ship = getEntity(uuid);
         return scannable(ship)
-            && hasContraband(contrabandAboard(ship, govtMask, gameData));
+            && needsScan(ship, contrabandAboard(ship, govtMask, gameData));
     });
     if (current !== undefined && qualifying.some(([u]) => u === current)) {
         return current;

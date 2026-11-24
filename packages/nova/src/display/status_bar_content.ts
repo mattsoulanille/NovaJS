@@ -366,11 +366,17 @@ export function playerPlunderedMessage(credits: number): string {
  * mission line. The fine is printed as the reference showed it ("500", no
  * separator).
  *
- * GUESSES: when one scan both fails a mission and finds other contraband,
- * the detection line wins the status line (the mission is failed all the
- * same); an outfit is named over a jünk, and a jünk over a mission's
- * cargo; with no pilot name the address is dropped ("<scanner>: your
- * ...").
+ * SEVERAL FINDS (measured, "A14 / contraband wave 15", `w15_several`: the
+ * pod, 10 t of illegal jünk and a Flags 0x0020 mission's illegal cargo in
+ * one scan): ONE line, naming the JÜNK ("your attempt to smuggle kit
+ * contraband through this system ..."), not the pod; the 0x0020 mission
+ * failed with no line of its own, so the detection line wins over the
+ * mission line.
+ *
+ * GUESSES: a plain mission's illegal cargo is named over an outfit too
+ * (the hold's cargo first: the jünk, then "illegal cargo", then the
+ * outfit; only jünk over an outfit was measured); with no pilot name the
+ * address is dropped ("<scanner>: your ...").
  */
 export function contrabandScanMessage(scan: {
     scanner: string, pilot?: string, outfit?: string, junk?: string,
@@ -380,9 +386,9 @@ export function contrabandScanMessage(scan: {
         return scan.missionFailed
             ? 'Your ship has been scanned - mission failed.' : '';
     }
-    const what = scan.outfit
-        ? `your posession of ${/^[aeiou]/i.test(scan.outfit) ? 'an' : 'a'} ${scan.outfit}`
-        : `your attempt to smuggle ${scan.junk ?? 'illegal cargo'} through this system`;
+    const what = scan.junk || scan.smuggled || !scan.outfit
+        ? `your attempt to smuggle ${scan.junk ?? 'illegal cargo'} through this system`
+        : `your posession of ${/^[aeiou]/i.test(scan.outfit) ? 'an' : 'a'} ${scan.outfit}`;
     const address = scan.pilot ? `${scan.pilot}, ` : '';
     const fined = scan.fine > 0
         ? ` You have been fined ${Math.floor(scan.fine)} credits.` : '';

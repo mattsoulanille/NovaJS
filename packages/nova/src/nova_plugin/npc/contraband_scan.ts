@@ -13,10 +13,11 @@ import {
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecordsComponent, localLawIn } from '../reputation/index.js';
 import {
-    applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband, isDetection,
+    applyContrabandScan, CONTRABAND_SCAN_RANGE, hasContraband,
 } from './contraband.js';
 import {
-    ContrabandScannedComponent, contrabandAboard, scannable,
+    ContrabandScannedComponent, contrabandAboard, needsScan, scannable,
+    scannedMarker,
 } from './contraband_target.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcFireControlSystem } from './npc_fire_control.js';
@@ -99,6 +100,12 @@ registerSimulationBridgeEvent({ event: ContrabandScanEvent });
  * CrimeTol-30000 customs govt's cutters fired on a pod pilot for the rest
  * of the visit).
  *
+ * The marker remembers what the scan found, so a ship already scanned
+ * this visit is scanned again only for contraband that scan did not find
+ * (contraband_target.ts's needsScan; reference wave 15, `w15_several`: a
+ * pod pilot rescanned at takeoff after buying illegal jünk). A rescan
+ * applies everything aboard as one scan: one line, one fine.
+ *
  * A scan that finds nothing (the hold was emptied en route) still marks
  * the ship, and says nothing (GUESS: the stock "Have a nice day." line,
  * STR# 2002 #389, may belong here; the reference never saw a clean scan).
@@ -138,8 +145,7 @@ export const ContrabandScanSystem = new System({
             const govt = govtId
                 ? gameData.data.Govt.getCached(govtId) : undefined;
             if (!scannable(target) || !govt) {
-                // Gone, disabled, cloaked, or beaten to it by another
-                // interceptor earlier in this very sweep.
+                // Gone, disabled or cloaked.
                 giveUp();
                 continue;
             }
@@ -150,10 +156,16 @@ export const ContrabandScanSystem = new System({
                 continue; // Still on the way; NpcSteeringSystem flies it.
             }
             const findings = contrabandAboard(target, govt.scanMask, gameData);
-            target.components.set(ContrabandScannedComponent, {
-                at: time.time,
-                ...(isDetection(findings) ? { hostile: govt.id } : {}),
-            });
+            if (target.components.has(ContrabandScannedComponent)
+                && !needsScan(target, findings)) {
+                // Scanned this visit with nothing new aboard: beaten to it
+                // by another interceptor earlier in this very sweep, or
+                // the new contraband went overboard en route.
+                giveUp();
+                continue;
+            }
+            target.components.set(ContrabandScannedComponent,
+                scannedMarker(time.time, govt.id, findings));
             if (hasContraband(findings)) {
                 const result = applyContrabandScan(findings, govt, law, {
                     credits: target.components.get(CreditsComponent),

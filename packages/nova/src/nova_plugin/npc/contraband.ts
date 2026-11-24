@@ -45,6 +45,13 @@ import { Cargo, OutfitsState } from '../ship/index.js';
  *    fine sentence, no money taken, SmugPenalty still charged (see
  *    contrabandFine for the Bible's contrary reading of -N).
  *  - a clean ship is not approached, and nothing is said to it.
+ *  - SEVERAL FINDS in one scan (wave 15, `w15_several`: the pod, 10 t of
+ *    illegal jünk and a Flags 0x0020 mission's illegal cargo): ONE status
+ *    line, which named the JÜNK, not the pod; ONE fine; the 0x0020
+ *    mission failed with no line of its own.
+ *  - an ally of the system's owner scanning charges ITS OWN SmugPenalty
+ *    (wave 15, `w15_scan_ally`: -50, not the owner's 70;
+ *    smugglingRecordChange).
  *
  * GUESSES (not measured; each is listed for the reference Mac in
  * docs/npc_behavior_gaps.md, "Contraband scan"):
@@ -52,9 +59,10 @@ import { Cargo, OutfitsState } from '../ship/index.js';
  *    at all (passengers, an agent, 8 stock missions with a ScanMask) is
  *    illegal for as long as it is active.
  *  - a fine never takes more than the pilot has.
- *  - one scan can find several things: every flagged mission fails, ONE
- *    fine is charged, ONE record change (for an outfit or jünk), and the
- *    line names the outfit, else the jünk, else "illegal cargo".
+ *  - of several finds, the line names the hold's cargo before an outfit:
+ *    the jünk, else a plain mission's "illegal cargo", else the outfit
+ *    (status_bar_content.ts's contrabandScanMessage; only jünk over an
+ *    outfit was measured). ONE record change (for an outfit or jünk).
  */
 
 // --- Tuning constants (GUESSES: listed for the reference Mac) ---
@@ -102,6 +110,19 @@ export interface ContrabandFindings {
     /** Active missions with Flags 0x0020 whose cargo is illegal here,
      * sorted by id: each fails. */
     failMissions: string[];
+    /** EVERY illegal thing found, as sorted keys ("outfit:<id>",
+     * "junk:<id>", "mission:<id>"): what the scanned marker remembers, so
+     * a later scan in the same visit can tell new contraband from what was
+     * already found (contraband_target.ts's needsScan). */
+    items: string[];
+}
+
+/** The keys in `findings` that are not among `found` (what an earlier
+ * scan on this visit found): the contraband NEW since that scan. */
+export function newContraband(findings: ContrabandFindings,
+    found: readonly string[] | undefined): string[] {
+    const known = new Set(found ?? []);
+    return findings.items.filter(key => !known.has(key));
 }
 
 /** Whether a scan finding `findings` has anything to act on. */
@@ -163,7 +184,9 @@ export interface ScannedHold {
 export function findContraband(govtMask: number, hold: ScannedHold,
     getOutfit: (id: string) => OutfitData | undefined,
     getJunk: (id: string) => JunkData | undefined): ContrabandFindings {
-    const findings: ContrabandFindings = { smuggled: false, failMissions: [] };
+    const findings: ContrabandFindings = {
+        smuggled: false, failMissions: [], items: [],
+    };
     if ((govtMask & 0xffff) === 0) {
         return findings;
     }
@@ -173,8 +196,8 @@ export function findContraband(govtMask: number, hold: ScannedHold,
         }
         const outfit = getOutfit(id);
         if (outfit && scanMaskMatches(govtMask, outfit.scanMask)) {
-            findings.outfit = { id, name: outfitScanName(outfit) };
-            break;
+            findings.outfit ??= { id, name: outfitScanName(outfit) };
+            findings.items.push(`outfit:${id}`);
         }
     }
     const junkIds = [...(hold.cargo ?? [])]
@@ -183,8 +206,8 @@ export function findContraband(govtMask: number, hold: ScannedHold,
     for (const id of junkIds) {
         const junk = getJunk(id);
         if (junk && scanMaskMatches(govtMask, junk.scanMask)) {
-            findings.junk = { id, name: junkScanName(junk) };
-            break;
+            findings.junk ??= { id, name: junkScanName(junk) };
+            findings.items.push(`junk:${id}`);
         }
     }
     for (const id of [...(hold.missions?.keys() ?? [])].sort()) {
@@ -192,12 +215,14 @@ export function findContraband(govtMask: number, hold: ScannedHold,
         if (!missionIllegal(mission, govtMask)) {
             continue;
         }
+        findings.items.push(`mission:${id}`);
         if (mission.failIfScanned) {
             findings.failMissions.push(id);
         } else {
             findings.smuggled = true;
         }
     }
+    findings.items.sort();
     return findings;
 }
 
@@ -245,10 +270,11 @@ export function smugglingPenalty(govt: GovtData | undefined): number {
  * Smuggling does not spread to linked systems (the nosy scanner's own
  * system, linked to the one it scanned in, did not move), so on NovaJS's
  * per-govt records it is ONE change, to the system's status govt
- * (law.recordGovtId), as the doc proposes. GUESSES: when an ALLY of the
- * owner scans, the ally's own SmugPenalty is charged (not measured); in
- * an independent system there is no owner, so a nosy scanner's detection
- * changes no record.
+ * (law.recordGovtId), as the doc proposes. When an ALLY of the owner
+ * scans, the ally's own SmugPenalty is charged (MEASURED, wave 15,
+ * `w15_scan_ally`: -50 where the owner's is 70). GUESS: in an independent
+ * system there is no owner, so a nosy scanner's detection changes no
+ * record.
  */
 export function smugglingRecordChange(scanner: GovtData, law: LocalLaw):
     number {

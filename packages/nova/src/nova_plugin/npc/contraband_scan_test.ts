@@ -33,8 +33,8 @@ import { completeEntity } from '../spawn/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
     applyContrabandScan, contrabandFine, ContrabandFindings, findContraband,
-    hasContraband, missionIllegal, scansHere, smugglingPenalty,
-    smugglingRecordChange,
+    hasContraband, missionIllegal, newContraband, scansHere,
+    smugglingPenalty, smugglingRecordChange,
 } from './contraband.js';
 import { ContrabandScanEvent, ContrabandScanEventData } from './contraband_scan.js';
 import { ContrabandScannedComponent } from './contraband_target.js';
@@ -470,9 +470,10 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             const scannedAt = pilot.components.get(ContrabandScannedComponent)!.at;
             world.emit(LandEvent, { id: 'test:planet', uuid: 'stellar' }, [PILOT]);
             run(world, 1200);
-            // The marker stays (its hostility gone): no second fine.
+            // The marker stays (its hostility gone) with what it found: no
+            // second fine.
             expect(pilot.components.get(ContrabandScannedComponent))
-                .toEqual({ at: scannedAt });
+                .toEqual({ at: scannedAt, found: [`outfit:${POD}`] });
             expect(credits(pilot)).toBe(START_CREDITS - 500);
 
             // A crossing into a fresh world is a new visit.
@@ -480,6 +481,83 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(pilot.components.has(ContrabandScannedComponent)).toBeFalse();
             expect(runUntilScanned(world, pilot)).toBeTrue();
             expect(credits(pilot)).toBe(START_CREDITS - 1000);
+        });
+
+    it('rescans after a landing only for NEW contraband, and names the jünk '
+        + 'of several finds (w15_several, w14_s3_pod)', async () => {
+            const { world, pilot, scans } = await scanWorld({
+                customs: { crimeTol: 30000 },
+                pilot: { outfits: { [POD]: 1 } },
+            });
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            expect(credits(pilot)).toBe(START_CREDITS - 500);
+            expect(record(pilot)).toBe(-50);
+
+            // Landed: a ScanMask-0 mission is nothing new (w14_s3_pod).
+            world.emit(LandEvent, { id: 'test:planet', uuid: 'stellar' }, [PILOT]);
+            run(world, 2);
+            pilot.components.get(MissionsComponent)!.set('test:s3',
+                mission('test:s3', { scanMask: 0, failIfScanned: true }));
+            run(world, 900);
+            expect(scans.length).toBe(1);
+            expect(credits(pilot)).toBe(START_CREDITS - 500);
+
+            // Landed again: bought illegal jünk and took a 0x0020 mission
+            // with illegal cargo (w15_several). Takes off: scanned again.
+            world.emit(LandEvent, { id: 'test:planet', uuid: 'stellar' }, [PILOT]);
+            run(world, 2);
+            pilot.components.set(CargoComponent, new Map([
+                [`junk:${SMUGGLED_JUNK}`, 10], ['mission:test:food', 1]]));
+            pilot.components.get(MissionsComponent)!.set('test:food',
+                mission('test:food', {
+                    cargoType: 0, scanMask: 1, failIfScanned: true,
+                }));
+            run(world, 900);
+            expect(scans.length).toBe(2);
+            const rescan = scans[1].scan;
+            // One fine, one record change, the jünk named over the pod,
+            // and the 0x0020 mission failed with no line of its own.
+            expect(rescan).toEqual({
+                scanner: CUTTER, outfit: 'kit contraband pod',
+                junk: 'kit contraband', smuggled: false, missionFailed: true,
+                fine: 500,
+            });
+            expect(contrabandScanMessage({
+                ...rescan, scanner: 'Kit Customs Cutter', pilot: 'w15-several',
+            })).toBe('Kit Customs Cutter: w15-several, your attempt to smuggle '
+                + 'kit contraband through this system has been detected. You '
+                + 'have been fined 500 credits.');
+            expect(credits(pilot)).toBe(START_CREDITS - 1000);
+            expect(record(pilot)).toBe(-100);
+            expect(pilot.components.get(MissionsComponent)!.get('test:food')!
+                .failed).toBeTrue();
+            expect(pilot.components.get(ContrabandScannedComponent)?.found)
+                .toEqual([`junk:${SMUGGLED_JUNK}`, `outfit:${POD}`,
+                    'mission:test:food'].sort());
+            // Nothing new since: no third scan.
+            world.emit(LandEvent, { id: 'test:planet', uuid: 'stellar' }, [PILOT]);
+            run(world, 900);
+            expect(scans.length).toBe(2);
+        });
+
+    it('an ally of the owner scanning charges ITS OWN SmugPenalty '
+        + '(w15_scan_ally)', async () => {
+            // 321 Kit Smug Ally Owner (SmugPenalty 70, no ScanMask) owns
+            // the system; its ally 320 Kit Customs Ally (Smug 50) scans.
+            const { world, pilot, scans } = await scanWorld({
+                customs: { crimeTol: 30000 }, systemGovt: NEIGHBOUR,
+                neighbour: { smugglePenalty: 70, allies: [7] },
+                pilot: { outfits: { [POD]: 1 } },
+            });
+            expect(runUntilScanned(world, pilot)).toBeTrue();
+            expect(scans.map(s => s.scan)).toEqual([{
+                scanner: CUTTER, outfit: 'kit contraband pod', smuggled: false,
+                missionFailed: false, fine: 500,
+            }]);
+            expect(credits(pilot)).toBe(START_CREDITS - 500);
+            expect(record(pilot, NEIGHBOUR)).toBe(-50);
+            expect(pilot.components.get(LegalRecordsComponent)!.has(CUSTOMS))
+                .toBeFalse();
         });
 
     it('a nosy scanner in another govt\'s system fines, and RAISES the '
@@ -644,6 +722,7 @@ describe('Contraband rules', () => {
         const both = scan({
             outfit: { id: POD, name: 'pod' }, junk: { id: 'j', name: 'junk' },
             smuggled: true, failMissions: [],
+            items: [`outfit:${POD}`, 'junk:j', 'mission:m'],
         });
         expect(both.result).toEqual({
             outfit: 'pod', junk: 'junk', smuggled: true, missionFailed: false,
@@ -651,7 +730,9 @@ describe('Contraband rules', () => {
         });
         expect([...both.records]).toEqual([[NEIGHBOUR, -50]]);
         expect(both.credits).toBe(500);
-        const cargoOnly = scan({ smuggled: true, failMissions: [] });
+        const cargoOnly = scan({
+            smuggled: true, failMissions: [], items: ['mission:m'],
+        });
         expect(cargoOnly.records.size).toBe(0);
         expect(cargoOnly.credits).toBe(500);
     });
@@ -696,8 +777,47 @@ describe('Contraband rules', () => {
             + 'cargo through this system has been detected. You have been '
             + 'fined 500 credits.');
         expect(contrabandScanMessage({
-            scanner: 'Cutter', outfit: 'illegal blaster', smuggled: true,
+            scanner: 'Cutter', outfit: 'illegal blaster', smuggled: false,
             missionFailed: true, fine: 0,
         })).toBe('Cutter: your posession of an illegal blaster has been detected.');
+    });
+
+    it('names the hold\'s cargo before an outfit of several finds: the '
+        + 'jünk (w15_several), then "illegal cargo" (guess)', () => {
+        expect(contrabandScanMessage({
+            scanner: 'Cutter', outfit: 'kit contraband pod',
+            junk: 'kit contraband', smuggled: true, missionFailed: true,
+            fine: 500,
+        })).toBe('Cutter: your attempt to smuggle kit contraband through this '
+            + 'system has been detected. You have been fined 500 credits.');
+        expect(contrabandScanMessage({
+            scanner: 'Cutter', outfit: 'illegal blaster', smuggled: true,
+            missionFailed: false, fine: 0,
+        })).toBe('Cutter: your attempt to smuggle illegal cargo through this '
+            + 'system has been detected.');
+    });
+
+    it('lists every illegal thing found, and tells new finds from old',
+        () => {
+        const junks = new Map([['test:j', {
+            ...getDefaultJunkData(), id: 'test:j', lcName: 'j', scanMask: 1,
+        }]]);
+        const findings = findContraband(0x0001, {
+            outfits: new Map([[POD, { count: 1 }], ['test:a', { count: 2 }]]),
+            cargo: new Map([['junk:test:j', 3]]),
+            missions: new Map([
+                ['test:m', mission('test:m', { scanMask: 1 })],
+                ['test:f', mission('test:f', { scanMask: 1, failIfScanned: true })],
+                ['test:legal', mission('test:legal', { scanMask: 2 })],
+            ]),
+        }, id => outfits.get(id), id => junks.get(id));
+        expect(findings.items).toEqual(['junk:test:j', 'mission:test:f',
+            'mission:test:m', 'outfit:test:a', `outfit:${POD}`]);
+        // The named outfit is still the first by sorted id.
+        expect(findings.outfit?.id).toBe('test:a');
+        expect(newContraband(findings, undefined)).toEqual(findings.items);
+        expect(newContraband(findings, ['outfit:test:a', `outfit:${POD}`]))
+            .toEqual(['junk:test:j', 'mission:test:f', 'mission:test:m']);
+        expect(newContraband(findings, findings.items)).toEqual([]);
     });
 });
