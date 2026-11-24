@@ -67,6 +67,18 @@ describe('dialog layout', () => {
                 expect(BBS.desc.x).toBe(BBS.titlePane.x);
             });
 
+        it('clips an overlong description after seven lines and part of an '
+            + 'eighth, as the original (which never scrolls it)', () => {
+                // Reference "Scrolling ... wave 12" (explore/08-bbs.png):
+                // a 60-line job text shows Line 01..07 whole and the top
+                // of Line 08, with no arrows; Down, PageDown and the wheel
+                // move nothing. The board has no scroll path at all, so
+                // the pane's clip is the whole of the behaviour.
+                const shown = BBS.desc.y + BBS.desc.height - BBS.descText.y;
+                expect(Math.floor(shown / LINE_HEIGHT)).toBe(7);
+                expect(shown % LINE_HEIGHT).toBeGreaterThan(0);
+            });
+
         it('lands Accept and Leave on the reference pills', () => {
             // Faces x976..1063 and x1078..1165, y615..627.
             expect(faceLeft(BBS.button.accept)).toBe(976);

@@ -184,6 +184,10 @@ export class MissionBoard extends Menu<Entity> {
             this.text.description, this.text.status);
 
         // Clip the list, the name pane and the description to their panes.
+        // The description NEVER scrolls, on purpose: the original clips an
+        // overlong job text at its pane (seven lines and the top of an
+        // eighth), with no arrows, and Down / PageDown / the wheel leave
+        // it where it is (reference "Scrolling ... wave 12").
         const listMask = new PIXI.Graphics()
             .beginFill(0xffffff)
             .drawRect(BBS.list.x, BBS.list.y, BBS.list.width,
