@@ -41,7 +41,10 @@ import {
  *  1 wimpy trader:  flies planet to planet (arrive -> dwell -> next),
  *                   flees for a jump-out when attacked. A goal-less
  *                   mission ship of AI 1 only passes through: it jumps
- *                   out 30-40 s after it appears.
+ *                   out 30-40 s after it appears. A SHUTTLE hull (shïp
+ *                   Flags3 0x0002, no scoop) flies between the non-enemy
+ *                   stellars, never jumps, and lands instead of leaving
+ *                   (npc_shuttle.ts).
  *  2 brave trader:  same, but fights its attacker back while the govt
  *                   MaxOdds calculation stays favorable, then flees;
  *                   it also flees once an attacker that had been
@@ -106,6 +109,8 @@ import {
  *                           illegal, the fine, SmugPenalty, mission 0x0020
  *  contraband_target.ts     ContrabandScannedComponent, chooseScanTarget
  *  contraband_scan.ts       ContrabandScanSystem, ContrabandScanEvent
+ *  npc_shuttle.ts           shïp Flags3 0x0002 shuttles: their stops,
+ *                           stellarEntries for the respawn's take-off
  */
 
 export {

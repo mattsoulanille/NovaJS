@@ -46,6 +46,7 @@ import { LegalRecordsComponent } from '../reputation/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { SystemHoldComponent } from './system_hold.js';
+import { isShuttle, shuttleStops } from './npc_shuttle.js';
 import { TargetComponent } from '../ship/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
 
@@ -164,14 +165,16 @@ export function landingDestinations(planets: PlanetEntry[]): PlanetEntry[] {
 }
 
 /** Picks the next planet a trader heads for (uuid order for
- * determinism; Random for variety; excludes the one it's at). */
+ * determinism; Random for variety; excludes the one it's at). With
+ * `sameIfOnly` (a SHUTTLE, npc_shuttle.ts) a ship whose only stop is the
+ * one it is at goes back to it rather than having nowhere to go, which
+ * would send it out of the system. No draw when there is no choice. */
 function pickPlanet(planets: PlanetEntry[],
-    random: Random, exclude?: string): string | undefined {
-    const ids = planets.map(([uuid]) => uuid)
-        .filter(uuid => uuid !== exclude)
-        .sort();
+    random: Random, exclude?: string, sameIfOnly = false): string | undefined {
+    const all = planets.map(([uuid]) => uuid).sort();
+    const ids = all.filter(uuid => uuid !== exclude);
     if (ids.length === 0) {
-        return undefined;
+        return sameIfOnly ? all[0] : undefined;
     }
     return ids[random.below(ids.length)];
 }
@@ -537,6 +540,17 @@ export const NpcDecisionSystem = new System({
                     npc.mode = 'depart';
                     return;
                 }
+                // SHUTTLES (npc_shuttle.ts; reference N2 wave 13): a hull
+                // with Flags3 0x0002 and no scoop flies between the
+                // system's non-enemy stellars, uninhabited ones included,
+                // and never jumps out: when its stay is up it lands at the
+                // end of a stop instead. Ordinary traders fly between the
+                // landable ports and jump out.
+                const shuttle = isShuttle(shipData);
+                const destinations = shuttle
+                    ? shuttleStops(planets, govtData,
+                        id => gameData.data.Govt.getCached(id))
+                    : landingDestinations(planets);
                 // Planet-to-planet loop.
                 if (npc.mode === 'travel') {
                     if (!npc.destination || !entities.has(npc.destination)) {
@@ -558,18 +572,24 @@ export const NpcDecisionSystem = new System({
                         // boarding_plugin's landing reset.
                         clearPlunderRecord(entity);
                         if (!held && time.time >= npc.departAt) {
+                            if (shuttle) {
+                                // A shuttle's way out: it lands here and is
+                                // gone (GUESS; see npc_shuttle.ts). Its
+                                // replacement takes off from a stop
+                                // (npc_spawn_plugin.ts's respawn).
+                                entities.delete(uuid);
+                                return;
+                            }
                             npc.mode = 'depart';
                             return;
                         }
-                        npc.destination = pickPlanet(
-                            landingDestinations(planets), random,
-                            npc.destination);
+                        npc.destination = pickPlanet(destinations, random,
+                            npc.destination, shuttle);
                         npc.mode = travelOrDepart(npc.destination, held);
                     }
                 }
                 if (npc.mode === undefined) {
-                    npc.destination = pickPlanet(
-                        landingDestinations(planets), random);
+                    npc.destination = pickPlanet(destinations, random);
                     npc.mode = travelOrDepart(npc.destination, held);
                 }
                 break;

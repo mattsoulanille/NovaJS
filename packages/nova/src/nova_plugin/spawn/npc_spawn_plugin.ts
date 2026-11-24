@@ -35,6 +35,7 @@ import { ControlledByComponent, GOAL_RESCUE } from '../player/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { FormationComponent, NpcComponent, formationSlotPosition, formationSpacing } from '../npc/index.js';
+import { isShuttle, shuttleStops, stellarEntries } from '../npc/index.js';
 import { PersComponent } from './pers_plugin.js';
 import {
     classifySpawnTest, effectiveNpcSpawnEntries, effectivePersEntries,
@@ -1000,6 +1001,32 @@ export function jumpInState(shipData: ShipData,
 }
 
 /**
+ * Take-off kinematics for a respawning SHUTTLE (npc_shuttle.ts): at rest
+ * on one of its stops (a non-gate stellar not owned by an enemy of
+ * `govt`), the stand-in for taking off, as its landing is the stand-in for
+ * leaving. Two draws (the stop, then the heading); undefined, with no
+ * draw, when it has no stop here, and the caller falls back to a jump-in.
+ * The stellars are genesis state and every govt is staged, so every peer
+ * picks alike.
+ */
+export function takeOffState(world: World,
+    gameData: SimulationGameDataInterface, govt: string | null,
+    random: Random) {
+    const govtOf = (id: string) => gameData.data.Govt.getCached(id);
+    const stops = shuttleStops(stellarEntries(world.entities),
+        govt === null ? undefined : govtOf(govt), govtOf);
+    if (stops.length === 0) {
+        return undefined;
+    }
+    const [, stellar] = stops[random.below(stops.length)]!;
+    return {
+        position: Position.fromVectorLike(stellar.position),
+        rotation: new Angle(random.next() * 2 * Math.PI),
+        velocity: new Vector(0, 0),
+    };
+}
+
+/**
  * Spawns one draw from the spawn table — the candidate tables as `bits`
  * see them (spawn_bits.ts; the empty set by default): a single dude
  * ship, or a whole fleet (lead + escorts in formation slots). `atEdge` selects jump-in
@@ -1060,7 +1087,11 @@ export function spawnNpc(world: World,
         }
         let state;
         if (atEdge) {
-            state = jumpInState(shipData, random);
+            // A SHUTTLE never jumps in (reference N2): it takes off from
+            // one of its stops instead (npc_shuttle.ts).
+            state = (isShuttle(shipData) ? takeOffState(world, gameData,
+                entry.dude.govt, random) : undefined)
+                ?? jumpInState(shipData, random);
         } else {
             state = {
                 position: scatter(),
