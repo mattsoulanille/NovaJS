@@ -18,7 +18,29 @@ export interface ControlRouteTargets {
     bridge: { controlEvents(events: ControlEvent[]): Promise<void> } | undefined;
     /** Fire-and-forget wrapper for the bridge call (runtime.sendToBridge). */
     send(call: Promise<void>): void;
+    /**
+     * True while the player cannot see the system they are arriving in
+     * yet: the hyperspace flash still covers the screen
+     * (display/jump_fade_plugin.ts jumpFadeCovering). While it is, a
+     * HELD jump key is not re-asserted to the simulation (see
+     * {@link ControlRouter}). Omitted means visible.
+     */
+    arrivalHidden?: boolean;
 }
+
+/**
+ * The actions a held key does not re-assert to a new simulation while
+ * the arrival is hidden: the held-j route jump. Holding the jump key
+ * chain-jumps along a route, and a key held across a system transition
+ * reaches the destination's simulation only as its next auto-repeat
+ * (below). The destination world goes live, and its arriving ship has
+ * already left hyperspace in the simulation, while the screen is still
+ * white: the repeat used to reach it there, so a player who let go of
+ * `j` before they could see the new system still jumped again
+ * (Matthew's report, 2026-11-23).
+ */
+const REASSERTED_ONLY_WHEN_VISIBLE: ReadonlySet<ControlAction> =
+    new Set<ControlAction>(['hyperjump']);
 
 /**
  * Routes the client's in-space control events: client-local actions are
@@ -40,6 +62,13 @@ export interface ControlRouteTargets {
  * held when the menu closes becomes held in the sim at its next repeat.
  * So the router remembers which actions the CURRENT bridge has been told
  * are down, and forwards a repeat only for an action it has not — once.
+ * The same re-assert carries a key held through a hyperjump into the
+ * destination system's simulation, which is how a held `j` keeps
+ * chain-jumping along a route. For the jump key it waits until the
+ * arrival is visible (`arrivalHidden`): a repeat while the flash covers
+ * the screen is not forwarded and not remembered, so the next repeat
+ * after the flash clears re-asserts the key if it is still down, and a
+ * key let go before that never jumps again.
  */
 export class ControlRouter {
     private readonly held = new Set<ControlAction>();
@@ -63,7 +92,8 @@ export class ControlRouter {
         if (!bridge) {
             return;
         }
-        const simEvents = this.simulationEvents(bridge, passed);
+        const simEvents = this.simulationEvents(bridge, passed,
+            targets.arrivalHidden ?? false);
         if (simEvents.length > 0) {
             targets.send(bridge.controlEvents(simEvents));
         }
@@ -71,7 +101,7 @@ export class ControlRouter {
 
     /** The events the simulation needs: all but redundant repeats. */
     private simulationEvents(bridge: NonNullable<ControlRouteTargets['bridge']>,
-        events: readonly ControlEvent[]): ControlEvent[] {
+        events: readonly ControlEvent[], arrivalHidden: boolean): ControlEvent[] {
         if (bridge !== this.heldFor) {
             // A new system's simulation: it has been told nothing yet.
             this.heldFor = bridge;
@@ -85,6 +115,10 @@ export class ControlRouter {
                 if (event.state === 'repeat') {
                     continue;
                 }
+            } else if (event.state === 'repeat' && arrivalHidden
+                && REASSERTED_ONLY_WHEN_VISIBLE.has(event.action)) {
+                // A key held across the transition: not yet (see above).
+                continue;
             } else {
                 this.held.add(event.action);
             }

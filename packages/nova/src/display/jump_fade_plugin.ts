@@ -96,6 +96,19 @@ export function resetJumpFade(app: PIXI.Application): void {
     }
 }
 
+/**
+ * Whether the hyperspace white-out still covers any of the screen: from
+ * the departure instant until the destination world has drawn the
+ * arriving ship and the flash has cleared. The client's control router
+ * uses it as "the player cannot see the new system yet" (the held-j
+ * route jump, client/control_routing.ts).
+ */
+export function jumpFadeCovering(app: PIXI.Application): boolean {
+    const overlay = app.stage.getChildByName(JUMP_FADE_OVERLAY_NAME);
+    return overlay instanceof PIXI.Graphics && overlay.visible
+        && overlay.alpha > 0;
+}
+
 function clamp01(value: number) {
     return Math.min(1, Math.max(0, value));
 }

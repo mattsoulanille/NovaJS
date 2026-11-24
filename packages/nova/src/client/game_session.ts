@@ -30,7 +30,7 @@ import { LeaveGateMapEvent } from '../display/gate_map_plugin.js';
 import {
     EscortActionEvent, HailRequestEvent,
 } from '../display/hail_dialog_plugin.js';
-import { resetJumpFade } from '../display/jump_fade_plugin.js';
+import { jumpFadeCovering, resetJumpFade } from '../display/jump_fade_plugin.js';
 import {
     AcceptShipMissionEvent, RefuseShipMissionEvent,
 } from '../display/ship_mission_offer_plugin.js';
@@ -385,6 +385,9 @@ async function enterSession(runtime: ClientRuntime, host: SessionHost,
             controlsSubject: runtime.controlsSubject,
             bridge: live?.bridge,
             send: call => sendToBridge(call, 'Control events'),
+            // The held-j route jump: a jump key held across a transition
+            // reaches the new system only once its arrival is visible.
+            arrivalHidden: jumpFadeCovering(app),
         });
     }
 

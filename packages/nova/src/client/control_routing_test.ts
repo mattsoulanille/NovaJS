@@ -128,6 +128,46 @@ describe('ControlRouter', () => {
         expect(second.records).toEqual([[repeat('accelerate')]]);
     });
 
+    describe('the held-j route jump', () => {
+        const hidden = (bridge: FakeBridge) =>
+            ({ ...targets(bridge), arrivalHidden: true });
+
+        it('does not re-assert a held jump key to a new system while its arrival is hidden', () => {
+            const router = new ControlRouter();
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            router.route([start('hyperjump')], targets(origin));
+            // Arrived, still behind the flash: repeats go nowhere...
+            router.route([repeat('hyperjump')], hidden(destination));
+            router.route([repeat('hyperjump')], hidden(destination));
+            // ...and the key is let go before the player sees the system.
+            router.route([release('hyperjump')], hidden(destination));
+            router.route([release('hyperjump')], targets(destination));
+            expect(destination.records.flat()
+                .filter(event => event.state !== false)).toEqual([]);
+        });
+
+        it('re-asserts it with the first repeat once the arrival is visible: holding through keeps chaining', () => {
+            const router = new ControlRouter();
+            const origin = new FakeBridge();
+            const destination = new FakeBridge();
+            router.route([start('hyperjump')], targets(origin));
+            router.route([repeat('hyperjump')], hidden(destination));
+            router.route([repeat('hyperjump')], targets(destination));
+            router.route([repeat('hyperjump')], targets(destination));
+            expect(destination.records).toEqual([[repeat('hyperjump')]]);
+        });
+
+        it('leaves fresh presses and every other held key alone', () => {
+            const router = new ControlRouter();
+            const bridge = new FakeBridge();
+            router.route([repeat('accelerate')], hidden(bridge));
+            router.route([start('hyperjump')], hidden(bridge));
+            expect(bridge.records).toEqual([
+                [repeat('accelerate')], [start('hyperjump')]]);
+        });
+    });
+
     it('keeps client-local actions out of every path, and sends nothing for an empty remainder', () => {
         const router = new ControlRouter();
         const bridge = new FakeBridge();
