@@ -70,16 +70,18 @@ export interface GovtData extends BaseData {
      * 16-bit ScanMask (EVN Bible ~:1116): if any 1 bit matches one in a
      * mïsn's ScanMask (MissionData.scanMask), a jünk's (JunkData.scanMask)
      * or an oütf's (OutfitData.scanMask), this government considers that
-     * mission cargo, commodity or outfit illegal. 0 = unused. Data only:
-     * contraband scanning does not exist yet (docs/npc_behavior_gaps.md).
+     * mission cargo, commodity or outfit illegal. 0 = unused. Read by the
+     * AI 4 contraband scan (nova's npc/contraband.ts): a govt with 0 here
+     * never scans.
      */
     scanMask: number;
 
     /**
      * Legal-record penalties for various crimes against this government.
      * smugglePenalty is the Bible's SmugPenalty (~:987), the record lost
-     * for being detected smuggling past this government's ships; nothing
-     * applies it yet (no scanning).
+     * for being detected smuggling past this government's ships. The
+     * contraband scan charges it for an illegal OUTFIT only (reference S1/S2
+     * wave 12; nova's npc/contraband.ts).
      */
     smugglePenalty: number;
     disablePenalty: number;

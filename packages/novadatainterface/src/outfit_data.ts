@@ -249,12 +249,19 @@ export interface OutfitData extends BaseData {
      * government's ScanMask field match any of the 1 bits in an oütf type's
      * ScanMask field, that government will consider that outfit item
      * illegal. Set to zero if unused." Compare with GovtData.scanMask.
-     * Carried as data for contraband scanning, which does not exist yet
-     * (docs/npc_behavior_gaps.md); 56 stock outfits set bits, most of them
-     * 0x8000 (the Federation's), e.g. the "Illegal" blasters and missiles.
-     * Always 0 for a built-in (implicit) outfit.
+     * Read by contraband scanning (nova's npc/contraband.ts); 56 stock
+     * outfits set bits, most of them 0x8000 (the Federation's), e.g. the
+     * "Illegal" blasters and missiles. Always 0 for a built-in (implicit)
+     * outfit.
      */
     scanMask: number,
+    /**
+     * oütf LCName, the lower-case name the game uses mid-sentence ("your
+     * posession of a <LCName> has been detected", a contraband scan's
+     * status line). Empty when the oütf leaves it blank; callers fall back
+     * to the name.
+     */
+    lcName: string,
     /**
      * Amount this outfit clears the current system's murk by (ModType 28,
      * "murk modifier"). The Bible's ModVal is the amount to add to the
@@ -418,6 +425,7 @@ export function getDefaultOutfitData(): OutfitData {
         increasesMax: null,
         miningScoop: false,
         scanMask: 0,
+        lcName: "",
         murkClear: 0,
         interferenceReduction: 0,
         iff: false,

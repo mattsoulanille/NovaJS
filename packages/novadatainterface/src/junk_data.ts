@@ -27,8 +27,8 @@ export interface JunkData extends BaseData {
      * government's ScanMask field match any of the 1 bits in a jünk type's
      * ScanMask field, that government will consider that junk cargo type
      * illegal. Set to zero if unused." Compare with GovtData.scanMask.
-     * Carried as data for contraband scanning, which does not exist yet
-     * (docs/npc_behavior_gaps.md); 21 of the 23 stock jünks set bits.
+     * Read by contraband scanning (nova's npc/contraband.ts); 21 of the
+     * 23 stock jünks set bits.
      */
     scanMask: number;
     /** Lower-case display name, e.g. "machine parts". */
