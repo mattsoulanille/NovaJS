@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w14-penalty",
+  "edits": {
+    "ship": 703,
+    "stellar": 2158,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2050": 2,
+      "2051": 2,
+      "2158": 2,
+      "2159": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w14-penalty",
+    "weapons": {
+      "128": 0,
+      "283": 1
+    },
+    "outfits": {
+      "128": 0,
+      "460": 1
+    }
+  }
+}

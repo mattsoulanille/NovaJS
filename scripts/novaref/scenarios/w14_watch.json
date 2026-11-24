@@ -1,0 +1,13 @@
+{
+ "name": "w14_watch",
+ "_comment": "Wave 14 items 3 and 4 (npc_behavior_gaps.md P1 / T1 / N1): Enter Ship at a stellar and sit still for about 9 minutes, recording the window at 10 fps (radar_blips.mjs --tracks) with a window shot every 20 s. Pilots w14_market (sÿst 2085 Kit Life Range, the player at Life Market), w14_mixed (2010 Kit Mine Mixed: AI 2 / 3 / 4 miners), w14_raid (2059 Kit Raid Range: police, shipping, quiet shipping, raiders).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "repeat": 27, "steps": [ { "shot": "w-{i}", "window": true }, { "wait": 18000 } ] },
+  { "record": "stop" }
+ ]
+}

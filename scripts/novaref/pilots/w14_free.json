@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w14-free",
+  "edits": {
+    "ship": 703,
+    "stellar": 2055,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2055": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w14-free",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}

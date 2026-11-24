@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w14-kitdude-cargo",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9150": true
+    },
+    "nickname": "Probe",
+    "shipName": "w14-kitdude-cargo"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "novaref-w14-spread",
+  "edits": {
+    "ship": 703,
+    "stellar": 2095,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2095": 2,
+      "2096": 2,
+      "2097": 2,
+      "2098": 2,
+      "2099": 2,
+      "2108": 2,
+      "2109": 2,
+      "2135": 2,
+      "2136": 2,
+      "2137": 2,
+      "2138": 2,
+      "2139": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w14-spread",
+    "weapons": {
+      "128": 0,
+      "283": 1
+    },
+    "outfits": {
+      "128": 0,
+      "460": 1
+    }
+  }
+}

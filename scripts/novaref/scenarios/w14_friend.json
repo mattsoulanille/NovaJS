@@ -1,0 +1,22 @@
+{
+ "name": "w14_friend",
+ "_comment": "Wave 14 item 3: a victim the police govt cares about. sÿst 2008 Kit Friend Range is owned by gövt 323 Kit Police Allied (AI 4 red discs), whose ally 324 Kit Police Friend flies AI 1 blue discs. The player (Kit Lancer + Kit Long Beam) Tabs to a blue (tab_to), beams it 3 s, then shots every 3 s for the police brackets and bolts, Tabs through the ships, lands, leaves, pull (the 2008 record). Pilot w14_friend.",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 3000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "script": "../loops/tab_to.mjs", "args": { "colour": "blue", "tries": 14 } },
+  { "keys": "Space@3000 wait 300" },
+  { "shot": "fired", "window": true },
+  { "repeat": 5, "steps": [ { "wait": 2500 }, { "shot": "w-{i}", "window": true } ] },
+  { "repeat": 6, "steps": [ { "keys": "Tab wait 400" }, { "shot": "tab-{i}", "window": true } ] },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "Return wait 4000" },
+  { "shot": "left", "window": true }
+ ],
+ "pull": true
+}

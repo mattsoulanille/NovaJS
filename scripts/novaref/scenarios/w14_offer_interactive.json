@@ -1,0 +1,21 @@
+{
+ "name": "w14_offer_interactive",
+ "_comment": "Wave 14: land at the start stellar, accept the main-spaceport offer (Return), take off with the recording running, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w14.jsonl) until {\"done\":true}; the pilot is pulled at the end. CompReward (w14_comp), the 0x0020 / ScanMask-0 mission (w14_s3_clean, w14_s3_pod), rescue / abort (w14_abort_rescue, w14_shipstart2, w14_kitdude_cargo, w14_nocargo).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "keys": "l wait 1500 l wait 9000" },
+  { "shot": "offer", "window": true },
+  { "keys": "Return wait 2500" },
+  { "shot": "accepted", "window": true },
+  { "record": "start", "window": true },
+  { "keys": "Return wait 3500" },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w14.jsonl", "maxMs": 1800000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

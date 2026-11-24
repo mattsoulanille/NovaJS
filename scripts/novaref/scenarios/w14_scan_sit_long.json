@@ -1,0 +1,21 @@
+{
+ "name": "w14_scan_sit_long",
+ "_comment": "Wave 14 item 2: a pod pilot (oütf 458 Kit Contraband Pod, ScanMask 0x0001) starts beside a customs port and sits about 100 s (status line and credits in the shots), then lands, leaves (the pilot is written) and is pulled: the fine, the message and every system's record. Pilots w14_free (2055: gövt 331 ScanFine 0), w14_percent (2058: gövt 329 ScanFine -5), w14_foreign (2057: owned by the neutral 363, scanned by the nosy gövt 330's cutters; 2056 is 330's own, linked).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 1500" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "repeat": 30, "steps": [ { "shot": "w-{i}", "window": true }, { "wait": 1500 } ] },
+  { "record": "stop" },
+  { "keys": "l wait 1500 l wait 1500 l wait 10000" },
+  { "shot": "landed", "window": true },
+  { "keys": "m wait 2500" },
+  { "shot": "map", "window": true },
+  { "keys": "m wait 1500" },
+  { "keys": "Return wait 4000" },
+  { "shot": "left", "window": true }
+ ],
+ "pull": true
+}

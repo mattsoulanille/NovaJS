@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w14-raid",
+  "edits": {
+    "ship": 839,
+    "stellar": 2059,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2059": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w14-raid"
+  }
+}

@@ -285,8 +285,184 @@ export default {
         ...wave11Resources(),
         ...wave12Resources(),
         ...wave13Resources(),
+        ...wave14Resources(),
     ].map(withoutRunningLights),
 };
+
+/**
+ * Wave-14 experiments (docs/reference_experiments.md, "... wave 14").
+ * Nothing retired; ids above wave 13's (shïp 882+, düde 369+, gövt
+ * 323-338, mïsn 1078+, bits 9145+, jünk 203) and the last free sÿst / spöb
+ * ids (2001, 2008, 2010, 2050-2059, 2062, 2063, 2065, 2095-2099, 2108,
+ * 2109, 2129, 2135-2139, 2146, 2158, 2159).
+ *
+ *  A   A14 spread. Reward chain: gövt 338 Kit Spread Owner (Disab 2,
+ *      Board 2, Kill 8000: a kill of an unrelated ship pays 1 + 4000 =
+ *      4001; ally 337, enemy 336) owns sÿst 2095 Kit Spread Kill (traffic:
+ *      düde 344, gövt 350's bare traders) and the chain 2096 - 2097 - 2098
+ *      - 2099 - 2108 - 2109 (1-6 jumps). Also linked to 2095: 2135 owned by
+ *      the ally 337 (40 / 2 / 60), 2136 by the enemy 336 (70 / 2 / 140),
+ *      2137 by the victim's govt 350. 2138 (338) is reached from 2095 only
+ *      through a HYPERGATE (spöb 2129 in 2095 <-> spöb 2138), 2139 (338)
+ *      only through a WORMHOLE (spöb 2146 in 2095 <-> spöb 2139).
+ *      Penalty: gövt 335 Kit Penalty Owner (2 / 2 / 8000, ally 334, enemy
+ *      333) owns 2158 Kit Penalty Kill (traffic: its OWN bare traders, düde
+ *      369) and 2159 (one jump); 2050 (334, 40 / 2 / 60) and 2051 (333,
+ *      70 / 2 / 140) are linked to 2158. CompReward: mïsn 1079 (bit 9145)
+ *      at Kit Port, no goal, CompGovt 338, CompReward 1000, ReturnStel Kit
+ *      Port (OnSuccess b9146).
+ *  S   Contraband. mïsn 1078 (bit 9147): a kit copy of stock mïsn 441
+ *      "Rebel Food Drop" (Flags 0x0020 with ScanMask 0; 0x1060 kept, no
+ *      ships) offered at Kit Scan Port: 10 t of food aboard at accept, to
+ *      Kit Scan Gate Port (OnFailure b9148, OnSuccess b9149). Customs govts
+ *      (all ScanMask 0x0001, AI 4 Kit Customs Cutters, shïp 855, two per
+ *      system): 332 Kit Customs Tolerant (fine 500, Smug 50, CrimeTol
+ *      30000: a scan never makes the pilot a criminal, so rescans can be
+ *      counted) owns 2053; 331 Kit Customs Free (ScanFine 0, Smug 50) owns
+ *      2055; 329 Kit Customs Percent (ScanFine -5, Smug 50) owns 2058;
+ *      330 Kit Customs Nosy (0x0002, fine 500, Smug 50) owns 2056 Kit
+ *      Customs Home, its cutters fly in 2057 Kit Scan Foreign (owned by the
+ *      neutral 363, linked to 2056). jünk 203 Kit Contraband (ScanMask
+ *      0x0001) is sold at Kit Scan Port (2069).
+ *  P   Police. sÿst/spöb 2059 Kit Raid Range (owned by 342 Kit Police):
+ *      police (düde 354), Kit Shipping (355, green), 327 Kit Shipping Quiet
+ *      (Flags2 0x0008: no distress; shïp 883 blue, düde 375) and 328 Kit
+ *      Raider P (enemy of 343 and 327; shïp 882 yellow, AI 3, Kit Raider
+ *      Gun; düde 374). sÿst 2001 / spöb 2062 Kit Nosy Range (owned by 326
+ *      Kit Police Nosy, gövt 0x0002: police düde 376) with Kit Shipping
+ *      (355, green) and 325 Kit Shipping Ignored (gövt 0x0020; shïp 884
+ *      cyan, düde 377). sÿst 2008 / spöb 2063 Kit Friend Range (owned by
+ *      323 Kit Police Allied, police düde 378) with traders of its ally 324
+ *      Kit Police Friend (shïp 883 blue, düde 379).
+ *  M   Miners: sÿst 2010 / spöb 2065 Kit Mine Mixed (16 metal rocks, gövt
+ *      363): the Kit Miner hull (Flags3 0x0003, scoop, four wëap 181) as
+ *      AI 2 (shïp 885 green, düde 380) and AI 3 (shïp 886 yellow, düde 381),
+ *      and a Flags3-0x0001-only AI 4 without a scoop (the Zephyr case; shïp
+ *      887 red, düde 382), one third each, avgShips 4.
+ *  R   mïsn 1080 (bit 9150): wave 13's 1071 (stock Raczak fields, cargo
+ *      picked up by boarding, ShipStart -1) with the kit's düde 330.
+ */
+function wave14Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const armed = (wid, n = 1) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] });
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+
+    // --- A: the spread of a legal-record change.
+    out.push(govt(338, "Kit Spread Owner", { disabPenalty: 2, boardPenalty: 2, killPenalty: 8000, classes: [338, -1, -1, -1], allies: [337, -1, -1, -1], enemies: [336, -1, -1, -1] }));
+    out.push(govt(337, "Kit Spread Ally", { disabPenalty: 40, boardPenalty: 2, killPenalty: 60, classes: [337, -1, -1, -1], allies: [338, -1, -1, -1] }));
+    out.push(govt(336, "Kit Spread Enemy", { disabPenalty: 70, boardPenalty: 2, killPenalty: 140, classes: [336, -1, -1, -1], enemies: [338, -1, -1, -1] }));
+    const chain = [2096, 2097, 2098, 2099, 2108, 2109];
+    const kill = traffic(system(2095, "Kit Spread Kill", 100, -900, 338, [2095, 2129, 2146]), [[344, 100]], 3);
+    kill.set.links = links(chain[0], 2135, 2136, 2137);
+    out.push(kill, port(2095, "Kit Spread Kill Port"));
+    chain.forEach((id, i) => {
+        const s = system(id, `Kit Spread ${i + 1}`, 140 + 40 * i, -900, 338, [id]);
+        s.set.links = links(i === 0 ? 2095 : chain[i - 1], ...(i + 1 < chain.length ? [chain[i + 1]] : []));
+        out.push(s, port(id, `Kit Spread ${i + 1} Port`));
+    });
+    for (const [id, name, owner, x, y] of [[2135, "Kit Spread Ally Home", 337, 100, -860], [2136, "Kit Spread Enemy Home", 336, 60, -900], [2137, "Kit Spread Victim Home", 350, 100, -940]]) {
+        const s = system(id, name, x, y, owner, [id]);
+        s.set.links = links(2095);
+        out.push(s, port(id, `${name} Port`));
+    }
+    // The hypergate pair and the wormhole pair (stock HG-Aldebaran / Wormhole art and flags).
+    out.push(system(2138, "Kit Spread Gate", 400, -900, 338, [2138]), system(2139, "Kit Spread Worm", 440, -900, 338, [2139]));
+    out.push(spob(2129, "Kit Spread Gate A", 600, 0, 130, { flags: 0x30, flags2: 0x1000, hyperlinks: [2138, ...none8.slice(1)], techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(spob(2138, "Kit Spread Gate B", 0, 0, 130, { flags: 0x30, flags2: 0x1000, hyperlinks: [2129, ...none8.slice(1)], techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(spob(2146, "Kit Spread Worm A", -600, 0, 465, { flags: 0x21, flags2: 0x2200, hyperlinks: [2139, ...none8.slice(1)], techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(spob(2139, "Kit Spread Worm B", 0, 0, 465, { flags: 0x21, flags2: 0x2200, hyperlinks: [2146, ...none8.slice(1)], techLevel: 0, specialTech: [-1, -1, -1] }));
+    // Penalty rig.
+    out.push(govt(335, "Kit Penalty Owner", { disabPenalty: 2, boardPenalty: 2, killPenalty: 8000, classes: [335, -1, -1, -1], allies: [334, -1, -1, -1], enemies: [333, -1, -1, -1] }));
+    out.push(govt(334, "Kit Penalty Ally", { disabPenalty: 40, boardPenalty: 2, killPenalty: 60, classes: [334, -1, -1, -1], allies: [335, -1, -1, -1] }));
+    out.push(govt(333, "Kit Penalty Enemy", { disabPenalty: 70, boardPenalty: 2, killPenalty: 140, classes: [333, -1, -1, -1], enemies: [335, -1, -1, -1] }));
+    out.push(dude(369, "Kit Penalty Bare Trader", 1, 335, 861));
+    const pen = traffic(system(2158, "Kit Penalty Kill", 100, -980, 335, [2158]), [[369, 100]], 3);
+    pen.set.links = links(2159, 2050, 2051);
+    out.push(pen, port(2158, "Kit Penalty Kill Port"));
+    for (const [id, name, owner, x, y] of [[2159, "Kit Penalty 1", 335, 140, -980], [2050, "Kit Penalty Ally Home", 334, 100, -1020], [2051, "Kit Penalty Enemy Home", 333, 60, -980]]) {
+        const s = system(id, name, x, y, owner, [id]);
+        s.set.links = links(2158);
+        out.push(s, port(id, `${name} Port`));
+    }
+    // CompReward: a goal-less mission for gövt 338, accepted and completed at Kit Port.
+    out.push(...misn(1079, "Kit A comp reward 338", 9145, { compGovt: 338, compReward: 1000, returnStel: 2100, onAccept: "!b9145", onSuccess: "b9146" }));
+
+    // --- S: contraband.
+    out.push(...misn(1078, "Kit S rebel food drop copy", 9147, { availStel: 2069, travelStel: 2068, returnStel: 2069, cargoType: 0, cargoQty: 10, pickupMode: 0, dropoffMode: 0,
+        scanMask: 0, flags: 0x1060, compGovt: 354, compReward: 10, onAccept: "!b9147", onFailure: "b9148", onSuccess: "b9149" }));
+    const customs = (gid, name, did, sid, sname, set) => {
+        out.push(govt(gid, name, { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, classes: [gid, -1, -1, -1], ...set }));
+        out.push(dude(did, `${name} Cutter`, 4, gid, 855));
+        if (sid) out.push(traffic(system(sid, sname, -280, -740 - 40 * (gid - 328), gid, [sid]), [[did, 100]], 2), port(sid, `${sname} Port`));
+    };
+    customs(332, "Kit Customs Tolerant", 370, 2053, "Kit Scan Tolerant", { crimeTol: 30000 });
+    customs(331, "Kit Customs Free", 371, 2055, "Kit Scan Free", { scanFine: 0 });
+    customs(329, "Kit Customs Percent", 373, 2058, "Kit Scan Percent", { scanFine: -5 });
+    customs(330, "Kit Customs Nosy", 372, null, null, { flags: 0x0002 });
+    const nosyHome = system(2056, "Kit Customs Home", -360, -780, 330, [2056]);
+    nosyHome.set.links = links(2057);
+    const foreign = traffic(system(2057, "Kit Scan Foreign", -400, -780, 363, [2057]), [[372, 100]], 2);
+    foreign.set.links = links(2056);
+    out.push(nosyHome, port(2056, "Kit Customs Home Port"), foreign, port(2057, "Kit Scan Foreign Port"));
+    // Added during the wave: in 2057 the nosy scanner fined the pilot and no
+    // record moved, but the owner 363's SmugPenalty is 0. sÿst 2029 / spöb
+    // 2066 Kit Scan Smug Owner: owned by gövt 322 Kit Smug Owner (SmugPenalty
+    // 70, no ScanMask), the nosy 330's cutters as traffic: whose
+    // SmugPenalty, if any, lands on the 2029 record?
+    out.push(govt(322, "Kit Smug Owner", { smugPenalty: 70, classes: [322, -1, -1, -1] }));
+    out.push(traffic(system(2029, "Kit Scan Smug Owner", -440, -780, 322, [2066]), [[372, 100]], 2), port(2066, "Kit Scan Smug Owner Port"));
+    // Added during the wave: in Kit Scan Range a pod pilot is scanned (and
+    // made a criminal by the SmugPenalty) before it can land and accept
+    // 1078, and a criminal is attacked, not rescanned. mïsn 1081 (bit 9152)
+    // is 1078 offered at Kit Scan Tolerant Port (gövt 332, CrimeTol 30000:
+    // the pilot stays legal, so it can be scanned again with the mission
+    // aboard), to Kit Scan Free Port (OnFailure b9153, OnSuccess b9154).
+    out.push(...misn(1081, "Kit S rebel food drop tolerant", 9152, { availStel: 2053, travelStel: 2055, returnStel: 2053, cargoType: 0, cargoQty: 10, pickupMode: 0, dropoffMode: 0,
+        scanMask: 0, flags: 0x1060, compGovt: 332, compReward: 10, onAccept: "!b9152", onFailure: "b9153", onSuccess: "b9154" }));
+    out.push({ type: "jünk", id: 203, name: "Kit Contraband", clone: "jünk:128", set: { soldAt: [2069, ...none8.slice(1)], boughtAt: none8, basePrice: 100, flags: 0, scanMask: 0x0001, lcName: "kit contraband", abbrev: "Contraband", buyOn: "", sellOn: "" } });
+
+    // --- P: police, distress calls, nosy-ignore, a victim the police care about.
+    out.push(govt(328, "Kit Raider P", { classes: [328, -1, -1, -1], enemies: [343, 327, -1, -1] }));
+    out.push(govt(327, "Kit Shipping Quiet", { classes: [327, -1, -1, -1], flags2: 0x0008 }));
+    out.push(govt(326, "Kit Police Nosy", { classes: [326, -1, -1, -1], flags: 0x0002 }));
+    out.push(govt(325, "Kit Shipping Ignored", { classes: [325, -1, -1, -1], flags: 0x0020 }));
+    out.push(govt(323, "Kit Police Allied", { classes: [323, -1, -1, -1], allies: [324, -1, -1, -1] }));
+    out.push(govt(324, "Kit Police Friend", { classes: [324, -1, -1, -1], allies: [323, -1, -1, -1] }));
+    out.push(...shareRled(882, "Kit Raider P", 1974, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(367) }));
+    out.push(...shareRled(883, "Kit Shipping Blue", 1973, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }));
+    out.push(...shareRled(884, "Kit Shipping Cyan", 1976, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }));
+    out.push(dude(374, "Kit Raider P", 3, 328, 882), dude(375, "Kit Shipping Quiet", 1, 327, 883), dude(376, "Kit Police Nosy", 4, 326, 868),
+        dude(377, "Kit Shipping Ignored", 1, 325, 884), dude(378, "Kit Police Allied", 4, 323, 868), dude(379, "Kit Police Friend", 1, 324, 883));
+    out.push(traffic(system(2059, "Kit Raid Range", -40, -740, 342, [2059]), [[354, 100], [355, 100], [375, 100], [374, 100]], 6), port(2059, "Kit Raid Port"));
+    out.push(traffic(system(2001, "Kit Nosy Range", -40, -780, 326, [2062]), [[376, 100], [355, 100], [377, 100]], 5), port(2062, "Kit Nosy Port"));
+    out.push(traffic(system(2008, "Kit Friend Range", -40, -820, 323, [2063]), [[378, 100], [379, 100]], 4), port(2063, "Kit Friend Port"));
+
+    // --- M: AI 2 / AI 3 / AI 4 miners.
+    const miner = { ...mobile, armor: 1000, shield: 1000, flags3: 0x0003, cargo: 100, weapons: [181, -1, -1, -1], weaponCounts: [4, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], outfits: [271, -1, -1, -1], outfitCounts: [1, 0, 0, 0] };
+    out.push(...shareRled(885, "Kit Miner Brave", 1972, 24, { ...miner, ai: 2 }));
+    out.push(...shareRled(886, "Kit Miner Warship", 1974, 24, { ...miner, ai: 3 }));
+    out.push(...shareRled(887, "Kit Rock Interceptor", 1971, 24, { ...miner, ai: 4, flags3: 0x0001, outfits: none4, outfitCounts: zero4 }));
+    out.push(dude(380, "Kit Miner Brave", 2, 363, 885), dude(381, "Kit Miner Warship", 3, 363, 886), dude(382, "Kit Rock Interceptor", 4, 363, 887));
+    const mixed = traffic(system(2010, "Kit Mine Mixed", 220, -860, 363, [2065]), [[380, 33], [381, 33], [382, 34]], 4);
+    mixed.set = { ...mixed.set, asteroids: 16, asteroidTypes: 0x000F };
+    out.push(mixed, port(2065, "Kit Mine Mixed Port"));
+
+    // --- R: the Raczak rescue with the kit düde and the mission cargo.
+    const raczak = { shipCount: 1, shipSyst: -1, shipDude: 330, shipGoal: 5, shipBehav: -1, shipNameID: 25002, compGovt: 144, compReward: 10,
+        cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520, flags: 0x1214, flags2: 0x0001, returnStel: 2100, availShipType: 127 };
+    out.push(...misn(1080, "Kit R kit dude with cargo", 9150, { ...raczak, shipStart: -1, onAccept: "!b9150", onSuccess: "b9151" }));
+    return out;
+}
 
 /**
  * Wave-13 experiments (docs/reference_experiments.md, "... wave 13").

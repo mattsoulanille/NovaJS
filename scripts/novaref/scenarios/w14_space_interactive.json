@@ -1,0 +1,17 @@
+{
+ "name": "w14_space_interactive",
+ "_comment": "Wave 14: Enter Ship, recording from the start, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w14.jsonl) until {\"done\":true}; the pilot is pulled at the end (land and leave inside the hand-driven part so it is written). A14 spread / penalty (w14_spread, w14_penalty), contraband (w14_rescan, w14_free, w14_percent, w14_junk, w14_foreign), police (w14_nosy, w14_friend).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w14.jsonl", "maxMs": 1800000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}
