@@ -506,7 +506,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    non-enemy port for 15 s and then departs. No input kind or message
 //    kind changes. The derived wire schema fingerprint changes
 //    (0c6eeff124ceccf1 -> 86cef0d44be60ecd on its own; 4ba45ea2f8ce4634 ->
-//    COMBINEDFP on top of the scan-failure note above), and the join gate
+//    90e66780d5561a8d on top of the scan-failure note above), and the join gate
 //    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;

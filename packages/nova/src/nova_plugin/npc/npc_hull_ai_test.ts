@@ -417,19 +417,26 @@ describe('hull AI flags (reference W1 / C1 wave 15)', () => {
                 let cloakedTravelling = false;
                 let plainCloaked = false;
                 runFor(world, 60, () => {
-                    const ship = world.entities.get('cloaker')!;
-                    const npc = ship.components.get(NpcComponent)!;
-                    const cloaked = ship.components.get(CloakActiveComponent)
-                        ?.active === true;
-                    seen.set(`${npc.mode}:${cloaked}`, true);
-                    if (npc.mode === 'travel' && npc.until === undefined) {
-                        cloakedTravelling ||= cloaked;
+                    // A trader makes one stop and then jumps out (wave 15),
+                    // so either ship may be gone before the minute is up.
+                    const ship = world.entities.get('cloaker');
+                    const npc = ship?.components.get(NpcComponent);
+                    if (ship && npc) {
+                        const cloaked = ship.components
+                            .get(CloakActiveComponent)?.active === true;
+                        seen.set(`${npc.mode}:${cloaked}`, true);
+                        if (npc.mode === 'travel' && npc.until === undefined) {
+                            cloakedTravelling ||= cloaked;
+                        }
+                        // Pulling away after the stay: now 'depart' (one
+                        // stop per visit), or 'travel' for a held ship.
+                        if ((npc.mode === 'travel' || npc.mode === 'depart')
+                            && npc.until !== undefined
+                            && now(world) < npc.until + 1000) {
+                            revealedAfterStay ||= !cloaked;
+                        }
                     }
-                    if (npc.mode === 'travel' && npc.until !== undefined
-                        && now(world) < npc.until + 1000) {
-                        revealedAfterStay ||= !cloaked;
-                    }
-                    plainCloaked ||= world.entities.get('plain')!.components
+                    plainCloaked ||= world.entities.get('plain')?.components
                         .get(CloakActiveComponent)?.active === true;
                 });
                 expect(cloakedTravelling).toBeTrue();
