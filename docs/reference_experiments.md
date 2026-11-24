@@ -7277,7 +7277,21 @@ the frames; no per-ship tracking).
 - 4: STR# 5003 is not read anywhere; gövt Flags2 0x0008 only silences
   hail greetings (`N/nova_plugin/reputation/hail.ts:148`, `:199`).
 
-**Proposed fix (not applied).** In `NpcAggressionSystem`, when a ship V is
+**Applied (wave-14 fixes, 2026-11-24).** Piracy police:
+`N/nova_plugin/npc/piracy_police.ts`, called from `NpcAggressionSystem`
+through the `provoke` / `provokeFleet` path: an AI 4 within 1800 px of the
+victim or the attacker records a player-side attacker when its govt is
+nosy (the victim not its enemy, not 0x0020) or the victim is its own or an
+ally's (`local_law.ts`'s `alliedEitherWay`, either direction). Distress
+calls: `N/nova_plugin/npc/distress.ts`; a trader (AI 1/2) hit in an attack
+by an NPC not on a player's side, without Flags2 0x0008 on its govt or
+hull, sends "<ship>: <STR# 5003 line>" to every player's status line, at
+most once per 20 s per ship (one PRNG draw picks the line); nobody
+answers. Specs: `N/nova_plugin/npc/piracy_police_test.ts`. The guesses are
+listed in docs/npc_behavior_gaps.md, "Piracy police and distress calls:
+guesses to measure".
+
+**Proposed fix (as written before it was applied).** In `NpcAggressionSystem`, when a ship V is
 hit by an attacker A (the player's ship or flock): every AI 4 within its
 engagement range whose govt is NOSY (0x0002) and is not allied to A's
 govt, or whose govt is V's own or allied to it, records A as its aggressor

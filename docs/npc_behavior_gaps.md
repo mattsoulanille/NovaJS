@@ -108,10 +108,10 @@ inventory row); real landing for ordinary traffic is still open.
 | **Contraband scan by AI 4** ("buzzes incoming ships to scan them for illegal cargo") | B:867-868 (AI 4); gövt ScanFine B:977-986, SmugPenalty B:987-988, ScanMask B:1116-1119; jünk ScanMask B:1168-1173; oütf ScanMask B:2027-2032; mïsn ScanMask B:1364-1367; status strings STR# 2002 374-379, 392-393, 285 | **Done (2026-11-24),** to the S1/S2 measurements (R: "S1 / I1 wave 11", "S1 and S2 wave 12"). Rules: N/nova_plugin/npc/contraband.ts; who is buzzed and the scanned marker: contraband_target.ts; the scan: contraband_scan.ts (ContrabandScanSystem); AI 4 decision case 4 in npc_decision.ts, mode 'scan' steered in npc_steering.ts; the status line: N/display/status_bar_content.ts `contrabandScanMessage`. An AI 4 of a govt with a ScanMask that enforces here (local_law.ts) flies at an unscanned, non-criminal PLAYER ship within 3000 px that carries something illegal to it, and scans it within 150 px. Illegal outfit: "…your posession of a <LCName> has been detected. You have been fined N credits.", ScanFine, SmugPenalty off this system's record. Plain mission cargo: "…your attempt to smuggle illegal cargo through this system…", ScanFine, no SmugPenalty. A clean ship is never approached. Per player: each pilot is scanned, charged and told separately. | The **guesses** below ("Contraband scan: guesses to measure"); briefs **S1** run 5-7, **S2** ScanFine 0, **S3**. | (done) |
 | **Mission fails if scanned** (mïsn Flags 0x0020) | B:1550; STR# 2002 #285 | **Done:** a scan that finds the mission's cargo illegal fails it ("Your ship has been scanned - mission failed."), no fine, no record (R: "S1 and S2 wave 12"). ScanMask and the flag are frozen onto the ActiveMission at accept (mission_accept_offer.ts). | Does ANY scan fail it, or only a matching one? (S3.) **51 stock 0x0020 missions have ScanMask 0**, so they can never fail by scan under the current reading. | (done) |
 | **SmugPenalty** (record loss when detected smuggling) | B:987-988 | **Done** for an illegal OUTFIT only, as measured: the record of the system the scan happened in (its status govt), not the scanner's own. Not for mission cargo (measured) or jünk (guess). | Jünk; a scanner that is not the system's owner (whose record moves?). | (done) |
-| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Missing.** An NPC remembers only its OWN attacker (`npc.aggressor`, N/nova_plugin/npc/npc_targeting.ts:64). Nobody reacts to an attack on a third ship. N/nova_plugin/npc/npc_plunder.ts:21-25 keeps AI 4 out of plundering for this reason. | "Watching" range; whether it covers NPC-on-NPC fights (raiders vs traders); whose "non-enemy" counts (the victim must not be the police govt's enemy?); whether the culprit's record changes; how long the police stay on it. Brief **P1**. | M |
-| **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Not read** (parsed as `ignoredByOtherNosyGovts`, used nowhere). 27 stock govts set it, including Federation, Auroran, Pirate and Krypt. | What "nosy" means here: gövt 0x0002 ships, or AI 4 police generally? It exempts victims of these govts from rescue by others. Brief **P1** variant. | S, with police |
+| **Piracy police** (AI 4 attacks "any ship that fires on or attempts to board another, non-enemy ship while the interceptor is watching") | B:868-871 | **Done (2026-11-24),** to "P1 wave 13" and "P1 wave 14" (R). N/nova_plugin/npc/piracy_police.ts (`policeDefendVictim`, `piracyWitnesses`), called from NpcAggressionSystem (N/nova_plugin/npc/npc_targeting.ts) through the same `provoke` / `provokeFleet` path a hit uses. When a PLAYER-side ship attacks an NPC, every AI 4 within 1800 px of the victim or the attacker records the attacker as its aggressor if its govt defends the victim: a NOSY govt (gövt 0x0002) for any non-enemy victim without 0x0020; any govt for its own or an ally's ship (local_law.ts's `alliedEitherWay`). The record lasts until the attacker leaves the world (lands, jumps, dies). Non-nosy police ignore an unrelated victim (wave 13). No record change. | The **guesses** below ("Piracy police and distress calls: guesses to measure"). | (done) |
+| **Nosy-ignore** (gövt 0x0020: "Nosy ships of other non-allied governments ignore ships of this govt that are under attack") | B:1063-1064 | **Done (2026-11-24)** with the piracy police: nosy police ignore an attack on a ship whose govt sets 0x0020 (R: "P1 wave 14", finding 2). "Nosy" is gövt 0x0002 (measured). It does not shield a victim from its own or an allied govt's police (the Bible's "non-allied"; GUESS). | The ally case with 0x0020 (untested). | (done) |
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Not read in the sim** (`attacksPlayerIfCriminal` is parsed: P/parsers/govt_parse.ts:62). R: "A14" found the rule (current system's record; owner, allies and nosy govts enforce) and called NovaJS a mismatch: N/nova_plugin/reputation/govt_disposition.ts:99-104 tests the record kept per govt. | Answered by A14. Reputation work is in progress in parallel; scanning should reuse the same "who enforces here" rule. | (reputation backlog) |
-| **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Missing.** STR# 5003 is not read anywhere. 0x0008 is used only to silence greetings (N/nova_plugin/reputation/hail.ts:148, 199). | Who sends (only traders? only when the attacker is the player?); how often; whether anyone answers (nearby same-govt warships? police?). Brief **P1**. | S for the message; M if it summons help |
+| **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Done (2026-11-24)** for the message, to "P1 wave 14" (R): a trader (AI 1/2) hit in an attack by an NPC that is not on a player's side sends "<ship name>: <random STR# 5003 line>" to the status line of every player in the system, at most once per 20 s per ship, never when its govt sets Flags2 0x0008 or its hull inherits it. N/nova_plugin/npc/distress.ts (rules, DistressCallEvent), NpcAggressionSystem (the trigger and the PRNG draw), N/display/status_message_plugin.ts `ShowDistressCallMessage` (the line). **Nobody answers** (not measured). | Who answers; the real rate; whether the player's victims ever call; warships calling. Guesses below. | M if it summons help |
 | **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Parsed only:** D/system_data.ts:34-45. 344 of 545 stock systems have one. | R19 in the catalogue: trigger, delay (ReinfTime), cooldown (ReinfIntrval), the "Sensors detect xxx reinforcement fleet approaching." line. | M |
 | **Planet defence fleets and tribute** (spöb DefenseDude/DefCount, in waves) | B:2823-2836 | **Parsed only:** D/planet_data.ts:34-40 (tracker #353). 289 of 411 stock stellars have one; their düdes are mostly AI 3 (16), some AI 4 (4). | R18 in the catalogue. | L |
 
@@ -200,10 +200,10 @@ reference-Mac experiments to run first. Briefs follow.
    - Shared state: rock health and debris are already shared-sim state.
    - Sequence: build it after the measurement and after step 2, because
      what a miner does when full is probably "land".
-4. **Piracy police, distress calls and 0x0020 nosy-ignore** (P1). These
-   are one cluster: a shared "who is attacking whom nearby" record that AI 4
-   reads, and the trigger for STR# 5003 messages. (Fleet escorts defending
-   their leader is done: P1 wave 13.)
+4. **Piracy police, distress calls and 0x0020 nosy-ignore** (P1), **done
+   2026-11-24** (P1 waves 13-14; see the inventory rows). Still open: who
+   answers a distress call. (Fleet escorts defending their leader is done:
+   P1 wave 13.)
 5. **Hull AI flags** (W1, C1):
    - **cheap, common:** out-of-ammo flee (278 hulls), AI afterburner;
    - **bigger:** swarm (155) and standoff (142);
@@ -296,6 +296,43 @@ reference run:
    flies the trader loop until it departs.
 10. **T1:** traders park about 45 s on the original (including the
     approach) against NovaJS's 12 s dwell; left alone after one run.
+
+### Piracy police and distress calls: guesses to measure
+
+The piracy police (N/nova_plugin/npc/piracy_police.ts) and distress calls
+(N/nova_plugin/npc/distress.ts) follow P1 waves 13-14 where they measured
+something. Everything below is marked GUESS in the code and wants a
+reference run:
+
+1. **Watching range:** 1800 px (the interceptor's engagement range) from
+   the victim OR the attacker. The reference police sat a few hundred px
+   from both. To measure: run 1 of the P1 brief with the police at 300 /
+   1000 / 2500 px.
+2. **Only player-side attackers are policed.** The wave-14 raid watch could
+   not tell whether police reacted to raiders attacking traders. To
+   measure: raiders of a govt neutral to the police attacking a trader
+   beside a nosy police ship, with the player far off.
+3. **Only firing counts, not boarding.** Wave 13's board drew nothing from
+   non-nosy police; nosy police were not tested with a board.
+4. **Every hit that provokes the victim provokes the witnesses,** stray
+   player hits included.
+5. **Self-defence is not piracy:** no witness reacts to hits on a victim
+   that is attacking the player (in attack posture on him, or it shot him
+   within 30 s). To measure: a ship of a govt hostile to the player
+   attacks him beside nosy police, and he fires back.
+6. **Alliances:** a one-way alliance counts (the A14 enforcement rule;
+   only a two-way one was measured), and 0x0020 does not shield a victim
+   from its own or an allied govt's police.
+7. **The police never defend against an attacker of their own or an
+   allied govt** (a player's escort of that govt).
+8. **Distress rate:** at most one call per ship per 20 s, the first at the
+   first hit. Measured: lines lasted about 21-25 s, several a minute in a
+   melee.
+9. **Who calls:** AI 1 and AI 2 traders (only AI 1 was measured), under
+   NPC attack only (none seen in four runs with the player attacking: low
+   confidence). Warships never call.
+10. **Nobody answers** a distress call. NovaJS's status line holds a line
+    8 s and fades it over 4 s, not the original's 21-25 s.
 
 ## Reference-Mac briefs
 
