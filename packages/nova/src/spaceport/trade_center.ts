@@ -10,7 +10,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
 import {
-    activePriceEvents, applyPriceEvents, junkTradeGood, otherCargoNames, standardTradeGoods,
+    activePriceEvents, applyPriceEvents, junkExchangeRows, otherCargoNames, standardTradeGoods,
     TradeGood, TradeWorkingState,
 } from '../nova_plugin/economy/index.js';
 import { Button, ButtonClick } from './button.js';
@@ -61,7 +61,9 @@ const HEADER_PRICE = 'Price:';
  * the six standard commodities whether or not this stellar trades it —
  * Earth doesn't trade Equipment and leaves row 5 empty, putting its
  * Duranium Alloy jünk row on row 6, exactly where Port Kane (which
- * trades all six) puts its own jünk row. Jünk rows follow in list order.
+ * trades all six) puts its own jünk row. Jünk rows follow in list order
+ * (junkExchangeRows: at most two). The two rows of a jünk in both of its
+ * lists share a key, so a row is found by identity, not by key.
  */
 export function tradeSlot(good: TradeGood,
     goods: readonly TradeGood[]): number {
@@ -362,13 +364,10 @@ export class TradeCenter extends Menu<Entity> {
         this.goods = this.planet
             ? standardTradeGoods(this.planet, this.cargoNames) : [];
         // Jünk rows follow the standard commodities, as in the
-        // original's exchange listing.
-        for (const junk of this.junks) {
-            const row = junkTradeGood(junk, this.planetId, bits);
-            if (row) {
-                this.goods.push(row);
-            }
-        }
+        // original's exchange listing: two rows for a jünk in both of its
+        // lists, and no more than the list's two jünk slots (#321 wave
+        // 10; junkExchangeRows has the order).
+        this.goods.push(...junkExchangeRows(this.junks, this.planetId, bits));
         // Apply any active öops price events to the standard commodities.
         // Prices are keyed to the player's own game date, so this stays a
         // deterministic per-player computation (no shared state, no RNG).

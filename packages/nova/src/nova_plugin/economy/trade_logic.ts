@@ -3,6 +3,7 @@ import { PlanetData, TradeTier } from 'novadatainterface/planet_data';
 import { Cargo, cargoUsed } from '../ship/index.js';
 import { evaluateNCBTest, NCBParseError } from '../ncb/index.js';
 import { STANDARD_CARGO_NAMES } from '../missions/index.js';
+import { numericId } from '../missions/mission_ids.js';
 
 /**
  * Commodity-exchange rules, kept pure so they can be unit tested.
@@ -18,7 +19,8 @@ import { STANDARD_CARGO_NAMES } from '../missions/index.js';
  * Jünk commodities are bought by the player at their SoldAt stellars
  * (low tier) and sold at their BoughtAt stellars (high tier), gated by
  * their BuyOn/SellOn control-bit tests — the tiers the original shows
- * (reference #321).
+ * (reference #321). A stellar in both lists shows both rows, and the
+ * exchange holds at most two jünk rows (#321 wave 10).
  */
 
 /** Base prices of the six standard commodities (STR# 4004). */
@@ -99,15 +101,18 @@ export function standardTradeGoods(planet: PlanetData,
 }
 
 /**
- * The jünk row for this stellar, or null when the jünk doesn't trade
- * here. Buying happens at SoldAt stellars at the low tier; selling at
- * BoughtAt stellars at the high tier. A stellar in both lists shows
- * the sell (high) tier, matching the original's display. BuyOn/SellOn
- * control-bit tests gate each direction; a malformed expression fails
- * closed.
+ * The jünk rows for this stellar: none when the jünk doesn't trade here,
+ * one when it is in only one of its lists, TWO when it is in both.
+ * Buying happens at SoldAt stellars at the low tier; selling at BoughtAt
+ * stellars at the high tier. A stellar in both lists shows both rows, the
+ * High (sell-only) row first and then the Low (buy-only) row, as the
+ * original does (docs/reference_experiments.md, "#321 wave 10": Kit Port's
+ * Kit Doodads at High 500 and again at Low 320). BuyOn/SellOn control-bit
+ * tests gate each direction, and so each row; a malformed expression
+ * fails closed.
  */
-export function junkTradeGood(junk: JunkData, planetId: string,
-    bits: Set<number>): TradeGood | null {
+export function junkTradeGoods(junk: JunkData, planetId: string,
+    bits: Set<number>): TradeGood[] {
     const passes = (expression: string) => {
         if (!expression) {
             return true;
@@ -123,20 +128,77 @@ export function junkTradeGood(junk: JunkData, planetId: string,
             throw e;
         }
     };
-    const canBuy = junk.soldAt.includes(planetId) && passes(junk.buyOn);
-    const canSell = junk.boughtAt.includes(planetId) && passes(junk.sellOn);
-    if (!canBuy && !canSell) {
-        return null;
+    const rows: TradeGood[] = [];
+    if (junk.boughtAt.includes(planetId) && passes(junk.sellOn)) {
+        rows.push({
+            key: `junk:${junk.id}`,
+            name: junk.name,
+            tier: 'high',
+            price: tierPrice(junk.basePrice, 'high'),
+            canBuy: false,
+            canSell: true,
+        });
     }
-    const tier: TradeTier = canSell ? 'high' : 'low';
-    return {
-        key: `junk:${junk.id}`,
-        name: junk.name,
-        tier,
-        price: tierPrice(junk.basePrice, tier),
-        canBuy,
-        canSell,
-    };
+    if (junk.soldAt.includes(planetId) && passes(junk.buyOn)) {
+        rows.push({
+            key: `junk:${junk.id}`,
+            name: junk.name,
+            tier: 'low',
+            price: tierPrice(junk.basePrice, 'low'),
+            canBuy: true,
+            canSell: false,
+        });
+    }
+    return rows;
+}
+
+/**
+ * How many rows the commodity exchange lists: the six fixed standard
+ * slots (kept even when the stellar does not trade that commodity) and
+ * two more for jünk. The original's list holds no more than this
+ * ("#321 wave 10": Kit Port, with four candidate jünk rows, showed the
+ * six standard goods and two jünk rows only).
+ */
+export const EXCHANGE_ROWS = 8;
+
+/** The jünk rows that fit below the six standard slots. */
+export const EXCHANGE_JUNK_ROWS = EXCHANGE_ROWS
+    - STANDARD_COMMODITY_BASE_PRICES.length;
+
+/**
+ * Every jünk row this stellar's exchange shows, in display order, capped
+ * at {@link EXCHANGE_JUNK_ROWS}.
+ *
+ * WHICH rows survive the cap, and their order, is a model fitted to the
+ * three original-hardware tables (docs/reference_experiments.md, #321
+ * wave 1 and wave 10), not a documented rule:
+ *  - the jünks are taken HIGHEST resource id first (each contributing its
+ *    High row and then its Low row) until the jünk slots are full: Kit
+ *    Port with Doodads (202, both lists), Gadgets (201) and Widgets (200)
+ *    shows Doodads' two rows and drops the other two;
+ *  - the rows kept are then listed High before Low: Kit Port shows
+ *    Gadgets (High) above Widgets (Low), and Kit Market shows Widgets
+ *    (High) above Gadgets (Low), so the order is not the id order alone.
+ * Ids compare by their numeric resource number (the original's id space),
+ * then by the full global id so two plug-ins' equal numbers still order
+ * the same way on every client.
+ */
+export function junkExchangeRows(junks: readonly JunkData[], planetId: string,
+    bits: Set<number>): TradeGood[] {
+    const byIdDescending = [...junks].sort((a, b) => {
+        const delta = (numericId(b.id) ?? -1) - (numericId(a.id) ?? -1);
+        if (delta !== 0) {
+            return delta;
+        }
+        return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+    });
+    const kept = byIdDescending
+        .flatMap(junk => junkTradeGoods(junk, planetId, bits))
+        .slice(0, EXCHANGE_JUNK_ROWS);
+    return [
+        ...kept.filter(row => row.tier === 'high'),
+        ...kept.filter(row => row.tier !== 'high'),
+    ];
 }
 
 /** The working state a trade session edits (working copies). */

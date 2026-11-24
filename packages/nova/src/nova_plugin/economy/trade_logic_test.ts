@@ -5,7 +5,9 @@ import {
     buyGood,
     buyGoodQuantity,
     freeCargoSpace,
-    junkTradeGood,
+    EXCHANGE_JUNK_ROWS,
+    junkExchangeRows,
+    junkTradeGoods,
     maxBuyQuantity,
     maxSellQuantity,
     otherCargoNames,
@@ -94,10 +96,86 @@ describe('the original\'s Kit Port exchange (reference #321)', () => {
             id: 'kit:129', name: 'Kit Widgets', basePrice: 1000,
             soldAt: ['kit:port'], boughtAt: [],
         });
-        expect(junkTradeGood(gadgets, 'kit:port', new Set()))
-            .toEqual(jasmine.objectContaining({ tier: 'high', price: 187 }));
-        expect(junkTradeGood(widgets, 'kit:port', new Set()))
-            .toEqual(jasmine.objectContaining({ tier: 'low', price: 800 }));
+        expect(junkTradeGoods(gadgets, 'kit:port', new Set()))
+            .toEqual([jasmine.objectContaining({ tier: 'high', price: 187 })]);
+        expect(junkTradeGoods(widgets, 'kit:port', new Set()))
+            .toEqual([jasmine.objectContaining({ tier: 'low', price: 800 })]);
+    });
+});
+
+describe('the original\'s jünk rows and the 8-row exchange (#321 wave 10)', () => {
+    // docs/reference_experiments.md, "#321 wave 10": the kit's jünk at Kit
+    // Port and Kit Market, ids as in the kit (200 / 201 / 202).
+    const widgets = makeJunk({
+        id: 'kit:200', name: 'Kit Widgets', basePrice: 1000,
+        soldAt: ['kit:port'], boughtAt: ['kit:market'],
+    });
+    const gadgets = makeJunk({
+        id: 'kit:201', name: 'Kit Gadgets', basePrice: 150,
+        soldAt: ['kit:market'], boughtAt: ['kit:port'],
+    });
+    const doodads = makeJunk({
+        id: 'kit:202', name: 'Kit Doodads', basePrice: 400,
+        soldAt: ['kit:port'], boughtAt: ['kit:port'],
+    });
+    const rows = (junks: JunkData[], planet: string) =>
+        junkExchangeRows(junks, planet, new Set())
+            .map(row => [row.name, row.tier, row.price, row.canBuy,
+                row.canSell]);
+
+    it('shows a stellar in BOTH lists two rows: High (sell) then Low (buy)',
+        () => {
+            expect(junkTradeGoods(doodads, 'kit:port', new Set())
+                .map(row => [row.key, row.tier, row.price, row.canBuy,
+                    row.canSell]))
+                .toEqual([
+                    ['junk:kit:202', 'high', 500, false, true],
+                    ['junk:kit:202', 'low', 320, true, false],
+                ]);
+        });
+
+    it('gates each of the two rows on its own control-bit test', () => {
+        const gated = makeJunk({ ...doodads, buyOn: 'b7' });
+        expect(junkTradeGoods(gated, 'kit:port', new Set())
+            .map(row => row.tier)).toEqual(['high']);
+        expect(junkTradeGoods(gated, 'kit:port', new Set([7]))
+            .map(row => row.tier)).toEqual(['high', 'low']);
+    });
+
+    it('lists at most two jünk rows below the six standard slots', () => {
+        expect(EXCHANGE_JUNK_ROWS).toBe(2);
+    });
+
+    it('keeps Kit Port\'s Doodads rows and drops Widgets and Gadgets', () => {
+        // The original's wave-10 Kit Port table: the six standard goods,
+        // then Kit Doodads High 500 and Kit Doodads Low 320, and nothing
+        // else, whatever order the jünks load in.
+        const expected = [
+            ['Kit Doodads', 'high', 500, false, true],
+            ['Kit Doodads', 'low', 320, true, false],
+        ];
+        expect(rows([widgets, gadgets, doodads], 'kit:port'))
+            .toEqual(expected);
+        expect(rows([doodads, widgets, gadgets], 'kit:port'))
+            .toEqual(expected);
+    });
+
+    it('lists High rows above Low rows, whatever the ids', () => {
+        // Wave 1's Kit Port (before Doodads): Gadgets High above Widgets
+        // Low; wave 10's Kit Market: Widgets High above Gadgets Low.
+        expect(rows([widgets, gadgets], 'kit:port')).toEqual([
+            ['Kit Gadgets', 'high', 187, false, true],
+            ['Kit Widgets', 'low', 800, true, false],
+        ]);
+        expect(rows([widgets, gadgets, doodads], 'kit:market')).toEqual([
+            ['Kit Widgets', 'high', 1250, false, true],
+            ['Kit Gadgets', 'low', 120, true, false],
+        ]);
+    });
+
+    it('is empty where no jünk trades', () => {
+        expect(rows([widgets, gadgets, doodads], 'kit:elsewhere'))
+            .toEqual([]);
     });
 });
 
@@ -130,7 +208,7 @@ describe('standardTradeGoods', () => {
     });
 });
 
-describe('junkTradeGood', () => {
+describe('junkTradeGoods', () => {
     const junk = makeJunk({
         id: 'nova:128',
         name: 'Duranium Alloy',
@@ -140,7 +218,8 @@ describe('junkTradeGood', () => {
     });
 
     it('buys at the low tier where the jünk is sold', () => {
-        const row = junkTradeGood(junk, 'nova:200', new Set());
+        const [row, ...rest] = junkTradeGoods(junk, 'nova:200', new Set());
+        expect(rest).toEqual([]);
         expect(row).toEqual(jasmine.objectContaining({
             key: 'junk:nova:128',
             tier: 'low',
@@ -151,7 +230,8 @@ describe('junkTradeGood', () => {
     });
 
     it('sells at the high tier where the jünk is bought', () => {
-        const row = junkTradeGood(junk, 'nova:300', new Set());
+        const [row, ...rest] = junkTradeGoods(junk, 'nova:300', new Set());
+        expect(rest).toEqual([]);
         expect(row).toEqual(jasmine.objectContaining({
             tier: 'high',
             price: 1125,
@@ -161,19 +241,19 @@ describe('junkTradeGood', () => {
     });
 
     it('is null where the jünk does not trade', () => {
-        expect(junkTradeGood(junk, 'nova:400', new Set())).toBeNull();
+        expect(junkTradeGoods(junk, 'nova:400', new Set())).toEqual([]);
     });
 
     it('gates buying on the BuyOn control-bit test', () => {
         const gated = makeJunk({ ...junk, buyOn: 'b3' });
-        expect(junkTradeGood(gated, 'nova:200', new Set())).toBeNull();
-        expect(junkTradeGood(gated, 'nova:200', new Set([3]))?.canBuy)
+        expect(junkTradeGoods(gated, 'nova:200', new Set())).toEqual([]);
+        expect(junkTradeGoods(gated, 'nova:200', new Set([3]))[0]?.canBuy)
             .toBeTrue();
     });
 
     it('fails closed on a malformed NCB test', () => {
         const bad = makeJunk({ ...junk, sellOn: '((((' });
-        expect(junkTradeGood(bad, 'nova:300', new Set())).toBeNull();
+        expect(junkTradeGoods(bad, 'nova:300', new Set())).toEqual([]);
     });
 });
 
