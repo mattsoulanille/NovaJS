@@ -4,6 +4,7 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
     dayNumber, ActiveMission, GameDateComponent, MissionsComponent,
+    PlayerNamesComponent,
 } from '../nova_plugin/player/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import {
@@ -215,7 +216,8 @@ export class MissionInfoDialog {
         this.abortAction = abort;
         this.identity = await playerIdentitySubs(this.universe,
             entity.components.get(ShipComponent)?.id, undefined,
-            entity.components.get(ActiveRanksComponent));
+            entity.components.get(ActiveRanksComponent),
+            entity.components.get(PlayerNamesComponent));
         try {
             await this.universe.load();
         } catch (e) {

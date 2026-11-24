@@ -4,6 +4,9 @@ import {
     rankConversationNamesForGovt,
 } from '../nova_plugin/ncb/index.js';
 import { displayName } from '../nova_plugin/core/index.js';
+import {
+    PlayerNames, playerPilotName, playerShipName, sanitizePlayerName,
+} from '../nova_plugin/player/index.js';
 import { MissionUniverse } from './mission_universe.js';
 
 /**
@@ -11,9 +14,15 @@ import { MissionUniverse } from './mission_universe.js';
  * rank tags <PRK>/<SRK>/<PSR>) for expandMissionText, from the active pilot
  * profile, the player's current hull, and their active ränks.
  *
- * The ship NAME follows the convention the title screen and the sigma
- * reference screenshot use ("Are you Matt, Captain of the Starbridge
- * 525?"): the hull's type name plus the pilot's stable ship number.
+ * The pilot's and the ship's NAMES are the player's own state
+ * (PlayerNamesComponent, player_names.ts): the name the player gave their
+ * ship at the shipyard's Buy Ship prompt. A ship never named (an entity
+ * that has not been through player_start, in specs) takes the convention
+ * the title screen and the sigma reference screenshot use ("Are you Matt,
+ * Captain of the Starbridge 525?"): the hull's type name plus the pilot's
+ * stable ship number. Both are cleaned (sanitizePlayerName) and
+ * mission_text.ts substitutes them in one pass, so a name is never
+ * expanded as a wildcard.
  */
 export interface PlayerIdentitySubs {
     playerName?: string;
@@ -59,16 +68,19 @@ export async function playerIdentitySubs(universe: MissionUniverse,
     /** Profile override for tests; defaults to the stored pilot profile. */
     profileOverride?: PilotProfile,
     /** The player's active ränks, for <PRK>/<SRK>/<PSR>. */
-    ranks?: Iterable<string>): Promise<PlayerIdentitySubs> {
+    ranks?: Iterable<string>,
+    /** The player's stored names (the ship entity's PlayerNamesComponent). */
+    names?: PlayerNames): Promise<PlayerIdentitySubs> {
     const profile = profileOverride ?? loadPilotProfile();
     const shipType = shipId
         ? await universe.shipTypeName(shipId) : undefined;
     const getRank = (id: string) => universe.getRank(id);
     return {
-        playerName: profile?.name || undefined,
-        playerNickname: profile?.nickname || undefined,
+        playerName: playerPilotName(names, profile?.name),
+        playerNickname: sanitizePlayerName(profile?.nickname),
         playerShipName: shipType
-            ? `${shipType} ${profile?.shipNumber ?? 1}` : undefined,
+            ? playerShipName(names, shipType, profile?.shipNumber)
+            : undefined,
         playerShipType: shipType,
         rankName: rankConversationName(ranks, getRank, false),
         rankShortName: rankConversationName(ranks, getRank, true),

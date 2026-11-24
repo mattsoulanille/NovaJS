@@ -21,7 +21,9 @@ import {
     LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT, LOCATION_SHIPYARD,
     LOCATION_TRADING, MissionEvent, MissionMapMark, missionMapMarks, expandMissionText,
 } from '../nova_plugin/missions/index.js';
-import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player/index.js';
+import {
+    CreditsComponent, GameDateComponent, MissionsComponent, PlayerNamesComponent,
+} from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
@@ -679,7 +681,8 @@ export class Spaceport extends Menu<Entity> {
         const identity = await playerIdentitySubs(this.universe,
             entity.components.get(ShipComponent)?.id, undefined,
             this.playerComponent(ActiveRanksComponent)
-                ?? entity.components.get(ActiveRanksComponent));
+                ?? entity.components.get(ActiveRanksComponent),
+            entity.components.get(PlayerNamesComponent));
         for (const event of events) {
             if (!event.text) {
                 continue;

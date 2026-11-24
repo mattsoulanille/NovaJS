@@ -8,6 +8,7 @@ import { MissionData } from 'novadatainterface/mission_data';
 import {
     dayNumber, MissionShip, MissionShipComponent, GOAL_BOARD, GOAL_RESCUE, ShipObjective,
     PlayerShipSelector, GameDateComponent, MissionsComponent,
+    PlayerNamesComponent,
 } from '../nova_plugin/player/index.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
@@ -385,7 +386,8 @@ export async function presentShipDoneText(world: World,
     const offer = activeAsOffer(universe, active);
     const identity = await playerIdentitySubs(universe,
         player.components.get(ShipComponent)?.id, undefined,
-        player.components.get(ActiveRanksComponent));
+        player.components.get(ActiveRanksComponent),
+        player.components.get(PlayerNamesComponent));
     const bits = player.components.get(ControlBitsComponent) ?? new Set();
     const text = expandMissionText(mission.shipDoneText, {
         ...(offer ? offerSubstitutions(universe,

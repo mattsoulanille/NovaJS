@@ -17,6 +17,7 @@ import {
     stillOffered,
 } from './mission_offers.js';
 import { playerIdentitySubs } from './player_identity.js';
+import { PlayerNamesComponent } from '../nova_plugin/player/index.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
@@ -624,7 +625,8 @@ export async function presentOffers(popup: OfferPopup,
     session: MissionSession, universe: MissionUniverse,
     offers: MissionOffer[], rolls?: OfferRolls): Promise<void> {
     const identity = await playerIdentitySubs(universe, session.shipId,
-        undefined, session.state.ranks);
+        undefined, session.state.ranks,
+        session.target.components.get(PlayerNamesComponent));
     // Built fresh for every text: an accept's set string moves the bits
     // the next text's conditionals read.
     const descContext = () =>

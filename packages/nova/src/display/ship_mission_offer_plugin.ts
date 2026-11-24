@@ -8,7 +8,9 @@ import { World } from 'nova_ecs/world';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { PersData } from 'novadatainterface/pers_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { dayNumber, PlayerShipSelector, GameDateComponent } from '../nova_plugin/player/index.js';
+import {
+    dayNumber, PlayerShipSelector, GameDateComponent, PlayerNamesComponent,
+} from '../nova_plugin/player/index.js';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, GovtComponent,
     SystemIdResource,
@@ -211,7 +213,8 @@ async function expandOfferText(world: World, universe: MissionUniverse,
     const date = entity?.components.get(GameDateComponent);
     const identity = await playerIdentitySubs(universe,
         entity?.components.get(ShipComponent)?.id, undefined,
-        entity?.components.get(ActiveRanksComponent));
+        entity?.components.get(ActiveRanksComponent),
+        entity?.components.get(PlayerNamesComponent));
     return expandMissionText(text, {
         ...offerSubstitutions(universe,
             date ? dayNumber(date) : 0, offer, bits, extra.active),
@@ -562,8 +565,10 @@ async function sayHailQuote(world: World, state: HailQuoteState,
     }
     state.said.add(persId);
     const universe = MissionUniverse.shared(gameData);
+    const player = getPlayerShip(world)?.entity;
     const identity = await playerIdentitySubs(universe,
-        getPlayerShip(world)?.entity.components.get(ShipComponent)?.id);
+        player?.components.get(ShipComponent)?.id, undefined, undefined,
+        player?.components.get(PlayerNamesComponent));
     showStatusMessage(world, expandMissionText(pers.hailQuote, {
         ...identity,
         // Every stock quote opens with <OSN> — see mission_text.ts.

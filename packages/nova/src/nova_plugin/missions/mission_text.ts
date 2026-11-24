@@ -100,6 +100,9 @@ export function missionDisplayName(name: string): string {
     return displayName(name);
 }
 
+/** Any `<...>` run without a nested angle bracket: a candidate tag. */
+const TAG_PATTERN = /<[^<>]*>/g;
+
 export function expandMissionText(text: string,
     subs: MissionTextSubstitutions,
     ctx?: NCBTestContext): string {
@@ -158,10 +161,14 @@ export function expandMissionText(text: string,
         ['<OSN>', subs.offeringShipName ?? 'Unidentified ship'],
         ['<SN>', subs.specialShipName ?? 'unknown ship'],
     ];
-    let expanded = conditional;
-    for (const [tag, value] of replacements) {
-        expanded = expanded.split(tag).join(value);
-    }
+    // ONE pass over the text: a substituted value is never scanned for
+    // tags itself. The player's and ship's names are player-typed
+    // (player_names.ts), and a pilot named "<SN>" or a ship named "<PAY>"
+    // must print as typed, not expand — which a tag-by-tag replace did for
+    // every tag later in the table than the one substituted.
+    const values = new Map(replacements);
+    const expanded = conditional.replace(TAG_PATTERN,
+        tag => values.get(tag) ?? tag);
     // Nova line-break convention: dëscs use \n literally already, but
     // also carriage returns from MacRoman text.
     return expanded.replace(/\r/g, '\n');

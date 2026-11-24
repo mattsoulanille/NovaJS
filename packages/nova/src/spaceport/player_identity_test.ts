@@ -61,4 +61,33 @@ describe('playerIdentitySubs', () => {
                 'nova:128', { ...PROFILE, shipNumber: undefined });
             expect(subs.playerShipName).toBe('Shuttle 1');
         });
+
+    it('reads the stored names (PlayerNamesComponent) over the profile, '
+        + 'so a named ship reaches <PSN>', async () => {
+            const subs = await playerIdentitySubs(universeWith('Shuttle'),
+                'nova:128', PROFILE, undefined,
+                { pilot: 'Matthew', ship: 'Rocinante' });
+            expect(subs.playerName).toBe('Matthew');
+            expect(subs.playerShipName).toBe('Rocinante');
+            expect(subs.playerShipType).toBe('Shuttle');
+            expect(expandMissionText('Captain <PN> of the <PSN> (<PST>)',
+                subs)).toBe('Captain Matthew of the Rocinante (Shuttle)');
+            // A stored record without a ship name falls back to the
+            // derived one; without a pilot name, to the profile's.
+            const partial = await playerIdentitySubs(universeWith('Shuttle'),
+                'nova:128', PROFILE, undefined, {});
+            expect(partial.playerShipName).toBe('Shuttle 525');
+            expect(partial.playerName).toBe('Matt');
+        });
+
+    it('prints a name that looks like a wildcard as typed: the text is '
+        + 'expanded in one pass', async () => {
+            const subs = await playerIdentitySubs(universeWith('Shuttle'),
+                'nova:128', PROFILE, undefined,
+                { pilot: '<SN> <PAY>', ship: '<PN> & <DST>' });
+            expect(expandMissionText('<PN> flies the <PSN> to <DST>.', {
+                ...subs, destinationStellar: 'Earth', payment: 5000,
+                specialShipName: 'Hunter',
+            })).toBe('<SN> <PAY> flies the <PN> & <DST> to Earth.');
+        });
 });
