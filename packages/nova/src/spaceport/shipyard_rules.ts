@@ -274,7 +274,8 @@ export type ShipyardCheck =
  * lose its hangar with the hull, so the total is all canBuyShip needs;
  * WHICH bay each fighter came from does not change the answer.
  */
-export function deployedUnitCount(context: ShipPurchaseContext): number {
+export function deployedUnitCount(
+    context: Pick<ShipPurchaseContext, 'deployedCounts'>): number {
     let deployed = 0;
     for (const count of context.deployedCounts?.values() ?? []) {
         if (count > 0) {
@@ -567,9 +568,10 @@ export function runShipTradeSetStrings(entity: Entity,
  * ship change: a fresh entity of class `newShip` carrying the player-scoped
  * state (CARRIED_COMPONENTS), the given outfits and credits, and as much of
  * the old hold as fits. See buildPurchasedShip for the contract; the old
- * entity is left untouched.
+ * entity is left untouched. Also the hangar's (ship_storage.ts), which
+ * then puts its own pooled hold and the stored fuel on the result.
  */
-function buildShipEntity(oldShip: Entity, newShip: ShipData,
+export function buildShipEntity(oldShip: Entity, newShip: ShipData,
     outfits: Map<string, { count: number }>, credits: number,
     getOutfit: (id: string) => OutfitData | undefined): Entity {
     const entity = makeShip(newShip);

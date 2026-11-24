@@ -136,6 +136,18 @@ export const SHIPYARD_BUTTONS = {
  * How far right a pill reaches in container coordinates: its x plus the
  * tiling middle, plus a cap at each end.
  */
+/**
+ * The hangar's Your Ships pill (ship storage, docs/ship_storage.md) — a
+ * NovaJS addition, so it has no reference position. It sits in the empty
+ * stretch of the bottom rail left of the grid's scroll arrows (screen x
+ * 590..700 on shipyard/earth_spaceport.png, where the original draws
+ * nothing), on the other pills' row. Kept out of SHIPYARD_BUTTONS, which is
+ * the original's set as measured.
+ */
+export const HANGAR_BUTTON = {
+    label: 'Your Ships', width: 83, x: -366, y: 128,
+} as const satisfies ShipyardButtonSpec;
+
 export function buttonRightEdge(spec: ShipyardButtonSpec): number {
     return spec.x + spec.width + 2 * BUTTON_CAP_WIDTH;
 }

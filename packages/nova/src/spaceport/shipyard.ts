@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
-import { ShipComponent } from '../nova_plugin/ship/index.js';
+import { OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import {
     ControlBitsComponent, makeDescTextContext, playerGender, resolveConditionalBlocks,
 } from '../nova_plugin/ncb/index.js';
@@ -21,7 +21,9 @@ import { ScrollArrow } from './scroll_arrow.js';
 import { ShopSearchField } from './shop_search.js';
 import { enhancementEnabled } from '../enhancements.js';
 import { ShipInfoDialog } from './ship_info.js';
+import { HangarDialog } from './hangar_dialog.js';
 import {
+    HANGAR_BUTTON,
     SHIPYARD_BUTTONS,
     SHIPYARD_PRICE_COLUMNS,
     SHIPYARD_PRICE_LABELS,
@@ -33,6 +35,7 @@ import {
 import {
     buildPurchasedShip,
     canBuyShip,
+    deployedUnitCount,
     purchaseContextFrom,
     runShipTradeSetStrings,
     ShipPurchaseContext,
@@ -107,7 +110,14 @@ export class Shipyard extends Menu<Entity> {
      * a ship the player will never fly again, so the swap is announced at
      * the click, not at the exit.
      */
-    onShipPurchased?: (ship: Entity) => void;
+    onShipPurchased?: (ship: Entity, verb?: string) => void;
+    /**
+     * The hangar (ship storage, hangar_dialog.ts), opened by the Your Ships
+     * pill. Its swaps hand new hulls back through {@link adoptHangarHull},
+     * which adopts them exactly as a purchase is adopted.
+     */
+    private hangar: HangarDialog;
+    private hangarButton: Button;
     private text = {
         description: new PIXI.Text("", FONT.normal),
         // The price pane under the ship picture. Labels and values in
@@ -197,6 +207,13 @@ export class Shipyard extends Menu<Entity> {
             controlEvents);
         this.container.addChild(this.shipInfo.container);
         this.namePrompt = new ShipNamePrompt(controlEvents);
+
+        this.hangarButton = makeButton(HANGAR_BUTTON);
+        this.hangarButton.click.subscribe(() => void this.showHangar());
+        this.container.addChild(this.hangarButton.container);
+        this.hangar = new HangarDialog(displayAssets, simulationData,
+            controlEvents);
+        this.container.addChild(this.hangar.container);
 
         this.text.description.position.x = -27;
         this.text.description.position.y = -150;
@@ -494,6 +511,63 @@ export class Shipyard extends Menu<Entity> {
     }
 
     /**
+     * Opens the hangar over the shipyard (ship storage). Every swap inside
+     * it is adopted at the click (adoptHangarHull), so on the way out the
+     * shipyard only re-quotes against whatever hull is docked now.
+     */
+    private async showHangar() {
+        if (!this.input) {
+            return;
+        }
+        this.controls.unbind();
+        // Drawn over the grid, like the info dialog.
+        this.container.addChild(this.hangar.container);
+        try {
+            await this.hangar.show({
+                hull: () => this.input,
+                stellarId: this.stellarId ?? '',
+                fightersOut: () => this.playerFightersOut(),
+                adoptHull: (hull, label) => this.adoptHangarHull(hull, label),
+            });
+        } finally {
+            if (this.container.visible) {
+                this.controls.bind();
+            }
+            this.refreshTradeState();
+        }
+    }
+
+    /**
+     * Whether any of the player's own bay fighters are out — the same
+     * provider the trade-in's refusal reads (shipyard_rules judgment call
+     * 8): a hull cannot be put away from under its wing.
+     */
+    private playerFightersOut(): boolean {
+        const owned = this.input?.components.get(OutfitsStateComponent);
+        const counts = this.deployedOutfitCounts?.(owned?.keys() ?? []);
+        return deployedUnitCount({ deployedCounts: counts }) > 0;
+    }
+
+    /**
+     * A HANGAR SWAP: the hull the pilot now flies, built by ship_storage.ts
+     * from the docked one (which it leaves untouched). Adopted exactly as a
+     * purchase is — the landing's working copy re-seeds from it, then the
+     * Spaceport publishes it (docked handle, checkpoint, stat rebuild) —
+     * with no money moving.
+     */
+    private adoptHangarHull(hull: Entity, label: string) {
+        this.input = hull;
+        const shipId = hull.components.get(ShipComponent)?.id;
+        this.currentShipData = shipId
+            ? this.simulationData.data.Ship.getCached(shipId) : undefined;
+        this.transaction?.adoptPurchasedShip(hull);
+        this.onShipPurchased?.(hull, label);
+        if (typeof window !== 'undefined') {
+            window.myShip = hull;
+        }
+    }
+
+    /**
      * The purchase context for buying `newShip` now, or undefined (with
      * the denial caption shown) when it may not be bought: nothing to
      * price against yet, the stock gate (tech, availability, require,
@@ -615,6 +689,12 @@ export class Shipyard extends Menu<Entity> {
         if (typeof window !== 'undefined') {
             window.myShip = this.input;
         }
+    }
+
+    /** A teardown closes the hangar too, so its keys are released. */
+    override dismiss() {
+        this.hangar.dismiss();
+        super.dismiss();
     }
 
     /** Done: the visit (its purchases already adopted) is released. */

@@ -1113,8 +1113,10 @@ export class Spaceport extends Menu<Entity> {
                 controlEvents);
             // A purchase announces itself AT THE CLICK, not at the
             // shipyard's exit — see adoptPurchasedShip.
+            // The hangar's swaps (ship storage) come the same way, with
+            // their own checkpoint wording.
             this.shipyard.onShipPurchased =
-                ship => this.adoptPurchasedShip(ship);
+                (ship, verb) => this.adoptPurchasedShip(ship, verb);
             // The shipyard stocks ships by the same tech level /
             // SpecialTech (see shipyard_stock_rules.ts) and rolls the
             // per-day BuyRandom pool against this stellar's id. govt is
