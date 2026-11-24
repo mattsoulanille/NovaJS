@@ -3461,7 +3461,567 @@ the 1.8 factor is one GuidedTurn value only.
 `ctrl_tracks.json`, `ctrl_circles.json`), from the wave-5 recordings
 `20261123-w5/jam/{static,static-ctrl}/*/recording.mp4`.
 
+### B wave 7: what the kit-bay bug invalidated, and a carrier that stays with its bombers (2026-11-23)
+
+Wave 6 found that every kit bay pointed at a missing ship until the kit
+was fixed (AmmoType = the carried shïp's id). Three readings rested on a
+kit bay; each is rerun once here with the fixed kit.
+
+**Q4 (a ShipBehav-1 protector carrier's fighters).** `scenarios/protect_observe.json`
+with wave 1's pilot `q4` (mïsn 964: the Kit Carrier, govt 360, with the
+Kit Fighter Bay of four Kit Fighters, now really pointing at shïp 705;
+two always-attacks Kit Raiders). In 16 Tab panels over 70 s the cycle
+was always Kit Carrier, Kit Raider, Kit Raider, No Target: **no fighter
+ever launched**. The carrier fought with its guns (its shield 100, 81,
+65, 66%; both raiders Disabled by about 50 s). **Q4 stands**: a protector
+carrier keeps its bays shut, now with a kit bay that works (it is not
+only the stock Fed Carrier of Q4b). NovaJS's hold on a flock mission
+ship's bays (`N/nova_plugin/npc/npc_fire_control.ts:42-43`, `:163`)
+**matches**.
+
+**E-view (the player's own bay).** `scenarios/bay_launch.json`, pilot
+`w7_bay` (Kit Lancer with the Kit Fighter Bay and 4 Kit Fighters, quiet
+Kit Range): `w`, then four taps of Control. The bay counter went 4 to 0
+and **four Kit Fighters flew out** (the stock shïp 167 art), taking up
+formation around the player. Six Tab presses all read "No Target": the
+player's own fighters are not Tab targets. The escort panel (`e`) showed
+row 2 **Fighters** lit with **Formation**, rows 3-5 grey. The Kit Fighter
+is EscortType -1 (the kit's shipBase), so a bay fighter with no
+EscortType is filed under Fighters (wave 2 could not say where
+EscortType -1 ships go; for bay-launched ones this is the answer). Wave
+2's "four taps launched all four" therefore holds, now for the right ship.
+
+**The carrier that stays in the fight.** Wave 6's Kit Bomb Carrier left
+within 12 s, so `kits/testkit.mjs` wave 7 anchors it: shïp 800 Kit Bomb
+Carrier Anchored (shïp 712 with Speed/Accel 0: two Kit Escort Guns and a
+Kit Bomber Bay of four Kit Bombers, each armed only with the 400 px Kit
+Blast Shell), gövt 362 (always attacks the player), mïsn 1010 at Kit Port.
+One factor changed: shïp 802 / mïsn 1011, the same carrier whose bombers
+(shïp 801) carry the **1-damage** shell (wëap 243). The player is Kit
+Lancer Heavy (30000/30000, no recharge, no weapons), so anything that
+hits it shows on its shield bar. `scenarios/carrier_anchored_kit.json`:
+Tab every 1.3 s for 110 s. The carrier sat on top of the player at Kit
+Port in both runs.
+
+| run | carrier shield (Tab panels, in order) | bombers | player's shield bar |
+|---|---|---|---|
+| 50-damage shell (pilot `w7_carrier50`) | 83, 53, **40%** in the first 15 s, then 41-44% (recharging) | 33, 3% shield, armor 92, 69, 39%, then **Disabled** (all four by about 15 s) and still Disabled, not destroyed, at 110 s | 144 -> 108 px, falling at a constant rate (about 0.26 px/s) from 7 s to the end; trail picture at 90 s: hit puffs on the player |
+| 1-damage shell (`w7_carrier1`) | 99-100% throughout | 93-99% shield, worn down a point at a time, all four flying and bombing to the end | **146 px, untouched** for 140 s |
+
+**Finding.** With real kit bombers and a carrier that can't leave, the
+carrier lost 60% of its shield to its own bombers' blasts in 15 s and
+**never turned on them**: the four bombers, Disabled by their own blasts,
+lay beside it for 95 s without being finished off (two Kit Escort Guns
+would destroy a 500-armor bomber in seconds), and its guns went to the
+player. With 1-damage blasts the bombers lived and kept flying for 110 s.
+This repeats wave 6's stock-Fed-Carrier result with the kit's own
+bombers. Side observation, not separated: in the 1-damage run **nothing
+hit the player in 140 s**, so the carrier's two guns never fired at it,
+while in the 50-damage run the player's bar fell at a constant rate from
+7 s on (the carrier's guns: hit puffs on the player long after the
+bombers were disabled). The only difference between the runs is the
+bombers' shell.
+
+**NovaJS (base cf893d56).** `N/nova_plugin/npc/npc_targeting.ts:73`
+(`NpcAggressionSystem` skips a damager of the victim's own flock,
+`sameFlock`): **matches** (no retaliation). No change proposed. The silent
+guns of the 1-damage run are worth one more look (a stock carrier, more
+runs) before anything is read into them.
+
+Confidence: high for Q4 and E-view (clean single runs that show the
+launch or its absence); medium-high for "no retaliation" (two runs, one
+per blast strength, 110 s each, inferred from the bombers' survival and
+the player's bar); the silent-guns observation is one run.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/{q4,bay,carrier/c50,carrier/c1}/*/`
+(`panels.png`, the `NN-obs-*` / `NN-tab-*` shots, `10-panel.png` for the
+escort panel, `hostility.json` = the player's bars, `recording.mp4`).
+
+### U9 wave 7: boarding speed gate, money at five prices, a bigger hulk, capture (2026-11-23)
+
+Wave 6's rig (sÿst 2020 Kit Board Range: one immobile 24 px magenta Kit
+Hulk of the derelict gövt 378, ordinary traffic, booty food + money;
+`loops/board.mjs` walks the player to it by measurement), extended.
+
+**1. The boarding speed gate.** `loops/board.mjs` has a new `pass` mode:
+the loop walks the player to rest a little way from the 50,000 Kit Hulk
+(Kit Board Range, as in wave 6), aims at its centre, taps thrust (an
+inertialess hull keeps the speed it has when thrust is released) and
+crosses the hulk pressing `b` every 100-400 ms until it is well past,
+then brakes; a dialog that opens is closed with Abort. Each press's
+answer is the status line 8 frames later (`planet_track.mjs --key b`),
+and the hulk's offset per frame comes from the new
+`analysis/magenta_track.mjs`, which finds the magenta disc even under the
+player's sprite. Speeds are measured from that track (video frames, 30.04
+fps). Fast passes use Kit Crawler 25/40/50 (shïp 808, 809, 715); slow ones
+Kit Crawler Soft (shïp 817: Accel 200, so a 100-290 ms tap sets the pass
+speed). `scenarios/board_pass_{50,40,25,25_slowpress,soft4,soft8,soft8_fastpress,soft9}.json`.
+
+| run | measured speed | `b` every | closest the centres came | presses | answer |
+|---|---|---|---|---|---|
+| Crawler 50 | 22 px/s | 100 ms | 2.4 px (line fit) | 58, from 67 px in to 69 px out | **"You're moving too fast to board this ship."** at every press, 67 px out included |
+| Crawler 40 | 16 px/s | 100 ms | 3.6 px | 74, 48 px in to 70 px out | "too fast" at every press |
+| Crawler 25 | 11 px/s | 100 ms | about 7-11 px | 150 (29 within 19 px) | **"You're not close enough to board this ship."** at every press, also on top of the hulk |
+| Crawler 25 | 11 px/s | 400 ms | 7 px | 30 (presses at 15.1, 11.4, 10.2, 7.4, 8.8, 10.7, 13.5 px) | "not close enough" at every press |
+| Soft, 290 ms tap | 9.2 px/s | 200 ms | 5.1 px | 53 | "not close enough", no dialog |
+| Soft, 230 ms tap | 7.8 px/s | 100 ms | 5.7 px | 128 | "not close enough", no dialog |
+| Soft, 230 ms tap | **7.3 px/s** | 200 ms | | | **plunder dialog** at about 16.5 px |
+| Soft, 230 ms tap | **6.2 px/s** | 200 ms | | | **plunder dialog** at about 18.9 px (the presses at 27-20 px: "not close enough") |
+| Soft, 100 ms tap | **3.4 px/s** | 200 ms | | | **plunder dialog** at about 17 px |
+
+- **Boarding while moving needs under about 7.5-9 px/s** (boarded at 3.4,
+  6.2 and 7.3; refused at 9.2 and 11, and at 7.8 with presses every
+  100 ms, so the gate is between 7.3 and 9.2 px/s, possibly 7.3-7.8). That
+  is far stricter than the landing gate (19-20.5 px/s, wave 4). The
+  distance at which a slow ship boards (16.5-18.9 px) is the at-rest range
+  of wave 6 (13-17 px) within the disc-centre error (the magenta centroid
+  of a disc half under the player's sprite sits a px or two out).
+- **"Too fast" is a second, higher threshold, and it is checked before
+  distance**: at 16 and 22 px/s every press said "too fast", 67-70 px from
+  the hulk included (at rest the same distances say "not close enough").
+  Between the two thresholds (9.2 and 11 px/s) the game refuses with the
+  misleading "not close enough" even with the ships on top of each other.
+  So the "too fast" threshold is between 11 and 16 px/s.
+- Pressing `b` every 100 ms or every 400 ms makes no difference at 11
+  px/s (both refused throughout).
+
+**NovaJS (base cf893d56), `N/nova_plugin/ship/boarding_component.ts`:**
+`BOARD_REL_SPEED_SQUARED` = 3,000 (54.8 px/s, line 228), checked AFTER the
+distance (`boardingBlockedReason`, lines 299-306). **Mismatch**: about 7x
+too lenient, the order is reversed (NovaJS says "too far" to a fast ship
+67 px out, the original "too fast"), and there is no "refused but says
+not close enough" band.
+**Proposed (not applied):** board only below about 8 px/s relative speed
+(`BOARD_REL_SPEED_SQUARED` about 64); answer "too fast" first when the
+relative speed is over about 13 px/s (the midpoint of 11-16), at any
+distance; between the two, answer "not close enough" (it is what the
+original prints) or, if that quirk is not wanted, "too fast".
+
+**2. Money booty, a bigger hull, capture.** `scenarios/board_hulk.json`
+(wave 6's walk-and-board loop) on new hulks, each the only traffic of its
+own system (`kits/testkit.mjs` wave 7: shïp 803-806 and 807, sÿst/spöb
+2023-2027): the same immobile 24 px magenta Kit Hulk at other prices, a
+96 px one at 50,000, and the 50,000 hulk boarded from Kit Crawler Crew
+(crew 500 instead of 10). Two loop fixes came out of these runs: a step
+that ends with the hulk hidden under the player's sprite used to end the
+walk without a single press on top of it (it now presses there), and
+stops under 12 px skipped the turn to face the hulk (it now always turns).
+
+| hulk (price, sprite) | walks | stops and answers | dialog | Credits | Cargo / Energy | Capture |
+|---|---|---|---|---|---|---|
+| 2,000, 24 px | 1 | "not close enough" or no answer at 20, 15, 11, 12, 7, 13 px | at 12 px | **1,000** | 40 t food / 50 | 0%, greyed |
+| 20,000 (wave 6) | 2 | | 12.4-13.2 px | **1,000** (2 of 2) | | 0%, greyed |
+| 50,000 (wave 6 and this wave's passes) | 3 + 3 | | 7.6-18.9 px | **1,250** (6 of 6) | 26-46 t / 590-2,810 | 0%, greyed |
+| 50,000, player crew **500** | 1 | nothing at 44, 33, 23, 17, 12 px | at 6 px | **1,250** | 26 t / 1,420 | **0%, greyed** |
+| 2,000,000, 24 px | 3 | "not close enough" down to about 20 px, then no answer at 17, 13, 9, 5 and 5 px | **never** | | | |
+| 50,000, **96 px** | 1 | "not close enough" at 77, 66, 55 px, then no answer at 46, 35, 25, 14, 2 px | **never** | | | |
+| 100,000, 24 px | 1 | nothing at 37, 28, 20, 6, 12 px | at 8 px | **2,500** | 27 t / 670 | 0%, greyed |
+| 500,000, 24 px | 2 | nothing at 57-18 px / 44-24 px | at 7 px / 18 px | **19,500** / **21,500** | 49 t / 1,150; 36 t / 2,190 | 0%, greyed |
+
+**Findings.**
+- **The money booty has a floor of 1,000 credits** (2,000 and 20,000
+  hulls: exactly 1,000, three boards) and is **price / 40 in the middle**:
+  1,250 at 50,000 every time (7 of 7) and 2,500 at 100,000 (one board,
+  predicted from the first three prices before it was run). **At 500,000
+  it is more, and it varies**: 19,500 and 21,500 in two boards (3.9% and
+  4.3%, against 12,500 for price / 40). So above some price there is a
+  random part (every amount seen is a multiple of 250), or a share that
+  grows with the price; two boards can't say which.
+- **Crew does not open capture**: 500 crew against the hulk's 1 still
+  reads "Capture Odds: 0%" with Capture Ship greyed (and the same 1,250
+  credits, so crew does not touch the money). What blocks capture here is
+  something else: the derelict gövt (378, flag 0x0800 "starts disabled"),
+  the hulk's 0 shield, or that it was never disabled by anyone. Not
+  separated.
+- **"No answer"**: close in, a press often gets no message and no dialog
+  at all (wave 6 saw it twice at about 10 px). This wave it happened at
+  most stops under about 17 px for the 24 px hulks, and from 46 px in
+  for the 96 px hulk, whose radius is 48 px: there it started as soon as
+  the player was inside the hulk's sprite, and no stop anywhere inside it
+  (down to 2 px) opened the dialog. Three walks to the 2,000,000 hulk
+  never opened it either. Whether the silent presses are a refusal with
+  the message suppressed, or something about overlapping sprites, the
+  runs can't say; the boards that did open came at 6-19 px.
+- So: **the board range does not grow with the target's sprite** in the
+  way a "sprites overlap" rule would predict (the 96 px hulk would have
+  boarded from about 55-60 px); what does happen for a big hulk is not
+  pinned down.
+
+**NovaJS (base cf893d56), money and capture:** `creditBooty` (line 323,
+`CREDIT_BOOTY_FRACTION` 0.10 at line 243) gives 200 / 2,000 / 5,000 for
+the 2,000 / 20,000 / 50,000 hulls against the original's 1,000 / 1,000 /
+1,250: **mismatch**. `captureChance` (lines 370-377: crew share, clamped
+to 5-95%) would offer about 99.8% to the crew-500 player where the
+original greys Capture out: **mismatch** for this kind of hulk (why the
+original refuses is not known). **Proposed (not applied):** money =
+max(1,000, price / 40) up to at least 100,000; for dearer ships more
+boards are needed (500,000 gave 19,500-21,500); capture of a ship
+that started disabled (gövt 0x0800) not offered, pending a test of a
+hulk disabled by gunfire.
+
+Confidence: high for the speed gate's order and the two message bands
+(every press of nine passes agrees), medium for the gate value (7.3
+boarded, 7.8 and 9.2 refused: one run each); high for the 1,000 floor
+(two prices, three boards) and the 1,250 (7 of 7), medium for price / 40
+between 50,000 and 100,000 (a prediction that held), low above that;
+high that crew 500 doesn't open capture (one board, but an unambiguous
+0%); low for everything about the silent presses.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/u9/`:
+`pass50`, `pass40`, `pass25`, `pass25-slowpress`, `pass-soft4`,
+`pass-soft8` (two runs), `pass-soft8-fastpress`, `pass-soft9` (each:
+`recording.mp4`, `recording.events.json`, `track_summary.json` with every
+press's message id, `msgs/`, `magenta.json` = the hulk per frame,
+`NN-pass-*.png` = the dialog or the status line after the pass);
+`hulk-2k`, `hulk-2m` (the `-nodialog` walks and an `-INVALID-` one from
+before the hidden-hulk fix), `hulk-big`, `crew`, `hulk-100k`, `hulk-500k`
+(`NN-b-NN.png` per stop, `NN-dialog-*.png`, `log.jsonl` phase `script`).
+
+### A wave 7: gövt 0x0010, distance and damage rate at the 25% crossing (2026-11-23)
+
+**Setup.** `scenarios/ai_tank_hostile.json`: the AI 3 AI Tank Disc (1000
+shield, 30000 armor) and a player in Kit Lancer Heavy holding a beam
+turret from about 4.5 s to 56 s (1500 px reach, so the shield goes down
+wherever the tank is), then watching 32 s. Target panels about every
+3.6 s; the tank's distance per second from the screen (`hostility.mjs`)
+or, off screen, from its radar dot (about 33 px per radar px). The same
+weapon at two damage rates: **Kit Long Beam** (15 per beam frame, about
+120 a second: 64% at about 7.6 s, 28% at about 11.3 s, so the 25%
+crossing is at about 11.5 s) and **Kit Long Beam 50** (new wëap 248, about
+400 a second: "Shields Down" in the first panel, crossing at about 6 s).
+Two tanks:
+- **hostile**: new gövt 368 = 0x0010 plus 0x0004 "always attacks the
+  player" (düde 299), so it closes from any distance unprovoked: beside
+  the player (mïsn 1012, pilots `w7_ret_near*`) or 1800 px out at Kit Jam
+  Far's marker (mïsn 1013, `w7_ret_far*`);
+- **neutral**: the waves 4-6 tank (gövt 383, düde 637) beside the player
+  (mïsn 988) or at Kit Market, 900 px out (new mïsn 1020; pilots
+  `w7_n383_*`). It does not stay where it is put (it wanders off or flies
+  in before the trigger), so its distance at the crossing is what the
+  recording shows, not where it started.
+
+| tank | beam | distance at the crossing | what it did |
+|---|---|---|---|
+| hostile | 50 | 236-297 px, receding after a pass | stayed: 350-600 px for most of the fire, passes in to 29-34 px at 22-31 s and 45-53 s; close passes after the release |
+| hostile | 50 | about 760 px, closing from 1800 | fought on: passes to 17-64 px from 16 s to the end |
+| neutral | 50 | about 20 px, in a pass | fought on: passes to 9 px; one stand-off at 450-600 px (29-44 s) |
+| neutral | 50 | about 25 px, in a pass | **jumped**: receded steadily from 8 s, gone at about 30 s (24 s after the crossing) |
+| neutral | 50 | about 1030 px, receding (it had wandered off) | stood off **at the beam's edge** (1400-1470 px, 13-23 s), came back at 24-40 s, fought on in passes |
+| neutral | 50 | about 1030 px, receding | the same: 1420-1450 px at 14-21 s, back in, passes and a 460-600 px stand-off, fought on |
+| hostile | 15 | about 415 px, receding | **jumped**: receded steadily to 2600 px, gone at about 32 s (20 s after) |
+| hostile | 15 | 250-300 px (its closest), then receding | **jumped**: gone at about 34 s (22 s after) |
+| neutral | 15 | 540-570 px, receding | **jumped**: gone at about 29 s (18 s after) |
+| neutral | 15 | about 16-26 px, in a pass | stayed: passes to 11 px, stand-offs at 370-430 px (30-38 s) and 390-550 px (48-58 s) |
+| neutral | 15 | about 1320 px, receding | stood off at the beam's edge (1450-1485 px, 14-22 s), came back at 23-43 s, fought on |
+| neutral | 15 | 330-360 px, standing off | stayed: stand-offs at 364-397 px and 380-578 px between passes, to the end |
+
+**Findings.**
+- **Neither distance nor damage rate sorts the runs.** Four of twelve
+  jumped: 3 of 6 at the low rate, 1 of 6 at the high one; 3 of the 7
+  that were receding at the crossing, 1 of the 4 that were in a pass or
+  closing, 0 of the 1 already standing off.
+  Wave 6's tentative rule ("far at the crossing: jump; near: stand off")
+  fails both ways here (a 25 px crossing jumped; crossings at 760-1320 px
+  fought on). With waves 4-6, the jump looks like a **random choice made
+  around the crossing** (4 of 12 here; waves 4-6's heavy-fire cells
+  jumped in about half their runs), not a function of where the tank is.
+- **A jump is decided at once and carried out straight**: every jumper
+  turned away within a few seconds of the crossing, receded steadily and
+  vanished 18-24 s after it (waves 4-5: 16-20 s). None of the eight that
+  stayed jumped later while the fire lasted (up to 50 s more).
+- **"Stand-off" has two forms**: hovering a few hundred px off (350-600
+  px against a 1500 px beam, so not out of its reach) between attack
+  passes, and, for a tank already about 1000 px out at the crossing,
+  holding **just outside the beam's 1500 px reach** (1400-1485 px) for
+  8-10 s before coming back to fight. Both end in renewed passes under
+  fire; neither leads to a jump.
+
+**NovaJS (base cf893d56):** `N/nova_plugin/npc/npc_retreat.ts:109-126`
+(`warshipRetreat`: shield < 25% AND losing, i.e. the damage-load bucket
+over `HEAVY_FIRE_LOAD` at more than `HEAVY_FIRE_RATE_PER_S` 6%/s, line
+41, or unfavourable odds) stands off at 360-420 px (lines 62-63) and jumps
+after `RETREAT_JUMP_MS` 16 s of losing (line 57). Against wave 7: every
+stand-off under sustained fire becomes a jump at 16 s, where the original
+stayed in 8 of 12 (and never jumped late). **Mismatch.** **Proposed (not
+applied), tentative:** when the retreat condition first holds, draw once
+from the PRNG: about 1 in 3 to 1 in 2, flee and jump (it takes 18-24 s
+to leave); otherwise stand off between passes (360-600 px, or just outside the
+attacker's reach if already that far) and do not jump while the fire
+lasts. Keep the Strength/odds trigger of wave 5. A ruling may prefer
+keeping the deterministic 16 s jump.
+
+Confidence: medium that the jump is not decided by distance or damage
+rate (twelve runs, both tanks, the counter-examples are clean); low on
+the 1-in-3 share (4 of 12 here; the heavy-fire cells of waves 4-6 jumped
+in about half their runs, with other weapons); one run per row.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/ai/{near50,far50,near15,far15,n383-near50,n383-far50,n383-near15,n383-far15}/*/`
+(two runs in each `n383-*`; `panels.png` = fire and after panels,
+`hostility-yellow.json`, `blips.json`, `recording.mp4`).
+
+### J wave 7: InhJam lives on the hull, jammer outfits of different kinds add up, Interference 30/60, where ionization starts (2026-11-23)
+
+**Rig.** The J rig (`scenarios/jam_fire.json`: the player sits at the
+port, holds the secondary trigger about 25 s, about 49 JamM missiles of
+Speed 600 / GuidedTurn 60 at the immobile 100-armor, 1-damage target
+900 px east; hits = 100 - armor %; launched = trigger hold x 1.944/s).
+New targets in `kits/testkit.mjs` wave 7.
+
+| cell | missile | target | launched | hits | lost |
+|---|---|---|---|---|---|
+| InhJam on the hull | JamM V100 (type 1) | **shïp 811: the J0 hull with shïp InherentGovt 364** (InhJam1 100), düde govt 364 | 49.1 | 1 | **98%** |
+| two different jammers, 25 then 75 | JamM V100 | shïp 812: Kit Jammer 25 + Kit Jammer 75 (one each) | 49.9 | 0 | **100%** |
+| two different jammers, 75 then 25 | JamM V100 | shïp 813: the same, slots swapped | 49.7 | 0 | **100%** |
+
+**Findings.**
+1. **gövt InhJam works, through the HULL's own govt.** Waves 3-4 put the
+   J0 hull (shïp govt -1) in a düde of govt 364 and lost 0 of about 250
+   missiles; with the same govt written in the shïp's InherentGovt field
+   the target jammed 48 of 49 (98%, the same as one +100 jammer outfit in
+   wave 3). That is what the Bible's shïp InherentGovt text says: the
+   "inherent attributes govt" is the one used "for inherent jamming
+   ability". A düde's govt alone does not carry it. (Not split here: an
+   attributes-only govt, shïp govt 1364.)
+2. **Jammer outfits of different kinds add up; copies of one outfit do
+   not.** Kit Jammer 25 + Kit Jammer 75 jammed every missile in both slot
+   orders (V100 at J 100 is about 98% in wave 3), where the largest alone
+   (J 75) gives about 72% and either one alone 22% or 72%. With wave 3
+   (1, 2, 3 or 4 Kit Jammer 25s all act as J 25), the rule that fits is:
+   **J = the sum over the DIFFERENT jammer outfits, each counted once**
+   (capped at 100 presumably; not tested past 100).
+3. **Interference at 30 and 60** (`w7_static30/60`: wëap 235 JamM Interf,
+   Seeker 0x0008, JamVuln 0, in new sÿst 2028 / 2030 of Interference 30 /
+   60, otherwise wave 5's rig): 49.5 launched, 38 hits (**23%** lost) at
+   30; 49.0 launched, 32 hits (**35%**) at 60. With wave 5's 68% at 100 and
+   0% at 0, the share is close to a line through the origin: least squares
+   gives **0.0066 per point** (30 -> 20%, 60 -> 40%, 100 -> 66%; every cell
+   within about 1.5 binomial standard deviations of one 49-missile run).
+4. **Where ionization starts** (`scenarios/ion_threshold.json`, pilot
+   `w7_ionthr`): the player hull Kit Lancer Ion Slow (IonizeMax 100,
+   Deionize 1, i.e. 0.3 a second) sits beside Ion Target Green, an
+   immobile green disc whose gun (wëap 249) adds Ionization 10 per hit,
+   one shot every 45 game frames; the player holds the JamM Ion (0x0020)
+   trigger. The recording starts in the spaceport (take 1 started after
+   takeoff and the hull was already flickering blue in its first frame:
+   invalid). The hull is first drawn in the ion colour **7.0 s after it
+   appears in space** (frame 316; it then flickers blue every few frames
+   to the end). That is after the 5th or 6th hit (one shot every 1.33-1.55
+   s from takeoff; the green disc's sprite is occluded in pairs every 40
+   video frames, which are probably the shots, and the tint comes 10
+   frames after the 6th): **a charge of about 40-60 of IonizeMax 100**,
+   i.e. about half, not "fully ionized" at 100 (that would be the 10th or
+   11th hit, about 15 s in).
+
+**NovaJS (base cf893d56), `N/nova_plugin/combat/jamming_plugin.ts`:**
+- `deriveJamming` (line 255) takes the LARGEST outfit value per type
+  (`strongest[i] = Math.max(...)`, line 268): **mismatch** for two
+  different jammers (it gives 75, the original about 100). Wave 3's
+  "largest single outfit, or count ignored" was a tie that this run
+  breaks.
+- InhJam is parsed but deliberately not applied (lines 45, 246-249):
+  **mismatch** for a hull whose own govt has InhJam.
+- Interference: `INTERFERENCE_CONFUSION_PER_POINT_FITTED` = 0.0068 (line
+  236, one point at 100) against 0.0066 from three levels: **matches**; no
+  change needed (the comment can cite the three points).
+- Ionization: `N/nova_plugin/ship/ionization_plugin.ts:69-74`
+  (`ionizedNow`: charge > IonizeMax / 2): **matches** the 40-60 window.
+- **Proposed (not applied):** J_k = min(100, sum over distinct jammer
+  outfit ids of that outfit's type-k value) + the hull's inherent govt
+  InhJam_k (shïp InherentGovt 128-383 or 1128-1383, not the düde/combat
+  govt). How InhJam and outfits combine (sum or max) is untested; sum is
+  the natural reading of finding 2.
+
+Confidence: high for the InhJam and the two-jammer cells (clean 98-100%
+against the 22-72% the alternatives predict; one run each); medium for
+the Interference line (one run per level, about +-7 points of binomial
+noise each); low-medium for the ionization window (the shot count is
+inferred from the period, not seen hit by hit).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/jam/{inh,j2575,j7525,static30,static60,ionthr}/*/`
+(`panels.png` = the target panel from Tab to 12 s after release,
+`recording.mp4`, `recording.events.json`); `inh/*-INVALID-open-pilot-failed`
+is the Open-panel flake, `ionthr/*-INVALID-ionized-before-recording` take 1.
+
+### E-fight wave 7: front-quadrant turrets from the Formation slot (2026-11-23)
+
+**Setup.** Wave 5's `scenarios/efight_panel.json` (Kit Fight Range, two
+always-attacks A14 Warship raiders making passes, the player idle and
+never firing; every 5.5 s `r` targets the nearest raider and a shot reads
+its shield) with two hired blue disc escorts carrying two **Kit Front
+Turrets** (new wëap 250: the Kit Escort Gun with guidance 7, "front
+quadrant turret"; shïp 816; pilot `w7_efront`). One run, 133 s recorded.
+
+| escorts (wave) | distance from the player | raider shields (25 panels) | bolts born at a blue escort (`bolt_births.mjs`) |
+|---|---|---|---|
+| full turrets (wave 5 control) | slots | 13%, Shields Down by 8 s, both Disabled by 25 s | 68 in 50 s |
+| **front-quadrant turrets (wave 7)** | **40-46 px all 133 s** (the slots) | 71, 89, 83, 68, 67, then **51-52% and 40-41%** from about 45 s on | 8 (of 432 births; 198 were the raiders') |
+| rear-quadrant turrets (wave 5) | slots | 88-82%, 95 -> 74-77% | 6 clean |
+| fixed guns (wave 5) | slots | 98-100% | 1 (doubtful) |
+
+**Finding.** Escorts with only front-quadrant turrets **stay in their
+slots and fire from them** at raiders that pass in front: the raiders
+lost about half their shield (to 41% and 52%) with nothing else shooting
+at them (wave 5's fixed-gun run is the no-fire control: 98-100%). Like
+the rear turrets, they do much less than full turrets, and they stopped
+scoring once the raiders' passes no longer crossed the escorts' bows
+(flat from about 45 s).
+
+**NovaJS (base cf893d56):** `N/nova_plugin/escorts/escort_command_plugin.ts:646-647,664-671`
+(`formationTurretKind`: 'frontQuadrant' fires at an iff-hostile ship in
+the escort's front quadrant from the slot, "Unmeasured; kept by
+symmetry"): **matches**. No change; the comment can now cite this run.
+
+Confidence: medium-high (one 133 s run; the shield drop is clean against
+the wave-5 control; few bolts were attributed because the turrets fire
+from inside the formation, where births overlap the player's sprite).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/escorts/efront/*/`
+(`panels.png`, `hostility-{blue,red}.json`, `bolt_births.jsonl`,
+`recording.mp4`).
+
+### A wave 7: does an AI 2 trader run when its attacker is out of range? (2026-11-23)
+
+**Setup.** `scenarios/ai_outrange.json`, pilot `w7_ai2_out`: the wave-2 AI
+2 AI Subject Disc (yellow, 1000/1000, two Kit Raider Guns, neutral gövt
+363; mïsn 978) at Kit Port. The player (Kit Lancer, the 1-damage Kit
+Tickler) targets it, tickles it once (5.4 s), lets it fight for 20 s, then
+thrusts straight away for 5 s (about 1800 px, far past the Kit Raider
+Gun's reach), brakes and watches 80 s. Radar dots and the target panel
+show where it goes. The AI 3 subject (mïsn 979, pilot `w7_ai3_out`) went through the same
+script as a control.
+
+| time | AI 2 subject |
+|---|---|
+| 5.4 s | tickled |
+| 16-28 s | attack passes at the player, 8-237 px (the player's shield bar 148 -> 146 px) |
+| 26.7-32.6 s | the player flies off about 1800 px and stops |
+| 32 s | its radar dot sits among the stellars near Kit Port, about 1660 px from the player |
+| 32-50 s | it flies **directly away from the player** at about 125 px/s (its top speed is about 135), out to about 3700 px, and leaves the radar at about 50 s |
+| 53 s on | the target panel reads **"No Target"**: it has left the system |
+
+The **AI 3 control** fought the same way (passes at 7-243 px from 8 s,
+never hit the player's 30000 shield hard enough to show more than 2 px)
+and, after the break, also did not follow: it stayed off screen and off
+the radar (the radar's edge arrow kept pointing at it) for the remaining
+80 s, but it **stayed in the system**: the target panel read "AI Subject
+Disc, Shield: 100%" in all 20 shots to the end.
+
+**Finding.** The Bible's "runs away when his attacker is out of range"
+happens as written: once the player broke off beyond its guns' reach, the
+brave trader did not follow; it turned and ran directly away from the
+player at full speed and left the system about 20 s after the break
+(wave 4: a departing ship accelerates hard and vanishes far from any
+stellar, i.e. a jump; here it was off the radar before it vanished, so a
+jump vs a landing beyond the radar can't be told, but there is no stellar
+out there). It had never been hurt beyond the tickle (shield 100%). The
+AI 3 warship, by contrast, broke off the chase too but stayed in the
+system.
+
+**NovaJS (base cf893d56):** `N/nova_plugin/npc/npc_decision.ts:439-455`
+(case 2): a brave trader attacks its aggressor while `oddsFavorable`
+holds, flees when the odds turn, and with the aggressor gone or lost goes
+back to business; there is no "attacker out of range" branch, and the
+aggressor stays recorded (wave 3: retaliation is permanent), so it keeps
+chasing a player who flies off. **Mismatch.** **Proposed (not applied):**
+for AI 2, when the aggressor is farther than the ship's longest weapon
+reach (wëap speed x duration, or beam length), switch to 'flee' (run
+directly away, then depart by jump). One run per AI type.
+
+Confidence: medium (one run per AI type, clean radar track and panels).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261123-w7/ai/{out-ai2,out-ai3}/*/`
+(`panels-out.png`, `radar3.png` / `radar4.png`, `hostility-yellow.json`,
+`blips.json`, `recording.mp4`).
+
+### Asteroid decoy capture wave 7: not attempted (2026-11-23)
+
+The brief asked to separate range from per-tick chance if rocks could be
+placed or slowed. They can't: sÿst Asteroids is a count, and the röid
+resource (Bible: Strength, SpinRate, YieldType/Qty, PartCount/Color,
+FragType 1-2, FragCount, ExplodeType) has no speed, mass or position
+field; SpinRate is only the sprite's frame rate. Fragments of a destroyed
+rock start where it was but drift like any other rock. So wave 5-6's
+status stands (NovaJS's certain capture inside 25° / 200 px is consistent
+with what was seen; range vs chance is open) and no runs were spent on it.
+
+### U9 wave 7: why a receding ship stays "too fast" far out around big planets (2026-11-23, analysis only)
+
+**Question.** Wave 4's moving runs (`land_range*.json`: an inertialess
+Kit Crawler 100 crossing the planet at a constant 44 px/s, `l` every 7
+frames) flipped from "too far" to "too fast" at about the landing range
+on the way in, but around the big planets stayed "too fast" far beyond
+it on the way out (250 px planet: 450-460 px; 304x134: 524-534; 325:
+still at 700). No new driving: wave 6 showed the landing zone is a
+square, so the six wave-4 recordings were re-read with each press's
+offset (dx, dy) from the planet (`track.json` centres, a constant-velocity
+fit, read 4.5 frames after the stamp) and the distance taken as
+max(|dx|, |dy|). Message ids were re-read from the crops (the 304x134
+run's ids 3-8 are one message, "too far", split by the planet drawn
+behind the status line; id 9 is "land304, you're cleared to land.
+Commence final approach.").
+
+| planet (frame width W) | in: too far -> next answer, max(\|dx\|,\|dy\|) | out: too fast -> too far, max(\|dx\|,\|dy\|) | 1.7 x W | wave 6 at-rest landing square |
+|---|---|---|---|---|
+| 40 | 76 -> 69 ("too fast") | 70 -> 78 | 68 | 63-87 |
+| 72 | 166 -> 92 (coarse) | 125 -> 132 | 122 | 103-131 |
+| 150 (Kit Port) | 250 -> 240 (euclidean; slow pass) | 262 -> 272 (euclidean) | 255 | (wave 3, circle 235-277) |
+| 250 | 253 -> 243 ("cleared to land. Commence final approach.", then "too fast") | **430 -> 440** | **425** | 209.5-235.5 |
+| 304x134 | about 245 ("cleared ... Commence final approach") | **523 -> 533** | **517** | |
+| 325 | 244 -> 236 | **still "too fast" at 394** (the run ended) | **552** | 199-213 |
+
+**Finding (fits all six runs, not tested beyond them).** The "too fast"
+answer belongs to an approach state with two edges:
+- **entered** at about the landing square, min(1.7 W, cap), the cap here
+  being about 240-250 rather than the at-rest 212 (the first press inside
+  is answered "You are cleared to land. Commence final approach." in two
+  of the three big runs);
+- **left** only when max(|dx|, |dy|) exceeds about **1.7 W with no cap**
+  (425 / 517 / 552 for the 250 / 304 / 325 px art: 430-440 and 523-533
+  measured, and 325 still inside at 394).
+
+For the small planets the two edges coincide (1.7 W is under the cap), so
+in and out were symmetric; for art over about 140 px the exit edge is
+the uncapped 1.7 W, which is why a receding ship stays "too fast" for
+hundreds of px. A time-based lapse does not fit: the stay inside lasted
+3.4 s for 40 px and 16-21 s for the big planets, and the request-to-exit
+times (13-34 s) don't line up with the 27 s request lapse either.
+
+**NovaJS (base cf893d56; main 92361bed has since applied the square,
+bd344b9f):** `N/nova_plugin/travel/planet_plugin.ts:187` (`landingRange`,
+a circle at the base; on main `inLandingZone`, the capped 1.7 W square)
+and lines 314/317 at the base (345/348 on main: `tooFar`, then `tooFast`)
+answer from the current distance only: no approach state, no exit edge.
+It only changes which message a ship that can't land anyway is shown, so
+**proposed (not applied): nothing**, unless the message fidelity is
+wanted (then: remember "cleared" on entering the landing square and keep
+answering "too fast" until max(|dx|, |dy|) > 1.7 x frame width,
+uncapped).
+
+Confidence: medium (one pass per planet, every edge within the 7-10 px
+between presses; the cap on the entry edge, 240-250 against the at-rest
+212, is not explained; a direct test would stop a receding ship between
+the two edges and press `l` while creeping outward).
+
+**Evidence:** wave 4's `~/.local/share/novaref/evidence/20261123-w4/u9/land-*/*/`
+(`track.json`, `track_summary.json`, `msgs/`); the re-read is
+`~/.local/share/novaref/evidence/20261123-w7/u9/flips/` (`flips.py`, `flips.txt`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **Boarding at rest close in is flaky (wave 7).** Under about 17 px
+  (inside the sprite of a 96 px hulk) a `b` often gets no answer at all;
+  a walk may need several stops, or never opens the dialog (the
+  2,000,000 hulk, three walks). `loops/board.mjs` now presses once more
+  when the hulk ends up hidden under the player and always turns to face
+  it; the slow `pass` mode boarded more reliably than stops.
+- **Kit-placed neutral ships wander (wave 7).** A mïsn ship with
+  ShipStart -1 or -2 of a neutral gövt moves off or flies in during the
+  3-4 s of takeoff, so "where it was put" is not where it is when the
+  recording starts; read its distance from the recording (radar dots
+  for off-screen ones).
+- **Start the recording before Leave when the first seconds matter (wave
+  7).** A hostile ship placed beside the player starts shooting during
+  takeoff (the ionization take 1 was already ionized in its first frame).
 
 - **Kit bays pointed at the wrong ship (waves 1-5, fixed in wave 6).** A
   bay's AmmoType is the carried shïp's id itself; the kit wrote `id - 128`,
@@ -3537,11 +4097,11 @@ the 1.8 factor is one GuidedTurn value only.
 
 | id | question | status |
 |---|---|---|
-| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). Boarding a non-mission disabled hulk: the dialog opens only at about 13-17 px centre to centre (NovaJS 150); money booty fixed per hull, 1,250 for a 50,000 hull and 1,000 for a 20,000 one (NovaJS 10%); capture greyed at 0%. Still open: more prices and a bigger hull, the boarding speed gate, why a receding ship stays "too fast" far out around big planets. |
-| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (wave 6): no.** A stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player; its Vipers lived. Also found: the kit's bay AmmoType was id - 128 since wave 1 (fixed; the "kit bombers never launch" of wave 5 was that bug). Open: a carrier that stays in the fight with kit bombers (the Kit Bomb Carrier left within 12 s). |
-| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (63 px loops, drifting 10-25 px a lap) while ordinary turns match GuidedTurn (1.8x applied in bdc43534, drift left out). Asteroid capture range vs per-tick chance: not separated (rocks can't be placed). Still open: InhJam, stacked-jammer max vs ignore, other Interference levels, where ionization starts. |
-| A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 6:** jump vs stand-off is not damage rate (8 guns stood off twice). Where the tank is when its shield crosses 25% mostly decides: near (in a pass) stood off 5 of 5, far (260+ px or never in view) jumped 4 of 5; the fifth fought on under a moderate beam. Distance and damage rate still tangled; AI 2's out-of-range flight untested. |
-| E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). Front-quadrant turrets still unmeasured. |
+| U9 | Landing and boarding speed/distance gates | **Wave 6:** the landing zone is a SQUARE, max(\|dx\|, \|dy\|) <= about 1.7 x the frame WIDTH, capped near 212 px (fits all 12 at-rest brackets of waves 4 and 6; the tiny 15x21 / 17x31 stations land at about 25 / 29 px; applied in bd344b9f). **Wave 7:** boarding while moving needs under about 7.5-9 px/s (boarded at 3.4-7.3, refused at 9.2-11 with "not close enough", "too fast" from 16 px/s at any distance, checked before distance; NovaJS 54.8 px/s, after distance); money booty max(1,000, price / 40) from 2,000 to 100,000 (1,000 / 1,000 / 1,250 / 2,500), but 19,500 and 21,500 at 500,000; crew 500 still 0% capture; a 96 px hulk and a 2,000,000 one never opened the dialog (presses close in often get no answer). The receding "too fast" fits an approach state left only outside the UNCAPPED 1.7 W square (wave-4 re-read). Still open: money above 100,000, why capture is greyed (derelict govt?), the silent presses. |
+| B NPC carrier | Does a bay fighter's blast near its NPC carrier make the carrier turn on it? | **Answered (waves 6, 7): no.** Wave 6: a stock Fed Carrier beside the player took 57% shield from its Vipers' blasts, or 1-point blast hits for 110 s, and kept firing at the player. Wave 7: an anchored Kit Bomb Carrier lost 60% of its shield to its Kit Bombers' blasts in 15 s and never finished off the four bombers its blasts had disabled; with 1-damage blasts its bombers flew 110 s unharmed by it. The kit-bay rechecks: Q4 stands (a protector carrier with a working kit bay never launched) and the player's own bay launches real Kit Fighters (E-view). Open: the 1-damage carrier never fired its guns at the player (one run). |
+| J leftovers | What InhJam actually does (nothing on targets of AI 1-4); ion, cloak, max-vs-ignore-count for stacked jammers; Interference at other levels | **Wave 6:** an ionized ship cannot fire 0x0020 missiles at all and fires others normally (matches); missiles keep homing on a cloaked target while the parent's scanner keeps it targeted (applied in 2ccf6ee9); a confused (Interference) missile turns about 1.8x its GuidedTurn (applied in bdc43534). **Wave 7:** InhJam works through the HULL's inherent govt (shïp govt 364: 98% jammed; a düde govt alone: nothing); different jammer outfits ADD (25 + 75 jammed 100% in either order; copies of one outfit count once); Interference 30 / 60 confuse 23% / 35% (with 100 -> 68%: 0.0066 per point, matches); ionization starts at about half of IonizeMax (matches). NovaJS takes the largest outfit and ignores InhJam: mismatch. Asteroid range vs chance: not answerable (röid has no speed or position field). |
+| A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS keeps chasing (mismatch). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumps every 16 s stand-off (mismatch). |
+| E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
 
 ## Catalogue
@@ -3576,10 +4136,10 @@ cosmetic or rare.
 | A1 | Q1: does a protect-the-player ship retaliate when shot? | `N/nova_plugin/npc/npc_decision.ts:247-288` | **answered above** (shots pass through; it never turns) | H |
 | A2 | Q2: does it engage attackers only, or any hostile? | `npc_decision.ts:391` | **answered**: attackers only. Matches. | H |
 | A3 | Q3: does it fight its own govt's ships? | `npc_decision.ts:391` | **answered**: no. **Mismatch**; fix proposed above. | H |
-| A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | **answered**: protector carriers never launch (Q4b, the stock Fed Carrier; Q4's kit carrier pointed its bay at a missing ship, see "B wave 6") | M |
+| A4 | Q4: do its bay fighters follow suit? | `N/nova_plugin/escorts/bay_plugin.ts` | **answered (waves 1, 7)**: protector carriers never launch: Q4b (the stock Fed Carrier) and, rerun with the fixed kit bay in wave 7, the Kit Carrier (16 panels, no fighter) | M |
 | A5 | Do NPCs of the same govt pass through each other's shots? | `N/nova_plugin/ship/firing_group.ts:62-67` | CPg crossfire, VID | M |
 | A6 | Warship (AI 3) vs interceptor (AI 4) engagement thresholds against a criminal player (MaxOdds, strength) | `npc_decision.ts` odds logic | CPg govt MaxOdds variants, CPl rating/strength | M |
-| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **partly (wave 3)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked | M |
+| A7 | Brave/wimpy trader transitions: flee vs fight back, and when they calm down | `npc_decision.ts` cases 1/2 | **mostly (waves 3, 7)**: AI 2 fights to shields-down and keeps attacking 130 s after one tickle; AI 1 leaves within 35-40 s even unprovoked; AI 2 whose attacker flies out of reach runs away and leaves the system (wave 7). **Mismatch** for the last (NovaJS chases) | M |
 | A8 | How long a ship bribe lasts (NovaJS: 2 min) | `N/nova_plugin/encounters/hail_plugin.ts:228-233` | VID after bribing | M |
 | A9 | Do pirates board a disabled player, and what do they take? | `N/nova_plugin/npc/npc_plunder.ts:45-108` | CPl weak ship, VID, PD | M |
 | A10 | Does a disabled player ever recover unaided? | `N/nova_plugin/ship/disabled_component.ts:76-95` | VID 3 min | M |
@@ -3611,7 +4171,7 @@ cosmetic or rare.
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | CPl + kit stellar with MinStatus 32767 | L |
 | R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | CPl rating per Appendix I tier, VID | M |
 | R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | not implemented | CPg govt + syst ReinfFleet, VID, PD | L |
-| R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **partly (wave 6)**: fixed per hull, 1,250 credits at cost 50,000 (3 of 3) and 1,000 at 20,000 (2 of 2), so not a fixed share; cargo and energy a random share; capture 0% and greyed against crew 1. **Mismatch** (10%, 150 px range) | M |
+| R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6, 7)**: max(1,000, price / 40) at 2,000-100,000 (1,000 / 1,000 / 1,250 / 2,500; 1,250 seven times), 19,500 and 21,500 at 500,000; cargo and energy a random share; capture 0% and greyed against crew 1 even from a crew-500 hull. **Mismatch** (10%, 150 px range, 54.8 px/s gate) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |
 
@@ -3622,7 +4182,7 @@ cosmetic or rare.
 | B1-B4 | Blast damage to the firer, its flock and its protector; retaliation; record/rating for blasting one's own escort | NovaJS AI aggressor rules; `N/nova_plugin/combat/` blast damage | **answered above** (B-series) | H |
 | F1 | Escort slot geometry, and lead/lag with speed | `N/nova_plugin/npc/npc_formation.ts:18-26,258` | **answered above**: a 45° V with no lookahead. **Mismatch** | H |
 | U3 | Do outfit speed/accel/turn mods use the hull scale? | `P/parsers/outfit_parse.ts:159,172,177` | **answered (wave 2)**: yes, and NovaJS matches | M |
-| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227` | **landing answered (waves 4, 6: a square zone), applied in bd344b9f**; boarding range about 13-17 px (wave 6) | M |
+| U9 | Landing and boarding speed/distance gates | `N/nova_plugin/travel/planet_plugin.ts:187-190`, `N/nova_plugin/ship/boarding_component.ts:227-228` | **landing answered (waves 4, 6: a square zone), applied in bd344b9f**; boarding range about 13-19 px, speed gate about 7.5-9 px/s with "too fast" first from about 13 px/s (waves 6, 7) | M |
 | M1 | What closes the `h` minimap, and does it persist across jumps or landing? Is it shown over the big map? | `N/spaceport/mini_map.ts` | **answered (wave 2)**: a 2.2 s peek per `h` or click. **Mismatch** | L |
 | M2 | Minimap clicks with a multi-jump route; non-neighbour clicks; drag/zoom; borders | NovaJS minimap/routing | Same | L |
 | M3 | Does a shift-click on the minimap also fire secondaries? | input handling | Same, with a secondary weapon | L |
@@ -3653,8 +4213,8 @@ cosmetic or rare.
 | E2 | Fixed-angle (negative Inaccuracy) firing side | `N/nova_plugin/combat/fire_weapon_plugin.ts:211-231` | CPg, SS | L |
 | E3 | Weapon readiness right after a spawn or jump (#135) | `fire_weapon_plugin.ts:85,510` | CPg slow-reload weapon, VID | L |
 | E4 | planetType weapons vs normal ships (#136/#150) | wëap planetType | CPg, VID | L |
-| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up. Applied in c9fc116c | L |
-| E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | **partly (wave 6)**: an ionized hull is drawn in the ion colour, turns a fraction of its normal rate and cannot fire Seeker 0x0020 weapons (matches); the threshold and the slow factor are not measured | M |
+| E5 | Jamming odds and retargeting | `N/nova_plugin/combat/jamming_plugin.ts:96-166` | **answered (J-series wave 3)**: one roll per missile at launch, P = clamp((J-(100-V))/V, 0, 1), no re-acquire, jammer outfits don't add up (wave 7: copies of one outfit don't, DIFFERENT outfits do, and gövt InhJam counts through the hull's own govt; not applied). Applied in c9fc116c | L |
+| E6 | Ionization thresholds and slow factor (NovaJS 0.6) | `N/nova_plugin/ship/ionization_plugin.ts:25-59` | **mostly (waves 6, 7)**: an ionized hull is drawn in the ion colour, turns a fraction of its normal rate and cannot fire Seeker 0x0020 weapons; ionization starts at about half of IonizeMax (40-60 of 100, wave 7). All match; the slow factor is not measured | M |
 | E7 | Auto-refuel rate (ModType 19) | `N/nova_plugin/ship/health_plugin.ts:40-48` | CPl fuel 0, timed PD | L |
 | E8 | Bay fighter launch speed (#200) | `N/nova_plugin/escorts/bay_plugin.ts:245,313` | VID Kit Carrier | L |
 | E9 | shïp AppearOn residuals (#140): which entities it gates, asteroid re-roll | `N/nova_plugin/spawn/spawn_bits.ts` | CPg, CPl bit on/off | L |
