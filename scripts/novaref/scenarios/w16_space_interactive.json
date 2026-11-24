@@ -1,0 +1,17 @@
+{
+ "name": "w16_space_interactive",
+ "_comment": "Wave 16: Enter Ship, recording from the start at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w16.jsonl) until {\"done\":true}; landings, the offer, the BBS jobs and takeoffs are all hand-driven; the pilot is pulled at the end (land and leave inside the hand-driven part so it is written). Distress answerers (w16_ans_*), police watch range / self-defence / NPC-on-NPC (w16_watch*, w16_selfdef, w16_npcpolice), A14 (w16_unowned3), contraband (w16_clean_several, w16_bigfine), C1 (w16_cloak_prov), H1 (w16_disabled, w16_fuelless).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w16.jsonl", "maxMs": 1800000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ],
+ "pull": true
+}

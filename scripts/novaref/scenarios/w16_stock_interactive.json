@@ -1,0 +1,16 @@
+{
+ "name": "w16_stock_interactive",
+ "_comment": "Wave 16: STOCK data, no plug-in (the hub's stock-Sol shuttle question): Enter Ship with the pilot copy, recording at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w16.jsonl): every few minutes Tab through every ship in the system with a shot of the target panel each, until {\"done\":true}. Pilot w16_sol (stock Shuttle at Earth, Sol).",
+ "pilot": { "as": "novaref-scenario" },
+ "park_last_pilot": true,
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w16.jsonl", "maxMs": 2400000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ]
+}

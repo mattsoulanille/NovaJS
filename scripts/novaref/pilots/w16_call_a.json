@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w16-call-a",
+  "edits": {
+    "ship": 763,
+    "stellar": 1582,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1582": 2
+    },
+    "missionBits": {
+      "9191": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-call-a"
+  }
+}

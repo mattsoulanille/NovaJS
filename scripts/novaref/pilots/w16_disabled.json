@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w16-disabled",
+  "edits": {
+    "ship": 451,
+    "stellar": 1581,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1581": 2
+    },
+    "missionBits": {
+      "9187": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-disabled"
+  }
+}

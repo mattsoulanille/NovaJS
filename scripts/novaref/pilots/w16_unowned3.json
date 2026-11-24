@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w16-unowned3",
+  "edits": {
+    "ship": 703,
+    "stellar": 1566,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1566": 2,
+      "1567": 2,
+      "1568": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w16-unowned3",
+    "weapons": {
+      "128": 0,
+      "283": 1
+    },
+    "outfits": {
+      "128": 0,
+      "460": 1
+    }
+  }
+}

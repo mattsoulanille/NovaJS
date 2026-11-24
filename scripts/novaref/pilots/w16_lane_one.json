@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w16-lane-one",
+  "edits": {
+    "ship": 839,
+    "stellar": 1574,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1574": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w16-lane-one"
+  }
+}

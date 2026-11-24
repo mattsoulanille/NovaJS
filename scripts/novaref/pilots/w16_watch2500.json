@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w16-watch2500",
+  "edits": {
+    "ship": 703,
+    "stellar": 1562,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1562": 2
+    },
+    "missionBits": {
+      "9179": true,
+      "9182": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-watch2500",
+    "weapons": {
+      "128": 0,
+      "246": 1
+    },
+    "outfits": {
+      "128": 0,
+      "450": 1
+    }
+  }
+}

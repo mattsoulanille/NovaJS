@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w16-ans-bystander",
+  "edits": {
+    "ship": 763,
+    "stellar": 1560,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1560": 2
+    },
+    "missionBits": {
+      "9170": true,
+      "9173": true,
+      "9176": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-ans-bystander"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w16-bigfine",
+  "edits": {
+    "ship": 703,
+    "stellar": 1569,
+    "credits": 1200,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1569": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w16-bigfine",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}

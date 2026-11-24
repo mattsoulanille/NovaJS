@@ -1,0 +1,15 @@
+{
+  "name": "novaref-w16-sol",
+  "edits": {
+    "ship": 128,
+    "stellar": 128,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w16-sol"
+  }
+}

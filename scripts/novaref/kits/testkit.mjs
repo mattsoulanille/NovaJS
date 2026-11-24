@@ -287,8 +287,173 @@ export default {
         ...wave13Resources(),
         ...wave14Resources(),
         ...wave15Resources(),
+        ...wave16Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-16 experiments (docs/reference_experiments.md, "... wave 16").
+ * Nothing retired; ids above wave 15's: sÿst / spöb 1560-1584, shïp
+ * 447-453, düde 405-416, gövt 313 / 314, mïsn 1088-1110, bits 9170-9192.
+ * New map positions on the row y = -1060 (apart from every other system).
+ * Added during the wave (the 30000-shield mission victims never called):
+ * shïp 452 / 453 (thin anchored / mobile victims, düde 415 / 416, offers
+ * 1107 / 1108, b9189 / b9190 at 1560); sÿst/spöb 1582 Kit Call Range A
+ * (traffic raiders, the thin victim as offer 1109, b9191, on mark 1583) and
+ * 1584 Kit Call Range B (traffic Kit Shipping, a mission raider as offer
+ * 1110, b9192).
+ *
+ *  D   Distress answerers, the fight on screen: sÿst/spöb 1560 Kit Answer
+ *      Range (owner 363, no traffic), spöb 1561 Answer Mark (160,0),
+ *      uninhabited. Main-spaceport offer (one per pilot): an ANCHORED
+ *      green victim of gövt 343 Kit Shipping on the mark (ShipStart -2;
+ *      Speed 0, 30000 / 30000): mïsn 1088 AI 1 (b9170, shïp 447, düde
+ *      405), 1089 AI 2 (b9171, 448, 406), 1090 AI 3 unarmed (b9172, 449,
+ *      407). Mission BBS: 1091 (b9173) one yellow Kit Raider P (düde 374,
+ *      gövt 328, enemy of 343) on the mark; one candidate answerer at the
+ *      port (ShipStart -1): 1092 orange guard of 343 (b9174, düde 389),
+ *      1093 blue AI 3 of the ally 317 (b9175, düde 390), 1094 cyan AI 3 of
+ *      the unrelated 316 (b9176, düde 391), 1095 red AI 4 of the unrelated
+ *      non-nosy 315 (b9177, düde 392).
+ *  W   Police watch range: sÿst 1562 Kit Watch Range (owner 326 Kit Police
+ *      Nosy, gövt 0x0002, no traffic): spöb 1562 Watch Port (0,0), markers
+ *      1563 (300,0), 1564 (1000,0), 1565 (2500,0). Offer 1097 (b9179): the
+ *      anchored AI 1 victim of 343 (düde 405) at the port. BBS: an ANCHORED
+ *      nosy police (red, AI 4, Speed 0, Kit Escort Gun; shïp 450, düde 408)
+ *      on 1563 / 1564 / 1565: mïsn 1098 / 1099 / 1100 (b9180-9182); 1101
+ *      (b9183) a Kit Raider of 362 (always attacks the player; düde 602) at
+ *      the port (self-defence); 1096 (b9178) a MOBILE nosy police (düde
+ *      376) at the port and 1106 (b9188) a Kit Raider P (düde 374) at the
+ *      port: NPC-on-NPC policing with the victim offer.
+ *  A   A14, a second victim govt for the Independent neighbour: gövt 314
+ *      Kit Victim Odd (Disab 400 / Board 7 / Kill 70, no relations), its
+ *      bare traders (shïp 861, düde 409) are the traffic of sÿst/spöb 1566
+ *      Kit Spread Kill 3 (owner 338), linked to 1567 Kit Spread Unowned 3
+ *      (govt -1, port), linked to 1568 Kit Spread Beyond 3 (govt -1, no
+ *      stellar).
+ *  S   Contraband: gövt 313 Kit Customs Big (ScanMask 0x0001, ScanFine
+ *      5000, Smug 50, CrimeTol 30000) owns sÿst/spöb 1569 Kit Scan Big, its
+ *      cutters (shïp 855, düde 410) the traffic: a fine above the pilot's
+ *      cash, and the thousands separator.
+ *  N   Shuttles, one colour per düde (düde 411-414 = shïp 424-427 azure /
+ *      blue / purple / magenta, gövt 346, 25% each): sÿst 1570 Kit Lane
+ *      Range (owner 346), stellars in list order 1571 Lane East (150,40,
+ *      346), 1572 Lane North (-60,200, 363), 1570 Lane Port (-140,-60, 346;
+ *      the player), 1573 Lane Centre (0,0, 346): uneven distances, all on
+ *      screen from the port, the port NOT at the system centre. sÿst 1574
+ *      Kit Lane One: 1574 One Port (0,0, 346), 1575 / 1576 of the enemy 347
+ *      at (220,0) / (0,220): one stop. sÿst 1577 Kit Lane None (owner 363):
+ *      1577 None Port (0,0) and 1578 (220,0), both of 347: no stop.
+ *  W1  sÿst/spöb 1579 Kit Hull Flags 2 (363): yellow 0x0002 (düde 395,
+ *      35%), red 0x0080 (393, 25%), magenta Flags 0x0040 (397, 20%), green
+ *      control (394, 20%), avgShips 5.
+ *  C1  sÿst/spöb 1580 Kit Cloak Provoke (363, no traffic): offer 1102
+ *      (b9184) the yellow AI 3 0x4000 cloaker (düde 401) at the port; BBS
+ *      1103 (b9185) the blue AI 1 0x0400 (düde 399), 1104 (b9186) the
+ *      orange AI 1 0x2000 (düde 400), both at the port.
+ *  H1  sÿst/spöb 1581 Kit Assist Calm (363): the neutral warship (düde
+ *      403) and trader (404), avgShips 3; offer 1105 (b9187) the anchored
+ *      Kit Disabler of 362 (düde 358: one 1200-damage bolt, reload 30000)
+ *      at the port, to disable a shïp 451 Kit Fragile player (shield 0,
+ *      armor 1500).
+ */
+function wave16Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const anchored = { ...mobile, accel: 0, speed: 0, armor: 30000, shield: 30000 };
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const marker = (id, name, x, y) => spob(id, name, x, y, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] });
+    const RLED = { red: 1971, green: 1972 };
+    const shipMisn = (id, name, bit, availStel, dudeId, shipStart, bbs) => misn(id, name, bit, {
+        availStel, availLoc: bbs ? 0 : 3, shipCount: 1, shipDude: dudeId, shipGoal: -1, shipBehav: -1, shipStart,
+        onAccept: `!b${bit}`, ...(bbs ? { dispWeight: 30000 } : {}) });
+
+    // --- D: distress answerers.
+    [[447, 1, 405], [448, 2, 406], [449, 3, 407]].forEach(([sid, ai, did]) => {
+        out.push(...shareRled(sid, `Kit Anchored Victim AI${ai}`, RLED.green, 24, { ...anchored, ai }));
+        out.push(dude(did, `Kit Anchored Victim AI${ai}`, ai, 343, sid));
+    });
+    out.push(system(1560, "Kit Answer Range", -520, -1060, 363, [1560, 1561]), port(1560, "Kit Answer Port"), marker(1561, "Answer Mark", 160, 0));
+    out.push(...shipMisn(1088, "Kit D victim AI1", 9170, 1560, 405, -2, false), ...shipMisn(1089, "Kit D victim AI2", 9171, 1560, 406, -2, false),
+        ...shipMisn(1090, "Kit D victim AI3", 9172, 1560, 407, -2, false), ...shipMisn(1091, "Kit D raider", 9173, 1560, 374, -2, true),
+        ...shipMisn(1092, "Kit D guard 343", 9174, 1560, 389, -1, true), ...shipMisn(1093, "Kit D ally 317", 9175, 1560, 390, -1, true),
+        ...shipMisn(1094, "Kit D bystander 316", 9176, 1560, 391, -1, true), ...shipMisn(1095, "Kit D bystander police 315", 9177, 1560, 392, -1, true));
+    // Added during the wave (the 30000-shield anchored victims never called):
+    // shïp 452 anchored with shield 300 / armor 30000 (düde 415, offer 1107,
+    // b9189) and shïp 453 a mobile 3000 / 3000 AI 1 trader like the traffic
+    // (düde 416, offer 1108, b9190), both of 343 on the mark.
+    out.push(...shareRled(452, "Kit Anchored Victim Thin", RLED.green, 24, { ...anchored, ai: 1, shield: 300 }), dude(415, "Kit Anchored Victim Thin", 1, 343, 452));
+    out.push(...shareRled(453, "Kit Mobile Victim", RLED.green, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }), dude(416, "Kit Mobile Victim", 1, 343, 453));
+    out.push(...shipMisn(1107, "Kit D victim thin", 9189, 1560, 415, -2, false), ...shipMisn(1108, "Kit D victim mobile", 9190, 1560, 416, -2, false));
+    // Mission ships never called either, so: sÿst/spöb 1582 Kit Call Range A
+    // (363; mark 1583 at (160,0)) with TRAFFIC raiders (düde 374, avgShips 2)
+    // and the thin anchored victim as the offer (1109, b9191, on the mark);
+    // sÿst/spöb 1584 Kit Call Range B (363) with TRAFFIC Kit Shipping (düde
+    // 355, avgShips 3) and a MISSION raider (1110, b9192, offer, at the port).
+    out.push(traffic(system(1582, "Kit Call Range A", -40, -1060, 363, [1582, 1583]), [[374, 100]], 2), port(1582, "Kit Call A Port"), marker(1583, "Call A Mark", 160, 0));
+    out.push(traffic(system(1584, "Kit Call Range B", 0, -1060, 363, [1584]), [[355, 100]], 3), port(1584, "Kit Call B Port"));
+    out.push(...shipMisn(1109, "Kit D thin victim, traffic raiders", 9191, 1582, 415, -2, false), ...shipMisn(1110, "Kit D mission raider, traffic victims", 9192, 1584, 374, -1, false));
+
+    // --- W: police watch range, self-defence, NPC-on-NPC policing.
+    out.push(...shareRled(450, "Kit Police Anchored", RLED.red, 24, { ...anchored, ai: 4, weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(408, "Kit Police Nosy Anchored", 4, 326, 450));
+    out.push(system(1562, "Kit Watch Range", -480, -1060, 326, [1562, 1563, 1564, 1565]), port(1562, "Kit Watch Port"),
+        marker(1563, "Watch 300", 300, 0), marker(1564, "Watch 1000", 1000, 0), marker(1565, "Watch 2500", 2500, 0));
+    out.push(...shipMisn(1097, "Kit W victim", 9179, 1562, 405, -1, false),
+        ...shipMisn(1098, "Kit W police 300", 9180, 1562, 408, -2, true), ...shipMisn(1099, "Kit W police 1000", 9181, 1562, 408, -3, true),
+        ...shipMisn(1100, "Kit W police 2500", 9182, 1562, 408, -4, true), ...shipMisn(1101, "Kit W self-defence raider", 9183, 1562, 602, -1, true),
+        ...shipMisn(1096, "Kit W mobile nosy police", 9178, 1562, 376, -1, true), ...shipMisn(1106, "Kit W raider P", 9188, 1562, 374, -1, true));
+
+    // --- A: a second victim govt for the unowned neighbour.
+    out.push(govt(314, "Kit Victim Odd", { disabPenalty: 400, boardPenalty: 7, killPenalty: 70, classes: [314, -1, -1, -1] }));
+    out.push(dude(409, "Kit Victim Odd Bare Trader", 1, 314, 861));
+    const kill3 = traffic(system(1566, "Kit Spread Kill 3", -440, -1060, 338, [1566]), [[409, 100]], 3);
+    kill3.set.links = links(1567);
+    const unowned3 = system(1567, "Kit Spread Unowned 3", -400, -1060, -1, [1567]);
+    unowned3.set.links = links(1566, 1568);
+    const beyond3 = system(1568, "Kit Spread Beyond 3", -360, -1060, -1, []);
+    beyond3.set.links = links(1567);
+    out.push(kill3, port(1566, "Kit Spread Kill 3 Port"), unowned3, port(1567, "Kit Spread Unowned 3 Port"), beyond3);
+
+    // --- S: a fine above the pilot's cash.
+    out.push(govt(313, "Kit Customs Big", { scanMask: 0x0001, scanFine: 5000, smugPenalty: 50, crimeTol: 30000, classes: [313, -1, -1, -1] }));
+    out.push(dude(410, "Kit Customs Big Cutter", 4, 313, 855));
+    out.push(traffic(system(1569, "Kit Scan Big", -320, -1060, 313, [1569]), [[410, 100]], 2), port(1569, "Kit Scan Big Port"));
+
+    // --- N: shuttle lanes, one stop, no stop.
+    [424, 425, 426, 427].forEach((sid, i) => out.push(dude(411 + i, `Kit Lane Shuttle ${sid}`, 1, 346, sid)));
+    const shuttleDudes = [[411, 25], [412, 25], [413, 25], [414, 25]];
+    out.push(traffic(system(1570, "Kit Lane Range", -280, -1060, 346, [1571, 1572, 1570, 1573]), shuttleDudes, 4),
+        port(1571, "Lane East", 150, 40, { govt: 346 }), port(1572, "Lane North", -60, 200, { govt: 363 }),
+        port(1570, "Lane Port", -140, -60, { govt: 346 }), port(1573, "Lane Centre", 0, 0, { govt: 346 }));
+    out.push(traffic(system(1574, "Kit Lane One", -240, -1060, 346, [1574, 1575, 1576]), shuttleDudes, 3),
+        port(1574, "One Port", 0, 0, { govt: 346 }), port(1575, "One Hostile A", 220, 0, { govt: 347 }), port(1576, "One Hostile B", 0, 220, { govt: 347 }));
+    out.push(traffic(system(1577, "Kit Lane None", -200, -1060, 363, [1577, 1578]), shuttleDudes, 3),
+        port(1577, "None Port", 0, 0, { govt: 347 }), port(1578, "None B", 220, 0, { govt: 347 }));
+
+    // --- W1: standoff, the missile-only ship, the AI afterburner.
+    out.push(traffic(system(1579, "Kit Hull Flags 2", -160, -1060, 363, [1579]), [[395, 35], [393, 25], [397, 20], [394, 20]], 5), port(1579, "Kit Hull Flags 2 Port"));
+
+    // --- C1: provoke the 0x4000 cloaker; 0x0400 / 0x2000 leaving.
+    out.push(system(1580, "Kit Cloak Provoke", -120, -1060, 363, [1580]), port(1580, "Kit Cloak Provoke Port"));
+    out.push(...shipMisn(1102, "Kit C 0x4000 yellow", 9184, 1580, 401, -1, false), ...shipMisn(1103, "Kit C 0x0400 blue", 9185, 1580, 399, -1, true),
+        ...shipMisn(1104, "Kit C 0x2000 orange", 9186, 1580, 400, -1, true));
+
+    // --- H1: a disabled pilot's request.
+    out.push(...ship(451, "Kit Fragile", 135, { accel: 2000, speed: 800, turn: 60, armor: 1500, shield: 0, shieldRecharge: 0, armorRecharge: 0, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8 }));
+    out.push(traffic(system(1581, "Kit Assist Calm", -80, -1060, 363, [1581]), [[403, 50], [404, 50]], 3), port(1581, "Kit Assist Calm Port"));
+    out.push(...shipMisn(1105, "Kit H disabler", 9187, 1581, 358, -1, false));
+    return out;
+}
 
 /**
  * Wave-15 experiments (docs/reference_experiments.md, "... wave 15").

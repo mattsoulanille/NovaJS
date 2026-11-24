@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w16-ans-thin-ally",
+  "edits": {
+    "ship": 763,
+    "stellar": 1560,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1560": 2
+    },
+    "missionBits": {
+      "9173": true,
+      "9175": true,
+      "9189": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-ans-thin-ally"
+  }
+}

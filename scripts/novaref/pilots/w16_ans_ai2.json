@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w16-ans-ai2",
+  "edits": {
+    "ship": 763,
+    "stellar": 1560,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1560": 2
+    },
+    "missionBits": {
+      "9171": true,
+      "9173": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-ans-ai2"
+  }
+}

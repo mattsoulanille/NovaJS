@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w16-npcpolice",
+  "edits": {
+    "ship": 763,
+    "stellar": 1562,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1562": 2
+    },
+    "missionBits": {
+      "9178": true,
+      "9179": true,
+      "9188": true
+    },
+    "nickname": "Probe",
+    "shipName": "w16-npcpolice"
+  }
+}
