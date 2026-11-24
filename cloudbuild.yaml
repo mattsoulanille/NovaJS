@@ -17,6 +17,17 @@ steps:
     entrypoint: npx
     args: ['turbo', 'run', 'test']
     waitFor: ['build']
+  # REPORT ONLY (#347): lists advisories in production dependencies in the
+  # build log and never fails the build, whatever it finds or if the
+  # registry cannot be reached. It reads only package-lock.json, so it
+  # runs alongside the install.
+  - name: node:22
+    id: audit
+    entrypoint: bash
+    args:
+      - '-c'
+      - 'npm audit --omit=dev --audit-level=high || echo "npm audit reported issues (exit $$?); report only, not failing the build"'
+    waitFor: ['-']
 
 timeout: 900s
 options:
