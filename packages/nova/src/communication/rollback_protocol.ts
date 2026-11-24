@@ -570,7 +570,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    ränk) refuses a disabled pilot and sells a fuelless one a jump of
 //    fuel; an AI afterburner hull (shïp Flags 0x0040) burns for its whole
 //    attack, not only while thrusting. The derived wire schema
-//    fingerprint changes (8ef9af970d217153 -> FINGERPRINT_TBD), and the
+//    fingerprint changes (8ef9af970d217153 -> 64a84723886ce8ba), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
