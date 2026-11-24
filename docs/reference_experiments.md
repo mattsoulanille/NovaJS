@@ -627,8 +627,9 @@ Against the original this gets five cells wrong:
 - c3: an ally does not care in NovaJS unless the player is criminal with
   the ally itself.
 
-**Proposed fix (not applied).** Give both predicates the current system's
-owner govt O (`statusGovtOf(system govt)`, gövt 128 when independent):
+**Proposed fix (applied in 13567336, ruling #376).** Give both
+predicates the current system's owner govt O (`statusGovtOf(system
+govt)`, gövt 128 when independent):
 
     enforces = G === O || alliedWith(G, O) || G.flags.nosy   // 0x0002
     hostile  = enforces && recordWith(records, O) < -G.crimeTol
@@ -643,6 +644,15 @@ In other words:
 Per-govt records cannot express c2: a criminal in one of O's systems
 is criminal in all of them. That is the price of the existing
 simplification, not a new error.
+
+**Applied in 13567336** (`N/nova_plugin/reputation/local_law.ts`, with wave
+5's either-direction alliance test). Every hostility reader takes the law
+of its world's own system: the NPC brain, the escort brain, the brackets,
+the radar, 'r', point defense and the comm channel. All 21 cells (c0-c18
+here, c19/c20 from wave 5) are re-run as NovaJS specs in
+`N/nova_plugin/reputation/local_law_test.ts`, as the pure rule and in a
+live world (NPC brain + brackets). 20 match the original; c2 is pinned as
+the known per-govt difference.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261123-a14/<cell>/<run>/`.
 Each holds `recording.mp4`, `recording.events.json`, `hostility.json`, the
@@ -2370,8 +2380,9 @@ every non-zero record).
 - Hostility: `N/nova_plugin/reputation/govt_disposition.ts:38-65`
   (`govtDisposition`) counts an ally only from the acting govt's own Allies
   list, and the record test in `govtDispositionTo` (lines 76-105) uses the
-  player's record with the ship's OWN govt. The A14 proposal (not applied
-  yet) should test the alliance both ways, as above.
+  player's record with the ship's OWN govt. The A14 proposal should test
+  the alliance both ways, as above. **Applied in 13567336**
+  (`local_law.ts` `enforcesHere`).
 - Crime: `N/nova_plugin/reputation/reputation.ts` `applyCrime` (around line
   148) charges the victim govt's record (which NovaJS uses everywhere that
   govt owns) and propagates half the penalty to its allies
@@ -2380,9 +2391,12 @@ every non-zero record).
   is 0 in this test, though the ally here listed the victim's class rather
   than the other way round). Per-govt records are a sanctioned
   simplification, so the system-scope part is a known difference; the ally
-  propagation is a **mismatch** worth a ruling. **Proposed (not applied):**
-  drop the ally/enemy propagation (or put it behind a ruling), and charge
+  propagation is a **mismatch** worth a ruling. **Proposed:** drop the
+  ally/enemy propagation (or put it behind a ruling), and charge
   DisabPenalty and KillPenalty both when a kill passes through disabled.
+  **The propagation part is applied in 13567336** (ruling #376: `applyCrime`
+  charges the victim's govt only; `PROPAGATION_DIVISOR` is gone). The
+  Disab + Kill part is not applied.
 
 Confidence: high for the one-way alliances (three runs, two clean) and for
 the single-system charge (a clean before/after diff); medium on the ally
@@ -4673,7 +4687,7 @@ Side-by-side with headless NovaJS (same classes, port 8495):
 | A leftovers | AI 2 "runs away when the attacker is out of range"; the exact 0x0010 thresholds; how long traffic stays | **Wave 7:** an AI 2 trader whose attacker flew out of its guns' reach ran directly away and left the system about 20 s later (the AI 3 control broke off too but stayed); NovaJS kept chasing (applied in ae475ef8). gövt 0x0010: twelve runs at two beam damage rates, hostile and neutral tanks: neither distance nor rate sorts jump vs stay (4 of 12 jumped, one crossing at 25 px; far crossings at 760-1320 px fought on); every jump came at once (gone 18-24 s after the crossing), no late jumps; NovaJS jumped every 16 s stand-off (one draw at the crossing instead, 13 of 28 jump: applied in a6c1143b). |
 | E leftovers | Front-quadrant turrets (guidance 7) from the slot; recall overshoot vs NovaJS | **Wave 6:** the recall overshoot ranges from none to about 390 px over five runs (settling 8.3-18.5 s), so only the slow 35-48 px/s final approach is systematic. The escort panel's 8.3 s timer keeps running under the full map, which does not close it (matches). **Wave 7:** front-quadrant turret escorts stay in their slots and fire from them (raiders to 41-52% shield; matches). |
 | K10 | Where the target bracket corners sit (stellars and ships) | **Wave 9: answered.** Box = the BASE sprite frame + 15 px on every side (side 2 x floor(S / 2) + 30), square from max(w, h), for stellars (15x21 to 325) and ships (24 to 184) alike; not the art, not the glow layer, not the landing square; constant with distance and rotation; fixed-size glyphs (ships 9 x 9, stellars 11 x 11); a ~100-130 ms additive fly-in. NovaJS draws the glyphs at +-0.354 x the largest LAYER (glow included), w and h apart: inside the sprite, mismatch (fix proposed, not applied). Tab skips escorts (matches); whether `r` picks an escort is still open. |
-| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. |
+| A14 leftovers | Ally propagation when the VICTIM's govt lists the ally (the reverse of wave 5's case); enemies' records | **Wave 5:** one-way alliances enforce in either direction; a kill changes only the current system's record (DisabPenalty + KillPenalty), not the owner's other systems or the ally's. Both applied in 13567336 (ruling #376). Still open: whether a kill of an enemy of the system's owner raises the local record (NovaJS now credits nothing), and which record a crime against V changes in a system owned by O != V (NovaJS charges V's). |
 
 ## Catalogue
 
@@ -4717,14 +4731,14 @@ cosmetic or rare.
 | A11 | When do NPCs leave a system, and how often do they respawn? (AvgShips ±50%?) | `N/nova_plugin/spawn/npc_spawn_plugin.ts:138,833` | **partly (waves 4-5)**: AI 1 mission ships jump out 30-40 s after appearing (9 of 9); AI 1 traffic lands, lingers about 20 s at a stellar and jumps (wave 5) | M |
 | A12 | Do mission goal ships (other than chase-off) linger after the goal completes? | `N/nova_plugin/missions/mission_ship_spawn.ts:95-105` | CPg, VID | L |
 | A13 | Does a hostile Flags 0x0020 AI use its afterburner? Is a Flags2 0x0004 ship skipped by NPC targeting? | `P/parsers/ship_parse.ts` | CPg, VID | L |
-| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; fix proposed. | H |
+| A14 | Which legal record decides a ship's hostility: the player's record in the CURRENT system, or in the ship's govt's systems? | `N/nova_plugin/reputation/reputation.ts`, `hostility.ts` | **answered (A14, wave 2)**: the current system's record, enforced by the owner, its allies and nosy govts, against the ship's own CrimeTol. **Mismatch**; applied in 13567336 (ruling #376). | H |
 
 ### Reputation, missions and economy
 
 | id | question | where it matters | how | prio |
 |---|---|---|---|---|
 | R1 | #321 trade tier multiplier k / priceFlux | `N/nova_plugin/economy/trade_logic.ts:33` | **answered above**: priceFlux has no effect, tiers are exact ×0.8/1/1.25, and öops disasters are the likely ×1.1 | H |
-| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | **partly (wave 5, A14 wave 5)**: a kill changed only the current system's record (-150 = Disab 50 + Kill 100); the ally's home (an ally listing the victim's class) got 0. The reverse alliance direction and enemies are untested | H |
+| R2 | #320.1 ally/enemy record propagation size (NovaJS penalty/2) | `N/nova_plugin/reputation/reputation.ts:75,156` | **partly (wave 5, A14 wave 5)**: a kill changed only the current system's record (-150 = Disab 50 + Kill 100); the ally's home (an ally listing the victim's class) got 0. The reverse alliance direction and enemies are untested. Propagation removed in 13567336 (ruling #376) | H |
 | R3 | #320.2 negative gövt penalty = none? | `reputation.ts:127-139` | CPg govt KillPenalty -5, PD | H |
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
