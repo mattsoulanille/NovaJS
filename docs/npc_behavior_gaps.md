@@ -66,7 +66,8 @@ rocks, how long it mines, whether it lands its haul. NovaJS has the pieces
 (asteroids, debris boxes, and a ScoopSystem that works for any ship carrying
 a scoop: N/nova_plugin/combat/asteroid_plugin.ts:144-170, 658), but Flags3
 0x0001/0x0002 are not parsed and no AI seeks asteroids. Size **M**, after a
-measurement.
+measurement. **Since 2026-11-24 miners mine** (R: "N1 wave 13"; see the
+inventory row and "Shuttles and miners: guesses to measure").
 
 **Trading between planets in the same system.** Also documented, as the
 other half of Flags3 0x0002: without a mining scoop, "the ship will instead
@@ -95,7 +96,8 @@ today, but:
 Neither game moves goods. Nothing in the Bible says NPC trading changes
 prices; düde Flags 0x0001-0x0040 only decide what a plundered ship yields
 (B:840-847). Size **S** for the shuttles; **M** for real landing and
-take-off.
+take-off. **Since 2026-11-24 shuttles shuttle** (R: "N2 wave 13"; see the
+inventory row); real landing for ordinary traffic is still open.
 
 ## Inventory
 
@@ -117,16 +119,16 @@ take-off.
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **Traders visit stellars** (AI 1 "visits planets and runs away when attacked"; AI 2 fights back) | B:861-864 | **Done in shape.** The planet-to-planet loop is N/nova_plugin/npc/npc_decision.ts:508-557; destinations are landable non-wormhole stellars (`landingDestinations`, :158-161). Flee and fight-back are :440-506 (R: A7, A wave 7; applied). | The landed stay; how long a trader spends in the system; whether it only lands where its govt is welcome. NovaJS departs 120-300 s after spawning (:79-80, marked unmeasured). Brief **T1**. | — |
+| **Traders visit stellars** (AI 1 "visits planets and runs away when attacked"; AI 2 fights back) | B:861-864 | **Done in shape.** The planet-to-planet loop is N/nova_plugin/npc/npc_decision.ts:508-557; destinations are landable non-wormhole stellars (`landingDestinations`, :158-161). Flee and fight-back are :440-506 (R: A7, A wave 7; applied). | The landed stay; how long a trader spends in the system; whether it only lands where its govt is welcome. NovaJS departs 120-300 s after spawning (:79-80, marked unmeasured). Brief **T1**. R: "T1 wave 13" (first pass): the shape matches (jump in, park beside a friendly port about 45 s including the approach, jump out from beside it; NovaJS parks 12 s); no change on one run. | — |
 | **Real landing and take-off** (traffic vanishes on a stellar and later takes off from one) | Not in the Bible; seen in R: "A-series wave 5" (ships converge on Traffic Port and vanish; one appears beside the Port and flies off) | **Stand-in:** a 12 s "dwell" parked beside the stellar (N/nova_plugin/npc/npc_steering.ts:31-33, 171-200). NPCs never take off; they spawn scattered at genesis or jump in at the edge (N/nova_plugin/spawn/npc_spawn_plugin.ts:984-1000). | Landed duration; whether a landed ship takes off again or a fresh one does; the share of arrivals by take-off vs jump-in; the "lingers about 20 s beside" stops seen at Traffic Market (wave 5) vs real landings. Brief **T1**. | M |
-| **In-system shuttles** (Flags3 0x0002 without a scoop: "shuttle back and forth between friendly stellars in the system") | B:2646-2650 | **Missing as a distinct behaviour.** Flags3 0x0001/0x0002 are not parsed (P/parsers/ship_parse.ts reads only 0x0100/0x0200/0x4000 of Flags3, :421-423). Shuttle hulls fly the ordinary trader loop and leave. Stock: shïp 391-394 in düdes 247-250. | Do shuttles ever jump out? Which stellars count as "friendly" (own govt, allied, not hostile, inhabited)? Do they land? Brief **N2**. | S |
+| **In-system shuttles** (Flags3 0x0002 without a scoop: "shuttle back and forth between friendly stellars in the system") | B:2646-2650 | **Done (2026-11-24),** to R: "N2 wave 13" (never jumps; visits the friendly stellars, the uninhabited marker included; never an enemy's). N/nova_plugin/npc/npc_shuttle.ts; the AI 1/2 trader loop in npc_decision.ts picks a shuttle's stops with `shuttleStops` (every non-gate stellar not owned by an enemy govt, landable or not); when its stay is up it LANDS at the end of a stop (removed beside the stellar) instead of jumping out, and a respawned shuttle takes off from a stop (npc_spawn_plugin.ts `takeOffState`) instead of jumping in. Stock: shïp 391-394 in düdes 247-250. | The **guesses** below ("Shuttles and miners: guesses to measure"), the landing above all. | (done) |
 | **Freighter cargo** (düde Flags 0x0001-0x0040 "carries food / industrial / ... / money"; flët 0x0001 random cargo) | B:840-847, B:924-925 | **Not plumbed:** D/dude_data.ts:23-24; D/fleet_data.ts:41-42. A boarded NPC yields its CargoComponent (N/nova_plugin/ship/boarding_component.ts:27-36), but spawned traders carry nothing. 29 stock düdes set carry flags; no stock flët sets 0x0001. | Amounts per flag (R20 covers money). | S |
 
 ### Asteroids
 
 | behaviour | Bible | NovaJS status | unknown, to measure | size |
 |---|---|---|---|---|
-| **NPC mining** (Flags3 0x0001 destroys asteroids, 0x0002 scoops debris, with oütf ModType 31) | B:2645-2651, B:1900; röid YieldType/YieldQty B:2303-2315 | **Missing AI, mechanics present.** Asteroids and debris exist and are documented as "queryable by NPC AI (e.g. future mining behavior)" (N/nova_plugin/combat/asteroid_plugin.ts:144-170). ScoopSystem (:658) already scoops for any ship carrying a scoop, and NPC hulls get their DefaultItems (N/nova_plugin/ship/ship_plugin.ts:60), so a stock Asteroid Miner that ran over a box would scoop it. Nothing steers it there, and the flags are not parsed. | The whole behaviour: does the AI 1 Asteroid Miner seek rocks or fly the trader loop; does it fire at rocks; does it chase debris; how long; does it leave or land afterwards; does a Flags3 0x0001 warship (Zephyr) shoot rocks while patrolling. Brief **N1**. | M |
+| **NPC mining** (Flags3 0x0001 destroys asteroids, 0x0002 scoops debris, with oütf ModType 31) | B:2645-2651, B:1900; röid YieldType/YieldQty B:2303-2315 | **Done (2026-11-24),** to R: "N1 wave 13" (closes on a rock, shoots it apart, flies over the debris, later jumps out). N/nova_plugin/npc/npc_mining.ts: an AI 1/2 hull with Flags3 0x0001 and a weapon with a reach shoots the nearest rock (mode 'mine', fired by npc_fire_control.ts: its asteroid-miner weapons if it has any, held until the rock is within reach and, for a fixed gun, under the nose); with 0x0002 and a scoop aboard it first flies over debris boxes (mode 'scoop'; ScoopSystem does the scooping); it departs at its ordinary time straight from mining; with nothing to mine (or a full hold) it flies the trader loop. Nothing was missing underneath: rocks take weapon damage and break into debris, and debris scoops into the hold (N/nova_plugin/combat/asteroid_plugin.ts). The Asteroid/Debris components moved to N/nova_plugin/core/asteroid_components.ts so the NPC brain can read them. | The **guesses** below; the AI 4 Zephyr variant (Flags3 0x0001 alone) was not run, so AI 3/4 hulls do not mine. | (done) |
 
 ### Combat AI
 
@@ -186,11 +188,13 @@ reference-Mac experiments to run first. Briefs follow.
      records are each player's own), so it is an NPC decision against one
      player ship plus a per-player event.
 2. **Shuttles, and real landing and take-off for traffic** (T1, N2).
+   **Shuttles done 2026-11-24** (see the inventory row); real landing for
+   ordinary traffic is still open.
    - The shuttle is small: parse Flags3, give shuttle hulls a trader loop
      that never departs and only picks friendly stellars.
    - Real landing (vanish, later take off) replaces the dwell stand-in, and
      needs a respawn-from-stellar path beside `jumpInState`.
-3. **Mining** (N1): an AI 1/2 mode, chosen by Flags3 0x0001/0x0002 plus a
+3. **Mining** (N1), **done 2026-11-24** (see the inventory row): an AI 1/2 mode, chosen by Flags3 0x0001/0x0002 plus a
    scoop. It targets the nearest AsteroidComponent, fires until it breaks,
    then steers over DebrisComponents.
    - Shared state: rock health and debris are already shared-sim state.
@@ -250,6 +254,48 @@ in the code, and wants a reference run:
 10. **The scanner's name** on the line is the target pane's (a përs's or
     mission ship's own name, else the ship class); the pilot's is the
     profile name.
+
+### Shuttles and miners: guesses to measure
+
+The shuttles (N/nova_plugin/npc/npc_shuttle.ts) and miners
+(N/nova_plugin/npc/npc_mining.ts) follow N2 and N1 where they measured
+something. Everything below is marked GUESS in the code and wants a
+reference run:
+
+1. **A shuttle lands.** When its ordinary stay (120-300 s) is up it is
+   removed at the end of a stop, and a respawn takes off from a stop. N2
+   saw no jump in 584 s and could not tell a landing from discs
+   overlapping over the port. The landing is there because a shuttle that
+   never leaves would, in mixed traffic (stock Sol: 30% shuttles), slowly
+   take every traffic slot. To measure: a long watch (20+ min) of a
+   mixed-traffic system, counting shuttles; or a lone shuttle in a
+   system whose stellars are all on screen.
+2. **Which stellars are stops:** every stellar not owned by an enemy of
+   the shuttle's govt, uninhabited and non-landable ones included
+   (measured: the marker, medium confidence), but no hypergate or
+   wormhole (the rig had none). An allied or neutral govt's port counts.
+3. **A shuttle with one stop** goes back to it; **with none** (every
+   stellar an enemy's) it jumps out like a trader, and a respawn jumps in.
+4. **A shuttle that is attacked** flees like any AI 1 trader, which can
+   end in a jump out at the rim. N2 had no attacks.
+5. **Only düde respawns** take off from a stop; a përs or a fleet with a
+   shuttle hull still jumps in. Genesis shuttles are scattered like other
+   traffic.
+6. **Who mines:** AI 1 and AI 2 hulls with Flags3 0x0001 (the stock
+   Asteroid Miner). An AI 4 Zephyr (Flags3 0x0001, AI 4 düdes 200/201)
+   keeps the interceptor brain: N1's AI 2/3/4 variants were not run.
+7. **The miner's numbers:** rocks within 3000 px, debris within 800 px,
+   debris before rocks, a standoff of 0.6 of its shortest weapon reach,
+   firing a fixed gun only within 0.25 rad of the rock. Which weapons
+   fire: its asteroid-miner weapons (wëap Flags2 0x8000) if it has any,
+   otherwise guns, beams and turrets, never guided weapons or bays.
+8. **How long a miner mines:** until its ordinary departure time, then it
+   jumps out straight from mining (N1: 39 jump-outs; how long each stayed
+   was not separated). Whether it lands its haul instead was not seen.
+9. **A full hold:** a scooping miner whose hold is full stops mining and
+   flies the trader loop until it departs.
+10. **T1:** traders park about 45 s on the original (including the
+    approach) against NovaJS's 12 s dwell; left alone after one run.
 
 ## Reference-Mac briefs
 
