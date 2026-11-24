@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w15-scan-ally",
+  "edits": {
+    "ship": 703,
+    "stellar": 1515,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1515": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-scan-ally",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "novaref-w15-nosy-end",
+  "edits": {
+    "ship": 703,
+    "stellar": 2062,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1520": 2,
+      "2001": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-nosy-end",
+    "weapons": {
+      "128": 0,
+      "246": 1
+    },
+    "outfits": {
+      "128": 0,
+      "450": 1
+    }
+  }
+}

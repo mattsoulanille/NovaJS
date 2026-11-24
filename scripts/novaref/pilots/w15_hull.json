@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w15-hull",
+  "edits": {
+    "ship": 763,
+    "stellar": 1535,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1535": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-hull"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "novaref-w15-special",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {
+      "9166": true,
+      "9167": true,
+      "9168": true
+    },
+    "nickname": "Probe",
+    "shipName": "w15-special",
+    "cargo": [
+      0,
+      5,
+      0,
+      7,
+      0,
+      9
+    ]
+  }
+}

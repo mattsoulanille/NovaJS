@@ -286,8 +286,207 @@ export default {
         ...wave12Resources(),
         ...wave13Resources(),
         ...wave14Resources(),
-    ].map(withoutRunningLights),
+        ...wave15Resources(),
+    ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-15 experiments (docs/reference_experiments.md, "... wave 15").
+ * Nothing retired. **New id range:** every kit spöb id 2000-2175 was in
+ * use after wave 14, so wave 15 opens sÿst / spöb **1500-1599** (between
+ * the stock maxima, sÿst 1127 / spöb 1420, and the kit's 2000; a pilot
+ * can name any id up to 2175) and shïp **416-699** (stock shïp ids stop at
+ * 414, plus 895; the kit had used only 415). Also mïsn 1083+, bits 9160+,
+ * düde 383+, gövt 315-321, wëap 289+, rlëD 1956 / 1958 / 1960 (new disc
+ * colours: orange, azure, purple).
+ *
+ *  T/S Mixed traffic in one system whose stellars are ALL ON SCREEN from
+ *      the player's port: sÿst 1500 Kit Square Range (owner 346 Kit Life
+ *      Traders). Stellars, in sÿst list order: 1501 Square Hostile
+ *      (220,220) of the enemy 347; 1502 Square Market (220,0) of 346; 1500
+ *      Square Port (0,0) of 346 (the player); 1503 Square Neutral (0,220)
+ *      of 363; 1504 Square Marker (-220,0), uninhabited. Traffic, avgShips
+ *      6: düde 383 traders (AI 1, shïp 420-423: red / orange / yellow /
+ *      green discs) and düde 384 shuttles (AI 1, Flags3 0x0002, shïp
+ *      424-427: azure / blue / purple / magenta), 50 / 50. One colour per
+ *      hull, so each ship can be followed.
+ *  M   N1 by colour: sÿst/spöb 1505 Kit Mine Colour (16 metal rocks,
+ *      gövt 363): the Kit Miner hull (AI 1, Flags3 0x0003, scoop, four
+ *      wëap 181) as red / yellow / blue / magenta discs (shïp 428-431,
+ *      düde 385), avgShips 2.
+ *  A   A14: sÿst/spöb 1510 Kit Spread Unowned (no owner, govt -1; traffic
+ *      düde 344, gövt 350's bare traders) linked to 2095 Kit Spread Kill
+ *      (patched: 2095 gains the link) and to sÿst 1511 Kit Spread Beyond
+ *      (owner 338, no stellar). mïsn 1083 (bit 9160) at Kit Port: CompGovt
+ *      338, CompReward 1000, TimeLimit 1, ReturnStel Kit Market (fail it
+ *      by letting the day pass at Kit Port): the failure's -R/2.
+ *  S   Contraband: gövt 321 Kit Smug Ally Owner (SmugPenalty 70, no
+ *      ScanMask; ally 320) owns sÿst/spöb 1515 Kit Scan Ally, whose
+ *      traffic is the AI 4 cutters (shïp 855, düde 386) of its ALLY gövt
+ *      320 Kit Customs Ally (ScanMask 0x0001, fine 500, Smug 50, CrimeTol
+ *      30000). Several finds in one scan: jünk 203 Kit Contraband is also
+ *      sold at Kit Scan Tolerant Port (2053; patched), and mïsn 1084 (bit
+ *      9163) at 2053 carries 1 t of ScanMask-0x0001 food with Flags 0x0020.
+ *  P   Police: sÿst/spöb 1520 Kit Nosy Gate (gövt 363) linked to 2001 Kit
+ *      Nosy Range (patched), so a provoked nosy police can be left and
+ *      revisited by jump. sÿst/spöb 1525 Kit Friend Ign Range (owner gövt
+ *      319 Kit Police Allied Ign, police düde 387) with blue traders of its
+ *      ally gövt 318 Kit Friend Ignored (gövt 0x0020; düde 388). sÿst/spöb
+ *      1530 Kit Distress Range (owner 363): yellow raiders (düde 374, enemy
+ *      of 343) and green Kit Shipping (343, düde 355) with possible
+ *      answerers: orange AI 3 Kit Shipping Guard of 343 itself (shïp 432,
+ *      düde 389), blue AI 3 of gövt 317 Kit Shipping Ally (allied to 343;
+ *      shïp 433, düde 390), cyan AI 3 of gövt 316 Kit Bystander (no
+ *      relations; shïp 434, düde 391), red AI 4 of gövt 315 Kit Bystander
+ *      Police (no relations, not nosy; düde 392).
+ *  item 4  Status bar "Special:": mïsn 1085 (bit 9166, the spaceport
+ *      offer) and 1086 (bit 9167, a BBS job) both carry 3 t of cargo type 7
+ *      "Military Stores" (STR# 4002 "Mil Stores"); 1087 (bit 9168, BBS)
+ *      carries 3 t of type 11 "Money Train" ("$Train"). All to Kit Market.
+ *  W1  Hull AI flags: sÿst/spöb 1535 Kit Hull Flags Range (363); hostile
+ *      (gövt 362) AI 3 discs: red shïp 435 Flags2 0x0080 with only wëap 289
+ *      Kit Ammo Missile (5 rounds), green 436 control (Kit Raider Gun),
+ *      yellow 437 Flags2 0x0002 (standoff), blue 438 Flags2 0x0001 (swarm),
+ *      magenta 439 shïp Flags 0x0040 (AI afterburner); düde 393-397.
+ *  C1  NPC cloaking: sÿst/spöb 1540 Kit Cloak Range (363), the disc hull
+ *      with the stock Wraith Cloaking Device (oütf 266), one Flags2 cloak
+ *      bit each: green 440 AI 1 0x0800 (flying around), blue 441 AI 1
+ *      0x0400 (hyperspacing), orange 442 AI 1 0x2000 (docking), yellow 443
+ *      AI 3 (363) 0x4000 (preemptively attacked), red 444 AI 3 hostile
+ *      (362) 0x0800 + 0x1000 (stays cloaked until close); düde 398-402.
+ *  H1  Battle assistance: sÿst/spöb 1545 Kit Assist Range (363): Kit
+ *      Raiders (düde 602, gövt 362), a neutral AI 3 warship (blue shïp 445,
+ *      Kit Escort Gun, düde 403) and a neutral AI 1 trader (green shïp 446,
+ *      düde 404).
+ */
+function wave15Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10, flags: 0, flags2: 0 };
+    const armed = (wid, n = 1, ammo = 0) => ({ weapons: [wid, -1, -1, -1], weaponCounts: [n, 0, 0, 0], weaponAmmo: [ammo, 0, 0, 0] });
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    /** A düde of several hulls, equal odds. */
+    const mixDude = (id, name, ai, govtId, shipIds) => ({
+        type: "düde", id, name, clone: "düde:128",
+        set: { ai, govt: govtId, flags: 0, infoTypes: 0, ships: [...shipIds, ...none16].slice(0, 16),
+            probs: [...shipIds.map((_, i) => Math.floor(100 / shipIds.length) + (i < 100 % shipIds.length ? 1 : 0)), ...zero16].slice(0, 16) },
+    });
+    // New disc colours (24 px, 22 px disc), rlëD ids free between the kit's.
+    const RLED = { red: 1971, green: 1972, blue: 1973, yellow: 1974, magenta: 1975, cyan: 1976, orange: 1956, azure: 1958, purple: 1960 };
+    for (const [c, rgb] of [["orange", [31, 16, 0]], ["azure", [0, 16, 31]], ["purple", [16, 0, 31]]]) {
+        const g = discShipGraphics(RLED[c], rgb, 24, 36, 22);
+        out.push({ type: "rlëD", id: RLED[c], name: `Kit Disc ${c}`, hex: Buffer.from(g.rled).toString("hex") });
+    }
+
+    // --- T/S: mixed traders and shuttles, every stellar on screen.
+    const square = traffic(system(1500, "Kit Square Range", 260, -860, 346, [1501, 1502, 1500, 1503, 1504]), [[383, 50], [384, 50]], 6);
+    out.push(square,
+        spob(1501, "Square Hostile", 220, 220, 138, { flags: 0x43, govt: 347 }),
+        spob(1502, "Square Market", 220, 0, 138, { flags: 0x43, govt: 346 }),
+        spob(1500, "Square Port", 0, 0, 138, { flags: 0x43, govt: 346 }),
+        spob(1503, "Square Neutral", 0, 220, 138, { flags: 0x43, govt: 363 }),
+        spob(1504, "Square Marker", -220, 0, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    const traders = [[420, "red"], [421, "orange"], [422, "yellow"], [423, "green"]];
+    const shuttles = [[424, "azure"], [425, "blue"], [426, "purple"], [427, "magenta"]];
+    for (const [id, c] of traders) out.push(...shareRled(id, `Kit Sq Trader ${c}`, RLED[c], 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0 }));
+    for (const [id, c] of shuttles) out.push(...shareRled(id, `Kit Sq Shuttle ${c}`, RLED[c], 24, { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0002 }));
+    out.push(mixDude(383, "Kit Square Traders", 1, 346, traders.map((t) => t[0])), mixDude(384, "Kit Square Shuttles", 1, 346, shuttles.map((t) => t[0])));
+
+    // --- M: miners by colour.
+    const miner = { ...mobile, ai: 1, armor: 1000, shield: 1000, flags3: 0x0003, cargo: 100, weapons: [181, -1, -1, -1], weaponCounts: [4, 0, 0, 0], weaponAmmo: [0, 0, 0, 0], outfits: [271, -1, -1, -1], outfitCounts: [1, 0, 0, 0] };
+    const miners = [[428, "red"], [429, "yellow"], [430, "blue"], [431, "magenta"]];
+    for (const [id, c] of miners) out.push(...shareRled(id, `Kit Miner ${c}`, RLED[c], 24, miner));
+    out.push(mixDude(385, "Kit Colour Miners", 1, 363, miners.map((m) => m[0])));
+    const mineColour = traffic(system(1505, "Kit Mine Colour", 300, -860, 363, [1505]), [[385, 100]], 2);
+    mineColour.set = { ...mineColour.set, asteroids: 16, asteroidTypes: 0x000F };
+    out.push(mineColour, port(1505, "Kit Mine Colour Port"));
+
+    // --- A: an unowned system in the spread, and the failure's -R/2.
+    const unowned = traffic(system(1510, "Kit Spread Unowned", 100, -820, -1, [1510]), [[344, 100]], 3);
+    unowned.set.links = links(2095, 1511);
+    const beyond = system(1511, "Kit Spread Beyond", 100, -780, 338, []);
+    beyond.set.links = links(1510);
+    out.push(unowned, port(1510, "Kit Spread Unowned Port"), beyond);
+    out.push(...misn(1083, "Kit A comp fail 338", 9160, { compGovt: 338, compReward: 1000, timeLimit: 1, returnStel: 2101, onAccept: "!b9160", onFailure: "b9161", onSuccess: "b9162" }));
+
+    // --- S: an ally of the owner scans; several finds in one scan.
+    out.push(govt(321, "Kit Smug Ally Owner", { smugPenalty: 70, classes: [321, -1, -1, -1], allies: [320, -1, -1, -1] }));
+    out.push(govt(320, "Kit Customs Ally", { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, crimeTol: 30000, classes: [320, -1, -1, -1], allies: [321, -1, -1, -1] }));
+    out.push(dude(386, "Kit Customs Ally Cutter", 4, 320, 855));
+    out.push(traffic(system(1515, "Kit Scan Ally", -480, -780, 321, [1515]), [[386, 100]], 2), port(1515, "Kit Scan Ally Port"));
+    out.push(...misn(1084, "Kit S several finds", 9163, { availStel: 2053, travelStel: 2055, returnStel: 2053, cargoType: 0, cargoQty: 1, pickupMode: 0, dropoffMode: 0,
+        scanMask: 0x0001, flags: 0x0020, compGovt: 332, compReward: 10, onAccept: "!b9163", onFailure: "b9164", onSuccess: "b9165" }));
+
+    // --- P: leaving a provoked nosy police; 0x0020 on an ally; distress answerers.
+    const nosyGate = system(1520, "Kit Nosy Gate", -80, -780, 363, [1520]);
+    nosyGate.set.links = links(2001);
+    out.push(nosyGate, port(1520, "Kit Nosy Gate Port"));
+    out.push(govt(319, "Kit Police Allied Ign", { classes: [319, -1, -1, -1], allies: [318, -1, -1, -1] }));
+    out.push(govt(318, "Kit Friend Ignored", { classes: [318, -1, -1, -1], allies: [319, -1, -1, -1], flags: 0x0020 }));
+    out.push(dude(387, "Kit Police Allied Ign", 4, 319, 868), dude(388, "Kit Friend Ignored", 1, 318, 883));
+    out.push(traffic(system(1525, "Kit Friend Ign Range", -40, -860, 319, [1525]), [[387, 100], [388, 100]], 4), port(1525, "Kit Friend Ign Port"));
+    out.push(govt(317, "Kit Shipping Ally", { classes: [317, -1, -1, -1], allies: [343, -1, -1, -1] }));
+    out.push(govt(316, "Kit Bystander", { classes: [316, -1, -1, -1] }));
+    out.push(govt(315, "Kit Bystander Police", { classes: [315, -1, -1, -1] }));
+    const guard = { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) };
+    out.push(...shareRled(432, "Kit Shipping Guard", RLED.orange, 24, guard));
+    out.push(...shareRled(433, "Kit Shipping Ally", RLED.blue, 24, guard));
+    out.push(...shareRled(434, "Kit Bystander", RLED.cyan, 24, guard));
+    out.push(dude(389, "Kit Shipping Guard", 3, 343, 432), dude(390, "Kit Shipping Ally", 3, 317, 433), dude(391, "Kit Bystander", 3, 316, 434), dude(392, "Kit Bystander Police", 4, 315, 868));
+    out.push(traffic(system(1530, "Kit Distress Range", -80, -860, 363, [1530]), [[374, 100], [355, 100], [389, 60], [390, 60], [391, 60], [392, 60]], 9), port(1530, "Kit Distress Port"));
+
+    // --- Item 4: the status bar's "Special:" line.
+    const cargoMisn = (id, name, bit, cargoType, availLoc) => misn(id, name, bit, { availLoc, cargoType, cargoQty: 3, pickupMode: 0, dropoffMode: 1, returnStel: 2101,
+        onAccept: `!b${bit}`, ...(availLoc === 0 ? { dispWeight: 30000 } : {}) });
+    out.push(...cargoMisn(1085, "Kit Special stores offer", 9166, 7, 3), ...cargoMisn(1086, "Kit Special stores BBS", 9167, 7, 0), ...cargoMisn(1087, "Kit Special train BBS", 9168, 11, 0));
+
+    // --- W1: hull AI flags.
+    out.push(weap(289, "Kit Ammo Missile", 131, { reload: 60, duration: 90, armorDamage: 20, shieldDamage: 20, guidance: 1, speed: 400, guidedTurn: 30, ammoType: 289 - 128, maxAmmo: 5 }));
+    const hullFlags = [[435, "red", { flags2: 0x0080, ...armed(289, 1, 5) }], [436, "green", armed(367)], [437, "yellow", { flags2: 0x0002, ...armed(367) }],
+        [438, "blue", { flags2: 0x0001, ...armed(367) }], [439, "magenta", { flags: 0x0040, ...armed(367) }]];
+    hullFlags.forEach(([id, c, set], i) => {
+        out.push(...shareRled(id, `Kit Hull ${c}`, RLED[c], 24, { ...mobile, ai: 3, armor: 2000, shield: 2000, ...set }));
+        out.push(dude(393 + i, `Kit Hull ${c}`, 3, 362, id));
+    });
+    out.push(traffic(system(1535, "Kit Hull Flags Range", 340, -860, 363, [1535]), hullFlags.map((_, i) => [393 + i, 20]), 8), port(1535, "Kit Hull Flags Port"));
+
+    // --- C1: NPC cloaking, one Flags2 bit per colour.
+    const cloak = { outfits: [266, -1, -1, -1], outfitCounts: [1, 0, 0, 0] };
+    const cloakers = [[440, "green", 1, 363, 0x0800], [441, "blue", 1, 363, 0x0400], [442, "orange", 1, 363, 0x2000],
+        [443, "yellow", 3, 363, 0x4000], [444, "red", 3, 362, 0x1800]];
+    cloakers.forEach(([id, c, ai, g, f2], i) => {
+        out.push(...shareRled(id, `Kit Cloak ${c}`, RLED[c], 24, { ...mobile, ai, armor: 2000, shield: 2000, flags2: f2, ...cloak, ...(ai === 3 ? armed(367) : {}) }));
+        out.push(dude(398 + i, `Kit Cloak ${c}`, ai, g, id));
+    });
+    out.push(traffic(system(1540, "Kit Cloak Range", 380, -860, 363, [1540]), cloakers.map((_, i) => [398 + i, 20]), 6), port(1540, "Kit Cloak Port"));
+
+    // --- H1: battle assistance.
+    out.push(...shareRled(445, "Kit Assist Warship", RLED.blue, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, ...armed(365) }));
+    out.push(...shareRled(446, "Kit Assist Trader", RLED.green, 24, { ...mobile, ai: 1, armor: 3000, shield: 3000 }));
+    out.push(dude(403, "Kit Assist Warship", 3, 363, 445), dude(404, "Kit Assist Trader", 1, 363, 446));
+    out.push(traffic(system(1545, "Kit Assist Range", 420, -860, 363, [1545]), [[602, 50], [403, 25], [404, 25]], 4), port(1545, "Kit Assist Port"));
+    return out;
+}
+
+/** Wave 15's edits to earlier waves' resources (links and a sale list). */
+function wave15Patches(r) {
+    const addLink = (id) => {
+        const l = r.set.links.filter((x) => x !== -1);
+        return { ...r, set: { ...r.set, links: [...l, id, ...none16].slice(0, 16) } };
+    };
+    if (r.type === "sÿst" && r.id === 2095) return addLink(1510);
+    if (r.type === "sÿst" && r.id === 2001) return addLink(1520);
+    if (r.type === "jünk" && r.id === 203) return { ...r, set: { ...r.set, soldAt: [2069, 2053, ...none8].slice(0, 8) } };
+    return r;
+}
 
 /**
  * Wave-14 experiments (docs/reference_experiments.md, "... wave 14").

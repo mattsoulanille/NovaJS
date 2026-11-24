@@ -1,0 +1,13 @@
+{
+ "name": "w15_watch_short",
+ "_comment": "Wave 15: w15_watch for about 6 minutes (18 shots), recording at 10 fps. Pilots w15_distress (sÿst 1530 Kit Distress Range), w15_hull (1535, W1), w15_cloak (1540, C1).",
+ "pilot": { "as": "novaref-scenario" },
+ "plugins": ["../kits/testkit.mjs"],
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "repeat": 18, "steps": [ { "shot": "w-{i}", "window": true }, { "wait": 18000 } ] },
+  { "record": "stop" }
+ ]
+}

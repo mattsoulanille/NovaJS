@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w15-cloak",
+  "edits": {
+    "ship": 763,
+    "stellar": 1540,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1540": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w15-cloak",
+    "weapons": {
+      "128": 0,
+      "361": 1
+    },
+    "outfits": {
+      "128": 0,
+      "601": 1
+    }
+  }
+}
