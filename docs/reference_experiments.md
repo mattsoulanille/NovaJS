@@ -9178,7 +9178,7 @@ cases: the disabled refusals came from 95-99 (0-based; "Yeah, right!",
 "Not a chance.", "In your dreams, pal."), the for-pay openers from 115-124
 and 140-144 by mood, the withdrawal from 155-159.
 
-**Proposed fixes (not applied).**
+**Proposed fixes (applied, see below).**
 - Request Assistance from a NEUTRAL ship when the player is fuelless (not
   disabled): a per-ship mood draw, good (1,000, opener 115-119) / neutral
   (2,000-3,000, 140-144) / bad (3,000, 120-124); the price is the base + 1,000
@@ -9191,6 +9191,27 @@ and 140-144 by mood, the withdrawal from 155-159.
   govts and ränk 0x0800 (unmeasured).
 - ränk 0x0400: do not make traders willing; leave warships as they are until
   measured.
+
+**Applied (wave-17 fixes, 2026-11-24) in de713e35.**
+`N/nova_plugin/reputation/hail.ts`: `fuelSaleTerms` draws the base first
+from a salted hash of the ship's uuid (1,000 / 2,000 / 3,000 alike) and the
+base picks the mood (1,000 good 115-119; 2,000 neutral 140-144; 3,000
+neutral or bad 120-124, half each): GUESS for what picks 2,000 or 3,000,
+but it fits every row and the 2:3:1 frequencies. `fuelSalePrice` = base +
+1,000 x the offers this pilot has answered (withdrawn or accepted; GUESS
+for accepted), or `fuelCounterPrice` (floor(3P / 400) x 100) while the
+counter is on the table. `lowerFuelPrice`: on the asking price a counter
+(about 40%: a hash of ship, pilot and ask) or a withdrawal; on a counter
+always a withdrawal. The FuelHaggle component holds { asks, countered } per
+pilot (schema-only, under protocol 8: fingerprint 64a84723886ce8ba ->
+51a63184211e887b). The dialog keeps the popup with the new price on a
+counter (GUESS: the mood line stays in the well). `assistWillingness`: a
+'friendly' (allied) disposition no longer helps for free (a disabled pilot
+is refused; fuel is sold, GUESS); `rankBattleAssistance`: a ränk 0x0400 no
+longer makes a trader (AI 1 / 2) help, and the trader's under-fire answer
+is the 95-99 refusal; warships unchanged (GUESS). The record is still not
+read. Overturned wave-16 specs: the doubling price, the always-good mood
+line, an ally's free help, the ränk 0x0400 trader's help.
 
 Confidence: high for 1-4 (screenshots of every price; the 3/4 rule fits all
 five counters exactly), medium for 2 (six ships), medium for 6 (two
@@ -9264,6 +9285,11 @@ characters were all typed in).
   unscanned player ship whether or not it carries anything, scans it within
   150 px and then keeps station on it (no line on a clean scan).
 - `ship_name_prompt.ts` comment: 65 refused, 64 accepted (measured).
+  **Applied in ad3c75b1:** NovaJS cut the field at 64 while typing;
+  now the field takes up to 255 characters (GUESS; the original took 72)
+  and OK refuses more than 64, the dialog staying up with the text
+  reselected (`N/spaceport/alert_prompt.ts` `promptAnswer`, the alert's
+  optional `acceptLength`; the Find dialog is unchanged).
 - 0x4000: keep it uncloaked (two runs saw no cloak); drop the wave-16
   "lost at once" reading.
 

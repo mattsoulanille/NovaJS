@@ -156,8 +156,8 @@ traders, wave 15").
 | **NPC plunder** (gövt 0x1000: warships plunder trader-type enemies, the player included, before destroying them) | B:1078-1079 | **Done**, with ruled guesses: N/nova_plugin/npc/npc_plunder.ts (rules; credits taken from a player :109), N/nova_plugin/npc/npc_plunder_board.ts:74. mïsn 0x8000 "fails if boarded by pirates" is wired (N/nova_plugin/encounters/boarding_plugin.ts:1479). | A9: do pirates board a disabled player, and what do they take? | — |
 | **Bribes** (gövt 0x0200 / 0x2000 / 0x4000 / 0x8000) | B:1071-1086 | **Done**, numbers guessed: N/nova_plugin/reputation/hail.ts:64-104 (10% / 30% of cash, minimum 500), N/nova_plugin/encounters/hail_plugin.ts:233 (2 min reprieve). | R7 (price) and A8 (duration). | — |
 | **Greetings and hail answers** (gövt CommName, greetings STR#, Flags 0x0400, Flags2 0x0001/0x0008) | B:1072, B:1088-1098, Appendix III | **Done** (ruling #297): N/nova_plugin/reputation/hail.ts. | — | — |
-| **Request assistance: repair / refuel** (and Roadside Assistance, Flags2 0x0010; ränk 0x0800) | B:1099-1100, B:2261-2262 | **Done:** the helper flies over and restores armor, shield and fuel to full (N/nova_plugin/encounters/hail_plugin.ts AssistBehaviorSystem; willingness N/nova_plugin/reputation/hail.ts `assistWillingness`) — for FREE help only: an ally (GUESS), a Roadside Assistance govt, a ränk 0x0400 / 0x0800. **A NEUTRAL ship, applied 2026-11-24** to R "W1 / C1 / H1 wave 16" (H1): it refuses a disabled pilot flat (STR# 3000 95-99, "Not a chance." / "No way.") and SELLS a fuelless one a jump of fuel: "You're in luck, I'm in a good mood today." (115-119) over a "Pay me 1,000 credits." popup with Lower Price / Accept Price; Lower Price withdraws the offer ("If that's the way you feel ...", 155-159) and doubles the next price; Accept Price takes the money at once ("Hold on, I'll be right there.", 145-149) and the ship comes over with 100 fuel, no repair (`lowerPrice` hail input, FuelHaggle on the NPC). | The **guesses** in "Assistance from a neutral ship: guesses to measure" below. | — |
-| **Battle assistance** (ränk 0x0400 "request battle assistance ... who will also call in reinforcements"; STR# 3000 "Help is on the way.", "I'm busy.") | B:2257-2260 | **Missing** with a ränk 0x0400: assistance is repair/refuel only; a willing warship does not fight the player's attackers. **Without the ränk, measured and applied** (R "W1 / C1 / H1 wave 15", H1; 13c164af): a healthy player under attack who asks a neutral ship for help is turned down from STR# 3000 95-99 ("Yeah, right!", "No way."), whatever his record, and nothing happens (N/display/hail_dialog_plugin.ts `assistAnswer`, hail.ts `underFireRefusalText`); with nobody attacking him the answer stays 70-74. | A ränk 0x0400 holder's request (keeps 70-74 for now); a disabled or fuelless pilot under attack (busy, then the neutral refusal / fuel sale of wave 16, unmeasured under fire). Brief **H1**. | S-M |
+| **Request assistance: repair / refuel** (and Roadside Assistance, Flags2 0x0010; ränk 0x0800) | B:1099-1100, B:2261-2262 | **Done:** the helper flies over and restores armor, shield and fuel to full (N/nova_plugin/encounters/hail_plugin.ts AssistBehaviorSystem; willingness N/nova_plugin/reputation/hail.ts `assistWillingness`) — for FREE help only: a Roadside Assistance govt, a ränk 0x0800, a ränk 0x0400's warship (GUESS). **A non-hostile ship, applied 2026-11-24** to R "W1 / C1 / H1 wave 16" and "H1 wave 17" (H1; de713e35): it refuses a disabled pilot flat (STR# 3000 95-99, "Not a chance." / "Yeah, right!"), at record +2000 and when his hull is of an ALLIED govt too, and SELLS a fuelless one a jump of fuel, trader or warship: its mood line (good 115-119 at 1,000; neutral 140-144 at 2,000-3,000; bad 120-124 at 3,000) over a "Pay me N credits." popup with Lower Price / Accept Price; every repeated ask adds 1,000; Lower Price counters with floor(0.75 x P / 100) x 100 or withdraws the offer ("If that's the way you feel ...", 155-159), and always withdraws a counter; Accept Price takes the price on the table at once ("Okay, I'm on my way.", 145-149) and the ship comes over with 100 fuel, no repair (`lowerPrice` hail input, FuelHaggle on the NPC). A ränk 0x0400 trader refuses. | The **guesses** in "Assistance from a neutral ship: guesses to measure" below. | — |
+| **Battle assistance** (ränk 0x0400 "request battle assistance ... who will also call in reinforcements"; STR# 3000 "Help is on the way.", "I'm busy.") | B:2257-2260 | **Missing** with a ränk 0x0400: assistance is repair/refuel only; a willing warship does not fight the player's attackers. **Without the ränk, measured and applied** (R "W1 / C1 / H1 wave 15", H1; 13c164af): a healthy player under attack who asks a neutral ship for help is turned down from STR# 3000 95-99 ("Yeah, right!", "No way."), whatever his record, and nothing happens (N/display/hail_dialog_plugin.ts `assistAnswer`, hail.ts `underFireRefusalText`); with nobody attacking him the answer stays 70-74. | A ränk 0x0400 WARSHIP's answer (keeps 70-74 for now; its TRADER refuses from 95-99, measured in R "H1 wave 17" and applied in de713e35); a disabled or fuelless pilot under attack (busy, then the neutral refusal / fuel sale of wave 16, unmeasured under fire). Brief **H1**. | S-M |
 | **Hail info** (düde InfoTypes: good prices, disaster info, specific advice STR# 7500+, generic hails; përs 0x8000 disaster info) | B:832-839, B:2184 | **Not plumbed** (D/dude_data.ts:23-24). 130 of 147 stock düdes and 76 përs set it. | Where the text appears (the comm dialog's greeting?). One look at a stock trader's hail settles it. | S |
 | **përs HailQuote / CommQuote / LinkMission** | B:2139-2185 | **Done:** N/display/ship_mission_offer_plugin.ts:418-570, N/spaceport/ship_mission_offer.ts:140-180. | — | — |
 | **Fleet arrival quote** (flët Quote) | B:919-922 | **Not plumbed** (D/fleet_data.ts:41-42). No stock flët uses it (0 of 128). | — | S |
@@ -479,35 +479,44 @@ code and wants a second run:
 
 ### Assistance from a neutral ship: guesses to measure
 
-H1 wave 16 measured one pilot (record 0) against one neutral govt's
-traders and warships. Applied in N/nova_plugin/reputation/hail.ts
-(`assistWillingness`, `fuelSalePrice`) and encounters/hail_plugin.ts;
-everything below is marked GUESS in the code:
+H1 waves 16 and 17 measured three pilots (record 0, record +2000, a hull of
+an allied govt) against one neutral govt's traders and warships. Applied in
+N/nova_plugin/reputation/hail.ts (`assistWillingness`, `fuelSaleTerms`,
+`fuelSalePrice`, `lowerFuelPrice`) and encounters/hail_plugin.ts. Measured
+and applied (wave 17, de713e35): the price is a per-ship base by mood
+(good 1,000; neutral 2,000-3,000; bad 3,000) plus 1,000 for every repeated
+ask; Lower Price counters with floor(0.75 x P / 100) x 100 or withdraws, and
+always withdraws a counter; Accept takes the price on the table; warships
+sell too; a +2000 record changes nothing; a disabled pilot is refused even
+by an ally's ship; a ränk 0x0400 trader refuses. What is still marked GUESS
+in the code:
 
-1. **The price:** 1,000 credits to start, doubling with every Lower Price
-   press on that ship by that pilot, never coming back down (one doubling
-   seen: 1,000 then 2,000, with 1,000,000 credits aboard). Whether the
-   original draws the first price (by ship class, fuel needed, cash or
-   record) or doubles again is open.
-2. **The mood:** always the good mood (115-119); the bad mood (120-124,
-   "it's going to cost extra") was seen only on a hostile ship's mercy
-   price (hail/beg_mercy.png). When a seller is in a bad mood is open.
-3. **Lower Price:** always withdraws the offer. Whether it ever lowers the
-   price, and whether a withdrawn seller can turn hostile (the pirate's
-   150-154 "Die, cheapskate!"), is open.
-4. **Who sells:** every neutral ship, trader or warship (only a trader was
-   seen selling; both refused a disabled pilot). A disabled pilot with no
-   fuel is refused (being disabled decides).
-5. **How much fuel:** one jump (100), read off the fuel bar (0 to about 3%
-   of 3000): low confidence.
-6. **The record:** not read. The 160-164 group ("Okay, since your
-   reputation is so good.") suggests a well-known pilot is helped anyway;
-   untested.
-7. **Allies:** a ship of the player's own govt or an ally still helps for
-   free (unmeasured; the player has no govt in single-player).
-8. **A pilot who cannot pay:** Accept Price is greyed (unmeasured; the
+1. **What picks a neutral seller's 2,000 or 3,000:** NovaJS draws the base
+   first (1,000 / 2,000 / 3,000 alike, a hash of the ship's uuid) and lets
+   it pick the mood (1,000 good, 2,000 neutral, 3,000 neutral or bad), which
+   fits all six ships and their 2:3:1 frequencies. The original's draw
+   (ship class? cash? fuel needed?) is open.
+2. **Which first Lower Price counters:** about 40% (5 of 13 measured), here
+   a hash of ship, pilot and ask. The original's rule is open.
+3. **An accepted offer counts as an ask** (the next one costs 1,000 more);
+   only withdrawn offers were followed by another ask.
+4. **The counter's well:** the mood line stays in the response well while
+   the popup shows the countered price (the captures read the popup).
+5. **How much fuel:** one jump (100), read off the fuel bar twice (0 to
+   about 3% of 3000): medium confidence.
+6. **The record:** +2000 changed nothing; a negative record and a pilot
+   with little cash (pilot `w17_fuel_poor`, 5,000 credits) are unmeasured.
+   The 160-164 group ("Okay, since your reputation is so good.") is unused.
+7. **Allies:** a disabled pilot is refused (measured); a fuelless pilot is
+   sold fuel like by a neutral ship (unmeasured).
+8. **A ränk 0x0400 warship:** still helps for free (none met on the
+   reference); its trader refuses (measured).
+9. **A disabled pilot with no fuel** is refused (being disabled decides).
+10. **A pilot who cannot pay:** Accept Price is greyed (unmeasured; the
    60-64 "come back when you actually have some money" group may be the
    original's answer).
+11. **A withdrawn seller turning hostile** (the pirate's 150-154 "Die,
+   cheapskate!"): never seen in 13 withdrawals; NovaJS never does.
 
 ### Piracy police and distress calls: guesses to measure
 
