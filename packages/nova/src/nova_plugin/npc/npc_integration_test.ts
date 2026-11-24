@@ -52,21 +52,21 @@ describe('NPC spawning in a parsed system', () => {
             expect(a.length).toBeGreaterThan(0);
             expect(a).toEqual(describeNpcs(worldB));
 
-            // The spawner rolled the same target on both worlds.
+            // The spawner set the same target on both worlds.
             const spawner = (world: World) => world.entities
                 .get('npc spawner')?.components.get(NpcSpawnerComponent);
             expect(spawner(worldA)?.targetCount)
                 .toEqual(spawner(worldB)?.targetCount);
         }, 120_000);
 
-    it('rolls the population target within AvgShips +/- 50%', async () => {
+    it('sets the population target to AvgShips (reference "Stock '
+        + 'traffic, wave 17")', async () => {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(THESSALY, gameData);
         const spawner = world.entities.get('npc spawner')!
             .components.get(NpcSpawnerComponent)!;
         // Thessaly Reach: AvgShips 6.
-        expect(spawner.targetCount).toBeGreaterThanOrEqual(3);
-        expect(spawner.targetCount).toBeLessThanOrEqual(9);
+        expect(spawner.targetCount).toBe(6);
         expect(spawner.entries.length).toBeGreaterThan(0);
     }, 120_000);
 

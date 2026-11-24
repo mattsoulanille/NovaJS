@@ -100,8 +100,10 @@ export const WARSHIP_ENGAGE_RANGE = 6000;
  * with a single stop leaves after it (npc_shuttle.ts), and an AI 4
  * INTERCEPTOR of ordinary traffic never leaves on it (reference "Stock
  * Sol, wave 16": three stayed 21+ minutes while an AI 3 destroyer left
- * within 5); miners (wave 15: 3-4 minutes in the field) and AI 3
- * warships go by it. */
+ * within 5; "Stock traffic, wave 17": five more in Arcturus and Tau
+ * Ceti), and a MINER with rocks to work never leaves on it (the stock
+ * Asteroid Miner stayed 20+ minutes in Sol and Tau Ceti, waves 16-17; it
+ * leaves once its hold is full, npc_mining.ts). AI 3 warships go by it. */
 export const NPC_DEPART_MIN_MS = 120_000;
 export const NPC_DEPART_MAX_MS = 300_000;
 /**
@@ -641,13 +643,15 @@ export const NpcDecisionSystem = new System({
                         distances(asteroids),
                         scoops ? distances(debrisBoxes) : [], scoops);
                     if (job) {
-                        // Miners leave like other traffic (39 jump-outs in
-                        // the reference run), straight from mining.
-                        if (!held && time.time >= npc.departAt) {
-                            npc.mode = 'depart';
-                            delete npc.mineTarget;
-                            return;
-                        }
+                        // A miner with work to do stays, whatever its
+                        // departure roll (still drawn, so no other NPC's
+                        // draws shift): the stock Asteroid Miner never
+                        // left Sol or Tau Ceti in 20+ minutes (reference
+                        // "Stock Sol, wave 16", "Stock traffic, wave 17").
+                        // It leaves once its hold is full (`full` above:
+                        // the trader loop, one stop and out), which is
+                        // how the kit miners' 3-4 minute stays (wave 15)
+                        // are read: GUESS, see npc_mining.ts.
                         npc.mode = job.mode;
                         npc.mineTarget = job.target;
                         return;

@@ -15,7 +15,7 @@ import { makeSystem } from '../make_system.js';
 import {
     buildNpcSpawnTable, buildPersSpawnTable,
     fleetAllowedInSystem, NpcSpawnEntry, MAX_NPC_POPULATION, persAllowedInSystem,
-    PERS_SPAWN_CHANCE, pickPersEntry, pickWeighted, rollPopulationTarget,
+    PERS_SPAWN_CHANCE, pickPersEntry, pickWeighted, populationTarget,
 } from './npc_spawn_plugin.js';
 import { effectiveNpcSpawnEntries, NO_SPAWN_BITS, spawnTableBits } from './spawn_bits.js';
 
@@ -146,26 +146,20 @@ describe('pickPersEntry (sÿst Person chances inside the Bible 5%)', () => {
     });
 });
 
-describe('rollPopulationTarget', () => {
+describe('populationTarget', () => {
     it('is zero for an empty system', () => {
-        expect(rollPopulationTarget(0, new Random(1))).toBe(0);
+        expect(populationTarget(0)).toBe(0);
     });
 
-    it('stays within the Bible average +/- 50%', () => {
-        const random = new Random(99);
-        for (let i = 0; i < 200; i++) {
-            const target = rollPopulationTarget(6, random);
-            expect(target).toBeGreaterThanOrEqual(3);
-            expect(target).toBeLessThanOrEqual(9);
-        }
+    it('is AvgShips exactly, no +/- 50% roll (reference "Stock traffic, '
+        + 'wave 17": Sol 6 of 6, Arcturus 4 of 4, Tau Ceti 4 of 4)', () => {
+        expect(populationTarget(6)).toBe(6);
+        expect(populationTarget(4)).toBe(4);
+        expect(populationTarget(1)).toBe(1);
     });
 
     it('caps runaway plugin AvgShips', () => {
-        const random = new Random(5);
-        for (let i = 0; i < 50; i++) {
-            expect(rollPopulationTarget(50, random))
-                .toBeLessThanOrEqual(MAX_NPC_POPULATION);
-        }
+        expect(populationTarget(50)).toBe(MAX_NPC_POPULATION);
     });
 });
 

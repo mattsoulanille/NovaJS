@@ -4,7 +4,6 @@ import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultPersData } from 'novadatainterface/pers_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
-import { Random } from 'nova_ecs/plugins/random_plugin';
 import { makeSystem } from '../make_system.js';
 import {
     buildNpcSpawnTable, buildPersSpawnTable, latchSpawnBits, NpcSpawnerType,
@@ -122,20 +121,20 @@ describe('room spawn bits', () => {
 
         it('waits for an entrant', () => {
             const state = spawner();
-            latchSpawnBits(state, [], new Random(1));
+            latchSpawnBits(state, []);
             expect(state.spawnBits).toBeUndefined();
         });
 
         it("keeps the first entrant's bits that the tables read", () => {
             const state = spawner();
-            latchSpawnBits(state, [entrant('peer', [5, 999])], new Random(1));
+            latchSpawnBits(state, [entrant('peer', [5, 999])]);
             expect(state.spawnBits).toEqual([5]);
         });
 
         it('treats a player ship with no control bits as an entrant with '
             + 'none set', () => {
             const state = spawner();
-            latchSpawnBits(state, [entrant('peer')], new Random(1));
+            latchSpawnBits(state, [entrant('peer')]);
             expect(state.spawnBits).toEqual([]);
         });
 
@@ -143,17 +142,17 @@ describe('room spawn bits', () => {
             for (const order of [[entrant('z', [5]), entrant('a', [])],
                 [entrant('a', []), entrant('z', [5])]]) {
                 const state = spawner();
-                latchSpawnBits(state, order, new Random(1));
+                latchSpawnBits(state, order);
                 expect(state.spawnBits).toEqual([]);
             }
         });
 
         it('never rewrites a latch: a later entrant changes nothing', () => {
             const state = spawner();
-            latchSpawnBits(state, [entrant('first', [5])], new Random(1));
+            latchSpawnBits(state, [entrant('first', [5])]);
             latchSpawnBits(state, [entrant('first', [5]),
-                entrant('aaa-later', [])], new Random(1));
-            latchSpawnBits(state, [entrant('aaa-later', [])], new Random(1));
+                entrant('aaa-later', [])]);
+            latchSpawnBits(state, [entrant('aaa-later', [])]);
             expect(state.spawnBits).toEqual([5]);
         });
 
@@ -165,33 +164,27 @@ describe('room spawn bits', () => {
                 });
                 delete state.avgShips;
                 const before = JSON.stringify(state);
-                latchSpawnBits(state, [entrant('peer', [5])], new Random(1));
+                latchSpawnBits(state, [entrant('peer', [5])]);
                 expect(JSON.stringify(state)).toBe(before);
             });
 
-        it('rolls a deferred population target, with one draw, only when '
-            + 'the latch admits something an empty genesis could not', () => {
-            const random = new Random(9);
-            const reference = new Random(9);
+        it('sets a deferred population target of AvgShips only when the '
+            + 'latch admits something an empty genesis could not', () => {
+            // avgShips 3 (spawner()): the original fills to AvgShips
+            // exactly (reference "Stock traffic, wave 17").
             const admitted = spawner({ targetCount: 0 });
-            latchSpawnBits(admitted, [entrant('peer', [5])], random);
-            expect(admitted.targetCount).toBeGreaterThan(0);
-            reference.next();
-            expect(random.next()).toBe(reference.next());
+            latchSpawnBits(admitted, [entrant('peer', [5])]);
+            expect(admitted.targetCount).toBe(3);
 
-            // Nothing admitted: no roll, no draw.
-            const untouched = new Random(9);
+            // Nothing admitted: no target.
             const refused = spawner({ targetCount: 0 });
-            latchSpawnBits(refused, [entrant('peer', [])], untouched);
+            latchSpawnBits(refused, [entrant('peer', [])]);
             expect(refused.targetCount).toBe(0);
-            expect(untouched.next()).toBe(new Random(9).next());
 
-            // A target genesis already rolled stands, and draws nothing.
-            const steady = new Random(9);
-            const rolled = spawner({ targetCount: 2 });
-            latchSpawnBits(rolled, [entrant('peer', [5])], steady);
-            expect(rolled.targetCount).toBe(2);
-            expect(steady.next()).toBe(new Random(9).next());
+            // A target genesis already set stands.
+            const set = spawner({ targetCount: 2 });
+            latchSpawnBits(set, [entrant('peer', [5])]);
+            expect(set.targetCount).toBe(2);
         });
     });
 

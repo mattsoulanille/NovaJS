@@ -51,9 +51,11 @@ import { TargetComponent } from '../ship/index.js';
  * ============================================================================
  *
  * Each system maintains a deterministic NPC population drawn from its
- * sÿst dude table: the population target is AvgShips +/- 50% (the
- * Bible's rule), rolled once at world genesis from the per-system
- * seeded Random, so every peer builds the same population. Ships jump
+ * sÿst dude table: the population target is AvgShips itself (measured;
+ * the Bible's "+/- 50%" is not what the original does, see
+ * populationTarget), and the initial population is drawn at world genesis
+ * from the per-system seeded Random, so every peer builds the same
+ * population. Ships jump
  * out when their AI decides to (npc_ai_plugin) and a respawn system
  * tops the population back up with ships "jumping in" at the system
  * edge — the same deterministic-spawner shape as the asteroid field.
@@ -829,14 +831,21 @@ function maybeSpawnPers(world: World,
     return 1;
 }
 
-/** The Bible's "average +/- 50%" population roll. */
-export function rollPopulationTarget(avgShips: number,
-    random: Random): number {
+/**
+ * How many NPCs a system holds: AvgShips itself, capped at
+ * MAX_NPC_POPULATION. The Bible says "this number of ships, +/- 50%", but
+ * the original FILLS TO EXACTLY AvgShips and stays there, never above it,
+ * with nothing arriving while it is full (docs/reference_experiments.md,
+ * "Stock Sol, wave 16" 6 of 6 and "Stock traffic, wave 17" Arcturus 4 of
+ * 4 and Tau Ceti 4 of 4; seventeen frozen censuses in all). So no roll,
+ * and no PRNG draw. (A fleet still arrives whole and can overshoot by its
+ * escorts: spawnNpcs.)
+ */
+export function populationTarget(avgShips: number): number {
     if (avgShips <= 0) {
         return 0;
     }
-    return Math.min(MAX_NPC_POPULATION,
-        Math.max(1, Math.round(avgShips * (0.5 + random.next()))));
+    return Math.min(MAX_NPC_POPULATION, Math.round(avgShips));
 }
 
 /**
@@ -1171,7 +1180,7 @@ export async function buildNpcSpawnTables(world: World, systemId: string,
 }
 
 /**
- * Genesis entry point: rolls the population target, builds and stages
+ * Genesis entry point: sets the population target, builds and stages
  * the spawn table, spawns the initial population scattered through the
  * system, and installs the spawner entity that keeps it topped up.
  * Call from makeSystem before the world steps. `tables`, when given, is
@@ -1194,7 +1203,7 @@ export async function spawnNpcs(world: World, systemId: string,
     const { entries, persEntries } = await tables;
     const targetCount =
         effectiveNpcSpawnEntries(entries, NO_SPAWN_BITS).length === 0 ? 0
-            : rollPopulationTarget(systemData.avgShips, random);
+            : populationTarget(systemData.avgShips);
 
     let population = 0;
     // Fleets can overshoot the target by their escort count; that's
@@ -1249,12 +1258,12 @@ function entrantSpawnBits(entrants: readonly Entrant[],
  * bits of the lowest-uuid player ship among those the spawner's tests
  * read. Once set, never rewritten. A table no test gates never latches
  * (it has nothing to decide). Deterministic: synced state in, synced
- * state out, uuid-sorted, and the one Random draw — the deferred
- * population roll — happens only on a gated table that spawned nothing
- * at genesis and now has something to spawn.
+ * state out, uuid-sorted, and no PRNG draw. The deferred population
+ * target (AvgShips, populationTarget) is set only on a gated table that
+ * spawned nothing at genesis and now has something to spawn.
  */
 export function latchSpawnBits(spawner: NpcSpawnerType,
-    entrants: readonly Entrant[], random: Random) {
+    entrants: readonly Entrant[]) {
     if (spawner.spawnBits !== undefined || entrants.length === 0) {
         return;
     }
@@ -1266,7 +1275,7 @@ export function latchSpawnBits(spawner: NpcSpawnerType,
     if (spawner.targetCount === 0 && spawner.avgShips !== undefined
         && effectiveNpcSpawnEntries(spawner.entries,
             latchedSpawnBits(spawner)).length > 0) {
-        spawner.targetCount = rollPopulationTarget(spawner.avgShips, random);
+        spawner.targetCount = populationTarget(spawner.avgShips);
     }
 }
 
@@ -1282,7 +1291,7 @@ export function latchSpawnBits(spawner: NpcSpawnerType,
  *    empty bit set, is removed (the NPCs nobody owns: a peer's escorts
  *    and mission ships carry MultiplayerData and are never touched);
  *  - the spawner waits for the first entrant (`awaitingEntrant`), whose
- *    arrival tick rolls the population target and spawns the initial
+ *    arrival tick sets the population target and spawns the initial
  *    population under the entrant's bits (populateForEntrant).
  *
  * Synchronous and a pure function of synced state and the seed, so it is
@@ -1319,7 +1328,7 @@ export function applyRoomSeed(world: World, seed: number) {
 /**
  * The first entrant's tick in a seeded room (applyRoomSeed): latch the
  * room's spawn bits as latchSpawnBits does (only on a table some test
- * gates), roll the population target from AvgShips against the table
+ * gates), set the population target from AvgShips against the table
  * those bits admit, and spawn the initial population scattered through
  * the system exactly as genesis used to — but from the room's seed and
  * under the entrant's bits, so an admitted story variant is there from
@@ -1340,7 +1349,7 @@ export function populateForEntrant(world: World,
     const persEntries = spawner.persEntries ?? [];
     spawner.targetCount =
         effectiveNpcSpawnEntries(spawner.entries, bits).length === 0 ? 0
-            : rollPopulationTarget(spawner.avgShips ?? 0, random);
+            : populationTarget(spawner.avgShips ?? 0);
     let population = 0;
     // The genesis loop, verbatim (fleets may overshoot; see spawnNpcs).
     for (let guard = 0; population < spawner.targetCount && guard < 100;
@@ -1369,7 +1378,7 @@ export const NpcRespawnSystem = new System({
                 entrants);
             return;
         }
-        latchSpawnBits(spawner, entrants, random);
+        latchSpawnBits(spawner, entrants);
         if (time.time < spawner.nextSpawn
             || liveNpcs.length >= spawner.targetCount) {
             return;

@@ -283,30 +283,53 @@ describe('NPC mining (shïp Flags3 0x0001 / 0x0002)', () => {
         expect(modes.has('mine')).toBeFalse();
     });
 
-    it('jumps out when its time is up, straight from mining', async () => {
-        const { world, addRock, addNpc } = await miningWorld();
-        addRock('rock', 3000, 0);
-        await addNpc('miner', MINER_HULL, 0, 0, { departAt: 3000 });
-        let mined = false;
-        let departedFromMining = false;
-        let firingWhileDeparting = false;
-        runFor(world, 'miner', 10, () => {
-            const ship = world.entities.get('miner');
-            const npc = ship?.components.get(NpcComponent);
-            if (npc?.mode === 'mine') {
-                mined = true;
-            }
-            if (npc?.mode === 'depart') {
-                departedFromMining ||= mined && npc.mineTarget === undefined;
-                for (const [, weapon] of ship!.components
-                    .get(WeaponsStateComponent)!) {
-                    firingWhileDeparting ||= weapon.firing;
+    it('stays past its departure roll while it has rocks to work '
+        + '(reference "Stock traffic, wave 17": the stock Asteroid Miner '
+        + 'never left)', async () => {
+            const { world, addRock, addNpc } = await miningWorld();
+            addRock('rock', 600, 0);
+            addRock('rock2', -600, 0);
+            await addNpc('miner', MINER_HULL, 0, 0, { departAt: 0 });
+            let departedWithRocks = false;
+            let minedFor = 0;
+            const modes = runFor(world, 'miner', 60, () => {
+                const mode = world.entities.get('miner')?.components
+                    .get(NpcComponent)?.mode;
+                const rocks = count(world, AsteroidComponent);
+                departedWithRocks ||= mode === 'depart' && rocks > 0;
+                if (mode === 'mine') {
+                    minedFor = now(world);
                 }
-            }
+            });
+            expect(modes.has('mine')).toBeTrue();
+            // Mining went on well past the (expired) roll, both rocks.
+            expect(minedFor).toBeGreaterThan(5000);
+            expect(departedWithRocks).toBeFalse();
         });
-        expect(departedFromMining).toBeTrue();
-        expect(firingWhileDeparting).toBeFalse();
-    });
+
+    it('leaves once its hold is full: the trader loop, one stop and out '
+        + '(GUESS: the kit miners\' 3-4 minute stays)', async () => {
+            const { world, addRock, addNpc } = await miningWorld();
+            addRock('rock', 600, 0);
+            const miner = await addNpc('miner', MINER_HULL, 0, 0,
+                { departAt: Number.MAX_SAFE_INTEGER });
+            miner.components.set(CargoComponent,
+                new Map([['cargo:1', 100]]));
+            let firingWhileDeparting = false;
+            const modes = runFor(world, 'miner', 180, () => {
+                const ship = world.entities.get('miner');
+                if (ship?.components.get(NpcComponent)?.mode === 'depart') {
+                    for (const [, weapon] of ship.components
+                        .get(WeaponsStateComponent)!) {
+                        firingWhileDeparting ||= weapon.firing;
+                    }
+                }
+            });
+            expect(modes.has('mine')).toBeFalse();
+            expect(modes.has('dwell')).toBeTrue();
+            expect(modes.has('depart')).toBeTrue();
+            expect(firingWhileDeparting).toBeFalse();
+        });
 
     it('replays identically after a rollback', async () => {
         const { world, addRock, addNpc } = await miningWorld();

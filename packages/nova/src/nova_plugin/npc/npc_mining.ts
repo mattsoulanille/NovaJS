@@ -29,10 +29,22 @@ import { chooseNearest } from './npc_targeting.js';
  *    a box; the miner only steers there.
  *  - Debris first, then rocks: after a rock breaks, the miner flies over
  *    the boxes it left before picking the next rock.
- *  - It departs at its ordinary departure time (npc_decision.ts's
- *    rollDepartureTime), straight from mining, by jumping out.
+ *  - It STAYS while it has rocks to work, whatever its departure roll
+ *    (npc_decision.ts's rollDepartureTime is still drawn): the stock
+ *    Asteroid Miner (shïp 379) never left Sol or Tau Ceti in 20+ minutes
+ *    (reference "Stock Sol, wave 16", "Stock traffic, wave 17").
  *  - With nothing to mine (no field, no rock in range, or a scooping
- *    miner's hold full) it flies the ordinary trader loop.
+ *    miner's hold full) it flies the ordinary trader loop: one stop, then
+ *    out by jump.
+ *
+ * Why the wave-15 kit miners left after 3-4 minutes when the stock one
+ * never did (GUESS): AI type, hull flags (Flags3 0x0003) and outfits (the
+ * Asteroid Scoop, four Mining Blasters) were the same; what differed was
+ * the work. The kit hull flew at 300 / accel 300 against the stock
+ * 135 / 36, in a field of 16 rocks against Sol's 2 and Tau Ceti's 3, so
+ * it could fill its 100-ton hold in minutes, and a full hold is what sends
+ * a miner off here. Not measured: the kit miners' departure itself was
+ * never seen (they went off screen and off the radar), nor their holds.
  *
  * Not miners: AI 3/4 hulls with Flags3 0x0001 (the stock Mu'Hari Zephyr
  * 375/376 in AI 4 düdes): the reference did not run that variant, so they

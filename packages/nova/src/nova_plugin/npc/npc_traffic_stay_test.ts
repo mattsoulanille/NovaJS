@@ -192,7 +192,8 @@ describe('Ordinary traffic that stays (reference "Stock Sol, wave 16")', () => {
             }
             expect(changed).withContext('the system changed').toBeUndefined();
             expect(atFreeze!.others).toBe(0);
-            expect(atFreeze!.stayers.split(',').length)
-                .toBeGreaterThanOrEqual(5);
+            // Exactly AvgShips: the system fills to it and stays there
+            // (reference "Stock traffic, wave 17").
+            expect(atFreeze!.stayers.split(',').length).toBe(6);
         }, 300_000);
 });
