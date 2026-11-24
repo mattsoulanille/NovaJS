@@ -368,9 +368,14 @@ export function targetGovtLabel(government: string,
  * Status-line feedback when the player boards one of their OWN disabled
  * flock members (a hired/captured escort or bay fighter): rather than
  * plundering it, the boarding party repairs it and it rejoins formation.
+ * Stock STR# 2002 index 126, verbatim, which is what the original printed
+ * for a repaired hired escort (reference "Reviving a disabled ally, wave
+ * 11"). Index 127, "Fighter repaired.", is presumably the bay-fighter
+ * line; it is not used, since EscortRepairedEvent does not say which kind
+ * was repaired and the fighter case was not measured.
  */
 export function escortRepairedMessage(): string {
-    return 'Your ship has been repaired and rejoins your formation.';
+    return 'Escort repaired.';
 }
 
 /**
