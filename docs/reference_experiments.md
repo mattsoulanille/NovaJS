@@ -12940,6 +12940,13 @@ hostility follows from InitialRec -5 < -CrimeTol 1 by the ordinary rule
 
 Confidence: high (pixel reads, one pilot).
 
+**Applied (wave-26 fixes, 2026-11-25).** No code change (matches): the
+"(no Nil'kemorya system was seen)" note is gone from
+`N/spaceport/starmap_refusing_test.ts`'s comment, which now cites this
+section for the nine red Nil'kemorya systems and the three orange
+neighbours, and records that InitialRec -5 under CrimeTol 1 already reads
+"Offender".
+
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w26/nil4/*/` (`03-map0.png`, `04-sel_nilk.png` Offender, `05-sel_muhari.png`, `06-zoomout.png`); `nil/`, `nil2/`, `nil3/` (the killed starts).
 
 ### R19 wave 26: an ARMED AI 3 victim stays, fights and DOES call the fleet, from near (86-89 px) and far (about 1,100 px) (2026-11-25, sixth pass)

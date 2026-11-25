@@ -225,10 +225,14 @@ describe('the map\'s orange / red dots on stock data (a fresh pilot)', () => {
  * (4), the Polaris worlds (2-10), the Heraan Landing Points (1-2), Rebel I /
  * II (5), and so on. ORANGE where that InitialRec is 0; RED in the
  * Nil'kemorya systems (gövt nova:147, InitialRec -5: a fresh pilot starts
- * at -5 there, the "No Convictions" record that drew Kit Map Wanted Planet
- * red). MEASURED orange on the original for Alphara, Gateway, Kerella,
- * Lesten and Rigel (reference "Map dot colours, wave 24"); the rest follow
- * the same rule, unmeasured one by one (no Nil'kemorya system was seen).
+ * at -5 there; with its CrimeTol 1 that already reads "Legal Status:
+ * Offender" and is hostile). MEASURED on the original: orange for
+ * Alphara, Gateway, Kerella, Lesten and Rigel (reference "Map dot colours,
+ * wave 24"); red for nine of the Nil'kemorya systems (Nil'kemorya,
+ * Ne'helipar, Nil'pesetra, Nil'ikro, Nil'vran, Nil'kvee, Nil'kol, Mjolnir,
+ * Nil'nesa) and orange for Mu'hari, Til'hapin and Ver'ashan beside them
+ * ("Map dot colours, wave 26"). The rest follow the same rule, unmeasured
+ * one by one.
  */
 const STOCK_REFUSING_FOR_A_FRESH_PILOT: string[] = [
     "nova:131 Alphara orange",
