@@ -436,8 +436,9 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
  * a jump of fuel is a per-ship ask set by its mood plus 1,000 for every
  * repeated ask; Lower Price counters with floor(0.75 x P / 100) x 100 or
  * withdraws, and always withdraws a counter. "H1 wave 19": each mood asks
- * one of two steps (good 1,000-2,000, neutral 2,000-3,000, bad
- * 3,000-4,000), capped by the pilot's cash, with no record term.
+ * one of two steps (neutral 2,000-3,000, bad 3,000-4,000; the good mood
+ * 1,000 only, "H1 / rescue leftovers, wave 21"), capped by the pilot's
+ * cash, with no record term.
  */
 describe('the fuel sale\'s price (reference H1 wave 17)', () => {
     it('counters with 3/4 rounded down to 100: all five measured counters',
@@ -475,8 +476,9 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
                 { asks: 1e12, countered: false }))).toBeTrue();
         });
 
-    it('draws a mood and an ask per ship: good 1,000-2,000, neutral '
-        + '2,000-3,000, bad 3,000-4,000 (reference H1 wave 19, finding 2)',
+    it('draws a mood and an ask per ship: good 1,000, neutral '
+        + '2,000-3,000, bad 3,000-4,000 (reference H1 wave 19, finding 2; '
+        + 'the good mood\'s one ask, wave 21, finding 1)',
         () => {
             const counts = new Map<string, number>();
             const n = 4000;
@@ -488,13 +490,16 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
                 expect(fuelSaleTerms(`ship ${i}`)).toEqual(terms);
             }
             expect([...counts.keys()].sort()).toEqual([
-                'bad 3000', 'bad 4000', 'good 1000', 'good 2000',
+                'bad 3000', 'bad 4000', 'good 1000',
                 'neutral 2000', 'neutral 3000',
             ]);
-            // GUESS for the draw: moods 1 : 2 : 1, each step even.
+            // GUESS for the draw: moods 1 : 2 : 1, each neutral / bad step
+            // even (bit 16 of the hash, unchanged by the good mood's
+            // losing its step).
             const share = (key: string) => (counts.get(key) ?? 0) / n;
-            for (const key of ['good 1000', 'good 2000', 'bad 3000',
-                'bad 4000']) {
+            expect(share('good 1000')).toBeGreaterThan(0.22);
+            expect(share('good 1000')).toBeLessThan(0.28);
+            for (const key of ['bad 3000', 'bad 4000']) {
                 expect(share(key)).toBeGreaterThan(0.1);
                 expect(share(key)).toBeLessThan(0.15);
             }
@@ -509,8 +514,9 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
             expect(fuelSaleTerms('ship3')).toEqual({ mood: 'good', base: 1000 });
             expect(fuelSaleTerms('ship10'))
                 .toEqual({ mood: 'neutral', base: 3000 });
+            // ship12 asked a good mood's 2,000 before wave 21.
             expect(fuelSaleTerms('ship12'))
-                .toEqual({ mood: 'good', base: 2000 });
+                .toEqual({ mood: 'good', base: 1000 });
             expect(fuelSaleTerms('ship13')).toEqual({ mood: 'bad', base: 4000 });
         });
 
@@ -521,19 +527,20 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
             const rich = 1_000_000;
             // A rich pilot pays the ship's own ask.
             expect(fuelAskingBase('ship13', { credits: rich })).toBe(4000);
-            expect(fuelAskingBase('ship12', { credits: rich })).toBe(2000);
+            expect(fuelAskingBase('ship12', { credits: rich })).toBe(1000);
             expect(fuelAskingBase('ship3', { credits: rich })).toBe(1000);
             // 10,000 credits: a bad mood asks 3,000, neutrals 2,000 / 3,000.
             expect(fuelAskingBase('ship13', { credits: 10_000 })).toBe(3000);
             expect(fuelAskingBase('ship2', { credits: 10_000 })).toBe(3000);
             expect(fuelAskingBase('ship10', { credits: 10_000 })).toBe(3000);
             expect(fuelAskingBase('ship0', { credits: 10_000 })).toBe(2000);
-            // 7,000 credits: every mood 2,000, bad ones included.
-            for (const ship of ['ship13', 'ship2', 'ship10', 'ship0',
-                'ship12']) {
+            // 7,000 credits: every neutral and bad mood 2,000, bad ones
+            // included; the good moods' own 1,000.
+            for (const ship of ['ship13', 'ship2', 'ship10', 'ship0']) {
                 expect(fuelAskingBase(ship, { credits: 7000 })).toBe(2000);
             }
             expect(fuelAskingBase('ship3', { credits: 7000 })).toBe(1000);
+            expect(fuelAskingBase('ship12', { credits: 7000 })).toBe(1000);
             // 5,000 and 300: 1,000, never less (300 is still asked it).
             expect(fuelAskingBase('ship10', { credits: 5000 })).toBe(1000);
             expect(fuelAskingBase('ship10', { credits: 300 })).toBe(1000);

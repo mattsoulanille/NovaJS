@@ -2112,9 +2112,9 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
  * Reference "W1 / C1 / H1 wave 16" and "H1 wave 17", H1: a NEUTRAL ship
  * refuses a disabled pilot ("Not a chance." / "No way.") and offers a
  * fuelless one fuel — its mood line ("You're in luck, I'm in a good mood
- * today." at 1,000-2,000; "I'll help you out if you pay me." at
- * 2,000-3,000; "I'm in a bad mood today ..." at 3,000-4,000, reference "H1
- * wave 19") over a "Pay me N credits." popup with
+ * today." at 1,000, "H1 / rescue leftovers, wave 21"; "I'll help you out
+ * if you pay me." at 2,000-3,000; "I'm in a bad mood today ..." at
+ * 3,000-4,000, reference "H1 wave 19") over a "Pay me N credits." popup with
  * Lower Price / Accept Price; Lower Price counters with 3/4 or withdraws the
  * offer ("If that's the way you feel, then you can sit here forever."), and
  * the next ask costs 1,000 more; Accept Price: "Hold on, I'll be right

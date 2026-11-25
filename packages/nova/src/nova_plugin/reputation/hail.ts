@@ -434,10 +434,15 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  * THE SHIP'S MOOD AND ITS OWN ASK, before the pilot's cash caps it
  * ({@link fuelAskingBase}). Reference "H1 wave 19", finding 2, over the
  * waves 17-19 rows (34 first asks): every opening line stays the same for
- * its ship, and each mood asks one of TWO steps —
+ * its ship; the neutral and bad moods ask one of TWO steps, the good mood
+ * ONE —
  *
  *  - good mood ("You're in luck, I'm in a good mood today.", STR# 3000
- *    115-119): 1,000 or 2,000;
+ *    115-119): 1,000 (reference "H1 / rescue leftovers, wave 21", finding
+ *    1: every good ask since wave 19 was 1,000, two at record 0, two at
+ *    -8, two at -9). The only good 2,000 ever seen is wave 18's, at
+ *    record -5, and it is unexplained (no record term fits the rest), so
+ *    it is not modelled;
  *  - neutral ("All right, I'll give you some help, but it'll cost you.",
  *    140-144): 2,000 or 3,000;
  *  - bad mood ("I'm in a bad mood today, so it's going to cost extra.",
@@ -447,12 +452,11 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  * -5, a -8 and a -9 pilot were all asked prices inside these spreads).
  * MEASURED (reference "H1 / rescue leftovers, wave 20", finding 2): a bad
  * mood asked 4,000 of a 1,000,000-credit pilot at a CLEAN record, so its
- * 4,000 needs no record term either. OPEN: a good mood's 2,000 at a clean
- * record is still unseen (no good mood came up at record 0).
+ * 4,000 needs no record term either.
  *
  * GUESSES for the draw: the mood is 1 in 4 good, 2 in 4 neutral, 1 in 4
  * bad (the first asks seen so far: 6 good, 19 neutral, 9 bad of 34), and
- * the step within the mood's spread is an even draw.
+ * the step within a neutral or bad mood's spread is an even draw.
  *
  * DETERMINISTIC without the PRNG: salted hashes of the ship's uuid, like
  * every comm line here, so the dialog (which must quote the price before
@@ -464,11 +468,12 @@ export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
     // ONE hash, two bit fields: the low two bits pick the mood and bit 16
     // the step. (Two hashes salted "mood" / "base" are correlated in their
     // low bits, FNV-1a mixing upward only: they paired every mood with
-    // one step.)
+    // one step.) The good mood has no step (wave 21), so bit 16 splits
+    // only the neutral and bad moods, about evenly each (hail_test).
     const roll = hashString(`fuelSale:ask:${shipUuid}`);
     const mood: FuelSaleMood = roll % 4 === 0 ? 'good'
         : roll % 4 === 3 ? 'bad' : 'neutral';
-    const step = (roll >>> 16) & 1;
+    const step = mood === 'good' ? 0 : (roll >>> 16) & 1;
     return {
         mood,
         base: FUEL_SALE_PRICE_STEP * (FUEL_SALE_MOOD_STEPS[mood] + step),
@@ -476,7 +481,8 @@ export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
 }
 
 /** Each mood's LOWER ask, in {@link FUEL_SALE_PRICE_STEP}s; the higher
- * one is a step more ({@link fuelSaleTerms}). */
+ * one is a step more ({@link fuelSaleTerms}), except the good mood's,
+ * which is its only ask. */
 export const FUEL_SALE_MOOD_STEPS: Readonly<Record<FuelSaleMood, number>> = {
     good: 1, neutral: 2, bad: 3,
 };
