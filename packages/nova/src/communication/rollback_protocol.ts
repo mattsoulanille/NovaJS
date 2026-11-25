@@ -639,6 +639,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    derived wire schema fingerprint changes (51a63184211e887b ->
 //    d3e842c4cfaedd4b), and the join gate keeps older and newer builds
 //    apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-19 contraband fix (reference
+//    "Contraband / rescue / A14, wave 19": a cutter does not follow a
+//    clean ship that flies off). NpcState gains an OPTIONAL `scanSatOn`
+//    (npc/npc_component.ts: the scanned ship an interceptor has come up to
+//    and sits on, so it holds the spot and lets go at
+//    CONTRABAND_SIT_LEASH); interceptors that never sit carry none. No
+//    input kind or message kind changes. Sim-rule changes alongside: the
+//    fuel price is the ship's own ask capped by the pilot's cash, with no
+//    record term; a ränk 0x0800 refuels for free from the affiliated
+//    govt's allies too. The derived wire
+//    schema fingerprint changes (d3e842c4cfaedd4b -> COMBINEDFP),
+//    and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

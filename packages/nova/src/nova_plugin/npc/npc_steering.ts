@@ -19,7 +19,7 @@ import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
 import {
     CONTRABAND_SCAN_RANGE, CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED,
 } from './contraband.js';
-import { holdingScan } from './contraband_target.js';
+import { flownOff, holdingScan } from './contraband_target.js';
 import {
     MINE_HOLD_SPEED, MINE_STANDOFF_FRACTION, miningReach, SCOOP_ARRIVE_RADIUS,
     SCOOP_ARRIVE_SPEED,
@@ -523,9 +523,14 @@ export const NpcSteeringSystem = new System({
                 // (contraband_target.ts's holdingScan; the reference
                 // cutters sat 0-50 px from the pilot): a slow, tight
                 // arrival that settles instead of sweeping through the ship
-                // at top speed. A ship that flies off is chased at top
-                // speed again outside the slow radius (steerArrive), so the
-                // cutter follows it (GUESS).
+                // at top speed. Once it has COME UP TO the ship (scanSatOn)
+                // it holds the spot, not the ship (reference wave 19: a
+                // cutter does not follow a clean ship that flies off): it
+                // moves after it no faster than CONTRABAND_SIT_SPEED, and
+                // brakes where it is once the ship is past
+                // CONTRABAND_SIT_LEASH (the decision step then lets go).
+                // An interceptor still closing on a ship another one has
+                // scanned flies at top speed as before.
                 const quarryShip = npc.scanTarget
                     ? entities.get(npc.scanTarget) : undefined;
                 const quarry = quarryShip?.components
@@ -533,10 +538,22 @@ export const NpcSteeringSystem = new System({
                 if (!quarryShip || !quarry) {
                     npc.mode = undefined;
                     delete npc.scanTarget;
+                    delete npc.scanSatOn;
                     return;
                 }
                 const sitting = holdingScan(quarryShip);
-                steerArrive(movement, physics,
+                const settled = sitting && npc.scanSatOn === npc.scanTarget;
+                if (settled && flownOff(npc.scanTarget, npc.scanSatOn,
+                    Position.fromVectorLike(quarry.position)
+                        .subtract(movement.position).lengthSquared)) {
+                    steerArrive(movement, physics,
+                        Position.fromVectorLike(movement.position),
+                        CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED);
+                    break;
+                }
+                steerArrive(movement,
+                    settled ? { ...physics, speed: Math.min(physics.speed,
+                        CONTRABAND_SIT_SPEED) } : physics,
                     Position.fromVectorLike(quarry.position),
                     sitting ? CONTRABAND_SIT_RADIUS : CONTRABAND_SCAN_RANGE / 2,
                     sitting ? CONTRABAND_SIT_SPEED : physics.speed);

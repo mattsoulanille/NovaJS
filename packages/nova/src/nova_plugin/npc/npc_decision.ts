@@ -525,6 +525,7 @@ export const NpcDecisionSystem = new System({
             target.target = undefined;
             delete npc.mineTarget;
             delete npc.scanTarget;
+            delete npc.scanSatOn;
             npc.boardTarget = undefined;
             return;
         }
@@ -891,6 +892,7 @@ export const NpcDecisionSystem = new System({
                 if (chosen) {
                     npc.mode = 'attack';
                     delete npc.scanTarget;
+                    delete npc.scanSatOn;
                     target.target = chosen;
                     return;
                 }
@@ -924,9 +926,13 @@ export const NpcDecisionSystem = new System({
                         || time.time < npc.departAt;
                     const scanTarget = chooseScanTarget(npc.scanTarget,
                         scanCandidates.filter(([u]) => !hostileSet.has(u)),
-                        govtData.scanMask, getEntity, gameData, mayHold);
+                        govtData.scanMask, getEntity, gameData, mayHold,
+                        npc.scanSatOn);
                     if (scanTarget !== undefined) {
                         npc.mode = 'scan';
+                        if (scanTarget !== npc.scanTarget) {
+                            delete npc.scanSatOn;
+                        }
                         npc.scanTarget = scanTarget;
                         return;
                     }
@@ -935,6 +941,7 @@ export const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                 }
                 delete npc.scanTarget;
+                delete npc.scanSatOn;
                 // An interceptor of ordinary traffic NEVER LEAVES on its
                 // departure roll (reference "Stock Sol, wave 16": the
                 // three AI 4 Fed interceptors stayed 21+ minutes, with the

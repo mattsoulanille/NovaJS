@@ -47,7 +47,7 @@ import { TargetComponent } from '../ship/index.js';
 
 /** The uuid-bearing NPC-brain fields that name another ship. */
 const NPC_REFERENCE_FIELDS =
-    ['aggressor', 'boardTarget', 'pacifiedFrom', 'scanTarget'] as const;
+    ['aggressor', 'boardTarget', 'pacifiedFrom', 'scanTarget', 'scanSatOn'] as const;
 
 /**
  * Drops every reference on `entity` that names an entity outside `live`

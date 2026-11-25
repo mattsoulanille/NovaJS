@@ -9,7 +9,8 @@ import {
     ExplodingComponent, isTargetable, OutfitsStateComponent,
 } from '../ship/index.js';
 import {
-    CONTRABAND_SCAN_SEEK_RANGE, ContrabandFindings, findContraband,
+    CONTRABAND_SCAN_SEEK_RANGE, CONTRABAND_SIT_LEASH, ContrabandFindings,
+    findContraband,
     isDetection, newContraband,
 } from './contraband.js';
 import { chooseNearest } from './npc_targeting.js';
@@ -185,11 +186,19 @@ export function needsScan(ship: Entity, findings: ContrabandFindings):
  * from 20 s to the end of an 8.5 min watch. Wave 16 had seen one cutter
  * sit 30+ s and NovaJS let it go after 30 s; that guess is gone.
  *
- * GUESSES: the cutter FOLLOWS a pilot who flies off (it keeps station on
- * the ship, wherever it goes in the system; unmeasured, the pilot sat
- * still); a landing ends the sit and the cutters do not come back to the
+ * MEASURED, reference "Contraband / rescue / A14, wave 19" (the same
+ * pilot and cutters): a cutter does NOT follow a clean ship that flies
+ * off. The pilot flew 2,700 px north; the cutters stayed with the port,
+ * one blip on the radar, and none came after him in the next 50 s. So the
+ * sit holds the SPOT, not the ship: once an interceptor has come up to the
+ * ship (NpcState.scanSatOn) it moves after it no faster than
+ * CONTRABAND_SIT_SPEED, and lets go when the ship is CONTRABAND_SIT_LEASH
+ * away (chooseScanTarget; the steering arm brakes it there meanwhile). The
+ * wave-18 GUESS that the cutter follows is gone.
+ *
+ * GUESS: a landing ends the sit and the cutters do not come back to the
  * pilot when he takes off (the marker survives the landing, so he is not
- * due a scan; also unmeasured).
+ * due a scan; unmeasured).
  */
 export function holdingScan(ship: Entity): boolean {
     return ship.components.has(ContrabandScannedComponent);
@@ -210,15 +219,20 @@ export function holdingScan(ship: Entity): boolean {
  *     still buzzed by the cutters sitting on the first.
  *  2. Else, when `mayHold`, the ship it is SITTING on (holdingScan: the
  *     current target, scanned this visit, still scannable and still a
- *     candidate), at any distance: it keeps station on that ship for the
- *     visit, following it if it flies off (GUESS, see holdingScan).
+ *     candidate): it keeps station on that ship for the visit — while it
+ *     is still closing on it, at any distance (a second cutter on its way
+ *     to a ship the first has scanned), and once it has come up to it
+ *     (`satOn` names it: NpcState.scanSatOn) only while the ship stays
+ *     within CONTRABAND_SIT_LEASH. A ship that flies off is let go, and
+ *     the interceptor stays where it sat (reference wave 19, holdingScan).
  *
  * Reads synced state and staged caches only; no PRNG.
  */
 export function chooseScanTarget(current: string | undefined,
     candidates: ReadonlyArray<readonly [string, number]>, govtMask: number,
     getEntity: (uuid: string) => Entity | undefined,
-    gameData: SimulationGameDataInterface, mayHold = true):
+    gameData: SimulationGameDataInterface, mayHold = true,
+    satOn?: string):
     string | undefined {
     const qualifying = candidates.filter(([uuid, d2]) => {
         const ship = getEntity(uuid);
@@ -233,9 +247,23 @@ export function chooseScanTarget(current: string | undefined,
         return chooseNearest(qualifying);
     }
     const sittingOn = current !== undefined ? getEntity(current) : undefined;
-    if (mayHold && candidates.some(([u]) => u === current)
-        && scannable(sittingOn) && holdingScan(sittingOn)) {
+    const entry = candidates.find(([u]) => u === current);
+    if (mayHold && entry && scannable(sittingOn) && holdingScan(sittingOn)
+        && !flownOff(current, satOn, entry[1])) {
         return current;
     }
     return undefined;
+}
+
+/**
+ * Whether the scanned ship `current`, `distanceSquared` from an
+ * interceptor that has come up to `satOn`, has FLOWN OFF: the interceptor
+ * had settled on it and it is now past CONTRABAND_SIT_LEASH (see
+ * chooseScanTarget). An interceptor still closing on the ship never
+ * counts it flown off.
+ */
+export function flownOff(current: string | undefined,
+    satOn: string | undefined, distanceSquared: number): boolean {
+    return current !== undefined && satOn === current
+        && distanceSquared > CONTRABAND_SIT_LEASH * CONTRABAND_SIT_LEASH;
 }

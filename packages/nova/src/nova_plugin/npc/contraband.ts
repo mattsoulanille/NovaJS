@@ -83,8 +83,21 @@ export const CONTRABAND_SCAN_RANGE = 150;
  * many px of it (the reference cutter sat 0-10 px from the pilot)... */
 export const CONTRABAND_SIT_RADIUS = 10;
 /** ...matching its speed to within this many px/s, so it settles on the
- * ship instead of buzzing back and forth through it at top speed. */
+ * ship instead of buzzing back and forth through it at top speed. Once it
+ * has come up to the ship (NpcState.scanSatOn) this is also the FASTEST it
+ * moves after it: it holds the spot, not the ship. */
 export const CONTRABAND_SIT_SPEED = 20;
+/**
+ * A sitting interceptor LETS GO of a scanned ship that gets this far from
+ * it: the ship has flown off, and the interceptor stays where it sat
+ * (then goes back to its patrol). MEASURED rule, reference "Contraband /
+ * rescue / A14, wave 19": the four cutters sitting on a clean pilot at
+ * the port stayed one radar blip with the port while he flew 2,700 px
+ * north, and nothing came after him in the next 50 s. GUESS for the
+ * distance: the cutters sat 23-51 px from the pilot (wave 18), and twice
+ * the scan range lets a drifting pilot keep his escort.
+ */
+export const CONTRABAND_SIT_LEASH = 2 * CONTRABAND_SCAN_RANGE;
 
 /** Whether two ScanMasks share a bit. */
 export function scanMaskMatches(govtMask: number, itemMask: number): boolean {

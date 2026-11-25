@@ -121,9 +121,12 @@ registerSimulationBridgeEvent({ event: ContrabandScanEvent });
  * onto it) for the rest of the visit (contraband_target.ts's
  * holdingScan): the reference cutters sat on a clean pilot for 8+
  * minutes. It lets go when the ship leaves the world (a landing or a
- * jump: the sweep below gives up on a target that is gone) or when its
- * decision step finds something better to do (an enemy, an aggressor, a
- * ship still due a scan). A detection's hostility takes over at the
+ * jump: the sweep below gives up on a target that is gone), when the ship
+ * FLIES OFF (it holds the spot, not the ship: reference wave 19, the
+ * sweep marks it `scanSatOn` once in range and chooseScanTarget lets go at
+ * CONTRABAND_SIT_LEASH) or when its decision step finds something better
+ * to do (an enemy, an aggressor, a ship still due a scan). A detection's
+ * hostility takes over at the
  * interceptor's next think (the decision step attacks before it scans).
  *
  * Why a once-per-tick sweep in UUID order rather than an arm of the
@@ -154,6 +157,7 @@ export const ContrabandScanSystem = new System({
             const giveUp = () => {
                 npc.mode = undefined;
                 delete npc.scanTarget;
+                delete npc.scanSatOn;
             };
             const target = npc.scanTarget
                 ? entities.get(npc.scanTarget) : undefined;
@@ -172,6 +176,10 @@ export const ContrabandScanSystem = new System({
                 continue; // Still on the way; NpcSteeringSystem flies it.
             }
             const findings = contrabandAboard(target, govt.scanMask, gameData);
+            // Within scan range of the ship it came for: from here on it
+            // has COME UP TO it, and sits holding the spot (NpcState
+            // scanSatOn; the steering arm and chooseScanTarget's leash).
+            npc.scanSatOn = npc.scanTarget;
             if (target.components.has(ContrabandScannedComponent)
                 && !needsScan(target, findings)) {
                 // Scanned this visit with nothing new aboard: this

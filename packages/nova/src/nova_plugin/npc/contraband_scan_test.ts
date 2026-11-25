@@ -34,13 +34,13 @@ import { completeEntity } from '../spawn/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
     applyContrabandScan, CONTRABAND_SCAN_RANGE,
-    CONTRABAND_SIT_RADIUS,
+    CONTRABAND_SIT_LEASH, CONTRABAND_SIT_RADIUS,
     contrabandFine, ContrabandFindings, findContraband, hasContraband,
     missionIllegal, newContraband, scansHere, smugglingPenalty,
     smugglingRecordChange, statedFine,
 } from './contraband.js';
 import { ContrabandScanEvent, ContrabandScanEventData } from './contraband_scan.js';
-import { ContrabandScannedComponent } from './contraband_target.js';
+import { ContrabandScannedComponent, flownOff } from './contraband_target.js';
 import { NpcComponent } from './npc_component.js';
 import {
     govtDispositionTo, localLaw, shipDisposition,
@@ -305,17 +305,24 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(later.has('scan')).toBeFalse();
         });
 
-    it('follows a scanned clean ship that flies off (GUESS: it keeps '
-        + 'station on the ship)', async () => {
+    it('does NOT follow a scanned clean ship that flies off: it holds its '
+        + 'spot, lets go, and does not come after him (Contraband / rescue '
+        + '/ A14, wave 19)', async () => {
             const { world, pilot, cutter } = await scanWorld();
             expect(runUntilScanned(world, pilot)).toBeTrue();
             run(world, 600);
+            const npc = () => cutter.components.get(NpcComponent)!;
+            expect(npc().scanSatOn).toBe(PILOT);
             const movement = () =>
                 pilot.components.get(MovementStateComponent)!;
-            const gap = () => cutter.components.get(MovementStateComponent)!
-                .position.subtract(movement().position).length;
-            // The pilot crawls 4000 px off (beyond the 3000 px seek range
-            // of a fresh scan) at 120 px/s, then stops.
+            const cutterAt = () =>
+                cutter.components.get(MovementStateComponent)!.position;
+            const gap = () => cutterAt().subtract(movement().position).length;
+            const spot = cutterAt();
+            // The pilot flies 4000 px off at 120 px/s (the reference pilot
+            // flew 2,700 px north), then stops.
+            let releasedAt: number | undefined;
+            let drift = 0;
             for (let i = 0; i < 2000; i++) {
                 const { position } = movement();
                 pilot.components.set(MovementStateComponent, {
@@ -324,16 +331,45 @@ describe('Contraband scan (AI 4 interceptors)', () => {
                     velocity: new Vector(120, 0),
                 });
                 world.step();
-                expect(cutter.components.get(NpcComponent)!.mode)
-                    .toBe('scan');
+                if (releasedAt === undefined && npc().mode !== 'scan') {
+                    releasedAt = gap();
+                }
+                if (releasedAt === undefined) {
+                    // How far it moved after him while it still sat.
+                    drift = Math.max(drift, cutterAt().subtract(spot).length);
+                }
             }
+            // It let go once he was past the leash, from about where it sat:
+            // it crept after him no faster than CONTRABAND_SIT_SPEED.
+            expect(releasedAt).toBeDefined();
+            expect(releasedAt!).toBeGreaterThan(CONTRABAND_SIT_LEASH);
+            expect(npc().scanTarget).toBeUndefined();
+            expect(npc().scanSatOn).toBeUndefined();
             pilot.components.set(MovementStateComponent, {
                 ...movement(), velocity: new Vector(0, 0),
             });
-            run(world, 1800);
-            expect(cutter.components.get(NpcComponent)!.scanTarget)
-                .toBe(PILOT);
-            expect(gap()).toBeLessThanOrEqual(4 * CONTRABAND_SIT_RADIUS);
+            // Nothing comes after him (the reference watched 50 s more).
+            const modes = new Set<string | undefined>();
+            run(world, 3600, () => modes.add(npc().mode));
+            expect(modes.has('scan')).toBeFalse();
+            expect(npc().scanTarget).toBeUndefined();
+            // Until it let go it stayed by its spot: no chase (he flew
+            // past the leash in about 2.5 s; 20 px/s at most after him).
+            expect(drift).toBeLessThan(100);
+        });
+
+    it('the leash only binds an interceptor that has come up to the ship '
+        + '(flownOff)', () => {
+            const far = (CONTRABAND_SIT_LEASH + 1) ** 2;
+            const near = (CONTRABAND_SIT_LEASH - 1) ** 2;
+            // Settled on it: let go past the leash, not inside it.
+            expect(flownOff(PILOT, PILOT, far)).toBeTrue();
+            expect(flownOff(PILOT, PILOT, near)).toBeFalse();
+            // Still closing (another cutter scanned it, or it is on its
+            // way): any distance.
+            expect(flownOff(PILOT, undefined, far)).toBeFalse();
+            expect(flownOff(PILOT, PILOT_2, far)).toBeFalse();
+            expect(flownOff(undefined, undefined, far)).toBeFalse();
         });
 
     it('a sitting cutter still buzzes a second pilot due a scan, then sits '

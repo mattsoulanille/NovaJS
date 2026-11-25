@@ -61,6 +61,15 @@ export const NpcState = t.intersection([t.type({
      * contraband (mode 'scan'; npc/contraband_scan.ts). Cleared the
      * moment the approach ends, however it ends. */
     scanTarget: t.string,
+    /** Uuid of the scanned ship this interceptor has COME UP TO and sits
+     * on (set by ContrabandScanSystem once it is within
+     * CONTRABAND_SCAN_RANGE of a ship scanned this visit). While it names
+     * `scanTarget`, the interceptor holds its spot rather than chasing:
+     * it creeps after the ship at CONTRABAND_SIT_SPEED at most and lets go
+     * once the ship is CONTRABAND_SIT_LEASH away (reference "Contraband /
+     * rescue / A14, wave 19": a cutter does not follow a clean ship that
+     * flies off). Dropped with `scanTarget`. */
+    scanSatOn: t.string,
     /** Uuid of the asteroid a miner is shooting (mode 'mine') or of the
      * debris box it is flying over to scoop (mode 'scoop'); see
      * npc/npc_mining.ts. Read only in those two modes, and dropped once
