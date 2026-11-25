@@ -126,6 +126,12 @@ export const FormationComponent = new Component<Formation>('FormationComponent')
  * its slot by the RCS station-keeper in the same tick. It never came
  * within scan range, swung about near its station, and kept "trying to
  * scan" for the whole visit (Matthew's playtest, 2026-11-24, Heraan).
+ *
+ * A fleet escort no longer scans at all (reference "Fleet escort scans,
+ * wave 23": the original's stayed in formation; npc_decision.ts case 4),
+ * so 'scan' here only matters for a ship that is not, or no longer, a
+ * fleet escort. It stays on the list so that no mode the steering flies
+ * away from the slot is one the formation keeper still holds.
  */
 export function offFormationBusiness(mode: string | undefined): boolean {
     return mode === 'attack' || mode === 'flee' || mode === 'depart'

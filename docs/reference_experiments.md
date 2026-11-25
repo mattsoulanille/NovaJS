@@ -11941,6 +11941,19 @@ of the scan decision (no 'scan' for an NPC whose FormationComponent names
 a leader), pending a control run (a lone AI 4 of gövt 301 in the same
 system) to confirm the govt scans at all.
 
+**Applied (wave-23 fixes, 2026-11-24, `N/nova_plugin/npc/npc_decision.ts`
+case 4).** An AI 4 holding a formation slot on a LIVE leader skips the
+scan decision altogether, so it never enters mode 'scan' and stays in
+formation (f75e50dc's "a fleet escort scans, then rejoins" is undone; spec:
+an escort beside a pod pilot for 60 s, never 'scan', within 150 px of its
+lead, no scan, no fine). The shared `offFormationBusiness` list in
+`npc_formation.ts` (which fixed the two-controllers tug-of-war) is kept,
+'scan' included. GUESS: an escort whose lead is gone (its leader entity
+left the world) is a lone interceptor again and scans (spec). Not
+changed: the lead (AI 3) never scanned in NovaJS either.
+docs/npc_behavior_gaps.md "Contraband scan: guesses to measure" 11
+updated; the lone-AI-4 control and a CrimeTol-10 fleet stay open.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/scan_{clean,pod}/*/` (`*-w-*.png`, `*-x-*.png`, `recording.mp4`).
 
 ### Escort cap, wave 23: the bar greys "Hire Escort" at six escorts, hired or captured, with no message; bay fighters do not count (2026-11-24)

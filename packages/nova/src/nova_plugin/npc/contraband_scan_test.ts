@@ -389,35 +389,57 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             expect(drift).toBeLessThan(100);
         });
 
-    it('a FLEET ESCORT peels off to scan, reaches the pilot and scans him, '
-        + 'then goes back to its slot instead of sitting (Matthew 2026-11-24, '
-        + 'Heraan: the Firebird "trying to scan" that never did)', async () => {
-            const { world, pilot, cutter, leader } = await scanWorld(
-                { fleetLeader: true });
+    it('a FLEET ESCORT does not scan: it stays in formation on its lead, '
+        + 'even beside a pilot carrying a ScanMask pod (Fleet escort scans, '
+        + 'wave 23)', async () => {
+            const { world, pilot, cutter, leader, scans } = await scanWorld(
+                { fleetLeader: true, pilot: { outfits: { [POD]: 1 } } });
             const npc = () => cutter.components.get(NpcComponent)!;
             const at = (ship: Entity) =>
                 ship.components.get(MovementStateComponent)!.position;
-            expect(npc().mode).toBe('scan');
-            // FormationSystem used to hold it on station while the scan
-            // arm flew it at the pilot: it never came within scan range.
-            // Now it closes at top speed like any interceptor: the pilot
-            // is 900 px off, a few seconds' run.
-            expect(runUntilScanned(world, pilot, 10 * 60)).toBeTrue();
-            // Its leader's business comes first: no sit (GUESS), back to
-            // its slot behind the leader within a few seconds.
-            run(world, 60);
-            expect(npc().mode).not.toBe('scan');
-            expect(npc().scanTarget).toBeUndefined();
-            expect(npc().scanSatOn).toBeUndefined();
-            run(world, 10 * 60);
-            expect(at(cutter).subtract(at(leader!)).length)
-                .toBeLessThan(150);
-            expect(at(cutter).subtract(at(pilot)).length)
-                .toBeGreaterThan(CONTRABAND_SIT_LEASH);
-            // And it is not drawn back to the scanned pilot.
+            // The reference fleet parked 10-40 px from the pod pilot for
+            // 10-15 s a visit, three visits: put the lead right beside him
+            // so the escort's slot is well inside scan range.
+            leader!.components.set(MovementStateComponent, {
+                ...leader!.components.get(MovementStateComponent)!,
+                position: new Position(850, 0),
+            });
+            let farthest = 0;
             const modes = new Set<string | undefined>();
-            run(world, 600, () => modes.add(npc().mode));
+            run(world, 60 * 60, () => {
+                modes.add(npc().mode);
+                if (world.resources.get(TimeResource)!.time > 10_000) {
+                    farthest = Math.max(farthest,
+                        at(cutter).subtract(at(leader!)).length);
+                }
+            });
             expect(modes.has('scan')).toBeFalse();
+            expect(npc().scanTarget).toBeUndefined();
+            // It held its slot behind the lead (the reference escorts sat
+            // 10-60 px off it) once it had formed up.
+            expect(farthest).toBeLessThan(150);
+            // No scan, no fine, no record change, no status line.
+            expect(pilot.components.has(ContrabandScannedComponent))
+                .toBeFalse();
+            expect(scans).toEqual([]);
+            expect(credits(pilot)).toBe(START_CREDITS);
+            expect(record(pilot)).toBe(0);
+        });
+
+    it('a fleet escort whose LEAD is gone is a lone interceptor again and '
+        + 'scans (GUESS: no reference run lost a lead)', async () => {
+            const { world, pilot, cutter, scans } = await scanWorld(
+                { fleetLeader: true, pilot: { outfits: { [POD]: 1 } } });
+            const npc = () => cutter.components.get(NpcComponent)!;
+            run(world, 120);
+            expect(npc().mode).not.toBe('scan');
+            world.entities.delete(FLEET_LEADER);
+            run(world, 2);
+            expect(npc().mode).toBe('scan');
+            expect(npc().scanTarget).toBe(PILOT);
+            expect(runUntilScanned(world, pilot, 10 * 60)).toBeTrue();
+            expect(scans.length).toBe(1);
+            expect(credits(pilot)).toBe(START_CREDITS - 500);
         });
 
     it('exactly one of the formation keeper and the NPC steering flies an '

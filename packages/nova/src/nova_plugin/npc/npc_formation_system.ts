@@ -65,8 +65,9 @@ export const FormationSystem = new System({
             // takes, for the same reason.
             return;
         }
-        // Engaged escorts fight (or go plundering, or scanning);
-        // FormationSystem only holds station. The same list as
+        // Engaged escorts fight (or go plundering; a fleet escort never
+        // scans, npc_decision.ts case 4); FormationSystem only holds
+        // station. The same list as
         // NpcSteeringSystem's (offFormationBusiness).
         if (npc && !escortCommand && offFormationBusiness(npc.mode)) {
             return;

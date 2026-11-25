@@ -324,15 +324,18 @@ sensible default, marked GUESS in the code, and wants a reference run:
     BUG fixed 2026-11-24: FormationSystem held a 'scan' escort on station
     while the scan arm flew it at the pilot, so it never came within
     150 px and swung about near its slot all visit (one exemption list,
-    npc_formation.ts `offFormationBusiness`, now serves both). GUESSES
-    since: a fleet escort scans like any interceptor (peels off at top
-    speed), and after the scan goes BACK TO ITS SLOT instead of sitting
-    on the ship (lone cutters sat, waves 16-19; nothing measured a fleet).
-    Reference run wanted: a kit flët (an AI 3 lead, two AI 4 escorts of a
-    ScanMask govt) in the govt's system, a clean pilot and a pod pilot
-    still beside the port as the fleet passes: do the escorts leave the
-    formation to scan, does the lead wait or scan, and after the scan do
-    the escorts sit on the pilot or rejoin the lead?
+    npc_formation.ts `offFormationBusiness`, now serves both, and is
+    kept). MEASURED since (R: "Fleet escort scans, wave 23", one run each,
+    applied 2026-11-24): a kit flët (AI 3 lead, two AI 4 escorts of a
+    ScanMask govt) parked on a clean pilot and on a pod pilot three times
+    each with the escorts 10-60 px from the lead: no escort left the
+    formation, the lead did not scan either, no message, no fine. So a
+    fleet escort with a live leader NEVER scans (npc_decision.ts case 4
+    skips the scan decision; it stays in formation). GUESSES left: an
+    escort whose lead is gone (destroyed, or left the system) scans as a
+    lone interceptor; the govt scans at all (no lone AI 4 of gövt 301 was
+    run as a control; wave 11's lone cutters scanned at CrimeTol 10, this
+    govt had CrimeTol 30000); a fleet of a CrimeTol-10 govt.
 
 ### Legal records per system: guesses to measure
 

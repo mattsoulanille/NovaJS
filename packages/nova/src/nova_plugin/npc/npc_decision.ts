@@ -983,19 +983,22 @@ export const NpcDecisionSystem = new System({
                 // still scans, then leaves on its clock below.
                 // A FLEET ESCORT (an AI 4 holding a formation slot on a live
                 // leader: a stock Heraan Firebird or Phoenix with its
-                // Aurora Cruiser) peels off to scan like any interceptor,
-                // but does not SIT on the ship afterwards: it goes back to
-                // its slot (GUESS, unmeasured: only lone cutters were seen
-                // to sit, reference waves 16-19; its leader's business
-                // comes first, as it does for a fleet's miner, which does
-                // not mine at all; docs/npc_behavior_gaps.md "Contraband
-                // scan: guesses to measure" 11).
+                // Aurora Cruiser) does NOT scan: it stays in formation
+                // (MEASURED, reference "Fleet escort scans, wave 23": a kit
+                // fleet's two AI 4 escorts parked 10-60 px from their AI 3
+                // lead beside a pilot carrying a ScanMask pod, three
+                // visits, no scan and no fine; its leader's business comes
+                // first, as it does for a fleet's miner, which does not
+                // mine at all). With its leader gone it is a lone
+                // interceptor again and scans (GUESS: no reference run
+                // lost a lead). docs/npc_behavior_gaps.md
+                // "Contraband scan: guesses to measure" 11.
                 const fleetEscort = formation !== undefined
                     && entities.has(formation.leader);
-                if (scans && govtData) {
+                if (scans && govtData && !fleetEscort) {
                     const hostileSet = new Set(hostiles.map(([u]) => u));
-                    const mayHold = !fleetEscort && (held
-                        || !npc.passingThrough || time.time < npc.departAt);
+                    const mayHold = held || !npc.passingThrough
+                        || time.time < npc.departAt;
                     const scanTarget = chooseScanTarget(npc.scanTarget,
                         scanCandidates.filter(([u]) => !hostileSet.has(u)),
                         govtData.scanMask, getEntity, gameData, mayHold,
