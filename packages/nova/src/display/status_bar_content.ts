@@ -359,6 +359,14 @@ export function plunderSelfDestructMessage(): string {
 }
 
 /**
+ * The status line when the hypergate map closes with Done and no pick: stock
+ * STR# 2002 one-based 50, verbatim (measured: reference "Wave-24 leftovers,
+ * wave 25", Kit Gate A1; the ship is left at rest at the gate, which plays
+ * its closing animation).
+ */
+export const HYPERGATE_JUMP_CANCELLED_MESSAGE = 'Hypergate jump cancelled.';
+
+/**
  * What the player is told when pirates board their disabled ship and take
  * a cut of their cash (gövt Flags 0x1000, "including the player").
  *

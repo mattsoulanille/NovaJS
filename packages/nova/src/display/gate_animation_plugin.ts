@@ -40,8 +40,10 @@ import { TargetShipBeepSystem } from "./ui_sound_triggers_plugin.js";
  *   appeared, opening and then working, after the `l` that cleared the
  *   ship, and after the gate map's Done with no pick it closed and vanished
  *   again. The brackets (baseSize) and the radar mark (planet data) do not
- *   read the sprite, so both stay. GUESS: the closing sequence plays before
- *   it vanishes (the shots were 2 s apart), as NovaJS always did.
+ *   read the sprite, so both stay. The closing sequence plays before it
+ *   vanishes, as NovaJS always did: MEASURED at 10 fps (reference
+ *   "Wave-24 leftovers, wave 25": after Done with no pick the frames shrink
+ *   inward for about 0.4-0.6 s, then the gate is gone).
  * - SELECTED: the opening sequence plays FORWARD; on reaching the last two
  *   frames it ALTERNATES between them (the "working" flicker).
  * - DESELECTED: the sequence plays BACKWARDS from wherever it is, back to

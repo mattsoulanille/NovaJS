@@ -332,7 +332,9 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
  * current gate's own, as arrows — and instead of plotting a jump route it
  * picks a destination (see {@link computeGateMapView}). Done with no pick
  * lifts the ship off at the gate, in the same system (measured, reference
- * "Gate map, wave 24"; client/transit.ts leaveGateMap).
+ * "Gate map, wave 24"; client/transit.ts leaveGateMap), and the status line
+ * says "Hypergate jump cancelled." (reference "Wave-24 leftovers, wave 25";
+ * display/gate_map_plugin.ts GateMapCancelledSystem).
  *
  * What it offers depends on the SERVER's `hypergateTransitivity` setting
  * (settings/settings.json, fetched through getSettings like controls.json):

@@ -4,6 +4,7 @@ import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SingletonComponent } from 'nova_ecs/world';
 import {
     ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
@@ -17,6 +18,8 @@ import {
     ResizeEvent, ScreenSize, screenCentre,
 } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
+import { HYPERGATE_JUMP_CANCELLED_MESSAGE } from './status_bar_content.js';
+import { StatusLineResource } from './status_message_plugin.js';
 
 /**
  * The hypergate map UI (display-side, player-local — like the spaceport).
@@ -86,6 +89,24 @@ const OpenGateMapSystem = new System({
     }
 });
 
+/**
+ * Done with no pick: the status line says "Hypergate jump cancelled." (STR#
+ * 2002 one-based 50, reference "Wave-24 leftovers, wave 25") as the ship
+ * lifts back off at the gate. No PlayerShipSelector: the docked ship is out
+ * of the world until the relaunch, and the gate map is the local player's.
+ */
+export const GateMapCancelledSystem: System = new System({
+    name: 'GateMapCancelled',
+    events: [LeaveGateMapEvent],
+    args: [LeaveGateMapEvent, StatusLineResource, TimeResource,
+        SingletonComponent] as const,
+    step({ destinationSpob }, statusLine, { time }) {
+        if (destinationSpob === null) {
+            statusLine.setMessage(HYPERGATE_JUMP_CANCELLED_MESSAGE, time);
+        }
+    },
+});
+
 const GateMapResizeSystem = new System({
     name: 'GateMapResize',
     events: [ResizeEvent],
@@ -122,6 +143,7 @@ export const GateMapPlugin: Plugin = {
         world.resources.set(GateMapUniverseResource, universe);
         world.addSystem(OpenGateMapSystem);
         world.addSystem(GateMapResizeSystem);
+        world.addSystem(GateMapCancelledSystem);
     },
     remove(world) {
         const gateMap = world.resources.get(GateMapResource);
@@ -135,6 +157,7 @@ export const GateMapPlugin: Plugin = {
         }
         world.removeSystem(OpenGateMapSystem);
         world.removeSystem(GateMapResizeSystem);
+        world.removeSystem(GateMapCancelledSystem);
         world.resources.delete(GateMapResource);
         world.resources.delete(GateMapUniverseResource);
     }
