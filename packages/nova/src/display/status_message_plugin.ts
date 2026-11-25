@@ -15,9 +15,12 @@ import { SingletonComponent } from "nova_ecs/world";
 import { DISTRESS_MESSAGES_STRING_TABLE } from "novadatainterface/string_table_data";
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
-import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
-import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
+import {
+    GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
+} from '../nova_plugin/player/index.js';
+import { Optional } from 'nova_ecs/optional';
+import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
+import { LandingBlockedEvent, LandingClearedEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
@@ -194,6 +197,25 @@ const ShowLandingBlockedMessage = new System({
             landingBlockedMessage(reason, isStation, stellarName, gateKind),
             time);
         emit(UiSoundEvent, { id: BEEP_CANT_DO });
+    },
+});
+
+// A hypergate's first `l` cleared the player: one of the three stock
+// clearance lines (status_bar_content.ts hypergateClearedMessage), the form
+// picked at random as the original seems to (three runs, three forms;
+// reference "Gate map, wave 27"). Math.random is fine here: the line is
+// this client's own status line and nothing in the simulation reads it.
+// No beep: nothing was refused.
+const ShowLandingClearedMessage = new System({
+    name: 'ShowLandingClearedMessage',
+    events: [LandingClearedEvent],
+    args: [LandingClearedEvent, StatusLineResource, TimeResource,
+        PlayerShipSelector, Optional(PlayerNamesComponent),
+        Optional(ShipDataComponent)] as const,
+    step(_cleared, statusLine, { time }, _player, names, shipData) {
+        const form = Math.floor(Math.random() * HYPERGATE_CLEARED_FORMS);
+        statusLine.setMessage(hypergateClearedMessage(form,
+            playerShipName(names, shipData?.name)), time);
     },
 });
 
@@ -508,6 +530,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(StatusLineResize);
         world.addSystem(DrawStatusMessage);
         world.addSystem(ShowLandingBlockedMessage);
+        world.addSystem(ShowLandingClearedMessage);
         world.addSystem(ShowBoardingBlockedMessage);
         world.addSystem(ShowBoardingRepelledMessage);
         world.addSystem(ShowPlunderSelfDestructMessage);
@@ -525,6 +548,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(StatusLineResize);
         world.removeSystem(DrawStatusMessage);
         world.removeSystem(ShowLandingBlockedMessage);
+        world.removeSystem(ShowLandingClearedMessage);
         world.removeSystem(ShowBoardingBlockedMessage);
         world.removeSystem(ShowBoardingRepelledMessage);
         world.removeSystem(ShowPlunderSelfDestructMessage);

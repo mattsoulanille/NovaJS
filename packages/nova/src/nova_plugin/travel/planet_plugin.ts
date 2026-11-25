@@ -129,6 +129,22 @@ export const LandingBlockedEvent =
     new EcsEvent<LandingBlocked>('LandingBlockedEvent');
 
 /**
+ * Emitted (targeted at the player's ship) when traffic control CLEARS the
+ * player's request: today only a working hypergate's first `l` (the press
+ * that targets it), answered by one of the stock clearance lines (STR# 2002
+ * one-based 91-93, "You are cleared for hypergate entry." etc.; measured:
+ * reference "Gate map, wave 27"). The same press at a gate that refuses
+ * the player emits LandingBlockedEvent 'denied' ("Hypergate usage denied.",
+ * wave 23's first `l` at HG-V01). Consumed display-side by the status line
+ * (status_message_plugin.ts), which picks the form. Never mutates the
+ * simulation.
+ */
+export const LandingClearedEventType = t.type({ gateKind: GateKindType });
+export type LandingCleared = t.TypeOf<typeof LandingClearedEventType>;
+export const LandingClearedEvent =
+    new EcsEvent<LandingCleared>('LandingClearedEvent');
+
+/**
  * Per-player temporary landing clearance bought with a bribe: the stellar's
  * NOVA ID (PlanetComponent.id, e.g. 'nova:133' — not the entity uuid, which
  * changes when a system is rebuilt) -> the simulation time the reprieve
@@ -161,6 +177,7 @@ export const StellarBribesComponent =
 export const STELLAR_BRIBE_MS = 120_000;
 
 registerSimulationBridgeEvent({ event: LandingBlockedEvent });
+registerSimulationBridgeEvent({ event: LandingClearedEvent });
 
 /**
  * The landing speed gate: a ship lands only below 20 px/s (speed², strict).
@@ -387,6 +404,14 @@ const AttemptLandingSystem = new System({
             return;
         }
 
+        // Whether this stellar's traffic control clears the player now.
+        const cleared = (id: string, planetData: PlanetData) =>
+            stellarClearanceFor({
+                planetData, gameData, govts, records, shipData, outfits,
+                bribes, ranks, missions,
+                planetId: id, systemId, now: time?.time ?? 0,
+            }).cleared;
+
         // The landing window, then is-it-a-port, then clearance, against one
         // stellar: land, or emit the original's refusal.
         const attempt = (uuid: string, planetPosition: Position,
@@ -424,11 +449,7 @@ const AttemptLandingSystem = new System({
                     stellarName: displayName(planetData.name),
                     ...gateKind,
                 }, [playerUuid]);
-            } else if (planetData && !stellarClearanceFor({
-                planetData, gameData, govts, records, shipData, outfits,
-                bribes, ranks, missions,
-                planetId: id, systemId, now: time?.time ?? 0,
-            }).cleared) {
+            } else if (planetData && !cleared(id, planetData)) {
                 // CLEARANCE. A port that is shut to this pilot answers
                 // "Landing request denied." (STR# 2002 index 82; index 81
                 // for a station), which is all the original says — it does
@@ -508,6 +529,27 @@ const AttemptLandingSystem = new System({
         // Nav System Off).
         if (closest && closest[3]?.gate?.kind === 'wormhole') {
             attempt(...closest);
+        }
+        // A HYPERGATE's first `l` is its clearance step: traffic control
+        // answers at once, wherever the ship is (measured: reference "Gate
+        // map, wave 27", "You are cleared for hypergate entry." on the gate
+        // at rest; wave 23, "Hypergate usage denied." at the stock HG-V01,
+        // MinStatus 32767). The window applies from the second `l`, as
+        // before ("Gate approach lines, wave 25": the too-far / too-fast
+        // lines came after the clearance line).
+        const gateData = closest?.[3];
+        if (closest && gateData?.gate?.kind === 'hypergate') {
+            if (cleared(closest[2], gateData)) {
+                emit(LandingClearedEvent, { gateKind: 'hypergate' },
+                    [playerUuid]);
+            } else {
+                emit(LandingBlockedEvent, {
+                    reason: 'denied',
+                    isStation: gateData.flags.isStation,
+                    stellarName: displayName(gateData.name),
+                    gateKind: 'hypergate',
+                }, [playerUuid]);
+            }
         }
     }
 });
@@ -652,6 +694,8 @@ export const PlanetPlugin: Plugin = {
         world.resources.get(SerializerResource)?.addEvent(LandEvent, LandEventType);
         world.resources.get(SerializerResource)?.addEvent(
             LandingBlockedEvent, LandingBlockedEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            LandingClearedEvent, LandingClearedEventType);
         deltaMaker.addComponent(PlanetComponent, {
             componentType: PlanetType,
         });

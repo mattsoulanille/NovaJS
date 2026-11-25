@@ -17,7 +17,8 @@ import { applyControlEvents } from '../player/index.js';
 import {
     applySetPlanetTarget, inLandingZone, LAND_RANGE_CAP,
     LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
-    LandingBlockedEvent, landingDistance, landingRange, PlanetComponent,
+    LandingBlockedEvent, LandingClearedEvent, landingDistance, landingRange,
+    PlanetComponent,
     PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
     stellarLandingRange,
 } from './planet_plugin.js';
@@ -28,7 +29,9 @@ import { applyHail } from '../encounters/index.js';
 import { CreditsComponent } from '../player/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { landable } from '../core/index.js';
-import { clearanceDeniedMessage, landingBlockedMessage } from '../../display/status_bar_content.js';
+import {
+    clearanceDeniedMessage, hypergateClearedMessage, landingBlockedMessage,
+} from '../../display/status_bar_content.js';
 
 // Thessaly Reach holds four stellars, in this order: Port Amberline (a
 // full-service port anyone may land on), the Sallow Moon (landable,
@@ -604,6 +607,30 @@ describe('AttemptLandingSystem landing clearance', () => {
             .toEqual('Hypergate usage denied.');
     }, 30_000);
 
+    // ... and wave 23's `l` there was the FIRST one (vnp/*/03-l1.png): the
+    // press that targets a hypergate answers with its clearance at once.
+    it('refuses a working hypergate on the first `l`', async () => {
+        const { world, ship } = await makeHarness(getIntegrationGameData(),
+            'nova:427');
+        const gate = stellars(world).find(p => world.entities.get(p.uuid)
+            ?.components.get(PlanetComponent)?.id === 'nova:1400')!;
+        expect(gate).toBeDefined();
+        ship.components.get(PlanetTargetComponent)!.target = undefined;
+        place(ship, gate.position);
+        const cleared: unknown[] = [];
+        world.events.get(LandingClearedEvent)
+            .subscribe(({ data }) => cleared.push(data));
+
+        const { lands, blocked } = pressLand(world);
+
+        expect(ship.components.get(PlanetTargetComponent)!.target)
+            .toEqual(gate.uuid);
+        expect(lands).toEqual([]);
+        expect(cleared).toEqual([]);
+        expect(blocked.map(b => [b.reason, b.gateKind]))
+            .toEqual([['denied', 'hypergate']]);
+    }, 30_000);
+
     // Stays on REAL data (Sol): the exemption is about the STOCK
     // hypergates' MinStatus 32767, a value the synthetic scenario has no
     // stellar for — its gates are ordinary MinStatus -32767 rings.
@@ -903,8 +930,12 @@ describe('the gate approach lines', () => {
         expect(lands.map(l => l.uuid)).toEqual([gate.uuid]);
     }, 30_000);
 
-    it('only selects a hypergate on the first `l` (its clearance step), '
-        + 'even out of the window', async () => {
+    // Measured: reference "Gate map, wave 27", the first `l` at Kit Gate N1
+    // (on the gate, at rest) said "You are cleared for hypergate entry.";
+    // the window lines come from the second `l` ("Gate approach lines, wave
+    // 25").
+    it('answers a hypergate\'s first `l` with its clearance, never the '
+        + 'window, and does not go through', async () => {
             const { world, ship, gate } = await atGate(
                 SYNTHETIC.systems.kestrel, KESTREL_GATE);
             for (const [position, velocity] of [
@@ -915,13 +946,42 @@ describe('the gate approach lines', () => {
             ] as const) {
                 ship.components.get(PlanetTargetComponent)!.target = undefined;
                 place(ship, position, velocity);
+                const cleared: { gateKind: string, entities?: unknown }[] = [];
+                const sub = world.events.get(LandingClearedEvent)
+                    .subscribe(({ data, entities }) =>
+                        cleared.push({ ...data, entities }));
 
                 const { lands, blocked } = pressLand(world);
+                sub.unsubscribe();
 
                 expect(ship.components.get(PlanetTargetComponent)!.target)
                     .toEqual(gate.uuid);
                 expect(lands).toEqual([]);
                 expect(blocked).toEqual([]);
+                expect(cleared).toEqual([
+                    { gateKind: 'hypergate', entities: [SHIP_UUID] }]);
             }
+            // The second `l` is the window's, with no clearance line.
+            const cleared: unknown[] = [];
+            const sub = world.events.get(LandingClearedEvent)
+                .subscribe(({ data }) => cleared.push(data));
+            expect(pressLand(world).blocked.map(b => b.reason))
+                .toEqual(['tooFast']);
+            sub.unsubscribe();
+            expect(cleared).toEqual([]);
         }, 30_000);
+
+    it('words the clearance as STR# 2002 #91-93', () => {
+        expect(hypergateClearedMessage(2, 'Lancer'))
+            .toBe('You are cleared for hypergate entry.');
+        expect(hypergateClearedMessage(0, 'Lancer'))
+            .toBe('Cleared for hypergate entry, Lancer.');
+        expect(hypergateClearedMessage(1, 'Lancer'))
+            .toBe("Lancer, you're cleared for hypergate entry.");
+        // No name to put in a named form: the nameless one.
+        expect(hypergateClearedMessage(0, undefined))
+            .toBe('You are cleared for hypergate entry.');
+        expect(hypergateClearedMessage(1, ''))
+            .toBe('You are cleared for hypergate entry.');
+    });
 });

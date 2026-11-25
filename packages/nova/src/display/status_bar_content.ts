@@ -366,6 +366,32 @@ export function plunderSelfDestructMessage(): string {
  */
 export const HYPERGATE_JUMP_CANCELLED_MESSAGE = 'Hypergate jump cancelled.';
 
+/** How many forms {@link hypergateClearedMessage} has. */
+export const HYPERGATE_CLEARED_FORMS = 3;
+
+/**
+ * Traffic control's answer to a hypergate's first `l` when it clears the
+ * player: one of stock STR# 2002 one-based 91-93 (measured: reference "Gate
+ * map, wave 27", #93 at Kit Gate N1; wave 24 saw #91 and #92 at Kit Gate A1
+ * / C2, three runs, three forms, so the pick looks random):
+ *
+ *   91 "Cleared for hypergate entry, <ship>."
+ *   92 "<ship>, you're cleared for hypergate entry."
+ *   93 "You are cleared for hypergate entry."
+ *
+ * `form` is 0..2 for 91..93. <ship> is the player's ship's name; with none
+ * (or a blank one) the nameless #93 stands in for the named forms.
+ */
+export function hypergateClearedMessage(form: number,
+    shipName?: string): string {
+    if (!shipName || form === 2) {
+        return 'You are cleared for hypergate entry.';
+    }
+    return form === 0
+        ? `Cleared for hypergate entry, ${shipName}.`
+        : `${shipName}, you're cleared for hypergate entry.`;
+}
+
 /**
  * What the player is told when pirates board their disabled ship and take
  * a cut of their cash (gövt Flags 0x1000, "including the player").
