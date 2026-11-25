@@ -33,8 +33,15 @@ import { TargetShipBeepSystem } from "./ui_sound_triggers_plugin.js";
  * the gate stands open.
  *
  * Behavior (matching the original game):
- * - IDLE: closed and un-animated (frame 0, frozen) while no ship has the
- *   gate selected as its landing target and no arrival is due.
+ * - IDLE: closed and NOT DRAWN while no ship has the gate selected as its
+ *   landing target and no arrival is due. MEASURED (reference "Hypergates
+ *   and the radar, wave 24"): at the start of every gate run, and on stock
+ *   HG-V01, the gate was not drawn (the target brackets framed nothing); it
+ *   appeared, opening and then working, after the `l` that cleared the
+ *   ship, and after the gate map's Done with no pick it closed and vanished
+ *   again. The brackets (baseSize) and the radar mark (planet data) do not
+ *   read the sprite, so both stay. GUESS: the closing sequence plays before
+ *   it vanishes (the shots were 2 s apart), as NovaJS always did.
  * - SELECTED: the opening sequence plays FORWARD; on reaching the last two
  *   frames it ALTERNATES between them (the "working" flicker).
  * - DESELECTED: the sequence plays BACKWARDS from wherever it is, back to
@@ -142,6 +149,16 @@ export function stepGateAnimation(state: GateAnimationState, wantOpen: boolean,
             }
             break;
     }
+}
+
+/**
+ * Whether an animated gate is drawn at all: not while it is IDLE (closed),
+ * only while it opens, works or closes (see the module comment). A
+ * single-frame gate never reaches GateAnimationSystem's sprite pass, so a
+ * plug-in's static gate art stays drawn (GUESS: nothing measured one).
+ */
+export function gateDrawn(state: Pick<GateAnimationState, 'mode'>): boolean {
+    return state.mode !== 'closed';
 }
 
 export const GateAnimationComponent =
@@ -290,9 +307,12 @@ export const GateAnimationSystem = new System({
         stepGateAnimation(state, wantOpen, frames, time.time);
 
         // Override the frame ObjectDrawSystem's rotation pass picked (planets
-        // have a 1-frame 'normal' set, which pins frame 0 every tick).
+        // have a 1-frame 'normal' set, which pins frame 0 every tick), and
+        // hide the idle gate (gateDrawn).
+        const drawn = gateDrawn(state);
         for (const sprite of sprites) {
             sprite.frame = Math.min(frames - 1, state.frame);
+            sprite.pixiSprite.visible = drawn;
         }
     },
     // GateAnimationProvider is a #156 pin (shared: *).

@@ -21,7 +21,7 @@ import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import {
     GateAnimationComponent, GateAnimationPlugin, GateAnimationState,
     GateAnticipationResource, GateArrivalAnticipationEvent, GATE_FRAME_MS,
-    stepGateAnimation,
+    gateDrawn, stepGateAnimation,
 } from "./gate_animation_plugin.js";
 
 const FRAMES = 42;
@@ -155,6 +155,13 @@ describe('stepGateAnimation', () => {
         expect(state.frame).toBe(0);
     });
 
+    it('draws the gate only while it is not closed', () => {
+        expect(gateDrawn({ mode: 'closed' })).toBeFalse();
+        for (const mode of ['opening', 'flicker', 'closing'] as const) {
+            expect(gateDrawn({ mode })).withContext(mode).toBeTrue();
+        }
+    });
+
     it('does nothing for single-frame (static) gates', () => {
         const state = makeState();
         stepGateAnimation(state, true, 1, GATE_FRAME_MS);
@@ -172,7 +179,8 @@ describe('GateAnimationSystem triggers', () => {
     const GATE_UUID = 'planet gate';
     let world: World;
     let time: { time: number, delta_ms: number, delta_s: number, frame: number };
-    let sprite: { frames: number, frame: number };
+    let sprite: { frames: number, frame: number,
+        pixiSprite: { visible: boolean } };
 
     beforeEach(async () => {
         world = new World('gate animation test');
@@ -180,7 +188,7 @@ describe('GateAnimationSystem triggers', () => {
         world.resources.set(TimeResource, time);
         await world.addPlugin(GateAnimationPlugin);
 
-        sprite = { frames: FRAMES, frame: 0 };
+        sprite = { frames: FRAMES, frame: 0, pixiSprite: { visible: true } };
         const gate = new Entity('gate');
         gate.components.set(PlanetComponent, { id: 'nova:1401' });
         gate.components.set(PlanetDataComponent, {
@@ -207,9 +215,11 @@ describe('GateAnimationSystem triggers', () => {
             .get(GateAnimationComponent)!;
     }
 
-    it('stays closed with no selection and no arrival', () => {
+    it('stays closed, and NOT DRAWN, with no selection and no arrival '
+        + '(reference "Hypergates and the radar, wave 24")', () => {
         for (let i = 0; i < 10; i++) {
             step();
+            expect(sprite.pixiSprite.visible).toBeFalse();
         }
         expect(gateState().mode).toBe('closed');
         expect(sprite.frame).toBe(0);
@@ -225,16 +235,22 @@ describe('GateAnimationSystem triggers', () => {
         step();
         expect(gateState().mode).toBe('opening');
         expect(sprite.frame).toBeGreaterThan(0);
+        // Drawn from the moment it starts opening...
+        expect(sprite.pixiSprite.visible).toBeTrue();
 
         // Deselect: it reverses back down to closed.
         ship.components.set(PlanetTargetComponent, { target: undefined });
         step();
         expect(gateState().mode).toBe('closing');
+        // ...through the closing sequence (GUESS)...
+        expect(sprite.pixiSprite.visible).toBeTrue();
         for (let i = 0; i < FRAMES + 2; i++) {
             step();
         }
         expect(gateState().mode).toBe('closed');
         expect(sprite.frame).toBe(0);
+        // ...and gone again once it is closed.
+        expect(sprite.pixiSprite.visible).toBeFalse();
     });
 
     it('ignores a PLAYER without access to a locked gate, opens for one '
