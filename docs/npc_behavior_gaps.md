@@ -117,7 +117,7 @@ traders, wave 15").
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Done** (13567336, ruling #376; per-system records since ruling #380): N/nova_plugin/reputation/local_law.ts. A govt enforces where it owns the system, is allied with the owner either way, or is nosy; it attacks when the player's record IN THE CURRENT SYSTEM is below its own CrimeTol (R: "A14", "A14 wave 5": all 21 cells, c2 included). | — | (done) |
 | **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). MEASURED in "A14 wave 18" (NovaJS already matched; comments updated): a disable alone spreads like a kill (-400 / -260 / -65), a crime inside an unowned system is charged there by the quarter rule at 0 jumps (-600), and the map shows a selected destination's own record. | (done) |
 | **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Done (2026-11-24)**, to "P1 waves 14-16" (R): a NON-MISSION trader (AI 1/2) hit in an attack by an NPC that is not on a player's side sends "<ship name>: <random STR# 5003 line>" to the status line of every player in the system, at most once per 8 s per ship (the life of one line), never when its govt sets Flags2 0x0008 or its hull inherits it. Mission ships never call (wave 16: seven silent mission victims). N/nova_plugin/npc/distress.ts (rules, DistressCallEvent), NpcAggressionSystem (the trigger and the PRNG draw), N/display/status_message_plugin.ts `ShowDistressCallMessage` (the line; 8 s, then cleared at once, no fade). **Nobody answers a call** (MEASURED, wave 16): the help comes from the alliance, call or no call: the victim's own govt's warships join against its NPC attacker at once, an allied govt's after 20 s (N/nova_plugin/npc/allied_defenders.ts; unrelated warships and police, nosy or not, ignore it). The player's own victims never call where no fleet answers: measured in five runs (R "P1 wave 15", finding 1; pinned in 9e56b637); in a system with a reinforcement fleet, a trader victim that CALLS it sends its line with the call (R "R19 reinforcement fleets, wave 21"; applied 2026-11-24, N/nova_plugin/spawn/reinforcements.ts). | Whether AI 4s of the own or an allied govt defend (GUESS: yes); the defenders' range (none) and the ally's delay (one run). Guesses below. | (done) |
-| **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; gövt MaxOdds B:1005-1018, MediumName B:1130-1132; oütf ModType 44 B:1924-1930; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Done, third pass (2026-11-24),** to R: "R19 reinforcement fleets, wave 19", "..., wave 20", "..., wave 21" and "..., wave 22" (fourth pass: a trader victim, AI 1 / AI 2, calls only when the shooter is within 600 px, a GUESS between the measured 475 and 700; speed plays no part; the call sends no distress line) and "R19 wave 24" (an AI 3 victim never calls: three of three, applied 2026-11-25). N/nova_plugin/spawn/reinforcements.ts. A PLAYER's hit (or his flock's) on a non-disabled, non-anchored (hull Speed > 0) NPC of the fleet's govt or an ally calls the fleet when the odds exceed the govt's MaxOdds: the caller's side's Strength sum over every non-disabled NPC of the govt's side in the system, each at 30-100% by shield, read after the hit (`ReinforcementCallSystem`; measured: 100 against two 50s calls it at the first hit, 1 does not). An NPC's hit never does; nothing calls it on a player's behalf (ränk 0x0400 included, measured). Once per system per game day (ReinfIntrval 0 or 1), else every ReinfIntrval days: the day is kept per pilot per system (player/reinforcement_calls.ts, saved with the pilot as `reinforcementCalls`), and a call stamps only the caller (Matthew's ruling 2026-11-24: the day is private to each player). ReinfTime / 39 s later (no cap) the whole flët comes in 1,800 px from the VICTIM's position at the call, heading there (`ReinforcementArrivalSystem`), unless the victim has left the system (jumped, landed, destroyed) by then (a GUESS since wave 21), and every player hears "Sensors detect <MediumName> reinforcement fleet approaching." (STR# 2002 306 / 307, N/display/status_message_plugin.ts). It stays for the visit (SystemHold 'reinforcement'), is not traffic (`trafficCount`), and goes for the caller when an NPC of its side still holds him as its aggressor. A pilot in the system carrying an oütf ModType 44 for the govt's class (or -1) stops calls. 344 of 545 stock systems have one. | The **guesses** below ("Reinforcement fleets: guesses to measure"). | (done) |
+| **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; gövt MaxOdds B:1005-1018, MediumName B:1130-1132; oütf ModType 44 B:1924-1930; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Done, third pass (2026-11-24),** to R: "R19 reinforcement fleets, wave 19", "..., wave 20", "..., wave 21" and "..., wave 22" (fourth pass: a trader victim, AI 1 / AI 2, calls only when the shooter is within 600 px, a GUESS between the measured 475 and 700; speed plays no part; the call sends no distress line) and "R19 wave 24" (an AI 3 victim never calls, applied 2026-11-25; withdrawn by "R19 wave 26": an ARMED AI 3 victim calls from near and far, applied 2026-11-25) and "R19 arrival centre, wave 26" (the fleet comes in around the SYSTEM'S CENTRE; an NPC of the fleet's side ATTACKING the player calls it with no hit; applied 2026-11-25). N/nova_plugin/spawn/reinforcements.ts. A PLAYER's hit (or his flock's) on a non-disabled, non-anchored (hull Speed > 0) NPC of the fleet's govt or an ally, or such an NPC STARTING an attack on a player's ship (or his flock's; `ReinforcementAttackCallSystem` off NpcDecisionSystem's `NpcAttackStartEvent`, the trigger a GUESS), calls the fleet when the odds exceed the govt's MaxOdds: the caller's side's Strength sum over every non-disabled NPC of the govt's side in the system, each at 30-100% by shield, read after the hit (`ReinforcementCallSystem`; measured: 100 against two 50s calls it at the first hit, 1 does not). An NPC's hit never does; nothing calls it on a player's behalf (ränk 0x0400 included, measured). Once per system per game day (ReinfIntrval 0 or 1), else every ReinfIntrval days: the day is kept per pilot per system (player/reinforcement_calls.ts, saved with the pilot as `reinforcementCalls`), and a call stamps only the caller (Matthew's ruling 2026-11-24: the day is private to each player). ReinfTime / 39 s later (no cap) the whole flët comes in 1,800 px from the SYSTEM'S CENTRE, heading for it (`ReinforcementArrivalSystem`; medium confidence, two runs), unless the victim (the NPC hit, or the attacker) has left the system (jumped, landed, destroyed) by then (a GUESS), and every player hears "Sensors detect <MediumName> reinforcement fleet approaching." (STR# 2002 306 / 307, N/display/status_message_plugin.ts). It stays for the visit (SystemHold 'reinforcement'), is not traffic (`trafficCount`), and goes for the caller when an NPC of its side still holds him as its aggressor. A pilot in the system carrying an oütf ModType 44 for the govt's class (or -1) stops calls. 344 of 545 stock systems have one. | The **guesses** below ("Reinforcement fleets: guesses to measure"). | (done) |
 | **Planet defence fleets and tribute** (spöb DefenseDude/DefCount, in waves) | B:2823-2836 | **Parsed only:** D/planet_data.ts:34-40 (tracker #353). 289 of 411 stock stellars have one; their düdes are mostly AI 3 (16), some AI 4 (4). | R18 in the catalogue. | L |
 
 ### Traffic, trading, landing
@@ -513,9 +513,12 @@ ReinfTimes, ReinfIntrval 2, an ally as the victim, the inhibitor, where
 the fleet comes in, anchored and departing victims; "..., wave 21"
 paired an AI 1 victim's call with its distress line and found slow AI 1
 hulls never calling; "..., wave 22" found both were the shooter's
-DISTANCE (a trader calls from near only) and the line a separate chance.
-Applied in N/nova_plugin/spawn/reinforcements.ts (wave-20, -21 and -22
-fixes 2026-11-24); what is still a GUESS there is marked below:
+DISTANCE (a trader calls from near only) and the line a separate chance;
+"R19 wave 26" found an armed AI 3 victim calling and "R19 arrival centre,
+wave 26" the fleet coming in around the system's centre and a call with
+no hit. Applied in N/nova_plugin/spawn/reinforcements.ts (wave-20, -21
+and -22 fixes 2026-11-24, wave-24 and -26 fixes 2026-11-25); what is
+still a GUESS there is marked below:
 
 1. **The threshold:** MEASURED (wave 20: ten of eleven points fit, the
    player's Strength 100 / 300 against S50-S400 at 0-90% shield): the
@@ -544,15 +547,20 @@ fixes 2026-11-24); what is still a GUESS there is marked below:
    present fleet's ships counting among the govt's friends.
 6. **Escorts:** a hit by the player's flock counts as his.
 7. **Hulks:** a hit on a disabled ship calls nothing.
-8. **Where it comes in:** 1,800 px from the VICTIM's position at the
-   call on a random bearing, heading there at the lead's top speed
-   (applied 2026-11-24, replacing "around the player"). MEASURED: not
-   around the player (none came within 2,750 px of a player 600+ px from
-   the victim and the port); 1,770-1,960 px out on random bearings. GUESS:
-   the victim rather than the system's centre (they were together in
-   every run: AI 4 victims hold their station by the port), its position
-   at the call rather than at the arrival, and the kinematics. To
-   measure: an AI 1 victim far from the port with a short ReinfTime.
+8. **Where it comes in:** 1,800 px from the SYSTEM'S CENTRE on a
+   random bearing, heading for the centre at the lead's top speed
+   (applied 2026-11-25, replacing "around the victim's position at the
+   call", itself replacing "around the player" on 2026-11-24). MEASURED,
+   medium confidence (R: "R19 arrival centre, wave 26", two runs): with
+   the victim and the player beside a port 3,000 px east of the centre,
+   the fleet's first blip was 1,650-1,900 px (`farm3`) and 2,600+ px
+   (`farm2`) from them, on the centre's side, about 1,500-1,800 px from
+   the centre, and in `farm3` it first moved toward the centre, then
+   turned for the player. Not around the player (wave 20: none came
+   within 2,750 px of a player 600+ px from the victim and the port);
+   1,770-1,960 px out on random bearings when the victim was at the
+   centre. GUESS: the 1,800 px (the direct read was 1,500-1,650 px from
+   the centre) and the speed.
 9. **Disposition:** each fleet ship takes the caller as its aggressor
    when some NPC of the govt's side still holds him (or his flock) as
    ITS aggressor; else its govt's politics decide. MEASURED for the
@@ -576,14 +584,16 @@ fixes 2026-11-24); what is still a GUESS there is marked below:
     hull has Speed 0 never calls (its AI does not run). Applied
     2026-11-24; no stock hull has Speed 0.
 16. **A victim that leaves:** a pending call is cancelled when the victim
-    is no longer in the system at the arrival (jumped out, landed,
-    destroyed or dying), the call being the victim's own. A GUESS with NO
-    supporting run: wave 20's one run (an AI 1 victim jumped out 10.4 s
-    after the hit, ReinfTime 600, no fleet) was reread in R: "R19
-    reinforcement fleets, wave 21" as no call at all (a slow AI 1 hull,
-    which never called even when it stayed 60-90 s). Kept, since it costs
-    nothing while no victim leaves. The caller's day stamp stays spent
-    either way. Applied 2026-11-24.
+    (the NPC hit, or the attacker of item 19) is no longer in the system
+    at the arrival (jumped out, landed, destroyed or dying), the call
+    being the victim's own. A GUESS: wave 20's one run (an AI 1 victim
+    jumped out 10.4 s after the hit, ReinfTime 600, no fleet) was reread
+    in R: "R19 reinforcement fleets, wave 21" as no call at all (hit from
+    far, wave 22). Since wave 26 (item 18) it is what keeps the UNARMED AI
+    3 victims of waves 22-24, gone within about 2-10 s of the hit, from
+    getting a fleet: those runs fit it, and fit "an unarmed AI 3 never
+    calls" equally. The caller's day stamp stays spent either way.
+    Applied 2026-11-24.
 17. **The caller's distress line: NOT the call** (wave 22, finding 3:
     seven near calls by AI 1, 2 and 4 came with no line, and a far hit
     drew "We're being attacked! Someone please help us!" with no fleet;
@@ -604,15 +614,36 @@ fixes 2026-11-24); what is still a GUESS there is marked below:
     own distance for its hit) is a GUESS too. AI 4 victims have no
     range (called from 1,600+ px once, wave 21, and from 40 px, wave 22).
     Speed and day are not factors (the old "KNOWN MISMATCH" is closed).
-    **AI 3 victims never call** (R: "R19 wave 24", applied 2026-11-25):
-    three of three AI 3 victims hit from 57-90 px (wave 22's one, wave
-    24's two) left within about 2-10 s with no fleet, no "Sensors
-    detect" and no distress line. MEASURED: no call; GUESS: that it is
-    "never" rather than "the call goes with the victim when it leaves"
-    (these runs cannot tell them apart, and the cancel of item 16 is
-    itself unsupported), and for an armed AI 3 that stays and fights. To
-    measure: a point inside 475-700 (e.g. 600), an escort's hit, an AI 3
-    victim that cannot leave.
+    **AI 3 victims call like AI 4, at any range** (R: "R19 wave 26",
+    applied 2026-11-25): an ARMED AI 3 victim that stayed and fought
+    called three of three, from 86 px, 89 px and about 1,100 px, with the
+    usual delay (high confidence for the call, medium for the range: one
+    far point). This withdraws wave 24's "an AI 3 victim never calls"
+    (0319b786): its three victims (wave 22's one, wave 24's two) were
+    the UNARMED mobile S50, hit from 57-90 px and gone within about 2-10
+    s, and are now left to item 16's cancel (GUESS: or an unarmed AI 3
+    never calls; both fit). To measure: a point inside 475-700 (e.g.
+    600), an escort's hit, an unarmed AI 3 victim that cannot leave.
+19. **A call with no hit: an NPC of the fleet's side attacking the
+    player** (R: "R19 arrival centre, wave 26", finding 2, medium
+    confidence: twice the line came ReinfTime 150's delay after the
+    take-off with an AI 4 mïsn ShipBehav 0 guard attacking beside the
+    player, once with the player never firing). Applied 2026-11-25
+    (`ReinforcementAttackCallSystem`): when NpcDecisionSystem puts an NPC
+    into 'attack' on a ship it was not already attacking
+    (`NpcAttackStartEvent`, npc/npc_decision.ts `engage`), and that ship
+    is a player's or his flock's, the call is checked exactly as for a
+    hit, the attacker standing in for the victim: same side (the fleet's
+    govt or an ally, not disabled, not anchored, not in a player's
+    flock), odds, inhibitor, pending call and per-pilot daily cooldown,
+    and the trader range measured from the attacked ship. GUESSES: the
+    trigger is the attack's START, not the first shot (the measured call
+    followed the take-off by the bare delay, the earliest reading); each
+    new attack checks once, and re-deciding to keep fighting the same
+    ship does not; an attack on the player's escort counts as on the
+    player (as an escort's hit); an ally's attacker counts; the trader
+    range for an attacking AI 2. To measure: an attacker that reaches the
+    player only later (start vs first shot), an attack on an escort.
 
 ### Hull AI flags and NPC cloaking: guesses to measure
 

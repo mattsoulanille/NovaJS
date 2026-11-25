@@ -19,8 +19,8 @@ import { GovtComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
 import {
-    DistressCallEvent, DistressCallEventData, NpcComponent,
-    SystemHoldComponent,
+    DistressCallEvent, DistressCallEventData, NpcAttackStartEvent,
+    NpcAttackStartEventData, NpcComponent, SystemHoldComponent,
 } from '../npc/index.js';
 import { extractSaveData, restorePlayerState, SaveData } from '../pilot/index.js';
 import {
@@ -35,8 +35,8 @@ import {
 import { completeEntity } from './entity_data_loader.js';
 import { trafficCount } from './npc_spawn_plugin.js';
 import {
-    inhibitsReinforcements, REINFORCEMENT_ARRIVAL_DISTANCE,
-    REINFORCEMENT_FRAMES_PER_SECOND, REINFORCEMENT_LINE_PREFIX_INDEX,
+    inhibitsReinforcements, REINFORCEMENT_ARRIVAL_CENTER,
+    REINFORCEMENT_ARRIVAL_DISTANCE, REINFORCEMENT_FRAMES_PER_SECOND, REINFORCEMENT_LINE_PREFIX_INDEX,
     REINFORCEMENT_LINE_SUFFIX_INDEX, REINFORCEMENT_TRADER_CALL_RANGE,
     ReinforcementArrivalEvent, ReinforcementArrivalEventData,
     reinforcementArrivalMessage, reinforcementArrivalState,
@@ -55,12 +55,15 @@ import {
  * of OWNER; two Strength-50 traders of OWNER sit by the player. A
  * Strength-100 player's first hit (3000 of a 30000 shield) calls the fleet;
  * a Strength-1 player's does not; an NPC's never does. Wave 20: the delay
- * is ReinfTime / 39 s, the fleet comes in around the victim (not the
- * player), an anchored victim never calls, and a victim that leaves before
+ * is ReinfTime / 39 s, the fleet does not come to the player, an
+ * anchored victim never calls, and a victim that leaves before
  * the arrival takes the call with it (a GUESS since wave 21). Wave 22: a
  * trader victim (AI 1 / AI 2) calls only when hit from near (600 px, a
  * GUESS between 475 that called and 700 that did not), whatever its speed,
- * and the call sends no distress line.
+ * and the call sends no distress line. Wave 26: an ARMED AI 3 victim calls
+ * from near and far, the fleet comes in around the SYSTEM'S CENTRE, and an
+ * NPC of the fleet's side that starts attacking the player calls it with
+ * no hit at all (the trigger a GUESS).
  */
 
 const SYSTEM = 'test:system';
@@ -200,7 +203,7 @@ describe('reinforcement rules', () => {
         });
 
     it('a trader calls only from near: 475 px yes, 700 no (MEASURED, wave '
-        + '22), 600 the GUESS between; AI 4 from anywhere, AI 3 never', () => {
+        + '22), 600 the GUESS between; AI 3 and AI 4 from anywhere', () => {
             expect(REINFORCEMENT_TRADER_CALL_RANGE).toBe(600);
             const sq = (d: number) => d * d;
             for (const aiType of [1, 2]) {
@@ -218,12 +221,12 @@ describe('reinforcement rules', () => {
             // Wave 21's AI 4 call came from 1,600+ px.
             expect(reinforcementCallInRange(4, sq(1600))).toBeTrue();
             expect(reinforcementCallInRange(4, undefined)).toBeTrue();
-            // Wave 24: three of three AI 3 victims hit from 57-90 px never
-            // called (GUESS over "the call left with the victim").
-            for (const distance of [0, 57, 90, 1600]) {
-                expect(reinforcementCallInRange(3, sq(distance))).toBeFalse();
+            // Wave 26: an armed AI 3 victim called from 86 px, 89 px and
+            // about 1,100 px (wave 24's "never" withdrawn).
+            for (const distance of [0, 86, 89, 1125, 1600]) {
+                expect(reinforcementCallInRange(3, sq(distance))).toBeTrue();
             }
-            expect(reinforcementCallInRange(3, undefined)).toBeFalse();
+            expect(reinforcementCallInRange(3, undefined)).toBeTrue();
         });
 
     it('the line: "Sensors detect <MediumName> reinforcement fleet '
@@ -240,6 +243,11 @@ describe('reinforcement rules', () => {
             // A scenario without the strings: the Bible's wording.
             expect(reinforcementArrivalMessage([], 'Federation')).toBe(
                 'Sensors detect Federation reinforcement fleet approaching.');
+        });
+
+    it('the fleet comes in around the system\'s centre (MEASURED, wave '
+        + '26, medium confidence)', () => {
+            expect(REINFORCEMENT_ARRIVAL_CENTER).toEqual({ x: 0, y: 0 });
         });
 
     it('the fleet comes in 1,800 px out, heading in', () => {
@@ -540,25 +548,42 @@ describe('reinforcement fleets in the sim', () => {
                     expect(call().victim).toBe('victim');
                 });
 
-            it('an AI 3 victim never calls, near or far, and the day stays '
-                + 'unspent (MEASURED, waves 22 and 24: three of three hit '
-                + 'from 57-90 px)', async () => {
-                    for (const distance of [70, 1600]) {
+            it('an AI 3 victim calls, near and far (MEASURED, wave 26: '
+                + 'an armed AI 3 from 86 px, 89 px and about 1,100 px)',
+                async () => {
+                    for (const distance of [86, 1125]) {
                         await build();
                         await lone(3, distance);
                         hit('victim', 'player');
-                        hit('victim', 'player');
-                        expect(call()).withContext(`${distance} px`)
-                            .toEqual({});
-                        expect(calls()).withContext(`${distance} px`)
-                            .toBeUndefined();
-                        world.step();
-                        expect(distress).toEqual([]);
+                        expect(call().victim).withContext(`${distance} px`)
+                            .toBe('victim');
+                        expect(calls()?.get(SYSTEM))
+                            .withContext(`${distance} px`)
+                            .toBe(dayNumber(JUNE_23));
+                        advance(reinforcementDelayMs(300) + 200);
+                        expect(fleetShips().length)
+                            .withContext(`${distance} px`).toBe(3);
                     }
                 });
 
-            it('the call sends no distress line, AI 1, 2 and 4', async () => {
-                for (const aiType of [1, 2, 4]) {
+            it('an AI 3 victim that leaves at once takes its call along '
+                + '(waves 22 and 24: three unarmed ones gone within 2-10 s, '
+                + 'no fleet; GUESS: the cancel)', async () => {
+                    await build();
+                    await lone(3, 70);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+                    advance(2_000);
+                    world.entities.delete('victim');
+                    advance(reinforcementDelayMs(300));
+                    expect(fleetShips().length).toBe(0);
+                    expect(arrivals).toEqual([]);
+                    expect(call()).toEqual({});
+                });
+
+            it('the call sends no distress line, AI 1, 2, 3 and 4',
+                async () => {
+                for (const aiType of [1, 2, 3, 4]) {
                     await build();
                     await lone(aiType, 150);
                     hit('victim', 'player');
@@ -593,15 +618,206 @@ describe('reinforcement fleets in the sim', () => {
                 });
         });
 
+    describe('an NPC of the fleet\'s side that STARTS attacking a player '
+        + 'calls it with no hit (MEASURED, wave 26; the trigger a GUESS)',
+        () => {
+            let starts: NpcAttackStartEventData[];
+
+            /** The player at the origin, an NPC `guard` `distance` px
+             * north. */
+            async function attackerScene({ aiType = 4, govtId = OWNER,
+                distance = 150, playerHull = PLAYER_HULL,
+                more = (_ship: Entity) => { } } = {}) {
+                await addShip('player', playerHull, 0, 0, ship => {
+                    pilot()(ship);
+                    more(ship);
+                });
+                await addShip('guard', TRADER_HULL, 0, -distance,
+                    npcShip(aiType, govtId));
+                world.step();
+                starts = [];
+                world.events.get(NpcAttackStartEvent).subscribe(
+                    ({ data }) => starts.push(data));
+            }
+
+            /** `attacker` starts attacking `target`, as NpcDecisionSystem
+             * announces it. */
+            function attack(attacker: string, target: string) {
+                world.emit(NpcAttackStartEvent, { attacker, target },
+                    [attacker]);
+                world.step();
+            }
+
+            it('through the real brain: a guard that always attacks the '
+                + 'player (mïsn ShipBehav 0) calls at its first think; '
+                + 'thinking again emits nothing more; the fleet arrives '
+                + 'around the centre and goes for him', async () => {
+                    await build();
+                    await attackerScene();
+                    // ShipBehav 0 as mission_ship_spawn.ts sets it: already
+                    // aggressed, targeting the player, and awake.
+                    const guard = world.entities.get('guard')!;
+                    const npc = guard.components.get(NpcComponent)!;
+                    npc.aggressor = 'player';
+                    npc.nextDecision = 0;
+                    guard.components.set(TargetComponent,
+                        { target: 'player' });
+                    world.step();
+                    expect(starts).toEqual(
+                        [{ attacker: 'guard', target: 'player' }]);
+                    expect(npc.mode).toBe('attack');
+                    expect(call().caller).toBe('player');
+                    expect(call().victim).toBe('guard');
+                    expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+                    // Nobody fired a shot.
+                    expect(world.entities.get('player')!.components
+                        .get(ShieldComponent)!.current).toBe(30000);
+                    advance(reinforcementDelayMs(300) + 200);
+                    // Several more thinks on the same target: one start.
+                    expect(starts.length).toBe(1);
+                    const fleet = fleetShips();
+                    expect(fleet.length).toBe(3);
+                    expect(arrivals).toEqual(
+                        [{ govt: OWNER, name: 'Kit Reinf' }]);
+                    for (const [, ship] of fleet) {
+                        const position = ship.components
+                            .get(MovementStateComponent)!.position;
+                        expect(position.length).toBeGreaterThan(1_500);
+                        expect(position.length).toBeLessThan(2_100);
+                        expect(ship.components.get(NpcComponent)!.aggressor)
+                            .toBe('player');
+                    }
+                });
+
+            it('the odds still decide: a Strength-1 player attacked calls '
+                + 'nothing and keeps his day', async () => {
+                    await build();
+                    await attackerScene({ playerHull: WEAK_HULL });
+                    attack('guard', 'player');
+                    expect(call()).toEqual({});
+                    expect(calls()).toBeUndefined();
+                });
+
+            it('once a day: an attack after the day\'s call calls nothing; '
+                + 'the next day it does', async () => {
+                    await build();
+                    await attackerScene();
+                    attack('guard', 'player');
+                    advance(reinforcementDelayMs(300) + 200);
+                    expect(fleetShips().length).toBe(3);
+                    dismissFleet();
+                    attack('guard', 'player');
+                    expect(call()).toEqual({});
+                    world.entities.get('player')!.components
+                        .set(GameDateComponent, { ...JUNE_24 });
+                    attack('guard', 'player');
+                    expect(call().caller).toBe('player');
+                    expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_24));
+                });
+
+            it('a pending call is left alone', async () => {
+                await build();
+                await scene();
+                await addShip('guard', TRADER_HULL, 0, -300,
+                    npcShip(4, OWNER));
+                world.step();
+                hit('trader1', 'player');
+                const pending = { ...call() };
+                attack('guard', 'player');
+                expect(call()).toEqual(pending);
+            });
+
+            it('an attacker off the fleet\'s side calls nothing; an ally\'s '
+                + 'does (as an ally\'s ship hit does)', async () => {
+                    for (const govtId of [RAIDER, OTHER]) {
+                        await build();
+                        await attackerScene({ govtId });
+                        attack('guard', 'player');
+                        expect(call()).withContext(govtId).toEqual({});
+                    }
+                    await build();
+                    await attackerScene({ govtId: ALLY });
+                    attack('guard', 'player');
+                    expect(call().victim).toBe('guard');
+                });
+
+            it('an attack on another NPC calls nothing', async () => {
+                await build();
+                await attackerScene();
+                await addShip('raider', TRADER_HULL, 200, 0,
+                    npcShip(3, RAIDER));
+                world.step();
+                attack('guard', 'raider');
+                expect(call()).toEqual({});
+            });
+
+            it('an attack on the player\'s escort calls it for the player '
+                + '(GUESS, as an escort\'s hit)', async () => {
+                    await build();
+                    await attackerScene({ playerHull: WEAK_HULL });
+                    await addShip('escort', PLAYER_HULL, 50, 0, ship => {
+                        ship.components.set(PlayerEscortComponent, {
+                            player: 'player', parent: 'player',
+                            deal: { kind: 'none' },
+                        });
+                    });
+                    world.step();
+                    attack('guard', 'escort');
+                    expect(call().caller).toBe('player');
+                    expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+                });
+
+            it('a trader attacker keeps the trader range (GUESS): from 150 '
+                + 'px yes, from 700 px no', async () => {
+                    await build();
+                    await attackerScene({ aiType: 2, distance: 700 });
+                    attack('guard', 'player');
+                    expect(call()).toEqual({});
+                    await build();
+                    await attackerScene({ aiType: 2, distance: 150 });
+                    attack('guard', 'player');
+                    expect(call().victim).toBe('guard');
+                });
+
+            it('a warship (AI 3) attacker calls from far', async () => {
+                await build();
+                await attackerScene({ aiType: 3, distance: 1_600 });
+                attack('guard', 'player');
+                expect(call().victim).toBe('guard');
+            });
+
+            it('the inhibitor stops it', async () => {
+                await build();
+                await attackerScene({
+                    more: ship => ship.components.set(OutfitsStateComponent,
+                        new Map([[JAMMER, { count: 1 }]])),
+                });
+                attack('guard', 'player');
+                expect(call()).toEqual({});
+            });
+
+            it('an attacker that leaves before the arrival takes the call '
+                + 'with it (GUESS, as a victim)', async () => {
+                    await build();
+                    await attackerScene();
+                    attack('guard', 'player');
+                    expect(call().victim).toBe('guard');
+                    world.entities.delete('guard');
+                    advance(reinforcementDelayMs(300) + 200);
+                    expect(fleetShips().length).toBe(0);
+                    expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+                });
+        });
+
     it('arrives ReinfTime / 39 s later: the whole flët, 1,800 px from the '
-        + 'victim, held, and the line names the MediumName', async () => {
+        + 'system\'s centre, held, and the line names the MediumName',
+        async () => {
             await build();
             await scene();
             hit('trader1', 'player');
             const delay = reinforcementDelayMs(300);
             const calledAt = call().arriveAt! - delay;
             expect(call().victim).toBe('trader1');
-            expect(call().center).toEqual({ x: 0, y: -150 });
             advance(calledAt + delay - 100 - now());
             expect(fleetShips().length).toBe(0);
             expect(arrivals).toEqual([]);
@@ -610,33 +826,31 @@ describe('reinforcement fleets in the sim', () => {
             expect(fleet.length).toBe(3);
             expect(arrivals).toEqual([{ govt: OWNER, name: 'Kit Reinf' }]);
             expect(call()).toEqual({});
-            const victim = new Vector(0, -150);
             for (const [, ship] of fleet) {
                 expect(ship.components.get(GovtComponent)?.id).toBe(OWNER);
                 const position = ship.components
                     .get(MovementStateComponent)!.position;
-                const distance = position.subtract(victim).length;
+                const distance = position.length;
                 expect(distance).toBeGreaterThan(1_500);
                 expect(distance).toBeLessThan(2_100);
             }
         });
 
-    it('the fleet comes in around the VICTIM at the call, not the player '
-        + '(MEASURED: none came to a far player; the victim over the '
-        + 'system\'s centre is a GUESS)', async () => {
+    it('the fleet comes in around the SYSTEM\'S CENTRE, heading for it, '
+        + 'not around the victim or the player (MEASURED, wave 26: a victim '
+        + 'and player 3,000 px out, the fleet 1,650-2,600+ px from them)',
+        async () => {
             await build();
             await scene();
             // The victim far from the system's centre, the player beside it
-            // (a trader calls only when hit from near, wave 22).
-            pin(world.entities.get('trader1')!, 4_000, 3_000);
-            pin(world.entities.get('player')!, 4_000, 3_150);
+            // (a trader calls only when hit from near, wave 22): wave 26's
+            // port 3,000 px east of the centre.
+            pin(world.entities.get('trader1')!, 3_000, 0);
+            pin(world.entities.get('trader2')!, 3_100, 100);
+            pin(world.entities.get('player')!, 3_000, 150);
             world.step();
             hit('trader1', 'player');
-            expect(call().center).toEqual({ x: 4_000, y: 3_000 });
-            // The player flies off, and the victim moves on: the centre is
-            // where the victim was at the call.
-            pin(world.entities.get('player')!, -6_000, 0);
-            pin(world.entities.get('trader1')!, 4_200, 3_000);
+            expect(call().victim).toBe('trader1');
             // Step to the arrival tick.
             while (fleetShips().length === 0 && now() < 60_000) {
                 world.step();
@@ -646,21 +860,23 @@ describe('reinforcement fleets in the sim', () => {
             const lead = fleet.find(([, ship]) => ship.components
                 .get(ShipDataComponent)?.id === LEAD_HULL)![1].components
                 .get(MovementStateComponent)!;
-            const center = new Vector(4_000, 3_000);
-            const fromCenter = lead.position.subtract(center);
+            const fromCenter = new Vector(lead.position.x, lead.position.y);
             expect(fromCenter.length).toBeGreaterThan(1_700);
             expect(fromCenter.length).toBeLessThan(1_850);
-            // Heading for the centre, not for the player.
+            // Heading for the centre, not for the victim or the player.
             const inward = fromCenter.scale(-1).normalize();
             const heading = lead.velocity.normalize();
             expect(heading.x).toBeCloseTo(inward.x, 3);
             expect(heading.y).toBeCloseTo(inward.y, 3);
-            const player = new Vector(-6_000, 0);
+            // So at least 1,200 px from the victim on any bearing (it is
+            // 3,000 px from the centre, the fleet 1,800 px; the escorts'
+            // formation spread aside).
+            const victim = new Vector(3_000, 0);
             for (const [, ship] of fleet) {
                 const position = ship.components
                     .get(MovementStateComponent)!.position;
-                expect(position.subtract(player).length)
-                    .toBeGreaterThan(6_000);
+                expect(position.subtract(victim).length)
+                    .toBeGreaterThan(1_100);
             }
         });
 

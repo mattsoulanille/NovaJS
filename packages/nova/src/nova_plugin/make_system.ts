@@ -210,8 +210,9 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
         ? buildNpcSpawnTables(world, systemId, systemData) : undefined;
     // The system's reinforcement fleet (sÿst ReinfFleet; spawn/
     // reinforcements.ts), staged whether or not the traffic is: nothing
-    // calls it but a player's hit on a ship of its govt's side, which a
-    // controlled battlefield stages deliberately.
+    // calls it but a player's hit on a ship of its govt's side, or such
+    // a ship starting an attack on a player, which a controlled
+    // battlefield stages deliberately.
     const reinforcements = stageReinforcements(world, systemData);
     const [govts, , , planetEntities, , , , systems, reinforcementFleet] =
         await Promise.all([govtEntries, ranks, links, planets,

@@ -1,7 +1,8 @@
 import { Entity } from 'nova_ecs/entity';
-import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
+import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { Random, RandomResource } from 'nova_ecs/plugins/random_plugin';
@@ -34,7 +35,7 @@ import { JumpComponent } from '../travel/index.js';
 import { landable } from '../core/index.js';
 import { MissionShipComponent } from '../player/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
-import { NpcComponent } from './npc_component.js';
+import { NpcComponent, NpcState } from './npc_component.js';
 import { FormationComponent } from './npc_formation.js';
 import {
     NPC_PLUNDER_SEEK_RANGE, npcPlunderEligible, npcPlundersHulks,
@@ -63,7 +64,7 @@ import {
     friendlyStellar, isShuttle, shuttleLaneEnd, shuttleStops,
 } from './npc_shuttle.js';
 import { outOfAmmo } from './npc_out_of_ammo.js';
-import { TargetComponent } from '../ship/index.js';
+import { Target, TargetComponent } from '../ship/index.js';
 import { longestReachOfStates, WeaponsStateComponent } from '../ship/index.js';
 
 /**
@@ -288,6 +289,40 @@ export function fleetLeaderLeaving(leader: Entity | undefined): boolean {
 }
 
 /**
+ * Emitted, on the attacker's entity, when NpcDecisionSystem STARTS an
+ * attack: it puts an NPC into mode 'attack' on a target it was not
+ * already attacking (from any other mode, or 'attack' on another ship).
+ * Re-deciding to keep fighting the same ship emits nothing. Read by the
+ * reinforcement call (spawn/reinforcements.ts's
+ * ReinforcementAttackCallSystem: a ship of the fleet's side that starts
+ * attacking a player may call the fleet, reference "R19 arrival centre,
+ * wave 26", finding 2). Sim-internal: not bridged, not serialized.
+ */
+export interface NpcAttackStartEventData {
+    attacker: string;
+    target: string;
+}
+export const NpcAttackStartEvent =
+    new EcsEvent<NpcAttackStartEventData>('NpcAttackStartEvent');
+
+/**
+ * Puts the NPC `uuid` into mode 'attack' on `chosen`, emitting
+ * NpcAttackStartEvent when that is a new attack (see the event). Every
+ * place NpcDecisionSystem engages goes through here. No PRNG draw.
+ */
+function engage(uuid: string, npc: NpcState, target: Target,
+    chosen: string | undefined, emit: EmitFunction) {
+    const starts = chosen !== undefined
+        && (npc.mode !== 'attack' || target.target !== chosen);
+    npc.mode = 'attack';
+    target.target = chosen;
+    if (starts) {
+        emit(NpcAttackStartEvent, { attacker: uuid, target: chosen },
+            [uuid]);
+    }
+}
+
+/**
  * The per-NPC think step. Runs at NPC_DECISION_INTERVAL_MS (scaled by
  * the govt's SkillMult) and owns all mode transitions; the steering
  * system (npc_steering.ts) only executes the current mode.
@@ -308,11 +343,13 @@ export const NpcDecisionSystem = new System({
         // The world's own system: whose law a criminal record is judged
         // by (reference A14, local_law.ts). Optional only so a bare test
         // world still thinks; every makeSystem world sets it.
-        Optional(SystemIdResource)] as const,
+        Optional(SystemIdResource),
+        // NpcAttackStartEvent (engage).
+        Emit] as const,
     step(npc, movement, target, govt, shield, shipData, formation,
         escortCommand, assisting, jump, hold, weapons, ships, planets, time,
         random, entities, uuid, gameData, entity, asteroids, debrisBoxes,
-        systemId) {
+        systemId, emit) {
         // Unfinished business here (a refuel offer on the table, a rescue
         // target waiting to be boarded): this ship never DECIDES to leave.
         // See system_hold.ts; the jump exits themselves are gated in
@@ -620,8 +657,7 @@ export const NpcDecisionSystem = new System({
                     const favorable = oddsFavorable(govtData?.maxOdds ?? 100,
                         myStrength, aggressorStrength);
                     if (favorable && !brokeOff) {
-                        npc.mode = 'attack';
-                        target.target = aggressorUuid;
+                        engage(uuid, npc, target, aggressorUuid, emit);
                         return;
                     }
                     npc.mode = 'flee';
@@ -848,14 +884,12 @@ export const NpcDecisionSystem = new System({
                         // Still 'attack', so it keeps firing what reaches;
                         // `retreatSince` makes NpcSteeringSystem hold the
                         // stand-off band instead of closing.
-                        npc.mode = 'attack';
-                        target.target = chosen;
+                        engage(uuid, npc, target, chosen, emit);
                         return;
                     }
                 }
                 if (chosen && favorable) {
-                    npc.mode = 'attack';
-                    target.target = chosen;
+                    engage(uuid, npc, target, chosen, emit);
                     return;
                 }
                 if (npc.mode === 'attack' || npc.mode === 'flee') {
@@ -951,10 +985,9 @@ export const NpcDecisionSystem = new System({
                 }
                 const chosen = chooseNearest(engageable);
                 if (chosen) {
-                    npc.mode = 'attack';
                     delete npc.scanTarget;
                     delete npc.scanSatOn;
-                    target.target = chosen;
+                    engage(uuid, npc, target, chosen, emit);
                     return;
                 }
                 if (npc.mode === 'attack') {

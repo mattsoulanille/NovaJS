@@ -12535,7 +12535,9 @@ AI 3 victims hit from 57-90 px gave no call. GUESS: "never" over "the call
 leaves with the victim" (each left within about 2-10 s), and for an armed
 AI 3 that stays and fights. AI 4 keeps no range (wave 21 from 1,600+ px,
 wave 22 from 40 px), traders keep 600 px. docs/npc_behavior_gaps.md
-"Reinforcement fleets: guesses to measure" 18 updated.
+"Reinforcement fleets: guesses to measure" 18 updated. **Withdrawn**
+(wave-26 fixes, 2026-11-25): an armed AI 3 victim calls ("R19 wave 26"),
+so AI 3 calls like AI 4 and these departures fall to the cancel.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/ai3_{a,b}/` (`sheet.png`, `lines.png`, `*/10-h-fire0.png`); `farc_a/*/`.
 
@@ -12996,6 +12998,18 @@ Update guess 18 in docs/npc_behavior_gaps.md and the specs that pin "AI
 Confidence: high for "an armed AI 3 calls" (three runs); medium for the
 range (one far point).
 
+**Applied (wave-26 fixes, 2026-11-25, `N/nova_plugin/spawn/reinforcements.ts`).**
+`reinforcementCallInRange` has no AI 3 branch: an AI 3 victim calls like
+an AI 4, at any range (the trader range stays for AI 1 / AI 2). Wave 24's
+three unarmed AI 3 victims, gone within about 2-10 s, are now left to the
+existing cancel (the victim has left the system at the arrival; GUESS,
+"an unarmed AI 3 never calls" is not excluded). Specs
+(`reinforcements_test.ts`): the rule at 0-1,600 px, an AI 3 victim hit
+from 86 px and 1,125 px calls and its fleet arrives, an AI 3 victim gone
+2 s after the hit gets no fleet, no distress line with the call.
+docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure" 16
+and 18 updated.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w26/ai3a/` (`sheet.png`, `lines.png`, `*/04-h-fire0.png`), `ai3b/`, `ai3far/` (`*/18-h-fire0.png` radar 38.8 px).
 
 ### Plunder self-destruct, wave 26: the blast DOES damage the boarder, by the hulk's mass, but never below a third of its armor; a 50 t hulk's does nothing visible; a tripped Credits take PAYS (2026-11-25)
@@ -13144,6 +13158,42 @@ target in combat), with the same odds, inhibitor and once-a-day tests.
 
 Confidence: medium (two runs; farm2's position is a lower bound, farm3's
 a direct read).
+
+**Applied (wave-26 fixes, 2026-11-25, `N/nova_plugin/spawn/reinforcements.ts`,
+`N/nova_plugin/npc/npc_decision.ts`).**
+- The arrival centre: the fleet comes in REINFORCEMENT_ARRIVAL_DISTANCE
+  (1,800 px, kept) from `REINFORCEMENT_ARRIVAL_CENTER` (0, 0), the
+  system's centre, on the random bearing, heading for the centre; the
+  call no longer records a `center` (ReinforcementCall drops it: schema
+  only under protocol 8, fingerprint 0afe73ee3aebe863 ->
+  a94a3bd8ec90e8fc). Marked MEASURED, medium confidence (two runs). The
+  per-pilot cooldown, the cancel when the victim has left and the
+  hostility rule are unchanged and re-spec'd.
+- A call with no hit: NpcDecisionSystem now goes into 'attack' through
+  one helper (`engage`), which emits `NpcAttackStartEvent` (on the
+  attacker's entity, sim-internal) when the attack is NEW: from another
+  mode, or on another target; re-deciding to keep fighting the same ship
+  emits nothing. `ReinforcementAttackCallSystem` runs the hit's own call
+  decision (`considerCall`) on it, the attacker standing in for the
+  victim. CHOICES (GUESSES): the trigger is the attack's START, not the
+  first shot (the measured line followed the take-off by the bare delay
+  with the guard beside the player); the fleet's side is the hit's (an NPC
+  of the fleet's govt or an ally, not disabled, not anchored, not in a
+  player's flock); the attacked ship must be a player's or his flock's
+  (the escort as his, as for an escort's hit), never another NPC; the
+  odds, the inhibitor, the pending call and the per-pilot daily cooldown
+  as for a hit; an attacking trader keeps the 600 px range, measured to
+  the ship it attacks. Deterministic: the event is emitted from synced
+  mode / target state in the decision's query order and handled from the
+  FIFO event queue after the step's systems; no PRNG draw.
+- Specs (`reinforcements_test.ts`): the fleet comes in 1,700-1,850 px
+  from the centre heading for it with the victim and player 3,000 px
+  east; a ShipBehav-0 guard through the real brain calls at its first
+  think with no shot, emits one start over many thinks, and its fleet
+  arrives around the centre and goes for the player; the odds, the daily
+  cooldown, a pending call, an off-side or ally attacker, an attack on
+  another NPC, an attack on an escort, an attacking trader's range, a far
+  AI 3 attacker, the inhibitor, and an attacker that leaves.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w26/farm2/` (`lines.png`, `sheet0.png`, `sheet1.png`, `*/radar_sheet.png`, `recording.mp4`), `farm3/` (`lines.png`, `recording.mp4`); radar tracks from `analysis/radar_blips.mjs` (10 fps: frame / 10 = seconds; the script's own `t` assumes 30 fps).
 

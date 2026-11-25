@@ -694,6 +694,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    inserts it). The derived wire schema fingerprint changes
 //    (5046ce9608f031a5 -> 0afe73ee3aebe863), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-26 reinforcement fixes (reference "R19
+//    wave 26" and "R19 arrival centre, wave 26"). ReinforcementCall drops
+//    its OPTIONAL `center` (the fleet now comes in around the system's
+//    centre, so the call no longer records where); `victim` stays. No input
+//    kind or message kind changes. Sim-rule changes alongside: an AI 3
+//    victim calls like an AI 4, at any range; the fleet comes in 1,800 px
+//    from the system's centre, heading for it; an NPC of the fleet's side
+//    that starts attacking a player's ship (NpcDecisionSystem's
+//    NpcAttackStartEvent, sim-internal and not serialized) is checked for
+//    a call as a hit is. The derived wire schema fingerprint changes
+//    (0afe73ee3aebe863 -> a94a3bd8ec90e8fc), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
