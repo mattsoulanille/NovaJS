@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w20-ally",
+  "edits": {
+    "ship": 703,
+    "stellar": 1432,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1141": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w20-ally",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

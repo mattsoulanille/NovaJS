@@ -291,8 +291,167 @@ export default {
         ...wave17Resources(),
         ...wave18Resources(),
         ...wave19Resources(),
+        ...wave20Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-20 experiments (docs/reference_experiments.md, "... wave 20").
+ * Nothing retired. A NEW sÿst / spöb range above the stock maxima (sÿst
+ * 1127, spöb 1420) and below the wave-15 range 1500 (now full), sÿst
+ * 1128-1499 / spöb 1421-1499 (checked: no stock or kit resource used
+ * them). Used: sÿst 1130-1147, spöb 1421-1438, shïp
+ * 482-496, düde 430-444, gövt 307-308, flët 306, wëap 290, oütf 463-465,
+ * mïsn 929 (bits 9225-9226, offer text dësc 4801; the stock gap 919-959).
+ * Map row y = -1220. The next free ids: sÿst 1148+, spöb 1439+, shïp
+ * 497+, düde 445+, mïsn 930+, gövt 306 and below, flët 307+, wëap 291+,
+ * oütf 466+.
+ *
+ * LESSON (first runs): an ANCHORED victim (Speed 0) never calls the fleet
+ * (its AI does not run), and an AI 1 victim jumps out about 10 s after the
+ * hit, and then no fleet comes; so the anchors below were made slow-mobile
+ * (Speed 20) and the ReinfTime / Int2 / Base / Ally systems use an AI 4
+ * victim that stays (shïp 494).
+ *
+ *  R19 Reinforcement fleets, second pass. Every system has ONE kind of
+ *      traffic, avgShips 1: a slow (Speed 20, Accel 50; first built
+ *      anchored, see the lesson), unarmed AI 1 victim on the magenta pointer
+ *      sprite with 30000 / 30000 and NO shield recharge, so each Kit Pulse
+ *      Beam hit takes exactly 10% of its shield. Victims of gövt 311 (wave 19's Kit
+ *      Reinf Owner, MaxOdds 100, flët 305): shïp 482 Kit RV Anchor S50
+ *      (Strength 50, düde 430), 483 S110 (431), 484 S150 (432), 485 S200
+ *      (433), 486 S300 (434), 487 S400 (435).
+ *      Odds (ReinfTime 300, ReinfIntrval 0; the Kit Lancer is Strength
+ *      100): sÿst 1130 Kit Odds 110, 1131 Kit Odds 150, 1132 Kit Odds 200,
+ *      1133 Kit Odds 300, 1134 Kit Odds 400 (ports spöb 1421-1425).
+ *      ReinfTime (S50 victim, ReinfIntrval 0): sÿst 1135 Kit Reinf T600,
+ *      1136 T1800, 1137 T1200, 1138 T150 (ports 1426-1429).
+ *      ReinfIntrval 2: sÿst 1139 Kit Reinf Int2 (S50, ReinfTime 300, port
+ *      1430). Base / inhibitor: sÿst 1140 Kit Reinf Base (S50, 300, 0, port
+ *      1431); oütf 464 Kit Reinf Inhibitor (ModType 44, ModVal 311: gövt
+ *      311's class) and 465 Kit Reinf Inhibitor All (ModVal -1).
+ *      An ally as the victim: gövt 307 Kit Reinf Owner B (MaxOdds 100,
+ *      MediumName "Kit Reinf B", ally 308) and 308 Kit Reinf Friend (ally
+ *      307), flët 306 Kit Reinf Fleet B (wave 19's purple lead and two blue
+ *      guards, gövt 307, LinkSyst 1594); sÿst 1141 Kit Reinf Ally (owner
+ *      307, ReinfFleet 306, ReinfTime 300, ReinfIntrval 0, port 1432),
+ *      traffic: the S50 anchor of gövt 308 (düde 436).
+ *      Player weapon: wëap 290 Kit Pulse Beam (turreted beam, ONE frame of
+ *      3000 shield / 2100 armor, reload 60, beamLength 5000: an instant
+ *      hit anywhere a victim is likely to sit) + oütf 463.
+ */
+function wave20Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const POINTER = 1959;
+    const anchor = { accel: 50, speed: 20, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0, ai: 1,
+        armor: 30000, shield: 30000, shieldRecharge: 0 };
+
+    // Player weapon and the inhibitors.
+    out.push(weap(290, "Kit Pulse Beam", 170, { reload: 60, duration: 1, armorDamage: 2100, shieldDamage: 3000, guidance: 3, beamLength: 5000, flags: 0 }));
+    out.push(gun(463, "Kit Pulse Beam", 290));
+    const inhibitor = (id, name, modVal) => {
+        const o = gun(id, name, 0);
+        o.set = { ...o.set, modType: 44, modVal, max: 1 };
+        return o;
+    };
+    out.push(inhibitor(464, "Kit Reinf Inhibitor", 311), inhibitor(465, "Kit Reinf Inhibitor All", -1));
+
+    // Anchored victims of 311 by Strength.
+    const strengths = [[482, 50], [483, 110], [484, 150], [485, 200], [486, 300], [487, 400]];
+    strengths.forEach(([id, s], i) => {
+        out.push(...shareRled(id, `Kit RV Anchor S${s}`, POINTER, 24, { ...anchor, strength: s }));
+        out.push(dude(430 + i, `Kit RV Anchor S${s}`, 1, 311, id));
+    });
+    const sys = (id, name, x, govtId, spobId, dudeId, reinfFleet, reinfTime, reinfInterval) => {
+        const s = traffic(system(id, name, x, -1220, govtId, [spobId]), [[dudeId, 100]], 1);
+        s.set = { ...s.set, reinfFleet, reinfTime, reinfInterval };
+        return [s, port(spobId, `${name} Port`)];
+    };
+    // Odds: Strength 110 / 150 / 200 / 300 / 400 victims, ReinfTime 300.
+    [[1130, 110, 431], [1131, 150, 432], [1132, 200, 433], [1133, 300, 434], [1134, 400, 435]].forEach(([id, s, d], i) =>
+        out.push(...sys(id, `Kit Odds ${s}`, -520 + 40 * i, 311, 1421 + i, d, 305, 300, 0)));
+    // ReinfTime 600 / 1800 / 1200 / 150 with the S50 victim.
+    [[1135, 600], [1136, 1800], [1137, 1200], [1138, 150]].forEach(([id, t], i) =>
+        out.push(...sys(id, `Kit Reinf T${t}`, -320 + 40 * i, 311, 1426 + i, 441, 305, t, 0)));
+    out.push(...sys(1139, "Kit Reinf Int2", -160, 311, 1430, 441, 305, 300, 2));
+    out.push(...sys(1140, "Kit Reinf Base", -120, 311, 1431, 441, 305, 300, 0));
+
+    // An ally of the fleet govt as the victim.
+    out.push(govt(307, "Kit Reinf Owner B", { maxOdds: 100, disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000, classes: [307, -1, -1, -1], allies: [308, -1, -1, -1], mediumName: "Kit Reinf B" }));
+    out.push(govt(308, "Kit Reinf Friend", { disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000, classes: [308, -1, -1, -1], allies: [307, -1, -1, -1] }));
+    out.push(fleet(306, "Kit Reinf Fleet B", 472, [[473, 2, 2], [473, 0, 0], [473, 0, 0], [473, 0, 0]], 307, 1594));
+    out.push(dude(436, "Kit RV Anchor S50 Friend", 1, 308, 482));
+    out.push(...sys(1141, "Kit Reinf Ally", -80, 307, 1432, 442, 306, 300, 0));
+
+    // Added after the first run (a lone anchored S50 victim never called the
+    // fleet): two anchored S50 victims (sÿst 1142 Kit Reinf Pair, avgShips 2),
+    // and one MOBILE AI 1 S50 victim (shïp 488 Kit RV Mobile S50, wave 19's
+    // trader without shield recharge, düde 437; sÿst 1143 Kit Reinf Mobile).
+    const pair = sys(1142, "Kit Reinf Pair", -40, 311, 1433, 430, 305, 300, 0);
+    pair[0].set = { ...pair[0].set, avgShips: 2 };
+    out.push(...pair);
+    out.push(...shareRled(488, "Kit RV Mobile S50", POINTER, 24, { ...anchor, accel: 300, speed: 300, strength: 50 }));
+    out.push(dude(437, "Kit RV Mobile S50", 1, 311, 488));
+    out.push(...sys(1143, "Kit Reinf Mobile", 0, 311, 1434, 437, 305, 300, 0));
+
+    // One-hit odds points (added during the wave: later pulses often missed, so
+    // each run fires ONE pulse): the victim's shield sets where that hit leaves
+    // it. shïp 489 Kit RV S400 Sh3000 (one hit -> 0% shield, düde 438, sÿst
+    // 1144 Kit Odds 400 Zero), 490 S400 Sh6000 (-> 50%, düde 439, sÿst 1145
+    // Kit Odds 400 Half), 491 S1000 Sh3000 (-> 0%, düde 440, sÿst 1146 Kit
+    // Odds 1000 Zero); ports spöb 1435-1437. Player hulls: shïp 492 Kit Lancer
+    // S300 and 493 Kit Lancer S50 (the Kit Lancer with Strength 300 / 50).
+    [[489, 400, 3000, 1144, "Kit Odds 400 Zero"], [490, 400, 6000, 1145, "Kit Odds 400 Half"], [491, 1000, 3000, 1146, "Kit Odds 1000 Zero"]].forEach(([id, s, sh, sysId, name], i) => {
+        out.push(...shareRled(id, `Kit RV S${s} Sh${sh}`, POINTER, 24, { ...anchor, strength: s, shield: sh }));
+        out.push(dude(438 + i, `Kit RV S${s} Sh${sh}`, 1, 311, id));
+        out.push(...sys(sysId, name, 40 + 40 * i, 311, 1435 + i, 438 + i, 305, 300, 0));
+    });
+    const lancer = { accel: 2000, speed: 800, turn: 60, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, flags: 0, flags2: 0x00C8 };
+    out.push(...ship(492, "Kit Lancer S300", 135, { ...lancer, strength: 300 }));
+    out.push(...ship(493, "Kit Lancer S50", 135, { ...lancer, strength: 50 }));
+    // A victim that STAYS until the fleet arrives (an AI 1 victim jumps out about
+    // 10 s after the hit, and then no fleet came): shïp 494 Kit RV Guard S50, AI 4,
+    // Speed 100, the Kit Escort Gun, 30000 / 30000, no shield recharge; düde 441
+    // (gövt 311) and 442 (gövt 308). The ReinfTime, Int2, Base and Ally systems
+    // (1135-1141) use these instead of the S50 anchor.
+    out.push(...shareRled(494, "Kit RV Guard S50", POINTER, 24, { ...anchor, ai: 4, accel: 100, speed: 100, strength: 50,
+        weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(441, "Kit RV Guard S50", 4, 311, 494), dude(442, "Kit RV Guard S50 Friend", 4, 308, 494));
+    // Where the fleet comes in: a FAST AI 4 victim (shïp 495 Kit RV Chaser S50,
+    // Speed / Accel 400) that follows the player far from the port after the
+    // hit; sÿst 1147 Kit Reinf Chase (ReinfTime 1800: 46 s to fly off), düde 443,
+    // port spöb 1438.
+    out.push(...shareRled(495, "Kit RV Chaser S50", POINTER, 24, { ...anchor, ai: 4, accel: 400, speed: 400, strength: 50,
+        weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(443, "Kit RV Chaser S50", 4, 311, 495));
+    out.push(...sys(1147, "Kit Reinf Chase", 160, 311, 1438, 443, 305, 1800, 0));
+
+    // Rescue (wave-19 leftover): a ShipStart-2 rescue ship WITH a cloaking
+    // device. shïp 496 Kit Cloak Rescue (the pointer hull, AI 3, the stock
+    // Wraith Cloaking Device oütf 266 and the Wraith's cloak Flags2 0x5F00),
+    // düde 444 (gövt 360 like the kit düde 330); mïsn 929 (b9225, offer text
+    // dësc 4801) = wave 18's 924 (the Raczak cargo, ShipStart 2) at Kit Self
+    // Defence (1585), OnSuccess b9226.
+    out.push(...shareRled(496, "Kit Cloak Rescue", POINTER, 24, { ...anchor, ai: 3, accel: 300, speed: 300, strength: 50,
+        armor: 3000, shield: 3000, flags2: 0x5F00, outfits: [266, -1, -1, -1], outfitCounts: [1, 0, 0, 0] }));
+    out.push(dude(444, "Kit Cloak Rescue", 3, 360, 496));
+    out.push(...misn(929, "Kit R cloaked ShipStart 2", 9225, { shipCount: 1, shipSyst: -1, shipDude: 444, shipGoal: 5, shipBehav: -1,
+        shipNameID: 25002, compGovt: 144, compReward: 10, cargoType: 27, cargoQty: 1, pickupMode: 2, dropoffMode: 1, scanMask: 520,
+        flags: 0x1214, flags2: 0x0001, returnStel: 1585, availShipType: 127, availStel: 1585, shipStart: 2, onAccept: "!b9225", onSuccess: "b9226" }));
+    return out;
+}
 
 /**
  * Wave-19 experiments (docs/reference_experiments.md, "... wave 19").

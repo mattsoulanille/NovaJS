@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w20-p300-o400",
+  "edits": {
+    "ship": 492,
+    "stellar": 1425,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1134": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w20-p300-o400",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}
