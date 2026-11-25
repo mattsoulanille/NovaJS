@@ -17,7 +17,8 @@ import {
     boardingRange,
     boardCaptureOdds,
     captureChance,
-    CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN, CAPTURE_ODDS_SPREAD_POINTS,
+    CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN, CAPTURE_ODDS_BY_CREW_RATIO,
+    CAPTURE_ODDS_SPREAD_POINTS,
     creditBooty,
     creditBootyBase,
     creditBootyRandomSteps,
@@ -326,12 +327,56 @@ describe('captureChance (the original\'s odds, ruling #378)', () => {
         Math.round(captureChance(attacker, defender) * 100);
 
     it('reads the measured odds for a crew-10 boarder', () => {
-        // "U9 wave 8", item 5: crew 10 against 1 / 5 / 10 / 15 (single
-        // readings).
+        // "U9 wave 8", item 5: crew 10 against 1 / 10 / 15 (single
+        // readings); crew 5 is wave 32's mean below.
         expect(shown(10, 1)).toEqual(75);
-        expect(shown(10, 5)).toEqual(34);
         expect(shown(10, 10)).toEqual(20);
         expect(shown(10, 15)).toEqual(18);
+    });
+
+    it('takes the upper table from the per-board means (reference '
+        + '"Capture odds at crew ratio 1 and above, wave 32")', () => {
+        // Ratio 1: 18-22% (10 v 10, 20 v 20; mean 19.4 with wave 8's 20).
+        expect(shown(10, 10)).toEqual(20);
+        expect(shown(20, 20)).toEqual(20);
+        // Ratio 2: 29-34% (10 v 5, 20 v 10; mean 31.7 with wave 8's 34).
+        expect(captureChance(10, 5)).toBeCloseTo(0.32, 10);
+        expect(captureChance(20, 10)).toBeCloseTo(0.32, 10);
+        // Ratio 5: 55-64% (50 v 10, four boards: 59.8). The old table
+        // interpolated 49% here.
+        expect(captureChance(50, 10)).toBeCloseTo(0.60, 10);
+        // Ratio 10: 75% on every board.
+        expect(captureChance(10, 1)).toEqual(CAPTURE_CHANCE_MAX);
+        // Only the ratio counts.
+        for (const [a, d] of [[10, 10], [10, 5], [50, 10], [10, 1]]) {
+            expect(captureChance(3 * a, 3 * d))
+                .toBeCloseTo(captureChance(a, d), 10);
+        }
+    });
+
+    it('keeps every wave-32 board inside its ratio\'s +-5 spread', () => {
+        const boards: [number, number, number[]][] = [
+            [10, 10, [18, 22, 18]], [20, 20, [18, 18, 22]],
+            [10, 5, [32, 32, 31]], [20, 10, [34, 30, 29]],
+            [50, 10, [59, 64, 61, 55]], [10, 1, [75, 75, 75]],
+        ];
+        for (const [a, d, readings] of boards) {
+            const mean = shown(a, d);
+            for (const odds of readings) {
+                expect(Math.abs(odds - mean))
+                    .withContext(`${a} v ${d}: ${odds}`)
+                    .toBeLessThanOrEqual(CAPTURE_ODDS_SPREAD_POINTS);
+            }
+        }
+    });
+
+    it('is monotonic in the ratio across the whole table', () => {
+        for (let i = 1; i < CAPTURE_ODDS_BY_CREW_RATIO.length; i++) {
+            const [r0, o0] = CAPTURE_ODDS_BY_CREW_RATIO[i - 1];
+            const [r1, o1] = CAPTURE_ODDS_BY_CREW_RATIO[i];
+            expect(r1).toBeGreaterThan(r0);
+            expect(o1).toBeGreaterThanOrEqual(o0);
+        }
     });
 
     it('takes the low end from the per-board means (wave 31)', () => {

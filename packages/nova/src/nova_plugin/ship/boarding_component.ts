@@ -573,17 +573,17 @@ export function creditBooty(price: number, roll: number): number {
  *   | Cargo   | 10 / 12       | 0.83  | 0.55 - 0.95            | 0.85 |
  *   | Credits |  4 / 15       | 0.27  | 0.11 - 0.52            | 0.25 |
  *   | Energy  |  2 / 4        | 0.50  | 0.15 - 0.85            | 0.50 |
- *   | Ammo    |  7 / 8        | 0.875 | 0.53 - 0.98            | 0.85 |
+ *   | Ammo    | 11 / 13       | 0.85  | 0.58 - 0.96            | 0.85 |
  *
  * These are FITS FROM SMALL SAMPLES: each rate is the count's own ratio
  * rounded to the nearest 0.05 (one rule for all; the samples cannot tell,
  * say, 0.80 from 0.85, so no digit past that is meant). Ammo's row is
- * reference "Plunder Ammo take, wave 31": EIGHT takes of a stock IR
- * Missile pair from one 50 t hulk type (Ammo was "None" on every earlier
- * hulk, and the kit's self-fed launcher is not plunderable); 7 / 8 cannot
- * tell 0.85 from 0.9, so it uses Cargo's 0.85 (GUESS: the two share a
- * rate). The hull, govt, the player's crew and rating were never varied,
- * so whether they matter is open.
+ * reference "Plunder Ammo take, waves 31 and 32": THIRTEEN takes of a
+ * stock IR Missile pair from one 50 t hulk type (Ammo was "None" on every
+ * earlier hulk, and the kit's self-fed launcher is not plunderable), Cargo's
+ * rate; a tripped Ammo take still delivered every round (wave 32, four
+ * tripped takes). The hull, govt, the player's crew and rating were never
+ * varied, so whether they matter is open.
  */
 export type PlunderItem = 'cargo' | 'credits' | 'fuel' | 'ammo';
 export const PLUNDER_SELF_DESTRUCT_CHANCE: Readonly<Record<PlunderItem, number>> = {
@@ -591,8 +591,8 @@ export const PLUNDER_SELF_DESTRUCT_CHANCE: Readonly<Record<PlunderItem, number>>
     credits: 0.25,
     /** The dialog's "Energy" row (fuel). */
     fuel: 0.5,
-    /** 7 / 8 takes (wave 31, see above): Cargo's rate, GUESS that the
-     * two share it. */
+    /** 11 / 13 takes (waves 31-32, see above), delivered when tripped
+     * (wave 32). */
     ammo: 0.85,
 };
 
@@ -670,27 +670,30 @@ export function capturable(target: Entity,
 
 /**
  * ============================================================================
- * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8"
- * and "Capture odds, wave 31")
+ * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8",
+ * "Capture odds, wave 31" and "Capture odds at crew ratio 1 and above,
+ * wave 32")
  * ============================================================================
  *
  * The odds the original shows against a hulk the player disabled, keyed by
- * the crew RATIO boarder / defender (a crew-10 boarder throughout, and a
- * crew-500 one against crew 1):
+ * the crew RATIO boarder / defender (wave 32, finding 2: the ratio is what
+ * counts, 20 v 20 read as 10 v 10 and 20 v 10 as 10 v 5):
  *
- *     ratio   10    2     1     0.67   0.5    0.25   0.2
- *     odds    75%   34%   20%   18%    16.2%  10%    12.0%
- *     used    75%   34%   20%   18%    16.5%  12%    12%
+ *     ratio   10    5      2      1      0.67   0.5    0.25   0.2
+ *     odds    75%   59.8%  31.7%  19.4%  18%    16.2%  10%    12.0%
+ *     used    75%   60%    32%    20%    18%    16.5%  12%    12%
  *
- * 10, 2, 1 and 0.67 are wave 8's single readings; 0.5 (crew 20: 12-18%,
- * six boards), 0.25 (crew 40: 7-12%, three boards) and 0.2 (crew 50: 7-17%,
- * thirteen boards) are MEANS over the boards of waves 8, 30 and 31 (0.5
- * uses the reference's proposed 16.5). 500
- * against 1 also read 75%: the odds top out at CAPTURE_CHANCE_MAX. No
- * simple formula fits (a crew share would give 67 / 50 / 40 / 33 / 20%), so
- * captureChance interpolates the table linearly in the ratio: from 0 at
- * ratio 0 (floored at CAPTURE_CHANCE_MIN) up to the cap at ratio 10
- * (between 2 and 10 nothing was measured).
+ * 0.67 is wave 8's single reading; the rest are MEANS over the boards of
+ * waves 8 and 30-32: 10 (75% on every board, waves 8 and 32; 500 against 1
+ * too: the odds top out at CAPTURE_CHANCE_MAX), 5 (crew 50 v 10: 55-64%,
+ * four boards), 2 (10 v 5 and 20 v 10: 29-34%, seven boards), 1 (10 v 10
+ * and 20 v 20: 18-22%, seven boards; 20% kept, within a point of the
+ * mean), 0.5 (crew 20: 12-18%, six boards; the reference's proposed 16.5),
+ * 0.25 (crew 40: 7-12%, three boards) and 0.2 (crew 50: 7-17%, thirteen
+ * boards). No simple formula fits (a crew share would give 83 / 67 / 50 /
+ * 40 / 33 / 20%), so captureChance interpolates the table linearly in the
+ * ratio: from 0 at ratio 0 (floored at CAPTURE_CHANCE_MIN) up to the cap
+ * at ratio 10 (between 5 and 10 nothing was measured).
  *
  * THE 0.25 POINT IS HELD AT 0.2's 12%, not its own 10% mean: three boards
  * (7, 11, 12) are too few to say the odds DIP as the boarders gain on the
@@ -722,7 +725,8 @@ export const CAPTURE_ODDS_BY_CREW_RATIO:
         [0.5, 0.165],
         [2 / 3, 0.18],
         [1, 0.20],
-        [2, 0.34],
+        [2, 0.32],
+        [5, 0.60],
         [10, CAPTURE_CHANCE_MAX],
     ];
 
@@ -756,8 +760,11 @@ export function captureChance(attackerCrew: number,
 
 /**
  * How far, in whole percentage points, one board's odds may fall either side
- * of the table's mean. GUESS from the spreads: 7-17% around crew 50's 12%,
- * 12-18% around crew 20's 16.5%.
+ * of the table's mean. MEASURED bound (reference "Capture odds at crew ratio
+ * 1 and above, wave 32", finding 3): all 38 boards from ratio 0.2 to 5 lie
+ * within 5 points of their ratio's mean, and the widest (7 against 12, 55
+ * against 60) reach 5 at both ends of the table, so the spread is the same
+ * at every ratio below the cap. GUESS: its shape (uniform).
  */
 export const CAPTURE_ODDS_SPREAD_POINTS = 5;
 
