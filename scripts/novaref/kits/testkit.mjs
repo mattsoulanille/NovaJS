@@ -305,11 +305,19 @@ export default {
 
 /**
  * Wave-28 experiments (docs/reference_experiments.md, "... wave 28").
- * Nothing retired. sÿst 1214-1220, spöb 1619-1625, shïp 536-541, düde
- * 467-472. Map row y = -1920 (x -300 .. 0) plus (-700,-1920). The next free
- * ids: sÿst 1221+, spöb 1626+ (spares 1495, 1496, 1499), shïp 542+, düde
- * 473+, mïsn 958-959 (then the stock gap 919-959 is used up: find a new mïsn
- * range), gövt 297 and below, flët 312+, wëap 295+, oütf 467+, bits 9244+.
+ * Nothing retired. sÿst 1214-1221, spöb 1619-1626, shïp 536-541, düde
+ * 467-472, ränk 204, mïsn 958 (bit 9244; offer text dësc 4830). Map row
+ * y = -1920 (x -300 .. 0) plus (-700,-1920) and (-660,-1920). The next free
+ * ids: sÿst 1222+, spöb 1627+ (spares 1495, 1496, 1499), shïp 542+, düde
+ * 473+, ränk 205+, mïsn 959 (then the stock gap 919-959 is used up: find a
+ * new mïsn range), gövt 297 and below, flët 312+, wëap 295+, oütf 467+,
+ * bits 9245+.
+ *
+ * LESSONS: only the 90 t and 99 t hulks were driven (both did nothing, so
+ * 60-95 were not needed). A ship's ordinary death beside the player is the
+ * same blast as a plunder trip, and its reach is a SQUARE, so the
+ * w28_death_at* scenarios (the board loop's fire point used as a kill
+ * distance) read hit / no hit by max(|dx|, |dy|), not by distance.
  *
  *  P   The self-destruct blast's cut-off between 50 t (nothing, wave 26) and
  *      100 t (28.4, wave 27): live immobile hulks like wave 27's (AI 4 of
@@ -321,6 +329,13 @@ export default {
  *      case): sÿst 1220 Kit Gate Deny (-700,-1920; gövt 363), its only
  *      stellar the kit hypergate spöb 1625 owned by gövt 363 with MinStatus
  *      100 (a clean record is 0), HyperLinks to N1's gate 1610.
+ *  M   ränk 0x0200 against a MinStatus refusal: ränk 204 Kit Land Anywhere
+ *      Rank (AffilGovt 363, Flags 0x0200), given by offer 958 (b9244,
+ *      OnAccept K204) at Kit Mixed Open (spöb 1490, wave 24's sÿst 1187),
+ *      next to Kit Map Picky (1188: port 1491 MinStatus 100, gövt 363).
+ *  H   The hail pane on another ODD overflow: sÿst 1221 Kit Hail Jupiter
+ *      (-660,-1920), its only stellar spöb 1626 (a clone of stock Jupiter,
+ *      spöb 159, with its 325 x 325 rlëD 2005, made a landable port).
  */
 function wave28Resources() {
     const out = [];
