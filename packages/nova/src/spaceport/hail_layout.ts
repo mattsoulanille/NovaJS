@@ -164,9 +164,9 @@ export const COMM_PLANET: CommFrameLayout = {
     // The pane is the starfield PAINTED INTO the PICT: its black interior,
     // inside the bevel, is frame x 222-531, y 5-287 (the first and last
     // pure-black pixels across row 150 and down column 375 of PICT 8512).
-    // The stellar's sprite is centred in exactly this rect
-    // (stellarSpriteOrigin): Earth's 150 px frame lands at frame (302,71)
-    // on hail/hail_planet.png, = 222 + floor(160/2), 5 + floor(133/2).
+    // The stellar's sprite is centred in exactly this rect, and clipped to
+    // it (stellarSpriteOrigin): Earth's 150 px frame lands at frame (302,71)
+    // on hail/hail_planet.png, = 222 + 155 - 75, 5 + 141 - 75.
     imagePane: { x: 222, y: 5, width: 310, height: 283 },
     // "Channel open to Earth." ink starts at frame (10,11).
     responseText: { x: 10, y: 11 - INK_TO_BOX },
@@ -380,25 +380,32 @@ export function fitImage(pane: Rect, imageWidth: number, imageHeight: number):
 /**
  * Where a hailed STELLAR's sprite goes in the planet comm's pane: the
  * top-left corner, in frame-local px, of one frame of its sprite drawn
- * 1:1 and centred, rounded down to whole pixels the way the original's
- * integer blit is. hail/hail_planet.png shows Earth's own 150 x 150 sprite
- * (rlëD 2000, ring and all, as it is drawn in space) on the PICT's
- * starfield, NOT the spöb's landscape PICT: template-matched against the
- * sprite it sits at frame (302,71) at RMSE 1.9%, i.e. unscaled, and
- * 222 + floor((310 - 150) / 2) = 302, 5 + floor((283 - 150) / 2) = 71.
+ * 1:1, its integer centre on the pane's integer centre:
  *
- * GUESS: a frame larger than the pane (rlëD 2062's 300 x 300, Tre'ar Vano,
- * Okiia III and four more, 17 px too tall; rlëD 2039's 315 x 200, Gladius
- * Shipyards and thirteen more stations, 5 px too wide)
- * keeps its 1:1 scale and is CLIPPED to the pane — a classic QuickDraw
- * blit into a clipped port — rather than scaled to fit. No capture shows
- * one; queued for the reference Mac.
+ *     pane.x + floor(pane.width / 2) - floor(frameWidth / 2)
+ *
+ * and the same down. hail/hail_planet.png shows Earth's own 150 x 150
+ * sprite (rlëD 2000, ring and all, as it is drawn in space) on the PICT's
+ * starfield, NOT the spöb's landscape PICT: template-matched against the
+ * sprite it sits at frame (302,71) at RMSE 1.9%, i.e. unscaled:
+ * 222 + 155 - 75 = 302, 5 + 141 - 75 = 71.
+ *
+ * MEASURED for oversized frames too (reference "Stellar hail graphic,
+ * wave 23", sprite_match RMSE 0 at scale 1): a frame larger than the pane
+ * keeps its 1:1 scale and is CLIPPED to the pane, never scaled. Tre'ar Vano
+ * (rlëD 2062, 300 x 300) sits at frame (227,-4): 9 px cut at the top, 8 at
+ * the bottom. Gladius Shipyards (rlëD 2039, 315 x 200) at (220,46): 2 px
+ * cut on the left, 3 on the right, so the clip really is the 310 px
+ * interior — and the 2 is why the centre is halved separately: the older
+ * 222 + floor((310 - 315) / 2) put Gladius at 219, 1 px left. (Halving
+ * separately is the same as centring in a 311 px pane; the reference
+ * section's "pane width 311" is this rule, not a wider clip.)
  */
 export function stellarSpriteOrigin(pane: Rect, frameWidth: number,
     frameHeight: number): { x: number, y: number } {
     return {
-        x: pane.x + Math.floor((pane.width - frameWidth) / 2),
-        y: pane.y + Math.floor((pane.height - frameHeight) / 2),
+        x: pane.x + Math.floor(pane.width / 2) - Math.floor(frameWidth / 2),
+        y: pane.y + Math.floor(pane.height / 2) - Math.floor(frameHeight / 2),
     };
 }
 

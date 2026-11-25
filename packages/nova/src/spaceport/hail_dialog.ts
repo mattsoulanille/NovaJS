@@ -1226,7 +1226,7 @@ export class HailDialog {
      * A hailed stellar's sprite in the planet comm's pane: frame 0 (what a
      * stellar shows in space), unscaled, its top-left at
      * stellarSpriteOrigin and clipped to the pane (see there for the
-     * measurement and the GUESS about oversized frames). The starfield
+     * measurements, oversized frames included). The starfield
      * behind it is PICT 8512's own art. A sprite that fails to load leaves
      * the starfield empty and the text intact.
      */

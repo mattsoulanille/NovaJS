@@ -238,8 +238,32 @@ describe('stellarSpriteOrigin', () => {
     it('centres a frame larger than the pane at 1:1 (the clip trims it)',
         () => {
             // rlëD 2062's 300x300 overhangs the 283 px pane by 17 px.
+            // Measured (wave 23): Tre'ar Vano at frame (227,-4), 9 px cut
+            // at the top and 8 at the bottom.
             expect(stellarSpriteOrigin(COMM_PLANET.imagePane!, 300, 300))
                 .toEqual({ x: 222 + 5, y: 5 - 9 });
+        });
+
+    it('puts Gladius Shipyards (315 x 200) at frame (220,46), as measured',
+        () => {
+            // Reference "Stellar hail graphic, wave 23": window (366,201)
+            // with the frame at (146,155); 2 px cut on the left, 3 on the
+            // right of the 310 px pane. floor((310 - 315) / 2) = -3 put it
+            // 1 px left; the centres are halved separately.
+            const at = stellarSpriteOrigin(COMM_PLANET.imagePane!, 315, 200);
+            expect(at).toEqual({ x: 220, y: 46 });
+            const pane = COMM_PLANET.imagePane!;
+            expect(pane.x - at.x).toBe(2);
+            expect(at.x + 315 - (pane.x + pane.width)).toBe(3);
+        });
+
+    it('matches every measured placement at once (Earth, Vano, Gladius)',
+        () => {
+            const pane = COMM_PLANET.imagePane!;
+            expect([[150, 150], [300, 300], [315, 200]].map(([w, h]) =>
+                stellarSpriteOrigin(pane, w, h)))
+                .toEqual([{ x: 302, y: 71 }, { x: 227, y: -4 },
+                    { x: 220, y: 46 }]);
         });
 });
 
