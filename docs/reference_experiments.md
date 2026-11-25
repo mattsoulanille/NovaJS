@@ -10552,7 +10552,347 @@ record 0, eleven more asks at -8), medium for 3 (one ship), medium for 4
 `rank400/` (`r.png`, `ra_more.png`, `tp_s.png`), `rescue_cloak/`
 (`n_s.png`; the run's `04-t0.png` .. `13-n7.png`).
 
+### #324 mission BBS after an accept, wave 21: an accept withdraws other listings at once but adds none until the next landing; venue offers are rolled at the landing; the map's visibility waits for the next landing or jump, its Legal Status does not (2026-11-24)
+
+**Question** (Forgejo #324; Matthew's ruling 2026-11-23: "test what the
+original does first"). NovaJS's #324 fix (7b779a51) re-filters the open
+BBS against the landing's working copy after an accept, re-rolls a
+venue's offers on every entry, and makes every docked map read the
+working copy's bits and records. What does the original's BBS, bar,
+trade center and map show after an accept in the same visit?
+
+**Rig** (`wave21Resources` "#324"). sÿst 1148 Kit Live Range, port spöb
+1439 (bar, trade center, outfitter, shipyard), linked to 1152 Kit Live
+Next (no stellar). BBS jobs at 1439: 930 **A** (AvailBits !b9227, OnAccept
+"b9227 b9228", destination spöb 1440 in sÿst 1149), 931 **B** (!b9227,
+OnAccept b9227), 932 **C** (b9228); offers 933 (trade center, AvailLoc 4)
+and 934 (bar, AvailLoc 1) on b9228. sÿst 1149 Kit Live Shown (Visibility
+b9228) and 1150 Kit Live Hidden (Visibility !b9228), both explored. A
+record change: gövt 306 Kit Live Owner (CrimeTol 30000) owns sÿst 1151 Kit
+Live Record (port 1442) with BBS 935 (Flags 0x0040, CompGovt 306,
+CompReward 100: an abort costs 5 x 100), 936 (AvailRecord 50: "at least
+50"), 937 (AvailRecord -100), 938 (no gate, OnAccept "A935"). Pilots
+`w21_live` (no bits), `w21_live_ctrl` (b9228 preset: the control),
+`w21_live_rec` (+100 in 1151); the Kit Lancer. Hand-driven
+(`w21_space_interactive.json`): map in flight, land, bar, trade center,
+BBS, accept, BBS again, venues again, `m`, take off, map, jump, map.
+
+**Controls** (b9228 preset): the bar offered 934 on entry, the trade
+center 933 (`live_ctrl`, `live_ctrl2`); the BBS listed A, B and C; the
+map drew Kit Live Shown and not Kit Live Hidden. So every gate works.
+
+| when (pilot `w21_live`, no bits) | BBS | bar / trade center | map |
+|---|---|---|---|
+| before any accept | A, B (and a stock "Delivery to Earth", see the notes) | no offer / no offer | Shown hidden, Hidden drawn |
+| **control: accept B** (b9227) with A, B, C listed | **A gone at once, the BBS STAYS OPEN listing C** | - | - |
+| accept A (b9227 b9228) with A, B listed | **the BBS CLOSES at once** (B withdrawn; C not added) | - | - |
+| reopen the BBS, same visit | **"There are no missions available here."** (C still missing) | **no bar offer, no trade offer** (both now qualify) | Shown still hidden, Hidden still drawn, **no mark** for A's destination (it is in the hidden system) |
+| take off, map in flight | - | - | the same (stale) |
+| jump to Kit Live Next (no landing), map | - | - | **Shown drawn with A's mission mark, Hidden gone** |
+
+| record run (`w21_live_rec`, +100 in 1151) | BBS | map Legal Status |
+|---|---|---|
+| landed | 935, 936 (AvailRecord 50), 938 | "Citizen" |
+| accept 935 | the BBS stays open: 936, 938 | - |
+| `i` in the spaceport, Abort 935 (record -> -400: the pilot written at the take-off) | - | **"No Convictions" at once** (Kit Live Owner's CrimeTol 30000) |
+| reopen the BBS | **936 still listed** (it needs at least 50); 937 (at most -100) not added | - |
+| (`live_rec2`) the same, then accept 938 | **the BBS closes** (936 withdrawn by the re-check the accept makes); reopened: "There are no missions available here." | - |
+
+**Findings.**
+1. **An accept re-checks the listings already on the board and withdraws
+   the ones that no longer qualify, at once**, by bits (B, and A in the
+   control) and by legal record (936 after an earlier abort). The re-check
+   is made by the ACCEPT: reopening the BBS after a record change did not
+   withdraw 936, the next accept did.
+2. **Nothing is ever ADDED in the visit:** a job (C), a bar offer and a
+   trade-center offer that an accept made available were not offered until
+   the next landing, not even on reopening the BBS or re-entering the
+   venues. The BBS list and the venue offers are rolled once per landing
+   (wave 10's side finding: "offers look rolled once per day").
+3. **When an accept leaves no listing, the BBS closes** (A in this run, the
+   one-job case in wave 10); otherwise it stays open on the remaining list
+   (B in the control, 935).
+4. **The map's NCB visibility is stale until the next landing or JUMP**:
+   neither the spaceport map nor the in-flight map changed after the
+   accept; after a jump to the next system (no landing) both systems had
+   changed. A mission mark on a system that is not yet visible is not
+   drawn; it appears with the system. (Wave 10 saw the landing case; the
+   jump case is new.)
+5. **The map's Legal Status is live**: an abort's record change showed on
+   the spaceport map at once.
+6. `i` (the mission-info dialog, with Abort) works in the spaceport.
+
+**NovaJS today (main 392f3cea).**
+- 1: `MissionBoard.buildRows` re-filters with `stillOffered`
+  (`N/spaceport/mission_board.ts:356-372`) after an accept (`:549-590`):
+  **matches** (bits and records alike).
+- 2: **mismatch**: `MissionBoard.show` re-rolls the offers on every open
+  (`mission_board.ts:281-315`, `rollOffers` against the working copy), so a
+  reopened BBS lists C (and 937 after the abort; and drops 936 on the
+  reopen rather than at the next accept); the bar
+  (`N/spaceport/bar.ts:274-286`) and the trade center / shipyard /
+  outfitter (`N/spaceport/venue_offers.ts:33-48`) roll their offers on
+  every entry, so 934 and 933 would be offered after A's accept. The
+  AvailRandom rolls are already kept per visit (OfferRolls); the set of
+  qualifying offers is not.
+- 3: **mismatch** (small): an emptied board shows the "no missions" row and
+  stays open (`mission_board.ts:370`).
+- 4: **mismatch**: the docked and in-flight maps read the live bits
+  (`N/display/starmap_plugin.ts:213-214` `getPlayerBits` through
+  `playerComponent`), so Kit Live Shown and A's mark appear right after
+  the accept (the #324 fix made this live on purpose).
+- 5: Legal Status reads the working copy's records
+  (`starmap_plugin.ts:255`): **matches**; the label at -400 with CrimeTol
+  30000 is "No Convictions" in both (`legalStatusName`,
+  `N/nova_plugin/reputation/reputation.ts:269`).
+- 6: matches (NovaJS opens `i` on the bare spaceport screen).
+
+**Proposed fixes (for the maintainer: #324's ruling asked for the
+original first; Matthew's 2026-10-03 comment wanted an NCB update to apply
+"immediately", which finding 1 confirms for withdrawals only).**
+- Freeze the SET of offers per landing, per location: roll the BBS, bar
+  and venue offers once at the landing (or at the first open) and keep
+  them with the visit's OfferRolls; later opens re-filter that frozen
+  list with `stillOffered` but never add to it.
+- Re-filter on an ACCEPT (keep `buildRows` after an accept); whether a
+  reopen should also re-filter is a choice (the original does not; it is
+  invisible unless something outside the BBS changes a gate mid-visit,
+  like an `i` abort).
+- Close the BBS when an accept empties it.
+- Map visibility: keep a "visible systems" set refreshed on landing and on
+  system entry (jump), instead of the live bits, if the faithful staleness
+  is wanted (a design choice; wave 10 raised it). Marks follow the
+  visible set.
+
+Confidence: high for 1-3 (two controls, three runs, every step shot),
+high for 4 (wave 10's three runs plus this one, now with the jump), medium
+for 5 (one record change), high for 6.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w21/live_ctrl/`
+(`ctrl_b.png`), `live_ctrl2/` (`02-trade.png`), `live/` (`v1.png`-`v5.png`,
+`bbs_a.png`, `bbs_a2.png`, the run's `13-bbs_re.png` and `16-map1.png`,
+`map4c.png`, `map4z.png`), `live_rec/` (`r1.png`, `r2.png`, `map2c.png`),
+`live_rec2/` (`r3.png`, `bbs2c.png`).
+
+### R19 reinforcement fleets, wave 21: AI 1 victims call with a distress line or not at all; the slow ones never did, so "a victim that leaves cancels" is not supported; the arrival centre is still open (2026-11-24, third pass)
+
+**Questions** (the "Wave 20 leftovers" row). Where the fleet comes in when
+the victim is far from the port; the S150 call at 90%; a neutral fleet
+and whether it leaves; whether a victim that leaves always cancels. Main
+392f3cea now applies the wave-20 fixes (`N/nova_plugin/spawn/reinforcements.ts`):
+the delay ReinfTime x 1000 / 39 ms, the arrival 1,800 px around the
+victim's position at the call (GUESS over the system's centre), no call
+from a Speed-0 hull, and the arrival cancelled when the victim has left.
+
+**Rig** (`wave21Resources` "R19"; every system owned by gövt 311, flët
+305). One Kit Pulse Beam hit per run (`tools/onehit.sh`), window shots
+about every 4.4 s (the shots' own cost; the "Sensors detect ..." line
+lasts 8 s); the hit is the frame of the Space press plus the panel's
+shield going 100% -> 90%. New: sÿst 1153 / 1154 Kit Reinf Far A / B
+(ReinfTime 150; the only stellar, the port, at (6000, 0); traffic the AI
+4 S50 guard / the mobile AI 1 S50), 1155 Kit Reinf Two (two slow AI 1
+S50, Speed 20, ReinfTime 600), 1156 Kit Reinf Leave One (one), 1159 Kit
+Reinf Slow 300; shïp 497 Kit Ring Lancer (pointer sprite, Lancer stats)
+to fly by heading; sÿst 1158 with offer 940 (the guard as a mission
+ship). Wave 20's 1131 Kit Odds 150, 1143 Kit Reinf Mobile and wave 19's
+1507 Kit Reinf Slow (two mobile Kit RV Traders, ReinfTime 900) again.
+
+**Results.**
+
+| run | victim | hit | at the hit | "Sensors detect ..." |
+|---|---|---|---|---|
+| `mobile_a`, `mobile_b` (1143, ReinfTime 300) | mobile AI 1 S50 (Speed 300) | 90%, beside the port | **"Kit RV Mobile S50:  We're under attack! Someone help us!"** | **yes**, within 10.5 s (both) |
+| `far_a` (1153, 150) | AI 4 guard S50, off the player's radar | 90% from the port | nothing | yes, by 6.2 s; no fleet blip on the player's radar (about 1,600 px here) in 45 s |
+| `far_b2` (1154, 150) | mobile AI 1 S50, two victims in turn | 90%, from beyond the radar; then 90% from about 900 px | nothing | **none** (14 s; 6 s and a Tab census: no fleet) |
+| `two` (1155, 600) | slow AI 1 S50, a second one about 1,200 px off | 90% | nothing | **none in 97 s**; the victim stayed **62-67 s** after the hit, then vanished from the radar |
+| `leave1` (1156, 600) | slow AI 1 S50 alone | 90% | nothing | **none in 97 s**; the victim stayed **84-89 s** |
+| `slow300` (1159, 300) | slow AI 1 S50 alone | 90% | nothing | none in 40 s; the target was gone 6 s after the hit |
+| `odds150b`, `odds150c` (1131, 300) | slow AI 1 S150 | 90% | nothing | none (27 s each) |
+| `reslow` (1507, 900, wave 19's rig) | mobile Kit RV Trader (with shield recharge), two in the system | 90% | nothing | none in 58 s; the victim gone 14-16 s after the hit |
+| `far_a2` (1153) | the AI 4 guard, about 3,400 px and about 1,700 px away | **missed** (shield stayed 100%, two pulses) | - | none |
+| `far_m`, `far_m2` (1158) | offer 940's mission guard on the port at 6,000 / 3,000 px | **the ship never appeared** (Tab found nothing, `i` listed the mission) | - | - |
+
+**Findings.**
+1. **An AI 1 victim that calls the fleet says so: the player's hit drew a
+   distress line ("<ship>: We're under attack! Someone help us!") and the
+   fleet's line followed** (both mobile S50 runs; wave 20's `mobile` called
+   too). **Every AI 1 hit with no distress line got no fleet** (eight
+   hits). The AI 4 victim of `far_a` called with no distress line.
+2. **The slow AI 1 victims (Speed 20) never called at all** (S50: `two`,
+   `leave1`, `slow300` and wave 20's `t600`; S150: `odds150b` /
+   `odds150c`, so S150 is now one call in five), even when the victim
+   STAYED in the system 60-90 s past the due arrival. So wave 20's `t600`
+   ("the victim jumped out at 10.4 s, no fleet") is explained by no call,
+   not by a cancelled one: **"a victim that leaves cancels the arrival" has
+   no supporting run left.** What makes an AI 1 hull call is open: speed
+   is not all of it (wave 19's 1507 traders, Speed 300, called twice on
+   later days and not in `reslow`'s first-day run; wave 20's slow S200
+   called for a Strength-300 player, the slow S150 once).
+3. **The player's own victims DO send distress calls** when they call the
+   fleet: this corrects waves 15-16's "the player's own victims never
+   call" (those systems had no ReinfFleet). A reading that fits every run
+   so far: the AI 1 victim's distress call IS its call for help, and in a
+   system with a reinforcement fleet the fleet answers it.
+4. **Where the fleet comes in: not settled.** In a system whose only
+   stellar is 6,000 px from the centre the traffic stayed thousands of px
+   from the port, the radar reached only about 1,600 px, the beam missed
+   far victims, the AI 1 victims did not call, and a mission ship placed on
+   the port never appeared (`far_m` at 6,000 and 3,000 px). `far_a`'s one
+   call came while the victim was off the player's radar, and no fleet came
+   onto it in 45 s: consistent with the victim or the centre, as in wave 20.
+5. **No neutral fleet was reproduced** (wave 19's 1507 rig gave no call on
+   its first day), so whether a neutral fleet leaves is still open.
+
+**NovaJS today (main 392f3cea).**
+- 1-3: `ReinforcementCallSystem` (`N/nova_plugin/spawn/reinforcements.ts:415-500`)
+  calls on the hit itself whenever the odds pass (`:488`); NovaJS's
+  distress calls (`N/nova_plugin/npc/distress.ts:22-24, :42`) come only
+  from NPC attacks ("the player's own victims never call"). **Mismatch**:
+  every slow AI 1 S50 run above calls in NovaJS (100 against 46.5, or 96.5
+  with the second victim), and `leave1` / `two` would get a fleet (the
+  victim was still there at 15.4 s); the original's caller also sends a
+  distress line.
+- The cancel (`victimHasLeft`, `:544`, used at `:581`): **unsupported**
+  rather than contradicted (no run has a call followed by a departure
+  before the arrival).
+- 4: the centre is the victim's position at the call (`:495`): unchanged
+  GUESS.
+
+**Proposed fixes (not applied; low confidence on the rule).**
+- Tie the AI 1 (and AI 2?) victim's call to a distress call: when the
+  player's hit makes a non-mission AI 1 ship call, send its distress line
+  (STR# 5003, as `distress.ts` does for NPC attacks) and call the fleet
+  through the same decision; no line, no fleet. Leave AI 3 / AI 4 victims
+  on the current rule (they call silently).
+- Until the decision is understood, do NOT add more rules on top of the
+  odds; mark the slow-hull runs as a known mismatch in a comment, and keep
+  the cancel as a GUESS (it costs nothing when no victim leaves).
+- Correct `distress.ts`'s "the player's own victims never call" comment
+  (true only where no fleet answers, as far as measured).
+
+Confidence: high for the pairing in 1 (ten AI 1 hits, the two with the
+line got the fleet and none of the eight without), high for 2's "slow S50 never
+calls" (four runs), low for what decides it, low for 4-5.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w21/` per run:
+`mobile_a/` (`v.png`: the distress line, then the Sensors line),
+`mobile_b/`, `far_a/` (`s1.png`), `far_b2/` (`hit.png`, `hit2.png`,
+`cen.png`), `far_a2/` (`hitk.png`), `far_m/` (`o.png`), `two/`, `leave1/`,
+`slow300/`, `odds150b/`, `odds150c/` (`p.png` each: the hit), `reslow/`
+(`hit.png`); the recordings' `recording.events.json` give the times.
+
+### H1 / rescue leftovers, wave 21: a good mood asks 1,000 at a clean record (twice), ränk 0x0400 refuses at 100% shield too, the cloaked ShipStart-2 ship is drawn uncloaked, a no-cargo rescue's first aligned press is a silent board (2026-11-24)
+
+**Fuel price** (pilot `w21_fuel_rich`: 1,000,000 credits, record 0,
+fuelless Kit Lancer Heavy at Kit Assist Stay; `tools/fuelrun.sh`, twelve
+first asks):
+
+| run | good | neutral | bad |
+|---|---|---|---|
+| `fuel_a` | 1,000 | 3,000, 3,000, 2,000, 2,000 | 3,000 |
+| `fuel_b` | 1,000 | 2,000, 3,000, 3,000, 2,000, 3,000 | - |
+
+Lower Price: one counter in twelve first presses (the good 1,000 ->
+**700**), every other press a withdrawal.
+
+**ränk 0x0400 and a warship not yet fighting** (`w21_rank_calm`, offer
+939 at Kit Rank Calm: ränk 200 and a Kit Raider; the raider appeared
+beside the port despite ShipStart -2): asked within 15 s of the take-off,
+Kit AS Yellow at **100%** shield answered "You wish.", Kit AS Red at 99%
+"In your dreams, pal." (STR# 3000 95-99). Whether the raider had fired on
+the player yet is not established from the shots.
+
+**The cloaked ShipStart-2 rescue ship on screen** (`w21_rescue_cloak`,
+mïsn 929, the Kit Ring Crawler flown by heading): about 1,700-1,800 px from the
+port, **drawn plainly** (the magenta pointer hull, not cloaked), target
+brackets, "UFS Bismarck", "Waiting", at rest; seen at 318 and 196 px.
+
+**The no-cargo rescue's first press** (`w21_rescue_nocargo`, mïsn 923,
+the kit düde 330 hulk on the 300 px marker; Tab first; 4.7 px apart):
+
+| press | axes apart | status line |
+|---|---|---|
+| 1 | 70 deg (outside the alignment gate) | nothing |
+| 2 (after turning in place) | 0 deg | **nothing** |
+| 3, 4 | 0 deg | "You can't board this ship." |
+
+The hulk stayed "Disabled" and the mission active.
+
+**Findings.**
+1. **A good mood asked 1,000 both times at a clean record**: a good mood's
+   2,000 has still only been seen at record -5 (wave 18). The other moods
+   sat inside their spreads (neutral 2,000-3,000, bad 3,000).
+2. **The counter is 3/4 rounded DOWN to 100**: 1,000 -> 700.
+3. **ränk 0x0400: a warship at 100% shield refuses as well** (six waves of
+   refusals; no assistance ever seen).
+4. **A ShipStart-2 rescue ship with a cloaking device is drawn uncloaked,
+   waiting** (radar, Tab and screen alike).
+5. **A no-cargo rescue's first in-gate press is a SILENT board**: the
+   misaligned press was silent (the alignment gate), the first aligned
+   press was silent too, and only then did "You can't board this ship."
+   come, so that press used up the hulk's one board with nothing to
+   retrieve (wave 19's single silent press at 10 deg apart fits).
+
+**NovaJS today (main 392f3cea).**
+- 1: `fuelSaleTerms` (`N/nova_plugin/reputation/hail.ts:463-476`) draws a
+  good mood's 1,000 or 2,000 evenly: **mismatch** as far as measured (every
+  good ask since wave 19 was 1,000: two at record 0 here, two at -8, two at
+  -9; the only 2,000 was wave 18's at -5).
+- 2: `fuelCounterPrice` (`hail.ts:571-573`) floors 3/4 to 100s:
+  **matches**. Counters: `FUEL_COUNTER_IN_FIVE` 2 (`:580`); this wave 1 of
+  12 first presses (wave 17: 5 of 13).
+- 3: the under-fire refusal stays (wave-19 fix): **matches** for these.
+- 4: `N/nova_plugin/missions/mission_ship_spawn.ts` does not cloak it:
+  **matches**.
+- 5: `rescueBoard` (`N/nova_plugin/encounters/rescue_board.ts:75-101`)
+  refuses a no-cargo rescue with "You can't board this ship." from the
+  first press (comment `:34-36`): **mismatch** on the first press only.
+
+**Proposed fixes.**
+- `fuelSaleTerms`: a good mood asks 1,000 (keep 2,000 only as a GUESS tied
+  to a negative record, or drop it). Leave `FUEL_COUNTER_IN_FIVE` until the
+  counters of waves 18-20 are tallied with these.
+- `rescueBoard`: the first board of a no-cargo live rescue that passes the
+  gates prints nothing and marks the hulk boarded (the one-board rule);
+  later presses refuse as now. The mission still never completes.
+
+Confidence: medium for 1 (two goods), high for 2, medium for 3, high for 4
+(one run, plain on screen), medium for 5 (one run with a control press,
+wave 19's agrees).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w21/fuel_a/sheet.png`,
+`fuel_b/sheet.png`, `rank_calm/` (`v1.png`, `v2.png`), `rescue_cloak/`
+(the run's `06-m2.png`, `08-m4.png`), `nocargo/` (`sl.png`, `pi.png`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **A port with trade tiers lists stock cargo jobs on its BBS (wave
+  21):** Kit Live Port (PORT_FLAGS) listed a stock "Delivery to Earth"
+  FIRST, above the kit's DispWeight-30000 jobs, and the first Accept took
+  it. Read the selected job's title in a shot before pressing Accept. A
+  0x43 port has no Trade Center button at all.
+- **The BBS stays open after an accept unless it empties (wave 21)**: a
+  driver that expects the board to close after Accept (wave 10's one-job
+  case) must shoot it; reopening it shows the landing's frozen list.
+- **The radar's reach depends on the system (wave 21):** about 1,600 px
+  (18.6 px per radar px) in the kit systems whose only stellar is 6,000 px
+  out, about 57 px per radar px in Kit Self Defence (markers at 5,000 /
+  -9,000 px), 31.6 in Kit Range. Calibrate it per system from a stellar's
+  blip while flying a known leg. With nothing targeted, an arrow at the
+  radar's edge points back toward the system's centre when the player is
+  far from it; it is NOT a target arrow.
+- **Far beam pulses miss (wave 21, again):** two Kit Pulse Beam pulses at
+  an AI 4 victim about 1,700 and 3,400 px away left it at 100%. Fly to
+  within the screen before the hit.
+- **A mission ship of düde 441 (the AI 4 S50 guard, gövt 311) never
+  appeared** at ShipStart -1 (offer 940, two builds); other düdes at
+  ShipStart -1 work. Untested why; avoid it as a mission ship.
+- **AI 1 traffic does not gather at a far port (wave 21):** in a system
+  whose only stellar is 6,000 px from the centre the AI 1 and AI 4 traffic
+  stayed thousands of px from it for minutes. Rigs that need the victim
+  beside a far port need another way to put it there.
+- **The novaref `open_pilot` can fail once ("panel still open;
+  cancelled", wave 21 `odds150a`):** the run cleans up; just run it again.
 
 - **An anchored hull (Speed 0) is inert to the AI (wave 20):** an anchored
   victim never called reinforcements (four hits, then two victims, the beam
@@ -10561,7 +10901,9 @@ record 0, eleven more asks at -8), medium for 3 (one ship), medium for 4
   Speed 20 / Accel 50 keeps a ship nearly in place and its AI running.
 - **An AI 1 victim jumps out about 10 s after the first hit (wave 20),**
   even at Speed 20 (the jump does not use its top speed), and a fleet
-  called by a victim that has left never came. Use an AI 4 victim (it
+  called by a victim that has left never came. **Correction (wave 21):** the
+  slow AI 1 S50 never called at all (no distress line, no fleet, even when
+  it stayed 60-90 s), so that run shows no cancelled call. Use an AI 4 victim (it
   stays and fights; it does NOT chase the player far from its port) for
   anything that waits more than a few seconds.
 - **`r` targets nothing in this install (wave 20):** after Tab had
@@ -10925,7 +11267,8 @@ record 0, eleven more asks at -8), medium for 3 (one ship), medium for 4
 | Wave 17 leftovers | P1: self-defence against a hostile firing continuously at that moment (an anchored 0x0004 hull with a 1-damage turret never fired first; use a gun that fires every second); stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). Traffic: why an AI 3 Fed Destroyer and an AI 2 Pegasus stayed in frozen Arcturus (kit systems with only AI 2 traders / only AI 3 warships, 20 min); arrival timing below the census spacing. W1: when 0x0040 burns (two magenta hulls on screen at once; use one 0x0040 hull per system). H1: a 0x0400 ränk WARSHIP's answer (none met); ränk 0x0800; the fuel price at a negative record and with little cash (pilot `w17_fuel_poor`, 5,000 credits, built, not run); the shuttles' no-stop case on screen. C1: 0x0400 / 0x2000 at a jump / landing. Rescue: the ShipStart-2 reveal (mïsn 1122), boarding 1080 / 1121 away from planets (the board loop stalled about 3,000 px from marker 2102: use a nearer marker), a no-cargo goal-5 completion. Contraband: a cutter's station-keeping on a clean ship: how long, and whether it leaves. | **Wave 17** (the "... wave 17" sections above) **Wave 18** answered: AI 2 traders and AI 3 warships keep leaving and nothing freezes (the staying Fed Destroyer was the reinforcement fleet's lead), never above AvgShips; cutters sit on a clean ship the whole visit (8+ min); a lone 0x0040 hull burns at every range (97-100% boosted inside 250 px), slow only at its turnarounds about 350 px out; firing back at a hostile firing at that moment is still policed; the fuel price is lower with little cash (1,000) and about 1,000 higher at a negative record, and a pilot who cannot pay hears "You can't fool me - you can't afford it." (STR# 3000 64); ränk 0x0800 refuels free but does not repair; no 0x0400 / 0x2000 cloak seen on screen. Not done: ränk 0x0400 with a warship (none stayed to be hailed), the rescue board and the ShipStart-2 reveal, a no-cargo goal-5 completion, the shuttles' no-stop case, arrival timing ("... wave 18" sections). |
 | Wave 18 leftovers | Traffic: do FLEET members (a kit flët's lead and escorts, a reinforcement flët) stay in a full system; the Pegasus that stayed in Arcturus; arrival timing below the census spacing (needs a full-system tracker, not the radar). H1: ränk 0x0400 against a warship (put an anchored or AI 4 363 warship at the port as a mission ship); ränk 0x0800 with an ALLY of the affiliated govt; the cash and record terms of the fuel price (more ships per case; a cash threshold; record -5 vs -9); Lower Price at a negative record. P1: stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). A14: a boarding's spread (guess 6), guesses 2-5, 7-10, 12-14; whether NovaJS shows "Uninhabited System" on the map. Rescue: board the 300 px marker hulk by hand (the board loop's sweep answered "not close enough" at 22 px), the ShipStart-2 reveal (mïsn 924 / 1122), a no-cargo goal-5 completion (923). C1: a 0x0400 ship's jump-out on screen (a system whose jump distance is inside the screen, or a radar track to the vanish). Contraband: whether a cutter leaves its clean ship when the player flies off (still in the system). | **Wave 18.** **Wave 19:** fleets leave (no member stays; a fleet arrives whole); the fuel price is capped by cash (about a third, in 1,000s), no record term needed, Lower Price counters at -1 / -9, ränk 0x0400 warships refuse, ränk 0x0800 allies refuel free, nobody repairs; a cutter does not follow; the marker rescue boarded by hand (Tab first), ShipStart 2 is a live waiting ship, a no-cargo rescue never completes; a boarding spreads like a kill; the map's "Uninhabited System" is missing in NovaJS. Left: see Wave 19 leftovers. |
 | Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?), where a released waiting ship goes. Fleets: escorts outliving their lead in NovaJS (checked: they lingered until their own roll; fixed to follow the lead out). Contraband: the leash distance at which a sitting cutter lets go. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** (fixes applied 2026-11-24: the "Applied (wave-19 fixes)" notes in the three wave-19 sections) **Wave 20** answered: R19's delay (ReinfTime / 39 s, linear to 1800), the odds (NovaJS's sum fits ten of eleven points; player Strength 100 / 300 against S50-S400 at 0-90% shield), ReinfIntrval 2 (every 2 days after the call), an ally's ship calls its ally's fleet, the ModType 44 inhibitor (class and -1), the arrival is not around a far player, the fleet is hostile while the victim holds the player as its attacker and stays; an anchored victim never calls and a victim that left before the arrival got no fleet; the fuel cash cap is a third (8,000 -> 2,000), a bad mood asks 4,000 at a clean record, the affiliated govt refuels free beside its ally, ränk 0x0400 warships refuse again (all fighting), a cloaked ShipStart-2 ship shows on radar and Tab. Left: see Wave 20 leftovers. Fixes applied 2026-11-24: the "Applied (wave-20 fixes)" notes in the two wave-20 sections. |
-| Wave 20 leftovers | R19: where the fleet comes in when the victim is far from the port (the victim or the system's centre: every run had them together; AI 4 victims hold their station, AI 1 victims leave; try an AI 1 victim far from the port with a short ReinfTime); why one S150 call came at 90% shield (one of three runs); a NEUTRAL fleet (wave 19's 1507: no NPC holding the player as its attacker? e.g. a victim that has calmed down or begged-for-mercy); whether a fleet ever leaves when neutral; whether a victim that leaves always cancels the arrival (one run). Fuel price: a good mood's 2,000 at a clean record (no good mood came up at record 0 in two runs). ränk 0x0400: a warship NOT yet fighting the attacker (all asked were at 94-98% shield). Rescue: the cloaked ShipStart-2 ship on screen (fly to it), the silent first press of a no-cargo rescue. Still open from wave 19: fleets' escorts outliving their lead in NovaJS (applied on main 4023a7f4, not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 20** |
+| Wave 20 leftovers | R19: where the fleet comes in when the victim is far from the port (the victim or the system's centre: every run had them together; AI 4 victims hold their station, AI 1 victims leave; try an AI 1 victim far from the port with a short ReinfTime); why one S150 call came at 90% shield (one of three runs); a NEUTRAL fleet (wave 19's 1507: no NPC holding the player as its attacker? e.g. a victim that has calmed down or begged-for-mercy); whether a fleet ever leaves when neutral; whether a victim that leaves always cancels the arrival (one run). Fuel price: a good mood's 2,000 at a clean record (no good mood came up at record 0 in two runs). ränk 0x0400: a warship NOT yet fighting the attacker (all asked were at 94-98% shield). Rescue: the cloaked ShipStart-2 ship on screen (fly to it), the silent first press of a no-cargo rescue. Still open from wave 19: fleets' escorts outliving their lead in NovaJS (applied on main 4023a7f4, not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 20** **Wave 21** answered ("... wave 21" sections): #324 (an accept withdraws listings that no longer qualify at once, adds none until the next landing, closes an emptied BBS; bar and trade-center offers are rolled at the landing; the map's NCB visibility changes at the next landing or JUMP, wave 10's leftover, its Legal Status at once); an AI 1 victim calls the fleet with a distress line or not at all (slow AI 1 hulls never called, so the "victim that leaves cancels" run was no call); S150 is one call in five; the neutral fleet was not reproduced; the good mood asks 1,000 at a clean record (twice); ränk 0x0400 refuses at 100% shield; the cloaked ShipStart-2 ship is drawn uncloaked, waiting; a no-cargo rescue's first aligned press is a silent board. Not settled: the arrival centre (the far-port rigs failed). Left: see Wave 21 leftovers. |
+| Wave 21 leftovers | R19: what makes an AI 1 victim call (the distress pairing; speed, hull, day, attacker distance?): repeat the mobile S50 at 1143 a few times with the attacker far (1,000+ px) and near, and a mobile S150; whether AI 3 / AI 4 victims ever send a distress line; the arrival centre (needs a victim that calls far from the system's centre: a fast AI 1 caller met in flight 3,000+ px from the centre, with the radar calibrated); a neutral fleet and its stay; whether a departed caller cancels (no run left). #324: whether a reopened BBS re-filters at all (only an accept was seen to), the AvailLoc 5 / 6 venues (assumed like the trade center), a second landing the same day (re-rolled?). Fuel: a good mood's 2,000 (only wave 18's at -5); the Lower Price counter rate over waves 17-21. ränk 0x0400: a warship asked while the player is NOT under attack at all (no raider). Rescue: none (no-cargo first press answered). Mission ships: why offer 940's AI 4 düde 441 never appeared. Still open from wave 20: fleets' escorts outliving their lead in NovaJS (not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 21** |
 
 ## Catalogue
 
@@ -10993,7 +11336,7 @@ cosmetic or rare.
 | R16 | Auto-abort ships, DatePostInc on deferred auto-abort | `N/nova_plugin/missions/mission_ship_spawn.ts:479-492` | CPg, PD date | L |
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | CPl + kit stellar with MinStatus 32767 | L |
 | R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | CPl rating per Appendix I tier, VID | M |
-| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"). **Second pass (R "R19 reinforcement fleets, wave 20"), applied 2026-11-24**: the delay ReinfTime / 39 s (no cap), the odds, ReinfIntrval 2, allies, the inhibitor and the hostile disposition measured; the fleet comes in around the victim (GUESS over the system's centre), an anchored victim never calls, a victim that leaves cancels the call (destroyed: GUESS). Open: the neutral 1507 fleet, the odd S150 call | CPg govt + syst ReinfFleet, VID, PD | L |
+| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"). **Second pass (R "R19 reinforcement fleets, wave 20"), applied 2026-11-24**: the delay ReinfTime / 39 s (no cap), the odds, ReinfIntrval 2, allies, the inhibitor and the hostile disposition measured; the fleet comes in around the victim (GUESS over the system's centre), an anchored victim never calls, a victim that leaves cancels the call (destroyed: GUESS). Open: the neutral 1507 fleet, the odd S150 call. **Third pass (R "R19 reinforcement fleets, wave 21")**: an AI 1 victim's call comes with its distress line (slow AI 1 hulls never called; the cancel rule has no supporting run); the arrival centre still open | CPg govt + syst ReinfFleet, VID, PD | L |
 | R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6-8)**: max(1,000, price / 40) up to 100,000 (exactly, 24 boards at 50,000), then a random amount between price / 40 and price / 20 (200,000 to 2,000,000, wave 8); cargo and energy a random share; capture never for a derelict (gövt 0x0800), odds capped at 75% and falling with the defenders' crew for a hulk the player disabled; one board per hulk (matches). **Mismatch** (10%, 150 px circle, 54.8 px/s gate, 15° alignment, crew-share odds, derelicts capturable) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |
