@@ -226,13 +226,12 @@ export function shipBlipSize(mass: number | undefined,
  * proposed ("a dot when the stellar is a station OR uninhabited"): Jupiter
  * (spöb 159, 325 px) carries 0x0020 too — and 0x0001 clear — yet it is a
  * RING on the original's in_space.png. So "uninhabited" alone is refuted.
- * What is left fits two rules that agree on every measured stellar: the
- * wormhole flag (this one, the narrowest), or "landable AND uninhabited"
- * (which would also dot Spica, Neo New York, the UHP-1002 copies, Kont and
- * ten more stock planets of 96 px and up, none measured). GUESS between
- * the two; an uninhabited LANDABLE planet of 96+ px on the original's radar
- * (Spica, 120 px) would decide it. Stock effect: the 24 wormholes (23
- * named "Wormhole" plus "Link", nova:514), all 104 px, ring -> dot.
+ * The rival "landable AND uninhabited" is refuted too: MEASURED (reference
+ * "Hypergates and the radar, wave 24") Spica (spöb 172, Flags 0x21, land +
+ * uninhabited, a 120 px planet) is a hollow 4 x 4 RING on the original's
+ * radar. So the wormhole flag is the dot's cause. Stock effect: the 24
+ * wormholes (23 named "Wormhole" plus "Link", nova:514), all 104 px, ring
+ * -> dot.
  *
  * The colour of the dot is not decided here: without IFF every stellar the
  * player may land on is the status bar's dimRadar grey (stock #808080, the

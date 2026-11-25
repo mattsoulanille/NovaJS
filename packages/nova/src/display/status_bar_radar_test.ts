@@ -261,6 +261,18 @@ describe('stellar radar shape', () => {
             })).toBe('ring');
         });
 
+    it('keeps a LANDABLE uninhabited planet on the size rule: Spica (0x21, '
+        + '120 px) is a ring (wave 24)', () => {
+            // Why the rule is the wormhole flag and not "landable AND
+            // uninhabited".
+            expect(planetRadarShape({
+                spriteFrameSize: [120, 120],
+                flags: { isStation: false, uninhabited: true,
+                    canLand: true } as PlanetData['flags'],
+                gate: null,
+            })).toBe('ring');
+        });
+
     it('is a hollow 5 x 5 ring with its corners cut', () => {
         expect(STELLAR_RING_PIXELS.length).toBe(12);
         const set = new Set(STELLAR_RING_PIXELS.map(key));
@@ -704,5 +716,14 @@ describe('stock stellar radar shapes (Nesre Secundus)', () => {
         const jupiter = await gameData.data.Planet.get('nova:159');
         expect(jupiter.flags.uninhabited).toBeTrue();
         expect(planetRadarShape(jupiter)).toBe('ring');
+        // Spica (spöb 172, Flags 0x21: land + uninhabited, 120 px) is a 4 x 4
+        // RING on the original's radar (reference "Hypergates and the radar,
+        // wave 24"), so "landable AND uninhabited" does not make a dot.
+        const spica = await gameData.data.Planet.get('nova:172');
+        expect(spica.name).toBe('Spica');
+        expect(spica.flags.canLand).toBeTrue();
+        expect(spica.flags.uninhabited).toBeTrue();
+        expect(spica.gate).toBeFalsy();
+        expect(planetRadarShape(spica)).toBe('ring');
     }, 120_000);
 });
