@@ -11,6 +11,8 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { requireNovaData } from '../test_support/nova_data_gate.js';
 import { styleForTarget } from '../nova_plugin/combat/index.js';
 import {
     GovtComponent, SimulationGameDataResource, SystemIdResource,
@@ -32,7 +34,7 @@ import {
     blipPixels, centerArrowPixels, CENTER_ARROW_HEAD, CENTER_ARROW_TAIL,
     CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
     radarCenterPixel, radarRefreshIndex, RADAR_REFRESH_MS, shipBlipSize,
-    stellarHullSize, stellarRadarShape, STELLAR_RING_PIXELS,
+    stellarRadarShape, stellarRadarSize, STELLAR_RING_PIXELS,
 } from './status_bar_radar.js';
 import { StatusBarResource } from './status_bar_resource.js';
 
@@ -193,11 +195,20 @@ describe('stellar radar shape', () => {
         expect(stellarRadarShape(undefined)).toBe('ring');
     });
 
-    it('reads the size off the frame-0 collision hull', () => {
-        expect(stellarHullSize([[[[-26.5, -30], [26.5, -30], [26.5, 30]]]]))
-            .toBe(60);
-        expect(stellarHullSize(undefined)).toBeUndefined();
-        expect(stellarHullSize([])).toBeUndefined();
+    it('reads the size off the larger side of the sprite frame', () => {
+        expect(stellarRadarSize([53, 60])).toBe(60);   // spïn 2063 gate
+        expect(stellarRadarSize([120, 73])).toBe(120); // Spacedock V
+        expect(stellarRadarSize(undefined)).toBeUndefined();
+        expect(stellarRadarSize([])).toBeUndefined();
+    });
+
+    it('rings the working hypergates (spïn 2001, 150 x 150 frames) and dots '
+        + 'the unlandable gate art (spïn 2063, 53 x 60)', () => {
+        // HG-Secundus's frame 0 is the folded gate, about 65 x 60 opaque px
+        // left of the frame's centre; the frame, not that art, is measured.
+        expect(stellarRadarShape(stellarRadarSize([150, 150]))).toBe('ring');
+        expect(stellarRadarShape(stellarRadarSize([53, 60]))).toBe('dot');
+        expect(stellarRadarShape(stellarRadarSize([40, 48]))).toBe('dot');
     });
 
     it('is a hollow 5 x 5 ring with its corners cut', () => {
@@ -401,6 +412,33 @@ describe('DrawRadar cadence', () => {
             ReadonlyMap<string, number> | undefined;
         expect(planetColors?.get('earth')).toBeUndefined();
     });
+
+    it('shapes stellars by their sprite frame from the first refresh, with '
+        + 'no sprite sheet loaded', () => {
+        // Nesre Secundus: the 250 px planet, Spacedock V (120 x 73),
+        // HG-Secundus (150 x 150 frames) and Pyrogenesis I (40 x 48).
+        const { drawRadar, stepAt, world } = radarWorld();
+        const stellars: [string, [number, number]][] = [
+            ['planet', [250, 250]], ['station', [120, 73]],
+            ['gate', [150, 150]], ['moon', [40, 48]],
+        ];
+        for (const [uuid, frame] of stellars) {
+            const stellar = new Entity(uuid);
+            stellar.components.set(MovementStateComponent,
+                { position: new Position(-9000, 2100) } as MovementState);
+            stellar.components.set(PlanetDataComponent,
+                { ...getDefaultPlanetData(), spriteFrameSize: frame });
+            stellar.components.set(PlanetComponent, { id: 'nova:128' });
+            world.entities.set(uuid, stellar);
+        }
+        stepAt(0);
+        const shapes = drawRadar.calls.mostRecent().args[8] as
+            ReadonlyMap<string, string>;
+        expect([...shapes].sort()).toEqual([
+            ['gate', 'ring'], ['moon', 'dot'], ['planet', 'ring'],
+            ['station', 'ring'],
+        ]);
+    });
 });
 
 /**
@@ -546,4 +584,32 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
         expect(blipColors(drawRadar).get('escort')).toBe(IFF_FRIENDLY_COLOR);
         expect(bracketColor(world, player, 'escort')).toBe(IFF_FRIENDLY_COLOR);
     });
+});
+
+/**
+ * Matthew's playtest (2026-11-24, Nesre Secundus): three rings on the
+ * radar, the planet, the station and the hypergate. Pinned against the
+ * stock data so the shapes follow the frame sizes the parser stages.
+ */
+describe('stock stellar radar shapes (Nesre Secundus)', () => {
+    beforeEach(requireNovaData);
+
+    it('rings the planet, Spacedock V and HG-Secundus, dots Pyrogenesis I '
+        + 'and the unlandable gate art', async () => {
+        const gameData = await getIntegrationGameData();
+        const system = await gameData.data.System.get('nova:133');
+        const shapes: [string, string, number[], string][] = [];
+        for (const id of [...system.planets, 'nova:130']) {
+            const planet = await gameData.data.Planet.get(id);
+            shapes.push([id, planet.name, planet.spriteFrameSize,
+                stellarRadarShape(stellarRadarSize(planet.spriteFrameSize))]);
+        }
+        expect(shapes).toEqual([
+            ['nova:161', 'Pyrogenesis I', [40, 48], 'dot'],
+            ['nova:176', 'Nesre Secundus IV', [250, 250], 'ring'],
+            ['nova:150', 'Spacedock V', [120, 73], 'ring'],
+            ['nova:1408', 'HG-Secundus', [150, 150], 'ring'],
+            ['nova:130', 'HG-Aldebaran', [53, 60], 'dot'],
+        ]);
+    }, 120_000);
 });

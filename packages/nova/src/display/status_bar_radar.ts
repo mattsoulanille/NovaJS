@@ -203,10 +203,13 @@ export function shipBlipSize(mass: number | undefined,
  * like Porto Rillia: a 120 px planet at the centre and a 53 x 60 hypergate
  * 300, 150 from it) a stationary ring with a stationary 2 x 2 dot exactly
  * (9-9.5, 4-4.5) px from it — the dot that is the one 2 px blip in the
- * no-add-ons clip. The size is read off the stellar's collision hull
- * (≈ its sprite). The cut-off lies somewhere in the unmeasured 61-109 px
- * band; STELLAR_RING_MIN_SIZE sits in the gap in the stock sprite sizes
- * (nothing between 56 and 72).
+ * no-add-ons clip. That 53 x 60 gate is the unlandable, uninhabited gate
+ * art (spïn 2063, HG-Aldebaran and 15 more); no recording shows the
+ * working hypergates' 150 x 150 art (spïn 2001), which draws as a ring
+ * here (stellarRadarSize). The size is the larger side of the stellar's
+ * sprite frame (stellarRadarSize). The cut-off lies somewhere in the
+ * unmeasured 61-109 px band; STELLAR_RING_MIN_SIZE sits in the gap in the
+ * stock frame sizes (nothing between 60 and 72).
  */
 export const STELLAR_RING_MIN_SIZE = 64;
 export type StellarRadarShape = 'ring' | 'dot';
@@ -242,26 +245,31 @@ export function blipPixels(size: number): RadarPixel[] {
 }
 
 /**
- * The size of a stellar's sprite for stellarRadarShape: the larger extent
- * of its collision hull (SpriteSheetData.hulls, frame 0), which tracks the
- * sprite's own size for every stock stellar. Undefined until the sprite
- * sheet caches.
+ * The size of a stellar's sprite for stellarRadarShape: the larger side of
+ * one frame of its sprite (PlanetData.spriteFrameSize, the rlëD header),
+ * the same size the original's landing zone (planet_plugin.ts's
+ * landingRange) and target brackets (K10: a square from max(w, h)) are
+ * measured from. Undefined for data without a frame size.
+ *
+ * It used to be the frame-0 collision hull's extent, which equals the
+ * frame for every stock stellar but one graphic: the working hypergates'
+ * 42-frame spïn 2001 (150 x 150 frames; HG-Secundus and 18 more), whose
+ * frame 0 is the folded gate, about 65 x 60 opaque px drawn left of the
+ * frame's centre, so its hull measured 82. Both are rings, so no stock
+ * stellar changes shape; the hull was also unknown until the display had
+ * fetched the sprite sheet, so every stellar drew as a ring until then.
+ *
+ * GUESS: that the original's radar rule reads the frame size at all. The
+ * radar evidence (see stellarRadarShape) only has stellars whose opaque
+ * art fills its frame, and nothing shows a working hypergate on the
+ * original's radar (reference queue K8).
  */
-export function stellarHullSize(hulls: readonly (readonly (readonly
-    [number, number])[])[][] | undefined): number | undefined {
-    const frame = hulls?.[0];
-    if (!frame || frame.length === 0) {
+export function stellarRadarSize(
+    spriteFrameSize: readonly number[] | undefined): number | undefined {
+    if (!Array.isArray(spriteFrameSize) || spriteFrameSize.length < 2) {
         return undefined;
     }
-    let mx = 0;
-    let my = 0;
-    for (const convex of frame) {
-        for (const [x, y] of convex) {
-            mx = Math.max(mx, Math.abs(x));
-            my = Math.max(my, Math.abs(y));
-        }
-    }
-    return 2 * Math.max(mx, my);
+    return Math.max(spriteFrameSize[0], spriteFrameSize[1]);
 }
 
 /**
@@ -689,19 +697,13 @@ export const DrawRadar = new System({
                         shipBlipSize(shipData.physics.mass, true));
                 }
             }
-            // Planet-sized stellars are rings, small ones 2 x 2 dots. The
-            // stellar's sprite sheet (hulls) is needed to tell; until it
-            // caches the stellar draws as a ring, and the fetch is started
-            // so the next refresh knows.
+            // Planet-sized stellars are rings, small ones 2 x 2 dots, by
+            // the stellar's sprite frame size (staged with its PlanetData,
+            // so known from the first refresh).
             const planetShapes = new Map<string, StellarRadarShape>();
             for (const [uuid, , planetData] of planets) {
-                const spriteId = planetData.animation.images.baseImage.id;
-                const sheet = gameData.data.SpriteSheet.getCached(spriteId);
-                if (!sheet) {
-                    gameData.data.SpriteSheet.get(spriteId).catch(() => { });
-                }
-                planetShapes.set(uuid,
-                    stellarRadarShape(stellarHullSize(sheet?.hulls)));
+                planetShapes.set(uuid, stellarRadarShape(
+                    stellarRadarSize(planetData.spriteFrameSize)));
             }
             // The selected target flashes on blink-ON refreshes.
             const targetUuid = entity.components.get(TargetComponent)?.target;
