@@ -14,7 +14,7 @@ import {
     INTERCEPTOR_ORBIT_RADIUS, NpcDecisionSystem, WAYPOINT_RADIUS,
 } from './npc_decision.js';
 import { chaserBlocksJump, departByJump, steerOutward } from './npc_departure.js';
-import { FormationComponent } from './npc_formation.js';
+import { FormationComponent, offFormationBusiness } from './npc_formation.js';
 import { NPC_BOARD_RADIUS, NPC_BOARD_SPEED } from './npc_plunder.js';
 import {
     CONTRABAND_SCAN_RANGE, CONTRABAND_SIT_RADIUS, CONTRABAND_SIT_SPEED,
@@ -404,11 +404,11 @@ export const NpcSteeringSystem = new System({
         // Escorts holding formation are steered by FormationSystem —
         // unless they are off doing something of their own, a plunder run
         // included (a warship peeling out of formation to board a hulk
-        // must not be dragged back to its station).
+        // must not be dragged back to its station). One list with
+        // FormationSystem's (offFormationBusiness), so exactly one of the
+        // two steers.
         if (formation && entities.has(formation.leader)
-            && npc.mode !== 'attack' && npc.mode !== 'flee'
-            && npc.mode !== 'depart' && npc.mode !== 'board'
-            && npc.mode !== 'scan') {
+            && !offFormationBusiness(npc.mode)) {
             return;
         }
         switch (npc.mode) {

@@ -114,6 +114,25 @@ export type Formation = t.TypeOf<typeof Formation>;
 export const FormationComponent = new Component<Formation>('FormationComponent');
 
 /**
+ * Whether an NPC escort in NPC mode `mode` is OFF ON BUSINESS OF ITS OWN,
+ * out of its formation slot: fighting, fleeing, leaving, flying over to
+ * plunder a hulk, or buzzing a player ship for a contraband scan. Both
+ * station-keeping (FormationSystem) and NpcSteeringSystem read this ONE
+ * list, so they never both steer the same ship.
+ *
+ * They used to keep a list each, and 'scan' was only in the steering's: a
+ * fleet's AI 4 escort (a stock Heraan Firebird with its Aurora Cruiser) in
+ * mode 'scan' was flown at the player by the scan arm and dragged back to
+ * its slot by the RCS station-keeper in the same tick. It never came
+ * within scan range, swung about near its station, and kept "trying to
+ * scan" for the whole visit (Matthew's playtest, 2026-11-24, Heraan).
+ */
+export function offFormationBusiness(mode: string | undefined): boolean {
+    return mode === 'attack' || mode === 'flee' || mode === 'depart'
+        || mode === 'board' || mode === 'scan';
+}
+
+/**
  * The first free formation slot on `leaderUuid`: one past the highest
  * slot number any live sibling holds (0 when the leader has no
  * followers yet).

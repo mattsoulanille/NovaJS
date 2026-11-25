@@ -975,10 +975,21 @@ export const NpcDecisionSystem = new System({
                 // ship that is only passing through (a released mission
                 // ship, a përs on its way) past its departure time: it
                 // still scans, then leaves on its clock below.
+                // A FLEET ESCORT (an AI 4 holding a formation slot on a live
+                // leader: a stock Heraan Firebird or Phoenix with its
+                // Aurora Cruiser) peels off to scan like any interceptor,
+                // but does not SIT on the ship afterwards: it goes back to
+                // its slot (GUESS, unmeasured: only lone cutters were seen
+                // to sit, reference waves 16-19; its leader's business
+                // comes first, as it does for a fleet's miner, which does
+                // not mine at all; docs/npc_behavior_gaps.md "Contraband
+                // scan: guesses to measure" 11).
+                const fleetEscort = formation !== undefined
+                    && entities.has(formation.leader);
                 if (scans && govtData) {
                     const hostileSet = new Set(hostiles.map(([u]) => u));
-                    const mayHold = held || !npc.passingThrough
-                        || time.time < npc.departAt;
+                    const mayHold = !fleetEscort && (held
+                        || !npc.passingThrough || time.time < npc.departAt);
                     const scanTarget = chooseScanTarget(npc.scanTarget,
                         scanCandidates.filter(([u]) => !hostileSet.has(u)),
                         govtData.scanMask, getEntity, gameData, mayHold,

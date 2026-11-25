@@ -318,6 +318,21 @@ sensible default, marked GUESS in the code, and wants a reference run:
 10. **The scanner's name** on the line is the target pane's (a përs's or
     mission ship's own name, else the ship class); the pilot's is the
     profile name.
+11. **A FLEET's AI 4 escort** (a stock Heraan Firebird or Phoenix holding
+    a slot on its AI 3 Aurora Cruiser; Matthew's playtest 2026-11-24,
+    "trying to scan me, but he never succeeds, and he flies strangely"):
+    BUG fixed 2026-11-24: FormationSystem held a 'scan' escort on station
+    while the scan arm flew it at the pilot, so it never came within
+    150 px and swung about near its slot all visit (one exemption list,
+    npc_formation.ts `offFormationBusiness`, now serves both). GUESSES
+    since: a fleet escort scans like any interceptor (peels off at top
+    speed), and after the scan goes BACK TO ITS SLOT instead of sitting
+    on the ship (lone cutters sat, waves 16-19; nothing measured a fleet).
+    Reference run wanted: a kit flët (an AI 3 lead, two AI 4 escorts of a
+    ScanMask govt) in the govt's system, a clean pilot and a pod pilot
+    still beside the port as the fleet passes: do the escorts leave the
+    formation to scan, does the lead wait or scan, and after the scan do
+    the escorts sit on the pilot or rejoin the lead?
 
 ### Legal records per system: guesses to measure
 

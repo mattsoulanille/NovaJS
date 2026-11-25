@@ -9,7 +9,9 @@ import { EscortCommandComponent } from '../player/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
-import { FormationComponent, formationSpacing, steerFormation } from './npc_formation.js';
+import {
+    FormationComponent, formationSpacing, offFormationBusiness, steerFormation,
+} from './npc_formation.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 
@@ -60,11 +62,10 @@ export const FormationSystem = new System({
             // takes, for the same reason.
             return;
         }
-        // Engaged escorts fight (or go plundering); FormationSystem only
-        // holds station.
-        if (npc && !escortCommand && (npc.mode === 'attack'
-            || npc.mode === 'flee' || npc.mode === 'depart'
-            || npc.mode === 'board')) {
+        // Engaged escorts fight (or go plundering, or scanning);
+        // FormationSystem only holds station. The same list as
+        // NpcSteeringSystem's (offFormationBusiness).
+        if (npc && !escortCommand && offFormationBusiness(npc.mode)) {
             return;
         }
         // Player-commanded escorts: station-keep only while the

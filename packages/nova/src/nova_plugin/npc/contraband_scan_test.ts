@@ -3,7 +3,7 @@ import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { getDefaultJunkData } from 'novadatainterface/junk_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
-import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
@@ -42,6 +42,7 @@ import {
 import { ContrabandScanEvent, ContrabandScanEventData } from './contraband_scan.js';
 import { ContrabandScannedComponent, flownOff } from './contraband_target.js';
 import { NpcComponent } from './npc_component.js';
+import { FormationComponent, offFormationBusiness } from './npc_formation.js';
 import {
     govtDispositionTo, localLaw, shipDisposition,
 } from '../reputation/index.js';
@@ -61,12 +62,18 @@ const NEIGHBOUR = 'test:neighbour';
 const SYSTEM = 'test:system';
 const CUTTER_HULL = 'test:cutter';
 const PLAYER_HULL = 'test:lancer';
+/** A fleet's lead and its AI 4 escort: stock Aurora Cruiser (shïp
+ * nova:300 class: slow) and Firebird (nova:155: 225 px/s, 144 px/s^2,
+ * 240°/s) physics. */
+const LEAD_HULL = 'test:cruiser';
+const ESCORT_HULL = 'test:firebird';
 const POD = 'test:pod';
 const LEGAL_GUN = 'test:legal';
 const SMUGGLED_JUNK = 'test:junk';
 const LEGAL_JUNK = 'test:junk-legal';
 const CUTTER = 'npc:cutter';
 const CUTTER_2 = 'npc:cutter2';
+const FLEET_LEADER = 'npc:fleet-lead';
 const PILOT = 'pilot:one';
 const PILOT_2 = 'pilot:two';
 const START_CREDITS = 1_000_000;
@@ -103,12 +110,24 @@ interface WorldOptions {
     pilot2?: Hold;
     /** A second interceptor. */
     secondCutter?: boolean;
+    /** The interceptor is a FLEET ESCORT: it holds formation slot 0 on
+     * an AI 3 leader of its govt (FLEET_LEADER) at (-200, 0), as a stock
+     * Heraan Firebird does on its Aurora Cruiser. */
+    fleetLeader?: boolean;
 }
 
 async function scanWorld(options: WorldOptions = {}) {
     const gameData = new MockGameData();
     gameData.data.Ship.map.set(CUTTER_HULL, { ...getDefaultShipData(), id: CUTTER_HULL });
     gameData.data.Ship.map.set(PLAYER_HULL, { ...getDefaultShipData(), id: PLAYER_HULL });
+    const hull = (id: string, physics: Partial<ShipData['physics']>) => {
+        const base = getDefaultShipData();
+        gameData.data.Ship.map.set(id,
+            { ...base, id, physics: { ...base.physics, ...physics } });
+    };
+    hull(LEAD_HULL, { speed: 60, acceleration: 40, turnRate: Math.PI / 3 });
+    hull(ESCORT_HULL,
+        { speed: 225, acceleration: 144, turnRate: 4 * Math.PI / 3 });
     const outfit = (id: string, extra: Partial<OutfitData>) =>
         gameData.data.Outfit.map.set(id, { ...getDefaultOutfitData(), id, ...extra });
     outfit(POD, { name: 'Kit Contraband Pod', lcName: 'kit contraband pod', scanMask: 0x0001 });
@@ -158,15 +177,27 @@ async function scanWorld(options: WorldOptions = {}) {
                 new Map(Object.entries(hold.cargo ?? {})));
         });
     const addCutter = (uuid: string, x: number) =>
-        addShip(uuid, CUTTER_HULL, new Position(x, 0), ship => {
-            ship.components.set(NpcComponent, { aiType: 4 });
-            ship.components.set(GovtComponent, { id: CUSTOMS });
-        });
+        addShip(uuid, options.fleetLeader ? ESCORT_HULL : CUTTER_HULL,
+            new Position(x, 0), ship => {
+                ship.components.set(NpcComponent, { aiType: 4 });
+                ship.components.set(GovtComponent, { id: CUSTOMS });
+            });
 
     const pilot = await addPilot(PILOT, 900, options.pilot);
     const pilot2 = options.pilot2
         ? await addPilot(PILOT_2, -900, options.pilot2) : undefined;
+    const leader = options.fleetLeader
+        ? await addShip(FLEET_LEADER, LEAD_HULL, new Position(-200, 0),
+            ship => {
+                ship.components.set(NpcComponent, { aiType: 3 });
+                ship.components.set(GovtComponent, { id: CUSTOMS });
+            })
+        : undefined;
     const cutter = await addCutter(CUTTER, 0);
+    if (leader) {
+        cutter.components.set(FormationComponent,
+            { leader: FLEET_LEADER, slot: 0 });
+    }
     if (options.secondCutter) {
         await addCutter(CUTTER_2, 50);
     }
@@ -181,7 +212,7 @@ async function scanWorld(options: WorldOptions = {}) {
         },
     }));
     world.step();
-    return { world, gameData, pilot, pilot2, cutter, scans };
+    return { world, gameData, pilot, pilot2, cutter, leader, scans };
 }
 
 function run(world: World, steps: number, each?: () => void) {
@@ -356,6 +387,49 @@ describe('Contraband scan (AI 4 interceptors)', () => {
             // Until it let go it stayed by its spot: no chase (he flew
             // past the leash in about 2.5 s; 20 px/s at most after him).
             expect(drift).toBeLessThan(100);
+        });
+
+    it('a FLEET ESCORT peels off to scan, reaches the pilot and scans him, '
+        + 'then goes back to its slot instead of sitting (Matthew 2026-11-24, '
+        + 'Heraan: the Firebird "trying to scan" that never did)', async () => {
+            const { world, pilot, cutter, leader } = await scanWorld(
+                { fleetLeader: true });
+            const npc = () => cutter.components.get(NpcComponent)!;
+            const at = (ship: Entity) =>
+                ship.components.get(MovementStateComponent)!.position;
+            expect(npc().mode).toBe('scan');
+            // FormationSystem used to hold it on station while the scan
+            // arm flew it at the pilot: it never came within scan range.
+            // Now it closes at top speed like any interceptor: the pilot
+            // is 900 px off, a few seconds' run.
+            expect(runUntilScanned(world, pilot, 10 * 60)).toBeTrue();
+            // Its leader's business comes first: no sit (GUESS), back to
+            // its slot behind the leader within a few seconds.
+            run(world, 60);
+            expect(npc().mode).not.toBe('scan');
+            expect(npc().scanTarget).toBeUndefined();
+            expect(npc().scanSatOn).toBeUndefined();
+            run(world, 10 * 60);
+            expect(at(cutter).subtract(at(leader!)).length)
+                .toBeLessThan(150);
+            expect(at(cutter).subtract(at(pilot)).length)
+                .toBeGreaterThan(CONTRABAND_SIT_LEASH);
+            // And it is not drawn back to the scanned pilot.
+            const modes = new Set<string | undefined>();
+            run(world, 600, () => modes.add(npc().mode));
+            expect(modes.has('scan')).toBeFalse();
+        });
+
+    it('exactly one of the formation keeper and the NPC steering flies an '
+        + 'escort, whatever its mode', () => {
+            for (const mode of ['attack', 'flee', 'depart', 'board', 'scan']) {
+                expect(offFormationBusiness(mode)).withContext(mode).toBeTrue();
+            }
+            for (const mode of [undefined, 'patrol', 'travel', 'dwell',
+                'mine', 'scoop']) {
+                expect(offFormationBusiness(mode)).withContext(String(mode))
+                    .toBeFalse();
+            }
         });
 
     it('the leash only binds an interceptor that has come up to the ship '
