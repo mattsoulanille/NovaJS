@@ -652,7 +652,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    govt's allies too; a ShipStart-2 rescue ship waits live instead of
 //    adrift; fleet escorts leave with their leader, not on their own
 //    rolls. The derived wire
-//    schema fingerprint changes (d3e842c4cfaedd4b -> COMBINEDFP),
+//    schema fingerprint changes (d3e842c4cfaedd4b -> 8389fa45cd30d491),
 //    and the join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;

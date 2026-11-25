@@ -10126,7 +10126,7 @@ see the reliability notes).
   `flownOff`, `npc_steering.ts`). The stay-for-the-visit sit is unchanged;
   a cutter still closing on a ship another one scanned closes at any
   distance. Schema-only under protocol 8 (wire fingerprint
-  51a63184211e887b -> da0885a9a4535f1c). Spec replaced:
+  51a63184211e887b -> 8389fa45cd30d491 (da0885a9a4535f1c before the reinforcement merge)). Spec replaced:
   `contraband_scan_test` "follows a scanned clean ship that flies off
   (GUESS)" -> "does NOT follow ...", plus `flownOff`.
 - Rescue: a ShipGoal-5 ship with ShipStart 2 spawns live with full
