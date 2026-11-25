@@ -59,47 +59,29 @@ import { LegalRecords } from './reputation.js';
  *    HAIL_RESPONSE_TABLE below.
  */
 
-/** Which of the two AI-type bribe flags applies to a ship of this aiType. */
+/**
+ * Whether a ship of this govt and aiType takes a bribe: gövt 0x2000
+ * "Freighters will take bribes" for AI 1 / AI 2, 0x0200 "Warships will
+ * take bribes" for everything else (an unknown aiType: an independent or
+ * player-spawned ship uses the warship flag as the general "will bargain"
+ * signal).
+ *
+ * 0x8000 "larger bribes" is NOT one of them. MEASURED (reference "R7 bribe
+ * price, wave 22", finding 5): gövt 303's warships (0x8000 alone) refused
+ * every Beg For Mercy ("Not a chance.", "You wish.", "Yeah, right!"); with
+ * 0x0200 as well (gövt 302) they named a price. 0x8000 only sets the size
+ * of a ship's demand ({@link shipBribePrice}) and makes the govt's PLANETS
+ * take bribes ({@link planetTakesBribes}).
+ */
 export function shipTakesBribes(govt: GovtData | undefined,
     aiType: number | undefined): boolean {
     if (!govt) {
         return false;
     }
-    if (govt.flags.largerBribes) {
-        // Pirates: always take (larger) bribes regardless of ship kind.
-        return true;
-    }
-    // aiType 1/2 = freighters, 3 = warship. Unknown aiType (independent /
-    // player-spawned) uses the warship flag as the general "will bargain"
-    // signal.
     if (aiType === 1 || aiType === 2) {
         return govt.flags.freightersTakeBribes;
     }
     return govt.flags.warshipsTakeBribes;
-}
-
-/**
- * The fraction of the player's cash a bribe costs. TUNABLE / ASSUMPTION: the
- * Bible only says "ships taking bribes will demand a larger percentage" for
- * largerBribes govts and gives no exact numbers. 10% is the ordinary demand;
- * pirate/largerBribes govts demand 30%. A pure function of the player's cash
- * and the flag, so the display and the sim agree without a random roll.
- */
-export const BRIBE_FRACTION = 0.10;
-export const BRIBE_FRACTION_LARGE = 0.30;
-/** A bribe is never smaller than this (so a near-broke player still pays). */
-export const BRIBE_MINIMUM = 500;
-
-/**
- * The credits a bribe/mercy plea costs, given the player's current cash and
- * whether the govt demands larger bribes. Rounded down to a whole credit and
- * capped at what the player actually has. Pure and total.
- */
-export function bribeAmount(playerCredits: number,
-    largerBribes: boolean): number {
-    const fraction = largerBribes ? BRIBE_FRACTION_LARGE : BRIBE_FRACTION;
-    const demand = Math.max(BRIBE_MINIMUM, Math.floor(playerCredits * fraction));
-    return Math.min(demand, Math.max(0, Math.floor(playerCredits)));
 }
 
 /**
@@ -531,10 +513,134 @@ export const FUEL_SALE_CASH_DIVISOR = 3;
  */
 export function fuelAskingBase(shipUuid: string, pilot: FuelSalePilot):
     number {
-    const credits = Math.max(0, Math.floor(pilot.credits) || 0);
-    const cap = FUEL_SALE_PRICE_STEP * Math.max(1, Math.floor(
-        credits / (FUEL_SALE_CASH_DIVISOR * FUEL_SALE_PRICE_STEP)));
-    return Math.min(fuelSaleTerms(shipUuid).base, cap);
+    return Math.min(fuelSaleTerms(shipUuid).base,
+        askingCashCap(pilot.credits));
+}
+
+/**
+ * THE CASH CAP on a first ask, fuel and bribes alike: a third of the
+ * pilot's cash ({@link FUEL_SALE_CASH_DIVISOR}), rounded down to a
+ * {@link FUEL_SALE_PRICE_STEP}, and never below one step, even for a
+ * pilot who has less (he is asked 1,000 all the same). MEASURED for the
+ * fuel sale (reference "H1 wave 19" / "... wave 20") and for bribes
+ * (reference "R7 bribe price, wave 22", finding 2: at 10,000 credits every
+ * ask above 3,000 came out 3,000, the 0x8000 ships' 20,000 included; at
+ * 300 credits every ask was 1,000). Non-finite or negative cash counts as
+ * none.
+ */
+export function askingCashCap(credits: number): number {
+    const cash = Math.max(0, Math.floor(credits) || 0);
+    return FUEL_SALE_PRICE_STEP * Math.max(1, Math.floor(
+        cash / (FUEL_SALE_CASH_DIVISOR * FUEL_SALE_PRICE_STEP)));
+}
+
+/**
+ * ============================================================================
+ * The price of a bribe (reference "R7 bribe price, wave 22")
+ * ============================================================================
+ *
+ * The original's bribe is THOUSANDS OF CREDITS, not a share of the cash
+ * (finding 1: 1,000-4,000 at 1M, 1,000-18,000 at 20M, 3,000-99,000 at
+ * 100M, always a whole 1,000). Its terms, as far as measured:
+ *
+ *  - A SHIP's price (Beg For Mercy) is the fuel sale's: the ship's own
+ *    mood and step ({@link fuelSaleTerms}: good 1,000, neutral 2,000-3,000,
+ *    bad 3,000-4,000) and its mood line (finding 3: the same lines, the same
+ *    spreads up to about 1M). A ship of a 0x8000 govt that takes bribes at
+ *    all ({@link shipTakesBribes}) asks a FLAT 20,000 instead, whatever its
+ *    mood (finding 5: six asks at 1M and 20M);
+ *  - A PLANET asks 3,000, or 4,000 for a 0x8000 govt, at every cash level
+ *    up to 1M (finding 4: eight asks), with no mood;
+ *  - above about 1M the ordinary price GROWS with the cash, very unevenly
+ *    ({@link bribeGrowth});
+ *  - a third of the cash caps it and 1,000 is the floor
+ *    ({@link askingCashCap});
+ *  - the legal record (-50 vs -2000) and the combat rating (0 vs 30000)
+ *    play no part (finding 6), so neither is an input.
+ *
+ * NOT MODELLED: one plain (0x4000) planet refused the bribe outright at
+ * 100M ("You wish."), unexplained (chance or cash; a wave-22 leftover);
+ * the haggle's Lower Price (3/4 or a withdrawal, as for fuel) and a second
+ * offer in the same channel answered as an insult; a NEW hail's new price
+ * (the 0x8000 planet asked 25,000, then 99,000): here the price is fixed
+ * per ship (or planet) and pilot for given cash.
+ *
+ * Pure over synced state (the target's and pilot's uuids, the pilot's
+ * cash, the govt's flags), so the dialog's quote and applyHail's charge
+ * agree on every peer without the PRNG.
+ */
+
+/** The floor of every bribe, 1,000 even for a pilot with less (finding 2;
+ * the cash cap's own floor, {@link askingCashCap}). */
+export const BRIBE_MINIMUM = FUEL_SALE_PRICE_STEP;
+
+/** A 0x8000 govt's bribe-taking SHIP asks this, flat, before the cash cap.
+ * MEASURED (finding 5: 20,000 at 1M and at 20M, six asks, every mood). */
+export const LARGER_SHIP_BRIBE = 20_000;
+
+/** A planet's price before the growth and the cap: an ordinary (0x4000)
+ * govt's and a 0x8000 govt's. MEASURED at 10k-1M (finding 4). */
+export const PLANET_BRIBE_BASE = 3_000;
+export const PLANET_LARGER_BRIBE_BASE = 4_000;
+
+/**
+ * The growth's range is the pilot's cash divided by this
+ * ({@link bribeGrowth}). A GUESS fitted to bracket every ask measured
+ * above 1M: 5M -> up to 4,000 more (planet 6,000; ships 2,000-4,000), 20M
+ * -> up to 19,000 more (1,000-18,000), 100M -> up to 99,000 more (3,000-
+ * 99,000).
+ */
+export const BRIBE_GROWTH_CASH_DIVISOR = 1_000;
+
+/**
+ * WHAT THE CASH ADDS to an ordinary bribe above about 1M: a draw in
+ * [0, cash / {@link BRIBE_GROWTH_CASH_DIVISOR}), rounded DOWN to 1,000.
+ * Below 1M that is always 0, so up to 1M the price is exactly the
+ * measured ladder; at 1M-2M it is 0 or 1,000.
+ *
+ * MEASURED: the asks grow with the cash and spread very widely (a "good
+ * mood" asked 1,000, 3,000 and 8,000 at 20M; a 0x8000 planet 4,000 at
+ * 20M and 25,000 / 99,000 at 100M). GUESSES: the linear range, the even
+ * draw and its seed (16 bits of a hash of the target and the pilot, so
+ * one ship asks one pilot one price for given cash; the original
+ * re-draws on a new hail).
+ */
+export function bribeGrowth(credits: number, targetUuid: string,
+    playerUuid: string): number {
+    const cash = Math.max(0, Math.floor(credits) || 0);
+    const range = Math.floor(cash / BRIBE_GROWTH_CASH_DIVISOR);
+    const draw = avalanche(hashString(
+        `bribe:grow:${targetUuid}:${playerUuid}`)) & 0xffff;
+    // Integers throughout (range < 2^37 for any plausible cash, times
+    // 2^16 stays exact in a double).
+    const extra = Math.floor(range * draw / 0x10000);
+    return FUEL_SALE_PRICE_STEP * Math.floor(extra / FUEL_SALE_PRICE_STEP);
+}
+
+/**
+ * The price a bribe-taking SHIP names for Beg For Mercy (or for its help,
+ * an unfriendly govt's 'forPay', GUESS: priced the same): its fuel-sale
+ * base plus the cash's growth, or 20,000 flat for a 0x8000 govt, capped
+ * by a third of the cash with a floor of 1,000. See the section comment.
+ */
+export function shipBribePrice(shipUuid: string, playerUuid: string,
+    credits: number, largerBribes: boolean): number {
+    const ask = largerBribes ? LARGER_SHIP_BRIBE
+        : fuelSaleTerms(shipUuid).base
+        + bribeGrowth(credits, shipUuid, playerUuid);
+    return Math.min(ask, askingCashCap(credits));
+}
+
+/**
+ * The price a refusing PLANET names for landing clearance: 3,000 (4,000
+ * for a 0x8000 govt) plus the cash's growth, capped by a third of the cash
+ * with a floor of 1,000. See the section comment.
+ */
+export function planetBribePrice(planetUuid: string, playerUuid: string,
+    credits: number, largerBribes: boolean): number {
+    const ask = (largerBribes ? PLANET_LARGER_BRIBE_BASE : PLANET_BRIBE_BASE)
+        + bribeGrowth(credits, planetUuid, playerUuid);
+    return Math.min(ask, askingCashCap(credits));
 }
 
 /**
@@ -900,6 +1006,11 @@ export const CANT_AFFORD_FALLBACK =
  */
 export const PAY_ME_INDEX = 186;
 export const PAY_ME_FALLBACK = 'Pay me';
+/** A planet's bribe demand, "Pay us 3,000 credits." (reference "R7 bribe
+ * price, wave 22"): STR# 2002's "Pay us" (index 187) in place of "Pay
+ * me". */
+export const PAY_US_INDEX = 187;
+export const PAY_US_FALLBACK = 'Pay us';
 export const CREDITS_WORD_INDEX = 32;
 export const CREDITS_WORD_FALLBACK = 'credits';
 
@@ -1131,12 +1242,15 @@ export function fuelOfferWithdrawnText(
 /**
  * The haggle popup's demand line, "Pay me 1,000 credits.", from STR# 2002's
  * "Pay me" (186) and "credits" (32) (`miscStrings`, or their pinned
- * literals). The figure is grouped with commas as on the reference capture,
- * independent of the browser's locale.
+ * literals); a planet's (`who` 'us') says "Pay us" (187). The figure is
+ * grouped with commas as on the reference capture, independent of the
+ * browser's locale.
  */
 export function payMeText(miscStrings: readonly string[] | undefined,
-    price: number): string {
-    const payMe = miscString(miscStrings, PAY_ME_INDEX, PAY_ME_FALLBACK);
+    price: number, who: 'me' | 'us' = 'me'): string {
+    const payMe = who === 'us'
+        ? miscString(miscStrings, PAY_US_INDEX, PAY_US_FALLBACK)
+        : miscString(miscStrings, PAY_ME_INDEX, PAY_ME_FALLBACK);
     const credits = miscString(miscStrings, CREDITS_WORD_INDEX,
         CREDITS_WORD_FALLBACK);
     const figure = Math.floor(price).toString()
@@ -1295,6 +1409,22 @@ export function miscString(strings: readonly string[] | undefined,
  * greeting deterministically from a ship's uuid, so the client-side dialog
  * chooses the same line on every peer and every re-hail (never Math.random).
  */
+/**
+ * MurmurHash3's 32-bit finalizer: every output bit depends on every input
+ * bit, so a narrow field of a {@link hashString} (`% 4`) splits evenly
+ * even when the strings differ only in their last character. Pure integer
+ * arithmetic, identical on every peer.
+ */
+export function avalanche(hash: number): number {
+    let h = hash >>> 0;
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    h ^= h >>> 16;
+    return h >>> 0;
+}
+
 export function hashString(value: string): number {
     let hash = 0x811c9dc5;
     for (let i = 0; i < value.length; i++) {
@@ -1344,21 +1474,5 @@ export function greetingText(opts: {
         ? opts.govtCommName
         : 'this vessel';
     return `Greetings from ${who}. Fly safe, captain.`;
-}
-
-/**
- * MurmurHash3's 32-bit finalizer: every output bit depends on every input
- * bit, so a narrow field of a {@link hashString} (`% 4`) splits evenly
- * even when the strings differ only in their last character. Pure integer
- * arithmetic, identical on every peer.
- */
-export function avalanche(hash: number): number {
-    let h = hash >>> 0;
-    h ^= h >>> 16;
-    h = Math.imul(h, 0x85ebca6b) >>> 0;
-    h ^= h >>> 13;
-    h = Math.imul(h, 0xc2b2ae35) >>> 0;
-    h ^= h >>> 16;
-    return h >>> 0;
 }
 

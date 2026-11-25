@@ -16,7 +16,7 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { escortParent, EscortAction } from '../nova_plugin/escorts/index.js';
 import {
-    assistGrantedText, ASSIST_GRANTED_FALLBACK, bribeAmount, busyResponseText,
+    assistGrantedText, ASSIST_GRANTED_FALLBACK, busyResponseText,
     BUSY_RESPONSE_FALLBACK, assistIsFree, canRequestAssistance, channelOpenText,
     CLEARED_TO_DOCK_INDEX, CLEARED_TO_LAND_INDEX, DOCKING_DENIED_INDEX, genericGreetings,
     greetingText, HAIL_RESPONSE_TABLE, hashString, hostileResponseText, LANDING_DENIED_INDEX,
@@ -32,7 +32,8 @@ import {
     MERCY_REFUSED_FALLBACK, assistNeed, disabledRefusalText, fuelSaleMoodText,
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
-    NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText,
+    NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText, planetBribePrice,
+    shipBribePrice,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -865,12 +866,23 @@ export async function computeContext(world: World,
             return undefined;
         }
         if (response.kind === 'hostile') {
-            const largerBribes = !!govt?.flags.largerBribes;
-            const amount = bribeAmount(credits, largerBribes);
-            const bribe = response.canBribe && !othersShip
+            // The ship's price (hail.ts's shipBribePrice, reference "R7
+            // bribe price, wave 22"), named in the fuel sale's words: the
+            // ship's mood line ("I'm in a bad mood today, so it's going to
+            // cost extra.") and "Pay me N credits.".
+            const amount = shipBribePrice(shipTargetUuid, player.uuid,
+                credits, !!govt?.flags.largerBribes);
+            const priced = response.canBribe && !othersShip;
+            const miscStrings = priced
+                ? await loadStrings(displayAssets, MISC_STRING_TABLE)
+                : undefined;
+            const bribe = priced
                 ? {
                     amount, canAfford: credits >= amount && amount > 0,
                     purpose: 'mercy' as const,
+                    offer: fuelSaleMoodText(shipStrings,
+                        fuelSaleTerms(shipTargetUuid).mood, shipSeed),
+                    demand: payMeText(miscStrings, amount),
                     // What they say once the demand is PAID (STR# 3000
                     // 135-139). Resolved here because the Pay handler is
                     // synchronous, exactly like the assistance replies.
@@ -1039,9 +1051,10 @@ export async function computeContext(world: World,
                 : {}),
         };
         // The price of an unfriendly ship's help, on the haggle page its
-        // answer opens: the SAME percentage-of-cash demand a mercy plea
-        // costs (bribeAmount), which applyHail re-derives when Pay arrives.
-        const amount = bribeAmount(credits, !!govt?.flags.largerBribes);
+        // answer opens: the SAME demand a mercy plea costs (GUESS:
+        // shipBribePrice), which applyHail re-derives when Pay arrives.
+        const amount = shipBribePrice(shipTargetUuid, player.uuid, credits,
+            !!govt?.flags.largerBribes);
         const bribe = assist && replies.forPay !== undefined
             && replies.escort === undefined
             ? {
@@ -1121,18 +1134,21 @@ export async function computeContext(world: World,
         // a hostile ship offers Beg For Mercy. Price and affordability are the
         // same pure functions the simulation re-derives in applyHail, so the
         // dialog never shows a number the sim would disagree with.
+        // The price is hail.ts's planetBribePrice (reference "R7 bribe
+        // price, wave 22"), demanded as "Pay us N credits.".
+        const stellarStrings = await loadStrings(displayAssets,
+            STELLAR_RESPONSE_TABLE);
+        const miscStrings = await loadStrings(displayAssets, MISC_STRING_TABLE);
         const canBribe = !clearance.cleared && planetTakesBribes(govt);
-        const amount = bribeAmount(credits, !!govt?.flags.largerBribes);
+        const amount = planetBribePrice(planetTargetUuid, player.uuid, credits,
+            !!govt?.flags.largerBribes);
         const bribe = canBribe
             ? {
                 amount, canAfford: credits >= amount && amount > 0,
                 purpose: 'landing' as const,
+                demand: payMeText(miscStrings, amount, 'us'),
             }
             : undefined;
-
-        const stellarStrings = await loadStrings(displayAssets,
-            STELLAR_RESPONSE_TABLE);
-        const miscStrings = await loadStrings(displayAssets, MISC_STRING_TABLE);
         const seed = hashString(planetTargetUuid);
         // "Channel open to Earth." — the reference's own opening line
         // (hail/hail_planet.png), from STR# 3002's channel-open group with the

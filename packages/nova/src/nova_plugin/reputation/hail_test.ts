@@ -31,14 +31,20 @@ import {
     ASSIST_REFUSED_FIRST_INDEX,
     justAnEscortText,
     rudeGreetingText,
-    bribeAmount,
+    askingCashCap,
+    bribeGrowth,
+    BRIBE_GROWTH_CASH_DIVISOR,
+    LARGER_SHIP_BRIBE,
+    planetBribePrice,
+    PLANET_BRIBE_BASE,
+    PLANET_LARGER_BRIBE_BASE,
+    shipBribePrice,
+    PAY_US_INDEX,
     busyResponseText,
     BUSY_RESPONSE_COUNT,
     BUSY_RESPONSE_FALLBACK,
     BUSY_RESPONSE_FIRST_INDEX,
     shipIsFighting,
-    BRIBE_FRACTION,
-    BRIBE_FRACTION_LARGE,
     BRIBE_MINIMUM,
     canRequestAssistance,
     greetingText,
@@ -80,31 +86,177 @@ describe('shipTakesBribes', () => {
         expect(shipTakesBribes(withFlags({ warshipsTakeBribes: true }), 2))
             .toBe(false);
     });
-    it('largerBribes (pirates) always take bribes regardless of aiType', () => {
-        expect(shipTakesBribes(withFlags({ largerBribes: true }), 1)).toBe(true);
-        expect(shipTakesBribes(withFlags({ largerBribes: true }), 3)).toBe(true);
-    });
+    it('0x8000 (larger bribes) alone does NOT make a ship take bribes '
+        + '(MEASURED, R7 wave 22, finding 5)', () => {
+            expect(shipTakesBribes(withFlags({ largerBribes: true }), 1))
+                .toBe(false);
+            expect(shipTakesBribes(withFlags({ largerBribes: true }), 3))
+                .toBe(false);
+            // With the aiType's own flag it does.
+            expect(shipTakesBribes(withFlags({
+                largerBribes: true, warshipsTakeBribes: true,
+            }), 3)).toBe(true);
+            expect(shipTakesBribes(withFlags({
+                largerBribes: true, freightersTakeBribes: true,
+            }), 1)).toBe(true);
+        });
     it('no govt never takes bribes', () => {
         expect(shipTakesBribes(undefined, 3)).toBe(false);
     });
 });
 
-describe('bribeAmount', () => {
-    it('demands the ordinary fraction of cash', () => {
-        expect(bribeAmount(100_000, false))
-            .toBe(Math.floor(100_000 * BRIBE_FRACTION));
-    });
-    it('demands the larger fraction for pirate govts', () => {
-        expect(bribeAmount(100_000, true))
-            .toBe(Math.floor(100_000 * BRIBE_FRACTION_LARGE));
-    });
-    it('never falls below the minimum but never exceeds the player cash', () => {
-        expect(bribeAmount(1000, false)).toBe(BRIBE_MINIMUM);
-        // A player poorer than the minimum pays everything they have.
-        expect(bribeAmount(200, false)).toBe(200);
-    });
-    it('is deterministic: same inputs, same output (no randomness)', () => {
-        expect(bribeAmount(54_321, true)).toBe(bribeAmount(54_321, true));
+/**
+ * Reference "R7 bribe price, wave 22": thousands, not a share of the cash;
+ * a third of the cash caps it and 1,000 is the floor; a ship's price is the
+ * fuel sale's, a 0x8000 govt's ship a flat 20,000; a planet 3,000 / 4,000;
+ * growth above about 1M.
+ */
+describe('the bribe price', () => {
+    /** Ship ids by fuel-sale mood and base (fuelSaleTerms, pinned in the
+     * fuel sale's specs below). */
+    const GOOD = 'ship3'; // 1,000
+    const NEUTRAL_LOW = 'ship0'; // 2,000
+    const BAD_HIGH = 'ship13'; // 4,000
+    const ships = Array.from({ length: 400 }, (_, i) => `ship ${i}`);
+
+    it('the cash cap: a third, in 1,000s, never under 1,000 (finding 2)',
+        () => {
+            expect(askingCashCap(10_000)).toBe(3_000);
+            expect(askingCashCap(9_000)).toBe(3_000);
+            expect(askingCashCap(8_999)).toBe(2_000);
+            expect(askingCashCap(300)).toBe(1_000);
+            expect(askingCashCap(0)).toBe(1_000);
+            expect(askingCashCap(-5)).toBe(1_000);
+            expect(askingCashCap(NaN)).toBe(1_000);
+            expect(BRIBE_MINIMUM).toBe(1_000);
+        });
+
+    it('a ship asks its fuel-sale price up to 1M: good 1,000, neutral '
+        + '2,000-3,000, bad 3,000-4,000 (finding 3)', () => {
+            for (const credits of [100_000, 1_000_000]) {
+                expect(shipBribePrice(GOOD, 'player', credits, false))
+                    .toBe(1_000);
+                expect(shipBribePrice(NEUTRAL_LOW, 'player', credits, false))
+                    .toBe(2_000);
+                expect(shipBribePrice(BAD_HIGH, 'player', credits, false))
+                    .toBe(4_000);
+            }
+            for (const ship of ships) {
+                expect(shipBribePrice(ship, 'player', 1_000_000, false))
+                    .toBe(fuelSaleTerms(ship).base);
+            }
+        });
+
+    it('capped by a third of the cash, and 1,000 even at 300 credits '
+        + '(finding 2: 10,000 -> 3,000, 300 -> 1,000)', () => {
+            expect(shipBribePrice(BAD_HIGH, 'player', 10_000, false))
+                .toBe(3_000);
+            expect(shipBribePrice(GOOD, 'player', 10_000, false)).toBe(1_000);
+            for (const ship of ships) {
+                expect(shipBribePrice(ship, 'player', 300, false)).toBe(1_000);
+                expect(shipBribePrice(ship, 'player', 10_000, false))
+                    .toBeLessThanOrEqual(3_000);
+            }
+        });
+
+    it('a 0x8000 govt\'s ship asks a flat 20,000 whatever its mood, capped '
+        + '(finding 5: 1M and 20M 20,000; 10k 3,000)', () => {
+            expect(LARGER_SHIP_BRIBE).toBe(20_000);
+            for (const ship of [GOOD, NEUTRAL_LOW, BAD_HIGH, ...ships]) {
+                expect(shipBribePrice(ship, 'player', 1_000_000, true))
+                    .toBe(20_000);
+                expect(shipBribePrice(ship, 'player', 20_000_000, true))
+                    .toBe(20_000);
+                expect(shipBribePrice(ship, 'player', 10_000, true))
+                    .toBe(3_000);
+                expect(shipBribePrice(ship, 'player', 300, true))
+                    .toBe(1_000);
+            }
+        });
+
+    it('a planet asks 3,000, or 4,000 for 0x8000, up to 1M (finding 4)',
+        () => {
+            expect(PLANET_BRIBE_BASE).toBe(3_000);
+            expect(PLANET_LARGER_BRIBE_BASE).toBe(4_000);
+            for (const planet of ships) {
+                expect(planetBribePrice(planet, 'player', 1_000_000, false))
+                    .toBe(3_000);
+                expect(planetBribePrice(planet, 'player', 1_000_000, true))
+                    .toBe(4_000);
+                // 10,000 credits: 3,000 for both (the cap).
+                expect(planetBribePrice(planet, 'player', 10_000, true))
+                    .toBe(3_000);
+                expect(planetBribePrice(planet, 'player', 300, false))
+                    .toBe(1_000);
+            }
+        });
+
+    it('above about 1M it grows with the cash, in 1,000s, inside the '
+        + 'measured spreads (5M: 2,000-6,000; 20M: 1,000-18,000; 100M: '
+        + '3,000-99,000)', () => {
+            expect(BRIBE_GROWTH_CASH_DIVISOR).toBe(1_000);
+            const spread = (credits: number, price: (id: string) => number) => {
+                const asks = ships.map(price);
+                for (const ask of asks) {
+                    expect(ask % 1_000).toBe(0);
+                }
+                return { min: Math.min(...asks), max: Math.max(...asks) };
+            };
+            // Ships: the base plus [0, cash / 1,000), floored to 1,000s.
+            const s20 = spread(20e6, id =>
+                shipBribePrice(id, 'player', 20e6, false));
+            expect(s20.min).toBe(1_000);
+            expect(s20.max).toBeGreaterThanOrEqual(18_000);
+            expect(s20.max).toBeLessThanOrEqual(4_000 + 19_000);
+            const s100 = spread(100e6, id =>
+                shipBribePrice(id, 'player', 100e6, false));
+            expect(s100.max).toBeGreaterThanOrEqual(90_000);
+            expect(s100.max).toBeLessThanOrEqual(4_000 + 99_000);
+            // Planets: 5M asked 6,000, 20M 9,000-18,000 (and 4,000 for
+            // 0x8000), 100M 25,000 and 99,000 (0x8000).
+            const p5 = spread(5e6, id =>
+                planetBribePrice(id, 'player', 5e6, false));
+            expect(p5.min).toBe(3_000);
+            expect(p5.max).toBe(7_000);
+            const p100 = spread(100e6, id =>
+                planetBribePrice(id, 'player', 100e6, true));
+            expect(p100.min).toBe(4_000);
+            expect(p100.max).toBeGreaterThanOrEqual(99_000);
+            // Under 1M nothing grows; at 1M-2M 0 or 1,000.
+            for (const id of ships) {
+                expect(bribeGrowth(999_999, id, 'player')).toBe(0);
+                expect(bribeGrowth(1_000_000, id, 'player')).toBe(0);
+                expect([0, 1_000]).toContain(bribeGrowth(1_999_999, id,
+                    'player'));
+            }
+        });
+
+    it('the growth draw is a fixed hash of the target and the pilot (no '
+        + 'PRNG), and moves with neither the record nor the rating', () => {
+            for (const id of ships.slice(0, 50)) {
+                expect(bribeGrowth(50e6, id, 'player'))
+                    .toBe(bribeGrowth(50e6, id, 'player'));
+                expect(shipBribePrice(id, 'p', 50e6, false))
+                    .toBe(shipBribePrice(id, 'p', 50e6, false));
+            }
+            // Different pilots can be asked different prices.
+            const prices = new Set(['a', 'b', 'c', 'd', 'e', 'f'].map(p =>
+                bribeGrowth(50e6, 'ship 1', p)));
+            expect(prices.size).toBeGreaterThan(1);
+            // Huge or nonsense cash stays an exact multiple of 1,000.
+            expect(bribeGrowth(1e12, 'ship 1', 'p') % 1_000).toBe(0);
+            expect(bribeGrowth(NaN, 'ship 1', 'p')).toBe(0);
+            expect(bribeGrowth(-1e9, 'ship 1', 'p')).toBe(0);
+        });
+
+    it('a planet demands "Pay us N credits." (STR# 2002 187)', () => {
+        const misc: string[] = [];
+        misc[186] = 'Pay me';
+        misc[PAY_US_INDEX] = 'Pay us';
+        misc[32] = 'credits';
+        expect(payMeText(misc, 3000, 'us')).toBe('Pay us 3,000 credits.');
+        expect(payMeText(misc, 20000)).toBe('Pay me 20,000 credits.');
+        expect(payMeText(undefined, 1000, 'us')).toBe('Pay us 1,000 credits.');
     });
 });
 
@@ -383,10 +535,18 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
         });
     it('makes the player PAY when its unfriendly govt takes bribes from a '
         + 'ship of its kind', () => {
-        const pirate = withFlags({ xenophobic: true, largerBribes: true });
+        const pirate = withFlags({
+            xenophobic: true, largerBribes: true, warshipsTakeBribes: true,
+        });
         expect(assistWillingness({
             disposition: 'hostile', govt: pirate, aiType: 3,
         })).toBe('forPay');
+        // 0x8000 alone takes no bribe (R7 wave 22, finding 5): unwilling.
+        expect(assistWillingness({
+            disposition: 'hostile',
+            govt: withFlags({ xenophobic: true, largerBribes: true }),
+            aiType: 3,
+        })).toBe('unwilling');
         // Freighter flag for freighters, warship flag for warships.
         const traders = withFlags({ freightersTakeBribes: true });
         expect(assistWillingness({
@@ -586,6 +746,10 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
                         counters++;
                     }
                 }
+                expect(counters / 4000).withContext(`ask ${ask}`)
+                    .toBeGreaterThan(0.22);
+                expect(counters / 4000).withContext(`ask ${ask}`)
+                    .toBeLessThan(0.28);
             }
         });
 
@@ -744,10 +908,6 @@ describe('shipIsFighting', () => {
     it('is false for the peaceful modes, even with a target', () => {
         for (const mode of ['travel', 'dwell', 'patrol', 'depart', undefined]) {
             expect(shipIsFighting({ npcMode: mode, npcTarget: 'someone' }))
-                expect(counters / 4000).withContext(`ask ${ask}`)
-                    .toBeGreaterThan(0.22);
-                expect(counters / 4000).withContext(`ask ${ask}`)
-                    .toBeLessThan(0.28);
                 .withContext(`mode ${mode}`).toBeFalse();
         }
     });

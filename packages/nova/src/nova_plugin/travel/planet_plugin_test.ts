@@ -620,7 +620,7 @@ describe('planet bribes', () => {
         place(ship, stellar.position);
         ship.components.set(LegalRecordsComponent,
             new Map([[SYSTEM, -1]]));
-        ship.components.set(CreditsComponent, { credits: 10_000 });
+        ship.components.set(CreditsComponent, { credits: 100_000 });
         return { world, ship, stellar };
     }
 
@@ -633,10 +633,12 @@ describe('planet bribes', () => {
 
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
 
-            // Charged: the Amber Compact sets largerBribes, so 30% of
-            // 10,000.
+            // Charged: the Amber Compact sets largerBribes, so its planet
+            // asks 4,000 (hail.ts's planetBribePrice, reference "R7 bribe
+            // price, wave 22"; no growth under 1M, a third of 100,000 is
+            // no cap).
             expect(ship.components.get(CreditsComponent)!.credits)
-                .toEqual(10_000 - 3_000);
+                .toEqual(100_000 - 4_000);
             const bribes = ship.components.get(StellarBribesComponent)!;
             // Keyed by the stellar's NOVA id, not its entity uuid.
             expect(bribes.get(PORT_ID)).toBeDefined();
@@ -673,17 +675,25 @@ describe('planet bribes', () => {
         expect(ship.components.has(StellarBribesComponent)).toBeFalse();
     }, 30_000);
 
-    it('charges a near-broke pilot everything they have, exactly as the '
-        + 'ship bribe does', async () => {
+    it('a third of the cash caps the price; a pilot under the 1,000 floor '
+        + 'cannot pay it at all (R7 wave 22, finding 2)', async () => {
             const { world, ship } = await shutOutHarness();
-            // Below the 500-credit floor (hail.ts BRIBE_MINIMUM), so
-            // bribeAmount caps the demand at the player's whole purse.
-            ship.components.set(CreditsComponent, { credits: 100 });
-
+            // 4,000 capped to a third of 9,000.
+            ship.components.set(CreditsComponent, { credits: 9_000 });
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
-
-            expect(ship.components.get(CreditsComponent)!.credits).toEqual(0);
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(6_000);
             expect(pressLand(world).blocked).toEqual([]);
+
+            // 300 credits are asked 1,000 (hail.ts BRIBE_MINIMUM), as the
+            // original asked; nothing is taken and the port stays shut.
+            const poor = await shutOutHarness();
+            poor.ship.components.set(CreditsComponent, { credits: 300 });
+            applyHail(poor.world, undefined, { kind: 'bribe', target: PORT });
+            expect(poor.ship.components.get(CreditsComponent)!.credits)
+                .toEqual(300);
+            expect(pressLand(poor.world).blocked[0].reason)
+                .toEqual('denied');
         }, 30_000);
 
     it('takes nothing from a penniless pilot and leaves the port shut',

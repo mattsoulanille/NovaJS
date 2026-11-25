@@ -29,7 +29,6 @@ import {
     assistNeed,
     AssistWillingness,
     assistWillingness,
-    bribeAmount,
     canRequestAssistance,
     FUEL_SALE_AMOUNT,
     fuelAskingBase,
@@ -38,7 +37,9 @@ import {
     fuelSalePrice,
     lowerFuelPrice,
     NO_FUEL_HAGGLE,
+    planetBribePrice,
     planetTakesBribes,
+    shipBribePrice,
     shipHailResponse,
     shipIsFighting,
 } from '../reputation/index.js';
@@ -293,17 +294,18 @@ function playerNeed(player: Entity) {
  *    this govt will take bribes", or 0x8000 whose Bible text ends "...and
  *    their planets will always take bribes" (hail.ts's planetTakesBribes).
  *    An INDEPENDENT stellar has no government and so never bargains.
- *  3. The player must be able to afford the demand, which is the SAME
- *    percentage-of-cash figure a ship demands (hail.ts's bribeAmount), with
- *    the pirate/largerBribes surcharge — the Bible gives no separate planet
- *    price, so the ship convention is reused rather than invented (a
- *    documented assumption).
+ *  3. The player must be able to afford the demand: hail.ts's
+ *    planetBribePrice (reference "R7 bribe price, wave 22": 3,000, or
+ *    4,000 for a 0x8000 govt, growing with the cash above about 1M,
+ *    capped by a third of it, never below 1,000; a pilot with less than
+ *    the floor cannot pay).
  *
  * The effect is one map entry on the player: this stellar's NOVA id -> the
  * simulation time the clearance lapses. Time comes from TimeResource, never
  * Date.now, so the expiry is identical on every peer.
  */
-function applyPlanetBribe(world: World, player: Entity, target: Entity) {
+function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
+    target: Entity, targetUuid: string) {
     const planetData = target.components.get(PlanetDataComponent);
     const planetId = target.components.get(PlanetComponent)?.id;
     const gameData = world.resources.get(SimulationGameDataResource);
@@ -334,7 +336,8 @@ function applyPlanetBribe(world: World, player: Entity, target: Entity) {
     if (!credits) {
         return;
     }
-    const amount = bribeAmount(credits.credits, !!govt?.flags.largerBribes);
+    const amount = planetBribePrice(targetUuid, playerUuid, credits.credits,
+        !!govt?.flags.largerBribes);
     if (amount <= 0 || credits.credits < amount) {
         return;
     }
@@ -370,7 +373,8 @@ export function applyHail(world: World, peerId: string | undefined,
     // for landing clearance.
     if (target.components.has(PlanetComponent)) {
         if (action.kind === 'bribe') {
-            applyPlanetBribe(world, player, target);
+            applyPlanetBribe(world, player, found.uuid, target,
+                action.target);
         }
         return;
     }
@@ -538,8 +542,9 @@ export function applyHail(world: World, peerId: string | undefined,
                 if (!credits) {
                     return;
                 }
-                const amount = bribeAmount(credits.credits,
-                    !!targetGovt?.flags.largerBribes);
+                // GUESS: help is priced like the ship's bribe (unmeasured).
+                const amount = shipBribePrice(action.target, found.uuid,
+                    credits.credits, !!targetGovt?.flags.largerBribes);
                 if (amount <= 0 || credits.credits < amount) {
                     return;
                 }
@@ -614,7 +619,11 @@ export function applyHail(world: World, peerId: string | undefined,
     if (!credits) {
         return;
     }
-    const amount = bribeAmount(credits.credits,
+    // The ship's price (hail.ts's shipBribePrice, reference "R7 bribe
+    // price, wave 22"): its fuel-sale ask grown with the cash, or 20,000
+    // flat for a 0x8000 govt, capped by a third of the cash, floor 1,000.
+    // A pilot who cannot pay it pays nothing and stays unpacified.
+    const amount = shipBribePrice(action.target, found.uuid, credits.credits,
         !!targetGovt?.flags.largerBribes);
     if (amount <= 0 || credits.credits < amount) {
         return;

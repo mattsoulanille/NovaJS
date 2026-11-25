@@ -1003,7 +1003,11 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             const pirate = {
                 ...gameData.data.Govt.defaultValue!, id: 'test:pirate',
             };
-            pirate.flags = { ...pirate.flags, largerBribes: true };
+            // 0x8000 prices it; 0x0200 makes its warships take one at all
+            // (reference "R7 bribe price, wave 22", finding 5).
+            pirate.flags = {
+                ...pirate.flags, largerBribes: true, warshipsTakeBribes: true,
+            };
             gameData.data.Govt.map.set('test:pirate', pirate);
             world.entities.get(PLAYER)!.components
                 .set(CreditsComponent, { credits: 10_000 });
@@ -1012,6 +1016,15 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             expect(result!.context.bribe?.purpose).toBe('mercy');
             expect(result!.context.bribe?.accepted)
                 .toBe(MERCY_ACCEPTED_FALLBACK);
+            // The price in the fuel sale's words: the ship's mood line,
+            // then "Pay me N credits." (20,000 flat, capped to a third of
+            // 10,000).
+            expect(result!.context.bribe?.amount).toBe(3000);
+            expect(result!.context.bribe?.demand)
+                .toBe('Pay me 3,000 credits.');
+            expect(result!.context.bribe?.offer).toBeDefined();
+            expect(haggleText(result!.context.bribe)).toBe(
+                `${result!.context.bribe?.offer}\nPay me 3,000 credits.`);
         });
 
     it('opens a NON-TALKATIVE govt\'s channel too, with nothing to greet '
@@ -1365,9 +1378,13 @@ describe('computeContext: hailing a STELLAR', () => {
                 "We'll let you slip by the security barrier if you pay us.");
             // STR# 2002 index 173, painted red by identityRuns.
             expect(result?.context.heading).toBe('Earth\nStatus: Hostile');
-            // 10% of 10,000 (this govt is not a largerBribes one).
-            expect(result?.context.bribe)
-                .toEqual({ amount: 1000, canAfford: true, purpose: 'landing' });
+            // A plain (0x4000) govt's planet asks 3,000, here also a third
+            // of 10,000 (reference "R7 bribe price, wave 22"), in its own
+            // words.
+            expect(result?.context.bribe).toEqual({
+                amount: 3000, canAfford: true, purpose: 'landing',
+                demand: 'Pay us 3,000 credits.',
+            });
         });
 
     it('refuses flatly when the port will not be bought', async () => {
@@ -1660,6 +1677,7 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                     flags: {
                         ...getDefaultGovtData().flags,
                         xenophobic: true, largerBribes: true,
+                        warshipsTakeBribes: true,
                     },
                 });
                 const player = world.entities.get(PLAYER)!;
@@ -1674,9 +1692,10 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                 expect(await corners(world, gameData)).toBe('neutral');
                 // Rude: Greetings gets the curt group, not a greeting.
                 expect(context.greeting).toBe(HOSTILE_RESPONSE_FALLBACK);
-                // The price of its help: the mercy demand (30% here).
+                // The price of its help: the mercy demand (a 0x8000 govt's
+                // flat 20,000 here; GUESS that help costs the same).
                 expect(context.bribe).toEqual({
-                    amount: 30_000, canAfford: true, purpose: 'assist',
+                    amount: 20_000, canAfford: true, purpose: 'assist',
                     offer: ASSIST_FOR_PAY_FALLBACK,
                     accepted: ASSIST_PAID_FALLBACK,
                 });
@@ -1694,7 +1713,7 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                 expect(haggle.phase).toBe('haggle');
                 expect(haggleText(haggle.context.bribe)).toBe(
                     `${ASSIST_FOR_PAY_FALLBACK}\nThey demand `
-                    + `${(30_000).toLocaleString()} credits to help you.`);
+                    + `${(20_000).toLocaleString()} credits to help you.`);
                 expect(hailPress(haggle, { kind: 'pay' }, context)).toEqual({
                     phase: 'main', context: {
                         ...haggle.context, body: ASSIST_PAID_FALLBACK,
@@ -2016,7 +2035,9 @@ describe('computeContext on the synthetic data set (ruling #297)', () => {
             expect(commButtonSlots('ship', context))
                 .toEqual(['greetings', 'assist', 'close']);
             expect(context.bribe?.purpose).toBe('assist');
-            expect(context.bribe?.amount).toBe(5_000);
+            // The ship's own fuel-sale ask (no 0x8000, 50,000 credits: no
+            // growth, no cap), reference "R7 bribe price, wave 22".
+            expect(context.bribe?.amount).toBe(fuelSaleTerms(TARGET).base);
             expect(assistAnswer(world, TARGET, result!.replies).haggle)
                 .toBeTrue();
         });

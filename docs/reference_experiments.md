@@ -11322,6 +11322,40 @@ credits.".
   percentage.
 - `shipTakesBribes`: 0x8000 no longer implies "takes bribes".
 
+**Applied (wave-22 fixes, 2026-11-24, `N/nova_plugin/reputation/hail.ts`).**
+- 1-3: `shipBribePrice` replaces `bribeAmount`'s 10% / 30%: the ship's
+  fuel-sale ask (`fuelSaleTerms`: good 1,000, neutral 2,000-3,000, bad
+  3,000-4,000) plus the growth below, capped by `askingCashCap` (the fuel
+  sale's cap, now shared: a third of the cash in 1,000s, never under
+  1,000). Beg For Mercy's haggle page says the ship's mood line
+  (`fuelSaleMoodText`) and "Pay me N credits." (`payMeText`). An
+  unfriendly govt's price for HELP is priced the same (GUESS: unmeasured).
+- Growth above 1M (`bribeGrowth`): a draw in [0, cash / 1,000), floored to
+  1,000s, from an avalanched hash of the target and the pilot. Exactly 0
+  up to 1M (the measured ladder), 0 or 1,000 at 1M-2M; 5M up to +4,000,
+  20M up to +19,000, 100M up to +99,000. MEASURED: the spreads it brackets
+  (5M planet 6,000; 20M 1,000-18,000; 100M 3,000-99,000). INTERPOLATED /
+  GUESS: the linear range, the even draw, and one price per target and
+  pilot for given cash (the original re-draws on a new hail: 25,000 then
+  99,000).
+- 4: `planetBribePrice`: 3,000 (0x4000), 4,000 (0x8000), plus the same
+  growth and cap; the dialog says "Pay us N credits." (STR# 2002 187).
+  NOT modelled: the plain planet's refusal at 100M (unexplained: chance or
+  cash, a leftover).
+- 5: `shipTakesBribes` no longer lets 0x8000 alone take bribes (0x0200
+  warships / 0x2000 freighters decide; every stock 0x8000 govt sets both,
+  so stock behaviour only changes in price). A 0x8000 govt's bribe-taking
+  ship asks `LARGER_SHIP_BRIBE`, a flat 20,000, before the cap.
+- 6: no record or rating term (neither is an input).
+- A pilot who cannot pay (under the 1,000 floor, or under a capped price)
+  keeps his money: the haggle page shows the price, "You cannot afford
+  it." and no Pay button (unchanged), and applyHail charges nothing.
+- NOT modelled: the bribe's Lower Price (3/4 or a withdrawal) and the
+  "insult" answer to a second Offer Bribe; the page still offers Pay /
+  Never Mind. `npc_plunder.ts`'s floor follows BRIBE_MINIMUM (now 1,000,
+  so the plunder floor is 2,000).
+- No schema change.
+
 Confidence: high for 1, 2 and 5 (every ask on screen); medium for 3-4's
 small-cash figures (they repeat the fuel sale's); low for the growth's
 shape; medium for 6 (one run each).
@@ -11593,6 +11627,18 @@ once).
 - `FUEL_COUNTER_IN_FIVE`: one in four (a `% 4 < 1` test) or keep two in
   five as within the noise; the data say about 25%.
 
+**Applied (wave-22 fixes, 2026-11-24, `N/nova_plugin/reputation/hail.ts`).**
+- 2: `FUEL_COUNTER_IN_FIVE = 2` is now `FUEL_COUNTER_IN_FOUR = 1`: a first
+  Lower Price counters one press in four (`% 4 < 1`), drawn from an
+  avalanched hash of ship, pilot and ask (`avalanche`, MurmurHash3's
+  finalizer: the raw FNV-1a's `% 4` repeated every four asks). About 25%
+  at every ask over 4,000 ships (spec'd). Deterministic as before (no
+  PRNG).
+- 1: not applied. No record rule fits every point (record -5 asked both
+  1,000 and 2,000, clean and -8 / -9 only 1,000), so a good mood stays
+  1,000 and `fuelSaleTerms`'s comment now cites both -5 sightings.
+- 3, 4: nothing to change. No schema change.
+
 Confidence: medium for 1 (two 2,000s in five goods at -5), high for 2's
 count (the shots), high for 3 (three ships), high for 4.
 
@@ -11627,18 +11673,6 @@ count (the shots), high for 3 (three ships), high for 4.
   in Flags but "no distress messages" in Flags2; the first Kit Quiet Attr
   set the wrong word. Read the Bible's flag list header before using a bit.
 - **`j` beside a planet does nothing;** fly a few hundred px off first. A
-**Applied (wave-22 fixes, 2026-11-24, `N/nova_plugin/reputation/hail.ts`).**
-- 2: `FUEL_COUNTER_IN_FIVE = 2` is now `FUEL_COUNTER_IN_FOUR = 1`: a first
-  Lower Price counters one press in four (`% 4 < 1`), drawn from an
-  avalanched hash of ship, pilot and ask (`avalanche`, MurmurHash3's
-  finalizer: the raw FNV-1a's `% 4` repeated every four asks). About 25%
-  at every ask over 4,000 ships (spec'd). Deterministic as before (no
-  PRNG).
-- 1: not applied. No record rule fits every point (record -5 asked both
-  1,000 and 2,000, clean and -8 / -9 only 1,000), so a good mood stays
-  1,000 and `fuelSaleTerms`'s comment now cites both -5 sightings.
-- 3, 4: nothing to change. No schema change.
-
   jump back into a system arrives off the port's radar (no blip, no arrow
   in one shot): landing after a jump needs a steering driver.
 - **A planet's bribe dialog stays up after a Lower Price COUNTER**
@@ -12113,7 +12147,7 @@ cosmetic or rare.
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
 | R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-48` | CPl with escorts (pilot-make `escorts`), PD | M |
-| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | `N/nova_plugin/reputation/hail.ts:83-93` | CPl with exact cash at 2-3 levels, SS | H |
+| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price | CPl with exact cash at 2-3 levels, SS | H |
 | R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |

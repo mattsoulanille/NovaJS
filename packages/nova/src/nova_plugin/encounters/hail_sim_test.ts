@@ -60,8 +60,18 @@ async function makeWorld() {
     const pirate = getDefaultGovtData();
     pirate.id = 'test:pirate';
     pirate.flags.xenophobic = true;
+    // 0x8000 sets the price (a flat 20,000) and 0x0200 lets its warships
+    // take one at all (reference "R7 bribe price, wave 22", finding 5).
     pirate.flags.largerBribes = true;
+    pirate.flags.warshipsTakeBribes = true;
     gameData.data.Govt.map.set('test:pirate', pirate);
+    // 0x8000 ALONE: its ships refuse every bribe (finding 5, gövt 303).
+    const proud = getDefaultGovtData();
+    proud.id = 'test:proud';
+    proud.flags.xenophobic = true;
+    proud.flags.largerBribes = true;
+    gameData.data.Govt.map.set('test:proud', proud);
+    await gameData.data.Govt.get('test:proud');
     // A peaceful govt that will lend a hand: Roadside Assistance (Flags2
     // 0x0010, "always repair or refuel the player for free"). A plain
     // neutral govt helps nobody for free (reference H1 wave 16): see
@@ -147,9 +157,10 @@ describe('applyHail: bribe / beg for mercy', () => {
             });
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
 
-            // 30% of 100k for a largerBribes govt.
+            // A 0x8000 govt's ship asks a flat 20,000 (reference "R7
+            // bribe price, wave 22", finding 5).
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(70_000);
+                .toBe(80_000);
             const npc = target(world).components.get(NpcComponent)!;
             expect(npc.pacifiedFrom).toBe('player');
             expect(npc.pacifiedUntil).toBeGreaterThan(0);
@@ -210,13 +221,13 @@ describe('applyHail: bribe / beg for mercy', () => {
             });
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(70_000);
+                .toBe(80_000);
             const until =
                 target(world).components.get(NpcComponent)!.pacifiedUntil;
 
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(70_000);
+                .toBe(80_000);
             // Nor is the reprieve silently extended by the free press.
             expect(target(world).components.get(NpcComponent)!.pacifiedUntil)
                 .toBe(until);
@@ -247,15 +258,55 @@ describe('applyHail: bribe / beg for mercy', () => {
             ship.components.set(TargetComponent, { target: 'player' });
         });
         applyHail(world, PEER, { kind: 'bribe', target: 'target' });
-        // 10% of 100k (armed is not a largerBribes govt).
+        // The ship's fuel-sale ask ('target' is in a good mood: 1,000;
+        // armed is not a 0x8000 govt), reference "R7 ..., wave 22".
         expect(player(world).components.get(CreditsComponent)!.credits)
-            .toBe(90_000);
+            .toBe(99_000);
         const npc = target(world).components.get(NpcComponent)!;
         expect(npc.pacifiedFrom).toBe('player');
         expect(npc.pacifiedUntil).toBeGreaterThan(0);
         expect(target(world).components.get(TargetComponent)!.target)
             .toBeUndefined();
     });
+
+    it('a 0x8000 govt\'s ship WITHOUT 0x0200 refuses: nothing charged, '
+        + 'nothing pacified (MEASURED, R7 wave 22, finding 5)', async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('target', 500, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:proud' });
+                ship.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'player' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(100_000);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBeUndefined();
+        });
+
+    it('the price: capped by a third of the cash, and 1,000 even for a '
+        + 'poorer pilot, who cannot pay it (R7 wave 22, finding 2)',
+        async () => {
+            for (const [cash, after] of [[10_000, 7_000], [300, 300],
+                [1_000, 0]] as const) {
+                const { world, addShip } = await makeWorld();
+                player(world).components.set(CreditsComponent,
+                    { credits: cash });
+                await addShip('target', 500, 0, ship => {
+                    ship.components.set(GovtComponent, { id: 'test:pirate' });
+                    ship.components.set(NpcComponent,
+                        { aiType: 3, mode: 'attack', aggressor: 'player' });
+                    ship.components.set(TargetComponent, { target: 'player' });
+                });
+                applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+                expect(player(world).components.get(CreditsComponent)!
+                    .credits).withContext(`${cash}`).toBe(after);
+                expect(target(world).components.get(NpcComponent)!
+                    .pacifiedFrom).withContext(`${cash}`)
+                    .toBe(after === cash ? undefined : 'player');
+            }
+        });
 
     it('the pacify reprieve lapses after BRIBE_PACIFY_MS', async () => {
         const { world, addShip } = await makeWorld();
@@ -584,9 +635,10 @@ describe('applyHail: hostility is the ship\'s IFF (ruling #297)', () => {
         async () => {
             const { world } = await fleeingAggressor('test:armed', 0);
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
-            // 10% of 100k (armed is not a largerBribes govt).
+            // 'target' asks its good mood's 1,000 (armed is not a 0x8000
+            // govt; reference "R7 bribe price, wave 22").
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(90_000);
+                .toBe(99_000);
             expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
                 .toBe('player');
         });
@@ -722,7 +774,7 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                     .toBeFalse();
                 applyHail(world, PEER, { kind: 'bribe', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
-                    .toBe(90_000);
+                    .toBe(99_000);
                 expect(target(world).components.get(NpcComponent)!
                     .pacifiedFrom).toBe('player');
             });
@@ -936,22 +988,23 @@ describe('applyHail: an unfriendly ship refuses or charges; an escort '
             await addShip('target', 150, 0, boughtOff('test:pirate'));
             applyHail(world, PEER,
                 { kind: 'requestAssistance', target: 'target' });
-            // 30% of 100k: the same demand a mercy plea from it costs.
+            // A 0x8000 govt's flat 20,000: the same demand a mercy plea
+            // from it costs (GUESS for help).
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(70_000);
+                .toBe(80_000);
             expect(target(world).components.get(AssistingComponent))
                 .toEqual({ client: 'player' });
             // A second Pay press while it is on its way charges nothing.
             applyHail(world, PEER,
                 { kind: 'requestAssistance', target: 'target' });
             expect(player(world).components.get(CreditsComponent)!.credits)
-                .toBe(70_000);
+                .toBe(80_000);
         });
 
     it('refuses, and charges nothing, when the player cannot pay',
         async () => {
-            // bribeAmount caps the demand at the player's cash, so only an
-            // empty purse cannot pay at all.
+            // An empty purse is asked the 1,000 floor (shipBribePrice) and
+            // cannot pay it.
             const { world, addShip } = await makeWorld();
             player(world).components.set(DisabledComponent, { repairAt: null });
             player(world).components.set(CreditsComponent, { credits: 0 });
@@ -1171,6 +1224,8 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
     it('two pilots haggle with one ship separately', async () => {
         const { world } = await neutralWorld();
         fuelless(world);
+        // Countered, then withdrawn: the second ask, 2,000.
+        applyHail(world, PEER, lower);
         applyHail(world, PEER, lower);
         target(world).components.get(FuelHaggleComponent)!
             .set('someone else', { asks: 7, countered: false });
@@ -1224,8 +1279,6 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
     it('a pilot who cannot pay: Accept Price and Lower Price change '
         + 'nothing and are not an ask (reference P1 / H1 wave 18: "You '
         + 'can\'t fool me - you can\'t afford it.")', async () => {
-        // Countered, then withdrawn: the second ask, 2,000.
-        applyHail(world, PEER, lower);
             const { world } = await neutralWorld(3);
             fuelless(world);
             player(world).components.set(CreditsComponent, { credits: 300 });

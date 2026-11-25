@@ -72,25 +72,27 @@ export const NPC_PLUNDER_TAKES_FROM_PLAYERS = true;
  *
  * A cut of the player's cash — Matthew's ruling — and it MUST COST MORE
  * THAN BUYING THEM OFF. That relation is the whole design: a hostile ship
- * you can still fly away from will take `bribeAmount` (hail.ts) to leave
- * you alone, so if letting yourself be disabled and boarded were cheaper,
- * the bribe would be strictly dominated and nobody would ever pay one.
+ * you can still fly away from will take `shipBribePrice` (hail.ts) to
+ * leave you alone, so if letting yourself be disabled and boarded were
+ * cheaper, the bribe would be strictly dominated and nobody would ever pay
+ * one.
  *
  * So both terms of the demand are pegged above the bribe's:
  *
- *  - the FRACTION is above BRIBE_FRACTION_LARGE (0.30), the biggest cut
- *    any bribe takes — the pirate/`largerBribes` one, which is exactly the
- *    kind of government that carries the plunder flag in the first place;
- *  - the FLOOR is DERIVED from BRIBE_MINIMUM rather than written out, so
- *    raising the bribe floor cannot silently leave a cheap plunder behind
- *    it.
+ *  - the FRACTION is above a third, the cash cap on any bribe (hail.ts's
+ *    askingCashCap, reference "R7 bribe price, wave 22": no bribe asks
+ *    more than a third of the cash, rounded down to 1,000s);
+ *  - the FLOOR is DERIVED from BRIBE_MINIMUM (1,000, which a bribe asks
+ *    even of a poorer pilot) rather than written out, so raising the bribe
+ *    floor cannot silently leave a cheap plunder behind it.
  *
- * The one place the two can be EQUAL is a purse too small to satisfy
- * either demand: both are capped at what the player actually has, and
- * nobody can take more than everything. npc_boarding_test pins the
- * relation (>= always, > whenever the bribe is not already taking the
- * whole purse) across a sweep of purses and both bribe flags, so the two
- * functions cannot drift apart.
+ * The one place the two can be EQUAL is a purse that is exactly the
+ * bribe: the plunder is capped at what the player actually has, and
+ * nobody can take more than everything. A purse under the bribe's floor
+ * cannot pay the bribe at all. npc_boarding_test pins the relation (>=
+ * every payable bribe, > whenever the bribe is not already taking the
+ * whole purse) across a sweep of purses, ships and both bribe flags, so
+ * the two functions cannot drift apart.
  *
  * PURE AND DETERMINISTIC: a function of the synced CreditsComponent
  * alone, with no roll, so every peer deducts the same amount on the same
@@ -104,7 +106,7 @@ export const NPC_PLUNDER_CREDIT_MINIMUM = 2 * BRIBE_MINIMUM;
 /**
  * The credits pirates take off a disabled player: the larger of the
  * fraction and the floor, capped at what the player actually has.
- * Mirrors bribeAmount's shape exactly, one tier up.
+ * The shape of a cash-capped demand, one tier above the bribe's.
  */
 export function npcPlunderCredits(playerCredits: number): number {
     const purse = Math.max(0, Math.floor(playerCredits));

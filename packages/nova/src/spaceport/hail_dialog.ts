@@ -133,12 +133,15 @@ export interface HailContext {
         /**
          * What the ship says as it names its price (STR# 3000 140-144, "All
          * right, I'll give you some help, but it'll cost you."), shown at
-         * the head of the haggle page. Help offers only.
+         * the head of the haggle page. Help offers, and a ship's mercy
+         * price, where it is the ship's mood line (reference "R7 bribe
+         * price, wave 22").
          */
         offer?: string,
         /**
          * The popup's demand line as the ship words it ("Pay me 1,000
-         * credits.", STR# 2002 186 + 32). Fuel offers only.
+         * credits.", STR# 2002 186 + 32; a planet's "Pay us", 187). Fuel
+         * offers, and a ship's or planet's bribe.
          */
         demand?: string,
         /**
@@ -610,8 +613,12 @@ export function haggleText(bribe: HailContext['bribe']): string {
     }
     const what = bribe.purpose === 'landing' ? 'let you land'
         : bribe.purpose === 'assist' ? 'help you' : 'let you go';
-    const demand = `They demand ${bribe.amount.toLocaleString()} credits to `
-        + `${what}.${bribe.canAfford ? '' : ' You cannot afford it.'}`;
+    // A bribe's own words where the caller has them (reference "R7 bribe
+    // price, wave 22": a ship's "Pay me N credits.", a planet's "Pay us N
+    // credits."); the shortfall note is NovaJS's (no Pay button then).
+    const demand = (bribe.demand
+        ?? `They demand ${bribe.amount.toLocaleString()} credits to `
+        + `${what}.`) + (bribe.canAfford ? '' : ' You cannot afford it.');
     return bribe.offer ? `${bribe.offer}\n${demand}` : demand;
 }
 

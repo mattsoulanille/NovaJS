@@ -25,7 +25,9 @@ import {
     NPC_PLUNDER_CREDIT_MINIMUM, NPC_PLUNDER_TAKES_FROM_PLAYERS,
     PlayerPlunderedEvent,
 } from './npc_ai_plugin.js';
-import { BRIBE_FRACTION_LARGE, BRIBE_MINIMUM, bribeAmount } from '../reputation/index.js';
+import {
+    BRIBE_MINIMUM, FUEL_SALE_CASH_DIVISOR, shipBribePrice,
+} from '../reputation/index.js';
 import { ActiveMission, CreditsComponent, MissionsComponent } from '../player/index.js';
 import { playerPlunderedMessage } from '../../display/status_bar_content.js';
 import { ControlledByComponent } from '../player/index.js';
@@ -401,15 +403,22 @@ describe('pirates plundering a disabled player', () => {
             // fraction and floor are both pegged above the bribe's, and
             // the floor is literally derived from BRIBE_MINIMUM.
             expect(NPC_PLUNDER_CREDIT_FRACTION)
-                .toBeGreaterThan(BRIBE_FRACTION_LARGE);
+                .toBeGreaterThan(1 / FUEL_SALE_CASH_DIVISOR);
             expect(NPC_PLUNDER_CREDIT_MINIMUM)
                 .toBeGreaterThan(BRIBE_MINIMUM);
 
             for (const purse of [0, 1, 4, 99, 499, 500, 501, 999, 1000, 1001,
                 1999, 2000, 2001, 5_000, 12_345, 100_000, 9_999_999]) {
                 const plunder = npcPlunderCredits(purse);
-                for (const larger of [false, true]) {
-                    const bribe = bribeAmount(purse, larger);
+                for (const [ship, larger] of [['ship0', false],
+                    ['ship3', false], ['ship13', false], ['ship 7', false],
+                    ['ship0', true]] as const) {
+                    const bribe = shipBribePrice(ship, 'player', purse,
+                        larger);
+                    // A purse under the bribe's floor cannot pay it.
+                    if (bribe > purse) {
+                        continue;
+                    }
                     expect(plunder)
                         .withContext(`purse ${purse}, larger ${larger}`)
                         .toBeGreaterThanOrEqual(bribe);
@@ -435,7 +444,7 @@ describe('pirates plundering a disabled player', () => {
         expect(npcPlunderCredits(100_000))
             .toEqual(100_000 * NPC_PLUNDER_CREDIT_FRACTION);
         // ...and the floor below that.
-        expect(npcPlunderCredits(1_500)).toEqual(NPC_PLUNDER_CREDIT_MINIMUM);
+        expect(npcPlunderCredits(3_000)).toEqual(NPC_PLUNDER_CREDIT_MINIMUM);
     });
 
     it('is a pure function of synced credits, with no roll', () => {

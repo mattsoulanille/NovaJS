@@ -62,7 +62,7 @@ import {
  *    the owner rolled the dude table with plain randomness."
  *
  * Which discipline applies is decided by ONE question: can the simulation
- * reproduce the value? For a hail bribe it can — `bribeAmount` is a pure
+ * reproduce the value? For a hail bribe it can — `shipBribePrice` is a pure
  * function of synced state — so it must. For a mission acceptance it
  * cannot, and not for want of trying: the sim has no access to mission
  * game data AT ALL (a deliberate architectural line — see
