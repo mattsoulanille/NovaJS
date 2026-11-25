@@ -752,7 +752,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    take-offs in the system, and the crossing into another system drops
 //    the whole component (pilot/transition_prep.ts, applied to the carried
 //    player before the destination inserts it). The derived wire schema
-//    fingerprint changes (b3344196d35e2ebd -> FPNEW), and the
+//    fingerprint changes (b3344196d35e2ebd -> 794b422a9a516ea5), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
