@@ -181,10 +181,11 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     for a fresh pilot. So the colour follows the record's SIGN, not
  *     hostility nor the Legal Status word. A mixed system (one port open)
  *     stays blue at any record (measured, Kit Map Mixed at -500 and -5); see
- *     landable.ts systemRefusesLanding. GUESS: a positive record still
- *     below MinStatus is orange (unmeasured; predicted by the sign rule),
- *     and a refusal for another reason (a travel permit, ränk 0x0200)
- *     follows the same record rule.
+ *     landable.ts systemRefusesLanding. A positive record still below
+ *     MinStatus is orange too (measured, reference "Wave-24 leftovers,
+ *     wave 25": Kit Map Picky at +50 against MinStatus 100). GUESS: a
+ *     refusal for another reason (a travel permit, ränk 0x0200) follows
+ *     the same record rule.
  *
  * NOT THE LEGAL STATUS WORD, NOR THE GOVERNMENT'S FLAGS (Matthew's playtest,
  * 2026-11-24: "the system does not like me, but it's still blue instead of
