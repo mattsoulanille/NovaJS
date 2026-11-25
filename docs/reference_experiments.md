@@ -13302,6 +13302,48 @@ Confidence: high (direct shots; clicks read back from the right column).
 `05-c_n2a.png` one click, `07-c_n2dbl.png`, `08-c_n3.png`, `11-done1.png` the
 transit line, `14-regmap.png` the regular map from N3).
 
+**Applied (wave-27 fixes, 2026-11-25).**
+- Unexplored destinations (`N/spaceport/gate_map.ts`,
+  `N/spaceport/system_graph.ts`): the selection half of 301baa7d is
+  reverted. `computeGateMapView` offers every destination of the gate's
+  links whatever the player knows of it (`GateMapViewer.discoveryOf` is
+  gone), and `SystemGraph` forces every offered destination onto the map, so
+  an unexplored one is the #424242 ring with no label, neighbour or not.
+  The comment and the 301baa7d specs are rewritten for this section.
+- One click picks it; further clicks on the picked system keep it picked
+  (the toggle-off NovaJS had is gone, after the table's "two more clicks
+  and a double-click keep it selected"); Done transits.
+- The gate map had no properties column at all; it now has the star map's
+  (`systemProperties`, `renderPropertyLines`): "Current System: <name>" and
+  the rest of the column over "- Please select a hypergate destination -"
+  (wave 24's bottom line, caption grey, centred where Ports / Navigation
+  Hazards go) until a pick, then "Hypergate Destination: <name>" or
+  "<Unknown>" with "Ports:" / "Navigation Hazards:" (both "<Unknown>" for an
+  unexplored system). Legal Status reads the docked ship's records
+  (`GateMapResult.legalRecords`).
+- Lanes (`N/spaceport/starmap_draw.ts` `LANE_COLOR` / `GATE_MAP_LANE_COLOR`):
+  the star map's and the `h` minimap's are #4a4a4a (was 0x666666; sampled
+  on every `map/*.png` shot and `mini_map.png`), the gate map's #080808.
+- The first `l` on a hypergate (`N/nova_plugin/travel/planet_plugin.ts`,
+  new display-only `LandingClearedEvent`; `N/display/status_bar_content.ts`
+  `hypergateClearedMessage`): the press that targets the gate runs its
+  clearance at once, wherever the ship is. Cleared: one of #91 / #92 / #93,
+  picked at random per press (the named forms use the player's ship name;
+  #93 when there is none). Refused: "Hypergate usage denied." on that same
+  first press (wave 23's `vnp/*/03-l1.png` was a first `l`). The window
+  lines still come from the second `l`. Not changed: a gate already
+  targeted (clicked, number key) still goes straight to the window on `l`
+  (unmeasured whether the original clears first there).
+- Browser-checked at HG-V01 (HypergatePass rank, VNP-002 and South
+  Manchester unexplored): "Shuttle 1, you're cleared for hypergate entry."
+  on the first `l`; the map's two #424242 destinations; one real click on
+  South Manchester read "Hypergate Destination: <Unknown>", a second click
+  kept it, Done transited.
+- Not applied (side finding): the arrival line after a gate transit is
+  still "Jumping into the South Manchester system on ..."; the table's
+  original reads "Exiting hypergate in the Kit Gate N3 system on June 23rd,
+  1177 NC.".
+
 ### Map dot colours, wave 27: a TRAVEL-PERMIT refusal leaves the system BLUE (2026-11-25)
 
 **Question** (wave-25 leftover): a refusal that is not MinStatus.
@@ -13337,6 +13379,18 @@ override that lets the player land should still un-colour it: unmeasured).
 Confidence: high (one clean read; the colour is unambiguous).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w27/permit/*/` (`02-l1.png`, `04-map.png`), `permit_map/*/` (`02-map.png`, `03-map_permit.png`).
+
+**Applied (wave-27 fixes, 2026-11-25, `N/spaceport/starmap.ts`
+`refusingSystems`, `N/nova_plugin/travel/planet_plugin.ts`
+`stellarClearanceWith`, `N/nova_plugin/reputation/stellar_clearance.ts`
+`planetClearance`).** The map asks the landing clearance with the new
+`ignoreTravelPermit`, so a port that refuses only for an unmet gövt
+Require leaves the dot blue; a port that ALSO fails MinStatus still
+colours it. The landing gate is unchanged ("Landing request denied.").
+The GUESS in `N/spaceport/starmap_draw.ts` is now marked measured for the
+permit; the ränk 0x0200 / bribe / mission-destination overrides stay
+GUESSES. A fresh stock pilot's 35 coloured systems are unchanged (the
+stock-data spec passes as it was).
 
 ### Plunder self-destruct blast, wave 27: 25.5 + 0.037 x the hulk's mass from 100 t up (nothing from 50 t), to the shield and then the armor in full; repeatable to the pixel; the floor IS the boarder's disable threshold (a 10% hull went to 30%) (2026-11-25)
 
