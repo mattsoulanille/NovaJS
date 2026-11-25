@@ -308,11 +308,17 @@ export default {
 
 /**
  * Wave-31 experiments (docs/reference_experiments.md, "... wave 31").
- * Nothing retired (no mïsn needed). sÿst 1278-1299, spöb 1744-1799, oütf
- * 467. Map row y = -2220 (x -800 .. 40). The next free ids: sÿst 1300+, spöb
- * 1800+ (spares 1495, 1496, 1499), shïp 547+, düde 477+, ränk 205+, mïsn
- * NONE (retire an old kit mission to add one), gövt 297 and below, flët
- * 317+, wëap 295+, oütf 468+, bits 9250+.
+ * Nothing retired (no mïsn needed). sÿst 1278-1300, spöb 1744-1800, shïp
+ * 547, düde 477, oütf 467. Map row y = -2220 (x -800 .. 80). The next free
+ * ids: sÿst 1301+, spöb 1801+ (spares 1495, 1496, 1499), shïp 548+, düde
+ * 478+, ränk 205+, mïsn NONE (retire an old kit mission to add one), gövt
+ * 297 and below, flët 317+, wëap 295+, oütf 468+, bits 9250+.
+ *
+ * LESSONS: the kit's self-fed launcher (wëap 289: AmmoType = itself,
+ * MaxAmmo 5, no ammo oütf) is NOT plunderable ammo (the dialog shows a bare
+ * "5" and the Ammo take does nothing, with or without its launcher
+ * outfit); the stock IR Missile pair (wëap 134, oütf 134 / 135) shows "10
+ * IR missiles" and the take works: use stock pairs for Ammo.
  *
  * Every rig starts the pilot at rest on a decoration stellar (spöb flags 0)
  * at (0, 0) beside ONE stellar at (d, 0), as wave 29-30's Kit Gate Far. A
@@ -342,7 +348,10 @@ export default {
  *      x 72 art; 1796-1799).
  *  A   oütf 467 Kit Ammo Launcher (ModType 1, ModVal 289): wave 30's Ammo
  *      take did nothing with wëap 289 written into the pilot without an
- *      outfit ("No Secondary Weapon"); this installs it as an outfit.
+ *      outfit; this installs it as an outfit (it still took nothing).
+ *      Added during the wave: shïp 547 Kit Hulk IR (the live 50 t hulk with
+ *      the stock IR Missile, wëap 134 x1 / 10 rounds), düde 477, the only
+ *      traffic of sÿst 1300 Kit Board IR (port spöb 1800).
  */
 function wave31Resources() {
     const out = [];
@@ -384,6 +393,20 @@ function wave31Resources() {
     }
     // --- A: the launcher for wëap 289 as an outfit.
     out.push(gun(467, "Kit Ammo Launcher", 289));
+    // --- A (added during the wave: the kit's self-fed wëap 289 with MaxAmmo 5 still gave nothing): a STOCK missile
+    // pair, the IR Missile (wëap 134: AmmoType 6 = itself, MaxAmmo 0, so the IR Missile ammo oütf 135's Max 200 caps
+    // it; launcher oütf 134). shïp 547 Kit Hulk IR (wave 30's live 50 t hulk carrying wëap 134 x1 with 10 rounds),
+    // düde 477, the only traffic of sÿst 1300 Kit Board IR (port spöb 1800).
+    out.push({ type: "shïp", id: 547, name: "Kit Hulk IR", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Hulk IR", longName: "Kit Hulk IR",
+        commName: "Kit Hulk IR", subtitle: "", armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1,
+        strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10, weapons: [134, -1, -1, -1], weaponCounts: [1, 0, 0, 0],
+        weaponAmmo: [10, 0, 0, 0] } },
+    { type: "shän", id: 547, name: "Kit Hulk IR", clone: "shän:128", set: { "@0:i16": 1959, "@2:i16": 1960, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+    const irDude = dude(477, "Kit Hulk IR", 4, 363, 547);
+    irDude.set = { ...irDude.set, flags: 0x0041 };
+    const irSys = system(1300, "Kit Board IR", nextX(), Y, 363, [1800]);
+    irSys.set = { ...irSys.set, avgShips: 1, dudes: [477, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(irDude, irSys, spob(1800, "Kit Board IR Port", 0, 0, 138, { flags: 0x43 }));
     return out;
 }
 

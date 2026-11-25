@@ -1,0 +1,33 @@
+{
+  "name": "novaref-w31-pd-ir",
+  "edits": {
+    "ship": 528,
+    "stellar": 1800,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1300": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-pd-ir",
+    "weapons": {
+      "128": 0,
+      "134": {
+        "count": 1,
+        "ammo": 0
+      },
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "134": 1,
+      "185": 1,
+      "607": 1
+    }
+  }
+}
