@@ -89,8 +89,12 @@ export interface MapClearancePlayer {
  * colours, wave 24". The gövt Require travel permit is left out: a port
  * that refuses only for a missing permit leaves the dot blue (MEASURED,
  * "Map dot colours, wave 27"), so only the MinStatus / record test colours
- * it. The ränk 0x0200, bribe and mission-destination overrides still
- * un-colour a port they open (GUESS: unmeasured).
+ * it. A ränk 0x0200 of the owner un-colours the port it opens: MEASURED
+ * ("Map dot colours, wave 28": Kit Map Picky's MinStatus-100 port, orange
+ * #ff6300 for a clean pilot, turned #0000ff once offer 958 gave ränk 204
+ * Flags 0x0200, and the port then took him). The bribe and
+ * mission-destination overrides still un-colour a port they open (GUESS:
+ * unmeasured).
  */
 export function refusingSystems(systems: readonly SystemData[],
     universe: Pick<MissionUniverse, 'getPlanet' | 'getGovt'

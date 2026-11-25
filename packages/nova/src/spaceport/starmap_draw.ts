@@ -201,9 +201,11 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     colours, wave 27": Kit Map Permit, gövt Require 0x1 unmet, its only
  *     port MinStatus -32767, stays #0000ff while `l` there says "Landing
  *     request denied."), so the rule asks only the MinStatus / record
- *     test (starmap.ts refusingSystems). GUESS: a ränk 0x0200 override, a
- *     bribe or a mission destination that lets the player land un-colours
- *     the dot (unmeasured).
+ *     test (starmap.ts refusingSystems). A ränk 0x0200 override that lets
+ *     the player land un-colours the dot (MEASURED, "Map dot colours,
+ *     wave 28": Kit Map Picky's ring went from #ff6300 to #0000ff with
+ *     ränk 204, Flags 0x0200, of its owner). GUESS: a bribe or a mission
+ *     destination does the same (unmeasured).
  *
  * NOT THE LEGAL STATUS WORD, NOR THE GOVERNMENT'S FLAGS (Matthew's playtest,
  * 2026-11-24: "the system does not like me, but it's still blue instead of

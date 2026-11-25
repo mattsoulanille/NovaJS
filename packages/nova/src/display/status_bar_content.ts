@@ -409,7 +409,9 @@ export const HYPERGATE_CLEARED_FORMS = 3;
  * Traffic control's answer to a hypergate's first `l` when it clears the
  * player: one of stock STR# 2002 one-based 91-93 (measured: reference "Gate
  * map, wave 27", #93 at Kit Gate N1; wave 24 saw #91 and #92 at Kit Gate A1
- * / C2, three runs, three forms, so the pick looks random):
+ * / C2; "Hypergate clearance lines, wave 28": #91 1, #92 6, #93 3 in ten
+ * clearances, always on the press that selected a usable gate, no pattern
+ * with distance or speed, so the pick looks random and uniform fits):
  *
  *   91 "Cleared for hypergate entry, <ship>."
  *   92 "<ship>, you're cleared for hypergate entry."

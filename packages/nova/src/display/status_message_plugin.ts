@@ -221,9 +221,10 @@ const ShowLandingBlockedMessage = new System({
 
 // A hypergate's first `l` cleared the player: one of the three stock
 // clearance lines (status_bar_content.ts hypergateClearedMessage), the form
-// picked at random as the original seems to (three runs, three forms;
-// reference "Gate map, wave 27"). Math.random is fine here: the line is
-// this client's own status line and nothing in the simulation reads it.
+// picked at random as the original seems to (ten clearances, 1 / 6 / 3;
+// reference "Hypergate clearance lines, wave 28"). Math.random is fine
+// here: the line is this client's own status line and nothing in the
+// simulation reads it.
 // No beep: nothing was refused.
 const ShowLandingClearedMessage = new System({
     name: 'ShowLandingClearedMessage',

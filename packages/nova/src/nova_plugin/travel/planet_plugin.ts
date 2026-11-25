@@ -566,7 +566,15 @@ const AttemptLandingSystem = new System({
         // at rest; wave 23, "Hypergate usage denied." at the stock HG-V01,
         // MinStatus 32767). The window applies from the second `l`, as
         // before ("Gate approach lines, wave 25": the too-far / too-fast
-        // lines came after the clearance line).
+        // lines came after the clearance line). MATCHES "Hypergate
+        // clearance lines, wave 28" (the cleared line, or "Hypergate usage
+        // denied." from the very first `l`). Two small differences that
+        // section found are deliberately NOT changed yet: far out (over
+        // about 1,000 px, moving fast) the original's `l` selected nothing,
+        // where this targets the nearest gate from any distance (waiting
+        // on a selection-range measurement at rest), and the request lines
+        // (STR# 2002 #74 / #75 + #80 "Hypergate is online. Begin initial
+        // approach." for a gate, #77-80 for a port) are not printed.
         const gateData = closest?.[3];
         if (closest && gateData?.gate?.kind === 'hypergate') {
             if (cleared(closest[2], gateData)) {

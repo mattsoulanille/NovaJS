@@ -403,7 +403,11 @@ export function fitImage(pane: Rect, imageWidth: number, imageHeight: number):
  * interior — and the 2 is why the centre is halved separately: the older
  * 222 + floor((310 - 315) / 2) put Gladius at 219, 1 px left. (Halving
  * separately is the same as centring in a 311 px pane; the reference
- * section's "pane width 311" is this rule, not a wider clip.)
+ * section's "pane width 311" is this rule, not a wider clip.) MEASURED
+ * and closed on a second odd overflow ("Stellar hail pane, wave 28"): a
+ * landable clone of Jupiter (rlëD 2005, 325 x 325) sat at frame
+ * (215,-16) at RMSE 0, 222 + 155 - 162 = 215 and 5 + 141 - 162 = -16
+ * (a 310 px pane centred as one would give 214).
  */
 export function stellarSpriteOrigin(pane: Rect, frameWidth: number,
     frameHeight: number): { x: number, y: number } {
