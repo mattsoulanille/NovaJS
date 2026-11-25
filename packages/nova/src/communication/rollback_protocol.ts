@@ -667,6 +667,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    components and hash input as before. The derived wire schema
 //    fingerprint changes (8389fa45cd30d491 -> 4da2e0c99f1d652a), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-20 reinforcement fixes (reference "R19
+//    reinforcement fleets, wave 20"). ReinforcementCall gains two OPTIONAL
+//    fields, `victim` (the NPC whose hit called the fleet) and `center`
+//    (`{x, y}`, its position at the call); a system with nothing called
+//    carries neither. No input kind or message kind changes. Sim-rule
+//    changes alongside: the delay is ReinfTime / 39 s with no cap; the
+//    fleet comes in around the victim's position at the call, not the
+//    caller; a victim whose hull has Speed 0 never calls; a pending call
+//    is cancelled when its victim has left the system (or is dying) before
+//    the arrival. The derived wire schema fingerprint changes
+//    (4da2e0c99f1d652a -> 5046ce9608f031a5), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
