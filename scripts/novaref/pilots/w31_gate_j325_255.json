@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w31-gate-j325-255",
+  "edits": {
+    "ship": 703,
+    "stellar": 1788,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1294": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-gate-j325-255"
+  }
+}

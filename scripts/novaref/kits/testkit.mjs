@@ -302,8 +302,90 @@ export default {
         ...wave28Resources(),
         ...wave29Resources(),
         ...wave30Resources(),
+        ...wave31Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-31 experiments (docs/reference_experiments.md, "... wave 31").
+ * Nothing retired (no mïsn needed). sÿst 1278-1299, spöb 1744-1799, oütf
+ * 467. Map row y = -2220 (x -800 .. 40). The next free ids: sÿst 1300+, spöb
+ * 1800+ (spares 1495, 1496, 1499), shïp 547+, düde 477+, ränk 205+, mïsn
+ * NONE (retire an old kit mission to add one), gövt 297 and below, flët
+ * 317+, wëap 295+, oütf 468+, bits 9250+.
+ *
+ * Every rig starts the pilot at rest on a decoration stellar (spöb flags 0)
+ * at (0, 0) beside ONE stellar at (d, 0), as wave 29-30's Kit Gate Far. A
+ * stellar cloned for its art keeps the clone's Type (spïn 2000 + Type picks
+ * the art).
+ *
+ *  L   A PLANET's or STATION's clearance zone vs its landing window: landable
+ *      ports with a chosen art at (d, 0): sÿst 1278-1280 Kit Land P72 140 /
+ *      230 / 260 (stock spöb 138's 72 x 72 art; decorations spöb 1744 /
+ *      1746 / 1748, ports 1745 / 1747 / 1749), 1281-1283 Kit Land P250 230 /
+ *      245 / 260 (stock spöb 176's 250 x 250 art; 1750-1755), 1284 / 1285
+ *      Kit Land S17 140 / 230 (stock spöb 299 Holpa Station's 17 x 31 art, a
+ *      station; 1756-1759), 1286 / 1287 Kit Land S315 230 / 260 (stock spöb
+ *      311 Gladius Shipyards' 315 x 200 art, a station; 1760-1763).
+ *  M   A request standing while the ship COASTS in: sÿst 1288 Kit Land
+ *      Toward P72 / 1289 Kit Land Toward P250 (decoration 1764 / 1772 at
+ *      (0, 0), moon rulers 1765-1770 / 1773-1778 at (300 .. 800, 60), the
+ *      port 1771 / 1779 at (1100, 0)), as wave 30's Kit Gate Toward.
+ *  G   The hypergate clearance zone and entry window across art sizes:
+ *      usable gates (flags 0x11, Flags2 0x1000, HyperLinks to N1's gate
+ *      1610) with stock art: sÿst 1290-1292 Kit Gate S17 140 / 245 / 255
+ *      (Holpa Station's 17 x 31 art; decorations 1780 / 1782 / 1784, gates
+ *      1781 / 1783 / 1785), 1293-1295 Kit Gate J325 245 / 255 / 300 (stock
+ *      Jupiter's 325 x 325 art, spöb 159; 1786-1791), 1296 / 1297 Kit Gate
+ *      M96 155 / 172 (stock spöb 145 Sirius Prime's 96 x 96 art: 1.7 W =
+ *      163; 1792-1795), 1298 / 1299 Kit Gate Small 245 / 255 (spöb 138's 72
+ *      x 72 art; 1796-1799).
+ *  A   oütf 467 Kit Ammo Launcher (ModType 1, ModVal 289): wave 30's Ammo
+ *      take did nothing with wëap 289 written into the pilot without an
+ *      outfit ("No Secondary Weapon"); this installs it as an outfit.
+ */
+function wave31Resources() {
+    const out = [];
+    const Y = -2220;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    // A landable port with another stellar's art (its Type kept by the clone).
+    const artPort = (id, name, x, clone, flags) => spob(id, name, x, 0, clone, { flags, govt: -1, minStatus: -32767 });
+    // A usable hypergate with another stellar's art.
+    const artGate = (id, name, x, clone) => spob(id, name, x, 0, clone, { flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767,
+        techLevel: 0, specialTech: [-1, -1, -1], hyperlinks: [1610, ...none8].slice(0, 8) });
+    let sid = 1278, pid = 1744;
+    const rig = (label, d, make) => {
+        out.push(system(sid, label, nextX(), Y, 363, [pid, pid + 1]), decoration(pid, `${label} Start`), make(pid + 1, label, d));
+        sid++;
+        pid += 2;
+    };
+
+    // --- L: planets and stations at rest.
+    const ART = { P72: [138, 0x43], P250: [176, 0x43], S17: [299, 0x11], S315: [311, 0x11] };
+    for (const [art, ds] of [["P72", [140, 230, 260]], ["P250", [230, 245, 260]], ["S17", [140, 230]], ["S315", [230, 260]]]) {
+        for (const d of ds) rig(`Kit Land ${art} ${d}`, d, (id, name, x) => artPort(id, name, x, ...ART[art]));
+    }
+    // --- M: coasting in toward a port at (1100, 0) with moon rulers.
+    for (const art of ["P72", "P250"]) {
+        const name = `Kit Land Toward ${art}`;
+        const rulers = [300, 400, 500, 600, 700, 800];
+        const ids = [pid, ...rulers.map((_, i) => pid + 1 + i), pid + 7];
+        out.push(system(sid, name, nextX(), Y, 363, ids), decoration(pid, `${name} Start`),
+            ...rulers.map((x, i) => decoration(pid + 1 + i, `${name} Ruler ${x}`, x, 60)), artPort(pid + 7, name, 1100, ...ART[art]));
+        sid++;
+        pid += 8;
+    }
+    // --- G: gates with other art.
+    const GATE_ART = { S17: 299, J325: 159, M96: 145, Small: 138 };
+    for (const [art, ds] of [["S17", [140, 245, 255]], ["J325", [245, 255, 300]], ["M96", [155, 172]], ["Small", [245, 255]]]) {
+        for (const d of ds) rig(`Kit Gate ${art} ${d}`, d, (id, name, x) => artGate(id, name, x, GATE_ART[art]));
+    }
+    // --- A: the launcher for wëap 289 as an outfit.
+    out.push(gun(467, "Kit Ammo Launcher", 289));
+    return out;
+}
 
 /**
  * Wave-30 experiments (docs/reference_experiments.md, "... wave 30").

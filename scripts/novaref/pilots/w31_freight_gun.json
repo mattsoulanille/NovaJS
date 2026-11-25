@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w31-freight-gun",
+  "edits": {
+    "ship": 703,
+    "stellar": 1743,
+    "credits": 200000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1277": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-freight-gun",
+    "weapons": {
+      "128": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "607": 1
+    },
+    "legal": {
+      "1277": -50
+    }
+  }
+}

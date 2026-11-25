@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w31-toward-p72",
+  "edits": {
+    "ship": 497,
+    "stellar": 1764,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1288": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-toward-p72"
+  }
+}

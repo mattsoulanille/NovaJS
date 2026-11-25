@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w31-walk-p250",
+  "edits": {
+    "ship": 528,
+    "stellar": 1750,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1281": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-walk-p250"
+  }
+}

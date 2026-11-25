@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w31-gate-m96-172",
+  "edits": {
+    "ship": 703,
+    "stellar": 1794,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1297": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w31-gate-m96-172"
+  }
+}

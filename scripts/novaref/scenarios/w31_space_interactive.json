@@ -1,0 +1,44 @@
+{
+ "name": "w31_space_interactive",
+ "_comment": "Wave 31: Enter Ship, recording from the start at 30 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w31.jsonl) until {\"done\":true}; the pilot is pulled at the end. Planet and station clearance zones and automatic clearance, the hypergate clearance zone across art sizes, a provoked freighter's Beg For Mercy.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w31.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
