@@ -5,7 +5,8 @@ import { getIntegrationGameData } from "../communication/simulation_test_fixture
 import { landable } from "../nova_plugin/core/index.js";
 import {
     DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
-    hypergateNetworkComponents, parseHypergateTransitivity, reachableGates,
+    hypergateNetworkComponents, hypergateReach, parseHypergateTransitivity,
+    reachableGates,
 } from "./hypergate_network.js";
 
 /** The stock working network: 19 gates, all mutually reachable. */
@@ -120,14 +121,31 @@ describe('hypergate network components', () => {
             .toEqual([['a', 'b', 'c'], ['d', 'e']]);
     });
 
-    it('treats a one-way link as joining both ends', () => {
-        // Stock data has no one-way links, but the spöb format allows one:
-        // "the network" is the web of lanes, from either end.
+    it('treats a one-way link as joining both ends into one network, but '
+        + 'reaches only along it', () => {
+            // Stock data has no one-way links, but the spöb format allows
+            // one: "the network" is the web of lanes, from either end...
+            const network: HypergateNetwork = {
+                links: new Map([['a', ['b']], ['b', []]]),
+            };
+            expect(hypergateNetworkComponents(network)).toEqual([['a', 'b']]);
+            // ...while a chain of transits follows each lane's direction:
+            // the original neither draws nor offers a one-way lane from its
+            // far end (reference "Gate map, wave 24", Kit Gate C2).
+            expect(reachableGates(network, 'a')).toEqual(['b']);
+            expect(reachableGates(network, 'b')).toEqual([]);
+        });
+
+    it('chains one-way lanes forward only (Kit Gates C1 -> C2 <-> C3)', () => {
         const network: HypergateNetwork = {
-            links: new Map([['a', ['b']], ['b', []]]),
+            links: new Map([['c1', ['c2']], ['c2', ['c3']], ['c3', ['c2']]]),
         };
-        expect(hypergateNetworkComponents(network)).toEqual([['a', 'b']]);
-        expect(reachableGates(network, 'b')).toEqual(['a']);
+        expect(gateMapDestinations(network, 'c1', true)).toEqual(['c2', 'c3']);
+        expect(gateMapDestinations(network, 'c2', true)).toEqual(['c3']);
+        expect(gateMapDestinations(network, 'c3', true)).toEqual(['c2']);
+        const reach = hypergateReach(network, 'c1');
+        expect([...reach.hops]).toEqual([['c1', 0], ['c2', 1], ['c3', 2]]);
+        expect([...reach.via]).toEqual([['c2', 'c1'], ['c3', 'c2']]);
     });
 
     it('drops destroyed gates from the network entirely', () => {

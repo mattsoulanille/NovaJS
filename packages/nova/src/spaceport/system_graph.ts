@@ -18,7 +18,7 @@ import {
     effectiveRoute, expandRoute, Passable, RouteState, SamePlace,
 } from "./route.js";
 import {
-    drawLinks, drawRouteOverlay, drawSelectionOverlay,
+    drawGatePickOverlay, drawLinks, drawRouteOverlay,
     drawSystem, installLabelFont, labelFontReady, makeSystemLabel, MapRefusal,
 } from "./starmap_draw.js";
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
@@ -32,11 +32,18 @@ import {
 
 export interface SystemGraphOptions {
     /**
-     * Hypergate lanes to overlay (pairs of system global ids). The REGULAR
-     * starmap does not show hypergate lanes (matching the original game);
-     * only the hypergate transit map (GateMap) passes these.
+     * Hypergate lanes to overlay, each a DIRECTED pair of system global ids
+     * (from, to) drawn as an arrow at `to`. The REGULAR starmap does not
+     * show hypergate lanes (matching the original game); only the hypergate
+     * transit map (GateMap) passes these.
      */
     gateLinks?: [string, string][];
+    /**
+     * Destination-picker mode: for each offered system, the lanes (as in
+     * {@link gateLinks}) drawn white while it is picked. A picked system
+     * with no entry whitens the lane from the current system to it.
+     */
+    gateRoutes?: ReadonlyMap<string, [string, string][]>;
     /**
      * Destination-picker mode: clicking is restricted to these systems, and a
      * click selects (highlights) the system instead of plotting a route. Used
@@ -153,6 +160,10 @@ export class SystemGraph {
     // selecting a route only redraws the route, not the whole galaxy.
     private readonly linkGraphics: PIXI.Graphics;
     private readonly routeGraphics: PIXI.Graphics;
+    /** The hypergate arrows and picker marks, over the dots
+     * (starmap_draw.ts drawGatePickOverlay). */
+    private readonly gateGraphics: PIXI.Graphics;
+    private readonly gateRoutes: ReadonlyMap<string, [string, string][]>;
     private readonly borderGraphics: PIXI.Graphics;
     private readonly links: [SystemData, SystemData][];
     private readonly systems: Map<string, SystemData>;
@@ -206,6 +217,7 @@ export class SystemGraph {
         const gateLinks = options.gateLinks ?? [];
         const playerBits = options.playerBits ?? new Set<number>();
         this.selectable = options.selectable;
+        this.gateRoutes = options.gateRoutes ?? new Map();
         this.missionMarks = options.missionMarks ?? [];
         this.viewedMarks = options.viewedMarks ?? [];
         this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
@@ -257,6 +269,7 @@ export class SystemGraph {
 
         this.linkGraphics = new PIXI.Graphics();
         this.routeGraphics = new PIXI.Graphics();
+        this.gateGraphics = new PIXI.Graphics();
         this.borderGraphics = new PIXI.Graphics();
         this.borderGraphics.visible = false;
 
@@ -319,6 +332,7 @@ export class SystemGraph {
             }
         }
         mapContainer.addChild(circleGraphics);
+        mapContainer.addChild(this.gateGraphics);
         mapContainer.addChild(labelContainer);
         const marks = buildMissionMarks(this.systems, this.missionMarks,
             this.viewedMarks, options.missionMarkTextures);
@@ -329,11 +343,15 @@ export class SystemGraph {
         if (options.territoryOf) {
             this.drawBorders(options.territoryOf);
         }
-        drawLinks(this.linkGraphics, this.links, this.gateLinks);
+        drawLinks(this.linkGraphics, this.links);
         if (this.selectable) {
             this.drawSelection();
         } else {
             this.drawRoute();
+            if (this.gateLinks.length > 0) {
+                drawGatePickOverlay(this.gateGraphics,
+                    { arrows: this.gateLinks, route: [] });
+            }
         }
         this.viewport.applyZoom();
     }
@@ -634,20 +652,26 @@ export class SystemGraph {
     }
 
     /** Draws the destination-picker overlay (starmap_draw.ts
-     * drawSelectionOverlay) for the offered systems that are on the map. */
+     * drawGatePickOverlay): the gate's arrows, the pick's lanes in white,
+     * the current system's centre and the selection brackets. */
     private drawSelection() {
+        this.routeGraphics.clear();
         if (!this.selectable) {
-            this.routeGraphics.clear();
+            this.gateGraphics.clear();
             return;
         }
-        const offered: { system: SystemData, picked: boolean }[] = [];
-        for (const id of this.selectable) {
-            const system = this.systems.get(id);
-            if (system) {
-                offered.push({ system, picked: id === this.selectedSystem });
-            }
-        }
-        drawSelectionOverlay(this.routeGraphics, offered);
+        const picked = this.selectedSystem !== undefined
+            && this.selectable.has(this.selectedSystem)
+            ? this.selectedSystem : undefined;
+        const route = picked === undefined ? []
+            : resolveGateLinks(this.systems, this.gateRoutes.get(picked)
+                ?? [[this.currentSystem, picked]]);
+        drawGatePickOverlay(this.gateGraphics, {
+            arrows: this.gateLinks, route,
+            current: this.systems.get(this.currentSystem),
+            picked: picked === undefined ? undefined
+                : this.systems.get(picked),
+        });
     }
 
     /**

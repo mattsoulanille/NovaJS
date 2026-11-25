@@ -3,7 +3,9 @@ import * as PIXI from "pixi.js";
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent, isPort, landable } from '../nova_plugin/core/index.js';
+import {
+    ControlEvent, isSettledPort, landable,
+} from '../nova_plugin/core/index.js';
 import {
     DISCOVERY_LANDED, DiscoveryLevel,
 } from "../nova_plugin/player/index.js";
@@ -11,11 +13,12 @@ import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { Button } from "./button.js";
 import {
     DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
-    parseHypergateTransitivity, reachableGates,
+    hypergateReach, parseHypergateTransitivity,
 } from "./hypergate_network.js";
 import { Menu } from "./menu.js";
 import { MenuControls } from "./menu_controls.js";
 import { MISSION_MARK_ACTIVE_CICN } from "./starmap_marks.js";
+import { DEFAULT_ZOOM } from "./starmap_viewport.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
 import {
     computeHypergateSystemLinks, systemVisible,
@@ -95,47 +98,57 @@ export interface GateMapViewer {
 
 /** What the hypergate map draws and offers for one showing. */
 export interface GateMapView {
-    /** The gates of the current gate's network (its connected component),
-     * the current gate included, sorted. */
+    /** The gates a chain of transits reaches from the current gate
+     * (hypergate_network.ts reachableGates), the current gate included,
+     * sorted. What transitivity offers; with it off, only the gate's own
+     * links are offered and drawn. */
     networkGates: string[];
-    /** The hypergate lanes to draw, as system-id pairs: the lanes of the
-     * current gate's network only. */
+    /** The hypergate lanes to draw, as DIRECTED system-id pairs (from, to):
+     * each is drawn as an arrow pointing at `to`. */
     gateLinks: [string, string][];
     /** system global id -> the destination spöb it stands for. */
     selectable: Map<string, string>;
+    /** Selectable system id -> the lanes (directed system pairs) a pick of
+     * it follows, drawn WHITE while it is picked: the one lane to it, or
+     * under transitivity the shortest chain of lanes. */
+    routes: Map<string, [string, string][]>;
 }
 
 /**
- * What the hypergate map shows for the gate the ship is docked at: ONLY the
- * hypergate network that gate belongs to.
+ * What the hypergate map shows for the gate the ship is docked at.
  *
- * A data set can hold several networks with no lane between them — the
- * arpia plug-in's P-153 / P-173 / Residio gates (arpia:522-524) link only to
- * each other, never to a stock gate. Every lane used to be drawn, and its
- * endpoints were forced onto the map, so a player at a stock gate saw a
- * second, unreachable network floating in a corner (Matthew's playtest,
- * 2026-11-24). Now the lanes and the offered gates are both cut down to the
- * current gate's connected component.
+ * MEASURED (docs/reference_experiments.md, "Gate map, wave 24": three Kit
+ * Gate networks, A1 <-> A2, B1 <-> B2 and C1 -> C2 one way, C2 <-> C3):
+ * the original draws ONLY the current gate's own HyperLinks, each as a cyan
+ * (#00adef) ARROW from the current system to the destination, and only
+ * those destinations are selectable; the picked lane turns white. The rest
+ * of the gate's own network (no C2 - C3 lane at C1), other networks (no B1
+ * - B2 lane at A1) and one-way lanes INTO the gate (at C2 the C1 -> C2 lane
+ * is neither drawn nor selectable) get no lanes at all: their systems are
+ * ordinary map dots. This supersedes 16a1b6c4's connected-network drawing
+ * (Matthew, 2026-11-24, "don't show non-contiguous networks": the arpia
+ * plug-in's P-153 / P-173 / Residio gates no longer show from a stock gate,
+ * and neither does any lane but the gate's own).
  *
- * The component is the UNDIRECTED one, the same graph hypergate
- * transitivity walks (hypergate_network.ts hypergateAdjacency): a one-way
- * HyperLink still draws a lane between its two ends, so the lanes a player
- * sees stay one contiguous web. (arpia's finished Scheall gate, arpia:536,
- * links to stock HG-Koria nova:1418 one way; Koria's own links never name it.
- * Its network is therefore contiguous with the stock one: drawn from either
- * side, and selectable from Koria only under transitivity, exactly as
- * before.) With transitivity off the network is still drawn whole, so the
- * player sees where the lanes go, but only the gate's own HyperLinks are
- * selectable.
+ * With the server's hypergate TRANSITIVITY on (a NovaJS addition,
+ * settings/settings.json), a gate offers every gate a chain of its links
+ * reaches, each link followed in its own direction (hypergate_network.ts),
+ * so a one-way lane is still never offered from its far end. The map then
+ * draws the lanes of that chain, as arrows pointing AWAY from the current
+ * gate (each lane once, from the gate nearer to the current one; a lane
+ * between two gates the same number of hops out keeps whichever directions
+ * it has), so every offered gate is visibly connected; picking a far gate
+ * whitens the shortest chain to it. Gates the chain cannot reach — other
+ * networks, the far side of a one-way lane — stay plain dots, as without
+ * transitivity.
  *
  * The player's control bits decide which systems exist (the same NCB
  * visibility rule as the star map). A gate in no system the player can see
- * is not on the map for them: it is neither offered nor walked through, so a
- * hidden gate cannot join two networks the player can see. The gate the
- * ship is docked at always counts, even in a copy its bits say is hidden
- * (SystemGraph keeps the current system for the same reason). Each lane is
- * drawn between the VISIBLE copies of its gates' systems, so a story bit
- * that swaps a system for its stacked copy (HG-Heraan's nova:344 / 540 /
+ * is not on the map for them: it is neither offered nor walked through. The
+ * gate the ship is docked at always counts, even in a copy its bits say is
+ * hidden (SystemGraph keeps the current system for the same reason). Each
+ * lane is drawn between the VISIBLE copies of its gates' systems, so a story
+ * bit that swaps a system for its stacked copy (HG-Heraan's nova:344 / 540 /
  * 604) keeps the lane instead of pointing it at a copy the map hides.
  *
  * Destroyed gates (unusable) stay out exactly as before. Pure, so it is
@@ -179,19 +192,37 @@ export function computeGateMapView(index: GateMapIndex,
     }
     const network: HypergateNetwork = { links: index.network.links, unusable };
 
-    const component = new Set(unusable.has(gateSpob)
-        ? [gateSpob] : [gateSpob, ...reachableGates(network, gateSpob)]);
+    const reach = hypergateReach(network, gateSpob);
+    const destinations =
+        gateMapDestinations(network, gateSpob, viewer.transitive);
 
-    const componentLinks = new Map<string, string[]>();
-    for (const [from, destinations] of network.links) {
-        if (!component.has(from) || unusable.has(from)) {
-            continue;
+    // The lanes, gate to gate, each pointing away from the current gate.
+    const lanes = new Map<string, string[]>();
+    const addLane = (from: string, to: string) => {
+        const onward = lanes.get(from) ?? [];
+        if (!onward.includes(to)) {
+            onward.push(to);
         }
-        componentLinks.set(from,
-            destinations.filter(to => component.has(to) && !unusable.has(to)));
+        lanes.set(from, onward);
+    };
+    if (viewer.transitive) {
+        for (const [from, hopsFrom] of reach.hops) {
+            for (const to of network.links.get(from) ?? []) {
+                const hopsTo = reach.hops.get(to);
+                if (hopsTo !== undefined && to !== gateSpob
+                    && hopsTo >= hopsFrom) {
+                    addLane(from, to);
+                }
+            }
+        }
+    } else {
+        for (const to of destinations) {
+            addLane(gateSpob, to);
+        }
     }
+
     const systemOfSpob = new Map<string, string>();
-    for (const gate of component) {
+    for (const gate of reach.hops.keys()) {
         const first = visibleSystemsOf(gate)[0];
         if (first !== undefined) {
             systemOfSpob.set(gate, first);
@@ -199,24 +230,47 @@ export function computeGateMapView(index: GateMapIndex,
     }
 
     const visibleSystemsOfSpob = new Map<string, string[]>();
-    const destinations =
-        gateMapDestinations(network, gateSpob, viewer.transitive);
     for (const dest of destinations) {
         visibleSystemsOfSpob.set(dest, visibleSystemsOf(dest));
     }
+    const selectable = computeSelectableSystems(visibleSystemsOfSpob,
+        destinations);
+
+    // What a pick whitens: the lane to it, or the shortest chain.
+    const routes = new Map<string, [string, string][]>();
+    for (const [pickedSystem, dest] of selectable) {
+        // The chain's hops, from the current gate outward.
+        const hops: [string, string[]][] = [];
+        if (viewer.transitive) {
+            for (let at = dest; reach.via.has(at);) {
+                const from = reach.via.get(at)!;
+                hops.unshift([from, [at]]);
+                at = from;
+            }
+        } else {
+            hops.push([gateSpob, [dest]]);
+        }
+        const chain = new Map(hops);
+        // The picked copy of a stacked system is the lane's head.
+        const route = computeHypergateSystemLinks(systemOfSpob, chain)
+            .map(([from, to]): [string, string] => [from,
+                visibleSystemsOf(dest).includes(to) ? pickedSystem : to]);
+        routes.set(pickedSystem, route);
+    }
 
     return {
-        networkGates: [...component].sort(),
-        gateLinks: computeHypergateSystemLinks(systemOfSpob, componentLinks),
-        selectable: computeSelectableSystems(visibleSystemsOfSpob,
-            destinations),
+        networkGates: [...reach.hops.keys()].sort(),
+        gateLinks: computeHypergateSystemLinks(systemOfSpob, lanes),
+        selectable,
+        routes,
     };
 }
 
 /**
  * The SystemGraph options the hypergate map draws itself with:
  * destination-PICKER mode (only the offered gates are clickable) with
- * the hypergate lanes drawn — plus the SAME orange active-mission arrows
+ * the hypergate lanes drawn as arrows, and the lanes a pick follows
+ * (`gateRoutes`, whitened while picked) — plus the SAME orange active-mission arrows
  * the regular starmap shows. A hypergate map is still a map, and choosing
  * a gate is exactly when the player wants to see where their missions
  * are; the marks are a decorative overlay that never affects what is
@@ -230,8 +284,9 @@ export function computeGateMapView(index: GateMapIndex,
 export function gateMapGraphOptions(gateLinks: [string, string][],
     selectable: Set<string>, missionMarks: MissionMapMark[] = [],
     missionMarkTexture?: PIXI.Texture,
-    /** Spöb global ids that are PORTS (landable.ts isPort), for the blue
-     * system dots. Omitted in tests, where the galaxy then draws grey. */
+    /** Spöb global ids that SETTLE a system (landable.ts isSettledPort: a
+     * port that is not a gate), for the blue system dots. Omitted in tests,
+     * where the galaxy then draws grey. */
     portSpobs?: ReadonlySet<string>,
     /** How much the player knows about each system (discovery.ts). The
      * transit map obeys the same visibility rule as the star map, except
@@ -241,10 +296,13 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
     discoveryOf?: (systemId: string) => DiscoveryLevel,
     /** The docked ship's control bits: the map draws the systems that
      * exist under them, as the star map does. Omitted means no bits. */
-    playerBits?: ReadonlySet<number>): SystemGraphOptions {
+    playerBits?: ReadonlySet<number>,
+    /** {@link GateMapView.routes}: the lanes each pick whitens. */
+    gateRoutes?: ReadonlyMap<string, [string, string][]>): SystemGraphOptions {
     return {
         gateLinks,
         selectable,
+        ...(gateRoutes ? { gateRoutes } : {}),
         missionMarks,
         ...(playerBits ? { playerBits } : {}),
         ...(discoveryOf ? { discoveryOf } : {}),
@@ -270,16 +328,18 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
 
 /**
  * The hypergate transit map: shown when the player lands on a hypergate.
- * Unlike the regular starmap, this map DOES draw the hypergate lanes, and
- * instead of plotting a jump route it picks a destination.
+ * Unlike the regular starmap, this map DOES draw hypergate lanes — the
+ * current gate's own, as arrows — and instead of plotting a jump route it
+ * picks a destination (see {@link computeGateMapView}). Done with no pick
+ * lifts the ship off at the gate, in the same system (measured, reference
+ * "Gate map, wave 24"; client/transit.ts leaveGateMap).
  *
  * What it offers depends on the SERVER's `hypergateTransitivity` setting
  * (settings/settings.json, fetched through getSettings like controls.json):
  * with it off — the original game, EVN Bible p. 61 — only the current gate's
- * immediate neighbors are selectable; with it on, every gate in the same
- * hypergate NETWORK is, however many lanes away. The lanes themselves are
- * drawn either way, so a directly-linked destination is still visibly
- * one lane out while a transitive one is not.
+ * own HyperLinks are drawn and selectable; with it on, every gate a chain of
+ * those links reaches is, however many lanes away, with the chain's lanes
+ * drawn so each one is visibly connected.
  *
  * Reuses the starmap's SystemGraph (bitmap-font labels, baked circle
  * batching, pan/zoom) in its destination-picker mode.
@@ -299,8 +359,11 @@ export class GateMap extends Menu<GateMapResult> {
     /** Spöbs that cannot be landed on — the destroyed gates. Neither a
      * destination nor a hop in the network walk. */
     private unlandableSpobs = new Set<string>();
-    /** Spöbs that are PORTS (landable.ts isPort) — what makes a system's
-     * dot blue on this map, exactly as on the star map. */
+    /** Spöbs that SETTLE a system (landable.ts isSettledPort) — what makes
+     * a system's dot blue on this map, exactly as on the star map. A gate
+     * does not: the gate-only Kit Gate systems are #c6c6c6 on the
+     * original's gate map ("Gate map, wave 24"), as VNP-001 is on its star
+     * map ("Map dot colours, wave 23"). */
     private portSpobs = new Set<string>();
     /** The server's hypergateTransitivity setting, read in build(). */
     private transitivity = DEFAULT_HYPERGATE_TRANSITIVITY;
@@ -367,7 +430,7 @@ export class GateMap extends Menu<GateMapResult> {
             if (!landable(planet)) {
                 this.unlandableSpobs.add(spob);
             }
-            if (isPort(planet.flags)) {
+            if (isSettledPort(planet)) {
                 this.portSpobs.add(spob);
             }
             if (planet.gate?.kind === 'hypergate') {
@@ -398,10 +461,10 @@ export class GateMap extends Menu<GateMapResult> {
     override async show(input: GateMapResult): Promise<GateMapResult> {
         await this.buildPromise;
 
-        // Only this gate's own network is drawn: its lanes, and the
-        // systems the player may pick — every visible system containing one
-        // of the gates this gate offers (its own links, or its whole
-        // network when the server has hypergate transitivity on).
+        // Only this gate's own lanes are drawn, as arrows, and only the
+        // systems the player may pick are clickable — every visible system
+        // containing one of the gates this gate offers (its own links, or
+        // the chain they reach when the server has transitivity on).
         const playerBits = input.playerBits ?? new Set<number>();
         const view = computeGateMapView({
             systemById: this.systemById,
@@ -423,7 +486,10 @@ export class GateMap extends Menu<GateMapResult> {
             gateMapGraphOptions(view.gateLinks,
                 new Set(this.selectableSpobs.keys()), input.missionMarks,
                 this.missionMarkTexture, this.portSpobs,
-                id => this.discoveryOf(id), playerBits));
+                id => this.discoveryOf(id), playerBits, view.routes));
+        // The original's opening scale, the star map's (Kit Gate A1 -> A2,
+        // 120 map units, 212 px apart: "Gate map, wave 24").
+        this.systemGraph.zoomBy(DEFAULT_ZOOM);
         this.systemGraph.container.position.set(-290, -248);
         this.container.addChild(this.systemGraph.container);
         this.systemGraph.center();

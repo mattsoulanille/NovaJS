@@ -8,7 +8,9 @@
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
 import { displayName } from "../nova_plugin/core/index.js";
-import { BASE_SCALE, scalePos, SYSTEM_RADIUS } from "./starmap_viewport.js";
+import {
+    BASE_SCALE, DEFAULT_ZOOM, scalePos, SYSTEM_RADIUS,
+} from "./starmap_viewport.js";
 
 const GREY = 0x666666;
 // System-dot colors, sampled off the original at 1:1 in
@@ -38,9 +40,21 @@ export const SYSTEM_REFUSING_CLEAN_COLOR = 0xff6300;
  */
 export type MapRefusal = 'clean' | 'negative';
 export const SYSTEM_INTERIOR_COLOR = 0x000000;
-// Hypergate network links, drawn in a distinct cyan so the instant-travel
-// hypergate routes read apart from the grey normal-jump hyperspace links.
-export const HYPERGATE_LINK_COLOR = 0x00cccc;
+/**
+ * The gate map's hypergate lanes (reference "Gate map, wave 24", 1:1 pixels
+ * of the original's map at Kit Gate A1): each of the current gate's own
+ * links is a #00adef ARROW, a 2 px line from the current system's centre to
+ * the destination's, with a barbed head at the destination (each barb about
+ * 6.5 px back and 6.5 px across, i.e. 9 px at 45 degrees). The PICKED lane
+ * is drawn white with a 3 px pen (the barbs thicken with it). Widths and
+ * the barb are screen px at the map's opening scale (DEFAULT_ZOOM); the map
+ * zooms by scaling, so they scale with it, unlike the original's fixed pen.
+ */
+export const HYPERGATE_LINK_COLOR = 0x00adef;
+export const HYPERGATE_PICKED_COLOR = 0xffffff;
+const HYPERGATE_LINK_WIDTH_PX = 2;
+const HYPERGATE_PICKED_WIDTH_PX = 3;
+const HYPERGATE_BARB_PX = 9;
 // Route colors (map/notes.txt): the multi-jump route is the STRONGER green
 // line; the single-jump route is the WEAKER one.
 const ROUTE_MULTI_COLOR = 0x00ff00;
@@ -266,21 +280,55 @@ export function drawLink(graphics: PIXI.Graphics, a: SystemData, b: SystemData,
     graphics.lineTo(...scalePos(b.position));
 }
 
-/**
- * Draws the hyperspace lanes, then the hypergate network links over them in
- * a distinct color so the instant-travel routes are legible as their own
- * layer.
- */
+/** Draws the hyperspace lanes. (The gate map's hypergate arrows are a
+ * layer of their own, over the dots: {@link drawGatePickOverlay}.) */
 export function drawLinks(graphics: PIXI.Graphics,
-    links: readonly [SystemData, SystemData][],
-    gateLinks: readonly [SystemData, SystemData][]) {
+    links: readonly [SystemData, SystemData][]) {
     graphics.clear();
     for (const [source, dest] of links) {
         drawLink(graphics, source, dest);
     }
-    for (const [source, dest] of gateLinks) {
-        drawLink(graphics, source, dest, HYPERGATE_LINK_COLOR, 1);
+}
+
+/**
+ * The two barb ends of an arrow from `from` to `tip` (laid-out
+ * coordinates): `barb` back from the tip, 45 degrees either side of the
+ * lane. Pure, for the specs; undefined for a zero-length lane.
+ */
+export function arrowBarbs(from: readonly [number, number],
+    tip: readonly [number, number], barb: number):
+    [[number, number], [number, number]] | undefined {
+    const dx = tip[0] - from[0];
+    const dy = tip[1] - from[1];
+    const length = Math.hypot(dx, dy);
+    if (length === 0) {
+        return undefined;
     }
+    // Unit vector pointing BACK along the lane, rotated +-45 degrees.
+    const bx = -dx / length;
+    const by = -dy / length;
+    const c = Math.SQRT1_2 * barb;
+    return [
+        [tip[0] + c * (bx - by), tip[1] + c * (by + bx)],
+        [tip[0] + c * (bx + by), tip[1] + c * (by - bx)],
+    ];
+}
+
+/** One hypergate arrow, `from`'s centre to `to`'s, head at `to`. */
+export function drawGateArrow(g: PIXI.Graphics, from: SystemData,
+    to: SystemData, color: number, widthPx: number) {
+    const start = scalePos(from.position);
+    const tip = scalePos(to.position);
+    const barbs = arrowBarbs(start, tip, HYPERGATE_BARB_PX / DEFAULT_ZOOM);
+    if (!barbs) {
+        return;
+    }
+    g.lineStyle(widthPx / DEFAULT_ZOOM, color);
+    g.moveTo(...start);
+    g.lineTo(...tip);
+    g.moveTo(...barbs[0]);
+    g.lineTo(...tip);
+    g.lineTo(...barbs[1]);
 }
 
 /** What the route overlay shows, already resolved to systems on the map. */
@@ -360,29 +408,63 @@ export function drawRouteOverlay(g: PIXI.Graphics, route: RouteOverlay) {
 
     // The inspected system: green corner brackets around it.
     if (route.info) {
-        const [x, y] = scalePos(route.info.position);
-        const r = SYSTEM_RADIUS + 3;
-        const arm = 3;
-        g.lineStyle(1, SELECT_COLOR);
-        for (const [sx, sy] of
-            [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-            g.moveTo(x + sx * r - sx * arm, y + sy * r);
-            g.lineTo(x + sx * r, y + sy * r);
-            g.lineTo(x + sx * r, y + sy * r - sy * arm);
-        }
+        drawSelectBrackets(g, route.info);
     }
 }
 
+/** Green corner brackets around a system: the map's selection mark. */
+function drawSelectBrackets(g: PIXI.Graphics, system: SystemData) {
+    const [x, y] = scalePos(system.position);
+    const r = SYSTEM_RADIUS + 3;
+    const arm = 3;
+    g.lineStyle(1, SELECT_COLOR);
+    for (const [sx, sy] of
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+        g.moveTo(x + sx * r - sx * arm, y + sy * r);
+        g.lineTo(x + sx * r, y + sy * r);
+        g.lineTo(x + sx * r, y + sy * r - sy * arm);
+    }
+}
+
+/** What the gate map's overlay shows, resolved to systems on the map. */
+export interface GatePickOverlay {
+    /** The current gate's lanes, each an arrow (from, to). */
+    arrows: readonly [SystemData, SystemData][];
+    /** The lanes the pick follows, drawn white over the arrows. */
+    route: readonly [SystemData, SystemData][];
+    /** The system the gate is in. */
+    current?: SystemData;
+    /** The picked destination, if any. */
+    picked?: SystemData;
+}
+
 /**
- * Draws the destination-picker overlay on the route layer: a ring around
- * each offered system, and a filled highlight on the picked one.
+ * Draws the hypergate map's overlay, ABOVE the dots as the original does
+ * (its arrow crosses the destination's ring; reference "Gate map, wave
+ * 24"): the cyan arrows, the picked route in white over them, the current
+ * system's #00adef centre, and the green selection brackets — on the pick,
+ * or on the current system while nothing is picked (both measured).
  */
-export function drawSelectionOverlay(g: PIXI.Graphics,
-    offered: readonly { system: SystemData, picked: boolean }[]) {
+export function drawGatePickOverlay(g: PIXI.Graphics,
+    overlay: GatePickOverlay) {
     g.clear();
-    for (const { system, picked } of offered) {
-        const [x, y] = scalePos(system.position);
-        g.lineStyle(picked ? 2 : 1, picked ? 0x00ff00 : HYPERGATE_LINK_COLOR);
-        g.drawCircle(x, y, SYSTEM_RADIUS + 3);
+    for (const [from, to] of overlay.arrows) {
+        drawGateArrow(g, from, to, HYPERGATE_LINK_COLOR,
+            HYPERGATE_LINK_WIDTH_PX);
+    }
+    for (const [from, to] of overlay.route) {
+        drawGateArrow(g, from, to, HYPERGATE_PICKED_COLOR,
+            HYPERGATE_PICKED_WIDTH_PX);
+    }
+    if (overlay.current) {
+        const [cx, cy] = scalePos(overlay.current.position);
+        g.lineStyle(0);
+        g.beginFill(CURRENT_SYSTEM_CENTER_COLOR);
+        g.drawCircle(cx, cy, 1.1 * BASE_SCALE);
+        g.endFill();
+    }
+    const marked = overlay.picked ?? overlay.current;
+    if (marked) {
+        drawSelectBrackets(g, marked);
     }
 }

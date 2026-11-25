@@ -6,6 +6,29 @@ import {
 import {
     clickRadiusWorld, DragTracker, nearestTargetIndex, screenToWorld,
 } from "./starmap_hit.js";
+import {
+    arrowBarbs, HYPERGATE_LINK_COLOR, HYPERGATE_PICKED_COLOR,
+} from "./starmap_draw.js";
+
+describe('the gate map\'s arrows (reference "Gate map, wave 24")', () => {
+    it('are #00adef, white once picked', () => {
+        expect(HYPERGATE_LINK_COLOR).toBe(0x00adef);
+        expect(HYPERGATE_PICKED_COLOR).toBe(0xffffff);
+    });
+
+    it('barb back from the tip at 45 degrees either side', () => {
+        const [a, b] = arrowBarbs([0, 0], [10, 0], Math.SQRT2)!;
+        expect(a[0]).toBeCloseTo(9);
+        expect(a[1]).toBeCloseTo(-1);
+        expect(b[0]).toBeCloseTo(9);
+        expect(b[1]).toBeCloseTo(1);
+        // Pointing up the screen: barbs below the tip.
+        const [c, d] = arrowBarbs([0, 10], [0, 0], Math.SQRT2)!;
+        expect([c[1], d[1]].map(y => Math.round(y))).toEqual([1, 1]);
+        expect([c[0], d[0]].map(x => Math.round(x)).sort()).toEqual([-1, 1]);
+        expect(arrowBarbs([3, 3], [3, 3], 1)).toBeUndefined();
+    });
+});
 
 describe('computeHypergateSystemLinks', () => {
     it('links the systems containing linked hypergates', () => {

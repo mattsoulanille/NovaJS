@@ -7,12 +7,19 @@ import * as t from "io-ts";
  *
  * In the original game a hypergate offers only its own HyperLink1-8
  * destinations: the player hops from gate to adjacent gate (EVN Bible p. 61).
- * With the server's `hypergateTransitivity` setting on, a gate instead offers
- * every gate in its NETWORK — the connected component it belongs to — so one
- * transit can cross the whole reachable web at once. Multi-hop is still ONE
- * transit: gates carry no per-transit cost in the data (every stock gate's
- * spöb Fee is 0 and nothing consumes fuel), so there is nothing to charge
- * per hop.
+ * With the server's `hypergateTransitivity` setting on (a NovaJS addition), a
+ * gate instead offers every gate a CHAIN of such hops could reach — following
+ * each HyperLink in its own direction, so a one-way lane is never travelled
+ * backwards — and one transit crosses that whole chain at once. Multi-hop is
+ * still ONE transit: gates carry no per-transit cost in the data (every stock
+ * gate's spöb Fee is 0 and nothing consumes fuel), so there is nothing to
+ * charge per hop.
+ *
+ * Why DIRECTED (reference "Gate map, wave 24"): the original never offers a
+ * one-way lane from its far end (at Kit Gate C2 the incoming C1 -> C2 lane
+ * is neither drawn nor selectable), so a transit that could would be
+ * travelling a lane the game has no way to travel, however many hops it
+ * chains. Stock links are all symmetric, so this changes nothing stock.
  *
  * Everything here is pure, so the graph walk and the setting parse are unit
  * testable without a display world.
@@ -80,16 +87,16 @@ function usable(network: HypergateNetwork, spob: string): boolean {
 }
 
 /**
- * The UNDIRECTED adjacency of the hypergate graph, over usable gates only.
+ * The UNDIRECTED adjacency of the hypergate graph, over usable gates only:
+ * what {@link hypergateNetworkComponents} groups into networks.
  *
  * Stock EV Nova's hypergate links are fully symmetric — every one of the 19
  * working gates' HyperLinks is mirrored by a link back (verified over the
  * base "Nova Files" data: zero asymmetric edges) — but nothing in the spöb
- * format enforces that, so a plug-in can write a one-way link. Transitivity
- * treats links as undirected: the network is "the gates this web of lanes
- * connects", and a one-way lane still puts both ends in the same web. That
- * keeps the relation symmetric, which is what makes "the network" a
- * well-defined thing to offer from either end.
+ * format enforces that, so a plug-in can write a one-way link. A network
+ * here is "the gates this web of lanes connects", so a one-way lane still
+ * puts both ends in the same one. What a gate OFFERS is directed instead
+ * ({@link reachableGates}).
  */
 export function hypergateAdjacency(
     network: HypergateNetwork): Map<string, Set<string>> {
@@ -156,31 +163,56 @@ export function hypergateNetworkComponents(
 }
 
 /**
- * Every gate reachable from `from` through any chain of links, excluding
- * `from` itself and every unusable (destroyed) gate. This is `from`'s
- * component minus `from`.
+ * How a chain of transits spreads out from one gate: a breadth-first walk
+ * that follows each HyperLink in ITS OWN direction, over usable gates only.
+ */
+export interface HypergateReach {
+    /** Gate -> how many hops from the start (the start itself is 0). */
+    hops: Map<string, number>;
+    /** Gate -> the gate the shortest chain arrives from (the start has
+     * none). Ties go to the first gate in sorted order, so the chain is
+     * stable. */
+    via: Map<string, string>;
+}
+
+/** The {@link HypergateReach} from `from` (empty when `from` is unusable). */
+export function hypergateReach(network: HypergateNetwork,
+    from: string): HypergateReach {
+    const hops = new Map<string, number>();
+    const via = new Map<string, string>();
+    if (!usable(network, from)) {
+        return { hops, via };
+    }
+    hops.set(from, 0);
+    let frontier = [from];
+    while (frontier.length > 0) {
+        const next: string[] = [];
+        for (const current of frontier) {
+            const onward = [...new Set(network.links.get(current) ?? [])]
+                .filter(to => usable(network, to)).sort();
+            for (const to of onward) {
+                if (hops.has(to)) {
+                    continue;
+                }
+                hops.set(to, hops.get(current)! + 1);
+                via.set(to, current);
+                next.push(to);
+            }
+        }
+        frontier = next.sort();
+    }
+    return { hops, via };
+}
+
+/**
+ * Every gate reachable from `from` through a chain of links, each followed
+ * in its own direction, excluding `from` itself and every unusable
+ * (destroyed) gate.
  */
 export function reachableGates(network: HypergateNetwork,
     from: string): string[] {
-    if (!usable(network, from)) {
-        return [];
-    }
-    const adjacency = hypergateAdjacency(network);
-    const seen = new Set<string>([from]);
-    const stack = [from];
-    const reached: string[] = [];
-    while (stack.length > 0) {
-        const current = stack.pop()!;
-        for (const neighbor of adjacency.get(current) ?? []) {
-            if (seen.has(neighbor)) {
-                continue;
-            }
-            seen.add(neighbor);
-            reached.push(neighbor);
-            stack.push(neighbor);
-        }
-    }
-    return reached.sort();
+    return [...hypergateReach(network, from).hops.keys()]
+        .filter(gate => gate !== from).sort();
 }
 
 /**
@@ -188,7 +220,8 @@ export function reachableGates(network: HypergateNetwork,
  *
  * - `transitive` false (the original game): `from`'s own HyperLink
  *   destinations, exactly as before.
- * - `transitive` true: every gate in `from`'s network.
+ * - `transitive` true: every gate a chain of links reaches from `from`
+ *   ({@link reachableGates}).
  *
  * Destroyed gates are excluded either way — a gate you cannot land on is not
  * a place a transit can put you — and the result is sorted so the offering is

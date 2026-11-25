@@ -54,8 +54,9 @@ export function computeHypergateSystemLinks(
 
 /**
  * Resolves hypergate link ids to the systems they connect, once per
- * unordered pair. Links touching a system not on the map (NCB-hidden) are
- * dropped, like normal jump links, and so are self-links.
+ * DIRECTED pair (each is an arrow, so A -> B and B -> A are two). Links
+ * touching a system not on the map (NCB-hidden) are dropped, like normal
+ * jump links, and so are self-links.
  */
 export function resolveGateLinks(systems: ReadonlyMap<string, SystemData>,
     gateLinks: readonly [string, string][]): [SystemData, SystemData][] {
@@ -67,7 +68,7 @@ export function resolveGateLinks(systems: ReadonlyMap<string, SystemData>,
         if (!sa || !sb || a === b) {
             continue;
         }
-        const key = [a, b].sort().join('<->');
+        const key = `${a}->${b}`;
         if (seenGateLink.has(key)) {
             continue;
         }
