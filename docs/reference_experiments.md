@@ -12930,7 +12930,7 @@ Map dots read at 1:1 (`tools/dots.mjs`, ring colours).
    killed the Shuttle within the 4 s before the first shot. (The map run
    started next door.)
 
-**NovaJS (main 799196ca).** `N/spaceport/starmap_draw.ts:247-263`
+**NovaJS (main ce18563b).** `N/spaceport/starmap_draw.ts:247-263`
 `systemDotColor` (`'negative'` -> `SYSTEM_REFUSING_COLOR` #ff0000) and the
 14 red / 21 orange list in `N/spaceport/starmap_refusing_test.ts:220-268`:
 **matches**. Proposed: drop "(no Nil'kemorya system was seen)" from that
@@ -12974,7 +12974,7 @@ off screen (`far`), then shots every ~1.8 s.
    left with it (both fit; the fleet's arrival was never due before they
    were gone, 2-10 s against 7.7 s).
 
-**NovaJS (main 799196ca).**
+**NovaJS (main ce18563b).**
 `N/nova_plugin/spawn/reinforcements.ts:233-243` `reinforcementCallInRange`
 returns false for AI 3 at any distance (and the module comment
 `:133-140`): **mismatch**. **Proposed:** drop the AI 3 branch so an AI 3
@@ -13042,30 +13042,35 @@ click (`tools/bars.mjs`, `tools/droptime.sh`). (A derelict version,
    Energy 0 in 1. With wave 25's: Cargo 12 in 17, Credits 6 in 21,
    Energy 2 in 5 (Cargo still the likeliest; its rate is nearer 0.7).
 
-**NovaJS (main 799196ca).** The trip zeroes the hulk's armor and fires
-the ordinary death (`N/nova_plugin/encounters/boarding_plugin.ts:1591-1618`
+**NovaJS (main ce18563b, which applied wave 25's per-item odds and the
+delivered take).** The trip zeroes the hulk's armor and fires the
+ordinary death (`N/nova_plugin/encounters/boarding_plugin.ts:1601-1629`
 `tripPlunderSelfDestruct`), so its final explosion is the mass-scaled
 blast (`N/nova_plugin/ship/ship_explosion.ts:159-170`
 `shipExplosionDamage`, `SHIP_EXPLOSION_DAMAGE_PER_TON = 0.03` to shield
 AND armor) with the non-lethal floor (`nonLethalArmorFloor` `:187-194`,
 the disable threshold + 1%: 34%).
 - 1, 3: **matches** (damage at the final explosion; the 34% floor fits
-  the measured 33.8% within the bar's 0.7% steps).
+  the measured 33.8% within the bar's 0.7% steps). The comment at
+  `boarding_plugin.ts:1574-1580` ("the player undamaged", "1.5 shield for
+  the 50-ton hull") should cite this: undamaged is right for 50 t, not
+  for heavy hulks.
 - 2: **close but not equal.** NovaJS gives a 50 t hulk 1.5 shield (2 px of
   this bar: visible; measured none), 5,000 t 150 armor (Fragile: 50% left;
   measured 33.8%, at least 199) and 30,000 t 900 armor (Tough: 70% left;
   measured about 61.5%, about 1,155). One reading of the points (GUESS):
   no blast damage below some mass, and about 0.04 armor a ton above it
-  (5,000 t -> 200, which also lands on the floor). Not proposed as a change from two points; a sweep of masses
-  (500, 1,000, 2,000 t against the Tough boarder) would pin it.
-- 4: **mismatch**: "when it trips nothing moves" (`:1394-1397`, the
-  take is marked spent and the booty kept from the player). **Proposed**
-  (as wave 25 for Cargo, now measured for Credits): apply the take, then
-  draw; a trip still delivers it.
-- 5: `PLUNDER_SELF_DESTRUCT_CHANCE = 0.05` for every item
-  (`N/nova_plugin/ship/boarding_component.ts:558`): **mismatch** (the
-  per-item fix agent's numbers: Cargo about 0.7, Credits about 0.3,
-  Energy about 0.4 on all counts so far).
+  (5,000 t -> 200, which also lands on the floor). Not proposed as a
+  change from three points; a sweep of masses (500, 1,000, 2,000 t
+  against the Tough boarder) would pin it.
+- 4: **matches** since ce18563b (the take is delivered before the draw,
+  `boarding_plugin.ts:1394-1400`); its "Credits ... could not be read,
+  delivered too for one rule" (`:1576-1577`) is now MEASURED (twice).
+- 5: `PLUNDER_SELF_DESTRUCT_CHANCE` per item (`N/nova_plugin/ship/boarding_component.ts:579-585`:
+  Cargo 0.85, Credits 0.25, Energy 0.5): **consistent**; with this wave's
+  takes the counts are Cargo 12 in 17 (0.71), Credits 6 in 21 (0.29),
+  Energy 2 in 5. Optional: Cargo 0.7 / Credits 0.3 if the "nearest 0.05
+  of the count" rule is kept.
 
 Confidence: high for 1, 3 and 4 (pixel bars, three trips each way); medium
 for the mass scaling (three masses, one boarder per point).
@@ -13117,7 +13122,7 @@ back-to-centre arrow points west all along).
    (about 3 radar px, roughly 100 px, a second) and fought beside the
    guard.
 
-**NovaJS (main 799196ca).** `N/nova_plugin/spawn/reinforcements.ts:597-612`
+**NovaJS (main ce18563b).** `N/nova_plugin/spawn/reinforcements.ts:597-612`
 places the fleet `REINFORCEMENT_ARRIVAL_DISTANCE` (1,800, `:248`) from the
 call's `center`, the VICTIM's position at the call (module comment
 `:166-177`): **mismatch** (the victim was beside the player at the far
