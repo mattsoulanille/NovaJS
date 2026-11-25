@@ -235,6 +235,32 @@ describe('beam fire cadence and damage on the original frame clock', () => {
             }
         }, 120_000);
 
+        it('an orphaned beam keeps its last pose instead of spinning',
+            async () => {
+                const { gameData, world } = await setUp();
+                const lance = await longLance(world, gameData);
+                const beam = lance.fireFromEntity('shooter', true)!;
+                const offset = beam.components.get(BeamStateComponent)!.aimOffset!;
+                expect(Math.abs(offset)).toBeGreaterThan(0);
+                // Let it anchor a few ticks, then take its firer away.
+                rotations(world, beam.uuid, 3);
+                const movement = () => beam.components.get(MovementStateComponent)!;
+                const lastAngle = movement().rotation.angle;
+                const lastX = movement().position.x;
+                const lastY = movement().position.y;
+                expect(lastAngle).toBeCloseTo(offset, 12);
+                world.entities.delete('shooter');
+
+                const seen = rotations(world, beam.uuid, 15);
+                expect(seen.length).withContext('the beam runs its course')
+                    .toEqual(15);
+                for (const angle of seen) {
+                    expect(angle).toBeCloseTo(lastAngle, 12);
+                }
+                expect(movement().position.x).toEqual(lastX);
+                expect(movement().position.y).toEqual(lastY);
+            }, 120_000);
+
         it('a point defense beam has no error at all', async () => {
             const { gameData, world } = await setUp();
             const pd = await longLance(world, gameData, { guidance: 'pointDefenseBeam' });

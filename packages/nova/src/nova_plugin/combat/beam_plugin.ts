@@ -203,15 +203,25 @@ export const BeamSystem = new System({
             return;
         }
 
+        // A beam whose source is gone (its firer destroyed, or a
+        // submunition beam whose parent shot expired) is not re-anchored,
+        // and so must not be re-aimed either: aimBeam adds aimOffset to
+        // the rotation it is given, which is only right when that
+        // rotation was just rebuilt from the firer. Applied to the
+        // beam's own last rotation it compounded every tick and an
+        // orphan with an inaccuracy spun. An orphan keeps its last pose,
+        // as BeamDisplaySystem (drawnBeamPose) already draws it.
+        let anchored = false;
         if (source) {
             const parent = entities.get(source);
             const parentMovement = parent?.components
                 .get(MovementStateComponent);
             if (parentMovement) {
-                const anchored = anchorBeam(parentMovement,
+                const anchor = anchorBeam(parentMovement,
                     beamState.exitPointData);
-                movement.position = anchored.position;
-                movement.rotation = anchored.rotation;
+                movement.position = anchor.position;
+                movement.rotation = anchor.rotation;
+                anchored = true;
             }
         }
 
@@ -246,8 +256,10 @@ export const BeamSystem = new System({
             }
             targetPosition = targetMovement.position;
         }
-        movement.rotation = aimBeam(movement.position, movement.rotation,
-            beamState, targetPosition);
+        if (anchored) {
+            movement.rotation = aimBeam(movement.position, movement.rotation,
+                beamState, targetPosition);
+        }
     }
 });
 
