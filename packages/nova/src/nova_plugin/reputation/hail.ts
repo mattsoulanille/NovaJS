@@ -444,10 +444,11 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  *    120-124): 3,000 or 4,000;
  *
  * whatever the pilot's record: there is NO record term (a clean, a -1, a
- * -5 and a -9 pilot were all asked prices inside these spreads). OPEN, a
- * GUESS either way: bad 4,000 has only been seen at records of -5 and -9,
- * and bad asked 3,000 at -1, 0 and +2000, so a bad mood adding 1,000
- * below about -5 is not ruled out; this rule has no such term.
+ * -5, a -8 and a -9 pilot were all asked prices inside these spreads).
+ * MEASURED (reference "H1 / rescue leftovers, wave 20", finding 2): a bad
+ * mood asked 4,000 of a 1,000,000-credit pilot at a CLEAN record, so its
+ * 4,000 needs no record term either. OPEN: a good mood's 2,000 at a clean
+ * record is still unseen (no good mood came up at record 0).
  *
  * GUESSES for the draw: the mood is 1 in 4 good, 2 in 4 neutral, 1 in 4
  * bad (the first asks seen so far: 6 good, 19 neutral, 9 bad of 34), and
@@ -492,7 +493,9 @@ export interface FuelSalePilot {
  * GUESS within the measured bounds: reference "H1 wave 19", finding 1,
  * needs a fraction f of the cash in [0.3, 0.4) (10,000 credits capped a
  * bad mood at 3,000, so f >= 0.3; 5,000 capped a neutral at 1,000, so
- * f < 0.4; 7,000 -> 2,000 fits both); a third is the round figure inside.
+ * f < 0.4; 7,000 -> 2,000 fits both), and "H1 / rescue leftovers, wave
+ * 20", finding 1, narrows it to [0.3, 0.334) (8,000 credits capped six
+ * neutral asks at 2,000, not 3,000); a third is the round figure inside.
  */
 export const FUEL_SALE_CASH_DIVISOR = 3;
 
@@ -508,8 +511,8 @@ export const FUEL_SALE_CASH_DIVISOR = 3;
  * neutral asked 1,000; with 1,000,000 nothing is capped. The cap never
  * goes below 1,000: a pilot who cannot pay even that is still asked it,
  * and answered "You can't fool me - you can't afford it." ({@link
- * cantAffordText}). NO RECORD TERM (finding 2; see {@link fuelSaleTerms}
- * for the one open bad-mood question). The cash divisor is a GUESS
+ * cantAffordText}). NO RECORD TERM (finding 2, and wave 20's bad 4,000 at a
+ * clean record; see {@link fuelSaleTerms}). The cash divisor is a GUESS
  * ({@link FUEL_SALE_CASH_DIVISOR}).
  *
  * The cap is on the FIRST ask: the +1,000 every later ask adds and the
