@@ -13479,6 +13479,27 @@ would land about 396, not 300; a 650 t IDA Frigate 50, not 20).
 Confidence: high for 1, 2 (100-5,000 t, eleven trips), 4; medium for the
 cut-off (one 50 t hulk, wave 26).
 
+**Applied (wave-27 fixes, 2026-11-25, 4f2258a4).**
+`N/nova_plugin/ship/ship_explosion.ts` `shipExplosionDamage` is now
+`SHIP_EXPLOSION_DAMAGE_BASE` 25.5 + `SHIP_EXPLOSION_DAMAGE_PER_TON` 0.037 x
+mass to the shield and to the armor (the existing hit rule lands the armor
+in full once the shield breaks), and **nothing below
+`SHIP_EXPLOSION_DAMAGE_MIN_MASS` 100 t (GUESS: measured between 50 and
+100)**. It is every ship's final explosion, not only a plunder trip's: the
+trip fires the ordinary death and DeathDelay changed nothing but the
+timing, and nothing here suggests the self-destruct is special. Stock
+deaths, old -> new: Viper (10 t) 0.3 -> 0 (121 of the 288 stock hulls are
+under 100 t), IDA Frigate (650 t) 19.5 -> 49.55, Cambrian (6,000 t) 180 ->
+247.5, Leviathan (10,000 t) 300 -> 395.5. The floor needed no change: it
+was already the victim's own `disableArmorFraction` (0x0010 honoured) + 1%
+of max armor; specs now pin wave 26's 33.8% (NovaJS 34%, inside the bar's
+steps) and pd_ten's 29.7% (NovaJS 29.8%, not floored). The blast radius
+(0.02 px a ton, min 20) and the knockback are unchanged (unmeasured). The
+`boarding_plugin.ts` comment cites these sections. Browser-checked: a
+Raven (1,800 shield) beside a stock Leviathan (10,000 t) lost 395.2 shield
+in one step 8.5 s after the hulk's armor went to zero (its DeathDelay), the
+predicted 395.5 less a moment's recharge (was 300).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w27/pd_100/` (the second dir; the first was "target not found"), `pd_100b/`, `pd_200/`, `pd_200b/`, `pd_500/` (the second dir; the first was "target not found"), `pd_500b/`, `pd_1000/`, `pd_1000b/`, `pd_2000/`, `pd_2000b/`, `pd_ten/` (each `*-sw-*` / `*-dialog-*` shots and `recording.mp4`); `trips.png`-style crops from `tools/tripframes.sh`.
 
 ### Disabled fleet lead, UNPROVOKED, wave 27: reached with a guided shot; the escorts turn on the player at once, none stays by the lead, none leaves (2026-11-25)
@@ -13624,6 +13645,24 @@ of waves 22 and 27).
 
 Confidence: medium (three runs; the 20,000 cap is four equal asks at the
 top, the planet's refusal two sightings).
+
+**Applied (wave-27 fixes, 2026-11-25, 9e0d68ee).**
+`N/nova_plugin/reputation/hail.ts` `shipBribePrice` caps an ordinary ship's
+ask (fuel-sale base + growth) at `SHIP_BRIBE_CAP` = `LARGER_SHIP_BRIBE`
+20,000 before the third-of-cash cap; planets are unchanged. The planet's
+outright refusal IS modelled, at the proposal's rate:
+`planetRefusesBribe` refuses **one in eight (`PLANET_BRIBE_REFUSAL_ONE_IN`;
+GUESS from 2 in 15)**, never for a 0x8000 govt (none of its ten offers was
+refused), whatever the cash; the draw is a hash of the planet, the pilot
+and the game day (GUESS: the original re-draws on every hail; here a jump
+re-draws). The comm still offers Offer Bribe and answers the press with an
+STR# 3000 95-99 refusal ("Yeah, right!" / "You wish." / ...; the wave
+read "Yeah, right." and wave 22 "You wish.", both of that group);
+`applyPlanetBribe` (`N/nova_plugin/encounters/hail_plugin.ts`) draws the
+same verdict and charges nothing. Browser-checked: an Association of
+Free Traders warship (gövt 176: 0x0200, no 0x8000) at 200,000,000 credits
+answered Beg For Mercy "I'm in a mean mood today, ... Pay me 20,000
+credits." (uncapped it could ask up to about 204,000).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w27/bribe_2m/sheet.png`, `bribe_50m/sheet.png`, `bribe_200m/sheet.png` (each `*/NN-pbribe.png`, `*-sN-beg.png`).
 
@@ -14308,7 +14347,7 @@ cosmetic or rare.
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
 | R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-48` | CPl with escorts (pilot-make `escorts`), PD | M |
-| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price | CPl with exact cash at 2-3 levels, SS | H |
+| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate) | CPl with exact cash at 2-3 levels, SS | H |
 | R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |
