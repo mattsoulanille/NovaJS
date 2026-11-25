@@ -530,6 +530,39 @@ export function creditBooty(price: number, roll: number): number {
         creditBootyBase(price) + k * CREDIT_BOOTY_RANDOM_STEP);
 }
 
+/**
+ * ============================================================================
+ * The plunder self-destruct (reference "Disabled ships, wave 24")
+ * ============================================================================
+ *
+ * MEASURED once: taking the Energy from a trader the player had disabled
+ * printed "Oops! You tripped this ship's security self-destruct
+ * mechanism." (stock STR# 2002 "misc strings", index 112 0-based), the
+ * dialog was gone, the hulk was destroyed and the player was undamaged and
+ * still at rest. The Bible has no field for it (no shïp, gövt or oütf
+ * entry mentions a plunder self-destruct), so it is the engine's own.
+ *
+ * THE CHANCE IS A GUESS: one take tripped in one (wave 24), while waves
+ * 6-7 took the Credits and then the Cargo of five derelict hulks (gövt
+ * 0x0800) and more boards after them with no self-destruct, ten takes at
+ * least and likely twenty-odd. A single per-take chance fits all of it at
+ * a few percent (one trip in N + 1 takes is the likeliest p = 1 / (N +
+ * 1): 1 / 11 to 1 / 25); PLUNDER_SELF_DESTRUCT_CHANCE is 5%, between
+ * them. Whether derelicts are exempt (every clean take was a derelict's)
+ * is open; the one rule for every hulk is the simpler reading.
+ *
+ * One seeded draw per booty take (cargo, credits, energy, ammo), made as
+ * the take applies; not for the capture attempt, which has its own roll
+ * and its own failure (the line says "plunder").
+ */
+export const PLUNDER_SELF_DESTRUCT_CHANCE = 0.05;
+
+/** Whether a booty take trips the hulk's self-destruct, given ONE uniform
+ * draw `roll` in [0, 1) from the seeded RandomResource. */
+export function plunderTripsSelfDestruct(roll: number): boolean {
+    return roll < PLUNDER_SELF_DESTRUCT_CHANCE;
+}
+
 /** Looks up a government's data by id: the sim's GovtsResource with the
  * cached game data behind it, or the display's cached game data. */
 export type BoardingGovtLookup =

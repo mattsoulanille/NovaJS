@@ -337,6 +337,20 @@ export function captureRepelledMessage(): string {
 }
 
 /**
+ * The stock line for a booty take that tripped the hulk's security
+ * self-destruct: STR# 2002 index 112, verbatim (reference "Disabled ships,
+ * wave 24": the only line shown, the dialog gone, the hulk destroyed).
+ */
+export const PLUNDER_SELF_DESTRUCT_MESSAGE =
+    "Oops! You tripped this ship's security self-destruct mechanism.";
+
+/** The status line for a plunder self-destruct (see
+ * PLUNDER_SELF_DESTRUCT_MESSAGE). */
+export function plunderSelfDestructMessage(): string {
+    return PLUNDER_SELF_DESTRUCT_MESSAGE;
+}
+
+/**
  * What the player is told when pirates board their disabled ship and take
  * a cut of their cash (gövt Flags 0x1000, "including the player").
  *

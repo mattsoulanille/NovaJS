@@ -12359,6 +12359,36 @@ lead and exactly one each of red / orange / yellow / green escorts, gövt
 
 Confidence: high for 1-3 (panel and dialog shots), medium for 4.
 
+**Applied (wave-24 fixes, 2026-11-25).**
+- 1: NovaJS already **matches**: `DamageSystem`
+  (`N/nova_plugin/ship/death_plugin.ts`) lands a hit's armor damage in the
+  same hit when it takes the shield to 0, so 3000 shield / 2100 armor on a
+  3000 / 3000 hull leaves 30% armor, under the 33% threshold
+  (`disabled_component.ts` `isBelowDisableThreshold`), and a second hit
+  kills. Comment and spec only (`disabled_plugin_test.ts`, the kit hit
+  scaled to the Wren Skiff).
+- 3: the plunder self-destruct (`N/nova_plugin/encounters/boarding_plugin.ts`
+  `tripPlunderSelfDestruct`, `ship/boarding_component.ts`
+  `PLUNDER_SELF_DESTRUCT_CHANCE`). The line is stock STR# 2002 "misc
+  strings" index 112 (0-based); the Bible has no field for it. Each booty
+  take (Cargo, Credits, Energy, Ammo; not the capture attempt) makes one
+  draw of the seeded PRNG and trips at **5% (GUESS)**: one trip in one take
+  here, against ten or more clean takes on derelicts in waves 6-7 (wave 6
+  took Credits and Cargo from five hulks), so one trip in 11-25 takes; 5%
+  is between. When it trips, the take's booty is lost (GUESS: only the
+  "Oops!" line showed; the player's fuel was full, so the energy could not
+  be read), the hulk dies through the ordinary zero-armor path (breakup,
+  final explosion: its mass-scaled blast is 1.5 shield for this 50-ton
+  hull), the session ends and the status line says it
+  (`PlunderSelfDestructEvent`, `display/status_message_plugin.ts`). The
+  piracy is charged as for any take; the hulk's death is NOT the player's
+  kill (GUESS: no combat rating, no Kill penalty; the records after it
+  were not read). No draw for a ship a player is flying or a mission ship
+  (GUESS). Whether derelicts are exempt is open (every clean take was a
+  derelict's); NovaJS rolls for every hulk.
+- The coast: left at 45 px/s² (a GUESS until a coast is recorded); the
+  constant's comment in `disabled_component.ts` notes the mismatch.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/leaver/*/` (`59-h-fire0.png`, `60-h-fire1a.png`, `68-chk1.png`, `69-bd-000.png` .. `105-bd-036.png`, `106-bd-037b.png` dialog, `107-took.png` self-destruct);
 `bigfleet/*/` (`names.png`, `170-rw-04.png`, `203-s2.png`, `209-hu1-fire0.png`, `210-u1.png`, `211-dw-00.png` .. `235-dw-24.png`).
 

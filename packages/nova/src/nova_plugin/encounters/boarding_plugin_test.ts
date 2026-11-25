@@ -19,17 +19,22 @@ import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { UUID } from 'nova_ecs/arg_types';
 import { System } from 'nova_ecs/system';
-import { boardingBlockedMessage } from '../../display/status_bar_content.js';
+import {
+    boardingBlockedMessage, plunderSelfDestructMessage,
+} from '../../display/status_bar_content.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import {
     BayCaptureEvent, BoardingBlockedEvent, clearHostilityToward,
-    EscortRepairedEvent, reassignCapturedWing,
+    EscortRepairedEvent, PlunderSelfDestructEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
 import { AggressionComponent } from '../combat/index.js';
 import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
-import { BoardedComponent, BoardingComponent, creditBooty } from '../ship/index.js';
+import {
+    BoardedComponent, BoardingComponent, creditBooty, ExplodingComponent,
+    PLUNDER_SELF_DESTRUCT_CHANCE, plunderTripsSelfDestruct,
+} from '../ship/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
 import { LandEvent } from '../travel/index.js';
 import {
@@ -61,7 +66,9 @@ import { PlayerEscortComponent } from '../player/index.js';
 import {
     CreditsComponent, MissionsComponent,
 } from '../player/index.js';
-import { LegalRecordsComponent } from '../reputation/index.js';
+import {
+    CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponent,
+} from '../reputation/index.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from '../player/index.js';
@@ -343,7 +350,9 @@ describe('boarding in a live world', () => {
                     .toEqual('none');
                 expect(target.components.has(PlayerEscortComponent))
                     .toBeFalse();
-                // Plunder is untouched.
+                // Plunder is untouched (a draw that does not trip the
+                // hulk's self-destruct).
+                random.next = () => 0.99;
                 press(world, BOARDER, 'plunderCredits');
                 expect(boarder.components.get(CreditsComponent)!.credits)
                     .toBeGreaterThan(0);
@@ -880,7 +889,9 @@ describe('boarding in a live world', () => {
                 expect(boarder.components.get(BoardingComponent)?.capture)
                     .toEqual('none');
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
-                // The booty is still there for the taking...
+                // The booty is still there for the taking (a draw that
+                // does not trip the hulk's self-destruct)...
+                random.next = () => { draws++; return 0.99; };
                 press(world, BOARDER, 'plunderCargo');
                 expect(boarder.components.get(BoardingComponent)?.cargoTaken)
                     .toBeTrue();
@@ -1679,6 +1690,172 @@ describe('boarding in a live world', () => {
      * Boarding for NON-plunder purposes is untouched, which the escort
      * repair spec at the end pins.
      */
+    describe('a booty take can trip the hulk\'s security self-destruct '
+        + '(reference "Disabled ships, wave 24")', () => {
+            /** The world's PRNG replaced: every draw returns `roll` and is
+             * counted. */
+            function pinDraws(world: World, roll: number) {
+                const counter = { draws: 0 };
+                const random = new Random();
+                random.next = () => { counter.draws++; return roll; };
+                world.resources.set(RandomResource, random);
+                return counter;
+            }
+
+            /** A boarded hulk the BOARDER disabled (its attribution root),
+             * with his combat rating, and the self-destruct lines
+             * collected. */
+            async function boarded() {
+                const ctx = await boardingWorld();
+                ctx.boarder.components.set(CombatRatingComponent,
+                    { kills: 0 });
+                ctx.target.components.set(DamageAttributionComponent,
+                    { root: BOARDER, disabledAtHit: false });
+                const lines: string[][] = [];
+                ctx.world.addSystem(new System({
+                    name: 'CollectSelfDestruct',
+                    events: [PlunderSelfDestructEvent],
+                    args: [UUID] as const,
+                    step: (uuid) => { lines.push([uuid]); },
+                }));
+                pinDraws(ctx.world, 0.99);
+                press(ctx.world, BOARDER, 'board');
+                expect(ctx.boarder.components.has(BoardingComponent))
+                    .toBeTrue();
+                return { ...ctx, lines };
+            }
+
+            it('the chance: a GUESSED 5% a take', () => {
+                expect(PLUNDER_SELF_DESTRUCT_CHANCE).toBe(0.05);
+                expect(plunderTripsSelfDestruct(0)).toBeTrue();
+                expect(plunderTripsSelfDestruct(0.0499)).toBeTrue();
+                expect(plunderTripsSelfDestruct(0.05)).toBeFalse();
+                expect(plunderTripsSelfDestruct(0.99)).toBeFalse();
+            });
+
+            it('the line is STR# 2002 index 112, verbatim', () => {
+                expect(plunderSelfDestructMessage()).toEqual(
+                    "Oops! You tripped this ship's security self-destruct "
+                    + 'mechanism.');
+            });
+
+            for (const action of ['plunderCredits', 'plunderCargo',
+                'plunderFuel', 'plunderAmmo']) {
+                it(`a tripped ${action}: the hulk is destroyed, the booty `
+                    + 'lost, the session over, the player told and '
+                    + 'unharmed', async () => {
+                        const { world, boarder, target, lines } =
+                            await boarded();
+                        const armor = boarder.components.get(ArmorComponent)!
+                            .current;
+                        const counter = pinDraws(world, 0);
+                        press(world, BOARDER, action);
+                        expect(counter.draws).toBe(1);
+                        expect(lines).toEqual([[BOARDER]]);
+                        expect(boarder.components.has(BoardingComponent))
+                            .toBeFalse();
+                        expect(target.components.has(ExplodingComponent))
+                            .toBeTrue();
+                        expect(target.components.get(ArmorComponent)!.current)
+                            .toBe(0);
+                        expect(boarder.components.get(CreditsComponent)!
+                            .credits).toBe(0);
+                        expect(boarder.components.get(CargoComponent)!.size)
+                            .toBe(0);
+                        expect(boarder.components.get(FuelComponent)!.current)
+                            .toBe(0);
+                        expect(boarder.components.get(ArmorComponent)!.current)
+                            .toBe(armor);
+                        // Not his kill (GUESS): no combat rating.
+                        expect(boarder.components.get(CombatRatingComponent)!
+                            .kills).toBe(0);
+                        // It is in the ordinary death sequence (the
+                        // breakup, the final explosion, DeathEvent).
+                        world.step();
+                        expect(target.components.has(ExplodingComponent))
+                            .toBeTrue();
+                    });
+            }
+
+            it('the piracy is charged as for any take, and the kill is not '
+                + '(GUESS)', async () => {
+                    const kept = await boarded();
+                    pinDraws(kept.world, 0.99);
+                    press(kept.world, BOARDER, 'plunderCredits');
+                    const tripped = await boarded();
+                    pinDraws(tripped.world, 0);
+                    press(tripped.world, BOARDER, 'plunderCredits');
+                    const records = (ctx: typeof kept) => [...ctx.boarder
+                        .components.get(LegalRecordsComponent)!.entries()];
+                    expect(records(kept).length).toBeGreaterThan(0);
+                    expect(records(tripped)).toEqual(records(kept));
+                    for (let i = 0; i < 60; i++) {
+                        tripped.world.step();
+                    }
+                    expect(records(tripped)).toEqual(records(kept));
+                });
+
+            it('a draw that does not trip moves every booty as before, one '
+                + 'draw a take', async () => {
+                    const { world, boarder, target, lines } = await boarded();
+                    const counter = pinDraws(world, 0.99);
+                    for (const action of ['plunderCredits', 'plunderCargo',
+                        'plunderFuel', 'plunderAmmo']) {
+                        press(world, BOARDER, action);
+                        // A replayed press draws nothing more.
+                        press(world, BOARDER, action);
+                    }
+                    expect(counter.draws).toBe(4);
+                    expect(lines).toEqual([]);
+                    expect(boarder.components.get(CreditsComponent)!.credits)
+                        .toBeGreaterThan(0);
+                    expect(boarder.components.get(CargoComponent)!
+                        .get('cargo:0')).toBe(2);
+                    expect(boarder.components.get(FuelComponent)!.current)
+                        .toBeGreaterThan(0);
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeFalse();
+                    expect(boarder.components.has(BoardingComponent))
+                        .toBeTrue();
+                });
+
+            it('the capture attempt draws its own roll only, never the '
+                + 'self-destruct', async () => {
+                    const { world, boarder, target, lines } = await boarded();
+                    const counter = pinDraws(world, 0);
+                    press(world, BOARDER, 'plunderCapture');
+                    expect(counter.draws).toBe(1);
+                    expect(boarder.components.get(BoardingComponent)?.capture)
+                        .toEqual('succeeded');
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeFalse();
+                    expect(lines).toEqual([]);
+                });
+
+            it('never for a ship a player is flying, nor a mission ship: no '
+                + 'draw (GUESS)', async () => {
+                    for (const exempt of ['player', 'mission']) {
+                        const { world, boarder, target, lines } =
+                            await boarded();
+                        if (exempt === 'player') {
+                            target.components.set(ControlledByComponent,
+                                { peerId: 'the other peer' });
+                        } else {
+                            target.components.set(MissionShipComponent,
+                                { mission: 'nova:9999', owner: BOARDER });
+                        }
+                        const counter = pinDraws(world, 0);
+                        press(world, BOARDER, 'plunderCredits');
+                        expect(counter.draws).withContext(exempt).toBe(0);
+                        expect(lines).withContext(exempt).toEqual([]);
+                        expect(target.components.has(ExplodingComponent))
+                            .withContext(exempt).toBeFalse();
+                        expect(boarder.components.get(CreditsComponent)!
+                            .credits).withContext(exempt).toBeGreaterThan(0);
+                    }
+                });
+        });
+
     describe('a hulk gets one plunder and one capture attempt', () => {
         it('refuses a second plunder session after the first one closes',
             async () => {

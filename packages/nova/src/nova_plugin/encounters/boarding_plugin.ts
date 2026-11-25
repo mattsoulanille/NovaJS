@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { GovtData } from 'novadatainterface/govt_data';
-import { Emit, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { EcsEvent } from 'nova_ecs/events';
@@ -11,6 +11,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import {
@@ -19,7 +20,7 @@ import {
     boardingDistance, BoardingGovtLookup, boardingRange, BoardingState,
     capturable, captureChance, CaptureBayCandidate, chooseCaptureBay,
     clearPlunderRecord, creditBooty, fuelTransferAmount, matchBoardedVelocity,
-    planAmmoPlunder, planCargoPlunder, plunderSpent,
+    planAmmoPlunder, planCargoPlunder, plunderSpent, plunderTripsSelfDestruct,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
 import { GateDepartureSystem, LandEvent } from '../travel/index.js';
@@ -47,7 +48,7 @@ import { FiringGroupComponent } from '../ship/index.js';
 import { isInFlock } from '../combat/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent, SystemIdResource } from '../core/index.js';
-import { ArmorComponent } from '../ship/index.js';
+import { ArmorComponent, ShieldComponent, ZeroArmorEvent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import {
     endContrabandHostility, formationsIn, FormationComponent, nextFormationSlot,
@@ -58,7 +59,7 @@ import {
 } from '../player/index.js';
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecords } from '../reputation/index.js';
-import { chargeCrime, GovtsResource, LegalGeography, LegalGeographyResource, LegalRecordsComponent } from '../reputation/index.js';
+import { chargeCrime, DamageAttributionComponent, GovtsResource, LegalGeography, LegalGeographyResource, LegalRecordsComponent } from '../reputation/index.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from '../player/index.js';
@@ -124,6 +125,20 @@ export const BoardingRepelledEvent =
     new EcsEvent<Record<string, never>>('BoardingRepelledEvent');
 export const BoardingRepelledEventType = t.type({});
 registerSimulationBridgeEvent({ event: BoardingRepelledEvent });
+
+/**
+ * Emitted (targeted at the boarding ship) when a booty take trips the
+ * hulk's security self-destruct (tripPlunderSelfDestruct): the hulk is
+ * destroyed and the session is over on the same tick, so the status line
+ * is the only place the player is told why the dialog vanished (stock
+ * STR# 2002 index 112, "Oops! You tripped this ship's security
+ * self-destruct mechanism."; reference "Disabled ships, wave 24"). Never
+ * mutates the simulation.
+ */
+export const PlunderSelfDestructEvent =
+    new EcsEvent<Record<string, never>>('PlunderSelfDestructEvent');
+export const PlunderSelfDestructEventType = t.type({});
+registerSimulationBridgeEvent({ event: PlunderSelfDestructEvent });
 
 /**
  * Emitted (targeted at the boarding ship) when boarding one of your OWN
@@ -1300,7 +1315,8 @@ function convertToEscort(target: Entity, targetUuid: string,
  * The plunder-dialog actions. Each is idempotent (a per-action flag or
  * the capture state guards a repeated control edge), so a replayed input
  * never double-applies. All arithmetic is deterministic; the capture
- * roll draws once from the seeded RandomResource.
+ * roll draws once from the seeded RandomResource, and so does each booty
+ * take, for the hulk's security self-destruct (tripPlunderSelfDestruct).
  */
 const BoardingActionSystem = new System({
     name: 'BoardingActionSystem',
@@ -1311,10 +1327,10 @@ const BoardingActionSystem = new System({
         Optional(WeaponsStateComponent), GetEntity, UUID, Entities,
         RandomResource, Optional(GovtsResource), SimulationGameDataResource,
         Emit, Optional(LegalGeographyResource),
-        Optional(SystemIdResource)] as const,
+        Optional(SystemIdResource), TimeResource] as const,
     step(controls, boarding, shipData, cargo, physics, credits, fuel, records,
         boarderOutfits, boarderWeapons, entity, uuid, entities, random, govts,
-        gameData, emit, geography, systemId) {
+        gameData, emit, geography, systemId, time) {
         const target = entities.get(boarding.target);
 
         // Charges the BoardPenalty crime once per session, the first
@@ -1375,9 +1391,27 @@ const BoardingActionSystem = new System({
             return;
         }
 
+        // Each booty take may trip the hulk's security self-destruct (one
+        // seeded draw, tripPlunderSelfDestruct). The take is already
+        // marked spent; when it trips nothing moves and the session is
+        // over.
+        const tripped = (): boolean => {
+            if (!tripPlunderSelfDestruct(target, boarding.target, random,
+                time, emit)) {
+                return false;
+            }
+            chargeCrime();
+            endBoardingSession(entity, target);
+            emit(PlunderSelfDestructEvent, {}, [uuid]);
+            return true;
+        };
+
         if (controls.get('plunderCargo') === 'start' && !boarding.cargoTaken) {
             boarding.cargoTaken = true;
             markBootyTaken(target, uuid, 'cargoTaken');
+            if (tripped()) {
+                return;
+            }
             const targetCargo = target.components.get(CargoComponent);
             if (targetCargo) {
                 const free = physics.freeCargo - cargoUsed(cargo);
@@ -1398,6 +1432,9 @@ const BoardingActionSystem = new System({
             && !boarding.creditsTaken) {
             boarding.creditsTaken = true;
             markBootyTaken(target, uuid, 'creditsTaken');
+            if (tripped()) {
+                return;
+            }
             credits.credits += boarding.creditsAvailable;
             chargeCrime();
         }
@@ -1405,6 +1442,9 @@ const BoardingActionSystem = new System({
         if (controls.get('plunderFuel') === 'start' && !boarding.fuelTaken) {
             boarding.fuelTaken = true;
             markBootyTaken(target, uuid, 'fuelTaken');
+            if (tripped()) {
+                return;
+            }
             const targetFuel = target.components.get(FuelComponent);
             if (targetFuel) {
                 const moved = fuelTransferAmount(
@@ -1418,6 +1458,9 @@ const BoardingActionSystem = new System({
         if (controls.get('plunderAmmo') === 'start' && !boarding.ammoTaken) {
             boarding.ammoTaken = true;
             markBootyTaken(target, uuid, 'ammoTaken');
+            if (tripped()) {
+                return;
+            }
             const targetOutfits = target.components.get(OutfitsStateComponent);
             if (boarderOutfits && targetOutfits) {
                 const { victim, boarderRoundsByWeapon, info } = ammoPlunderInputs(
@@ -1510,6 +1553,71 @@ const BoardingActionSystem = new System({
 });
 
 /**
+ * ============================================================================
+ * THE PLUNDER SELF-DESTRUCT (reference "Disabled ships, wave 24")
+ * ============================================================================
+ *
+ * Draws once from the seeded RandomResource for a booty take on `hulk`
+ * and, when it trips (plunderTripsSelfDestruct, a GUESSED 5% a take),
+ * destroys the hulk through the ordinary zero-armor death path (shield to
+ * its min, armor 0, ZeroArmorEvent: the breakup, the final explosion and
+ * DeathEvent follow as for any other ship). Returns whether it tripped.
+ *
+ * MEASURED (one run): the line, the hulk destroyed, the dialog gone, the
+ * player undamaged. NovaJS's final explosion still deals its small
+ * mass-scaled blast (Matthew's ruling, ship_explosion.ts): 1.5 shield for
+ * the measured 50-ton hull, nothing a player would see.
+ *
+ * GUESSES:
+ *  - the booty of the take that trips is LOST (only the "Oops!" line was
+ *    shown, no "You salvaged ..." or energy line; the run could not read
+ *    the player's fuel, which was full before the take);
+ *  - the piracy is charged as for any take (BoardPenalty, once per
+ *    session);
+ *  - it is NOT the player's kill: the hulk blew itself up, so no combat
+ *    rating and no Kill / Disab penalty (its DamageAttribution is marked
+ *    `killCredited` before the event; the original's records after a
+ *    self-destruct were not read);
+ *  - no draw and no self-destruct for a ship a PLAYER is flying (a
+ *    rival's disabled ship: destroying a player on a random draw is not
+ *    plunder) or a MISSION special ship (a random draw must not decide a
+ *    mission's ship goal; the original was only seen with a traffic
+ *    trader).
+ *
+ * Determinism: the draw is made only for a take that applies (the
+ * per-action flags guard replays) and the exemptions read synced
+ * components, so every peer draws the same count.
+ */
+function tripPlunderSelfDestruct(hulk: Entity, hulkUuid: string,
+    random: { next(): number }, time: Time, emit: EmitFunction): boolean {
+    if (hulk.components.has(ControlledByComponent)
+        || hulk.components.has(MissionShipComponent)) {
+        return false;
+    }
+    if (!plunderTripsSelfDestruct(random.next())) {
+        return false;
+    }
+    const attribution = hulk.components.get(DamageAttributionComponent);
+    if (attribution) {
+        attribution.killCredited = true;
+    } else {
+        hulk.components.set(DamageAttributionComponent,
+            { killCredited: true });
+    }
+    const shield = hulk.components.get(ShieldComponent);
+    if (shield) {
+        shield.current = shield.min;
+    }
+    const armor = hulk.components.get(ArmorComponent);
+    if (armor) {
+        armor.current = 0;
+    }
+    // The same event DamageSystem emits when damage zeroes armor.
+    emit(ZeroArmorEvent, time, [hulkUuid]);
+    return true;
+}
+
+/**
  * A ship LANDED, so its plunder life segment is over: the durable
  * boarding record is dropped and the ship may be plundered once again
  * when it comes back up (Matthew's ruling; see clearPlunderRecord).
@@ -1569,6 +1677,8 @@ export const BoardingPlugin: Plugin = {
             BayCaptureEvent, BayCaptureEventType);
         world.resources.get(SerializerResource)?.addEvent(
             BoardingRepelledEvent, BoardingRepelledEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            PlunderSelfDestructEvent, PlunderSelfDestructEventType);
         world.resources.get(SerializerResource)?.addEvent(
             MissionCargoRetrievedEvent, MissionCargoRetrievedEventType);
 

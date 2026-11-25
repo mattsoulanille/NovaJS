@@ -16,9 +16,9 @@ import { DISTRESS_MESSAGES_STRING_TABLE } from "novadatainterface/string_table_d
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage } from "./status_bar_content.js";
+import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
+import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
     ContrabandScanEvent, DistressCallEvent, distressCallMessage, distressLine,
@@ -230,6 +230,20 @@ const ShowBoardingRepelledMessage = new System({
     step(statusLine, { time }, _player, emit) {
         statusLine.setMessage(captureRepelledMessage(), time);
         emit(UiSoundEvent, { id: BEEP_CANT_DO });
+    },
+});
+
+// A booty take tripped the hulk's security self-destruct
+// (boarding_plugin's tripPlunderSelfDestruct): the hulk is destroyed and
+// the session over on the same tick, so the dialog has already closed and
+// the status line says why. No beep: the hulk's own explosion is the
+// sound of it.
+const ShowPlunderSelfDestructMessage = new System({
+    name: 'ShowPlunderSelfDestructMessage',
+    events: [PlunderSelfDestructEvent],
+    args: [StatusLineResource, TimeResource, PlayerShipSelector] as const,
+    step(statusLine, { time }) {
+        statusLine.setMessage(plunderSelfDestructMessage(), time);
     },
 });
 
@@ -496,6 +510,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowLandingBlockedMessage);
         world.addSystem(ShowBoardingBlockedMessage);
         world.addSystem(ShowBoardingRepelledMessage);
+        world.addSystem(ShowPlunderSelfDestructMessage);
         world.addSystem(ShowPlayerPlunderedMessage);
         world.addSystem(ShowContrabandScanMessage);
         world.addSystem(ShowDistressCallMessage);
@@ -512,6 +527,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowLandingBlockedMessage);
         world.removeSystem(ShowBoardingBlockedMessage);
         world.removeSystem(ShowBoardingRepelledMessage);
+        world.removeSystem(ShowPlunderSelfDestructMessage);
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowContrabandScanMessage);
         world.removeSystem(ShowDistressCallMessage);
