@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w22-bribe-plain-5m",
+  "edits": {
+    "ship": 703,
+    "stellar": 1461,
+    "credits": 5000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1169": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-bribe-plain-5m",
+    "legal": {
+      "1169": -50
+    }
+  }
+}

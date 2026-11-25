@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w22-rank-alone",
+  "edits": {
+    "ship": 703,
+    "stellar": 1447,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1157": 2
+    },
+    "missionBits": {
+      "9241": true
+    },
+    "nickname": "Probe",
+    "shipName": "w22-rank-alone"
+  }
+}

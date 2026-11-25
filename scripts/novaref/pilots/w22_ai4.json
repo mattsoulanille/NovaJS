@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w22-ai4",
+  "edits": {
+    "ship": 497,
+    "stellar": 1453,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1162": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-ai4",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

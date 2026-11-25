@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w22-refilter",
+  "edits": {
+    "ship": 703,
+    "stellar": 1460,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1167": 2,
+      "1168": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-refilter"
+  }
+}

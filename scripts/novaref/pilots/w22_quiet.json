@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w22-quiet",
+  "edits": {
+    "ship": 497,
+    "stellar": 1454,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1163": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-quiet",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

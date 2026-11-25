@@ -1,0 +1,16 @@
+{
+ "name": "w22_stock_interactive",
+ "_comment": "Wave 22: STOCK data, no plug-in, Last Pilot parked: Enter Ship with the pilot copy, recording at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w22.jsonl) until {\"done\":true}. K8: pilot w22_k8_gate (a stock Shuttle at HG-Secundus, Nesre Secundus) for the radar shape of a working hypergate.",
+ "pilot": { "as": "novaref-scenario" },
+ "park_last_pilot": true,
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w22.jsonl", "maxMs": 1200000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w22-fuel-m5",
+  "edits": {
+    "ship": 763,
+    "stellar": 1509,
+    "credits": 1000000,
+    "fuel": 0,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1509": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-fuel-m5",
+    "legal": {
+      "1509": -5
+    }
+  }
+}

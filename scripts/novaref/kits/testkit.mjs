@@ -293,8 +293,180 @@ export default {
         ...wave19Resources(),
         ...wave20Resources(),
         ...wave21Resources(),
+        ...wave22Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-22 experiments (docs/reference_experiments.md, "... wave 22").
+ * Nothing retired. sÿst 1160-1173, spöb 1451-1475, shïp 498-510, düde
+ * 445-453, gövt 302-305, wëap 291-293, mïsn 941-955 (bits 9233-9241; offer
+ * text dësc 4813-4827), bar dësc 11332. Map row y = -1300. The next free
+ * ids: sÿst 1174+, spöb 1476+, shïp 511+, düde 454+, mïsn 956+ (the stock
+ * gap ends at 959), gövt 301 and below, flët 307+, wëap 294+, oütf 466+,
+ * bits 9242+.
+ *
+ *  R19 What makes an AI 1 victim call (one thing varied at a time from
+ *      wave 20's mobile S50, shïp 488, at sÿst 1143): every system is owned
+ *      by gövt 311 (flët 305, ReinfTime 300, ReinfIntrval 0), avgShips 1,
+ *      port at (0,0). shïp 498 Kit RV Mobile S50 AI2 (488 with AI 2, düde
+ *      445, sÿst 1160), 499 AI3 (düde 446, sÿst 1161), 500 AI4 (düde 447,
+ *      sÿst 1162), 501 Kit RV Mobile S50 Quiet (488 with InherentGovt 1305:
+ *      the ATTRIBUTES govt gövt 305 Kit Quiet Attr, Flags2 0x0008 "don't send
+ *      distress messages"; düde 448 of 311, sÿst 1163), 502 Kit RV Mobile
+ *      S50 Sp20 (488 with Speed 20, Accel kept at 300; düde 449, sÿst 1164);
+ *      ports spöb 1451-1455.
+ *      The arrival centre: sÿst 1165 Kit Reinf Far C (the mobile AI 1 S50,
+ *      düde 437), port spöb 1456 at (3000, 0) (the first nav default),
+ *      uninhabited markers 1457 at (0, 0) (the centre) and 1458 at (3000,
+ *      1000) (to calibrate the radar from the port).
+ *  Mission ships (wave-21 leftover: offer 940's düde 441 never appeared on
+ *      the port at 3000 px): sÿst 1166 Kit Ship Test (363), port spöb 1459
+ *      at (0,0): BBS job 941 (b9239) düde 441 at ShipStart -1. At Kit Reinf
+ *      Far M's port (spöb 1449 at (3000, 0)): BBS jobs 942 (düde 437, the
+ *      mobile AI 1 of 311), 943 (düde 426, an AI 4 warship of 363), 944
+ *      (düde 441 again), all b9240, ShipStart -1.
+ *  #324 sÿst 1167 Kit Live Refilter (363), port spöb 1460 (PORT_FLAGS),
+ *      linked to 1168 Kit Live Refilter Next (no stellar). BBS 945 job X
+ *      (!b9233), bar offer 946 Y (!b9234, OnAccept "b9233 b9234": X stops
+ *      qualifying, set OUTSIDE the BBS), BBS 947 job Z (!b9235, OnAccept
+ *      b9235: an accept that re-checks the list); BBS 950 setter (!b9236,
+ *      OnAccept b9236), shipyard offer 948 (AvailLoc 5) and outfitter offer
+ *      949 (AvailLoc 6), both b9236; BBS 951-954 Kit L rand
+ *      1-4 (AvailRandom 50, !b9237) to see when random offers are re-rolled
+ *      (a re-landing vs a jump and back; the Bible says "each time you warp
+ *      into a system").
+ *  H1  ränk 0x0400 with no raider at all: offer 955 (b9241) at Kit Rank
+ *      Calm (spöb 1447), OnAccept "!b9241 K200", no ship.
+ *  Added during the wave (hub requests): R7 bribes (gövt 304 / 303 / 302,
+ *      sÿst 1169 / 1170 / 1173, ports spöb 1461 / 1462 / 1475, shïp 503 /
+ *      504, düde 450-453); K8 radar shapes (sÿst 1171 with spöb 1463-1469,
+ *      sÿst 1172 with spöb 1470-1474); F1c formation fill (shïp 505-510,
+ *      wëap 291-293). Each block below says what it holds.
+ *
+ * LESSONS: an AI 1 / AI 2 victim calls the fleet only when hit from near
+ * (475 px yes, 700 px no); gövt 0x0008 is a different flag in Flags and
+ * Flags2 (Kit Quiet Attr was first built with the Flags one); a stock
+ * station (spöb Flags 0x10) is a radar dot at any size.
+ */
+function wave22Resources() {
+    const out = [];
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const marker = (id, name, x, y) => spob(id, name, x, y, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const Y = -1300;
+    const POINTER = 1959;
+    // shïp 488 Kit RV Mobile S50 (wave 20), the one AI 1 victim that called.
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0, ai: 1,
+        armor: 30000, shield: 30000, shieldRecharge: 0, strength: 50 };
+    const reinf = (id, name, x, spobId, dudeId) => {
+        const s = traffic(system(id, name, x, Y, 311, [spobId]), [[dudeId, 100]], 1);
+        s.set = { ...s.set, reinfFleet: 305, reinfTime: 300, reinfInterval: 0 };
+        return [s, port(spobId, `${name} Port`)];
+    };
+
+    // --- R19: one thing varied at a time from the mobile S50.
+    out.push(govt(305, "Kit Quiet Attr", { flags2: 0x0008, classes: [305, -1, -1, -1], crimeTol: 30000 }));
+    const variants = [
+        [498, "Kit RV Mobile S50 AI2", { ai: 2 }, 1160, "Kit Reinf AI2"],
+        [499, "Kit RV Mobile S50 AI3", { ai: 3 }, 1161, "Kit Reinf AI3"],
+        [500, "Kit RV Mobile S50 AI4", { ai: 4 }, 1162, "Kit Reinf AI4"],
+        [501, "Kit RV Mobile S50 Quiet", { govt: 1305 }, 1163, "Kit Reinf Quiet"],
+        [502, "Kit RV Mobile S50 Sp20", { speed: 20 }, 1164, "Kit Reinf Sp20"],
+    ];
+    variants.forEach(([shipId, name, set, sysId, sysName], i) => {
+        out.push(...shareRled(shipId, name, POINTER, 24, { ...mobile, ...set }));
+        out.push(dude(445 + i, name, set.ai ?? 1, 311, shipId));
+        out.push(...reinf(sysId, sysName, -520 + 40 * i, 1451 + i, 445 + i));
+    });
+    // The arrival centre: the port 3,000 px from the centre, markers at the centre and 1,000 px off the port.
+    const farC = traffic(system(1165, "Kit Reinf Far C", -320, Y, 311, [1456, 1457, 1458]), [[437, 100]], 1);
+    farC.set = { ...farC.set, reinfFleet: 305, reinfTime: 300, reinfInterval: 0 };
+    out.push(farC, port(1456, "Kit Reinf Far C Port", 3000, 0), marker(1457, "Kit Far C Centre", 0, 0), marker(1458, "Kit Far C Side", 3000, 1000));
+
+    // --- Mission ships: düde 441 on a (0,0) port; three düdes on the 3,000 px port.
+    out.push(system(1166, "Kit Ship Test", -280, Y, 363, [1459]), port(1459, "Kit Ship Test Port"));
+    const job = (id, name, bit, set) => misn(id, name, bit, { availLoc: 0, dispWeight: 30000, ...set });
+    const shipJob = (id, name, bit, stel, dudeId, w) => job(id, name, bit, { availStel: stel, shipCount: 1, shipSyst: -1, shipDude: dudeId,
+        shipGoal: -1, shipBehav: -1, shipStart: -1, dispWeight: w });
+    out.push(...shipJob(941, "Kit S guard 441 at a centre port", 9239, 1459, 441, 30000));
+    out.push(...shipJob(942, "Kit S mobile 437 far port", 9240, 1449, 437, 30000));
+    out.push(...shipJob(943, "Kit S warship 426 far port", 9240, 1449, 426, 29999));
+    out.push(...shipJob(944, "Kit S guard 441 far port", 9240, 1449, 441, 29998));
+
+    // --- #324: a reopened BBS, the shipyard / outfitter venues, random offers.
+    const live = system(1167, "Kit Live Refilter", -240, Y, 363, [1460]);
+    live.set.links = links(1168);
+    const next = system(1168, "Kit Live Refilter Next", -200, Y, 363, []);
+    next.set.links = links(1167);
+    out.push(live, port(1460, "Kit Live Refilter Port", 0, 0, { flags: PORT_FLAGS }), next);
+    out.push({ type: "dësc", id: 10000 + 1460 - 128, text: "Kit Live Refilter Port bar (novaref test kit)." });
+    const at = { availStel: 1460 };
+    out.push(...job(945, "Kit L job X", 9233, { ...at, availBits: "!b9233" }));
+    out.push(...misn(946, "Kit L bar Y", 9234, { ...at, availLoc: 1, availBits: "!b9234", onAccept: "b9233 b9234" }));
+    out.push(...job(947, "Kit L job Z", 9235, { ...at, availBits: "!b9235", onAccept: "b9235", dispWeight: 29999 }));
+    out.push(...job(950, "Kit L job setter", 9236, { ...at, availBits: "!b9236", onAccept: "b9236", dispWeight: 29998 }));
+    out.push(...misn(948, "Kit L shipyard offer", 9236, { ...at, availLoc: 5 }));
+    out.push(...misn(949, "Kit L outfitter offer", 9236, { ...at, availLoc: 6 }));
+    [951, 952, 953, 954].forEach((id, i) =>
+        out.push(...job(id, `Kit L rand ${i + 1}`, 9237, { ...at, availBits: "!b9237", availRandom: 50, dispWeight: 29990 - i })));
+
+    // --- H1: ränk 0x0400 with no raider.
+    out.push(...misn(955, "Kit H rank alone", 9241, { availStel: 1447, onAccept: "!b9241 K200" }));
+
+    // --- R7 (added during the wave, Matthew's playtest): the bribe price.
+    out.push(govt(304, "Kit Bribe Plain", { flags: 0x4000 | 0x2000 | 0x0200, classes: [304, -1, -1, -1], crimeTol: 10 }));
+    out.push(govt(303, "Kit Bribe Large", { flags: 0x8000, classes: [303, -1, -1, -1], crimeTol: 10 }));
+    const briber = { accel: 300, speed: 200, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0,
+        armor: 30000, shield: 30000, shieldRecharge: 0, strength: 50, weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    out.push(...shareRled(503, "Kit Bribe Warship", POINTER, 24, { ...briber, ai: 3 }));
+    out.push(...shareRled(504, "Kit Bribe Freighter", POINTER, 24, { ...briber, ai: 1, weapons: none4, weaponCounts: zero4 }));
+    out.push(dude(450, "Kit Bribe Warship Plain", 3, 304, 503), dude(451, "Kit Bribe Freighter Plain", 1, 304, 504), dude(452, "Kit Bribe Warship Large", 3, 303, 503));
+    out.push(traffic(system(1169, "Kit Bribe Plain", -160, Y, 304, [1461]), [[450, 100]], 3), port(1461, "Kit Bribe Plain Port", 0, 0, { govt: 304, minStatus: 0 }));
+    out.push(traffic(system(1170, "Kit Bribe Large", -120, Y, 303, [1462]), [[452, 100]], 2), port(1462, "Kit Bribe Large Port", 0, 0, { govt: 303, minStatus: 0 }));
+    // Added after the first runs (gövt 303's warships, 0x8000 alone, refused every Beg For Mercy): gövt 302 Kit Bribe
+    // Large Ships (0x8000 | 0x0200), sÿst 1173 (port spöb 1475), its warships düde 453.
+    out.push(govt(302, "Kit Bribe Large Ships", { flags: 0x8000 | 0x0200, classes: [302, -1, -1, -1], crimeTol: 10 }));
+    out.push(dude(453, "Kit Bribe Warship Large Ships", 3, 302, 503));
+    out.push(traffic(system(1173, "Kit Bribe Large Ships", 0, Y, 302, [1475]), [[453, 100]], 3), port(1475, "Kit Bribe Large Ships Port", 0, 0, { govt: 302, minStatus: 0 }));
+
+    // --- K8 (added during the wave): the radar shape of a stellar by its sprite. sÿst 1171 Kit Radar Shapes (363):
+    // the port spöb 1463 at (0,0) and six landable stellars 700 px around it whose spöb Type picks a stock spïn
+    // (2000 + Type): 1464 Type 1 (spïn 2001, the hypergate's 150 px art, NOT a gate here), 1465 Type 6 (2006, 72 px),
+    // 1466 Type 19 (2019, 87), 1467 Type 24 (2024, 88), 1468 Type 26 (2026, 96), 1469 Type 17 (2017, 104).
+    const shapes = [[1464, 1, 0], [1465, 6, 60], [1466, 19, 120], [1467, 24, 180], [1468, 26, 240], [1469, 17, 300]];
+    out.push(system(1171, "Kit Radar Shapes", -80, Y, 363, [1463, ...shapes.map((s) => s[0])]), port(1463, "Kit Radar Shapes Port"));
+    // Positions rounded from 700 px at the listed bearings (0 = east, clockwise on screen: y grows down).
+    const at700 = { 0: [700, 0], 60: [350, 606], 120: [-350, 606], 180: [-700, 0], 240: [-350, -606], 300: [350, -606] };
+    shapes.forEach(([id, type, deg]) => out.push(port(id, `Kit Radar T${type}`, at700[deg][0], at700[deg][1], { type })));
+    // Added after the stock run (HG-Secundus, flags 0x11, drew a DOT; its station neighbours too): the station flag
+    // (spöb Flags 0x10) or the gate? sÿst 1172 Kit Radar Station (363): port spöb 1470 at (0,0); 1471 Type 1 (the
+    // 150 px gate art) with Flags 0x11 (a station, no gate flag) east, 1472 Type 17 (104 px) 0x11 west, 1473 Type 26
+    // (96 px) 0x01 (a plain planet: the ring control) south, 1474 Type 6 (72 px) 0x11 north.
+    const stations = [[1471, 1, 0x11, 700, 0], [1472, 17, 0x11, -700, 0], [1473, 26, 0x01, 0, 700], [1474, 6, 0x11, 0, -700]];
+    out.push(system(1172, "Kit Radar Station", -40, Y, 363, [1470, ...stations.map((s) => s[0])]), port(1470, "Kit Radar Station Port"));
+    stations.forEach(([id, type, flags, x, y]) => out.push(port(id, `Kit Radar S${type} ${flags.toString(16)}`, x, y, { type, flags })));
+
+    // --- F1c (added during the wave, Matthew): formation slots past rank 3. Three more hired disc escorts with the
+    // Kit Disc Red's stats (shïp 721): shïp 505 orange, 506 azure, 507 purple (the wave-15 disc rlëDs 1956 / 1958 /
+    // 1960, 24 px). Disc FIGHTERS for the player's own bays: shïp 508 / 509 / 510 Kit F1c Fighter Red / Green / Blue
+    // (the 721-723 rlëDs, same stats), launched by wëap 291 / 292 / 293 Kit F1c Bay Red / Green / Blue (Kit Fighter
+    // Bay 366's bytes, AmmoType = the fighter's shïp id).
+    const discEsc = { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100, cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000 };
+    [[505, "Orange", 1956], [506, "Azure", 1958], [507, "Purple", 1960], [508, "F1c Fighter Red", 1971], [509, "F1c Fighter Green", 1972], [510, "F1c Fighter Blue", 1973]]
+        .forEach(([id, c, rled]) => out.push(...shareRled(id, `Kit Disc ${c}`, rled, 24, discEsc)));
+    [[291, "Red", 508], [292, "Green", 509], [293, "Blue", 510]].forEach(([id, c, fighter]) =>
+        out.push(weap(id, `Kit F1c Bay ${c}`, 149, { reload: 30, guidance: 99, ammoType: fighter })));
+    return out;
+}
 
 /**
  * Wave-21 experiments (docs/reference_experiments.md, "... wave 21").

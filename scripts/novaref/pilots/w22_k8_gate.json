@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w22-k8-gate",
+  "edits": {
+    "ship": 128,
+    "stellar": 1408,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "133": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w22-k8-gate"
+  }
+}
