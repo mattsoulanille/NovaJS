@@ -10258,7 +10258,312 @@ for 3 (same day none, two days two calls), low for 4, medium for 5.
 `pts.txt`), `reinf_weak/` (`w.png`, `c.png`), `reinf_rank/` (`w.png`,
 `v.png`, `dz.png`).
 
+### R19 reinforcement fleets, wave 20: the delay is ReinfTime / 39 s (no cap), an ally's ship calls its ally's fleet, interval 2 is every other day, the inhibitor works, the odds fit the Bible's sum except one call; the fleet does not come to a far player; a victim that leaves takes the call with it; an anchored victim never calls (2026-11-24, second pass)
+
+**Question** (brief item 1; docs/npc_behavior_gaps.md "Reinforcement
+fleets: guesses to measure" 1-4, 8-10, 12). The odds threshold, the
+ReinfTime scale (600, 1800), where the fleet comes in, its disposition and
+stay, ReinfIntrval 2, an ally as the victim, the oütf ModType 44 inhibitor.
+
+**Rig** (`wave20Resources`; a new sÿst / spöb range 1130-1146 / 1421-1437).
+Every system is owned by the fleet govt (wave 19's gövt 311 Kit Reinf
+Owner, MaxOdds 100, flët 305: a purple lead and two blue guards with the
+Kit Escort Gun) and has ONE kind of traffic, avgShips 1: a victim on the
+magenta pointer sprite with 30000 / 30000 and NO shield recharge, so a hit
+of the new Kit Pulse Beam (wëap 290: a turreted beam, one frame of 3000
+shield / 2100 armor, reach 5000) takes exactly 10% of its shield. The
+player is the Kit Lancer (Strength 100; shïp 492 / 493 for Strength 300 /
+50). One run per point: Enter Ship, Tab to the victim, ONE pulse (later
+pulses at a far victim often missed, see the notes), window shots every
+~4 s, a Tab census; times are the 10 fps recording's: the hit is the frame
+the target panel's shield digits change, the line the first frame of
+"Sensors detect ...". Drivers: `tools/onehit.sh`, `pulse2.mjs`, `days.sh`.
+
+**1. Which victims call at all.**
+
+| victim | hits | line |
+|---|---|---|
+| ANCHORED (Speed 0) AI 1 S50, alone (sÿst 1140, first build) | 4 (90% -> 60%), "Status: Hostile" on a hail | none in 2 min |
+| two anchored S50 (1142), the beam / the Kit Disable Gun | 1 each | none (25 s, 30 s) |
+| MOBILE AI 1 S50, Speed 300 (1143) | 1 | yes, 7.8 s later |
+| slow AI 1 S50 (Speed 20), ReinfTime 600 (1135, first build) | 1 | none: the victim jumped out 10.4 s after the hit (radar), before the arrival was due |
+| AI 4 S50 with a gun (shïp 494), ReinfTime 300 / 600 / 1800 | 1 each | yes (below) |
+
+**2. The delay** (hit -> line; the fleet's first radar blip comes 2.8 s
+after the line, twice):
+
+| ReinfTime | delay, s | runs |
+|---|---|---|
+| 300 | 7.8, 7.7, 7.6, 7.6, 8.3, 7.5, 7.7 (mean 7.7) | mobile, odds150, ally, base2, int2 x2, p300_o200 |
+| 600 | 15.2 | t600b |
+| 900 (wave 19) | 23.2-24.8 | reinf_slow x2 |
+| 1800 | 45.7, 46.1, 46.8 | t1800, pos1800, chase |
+
+Every row is **ReinfTime / 39 s** (300 -> 7.7, 600 -> 15.4, 900 -> 23.1,
+1800 -> 46.2), i.e. about 0.77 of the Bible's "30 = one second". Neither
+the cap (600 -> 20 s, 1800 -> 24 s) nor the line 3 s + ReinfTime / 43 (17 /
+45 s; 300 -> 10 s) fits 300 and 600. Wave 19's "300 -> 9.6-10.2 s" read
+the hit off shots 1.2 s apart while several hits landed; seven one-hit runs
+here give 7.5-8.3.
+
+**3. The odds** (MaxOdds 100; one hit, victim alone, the call or not
+within 20+ s; "NovaJS" = main's rule: the player's effective Strength over
+the victim side's, each x (0.3 + 0.7 x shield), > 1):
+
+| player | victim, shield after the hit | line | NovaJS ratio | NovaJS |
+|---|---|---|---|---|
+| 100 | S50, 90% (six runs) | yes | 2.15 | calls |
+| 100 | S150, 90% (odds150, two hits 6 s apart) | **yes** (7.7 s after the FIRST) | 0.72 | no: **mismatch** |
+| 100 | S150, 90% (odds150r, one hit) | no | 0.72 | matches |
+| 100 | S150, 90% / 80% / 70% (odds150x2, three hits 6 s apart) | no | 0.72 / 0.65 / 0.53 | matches |
+| 100 | S200, 90% | no | 0.54 | matches |
+| 100 | S400, 90% | no | 0.27 | matches |
+| 100 | S400, 50% (shield 6000) | no | 0.38 | matches |
+| 100 | S400, 0% ("Shields Down", shield 3000) | no | 0.83 | matches |
+| 300 | S200, 90% | yes (7.7 s) | 1.61 | matches |
+| 300 | S400, 90% | no | 0.81 | matches |
+| 1 (wave 19) | two S50 | no | 0.01 | matches |
+
+**4. Where it comes in.** With the player sitting at the port, the lead's
+first blip was 1,840 px WSW (the victim 760 px east) and 1,960 px NE (the
+victim 130 px south) of him: two bearings, about 1,800-2,000 px. With the
+player 600+ px from the port and the victim off his radar (ally, base2,
+pos1800: the player flew off before or after the hit), **no fleet came
+onto his radar** (about 2,750 px) in 30-60 s, and with the fleet targeted
+the off-radar arrow pointed the same way as the victim's (and the port's).
+A fourth run (sÿst 1147 Kit Reinf Chase: a fast AI 4 victim, ReinfTime
+1800, the player flying off after the hit) did not separate them either:
+the AI 4 victim stayed by its port (AI 4 holds its station) and again no
+fleet came near the player. So the fleet comes in around the victim (the
+caller) or the system's centre, not around the player.
+
+**5. Disposition and stay.** Every fleet this wave was HOSTILE ("Status:
+Hostile" on a hail of a guard; it fired at the player): after one hit and
+nothing more (mobile, t1800: the AI 4 victim kept fighting; mobile: the AI
+1 victim was fleeing but still in the system). In odds150 it stayed 2+
+minutes beside the player, firing, while he did nothing. No neutral fleet
+was seen; wave 19's neutral 1507 fleet is still unexplained.
+
+**6. ReinfIntrval 2** (sÿst 1139, `days.sh`: hit, 27 s of shots, land,
+take off, which advances the date one day): June 23 a call (8.3 s), June
+24 no shot fired (no target found), June 25 a call (7.5 s), June 26 none.
+So **every 2 days after the last call** (day d and d + 2; d + 1 refused,
+seen as the day after June 25).
+
+**7. An ally as the victim** (sÿst 1141 owned by gövt 307 Kit Reinf Owner
+B, MediumName "Kit Reinf B", flët 306; its traffic the AI 4 victim of
+gövt 308, mutual allies): one hit -> **"Sensors detect Kit Reinf B
+reinforcement fleet approaching."** 7.6 s later and the lead and two
+guards in the census.
+
+**8. The inhibitor** (oütf ModType 44, sÿst 1140, the AI 4 victim that
+called in base2): ModVal 311 (gövt 311's class) and ModVal -1: a hit at
+90%, **no line in 40+ s and no fleet in the census**, both.
+
+**Findings.**
+1. **An anchored victim (Speed 0) never calls**, whatever was hit or how
+   often (its AI does not run: wave 17's anchored shooter never fired
+   either). A slow mobile one does.
+2. **A victim that leaves before the arrival gets no fleet:** the AI 1
+   victim jumped out 10.4 s after the hit and no line or fleet came in the
+   next 47 s (ReinfTime 600, one run); with ReinfTime 300 every fleeing AI
+   1 victim was still in the system at the arrival and the fleet came.
+3. **The delay is ReinfTime / 39 s**, linear to 1800 (46 s), no cap.
+4. **The odds fit NovaJS's sum** (the player's Strength over the victim's
+   x (0.3 + 0.7 x shield), > MaxOdds) in ten of eleven points, the
+   player's Strength counting (300 calls against S200 where 100 does not);
+   the one exception is a call against S150 at 90% (ratio 0.72) that two
+   repeats did not give (one hit; three hits down to 70%). That run's
+   victim took a second hit 6 s after the first and the line came 1.9 s
+   after it, far below any measured delay, so it was the first hit's.
+5. **The fleet does not come to a player far from the victim and the
+   port**; at the port it came 1,800-2,000 px out on random bearings.
+6. **Hostile whenever the victim still held the player as its attacker**
+   (every run here); it stays while hostile (2+ minutes).
+7. **ReinfIntrval N: every N days after the last call** (N = 2 measured).
+8. **An ally's ship calls the ally's fleet** (the Bible's "ships allied
+   with"), with the fleet govt's MediumName.
+9. **The ModType 44 inhibitor works**, for the govt's class and for -1.
+
+**NovaJS today (main d2ded50e, `N/nova_plugin/spawn/reinforcements.ts`).**
+- 1: the trigger (`ReinforcementCallSystem`, `:381-466`) reads any non-disabled NPC of the fleet's
+  side, anchored or not: **mismatch** for anchored hulls (moot in stock
+  data: no stock hull has Speed 0; note it for kit-like rigs).
+- 2: `ReinforcementArrivalSystem` (`:498`) brings the fleet in at
+  `arriveAt` whatever happened to the victim: **mismatch** (one run).
+- 3: `reinforcementDelayMs` (`:173`, `REINFORCEMENT_MAX_DELAY_MS` 24 s at
+  `:152`): **mismatch** (600 -> 20 s instead of 15.4; 1800 -> 24 s
+  instead of 46; 300 -> 10 s instead of 7.7).
+- 4: `reinforcementOddsCall` (`:202`, read at `:446`) with `effectiveStrength`
+  (`N/nova_plugin/reputation/govt_disposition.ts:131`): **matches** ten
+  points (S50 / S150 x2 / S200 / S400 x3 at 100; S200 / S400 at 300; the
+  wave-19 Strength 1); the odd S150 call is not modelled.
+- 5: the arrival's centre is the caller, the PLAYER (`:526`), 1,800 px
+  (`REINFORCEMENT_ARRIVAL_DISTANCE`, `:156`): **mismatch** for a player
+  away from the victim (none came within 2,750 px of him).
+- 6: hostile when an NPC of the side holds the caller as its aggressor
+  (`:529-546`): **matches** every run; the stay (SystemHold): matches.
+- 7: `reinforcementAvailable` (`:187`): `today - lastDay >= max(1, N)`:
+  **matches** N = 2.
+- 8: `onFleetSide` (`:365`) counts allies' ships: **matches**; the line
+  uses the fleet govt's MediumName (`reinforcementGovtName`, `:242`):
+  matches.
+- 9: `inhibitsReinforcements` (`:220`): **matches** (class and -1).
+
+**Proposed fixes (not applied).**
+- Delay: `ReinfTime * 1000 / 39` ms, no cap (drop
+  `REINFORCEMENT_MAX_DELAY_MS`; `REINFORCEMENT_FRAMES_PER_SECOND` 39, with
+  a comment that the measured scale is not the Bible's 30).
+- Arrival: centre the fleet on the VICTIM that called (its position at the
+  arrival), falling back to the system's centre when it has left; GUESS
+  between the victim and the system's centre (the two coincided in every
+  measured arrival).
+- Cancel the arrival when the calling ship has left the system (jumped,
+  landed or died) before it is due (GUESS from one run; keep the day's
+  stamp spent).
+- Skip ships whose hull has Speed 0 as callers (they have no AI in the
+  original).
+- Keep the odds rule; note the one unexplained S150 call.
+
+Confidence: high for 3 (thirteen delays, two of them wave 19's, at four ReinfTimes, one line through
+all), high for 8 and 9 (one run each, clean controls), medium for 7 (one
+call refused, one granted), medium-high for 4 (one call of eleven unexplained),
+medium for 1 (four runs), low for 2 (one run), medium for 5 (three away
+runs, radar only, victim and port not separated), medium for 6.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w20/` per run:
+`base/`, `pair/`, `pair_gun/` (anchored), `mobile/` (`both.png`,
+`line_onset.png`, `tabs.png`), `odds150/` (`both.png`, `m.png`: the stay),
+`odds150r/`, `odds150x2/` (`p_s.png`), `odds200/`, `odds400/` (`pb.png`), `o400z/`, `o400h/`,
+`p300_o400/`, `p300_o200/` (`p.png`), `t600/` (the AI 1 victim that
+jumped), `t600b/`, `t1800/` (`31-hail.png`: the fleet firing),
+`pos1800/` and `chase/` (`radar_seq.png`), `base2/` (`radar_seq.png`), `ally/`
+(`line_ally.png`, `arrows.png`), `inhib/`, `inhib_all/` (`p_s.png`),
+`int2/` (`lines.png`: the lines and the take-off dates); `tools/`.
+
+### H1 / rescue leftovers, wave 20: 8,000 credits are capped at 2,000 (a third, not 0.375), a bad mood asks 4,000 at a clean record, the affiliated govt still refuels free beside its ally, ränk 0x0400 warships refuse again, a cloaked ShipStart-2 rescue ship still shows on radar (2026-11-24)
+
+**Rig.** Wave 19's: sÿst 1509 Kit Assist Stay (six AI 4 warships of gövt
+363, CrimeTol 10) with fuelless Kit Lancer Heavy pilots (`tools/fuelrun.sh`:
+per ship Tab, hail, Request Assistance, Lower Price twice, Close Channel;
+never Accept); sÿst 1508 Kit Ally Assist with ränk 202 (AffilGovt 310,
+0x0800; gövt 309 its ally); offer 925 (ränk 200, 0x0400, and a Kit Raider)
+at 1509. New: mïsn 929 (b9225) = wave 18's ShipStart-2 rescue 924 with
+shïp 496 Kit Cloak Rescue (the stock Wraith Cloaking Device, oütf 266, and
+the Wraith's cloak Flags2 0x5F00).
+
+**Fuel price** (first asks; mood from the opening line):
+
+| pilot | good | neutral | bad |
+|---|---|---|---|
+| 8,000 credits, record 0 (`fuel_8k`) | - | 2,000 x6 | - |
+| 1,000,000, record 0 (`fuel_rich`) | - | 3,000, 2,000 x4 | **4,000** |
+| 1,000,000, record -8 (`fuel_m8`) | 1,000, 1,000 | 3,000, 2,000, 3,000 | 4,000 |
+| 1,000,000, record -20 (`fuel_m20`) | every ship "Status: Hostile" ("No way.", "In your dreams, pal.", "You wish."): -20 is below the govt's CrimeTol 10 | | |
+
+Lower Price as before: 3/4 counters (2,000 -> 1,500, 4,000 -> 3,000) or a
+withdrawal; a second press always withdrew.
+
+**ränk 0x0800 beside an ally** (`ally_fuel`, ränk 202 accepted on the
+BBS, fuelless): the AFFILIATED govt's own ship (Kit Affil Purple, 310),
+asked first with the ally's ships around, answered **"Hold on, I'll be
+right there."**, no price, credits unchanged, and the fuel bar had its
+sliver 10 s later.
+
+**ränk 0x0400** (`rank400`, offer 925): asked right after the take-off,
+five AI 4 warships of 363 answered "Not a chance.", "You wish.", "No
+way.", "You wish.", "Yeah, right!" (STR# 3000 95-99); all five were
+already fighting the raider (shields 94-98% in the panel before the ask),
+so a ship NOT yet fighting is still unasked.
+
+**ShipStart 2 with a cloak** (`rescue_cloak`): after the take-off the
+mission ship was **Tab-targetable at once ("UFS Enterprise", "Waiting")
+with a radar blip** about 1,250 px from the port, the same as wave 19's
+uncloaked kit ship; it was not flown to, so whether it is drawn cloaked on
+screen is open.
+
+**Findings.**
+1. **The cash cap is a third of the cash** (in 1,000s): 8,000 credits
+   capped six neutral asks at 2,000 (8,000 x 0.375 = 3,000 would have let
+   the neutrals' 3,000 asks through; half the neutrals ask 3,000 at
+   1,000,000: 1 in 64 to see none by chance). With wave 19: f in [0.3,
+   0.334).
+2. **A bad mood asks 4,000 at a clean record** (1,000,000, record 0): no
+   record term is needed for it. At -8 every ask sat inside the clean
+   spreads (good 1,000, neutral 2,000-3,000, bad 4,000). A good mood's
+   2,000 at a clean record is still unseen (no good mood came up at 0).
+3. **The affiliated govt's own ship refuels free with an ally present**
+   (ränk 0x0800): both the affiliated govt (wave 18, this run) and its
+   ally (wave 19).
+4. **ränk 0x0400: five more refusals** from warships fighting the
+   player's attacker.
+5. **A cloaked ShipStart-2 rescue ship shows on radar and Tab like an
+   uncloaked one.**
+
+**NovaJS today (main d2ded50e).**
+- 1: `FUEL_SALE_CASH_DIVISOR` 3 (`N/nova_plugin/reputation/hail.ts:497`)
+  in `fuelAskingBase` (`:521`): **matches**.
+- 2: `fuelSaleTerms` (`hail.ts:462`, `FUEL_SALE_MOOD_STEPS` `:479`): bad
+  3,000-4,000, no record term: **matches**; the comment's "bad 4,000 only
+  at -5 / -9" (`:448-450`) can go.
+- 3: `assistIsFree` (`hail.ts:1168`; ränk 0x0800, the affiliated govt and its allies, wave
+  19 fix): **matches**.
+- 4: ränk 0x0400 warships refuse under fire (wave 19 fix): **matches**.
+- 5: `N/nova_plugin/missions/mission_ship_spawn.ts:377-385` (the
+  ShipStart-2 rescue waits live, wave 19 fix) does not cloak it: **matches** what
+  radar and Tab show.
+
+**Proposed fixes.** None (comment updates in `hail.ts` only: the
+divisor's bounds are now [0.3, 0.334), and the bad-mood record question is
+closed).
+
+Confidence: high for 1 (six asks, one case), high for 2 (one bad 4,000 at
+record 0, eleven more asks at -8), medium for 3 (one ship), medium for 4
+(the same situation as wave 19), low for 5 (radar and panel only).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w20/{fuel_8k,fuel_rich,fuel_m8,fuel_m20}/sheet.png`,
+`ally_fuel/` (`names.png`, `fuelbars.png`, the run's `16-ra.png`),
+`rank400/` (`r.png`, `ra_more.png`, `tp_s.png`), `rescue_cloak/`
+(`n_s.png`; the run's `04-t0.png` .. `13-n7.png`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **An anchored hull (Speed 0) is inert to the AI (wave 20):** an anchored
+  victim never called reinforcements (four hits, then two victims, the beam
+  and the Disable Gun), as wave 17's anchored shooter never fired. Rigs
+  that need the victim's AI (calls, flight, fighting back) need Speed > 0;
+  Speed 20 / Accel 50 keeps a ship nearly in place and its AI running.
+- **An AI 1 victim jumps out about 10 s after the first hit (wave 20),**
+  even at Speed 20 (the jump does not use its top speed), and a fleet
+  called by a victim that has left never came. Use an AI 4 victim (it
+  stays and fights; it does NOT chase the player far from its port) for
+  anything that waits more than a few seconds.
+- **`r` targets nothing in this install (wave 20):** after Tab had
+  targeted the victim `r` left it targeted, and from "No Target" `r`
+  selected nothing (the pulses fired at nothing). Use Tab and read the
+  panel (`tools/pulse2.mjs` re-Tabs until the panel's name row is lit).
+- **Repeated beam pulses at a far victim stop landing (wave 20,
+  `odds400`):** the first Kit Pulse Beam pulse hit a victim about 1,300 px
+  out; every later one left the shield at 90% and the panel at "No
+  Target" after the press. The one-hit design (each run one point) avoids
+  it; the hit is the frame the panel's "Shield:" digits change
+  (`analysis/panel_hits.mjs --rect 648,424,90,16`).
+- **A live interactive run blocks the next one silently (wave 20):** a
+  hand-driven run left without `{"done":true}` keeps the lock, and the next
+  `run` waits on it (`--lock-wait`); a driver that deletes the inbox first
+  must not do it while another run's loop reads it. Append
+  `{"done":true}` to the inbox to end it.
+- **A waiter loop must not `pgrep -f` its own pattern (wave 20):** `until !
+  pgrep -f "onehit.sh"` matched the waiter's own shell command and never
+  ended; anchor the pattern (`pgrep -f "^bash onehit.sh"`).
+- **The take-off line gives the date (wave 20):** every take-off advances
+  the date one day (as wave 19) and the status line says "Taking off from
+  ... on June 24th, 1177 NC." / "Blasting off from ..." : read the day off
+  the recording without pulling the pilot.
+- **A hail sheet needs the record above -CrimeTol (wave 20):** at record
+  -20 in a CrimeTol-10 govt's system every AI 4 warship was "Status:
+  Hostile" and answered "No way." / "In your dreams, pal." / "You wish.":
+  no fuel sale to read.
 
 - **`b` boards the TARGET only, from about 12 px (wave 19):** with no
   target a press does nothing at all; Tab to the hulk first (a disabled one
@@ -10593,7 +10898,8 @@ for 3 (same day none, two days two calls), low for 4, medium for 5.
 | Wave 16 leftovers | P1: the self-defence case (a hostile that has FIRED on the player first, beside nosy police); whether the watch range is the whole system (5000+ px); stray hits, boards and one-way alliances (guesses 3, 4, 6, 7) untouched; whether the ally's help is limited to AI 3 (an AI 4 ally). Sol: Arcturus not watched; does the stock Asteroid Miner ever leave (21+ min here, the kit miners 3-4 min); do AI 4 interceptors ever leave (one run). Shuttles: the no-stop case on screen (radar only); the düde's uneven hull odds. A14: (done for the unowned neighbour). Contraband: whether a clean ship is approached on purpose (one cutter); the exact name limit (64 accepted, 80 refused) of the shipyard prompt. Rescue: the ShipStart-2 reveal, boarding 1080 away from planets, a no-cargo goal-5 completion (not run again). W1: confirm the 0x0002 standoff by targeting the ~500 px contacts; when 0x0040 burns. C1: see the 0x4000 cloak itself (an anchored ship); 0x0400 / 0x2000 at a jump / landing. H1: a ränk 0x0400; the fuel-sale price rule and the STR# rows; an ally's or a record-positive pilot's request when disabled. | **Wave 16** (the "... wave 16" sections above) **Wave 17** answered: Arcturus and Tau Ceti froze at exactly AvgShips (full = AvgShips; no arrival while full), AI 4 interceptors and the stock Asteroid Miner never left (an AI 3 Fed Destroyer and a Trader-govt Pegasus stayed too); a hostile that fired first (72 s earlier) is still policed; the watch range is the whole system (5000 and 9000 px reacted); an AI 4 ally defends; the name limit is 64 (65 refused); the 0x0002 contact targeted (the 0x0002 hull, still, about 450 px out); four of four cutters sat on a clean ship; an anchored 0x4000 ship did not cloak (the "No Target" is the target clearing on hostility); the fuel price (mood base 1,000 / 2,000-3,000 / 3,000, +1,000 an ask, Lower Price 3/4 or a withdrawal); a disabled pilot refused at +2000 and as an ally; a 0x0400 ränk trader refused ("... wave 17" sections). |
 | Wave 17 leftovers | P1: self-defence against a hostile firing continuously at that moment (an anchored 0x0004 hull with a 1-damage turret never fired first; use a gun that fires every second); stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). Traffic: why an AI 3 Fed Destroyer and an AI 2 Pegasus stayed in frozen Arcturus (kit systems with only AI 2 traders / only AI 3 warships, 20 min); arrival timing below the census spacing. W1: when 0x0040 burns (two magenta hulls on screen at once; use one 0x0040 hull per system). H1: a 0x0400 ränk WARSHIP's answer (none met); ränk 0x0800; the fuel price at a negative record and with little cash (pilot `w17_fuel_poor`, 5,000 credits, built, not run); the shuttles' no-stop case on screen. C1: 0x0400 / 0x2000 at a jump / landing. Rescue: the ShipStart-2 reveal (mïsn 1122), boarding 1080 / 1121 away from planets (the board loop stalled about 3,000 px from marker 2102: use a nearer marker), a no-cargo goal-5 completion. Contraband: a cutter's station-keeping on a clean ship: how long, and whether it leaves. | **Wave 17** (the "... wave 17" sections above) **Wave 18** answered: AI 2 traders and AI 3 warships keep leaving and nothing freezes (the staying Fed Destroyer was the reinforcement fleet's lead), never above AvgShips; cutters sit on a clean ship the whole visit (8+ min); a lone 0x0040 hull burns at every range (97-100% boosted inside 250 px), slow only at its turnarounds about 350 px out; firing back at a hostile firing at that moment is still policed; the fuel price is lower with little cash (1,000) and about 1,000 higher at a negative record, and a pilot who cannot pay hears "You can't fool me - you can't afford it." (STR# 3000 64); ränk 0x0800 refuels free but does not repair; no 0x0400 / 0x2000 cloak seen on screen. Not done: ränk 0x0400 with a warship (none stayed to be hailed), the rescue board and the ShipStart-2 reveal, a no-cargo goal-5 completion, the shuttles' no-stop case, arrival timing ("... wave 18" sections). |
 | Wave 18 leftovers | Traffic: do FLEET members (a kit flët's lead and escorts, a reinforcement flët) stay in a full system; the Pegasus that stayed in Arcturus; arrival timing below the census spacing (needs a full-system tracker, not the radar). H1: ränk 0x0400 against a warship (put an anchored or AI 4 363 warship at the port as a mission ship); ränk 0x0800 with an ALLY of the affiliated govt; the cash and record terms of the fuel price (more ships per case; a cash threshold; record -5 vs -9); Lower Price at a negative record. P1: stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). A14: a boarding's spread (guess 6), guesses 2-5, 7-10, 12-14; whether NovaJS shows "Uninhabited System" on the map. Rescue: board the 300 px marker hulk by hand (the board loop's sweep answered "not close enough" at 22 px), the ShipStart-2 reveal (mïsn 924 / 1122), a no-cargo goal-5 completion (923). C1: a 0x0400 ship's jump-out on screen (a system whose jump distance is inside the screen, or a radar track to the vanish). Contraband: whether a cutter leaves its clean ship when the player flies off (still in the system). | **Wave 18.** **Wave 19:** fleets leave (no member stays; a fleet arrives whole); the fuel price is capped by cash (about a third, in 1,000s), no record term needed, Lower Price counters at -1 / -9, ränk 0x0400 warships refuse, ränk 0x0800 allies refuel free, nobody repairs; a cutter does not follow; the marker rescue boarded by hand (Tab first), ShipStart 2 is a live waiting ship, a no-cargo rescue never completes; a boarding spreads like a kill; the map's "Uninhabited System" is missing in NovaJS. Left: see Wave 19 leftovers. |
-| Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?), where a released waiting ship goes. Fleets: escorts outliving their lead in NovaJS (checked: they lingered until their own roll; fixed to follow the lead out). Contraband: the leash distance at which a sitting cutter lets go. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** (fixes applied 2026-11-24: the "Applied (wave-19 fixes)" notes in the three wave-19 sections) |
+| Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?), where a released waiting ship goes. Fleets: escorts outliving their lead in NovaJS (checked: they lingered until their own roll; fixed to follow the lead out). Contraband: the leash distance at which a sitting cutter lets go. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** (fixes applied 2026-11-24: the "Applied (wave-19 fixes)" notes in the three wave-19 sections) **Wave 20** answered: R19's delay (ReinfTime / 39 s, linear to 1800), the odds (NovaJS's sum fits ten of eleven points; player Strength 100 / 300 against S50-S400 at 0-90% shield), ReinfIntrval 2 (every 2 days after the call), an ally's ship calls its ally's fleet, the ModType 44 inhibitor (class and -1), the arrival is not around a far player, the fleet is hostile while the victim holds the player as its attacker and stays; an anchored victim never calls and a victim that left before the arrival got no fleet; the fuel cash cap is a third (8,000 -> 2,000), a bad mood asks 4,000 at a clean record, the affiliated govt refuels free beside its ally, ränk 0x0400 warships refuse again (all fighting), a cloaked ShipStart-2 ship shows on radar and Tab. Left: see Wave 20 leftovers. |
+| Wave 20 leftovers | R19: where the fleet comes in when the victim is far from the port (the victim or the system's centre: every run had them together; AI 4 victims hold their station, AI 1 victims leave; try an AI 1 victim far from the port with a short ReinfTime); why one S150 call came at 90% shield (one of three runs); a NEUTRAL fleet (wave 19's 1507: no NPC holding the player as its attacker? e.g. a victim that has calmed down or begged-for-mercy); whether a fleet ever leaves when neutral; whether a victim that leaves always cancels the arrival (one run). Fuel price: a good mood's 2,000 at a clean record (no good mood came up at record 0 in two runs). ränk 0x0400: a warship NOT yet fighting the attacker (all asked were at 94-98% shield). Rescue: the cloaked ShipStart-2 ship on screen (fly to it), the silent first press of a no-cargo rescue. Still open from wave 19: fleets' escorts outliving their lead in NovaJS (applied on main 4023a7f4, not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 20** |
 
 ## Catalogue
 
