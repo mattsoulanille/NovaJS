@@ -35,6 +35,7 @@ import { ShipComponent } from '../ship/index.js';
 import { SoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
+import { BayFighter, BayFighterComponent } from '../ship/index.js';
 
 /** Exported so a landing order can cancel an in-progress return
  * (player_escort_plugin): a fighter whose carrier is leaving the system
@@ -51,25 +52,9 @@ export const ReturnComponent = new Component<undefined>('ReturnComponent');
  */
 export const ReturnWhenTargetRemovedComponent = new Component<undefined>('ReturnWhenTargetRemoved');
 
-/**
- * Links a launched fighter back to the bay weapon that launched it, so
- * docking can refund a round of ammo to the carrier's magazine and so
- * the outfitter can count still-deployed fighters against buy caps.
- *
- * A separate component rather than data folded into
- * ReturnWhenTargetRemovedComponent: that one is a registered marker
- * (markerType / `encode: () => null`) on the wire, and giving it a
- * payload would change its codec, so old and new peers would disagree
- * about the shape of an existing component. A NEW component is additive
- * — peers that don't know it ignore the extra key.
- */
-const BayFighter = t.type({
-    /** Global id of the bay wëap this fighter launched from. */
-    bayWeaponId: t.string,
-});
-export type BayFighter = t.TypeOf<typeof BayFighter>;
-export const BayFighterComponent =
-    new Component<BayFighter>('BayFighterComponent');
+// BayFighterComponent lives in `ship` (the formation layer reads it to put
+// hired escorts ahead of fighters); re-exported here, its old home.
+export { BayFighter, BayFighterComponent } from '../ship/index.js';
 
 /**
  * Credits one round of `bayWeaponId` ammo back to `carrier`'s magazine,

@@ -160,6 +160,24 @@ export function nextFormationSlot(formations: Iterable<Formation>,
 }
 
 /**
+ * The rank order of a leader's followers (reference F1c): every ship
+ * holding a formation on the leader shares ONE set of ranks, HIRED (and
+ * captured, and mission) escorts in the front ranks and bay fighters
+ * behind them, each in slot order. Slot numbers alone would put a fighter
+ * launched before an escort joined (a capture while the bays are out)
+ * ahead of it. `members` are [slot, isBayFighter] pairs; returns the slots
+ * in rank order. Pure and order-independent: a sort on synced values with
+ * no ties (slots are distinct per leader).
+ */
+export function formationRanks(
+    members: Iterable<readonly [number, boolean]>): number[] {
+    return [...members]
+        .sort(([slotA, fighterA], [slotB, fighterB]) =>
+            Number(fighterA) - Number(fighterB) || slotA - slotB)
+        .map(([slot]) => slot);
+}
+
+/**
  * Every formation present in `entities` — the adapter for sim systems
  * that hold an EntityMap rather than a formation query result, so they
  * can feed `nextFormationSlot`.
@@ -188,8 +206,9 @@ export type FormationCell = readonly [number, number];
  *              0     1             row 1
  *           2           3          row 2
  *
- * Add measured ranks here (reference F1c) and they replace the general
- * rule (formationFillCell) for those ranks.
+ * The layout for one, two and four followers (F1c: the original's 1-, 2-
+ * and 4-layouts are these ranks). Other counts have layouts of their own
+ * (FORMATION_COUNT_LAYOUTS), which win over this table.
  */
 export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
     [1, -1], [1, 1],
@@ -197,37 +216,77 @@ export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
 ];
 
 /**
- * Whole layouts for a formation of exactly `count` followers, keyed by
- * count, for the case where the original lays out a given count
- * differently from the rank table (the pre-4a408a45 NovaJS layout,
- * SMALL_FORMATIONS, was count-dependent; whether the original's is, is
- * pending reference F1c). A layout here wins over FORMATION_RANK_CELLS and
- * the general rule for every rank it lists, in a formation of that count.
- * Empty: no count has been measured to differ (the four-escort case IS the
- * rank table; counts 1-3 were never measured on their own, so they take
- * the same ranks).
+ * Measured whole layouts by COUNT (reference F1c, wave 22: hired 24 px
+ * escorts, 3-9 of them, ±0.5 px at rest and at cruise), cells in rank
+ * order. The slots are the points of the 45° lattice behind the leader
+ * (row r holds the r + 1 cells -r, -(r-2), ..., +r steps), but WHICH cells
+ * a formation uses, and in which rank order, depends on how many
+ * followers it has:
+ *
+ *   - an ODD count puts rank 2 (the third escort) in row 2's CENTRE, then
+ *     fills in pairs, left first: row 2's outer pair, row 3's inner pair,
+ *     row 3's outer pair;
+ *   - 4 and 6 leave the centre empty: row 1, row 2's outer pair, row 3's
+ *     INNER pair (not its outer, and not the centre: no nearest-first
+ *     rule fits 6 and 8 together);
+ *   - 8 is the 6-layout plus the centre (rank 6) and row 3's LEFT outer
+ *     cell (rank 7); the right outer cell stays empty.
+ *
+ *                 L                    count 9
+ *              0     1
+ *           3     2     4
+ *        7     5     6     8
+ *
+ *                 L                    count 8
+ *              0     1
+ *           2     6     3
+ *        7     4     5     .
+ *
+ * So earlier ranks MOVE when the count changes (rank 2 is row 2's left
+ * outer cell with 4, 6 or 8 followers and the centre with 3, 5, 7 or 9):
+ * FormationSystem passes the live count and the whole group re-flows when
+ * a follower joins or leaves, as the original's does (F1c: every fighter
+ * launch re-flowed hired escorts and fighters together).
+ *
+ * Counts 1, 2 and 4 are FORMATION_RANK_CELLS. Counts above
+ * FORMATION_MEASURED_MAX_COUNT were not measured (formationCell).
  */
 export const FORMATION_COUNT_LAYOUTS:
-    ReadonlyMap<number, ReadonlyArray<FormationCell>> = new Map();
+    ReadonlyMap<number, ReadonlyArray<FormationCell>> = new Map([
+        [3, [[1, -1], [1, 1], [2, 0]]],
+        [5, [[1, -1], [1, 1], [2, 0], [2, -2], [2, 2]]],
+        [6, [[1, -1], [1, 1], [2, -2], [2, 2], [3, -1], [3, 1]]],
+        [7, [[1, -1], [1, 1], [2, 0], [2, -2], [2, 2], [3, -1], [3, 1]]],
+        [8, [[1, -1], [1, 1], [2, -2], [2, 2], [3, -1], [3, 1], [2, 0],
+            [3, -3]]],
+        [9, [[1, -1], [1, 1], [2, 0], [2, -2], [2, 2], [3, -1], [3, 1],
+            [3, -3], [3, 3]]],
+    ] as Array<[number, ReadonlyArray<FormationCell>]>);
+
+/** The largest formation the reference measured (F1c: nine hired
+ * escorts, rows 1-3 full). */
+export const FORMATION_MEASURED_MAX_COUNT = 9;
 
 /**
- * INTERIM GUESS for ranks past FORMATION_RANK_CELLS, pending reference F1c
- * (Pending table, docs/reference_experiments.md; Matthew 2026-11-24: the
- * earlier linear extrapolation, a bare V with ever longer arms, is wrong).
- * Fills the triangle inside the measured V on the same 45° lattice: row r
- * sits r x a astern with r + 1 cells at lateral -r, -(r-2), ..., +r steps
- * (Pascal's triangle, the leader at the apex). Rows fill in order; within a
- * row, outer cells first, left then right as ranks 0-3 go, then inward, an
- * even row's centre cell last:
+ * GUESS: a slot by RANK alone, on the same lattice, for what F1c did not
+ * measure: ranks past rows 1-3 (formations of 10+, where ranks 0-8 take
+ * the measured 9-layout and this fills row 4 on) and formations whose
+ * count the caller does not know (a first placement before
+ * FormationSystem has seen the group). Rows fill in order. Rows 1 and 2
+ * follow the rank table (the V, left first) and then row 2's centre; from
+ * row 3 on a row fills from the INSIDE out, as every measured layout fills
+ * row 3 (inner pair before outer pair) and as the 9-layout fills row 2
+ * (centre before outer pair): an even row's centre first, then pairs
+ * outward, left first.
  *
  *                 L
- *              0     1             row 1: ranks 0-1   (measured)
- *           2     4     3          row 2: 2-3 measured, 4 GUESS
- *        5     7     8     6       row 3: ranks 5-8   (GUESS)
- *     9    11    13    12    10    row 4: ranks 9-13  (GUESS)
+ *              0     1             row 1: ranks 0-1   (measured V)
+ *           2     4     3          row 2: ranks 2-4
+ *        7     5     6     8       row 3: ranks 5-8
+ *    12    10     9    11    13    row 4: ranks 9-13  (GUESS)
  *
- * It reproduces FORMATION_RANK_CELLS for ranks 0-3. It depends on rank
- * alone, so a new escort never moves the ones already in place.
+ * Every rank is a distinct cell, so a count-less placement never stacks
+ * two ships, and ranks 9 and up never collide with the 9-layout.
  */
 export function formationFillCell(rank: number): FormationCell {
     // Rows 1..r hold r(r + 3) / 2 ranks (2, 5, 9, 14, ...). Found by
@@ -239,23 +298,51 @@ export function formationFillCell(rank: number): FormationCell {
         row++;
     }
     const indexInRow = rank - firstInRow;
-    // Outer pair first, then inward: pair p sits (row - 2p) steps out,
-    // its left cell (even index) before its right one.
-    const stepsOut = row - 2 * Math.floor(indexInRow / 2);
-    const lateral = stepsOut === 0 ? 0
-        : indexInRow % 2 === 0 ? -stepsOut : stepsOut;
-    return [row, lateral];
+    if (row <= 2) {
+        return FORMATION_RANK_CELLS[indexInRow + firstInRow] ?? [2, 0];
+    }
+    // Inside out: an even row's centre is index 0 and its pairs follow
+    // (pair p, from 1, at 2p steps out); an odd row's pairs start at 1
+    // step out (pair p, from 0, at 2p + 1). Left cell of a pair first.
+    const centre = row % 2 === 0;
+    if (centre && indexInRow === 0) {
+        return [row, 0];
+    }
+    const k = centre ? indexInRow - 1 : indexInRow;
+    const stepsOut = (centre ? 2 : 1) + 2 * Math.floor(k / 2);
+    return [row, k % 2 === 0 ? -stepsOut : stepsOut];
+}
+
+/**
+ * The formation cell [rows astern, steps right] of the follower of RANK
+ * `rank` in a formation of `count` followers: the measured layout for that
+ * count (FORMATION_COUNT_LAYOUTS, or FORMATION_RANK_CELLS for 1, 2 and 4);
+ * for a count above the measured nine (GUESS), the 9-layout for ranks 0-8
+ * and formationFillCell from row 4 on; with no count, FORMATION_RANK_CELLS
+ * then formationFillCell.
+ */
+export function formationCell(rank: number, count?: number): FormationCell {
+    if (count !== undefined) {
+        const layout = FORMATION_COUNT_LAYOUTS.get(count)
+            ?? (count > FORMATION_MEASURED_MAX_COUNT
+                ? FORMATION_COUNT_LAYOUTS.get(FORMATION_MEASURED_MAX_COUNT)
+                : undefined);
+        const cell = layout?.[rank];
+        if (cell) {
+            return cell;
+        }
+    }
+    return FORMATION_RANK_CELLS[rank] ?? formationFillCell(rank);
 }
 
 /**
  * Formation slot geometry, in px: the slot of the follower of RANK `rank`
  * in a formation of `count` followers (when known) with group step
  * `spacing` (formationSpacing, F1b: a = clamp(0.59 x S, 23.5, 59.5) with S
- * the largest sprite frame in the group). Looked up, in order, in
- * FORMATION_COUNT_LAYOUTS[count], FORMATION_RANK_CELLS (measured), then
- * formationFillCell (the interim guess). The slots are the SAME at rest
- * and at full speed (F1). NPC fleet (flët) escorts fly the same geometry
- * (F1n, ranks 0-3).
+ * the largest sprite frame in the group); the cell comes from
+ * formationCell (the measured per-count layouts, reference F1c). The slots
+ * are the SAME at rest and at full speed (F1). NPC fleet (flët) escorts fly
+ * the same geometry (F1n, ranks 0-3; fleets of 5+ were not measured).
  *
  * `back` is px astern of the leader; `lateral` is px to the leader's RIGHT
  * (formationSlotPosition's perpendicular), so left-side slots are negative.
@@ -263,16 +350,15 @@ export function formationFillCell(rank: number): FormationCell {
  * The layout is a function of RANK, not the persistent slot number: slot
  * ASSIGNMENT (hire order, continuation numbering) is unchanged, but the
  * formation-keeping systems convert a ship's slot to its rank among the
- * live same-leader slots, so when an escort leaves the ones behind it move
- * up and the formation never has holes. Deterministic on every peer (ranks
- * and counts come from the synced slot numbers; the tables are constant).
+ * live same-leader slots (hired escorts ahead of bay fighters: formationRanks),
+ * so when an escort leaves the ones behind it move up, the whole group
+ * re-flows to the new count's layout, and the formation never has holes.
+ * Deterministic on every peer (ranks and counts come from the synced slot
+ * numbers and components; the tables are constant).
  */
 export function formationOffset(rank: number, spacing: number,
     count?: number): { back: number, lateral: number } {
-    const countLayout = count === undefined ? undefined
-        : FORMATION_COUNT_LAYOUTS.get(count);
-    const [rows, steps] = countLayout?.[rank] ?? FORMATION_RANK_CELLS[rank]
-        ?? formationFillCell(rank);
+    const [rows, steps] = formationCell(rank, count);
     // `+ 0` folds the -0 of a centre cell times a step to 0.
     return { back: rows * spacing, lateral: steps * spacing + 0 };
 }

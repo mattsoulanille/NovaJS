@@ -1170,11 +1170,18 @@ export function spawnFleet(world: World,
         }
     }
     const spacing = formationSpacing(frameWidth);
+    // ...and the layout from the fleet's whole escort count (reference
+    // F1c: the original lays out each count differently).
+    let total = 0;
+    for (const [, count] of groups) {
+        total += count;
+    }
     for (const [escortData, count] of groups) {
         for (let i = 0; i < count; i++) {
             // Escorts materialize already sitting in their slots.
             const slotPosition = formationSlotPosition(
-                leadState.position, leadState.rotation, slot, spacing);
+                leadState.position, leadState.rotation, slot, spacing,
+                total);
             const escortEntity = makeNpcShip(escortData, 0, fleet.govt,
                 slotPosition, leadState.rotation,
                 Vector.fromVectorLike(leadState.velocity));

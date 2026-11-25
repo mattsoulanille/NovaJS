@@ -4,13 +4,14 @@ import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movemen
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
-import { DisabledComponent } from '../ship/index.js';
+import { BayFighterComponent, DisabledComponent } from '../ship/index.js';
 import { EscortCommandComponent } from '../player/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
 import {
-    FormationComponent, formationSpacing, offFormationBusiness, steerFormation,
+    FormationComponent, formationRanks, formationSpacing, offFormationBusiness,
+    steerFormation,
 } from './npc_formation.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
@@ -21,9 +22,11 @@ import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
  */
 
 /** Every formation member, with its hull's data for the group spacing
- * (ShipData.spriteFrameWidth). */
+ * (ShipData.spriteFrameWidth) and whether it is a bay fighter (they rank
+ * behind the hired escorts, reference F1c). */
 export const AllFormationsQuery = new Query(
-    [FormationComponent, Optional(ShipDataComponent)] as const);
+    [FormationComponent, Optional(ShipDataComponent),
+        Optional(BayFighterComponent)] as const);
 
 export const FormationSystem = new System({
     name: 'FormationSystem',
@@ -90,13 +93,15 @@ export const FormationSystem = new System({
         }
         // The ship's persistent slot number is only an ORDER; its
         // station comes from its rank among the live same-leader
-        // slots. Deterministic (sorting synced slot numbers) and
-        // cheap (formations are tiny); an escort leaving moves the
-        // ones behind it up the V.
+        // followers: hired escorts first, then bay fighters, each by slot
+        // (formationRanks, reference F1c). Deterministic (sorting synced
+        // values) and cheap (formations are tiny); an escort leaving
+        // moves the ones behind it up and re-flows the group to the new
+        // count's layout.
         const siblings = allFormations
             .filter(([other]) => other.leader === formation.leader);
-        const siblingSlots = siblings.map(([other]) => other.slot)
-            .sort((a, b) => a - b);
+        const siblingSlots = formationRanks(siblings.map(
+            ([other, , fighter]) => [other.slot, fighter !== undefined] as const));
         const rank = siblingSlots.indexOf(formation.slot);
         // The step of the V scales with the LARGEST sprite frame among
         // the leader and every ship in its formation (reference F1b), so
@@ -110,10 +115,11 @@ export const FormationSystem = new System({
         }
         // Base acceleration and turn rate (not the per-tick effective
         // physics): afterburners must not boost the RCS budget.
-        // The follower count goes along for count-dependent layouts
+        // The follower count goes along for the count-dependent layouts
         // (FORMATION_COUNT_LAYOUTS). Every ship holding a formation on
-        // this leader counts, bay fighters and escorts alike: they share
-        // one set of ranks (split them here if the original doesn't).
+        // this leader counts, bay fighters and escorts alike: the original
+        // flies them as one formation (F1c; its fighters hold their slots
+        // about 7 px more loosely, which is not modelled).
         steerFormation(movement, leader, formation,
             physics.acceleration, time.delta_s,
             rank < 0 ? formation.slot : rank, physics.turnRate,

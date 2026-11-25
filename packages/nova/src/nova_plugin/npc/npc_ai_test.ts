@@ -18,6 +18,7 @@ import {
 } from './npc_ai_plugin.js';
 import {
     FORMATION_COUNT_LAYOUTS, FORMATION_RANK_CELLS, formationFillCell,
+    formationCell, formationRanks, FORMATION_MEASURED_MAX_COUNT,
 } from './npc_formation.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 
@@ -184,98 +185,161 @@ describe('formation geometry (the original\'s 45° V, filled as a triangle, '
                 }
             });
 
-        // Ranks 4 and up are a GUESS pending reference F1c: the triangle
-        // inside the measured V, row by row, outer cells first (left then
-        // right), then inward; an even row's centre cell last.
-        /** The first `count` slots in units of `a`: [astern, lateral]. */
+        /** A formation of `count` followers in units of `a`, in rank
+         * order: [astern, lateral (+ right)]. */
         const layout = (count: number) => {
             const a = 40;
             return Array.from({ length: count }, (_, rank) => {
-                const { back, lateral } = formationOffset(rank, a);
+                const { back, lateral } = formationOffset(rank, a, count);
                 return [back / a, lateral / a];
             });
         };
 
-        it('puts a fifth escort in row 2\'s centre cell, before row 3', () => {
+        // Reference F1c (wave 22): hired 24 px escorts, every count 3-9,
+        // ±0.5 px at rest and at cruise. Measured (along, across) in px
+        // with a = 23.5 and + = LEFT, converted here to [rows astern,
+        // steps right]: rank k of the run is index k - 1.
+        it('lays out 1, 2 and 4 followers on the rank table (F1/F1b)', () => {
+            expect(layout(1)).toEqual([[1, -1]]);
+            expect(layout(2)).toEqual([[1, -1], [1, 1]]);
+            expect(layout(4)).toEqual([[1, -1], [1, 1], [2, -2], [2, 2]]);
+        });
+
+        it('puts the third of THREE in row 2\'s centre (F1c: cyan at '
+            + '(-47.5, -0.6))', () => {
+                expect(layout(3)).toEqual([[1, -1], [1, 1], [2, 0]]);
+            });
+
+        it('fills five as the centre then row 2\'s outer pair (f1c_5)', () => {
             expect(layout(5)).toEqual([
                 [1, -1], [1, 1],
-                [2, -2], [2, 2], [2, 0],
+                [2, 0], [2, -2], [2, 2],
             ]);
         });
 
-        it('starts row 3 at its outer cells with the sixth and seventh '
-            + 'escorts (Matthew\'s six-escort playtest)', () => {
+        it('leaves the centre empty with six and takes row 3\'s INNER pair '
+            + '(f1c_6: magenta (-71.2, +24.2), cyan (-71.3, -24.2))', () => {
                 expect(layout(6)).toEqual([
                     [1, -1], [1, 1],
-                    [2, -2], [2, 2], [2, 0],
-                    [3, -3],
-                ]);
-                expect(layout(7)).toEqual([
-                    [1, -1], [1, 1],
-                    [2, -2], [2, 2], [2, 0],
-                    [3, -3], [3, 3],
+                    [2, -2], [2, 2],
+                    [3, -1], [3, 1],
                 ]);
             });
 
-        it('fills rows 1-3 and starts row 4 with ten escorts', () => {
-            expect(layout(10)).toEqual([
+        it('fills seven as five plus row 3\'s inner pair (f1c_7)', () => {
+            expect(layout(7)).toEqual([
                 [1, -1], [1, 1],
-                [2, -2], [2, 2], [2, 0],
-                [3, -3], [3, 3], [3, -1], [3, 1],
-                [4, -4],
+                [2, 0], [2, -2], [2, 2],
+                [3, -1], [3, 1],
             ]);
         });
 
-        it('keeps every slot on the 45° lattice inside the V, row r '
-            + 'holding r + 1 distinct cells', () => {
-                const a = 40;
-                const cells = new Map<number, Set<number>>();
-                for (let rank = 0; rank < 120; rank++) {
-                    const { back, lateral } = formationOffset(rank, a);
-                    const row = back / a;
-                    const steps = lateral / a;
-                    expect(Number.isInteger(row)).toBe(true);
-                    expect(row).toBeGreaterThan(0);
-                    // Inside (or on) the V's arms, on the lattice: lateral
-                    // steps have the row's parity.
-                    expect(Math.abs(steps)).toBeLessThanOrEqual(row);
-                    expect((row - steps) % 2).toBe(0);
-                    const rowCells = cells.get(row) ?? new Set<number>();
-                    expect(rowCells.has(steps)).toBe(false);
-                    rowCells.add(steps);
-                    cells.set(row, rowCells);
-                    // Rows fill in order: no rank sits behind an unfilled row.
-                    for (let earlier = 1; earlier < row; earlier++) {
-                        expect(cells.get(earlier)?.size).toBe(earlier + 1);
-                    }
+        it('lays out EIGHT asymmetrically: six, then the centre (rank 7) and '
+            + 'row 3\'s LEFT outer cell (rank 8; f1c_8 azure (-71.2, '
+            + '+71.6)), the right outer cell empty', () => {
+                expect(layout(8)).toEqual([
+                    [1, -1], [1, 1],
+                    [2, -2], [2, 2],
+                    [3, -1], [3, 1],
+                    [2, 0], [3, -3],
+                ]);
+            });
+
+        it('fills rows 1-3 with nine, centre third, then pairs left first '
+            + '(f1c_9)', () => {
+                expect(layout(9)).toEqual([
+                    [1, -1], [1, 1],
+                    [2, 0], [2, -2], [2, 2],
+                    [3, -1], [3, 1], [3, -3], [3, 3],
+                ]);
+            });
+
+        it('moves earlier ranks when the count changes: rank 2 (the third '
+            + 'escort) is row 2\'s left outer cell with 4, 6 or 8 and the '
+            + 'centre with 3, 5, 7 or 9', () => {
+                for (const count of [4, 6, 8]) {
+                    expect(formationCell(2, count)).withContext(`${count}`)
+                        .toEqual([2, -2]);
                 }
-                // Rows 1-14 hold 2 + 3 + ... + 15 = 119 ranks.
-                for (let row = 1; row <= 14; row++) {
-                    expect(cells.get(row)?.size).toBe(row + 1);
+                for (const count of [3, 5, 7, 9]) {
+                    expect(formationCell(2, count)).withContext(`${count}`)
+                        .toEqual([2, 0]);
+                }
+            });
+
+        it('GUESS past nine: the 9-layout for ranks 0-8, then row 4 from the '
+            + 'inside out', () => {
+                expect(layout(12)).toEqual([
+                    ...layout(9),
+                    [4, 0], [4, -2], [4, 2],
+                ]);
+                expect(FORMATION_MEASURED_MAX_COUNT).toBe(9);
+            });
+
+        it('GUESS with no count: the rank table, row 2\'s centre, then each '
+            + 'row from the inside out', () => {
+                const a = 40;
+                expect(Array.from({ length: 14 }, (_, rank) => {
+                    const { back, lateral } = formationOffset(rank, a);
+                    return [back / a, lateral / a];
+                })).toEqual([
+                    [1, -1], [1, 1],
+                    [2, -2], [2, 2], [2, 0],
+                    [3, -1], [3, 1], [3, -3], [3, 3],
+                    [4, 0], [4, -2], [4, 2], [4, -4], [4, 4],
+                ]);
+            });
+
+        it('keeps every slot of every count on the 45° lattice inside the '
+            + 'V, no two followers on one cell', () => {
+                const counts: Array<number | undefined> =
+                    [undefined, ...Array.from({ length: 40 }, (_, i) => i + 1)];
+                for (const count of counts) {
+                    const n = count ?? 120;
+                    const seen = new Set<string>();
+                    for (let rank = 0; rank < n; rank++) {
+                        const [row, steps] = formationCell(rank, count);
+                        expect(Number.isInteger(row)).toBe(true);
+                        expect(row).toBeGreaterThan(0);
+                        expect(Math.abs(steps)).toBeLessThanOrEqual(row);
+                        expect((row - steps) % 2).toBe(0);
+                        const key = `${row},${steps}`;
+                        expect(seen.has(key))
+                            .withContext(`count ${count} rank ${rank}`)
+                            .toBe(false);
+                        seen.add(key);
+                    }
                 }
             });
 
         it('never returns -0 for a centre cell', () => {
             expect(Object.is(formationOffset(4, 40).lateral, 0)).toBe(true);
-            expect(Object.is(formationOffset(13, 40).lateral, 0)).toBe(true);
+            expect(Object.is(formationOffset(2, 40, 9).lateral, 0)).toBe(true);
+            expect(Object.is(formationOffset(9, 40).lateral, 0)).toBe(true);
         });
 
-        it('takes the measured rank table first; the interim fill '
-            + 'reproduces it for ranks 0-3', () => {
-                expect(FORMATION_RANK_CELLS.length).toBe(4);
-                expect([0, 1, 2, 3].map(formationFillCell))
-                    .toEqual([...FORMATION_RANK_CELLS]);
-            });
+        it('the count-less fill reproduces the rank table for ranks 0-3', () => {
+            expect(FORMATION_RANK_CELLS.length).toBe(4);
+            expect([0, 1, 2, 3].map(formationFillCell))
+                .toEqual([...FORMATION_RANK_CELLS]);
+        });
 
-        it('lays out every count by rank until a count-dependent layout '
-            + 'is measured', () => {
-                expect(FORMATION_COUNT_LAYOUTS.size).toBe(0);
-                for (const count of [1, 2, 3, 4, 5, 6, 7, 10]) {
-                    for (let rank = 0; rank < count; rank++) {
-                        expect(formationOffset(rank, 40, count))
-                            .toEqual(formationOffset(rank, 40));
-                    }
-                }
+        it('has a measured layout for every count 1-9', () => {
+            for (let count = 1; count <= 9; count++) {
+                expect(FORMATION_COUNT_LAYOUTS.has(count)
+                    || count <= 2 || count === 4).withContext(`${count}`)
+                    .toBe(true);
+                expect(FORMATION_COUNT_LAYOUTS.get(count)?.length ?? count)
+                    .toBe(count);
+            }
+        });
+
+        it('ranks hired escorts ahead of bay fighters, each by slot '
+            + '(F1c: one formation, hired first)', () => {
+                expect(formationRanks([[0, true], [3, false], [1, false],
+                    [2, true]])).toEqual([1, 3, 0, 2]);
+                expect(formationRanks([[2, false], [0, false], [1, false]]))
+                    .toEqual([0, 1, 2]);
             });
 
         it('places slot 0 astern and to the left of a leader facing "up" '

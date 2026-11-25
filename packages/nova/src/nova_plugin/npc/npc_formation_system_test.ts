@@ -11,8 +11,8 @@ import {
 import { TimePlugin, useFixedTimestep } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { SIMULATION_STEP_MS } from '../make_system.js';
-import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
-import { FormationComponent, formationSpacing } from './npc_formation.js';
+import { BayFighterComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
+import { FormationCell, FormationComponent, formationSpacing } from './npc_formation.js';
 import { FormationSystem } from './npc_formation_system.js';
 
 /**
@@ -66,6 +66,7 @@ async function formationWorld(leaderWidth: number, escortWidths: number[]) {
     world.addComponent(FormationComponent);
     world.addComponent(ShipDataComponent);
     world.addComponent(ShipPhysicsComponent);
+    world.addComponent(BayFighterComponent);
     world.addSystem(FormationSystem);
     // The leader at rest at the origin facing "up" (angle 0).
     world.entities.set(LEADER, ship(hull(leaderWidth), new Position(0, 0)));
@@ -127,4 +128,75 @@ describe('FormationSystem group spacing (reference F1b)', () => {
         stepSeconds(world, 30);
         expect(offsets(world, 1)).toEqual([[23.5, 23.5]]);
     });
+});
+
+/** Where a follower should settle for `cell` at step `a`, in offsets()'s
+ * [astern, left] frame (a cell's steps are to the RIGHT). */
+function expected(cell: FormationCell, a: number): [number, number] {
+    return [Math.round(cell[0] * a * 10) / 10,
+        Math.round(-cell[1] * a * 10) / 10 + 0];
+}
+
+function offsetOf(world: World, uuid: string): [number, number] {
+    const { position } = world.entities.get(uuid)!
+        .components.get(MovementStateComponent)!;
+    return [Math.round(position.y * 10) / 10,
+        Math.round(-position.x * 10) / 10 + 0];
+}
+
+describe('FormationSystem count layouts (reference F1c)', () => {
+    const a = 23.5;
+
+    it('flies nine 24 px escorts on the measured 9-layout', async () => {
+        const world = await formationWorld(24, Array(9).fill(24));
+        stepSeconds(world, 40);
+        const nine: FormationCell[] = [[1, -1], [1, 1], [2, 0], [2, -2],
+            [2, 2], [3, -1], [3, 1], [3, -3], [3, 3]];
+        nine.forEach((cell, slot) => {
+            const [back, left] = offsetOf(world, `escort-${slot}`);
+            const [eBack, eLeft] = expected(cell, a);
+            expect(back).withContext(`slot ${slot}`).toBeCloseTo(eBack, 0);
+            expect(left).withContext(`slot ${slot}`).toBeCloseTo(eLeft, 0);
+        });
+    });
+
+    it('re-flows the whole group to the 8-layout when the centre escort '
+        + 'leaves nine', async () => {
+            const world = await formationWorld(24, Array(9).fill(24));
+            stepSeconds(world, 40);
+            world.entities.delete('escort-2');
+            stepSeconds(world, 40);
+            // The eight left, in rank order (slot 2 gone), and the 8-layout:
+            // the old rank 3 moves out to row 2's left outer cell, the
+            // centre is taken by the old rank 7, the right outer of row 3
+            // is empty.
+            const slots = [0, 1, 3, 4, 5, 6, 7, 8];
+            const eight: FormationCell[] = [[1, -1], [1, 1], [2, -2], [2, 2],
+                [3, -1], [3, 1], [2, 0], [3, -3]];
+            slots.forEach((slot, rank) => {
+                const [back, left] = offsetOf(world, `escort-${slot}`);
+                const [eBack, eLeft] = expected(eight[rank]!, a);
+                expect(back).withContext(`slot ${slot}`).toBeCloseTo(eBack, 0);
+                expect(left).withContext(`slot ${slot}`).toBeCloseTo(eLeft, 0);
+            });
+        });
+
+    it('ranks hired escorts ahead of a bay fighter with a lower slot',
+        async () => {
+            const world = await formationWorld(24, [24, 24, 24]);
+            world.entities.get('escort-0')!.components.set(BayFighterComponent,
+                { bayWeaponId: 'nova:200' });
+            stepSeconds(world, 30);
+            // Three followers: the hired slots 1 and 2 take row 1, the
+            // fighter (slot 0) the centre behind them.
+            const near = (uuid: string, cell: FormationCell) => {
+                const [back, left] = offsetOf(world, uuid);
+                const [eBack, eLeft] = expected(cell, a);
+                expect(back).withContext(uuid).toBeCloseTo(eBack, 0);
+                expect(left).withContext(uuid).toBeCloseTo(eLeft, 0);
+            };
+            near('escort-1', [1, -1]);
+            near('escort-2', [1, 1]);
+            near('escort-0', [2, 0]);
+        });
 });
