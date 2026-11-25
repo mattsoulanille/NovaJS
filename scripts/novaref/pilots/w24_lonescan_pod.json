@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w24-lonescan-pod",
+  "edits": {
+    "ship": 703,
+    "stellar": 1492,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1190": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w24-lonescan-pod",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}

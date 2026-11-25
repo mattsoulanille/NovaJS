@@ -295,6 +295,7 @@ export default {
         ...wave21Resources(),
         ...wave22Resources(),
         ...wave23Resources(),
+        ...wave24Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
 
@@ -372,6 +373,95 @@ function wave23Resources() {
     // HireRandom 100, TechLevel 1 (hiring is gated by the spöb TechLevel, not SpecialTech), cost 10,000: a 1,000 fee) is offered in every bar every day.
     out.push(...shareRled(514, "Kit Hire Disc", 1974, 24, { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100,
         cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000, hireRandom: 100, techLevel: 1 }));
+    return out;
+}
+
+/**
+ * Wave-24 experiments (docs/reference_experiments.md, "... wave 24").
+ * Nothing retired. sÿst 1180-1188 and 1190-1194, spöb 1482-1494, 1497 and
+ * 1498, shïp none, düde 454, gövt 300, flët 308-309. Map rows y = -1530 to
+ * -1640. The next free ids: sÿst 1189 and 1195+, spöb 1495, 1496, 1499 (the
+ * 1421-1499 range is then FULL: a later wave needs another spöb range, e.g.
+ * 1600-1999 checked free first), shïp 515+, düde 455+, mïsn 956+ (the stock
+ * gap ends at 959), gövt 299 and below, flët 310+, wëap 294+, oütf 466+,
+ * bits 9242+.
+ *
+ *  G   The gate map: kit hypergates cloned from the stock HG-V01 (spöb
+ *      1400: Type 1, Flags 0x11, the 42-frame gate art) but usable (govt
+ *      -1, MinStatus -32767, Flags2 0x1000 only), each alone in a gövt-363
+ *      system with no hyperlinks. Network A: spöb 1482 Kit Gate A1 (sÿst
+ *      1180) <-> 1483 A2 (1181). Network B: 1484 B1 (1182) <-> 1485 B2
+ *      (1183). Network C with a ONE-WAY lane: 1486 C1 (1184) -> 1487 C2
+ *      (1185) (C2 does not list C1), 1487 C2 <-> 1488 C3 (1186).
+ *  M   Map dots (wave-23 leftovers): sÿst 1187 Kit Map Mixed (owner gövt 360,
+ *      CrimeTol 10; the pilot at -500) with a refusing planet spöb 1489
+ *      (MinStatus 0) and an open one 1490 (MinStatus -32767); sÿst 1188
+ *      Kit Map Picky (363) whose only port 1491 has MinStatus 100 (a clean
+ *      pilot is refused); sÿst 1193 Kit Map Wanted Planet (360, the pilot
+ *      at -500) whose only port is a PLANET 1497 with MinStatus 0 (wave
+ *      23's red was a station). 1187 - 1188 - 1193 linked.
+ *  S   Scan controls: sÿst 1190 Kit Lone Scan (owner gövt 301, port 1492)
+ *      whose only traffic is düde 454 (the AI 4 red escort hull shïp 512
+ *      ALONE, gövt 301), avgShips 2; gövt 300 Kit Scan Fleet Strict (301
+ *      with CrimeTol 10) and its flët 309 (lead 511, escorts 512 / 513 as
+ *      flët 307) the only traffic of sÿst 1194 Kit Fleet Scan Strict (port
+ *      1498).
+ *  D   Disabled ships: sÿst 1191 Kit Lone Leaver (363, port 1493), traffic
+ *      wave 18's düde 424 (gövt 312 AI 1 magenta pointer hulls, two Kit
+ *      Disable Gun hits disable) at avgShips 1, so no other ship of its govt
+ *      is around to push the boarder; flët 308 Kit Big Fleet (wave 19's
+ *      cyan lead 467 with exactly one each of the red / orange / yellow /
+ *      green escorts 468-471, gövt 363) the only traffic of sÿst 1192 Kit
+ *      Fleet Big (port 1494), avgShips 5.
+ */
+function wave24Resources() {
+    const out = [];
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+
+    // --- G: three hypergate networks with no lane between them; C has a one-way lane C1 -> C2.
+    const gate = (sid, pid, name, x, y, hyperlinks) => {
+        out.push(system(sid, `Kit Gate ${name}`, x, y, 363, [pid]));
+        out.push(spob(pid, `Kit Gate ${name}`, 0, 0, 1400, { type: 1, flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767, techLevel: 0,
+            specialTech: [-1, -1, -1], custPic: 37, custSnd: 120, hyperlinks: [...hyperlinks, ...none8].slice(0, 8) }));
+    };
+    gate(1180, 1482, "A1", -760, -1530, [1483]);
+    gate(1181, 1483, "A2", -640, -1530, [1482]);
+    gate(1182, 1484, "B1", -760, -1610, [1485]);
+    gate(1183, 1485, "B2", -640, -1610, [1484]);
+    gate(1184, 1486, "C1", -520, -1530, [1487]);
+    gate(1185, 1487, "C2", -400, -1530, [1488]);
+    gate(1186, 1488, "C3", -400, -1610, [1487]);
+
+    // --- M: red with one refusing and one open port; a refusing port at a clean record; a refusing PLANET.
+    const mixed = system(1187, "Kit Map Mixed", -280, -1640, 360, [1489, 1490]);
+    mixed.set.links = links(1188);
+    const picky = system(1188, "Kit Map Picky", -200, -1640, 363, [1491]);
+    picky.set.links = links(1187, 1193);
+    const wantedPlanet = system(1193, "Kit Map Wanted Planet", -120, -1640, 360, [1497]);
+    wantedPlanet.set.links = links(1188);
+    out.push(mixed, picky, wantedPlanet);
+    out.push(port(1489, "Kit Mixed Refusing", 0, 0, { govt: 360, minStatus: 0 }), port(1490, "Kit Mixed Open", 400, 0, { govt: 360 }),
+        port(1491, "Kit Picky Port", 0, 0, { govt: 363, minStatus: 100 }), port(1497, "Kit Wanted Planet", 0, 0, { govt: 360, minStatus: 0 }));
+
+    // --- S: a lone AI 4 of the fleet-scan govt; the fleet with a CrimeTol-10 govt.
+    out.push(dude(454, "Kit Lone Scanner", 4, 301, 512));
+    out.push(traffic(system(1190, "Kit Lone Scan", -280, -1560, 301, [1492]), [[454, 100]], 2), port(1492, "Kit Lone Scan Port"));
+    out.push(govt(300, "Kit Scan Fleet Strict", { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, crimeTol: 10, classes: [300, -1, -1, -1] }));
+    out.push(fleet(309, "Kit Scan Fleet Strict", 511, [[512, 1, 1], [513, 1, 1], [512, 0, 0], [512, 0, 0]], 300, 1194));
+    out.push(traffic(system(1194, "Kit Fleet Scan Strict", -200, -1560, 300, [1498]), [[-309, 100]], 3), port(1498, "Kit Fleet Scan Strict Port"));
+
+    // --- D: a lone disabled leaver to board; a fleet of five for the disabled-leader case.
+    out.push(traffic(system(1191, "Kit Lone Leaver", -120, -1560, 363, [1493]), [[424, 100]], 1), port(1493, "Kit Lone Leaver Port"));
+    out.push(fleet(308, "Kit Big Fleet", 467, [[468, 1, 1], [469, 1, 1], [470, 1, 1], [471, 1, 1]], 363, 1192));
+    out.push(traffic(system(1192, "Kit Fleet Big", -40, -1560, 363, [1494]), [[-308, 100]], 5), port(1494, "Kit Fleet Big Port"));
     return out;
 }
 

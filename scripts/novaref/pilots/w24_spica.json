@@ -1,0 +1,32 @@
+{
+  "name": "novaref-w24-spica",
+  "edits": {
+    "ship": 128,
+    "stellar": 172,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "130": 2,
+      "131": 2,
+      "134": 2,
+      "137": 2,
+      "144": 2,
+      "147": 2,
+      "148": 2,
+      "149": 2,
+      "158": 2,
+      "159": 2,
+      "160": 2,
+      "161": 2,
+      "167": 2,
+      "188": 2,
+      "351": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w24-spica"
+  }
+}

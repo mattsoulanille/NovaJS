@@ -1,0 +1,24 @@
+{
+  "name": "novaref-w24-gate-c2",
+  "edits": {
+    "ship": 703,
+    "stellar": 1487,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1180": 2,
+      "1181": 2,
+      "1182": 2,
+      "1183": 2,
+      "1184": 2,
+      "1185": 2,
+      "1186": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w24-gate-c2"
+  }
+}

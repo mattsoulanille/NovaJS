@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w24-strict-pod",
+  "edits": {
+    "ship": 703,
+    "stellar": 1498,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1194": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w24-strict-pod",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}
