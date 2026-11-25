@@ -32,17 +32,18 @@ import { Component } from 'nova_ecs/component';
  * magnitude of the impact when the shot hits something ... inversely
  * proportional to the ship's mass"), both proportional to the exploding
  * ship's mass. It does NOT document a damage number for a ship's own
- * explosion; the damage below is Matthew's ruling ("ships deal area
- * damage during their final explosion, scaling with the ship's mass"),
- * modelled on the one relationship the Bible does give — linear in mass.
+ * explosion. That ships deal area damage when they finally explode was
+ * first Matthew's ruling; the amount is now MEASURED on the original
+ * (reference "Plunder self-destruct blast, wave 27"): 25.5 + 0.037 x
+ * mass to the shield and then the armor, from 100 tons up (see
+ * SHIP_EXPLOSION_DAMAGE_PER_TON).
  *
  * The Bible's 60-frame distinction (single fireball vs. huge
- * mass-proportional explosion) is deliberately NOT a gate here: the Mass
- * entry states the radius/impact relationship unconditionally, and
- * because everything scales from mass, the ships that fall below the
- * threshold are exactly the light ones whose blast rounds to nothing
- * anyway (of the 288 stock ships, the 86 with DeathDelay >= 60 range
- * from 90 to 10000 tons, while the rest bottom out at 1 ton).
+ * mass-proportional explosion) is NOT a gate on the damage: MEASURED, a
+ * 5,000-ton hulk with DeathDelay 10 and one with DeathDelay 60 dealt the
+ * same blast (reference "Plunder self-destruct, wave 26"); only its
+ * timing differed. (Whether a DeathDelay-60 blast reaches FARTHER is not
+ * measured: the radius below is still a tunable.)
  *
  * The 60-frame threshold IS a gate on the fireball GRAPHIC, which is
  * the thing the Bible attaches it to — see
@@ -80,16 +81,40 @@ export const ShipExplosionComponent =
 // --- The final explosion's area damage (simulation) ---
 
 /**
- * Shield and armor damage per ton of the exploding ship's mass.
+ * The final explosion's shield and armor damage:
+ * SHIP_EXPLOSION_DAMAGE_BASE + SHIP_EXPLOSION_DAMAGE_PER_TON x mass, from
+ * SHIP_EXPLOSION_DAMAGE_MIN_MASS tons up, nothing below.
  *
- * TUNABLE (the Bible gives no damage figure — see the module comment).
- * Calibrated against the stock mass range and the heaviest stock
- * weapons: a 10000-ton Leviathan lands 300 shield + 300 armor, half
- * again a Polaron Massive Torpedo's 400/400 and comfortably "dangerous";
- * a 6000-ton Cambrian 180, a 2000-ton Fed Carrier 60, a 650-ton IDA
- * Frigate ~20, while a 10-ton Viper's death is the 0.3 it should be.
+ * MEASURED (reference "Plunder self-destruct blast, wave 27"): a plunder
+ * self-destruct's blast on a boarder 5-10 px from the hulk, read off the
+ * shield and armor bars frame by frame, was 28.4 / 32.4 / 44.6 / 63.5 /
+ * about 100 / 210.6 / about 1,155 points from 100 / 200 / 500 / 1,000 /
+ * 2,000 / 5,000 / 30,000-ton hulks, every repeat on the same pixel (no
+ * random part). A least-squares line through the exact points is
+ * 25.5 + 0.0371 x mass, every reading within about one point. The
+ * self-destruct is the hulk's ORDINARY final explosion (the trip zeroes
+ * its armor and fires the usual death; DeathDelay 10 and 60 gave the same
+ * amount at 5,000 t), so this is every ship's death blast.
+ *
+ * Stock deaths, old 0.03 x mass against this: a 10-ton Viper 0.3 -> 0
+ * (under the cut-off, as are 121 of the 288 stock hulls), a 650-ton IDA
+ * Frigate 19.5 -> 49.55, a 6000-ton Cambrian 180 -> 247.5, a 10000-ton
+ * Leviathan 300 -> 395.5.
  */
-export const SHIP_EXPLOSION_DAMAGE_PER_TON = 0.03;
+export const SHIP_EXPLOSION_DAMAGE_BASE = 25.5;
+export const SHIP_EXPLOSION_DAMAGE_PER_TON = 0.037;
+
+/**
+ * The lightest hull whose final explosion does any damage.
+ *
+ * GUESS on the exact value: measured only that a 50-ton hulk's blast did
+ * nothing visible (the line above predicts 27, about 40 px of the
+ * boarder's shield bar) while a 100-ton hulk's did the full 28.4 (wave 26
+ * pd_live2, wave 27 pd_100). 100 is the Bible's second shïp Mass band
+ * ("1-99" is the smallest); a cut-off by blast reach rather than mass is
+ * the other reading the reference leaves open.
+ */
+export const SHIP_EXPLOSION_DAMAGE_MIN_MASS = 100;
 
 /**
  * Blast radius in pixels per ton, the Bible's "the blast radius ... when
@@ -158,7 +183,9 @@ export function shipExplosionRadius(mass: number): number {
  */
 export function shipExplosionDamage(mass: number): WeaponDamage {
     const tons = mass > 0 ? mass : 0;
-    const damage = tons * SHIP_EXPLOSION_DAMAGE_PER_TON;
+    const damage = tons >= SHIP_EXPLOSION_DAMAGE_MIN_MASS
+        ? SHIP_EXPLOSION_DAMAGE_BASE + tons * SHIP_EXPLOSION_DAMAGE_PER_TON
+        : 0;
     return {
         shield: damage,
         armor: damage,

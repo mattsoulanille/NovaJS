@@ -29,7 +29,8 @@ import {
     FINAL_EXPLOSION_NATURAL_RADIUS, finalExplosionScale,
     MAX_SECONDARY_EXPLOSIONS, MIN_SECONDARY_EXPLOSIONS,
     nonLethalArmor, nonLethalArmorFloor, secondaryExplosionsDue,
-    secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_PER_TON,
+    secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_BASE,
+    SHIP_EXPLOSION_DAMAGE_MIN_MASS, SHIP_EXPLOSION_DAMAGE_PER_TON,
     SHIP_EXPLOSION_KNOCKBACK_PER_TON, SHIP_EXPLOSION_MAX_RADIUS,
     SHIP_EXPLOSION_MIN_RADIUS, shipExplosionDamage, shipExplosionRadius,
 } from './ship_explosion.js';
@@ -60,23 +61,53 @@ describe('ship explosion scaling', () => {
         expect(shipExplosionRadius(NaN)).toEqual(SHIP_EXPLOSION_MIN_RADIUS);
     });
 
-    it('scales damage and knockback linearly with mass', () => {
+    it('deals the measured 25.5 + 0.037 x mass from 100 tons up', () => {
+        // Reference "Plunder self-destruct blast, wave 27": the blast a
+        // boarder took from a self-destructing hulk, read off its bars
+        // (exact points to the pixel; 2,000 and 30,000 t to about 20).
+        const measured: [number, number, number][] = [
+            // [mass, measured blast, tolerance]
+            [100, 28.4, 1.5], [200, 32.4, 1], [500, 44.6, 1],
+            [1000, 63.5, 1.5], [2000, 100, 20], [5000, 210.6, 2],
+            [30000, 1155, 25],
+        ];
+        for (const [mass, blast, tolerance] of measured) {
+            const damage = shipExplosionDamage(mass);
+            expect(Math.abs(damage.shield - blast))
+                .withContext(`${mass} t`).toBeLessThanOrEqual(tolerance);
+            // The same amount hits the shield and the armor.
+            expect(damage.armor).toEqual(damage.shield);
+        }
+        expect(shipExplosionDamage(10000).armor).toBeCloseTo(
+            SHIP_EXPLOSION_DAMAGE_BASE
+            + 10000 * SHIP_EXPLOSION_DAMAGE_PER_TON, 9);
+    });
+
+    it('does nothing below the cut-off (a 50-ton hulk: measured none)',
+        () => {
+            // Wave 26 pd_live2: a 50 t hulk's blast left the boarder's
+            // bars untouched; 100 t did the full 28. The cut-off value
+            // itself is a GUESS between the two.
+            expect(shipExplosionDamage(50).shield).toEqual(0);
+            expect(shipExplosionDamage(50).armor).toEqual(0);
+            expect(shipExplosionDamage(
+                SHIP_EXPLOSION_DAMAGE_MIN_MASS - 1).armor).toEqual(0);
+            expect(shipExplosionDamage(SHIP_EXPLOSION_DAMAGE_MIN_MASS).armor)
+                .toBeGreaterThan(25);
+            // A degenerate mass is harmless rather than NaN (which would
+            // desync the sim).
+            expect(shipExplosionDamage(NaN).armor).toEqual(0);
+            expect(shipExplosionDamage(-5000).armor).toEqual(0);
+        });
+
+    it('scales knockback linearly with mass', () => {
         const leviathan = shipExplosionDamage(10000);
-        expect(leviathan.armor)
-            .toBeCloseTo(10000 * SHIP_EXPLOSION_DAMAGE_PER_TON, 9);
-        expect(leviathan.shield).toEqual(leviathan.armor);
         expect(leviathan.knockback)
             .toBeCloseTo(10000 * SHIP_EXPLOSION_KNOCKBACK_PER_TON, 9);
-        // Ten times the mass, ten times the damage.
-        expect(shipExplosionDamage(1000).armor)
-            .toBeCloseTo(leviathan.armor / 10, 9);
         // An explosion is a shock wave, not a shield-piercer, and it
         // ionizes nothing.
         expect(leviathan.passThroughShield).toEqual(0);
         expect(leviathan.ionization).toEqual(0);
-        // A degenerate mass is harmless rather than NaN (which would
-        // desync the sim).
-        expect(shipExplosionDamage(NaN).armor).toEqual(0);
     });
 });
 
@@ -238,6 +269,19 @@ describe('non-lethal armor clamp', () => {
         }
     });
 
+    it('reproduces the measured floors (reference wave 26-27)', () => {
+        // A 100 / 300 boarder under a 5,000 t hulk's 210.5: the 33%
+        // hull stopped at 33.8% (101 of 300; the floor is 102, inside
+        // the bar's 2-point steps), the 0x0010 hull went on to 29.7%
+        // (89 of 300): the whole blast, above its 10% floor.
+        const blast = shipExplosionDamage(5000).armor;
+        expect(nonLethalArmor(300, blast, nonLethalArmorFloor(300, 0.33)))
+            .toBeCloseTo(102, 9);
+        expect(nonLethalArmor(300, blast, nonLethalArmorFloor(300, 0.10)))
+            .toBeCloseTo(300 - blast, 9);
+        expect((300 - blast) / 300).toBeCloseTo(0.297, 2);
+    });
+
     it('never heals a ship already below the floor', () => {
         const floor = nonLethalArmorFloor(1000, 0.33);
         // A hulk at zero armor stays at zero: the clamp is a floor on
@@ -363,8 +407,8 @@ describe('final explosion area damage (simulation)', () => {
             { time: 0, delta_s: 0, delta_ms: 0, frame: 0 }, [EXPLODER]);
     }
 
-    it('damages a nearby ship in proportion to the exploder\'s mass',
-        async () => {
+    it('damages a nearby ship by the exploder\'s mass, nothing under '
+        + 'the cut-off', async () => {
             const damageTo = async (exploderId: string) => {
                 // 10 px apart, inside even the minimum blast radius, so
                 // the comparison is about the DAMAGE and not the reach.
@@ -374,14 +418,34 @@ describe('final explosion area damage (simulation)', () => {
                 world.step();
                 return before - shieldOf(victim).current;
             };
-            // A Bastion Hulk (10,000 t) and a Mote Drone (10 t) at the
-            // same range.
-            const heavy = await damageTo(HEAVY);
-            const light = await damageTo(LIGHT);
-            expect(heavy).toBeCloseTo(
-                10000 * SHIP_EXPLOSION_DAMAGE_PER_TON, 4);
-            expect(light).toBeCloseTo(10 * SHIP_EXPLOSION_DAMAGE_PER_TON, 4);
-            expect(heavy).toBeGreaterThan(light * 100 - 1);
+            // A Bastion Hulk (10,000 t), a Heron Warden (400 t) and a
+            // Mote Drone (10 t) at the same range.
+            expect(await damageTo(HEAVY)).toBeCloseTo(
+                shipExplosionDamage(10000).shield, 4);
+            expect(await damageTo(HEAVY)).toBeCloseTo(395.5, 4);
+            expect(await damageTo(SYNTHETIC.ships.warden))
+                .toBeCloseTo(25.5 + 400 * 0.037, 4);
+            expect(await damageTo(LIGHT)).toEqual(0);
+        }, 120_000);
+
+    it('floors at the victim\'s OWN disable threshold (0x0010: 10%)',
+        async () => {
+            // Reference "Plunder self-destruct blast, wave 27" pd_ten: a
+            // 0x0010 hull ("disabled at 10%") went down to 29.7% under a
+            // 211-point blast, not floored at a third. The Shrike Ghost
+            // sets 0x0010; the Bastion Hulk's 395.5 takes its 120 shield
+            // and then its 80 armor down to the floor.
+            const { world, victim } = await battlefield(HEAVY, 10,
+                SYNTHETIC.ships.ghost);
+            const shipData = victim.components.get(ShipDataComponent)!;
+            expect(shipData.disableArmorFraction).toEqual(0.10);
+            explodeNow(world);
+            world.step();
+            const armor = armorOf(victim);
+            expect(armor.current).toBeCloseTo(
+                nonLethalArmorFloor(armor.max, 0.10), 9);
+            expect(armor.current).toBeLessThan(armor.max * 0.33);
+            expect(victim.components.has(DisabledComponent)).toBeFalse();
         }, 120_000);
 
     it('does not reach past its radius', async () => {

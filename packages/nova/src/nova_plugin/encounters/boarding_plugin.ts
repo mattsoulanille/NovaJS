@@ -1572,13 +1572,16 @@ const BoardingActionSystem = new System({
  * The caller has already DELIVERED the take and charged the piracy.
  *
  * MEASURED: the line, the hulk destroyed at once, the dialog gone, the
- * player undamaged and at rest, the tripped take delivered (Cargo: the
- * hold filled; Credits and Energy could not be read, and are delivered
- * too for one rule). Derelicts trip like any hulk (waves 6-7's derelict
+ * player at rest, the tripped take delivered (Cargo: the hold filled;
+ * Credits: paid, wave 26; Energy could not be read, and is delivered too
+ * for one rule). Derelicts trip like any hulk (waves 6-7's derelict
  * boards tripped 8 times in 15 takes), so there is no govt exemption.
- * NovaJS's final explosion still deals its small mass-scaled blast
- * (Matthew's ruling, ship_explosion.ts): 1.5 shield for the 50-ton hull of
- * wave 24, nothing a player would see.
+ * The hulk's final explosion is its ordinary death blast, which DOES
+ * hurt the boarder (MEASURED, reference "Plunder self-destruct, wave 26"
+ * and "Plunder self-destruct blast, wave 27"): 25.5 + 0.037 x the hulk's
+ * mass from 100 tons up (ship_explosion.ts shipExplosionDamage), nothing
+ * from wave 24's 50-ton hull, and never below the boarder's own disable
+ * threshold (nonLethalArmorFloor). "Undamaged" holds for light hulks only.
  *
  * GUESSES (wave 25 read the dialog and the hold, never the records or
  * the combat rating, so these stand as they were):
