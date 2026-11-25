@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w26-coast-fast-beam",
+  "edits": {
+    "ship": 497,
+    "stellar": 1607,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1201": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w26-coast-fast-beam",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

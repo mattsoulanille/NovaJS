@@ -297,8 +297,139 @@ export default {
         ...wave23Resources(),
         ...wave24Resources(),
         ...wave25Resources(),
+        ...wave26Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-26 experiments (docs/reference_experiments.md, "... wave 26").
+ * Nothing retired. sÿst 1197-1203, spöb 1603-1609, shïp 517-528, düde
+ * 456-460, gövt 299, flët 310-311, mïsn 956 (bit 9242; offer text dësc
+ * 4828). Map rows y = -1760 / -1800. The next free ids: sÿst 1204+, spöb
+ * 1610+ (spares 1495, 1496, 1499), shïp 529+, düde 461+, mïsn 957-959 (the
+ * stock gap ends at 959; then a new mïsn range is needed), gövt 298 and
+ * below, flët 312+, wëap 294+, oütf 466+, bits 9243+.
+ *
+ * LESSONS: Flags 0x0008 ("player's shots won't hit") does NOT work through
+ * an ATTRIBUTES InherentGovt (1299): the bolt disabled the escort; a
+ * derelict placed by traffic can sit 3,000 px out where the walk never
+ * reaches it (use the live AI 4 kind).
+ *
+ *  R19 An ARMED AI 3 victim (waves 22 / 24's AI 3 victims were the unarmed
+ *      mobile S50 and left at once): shïp 517 Kit RV Mobile S50 AI3 Armed
+ *      (shïp 499 with the Kit Escort Gun turret), düde 456 (AI 3, gövt 311),
+ *      the only traffic of sÿst 1197 Kit Reinf AI3 Armed (gövt 311, flët
+ *      305, ReinfTime 300, ReinfIntrval 0; port spöb 1603), avgShips 1.
+ *  R19 The arrival centre: mïsn 956 (bit 9242), offered on landing at Kit
+ *      Reinf Far M's port (spöb 1449, 3,000 px from the centre of sÿst
+ *      1158: no traffic, ReinfTime 150): one düde 441 (the AI 4 Kit RV
+ *      Guard S50 of gövt 311) at ShipStart -1 with ShipBehav 0 (always
+ *      attacks the player), so the victim comes to the player at the far
+ *      port instead of wandering off.
+ *  D   An UNPROVOKED disabled fleet lead (wave 25: the bolt hit an escort
+ *      first): flët 310 Kit Pass Fleet (gövt 363), lead shïp 518 Kit TF Lead
+ *      (cyan, AI 3, Speed 300, Kit Escort Gun, 3000 / 3000: one Kit Disable
+ *      Gun hit disables), escorts shïp 519 Kit TF Red / 520 Kit TF Green
+ *      (the same with InherentGovt 1299: the ATTRIBUTES govt gövt 299 Kit
+ *      Shots Pass Attr, Flags 0x0008 "player's shots won't hit"), the only
+ *      traffic of sÿst 1198 Kit Fleet Pass (port spöb 1604), avgShips 3.
+ *      Fallback: flët 311 Kit Slow Escort Fleet (lead 518, escorts shïp 521
+ *      / 522 Kit TS Red / Green at Speed / Accel 40, so they trail), the
+ *      only traffic of sÿst 1199 Kit Fleet Slow (port spöb 1605).
+ *  P   Plunder self-destruct damage: shïp 523 Kit Ring Crawler Fragile (the
+ *      Kit Ring Crawler with 100 shield / 300 armor, no recharge: one point
+ *      of damage is 1% of the shield bar); shïp 524 Kit Hulk Pointer Heavy
+ *      (the derelict Kit Hulk Pointer with Mass 5000 and DeathDelay 60, the
+ *      Bible's "huge explosion proportional to mass"), düde 457 (AI 4 of
+ *      the neutral gövt 363 like wave 8's Kit Live Pointer: the player
+ *      disables it; a derelict version sat 3,000 px out of reach), the only
+ *      traffic of sÿst 1200 Kit Board Heavy (port spöb 1606).
+ *      Added during the wave: shïp 526 Kit Hulk Pointer Heavy Quick (5,000 t,
+ *      DeathDelay 10; düde 459, sÿst 1202 / spöb 1608), 527 Kit Hulk Pointer
+ *      Massive (30,000 t, DeathDelay 60; düde 460, sÿst 1203 / spöb 1609),
+ *      both live; shïp 528 Kit Ring Crawler Tough (100 shield / 3000 armor).
+ *  C   A faster coast: shïp 525 Kit Coast Fast Trader (wave 25's 516 at
+ *      Speed / Accel 250), düde 458 (AI 1, gövt 312), the only traffic of
+ *      sÿst 1201 Kit Coast Fast Range (port spöb 1607), avgShips 1.
+ */
+function wave26Resources() {
+    const out = [];
+    const Y = -1760;
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const RLED = { red: 1971, green: 1972, cyan: 1976, pointer: 1959, ring: 1955 };
+    const armed = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+
+    // --- R19: an armed AI 3 victim.
+    out.push(...shareRled(517, "Kit RV Mobile S50 AI3 Armed", RLED.pointer, 24, { ...mobile, ai: 3, armor: 30000, shield: 30000, shieldRecharge: 0, strength: 50, ...armed }));
+    out.push(dude(456, "Kit RV Mobile S50 AI3 Armed", 3, 311, 517));
+    const ai3 = traffic(system(1197, "Kit Reinf AI3 Armed", -760, Y, 311, [1603]), [[456, 100]], 1);
+    ai3.set = { ...ai3.set, reinfFleet: 305, reinfTime: 300, reinfInterval: 0 };
+    out.push(ai3, port(1603, "Kit Reinf AI3 Armed Port"));
+
+    // --- R19: the arrival centre, a victim that comes to the player at the 3,000 px port.
+    out.push(...misn(956, "Kit R attacker 441 far port", 9242, { availStel: 1449, shipCount: 1, shipSyst: -1, shipDude: 441, shipGoal: -1,
+        shipBehav: 0, shipStart: -1 }));
+
+    // --- D: a fleet whose escorts the player's shots pass through; a fleet whose escorts trail.
+    out.push(govt(299, "Kit Shots Pass Attr", { flags: 0x0008, classes: [299, -1, -1, -1], crimeTol: 30000 }));
+    const fleetHull = { ...mobile, ai: 3, armor: 3000, shield: 3000, strength: 50, ...armed };
+    out.push(...shareRled(518, "Kit TF Lead", RLED.cyan, 24, fleetHull));
+    out.push(...shareRled(519, "Kit TF Red", RLED.red, 24, { ...fleetHull, govt: 1299 }));
+    out.push(...shareRled(520, "Kit TF Green", RLED.green, 24, { ...fleetHull, govt: 1299 }));
+    out.push(fleet(310, "Kit Pass Fleet", 518, [[519, 1, 1], [520, 1, 1], [519, 0, 0], [519, 0, 0]], 363, 1198));
+    out.push(traffic(system(1198, "Kit Fleet Pass", -680, Y, 363, [1604]), [[-310, 100]], 3), port(1604, "Kit Fleet Pass Port"));
+    out.push(...shareRled(521, "Kit TS Red", RLED.red, 24, { ...fleetHull, speed: 40, accel: 40 }));
+    out.push(...shareRled(522, "Kit TS Green", RLED.green, 24, { ...fleetHull, speed: 40, accel: 40 }));
+    out.push(fleet(311, "Kit Slow Escort Fleet", 518, [[521, 1, 1], [522, 1, 1], [521, 0, 0], [521, 0, 0]], 363, 1199));
+    out.push(traffic(system(1199, "Kit Fleet Slow", -600, Y, 363, [1605]), [[-311, 100]], 3), port(1605, "Kit Fleet Slow Port"));
+
+    // --- P: a fragile boarder and a heavy derelict.
+    const crawler = { accel: 2000, speed: 100, turn: 30, armor: 300, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8,
+        ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...shareRled(523, "Kit Ring Crawler Fragile", RLED.ring, 24, crawler));
+    out.push(...shareRled(524, "Kit Hulk Pointer Heavy", RLED.pointer, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass: 5000, freeMass: 100, cargo: 50,
+        ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 60 }));
+    // Built first as a derelict (gövt 378): it was placed ~3,000 px out and the walk never reached it, so it is wave
+    // 8's LIVE kind instead (AI 4 of the neutral gövt 363, immobile; the player disables it), like Kit Board Live.
+    const heavy = dude(457, "Kit Hulk Pointer Heavy", 4, 363, 524);
+    heavy.set = { ...heavy.set, flags: 0x0041 };
+    out.push(heavy, traffic(system(1200, "Kit Board Heavy", -520, Y, 363, [1606]), [[457, 100]], 1), port(1606, "Kit Board Heavy Port"));
+    // Added after the first trips (the 5,000 t hulk's trip took 100 shield + about 200 armor, the 50 t one nothing
+    // visible): which of Mass and DeathDelay sets it, and is the player's armor floored at a third? shïp 526 Kit Hulk
+    // Pointer Heavy Quick (5,000 t, DeathDelay 10), düde 459, sÿst 1202 / spöb 1608; shïp 527 Kit Hulk Pointer
+    // Massive (30,000 t, DeathDelay 60), düde 460, sÿst 1203 / spöb 1609. Both live (AI 4, gövt 363).
+    const liveHulk = (shipId, name, mass, deathDelay, dudeId, sysId, x) => {
+        out.push(...shareRled(shipId, name, RLED.pointer, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass, freeMass: 100, cargo: 50,
+            ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay }));
+        const d = dude(dudeId, name, 4, 363, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        out.push(d, traffic(system(sysId, `Kit Board ${name.replace("Kit Hulk Pointer ", "")}`, x, Y - 40, 363, [sysId + 406]), [[dudeId, 100]], 1),
+            port(sysId + 406, `Kit Board ${name.replace("Kit Hulk Pointer ", "")} Port`));
+    };
+    liveHulk(526, "Kit Hulk Pointer Heavy Quick", 5000, 10, 459, 1202, -760);
+    liveHulk(527, "Kit Hulk Pointer Massive", 30000, 60, 460, 1203, -680);
+    // Both left the Fragile boarder at 0 shield and a THIRD of its armor: a floor at the disable threshold, or a fixed
+    // blast? shïp 528 Kit Ring Crawler Tough (100 shield / 3000 armor): a floor leaves ~1000, a ~300 blast ~2,800.
+    out.push(...shareRled(528, "Kit Ring Crawler Tough", RLED.ring, 24, { ...crawler, armor: 3000 }));
+
+    // --- C: a faster disabled coast.
+    out.push(...shareRled(525, "Kit Coast Fast Trader", RLED.pointer, 24, { ...mobile, accel: 250, speed: 250, strength: 50, ai: 1, armor: 3000, shield: 3000 }),
+        dude(458, "Kit Coast Fast Trader", 1, 312, 525));
+    out.push(traffic(system(1201, "Kit Coast Fast Range", -440, Y, 363, [1607]), [[458, 100]], 1), port(1607, "Kit Coast Fast Range Port"));
+    return out;
+}
 
 /**
  * Wave-25 experiments (docs/reference_experiments.md, "... wave 25").

@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w26-pd-quick",
+  "edits": {
+    "ship": 523,
+    "stellar": 1608,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1202": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w26-pd-quick",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}
