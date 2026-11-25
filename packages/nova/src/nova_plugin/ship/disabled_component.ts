@@ -65,6 +65,13 @@ export const DisabledComponent = new Component<DisabledState>('DisabledComponent
  * 45 px/s^2 coasts a full-speed ship to a stop over ~3-4 s — visibly
  * "drifting to a halt" rather than parking instantly. (Raised from 30 with
  * #316's 1.5x ship speeds, to keep that 3-4 s.)
+ *
+ * KNOWN MISMATCH IN KIND, kept until a coast is recorded: the original's
+ * disabled ships coast on for longer (reference "Disabled ships, wave 23":
+ * a warship disabled at speed went 11 -> 35 radar px in about 3 s, about
+ * its own speed, and was found at rest minutes later; wave 24's trader
+ * coasted a few hundred px). Its rate is a GUESS until a recording gives
+ * speed over time, so this brake is left as it is.
  */
 export const DISABLED_DECELERATION = 45;
 

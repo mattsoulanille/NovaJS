@@ -91,6 +91,11 @@ const DamageSystem = new System({
             }
         }
 
+        // A hit that takes the shield to 0 (or below) lands its armor
+        // damage in full in the same hit. MEASURED (reference "Disabled
+        // ships, wave 24"): one Kit Disable Gun hit (3000 shield / 2100
+        // armor) disabled a 3000 / 3000 hull (30% armor, under 33%) and a
+        // second destroyed it.
         if (shield && !damage.passThroughShield) {
             shield.current -= damage.shield * scale;
             if (shield.current > 0) {

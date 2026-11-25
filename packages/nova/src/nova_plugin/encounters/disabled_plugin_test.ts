@@ -524,6 +524,38 @@ describe('ship disabling in a live world', () => {
             expect(ship.components.has(DisabledComponent)).toBeFalse();
         }, 120_000);
 
+    it('one hit that takes the whole shield and 70% of the armor disables '
+        + '(the Kit Disable Gun, 3000 shield / 2100 armor, on a 3000 / 3000 '
+        + 'hull: MEASURED, reference "Disabled ships, wave 24"); a second '
+        + 'destroys', async () => {
+            const { DamagedEvent, ExplodingComponent } =
+                await import('../ship/index.js');
+            const { world, ship } = await shipWorld(SKIFF);
+            const shield = ship.components.get(ShieldComponent)!;
+            const armor = armorOf(ship);
+            expect(shield.current).toEqual(shield.max);
+            // The kit gun against the kit hull, scaled to this hull: the
+            // shield half empties the shield exactly, and the armor half
+            // lands in the same hit (the shield is not above 0), leaving
+            // 30% armor, under the 33% threshold.
+            const kitHit = {
+                shield: shield.max, armor: 0.7 * armor.max, ionization: 0,
+                ionizationColor: 0xffffff, passThroughShield: 0,
+                knockback: 0,
+            };
+            world.emit(DamagedEvent,
+                { damage: kitHit, damager: 'nobody' }, [SHIP]);
+            world.step();
+            expect(armor.current).toBeCloseTo(0.3 * armor.max, 6);
+            expect(ship.components.has(DisabledComponent)).toBeTrue();
+            expect(ship.components.has(ExplodingComponent)).toBeFalse();
+            world.emit(DamagedEvent,
+                { damage: kitHit, damager: 'nobody' }, [SHIP]);
+            world.step();
+            expect(armor.current).toEqual(0);
+            expect(ship.components.has(ExplodingComponent)).toBeTrue();
+        }, 120_000);
+
     it('disable-only weapons floor armor above zero; a normal weapon ' +
         'finishes the job', async () => {
             const { DamagedEvent, DISABLE_ONLY_ARMOR_FLOOR, ExplodingComponent } =
