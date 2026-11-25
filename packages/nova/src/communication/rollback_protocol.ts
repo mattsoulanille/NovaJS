@@ -649,7 +649,9 @@ export const STATE_HASH_INTERVAL = 60;
 //    input kind or message kind changes. Sim-rule changes alongside: the
 //    fuel price is the ship's own ask capped by the pilot's cash, with no
 //    record term; a ränk 0x0800 refuels for free from the affiliated
-//    govt's allies too. The derived wire
+//    govt's allies too; a ShipStart-2 rescue ship waits live instead of
+//    adrift; fleet escorts leave with their leader, not on their own
+//    rolls. The derived wire
 //    schema fingerprint changes (d3e842c4cfaedd4b -> COMBINEDFP),
 //    and the join gate keeps older and newer builds apart.
 

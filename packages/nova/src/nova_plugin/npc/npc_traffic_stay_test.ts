@@ -20,6 +20,9 @@ import { completeEntity } from '../spawn/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { NpcComponent, NpcState } from './npc_component.js';
 import { isShuttle } from './npc_shuttle.js';
+import { fleetLeaderLeaving } from './npc_decision.js';
+import { FormationComponent } from './npc_formation.js';
+import { EscortCommandComponent } from '../player/index.js';
 
 /**
  * ============================================================================
@@ -152,6 +155,51 @@ describe('Ordinary traffic that stays (reference "Stock Sol, wave 16")', () => {
                 { aiType: 4, departAt: 0, passingThrough: true });
             const left = departures(world, ['interceptor'], 30);
             expect(left.get('interceptor')).toBeTrue();
+        }, 60_000);
+
+    it('a FLEET leaves whole: escorts do not leave on their own rolls while '
+        + 'the leader stays, and follow it out when it goes (reference '
+        + '"Traffic wave 19")', async () => {
+            const { world, addNpc } = await trafficWorld();
+            await addNpc('lead', { aiType: 3, departAt: 1e12 });
+            const escorts = ['red', 'orange', 'yellow'];
+            for (const [slot, uuid] of escorts.entries()) {
+                const escort = await addNpc(uuid, { aiType: 3, departAt: 0 });
+                escort.components.set(FormationComponent,
+                    { leader: 'lead', slot });
+            }
+            // Their own rolls are long due; the leader stays, so do they.
+            const stayed = departures(world, escorts, 30);
+            for (const uuid of escorts) {
+                expect(stayed.get(uuid)).withContext(uuid).toBeFalse();
+            }
+            // The leader goes: every escort goes within a few seconds.
+            world.entities.get('lead')!.components.get(NpcComponent)!
+                .mode = 'depart';
+            const followed = departures(world, escorts, 3);
+            for (const uuid of escorts) {
+                expect(followed.get(uuid)).withContext(uuid).toBeTrue();
+            }
+            expect(fleetLeaderLeaving(world.entities.get('lead'))).toBeTrue();
+        }, 60_000);
+
+    it('fleetLeaderLeaving: only an NPC leader that is departing or '
+        + 'jumping, never a player\'s ship', async () => {
+            const { addNpc } = await trafficWorld();
+            const lead = await addNpc('lead', { aiType: 3 });
+            expect(fleetLeaderLeaving(lead)).toBeFalse();
+            lead.components.get(NpcComponent)!.mode = 'depart';
+            expect(fleetLeaderLeaving(lead)).toBeTrue();
+            lead.components.get(NpcComponent)!.mode = 'patrol';
+            lead.components.set(EscortCommandComponent,
+                { command: 'formation' } as never);
+            lead.components.get(NpcComponent)!.mode = 'depart';
+            expect(fleetLeaderLeaving(lead)).toBeFalse();
+            expect(fleetLeaderLeaving(undefined)).toBeFalse();
+            const player = await addNpc('player', { aiType: 3 });
+            player.components.delete(NpcComponent);
+            player.components.set(JumpComponent, {} as never);
+            expect(fleetLeaderLeaving(player)).toBeFalse();
         }, 60_000);
 
     it('a stock-Sol-like mix freezes: the slots end up with interceptors '

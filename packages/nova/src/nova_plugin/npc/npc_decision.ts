@@ -1,3 +1,4 @@
+import { Entity } from 'nova_ecs/entity';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -253,6 +254,34 @@ function travelOrDepart(destination: string | undefined,
 }
 
 /**
+ * Whether the LEADER of an NPC fleet (a sÿst / flët spawn's lead, which its
+ * escorts hold formation on) is leaving the system: an NPC of ordinary
+ * traffic (not a player's escort under command) in 'depart' or already in
+ * its jump. Its escorts then leave too, at their next think, instead of
+ * staying on their own departure rolls; and while it is NOT leaving, an
+ * AI 3 escort does not leave on its own roll either.
+ *
+ * Reference "Traffic wave 19" (docs/reference_experiments.md): fleets
+ * left whole — several whole fleets went inside one 17 s census burst, the
+ * system stood empty three times — and an escort outlived its lead by a
+ * few seconds (Orange alone at 4.1 min, Red at 6.1 and 8.2, Yellow at
+ * 18.2), as escorts that follow their leader out a think later do. With
+ * independent 2-5 minute rolls a fleet scattered over minutes. GUESS: an
+ * escort may also leave a few seconds BEFORE its lead (6.1: Yellow and
+ * Green went first) only through the jump's own timing, not by a roll.
+ * A player's ships (the leader of a mission's ShipBehav 1 ship, a carrier
+ * of bay fighters) never count: they are not NPC traffic.
+ */
+export function fleetLeaderLeaving(leader: Entity | undefined): boolean {
+    if (!leader || leader.components.has(EscortCommandComponent)) {
+        return false;
+    }
+    const leaderNpc = leader.components.get(NpcComponent);
+    return leaderNpc !== undefined && (leaderNpc.mode === 'depart'
+        || leader.components.has(JumpComponent));
+}
+
+/**
  * The per-NPC think step. Runs at NPC_DECISION_INTERVAL_MS (scaled by
  * the govt's SkillMult) and owns all mode transitions; the steering
  * system (npc_steering.ts) only executes the current mode.
@@ -332,6 +361,15 @@ export const NpcDecisionSystem = new System({
         if (npc.departAt === undefined) {
             npc.departAt = rollDepartureTime(time.time, random,
                 npc.passingThrough);
+        }
+
+        // A FLEET ESCORT LEAVES WITH ITS LEADER (fleetLeaderLeaving). After
+        // the roll above, so every NPC's draws stay where they were.
+        if (formation && !held
+            && fleetLeaderLeaving(entities.get(formation.leader))) {
+            npc.mode = 'depart';
+            target.target = undefined;
+            return;
         }
 
         // Forget aggressors that no longer exist.
@@ -845,7 +883,13 @@ export const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                     npc.boardTarget = undefined;
                 }
-                if (!held && time.time >= npc.departAt) {
+                // A fleet escort goes when its LEADER goes (above), not on
+                // its own roll (fleetLeaderLeaving; reference "Traffic wave
+                // 19": fleets left whole).
+                const inLiveFleet = formation !== undefined
+                    && entities.get(formation.leader)?.components
+                        .has(NpcComponent) === true;
+                if (!held && !inLiveFleet && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
                 }
