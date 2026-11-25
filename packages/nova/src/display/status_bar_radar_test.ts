@@ -1,7 +1,7 @@
 import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
-import { getDefaultPlanetData } from 'novadatainterface/planet_data';
+import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getDefaultStatusBarData } from 'novadatainterface/status_bar_data';
 import { Entity } from 'nova_ecs/entity';
@@ -34,7 +34,8 @@ import {
     blipPixels, centerArrowPixels, CENTER_ARROW_HEAD, CENTER_ARROW_TAIL,
     CENTER_ARROW_TIP, DrawRadar, linePixels, RadarPane, radarBlinkOn,
     radarCenterPixel, radarRefreshIndex, RADAR_REFRESH_MS, shipBlipSize,
-    stellarRadarShape, stellarRadarSize, STELLAR_RING_PIXELS,
+    planetRadarShape, stellarRadarShape, stellarRadarSize,
+    STELLAR_RING_MIN_SIZE, STELLAR_RING_PIXELS,
 } from './status_bar_radar.js';
 import { StatusBarResource } from './status_bar_resource.js';
 
@@ -185,14 +186,34 @@ describe('radar blip sizes (density scanner, oütf ModType 13)', () => {
 });
 
 describe('stellar radar shape', () => {
-    it('rings planet-sized stellars and dots small ones', () => {
-        expect(stellarRadarShape(40)).toBe('dot');   // Europa
-        expect(stellarRadarShape(48)).toBe('dot');   // Kolan, Mars
-        expect(stellarRadarShape(60)).toBe('dot');   // destroyed hypergate
-        expect(stellarRadarShape(110)).toBe('ring'); // Kiniké
-        expect(stellarRadarShape(120)).toBe('ring'); // Ryll
-        expect(stellarRadarShape(323)).toBe('ring'); // Jupiter
-        expect(stellarRadarShape(undefined)).toBe('ring');
+    it('rings planet-sized planets and dots small ones', () => {
+        expect(stellarRadarShape(40, false)).toBe('dot');   // Europa
+        expect(stellarRadarShape(48, false)).toBe('dot');   // Kolan, Mars
+        expect(stellarRadarShape(60, false)).toBe('dot');   // gate art
+        expect(stellarRadarShape(110, false)).toBe('ring'); // Kiniké
+        expect(stellarRadarShape(120, false)).toBe('ring'); // Ryll
+        expect(stellarRadarShape(323, false)).toBe('ring'); // Jupiter
+        expect(stellarRadarShape(undefined, false)).toBe('ring');
+    });
+
+    it('rings a planet from 96 px: the K8 kit planets (wave 22)', () => {
+        expect(STELLAR_RING_MIN_SIZE).toBe(96);
+        expect(stellarRadarShape(72, false)).toBe('dot');   // spïn 2006
+        expect(stellarRadarShape(87, false)).toBe('dot');   // spïn 2019
+        expect(stellarRadarShape(88, false)).toBe('dot');   // spïn 2024
+        // GUESS: the unmeasured 89-95 px gap is dots.
+        expect(stellarRadarShape(95, false)).toBe('dot');
+        expect(stellarRadarShape(96, false)).toBe('ring');  // spïn 2026
+        expect(stellarRadarShape(104, false)).toBe('ring'); // spïn 2017
+        expect(stellarRadarShape(150, false)).toBe('ring'); // spïn 2001
+    });
+
+    it('dots every station whatever its size (K8, wave 22)', () => {
+        expect(stellarRadarShape(72, true)).toBe('dot');
+        expect(stellarRadarShape(104, true)).toBe('dot');
+        expect(stellarRadarShape(150, true)).toBe('dot');   // HG-Secundus
+        expect(stellarRadarShape(315, true)).toBe('dot');
+        expect(stellarRadarShape(undefined, true)).toBe('dot');
     });
 
     it('reads the size off the larger side of the sprite frame', () => {
@@ -202,13 +223,15 @@ describe('stellar radar shape', () => {
         expect(stellarRadarSize([])).toBeUndefined();
     });
 
-    it('rings the working hypergates (spïn 2001, 150 x 150 frames) and dots '
-        + 'the unlandable gate art (spïn 2063, 53 x 60)', () => {
-        // HG-Secundus's frame 0 is the folded gate, about 65 x 60 opaque px
-        // left of the frame's centre; the frame, not that art, is measured.
-        expect(stellarRadarShape(stellarRadarSize([150, 150]))).toBe('ring');
-        expect(stellarRadarShape(stellarRadarSize([53, 60]))).toBe('dot');
-        expect(stellarRadarShape(stellarRadarSize([40, 48]))).toBe('dot');
+    it('dots the working hypergates (stations) and the unlandable gate art; '
+        + 'rings the 150 px gate art on a plain planet', () => {
+        const shape = (frame: [number, number], isStation: boolean) =>
+            planetRadarShape({ spriteFrameSize: frame,
+                flags: { isStation } as PlanetData['flags'] });
+        expect(shape([150, 150], true)).toBe('dot');   // HG-Secundus, 0x11
+        expect(shape([150, 150], false)).toBe('ring'); // k8_shapes Type 1
+        expect(shape([53, 60], false)).toBe('dot');    // HG-Aldebaran
+        expect(shape([40, 48], false)).toBe('dot');
     });
 
     it('is a hollow 5 x 5 ring with its corners cut', () => {
@@ -413,21 +436,26 @@ describe('DrawRadar cadence', () => {
         expect(planetColors?.get('earth')).toBeUndefined();
     });
 
-    it('shapes stellars by their sprite frame from the first refresh, with '
-        + 'no sprite sheet loaded', () => {
-        // Nesre Secundus: the 250 px planet, Spacedock V (120 x 73),
-        // HG-Secundus (150 x 150 frames) and Pyrogenesis I (40 x 48).
+    it('shapes stellars by their station flag and sprite frame from the '
+        + 'first refresh, with no sprite sheet loaded', () => {
+        // Nesre Secundus: the 250 px planet, Spacedock V (120 x 73,
+        // station), HG-Secundus (150 x 150 frames, station) and Pyrogenesis
+        // I (40 x 48, station); plus an 88 px planet just under the ring.
         const { drawRadar, stepAt, world } = radarWorld();
-        const stellars: [string, [number, number]][] = [
-            ['planet', [250, 250]], ['station', [120, 73]],
-            ['gate', [150, 150]], ['moon', [40, 48]],
+        const stellars: [string, [number, number], boolean][] = [
+            ['planet', [250, 250], false], ['station', [120, 73], true],
+            ['gate', [150, 150], true], ['moon', [40, 48], true],
+            ['small', [88, 88], false],
         ];
-        for (const [uuid, frame] of stellars) {
+        for (const [uuid, frame, isStation] of stellars) {
             const stellar = new Entity(uuid);
             stellar.components.set(MovementStateComponent,
                 { position: new Position(-9000, 2100) } as MovementState);
-            stellar.components.set(PlanetDataComponent,
-                { ...getDefaultPlanetData(), spriteFrameSize: frame });
+            const data = getDefaultPlanetData();
+            stellar.components.set(PlanetDataComponent, {
+                ...data, spriteFrameSize: frame,
+                flags: { ...data.flags, isStation },
+            });
             stellar.components.set(PlanetComponent, { id: 'nova:128' });
             world.entities.set(uuid, stellar);
         }
@@ -435,8 +463,8 @@ describe('DrawRadar cadence', () => {
         const shapes = drawRadar.calls.mostRecent().args[8] as
             ReadonlyMap<string, string>;
         expect([...shapes].sort()).toEqual([
-            ['gate', 'ring'], ['moon', 'dot'], ['planet', 'ring'],
-            ['station', 'ring'],
+            ['gate', 'dot'], ['moon', 'dot'], ['planet', 'ring'],
+            ['small', 'dot'], ['station', 'dot'],
         ]);
     });
 });
@@ -588,28 +616,47 @@ describe('DrawRadar IFF ship colours match the brackets (K9)', () => {
 
 /**
  * Matthew's playtest (2026-11-24, Nesre Secundus): three rings on the
- * radar, the planet, the station and the hypergate. Pinned against the
- * stock data so the shapes follow the frame sizes the parser stages.
+ * radar, the planet, the station and the hypergate. The original (K8,
+ * wave 22) draws only the planet as a ring: Spacedock V and HG-Secundus
+ * are stations, so dots. Pinned against the stock data so the shapes
+ * follow the station flags and frame sizes the parser stages.
  */
 describe('stock stellar radar shapes (Nesre Secundus)', () => {
     beforeEach(requireNovaData);
 
-    it('rings the planet, Spacedock V and HG-Secundus, dots Pyrogenesis I '
-        + 'and the unlandable gate art', async () => {
+    it('rings the planet, dots Spacedock V, HG-Secundus, Pyrogenesis I and '
+        + 'the unlandable gate art', async () => {
         const gameData = await getIntegrationGameData();
         const system = await gameData.data.System.get('nova:133');
-        const shapes: [string, string, number[], string][] = [];
+        const shapes: [string, string, number[], boolean, string][] = [];
         for (const id of [...system.planets, 'nova:130']) {
             const planet = await gameData.data.Planet.get(id);
             shapes.push([id, planet.name, planet.spriteFrameSize,
-                stellarRadarShape(stellarRadarSize(planet.spriteFrameSize))]);
+                planet.flags.isStation, planetRadarShape(planet)]);
         }
         expect(shapes).toEqual([
-            ['nova:161', 'Pyrogenesis I', [40, 48], 'dot'],
-            ['nova:176', 'Nesre Secundus IV', [250, 250], 'ring'],
-            ['nova:150', 'Spacedock V', [120, 73], 'ring'],
-            ['nova:1408', 'HG-Secundus', [150, 150], 'ring'],
-            ['nova:130', 'HG-Aldebaran', [53, 60], 'dot'],
+            ['nova:161', 'Pyrogenesis I', [40, 48], true, 'dot'],
+            ['nova:176', 'Nesre Secundus IV', [250, 250], false, 'ring'],
+            ['nova:150', 'Spacedock V', [120, 73], true, 'dot'],
+            ['nova:1408', 'HG-Secundus', [150, 150], true, 'dot'],
+            ['nova:130', 'HG-Aldebaran', [53, 60], true, 'dot'],
+        ]);
+    }, 120_000);
+
+    it('dots an 88 px planet, rings a 96 px one and a wormhole', async () => {
+        const gameData = await getIntegrationGameData();
+        const shapes: [string, number[], boolean, string][] = [];
+        // Fermia (Arcturus), Georgia (Nesre Primus), Spica's wormhole.
+        for (const id of ['nova:166', 'nova:175', 'nova:466']) {
+            const planet = await gameData.data.Planet.get(id);
+            shapes.push([planet.name, planet.spriteFrameSize,
+                planet.flags.isStation, planetRadarShape(planet)]);
+        }
+        expect(shapes).toEqual([
+            ['Fermia', [88, 88], false, 'dot'],
+            ['Georgia', [96, 96], false, 'ring'],
+            // UNMEASURED: the reference predicts a ring (not a station).
+            ['Wormhole', [104, 104], false, 'ring'],
         ]);
     }, 120_000);
 });

@@ -194,28 +194,51 @@ export function shipBlipSize(mass: number | undefined,
 
 /**
  * How a stellar shows on the radar. The original draws planet-sized
- * stellars as a hollow ring and small ones (moons, small stations,
- * destroyed hypergates) as a filled 2 x 2 dot, both centred on the
- * stellar's radar pixel. Evidence: Kiniké (sprite 112) is a ring and Kolan
- * (48) a dot on original_macos_screenshots/space/in_space_2.png; Jupiter
- * (325) and Earth (150) rings, Europa (40) and Mars (48) dots on
- * in_space.png; and in the two new Windows recordings (a system laid out
- * like Porto Rillia: a 120 px planet at the centre and a 53 x 60 hypergate
- * 300, 150 from it) a stationary ring with a stationary 2 x 2 dot exactly
- * (9-9.5, 4-4.5) px from it — the dot that is the one 2 px blip in the
- * no-add-ons clip. That 53 x 60 gate is the unlandable, uninhabited gate
- * art (spïn 2063, HG-Aldebaran and 15 more); no recording shows the
- * working hypergates' 150 x 150 art (spïn 2001), which draws as a ring
- * here (stellarRadarSize). The size is the larger side of the stellar's
- * sprite frame (stellarRadarSize). The cut-off lies somewhere in the
- * unmeasured 61-109 px band; STELLAR_RING_MIN_SIZE sits in the gap in the
- * stock frame sizes (nothing between 60 and 72).
+ * planets as a hollow ring, and small planets and EVERY STATION as a
+ * filled 2 x 2 dot, both centred on the stellar's radar pixel.
+ *
+ * MEASURED (reference "K8 stellar radar shape, wave 22", three runs on the
+ * original): a stellar flagged a station (spöb Flags 0x0010, "Stellar is a
+ * station instead of a planet") is a dot WHATEVER its size: the working
+ * hypergate HG-Secundus (flags 0x11, 150 x 150 spïn 2001), Spacedock V
+ * (120 px) and kit stations of 72, 104 and 150 px, while the same 104 and
+ * 150 px arts as plain planets are rings. A planet goes by size: 72, 87
+ * and 88 px planets were dots, 96, 104 and 150 px planets rings. The
+ * earlier evidence agrees: Kiniké (112) a ring and Kolan (48) a dot on
+ * original_macos_screenshots/space/in_space_2.png; Jupiter (325) and Earth
+ * (150) rings, Europa (40) and Mars (48) dots on in_space.png; the Windows
+ * recordings' 120 px planet a ring beside the unlandable 53 x 60 gate art
+ * (spïn 2063) as a 2 x 2 dot.
+ *
+ * STELLAR_RING_MIN_SIZE is 96, the smallest measured ring. GUESS: the
+ * cut-off lies somewhere in 89-96 px, and a 89-95 px planet is a dot
+ * here. No stock stellar has a frame in that gap (the stock sizes jump
+ * from 88 to 96), so only a plug-in's art can fall in it.
+ *
+ * Wormholes (spöb Flags2 0x2000; all 24 stock ones are plain planets,
+ * flags 0x21, 104 px) follow the planet rule: rings. UNMEASURED: the
+ * reference section predicts a ring (not a station), but no wormhole was
+ * shot on the original's radar.
+ *
+ * The size is the larger side of the stellar's sprite frame
+ * (stellarRadarSize); an unknown size draws a planet as a ring.
  */
-export const STELLAR_RING_MIN_SIZE = 64;
+export const STELLAR_RING_MIN_SIZE = 96;
 export type StellarRadarShape = 'ring' | 'dot';
-export function stellarRadarShape(size: number | undefined):
-    StellarRadarShape {
+export function stellarRadarShape(size: number | undefined,
+    isStation: boolean): StellarRadarShape {
+    if (isStation) {
+        return 'dot';
+    }
     return size !== undefined && size < STELLAR_RING_MIN_SIZE ? 'dot' : 'ring';
+}
+
+/** {@link stellarRadarShape} of a stellar's data: its station flag and frame. */
+export function planetRadarShape(
+    planetData: Pick<PlanetData, 'spriteFrameSize' | 'flags'>):
+    StellarRadarShape {
+    return stellarRadarShape(stellarRadarSize(planetData.spriteFrameSize),
+        planetData.flags?.isStation ?? false);
 }
 
 /**
@@ -255,14 +278,14 @@ export function blipPixels(size: number): RadarPixel[] {
  * frame for every stock stellar but one graphic: the working hypergates'
  * 42-frame spïn 2001 (150 x 150 frames; HG-Secundus and 18 more), whose
  * frame 0 is the folded gate, about 65 x 60 opaque px drawn left of the
- * frame's centre, so its hull measured 82. Both are rings, so no stock
- * stellar changes shape; the hull was also unknown until the display had
- * fetched the sprite sheet, so every stellar drew as a ring until then.
+ * frame's centre, so its hull measured 82 (those gates are stations, so
+ * they are dots either way). The hull was also unknown until the display
+ * had fetched the sprite sheet, so every stellar drew as a ring until then.
  *
- * GUESS: that the original's radar rule reads the frame size at all. The
- * radar evidence (see stellarRadarShape) only has stellars whose opaque
- * art fills its frame, and nothing shows a working hypergate on the
- * original's radar (reference queue K8).
+ * GUESS: that the original's size rule reads the frame size and not the
+ * art's opaque extent. Every measured planet (K8's kit planets reuse stock
+ * spïns of 72-150 px) has opaque art that fills its frame, so the two
+ * readings are not separated.
  */
 export function stellarRadarSize(
     spriteFrameSize: readonly number[] | undefined): number | undefined {
@@ -697,13 +720,13 @@ export const DrawRadar = new System({
                         shipBlipSize(shipData.physics.mass, true));
                 }
             }
-            // Planet-sized stellars are rings, small ones 2 x 2 dots, by
-            // the stellar's sprite frame size (staged with its PlanetData,
-            // so known from the first refresh).
+            // Planet-sized planets are rings; small planets and every
+            // station 2 x 2 dots (planetRadarShape: the spöb's station flag
+            // and its sprite frame size, staged with its PlanetData, so
+            // known from the first refresh).
             const planetShapes = new Map<string, StellarRadarShape>();
             for (const [uuid, , planetData] of planets) {
-                planetShapes.set(uuid, stellarRadarShape(
-                    stellarRadarSize(planetData.spriteFrameSize)));
+                planetShapes.set(uuid, planetRadarShape(planetData));
             }
             // The selected target flashes on blink-ON refreshes.
             const targetUuid = entity.components.get(TargetComponent)?.target;
