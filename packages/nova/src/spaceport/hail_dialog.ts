@@ -13,7 +13,8 @@ import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_BUTTON_FONT, COMM_ESCORT, COMM_HAGGLE,
     COMM_LINE_HEIGHT,
-    COMM_PLANET, COMM_SHIP, CommFrameLayout, escortButtonSlots, fitImage,
+    COMM_PLANET, COMM_SHIP, CommFrameLayout, commWrapWidth,
+    escortButtonSlots, fitImage,
     frameOrigin, Rect, stellarSpriteOrigin,
 } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
@@ -134,10 +135,10 @@ export interface HailContext {
         accepted?: string,
         /**
          * What the ship says as it names its price (STR# 3000 140-144, "All
-         * right, I'll give you some help, but it'll cost you."), shown at
-         * the head of the haggle page. Help offers, and a ship's mercy
-         * price, where it is the ship's mood line (reference "R7 bribe
-         * price, wave 22").
+         * right, I'll give you some help, but it'll cost you."), shown in
+         * the comm's well behind the haggle popup (hail/beg_mercy.png).
+         * Help offers, and a ship's mercy price, where it is the ship's
+         * mood line (reference "R7 bribe price, wave 22").
          */
         offer?: string,
         /**
@@ -618,10 +619,17 @@ export function playerChannelMessage(context: HailContext | undefined,
 }
 
 /**
- * The haggle page's text (PICT 8514's response well): the demand, in
- * NovaJS's wording since the original haggles instead, and for a price on
- * HELP the ship's own words first (STR# 3000 140-144). Pure, so it is
- * pinned by specs rather than by a canvas.
+ * The haggle page's text (PICT 8514's response well): the demand ("Pay me
+ * N credits.", or NovaJS's wording where the caller has none), and nothing
+ * else. Pure, so it is pinned by specs rather than by a canvas.
+ *
+ * The ship's own words as it names the price — its mood line (STR# 3000
+ * 115-124), its terms for help (140-144) — are NOT on the popup: they go in
+ * the comm's well behind it (hailPress), as on hail/beg_mercy.png ("I'm in
+ * a bad mood today, so it's going to cost extra." in the well, the popup
+ * only "Pay me 20,000 credits."). The popup's well holds two lines above
+ * Lower Price (hail_layout's responseLinesAboveButtons); a two-line mood
+ * line above the demand pushed the price under the button.
  */
 export function haggleText(bribe: HailContext['bribe']): string {
     if (!bribe) {
@@ -637,10 +645,9 @@ export function haggleText(bribe: HailContext['bribe']): string {
     // A bribe's own words where the caller has them (reference "R7 bribe
     // price, wave 22": a ship's "Pay me N credits.", a planet's "Pay us N
     // credits."); the shortfall note is NovaJS's (no Pay button then).
-    const demand = (bribe.demand
+    return (bribe.demand
         ?? `They demand ${bribe.amount.toLocaleString()} credits to `
         + `${what}.`) + (bribe.canAfford ? '' : ' You cannot afford it.');
-    return bribe.offer ? `${bribe.offer}\n${demand}` : demand;
 }
 
 /** What a Lower Price press came to (HailCallbacks.lowerPrice). */
@@ -762,8 +769,14 @@ export function hailPress(state: HailPage, press: HailPress,
             return { phase, context: { ...context, body: press.answer } };
         case 'beg':
             // A price for HELP is reached through Request Assistance only.
+            // The ship's words as it names its price (its mood line) go in
+            // the well behind the popup, which says only the demand
+            // (hail/beg_mercy.png; see haggleText). A planet's bribe has no
+            // such line and leaves the well as it was.
             if (context.bribe && context.bribe.purpose !== 'assist') {
-                return { phase: 'haggle', context };
+                const offer = context.bribe.offer;
+                return { phase: 'haggle', context: offer === undefined
+                    ? context : { ...context, body: offer } };
             }
             // A ship that will not be bought refuses the plea in the well
             // and THE BUTTON STAYS, like every other answer on this page.
@@ -1261,8 +1274,7 @@ export class HailDialog {
         } else {
             const response = new PIXI.Text(context.body, {
                 ...BODY_FONT,
-                wordWrapWidth: frame.responseWell.width
-                    - (frame.responseText.x - frame.responseWell.x) - 4,
+                wordWrapWidth: commWrapWidth(frame),
             });
             response.position.set(originX + frame.responseText.x,
                 originY + frame.responseText.y);
@@ -1511,8 +1523,7 @@ export class HailDialog {
         const bribe = context?.bribe;
         const body = new PIXI.Text(haggleText(bribe), {
             ...BODY_FONT,
-            wordWrapWidth: frame.responseWell.width
-                - (frame.responseText.x - frame.responseWell.x) - 4,
+            wordWrapWidth: commWrapWidth(frame),
         });
         body.position.set(originX + frame.responseText.x,
             originY + frame.responseText.y);

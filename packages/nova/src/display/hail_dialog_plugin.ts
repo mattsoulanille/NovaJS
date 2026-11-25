@@ -404,7 +404,7 @@ export interface AssistReplies {
 export interface MercyLines {
     /** The channel's first ask (hail.ts's shipBribePrice). */
     firstAsk: number;
-    /** The ship's mood line at the head of the popup. */
+    /** The ship's mood line, in the well behind the popup. */
     offer: string;
     /** "Okay, I'll leave you alone." (STR# 3000 135-139), once paid. */
     accepted: string;

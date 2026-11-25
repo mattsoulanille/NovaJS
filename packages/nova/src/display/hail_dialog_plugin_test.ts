@@ -1032,15 +1032,15 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             // a provoked freighter's Beg For Mercy above 20M, wave 31").
             expect(result!.context.bribe?.withdrawn)
                 .toBe(MERCY_LOWERED_FALLBACK);
-            // The price in the fuel sale's words: the ship's mood line,
-            // then "Pay me N credits." (20,000 flat, capped to a third of
-            // 10,000).
+            // The price in the fuel sale's words: the ship's mood line
+            // in the well, "Pay me N credits." on the popup (20,000 flat,
+            // capped to a third of 10,000; hail/beg_mercy.png).
             expect(result!.context.bribe?.amount).toBe(3000);
             expect(result!.context.bribe?.demand)
                 .toBe('Pay me 3,000 credits.');
             expect(result!.context.bribe?.offer).toBeDefined();
-            expect(haggleText(result!.context.bribe)).toBe(
-                `${result!.context.bribe?.offer}\nPay me 3,000 credits.`);
+            expect(haggleText(result!.context.bribe))
+                .toBe('Pay me 3,000 credits.');
             // The channel's haggle lines, for Lower Price and the next
             // plea (reference "R7 a provoked freighter's Lower Price, wave
             // 32"): one more withdrawn ask is 1,000 more, past the cap.
@@ -2104,9 +2104,11 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                     { kind: 'assist', answer: answer.line, haggle: true },
                     context) as HailPage;
                 expect(haggle.phase).toBe('haggle');
+                // Its terms in the well, the demand on the popup.
+                expect(haggle.context.body).toBe(ASSIST_FOR_PAY_FALLBACK);
                 expect(haggleText(haggle.context.bribe)).toBe(
-                    `${ASSIST_FOR_PAY_FALLBACK}\nThey demand `
-                    + `${(20_000).toLocaleString()} credits to help you.`);
+                    `They demand ${(20_000).toLocaleString()} credits to `
+                    + 'help you.');
                 expect(hailPress(haggle, { kind: 'pay' }, context)).toEqual({
                     phase: 'main', context: {
                         ...haggle.context, body: ASSIST_PAID_FALLBACK,

@@ -363,6 +363,31 @@ export function buttonRowY(frame: CommFrameLayout, index: number): number {
 }
 
 /**
+ * Where the response well's text wraps: from its text origin to 4px short
+ * of the well's right edge. The ship comm's well wraps at 185 px — the
+ * reference's "I'm in a bad mood today, so it's going to / cost extra."
+ * (hail/beg_mercy.png) breaks there — and the haggle popup's at 240.
+ */
+export function commWrapWidth(frame: CommFrameLayout): number {
+    return frame.responseWell.width
+        - (frame.responseText.x - frame.responseWell.x) - 4;
+}
+
+/**
+ * How many lines of response text a frame holds above its first button, at
+ * {@link COMM_LINE_HEIGHT}: the text box's bottom stays at or above the top
+ * of the first pill. The haggle popup (8514) holds TWO — its box starts at
+ * frame y 8 and Lower Price at 39 — which is why the ship's mood line is
+ * not on it (see hail_dialog.ts's haggleText): on hail/beg_mercy.png the
+ * popup says only "Pay me 20,000 credits." and the mood line stays in the
+ * comm's well behind it.
+ */
+export function responseLinesAboveButtons(frame: CommFrameLayout): number {
+    return Math.floor((frame.buttonTop - frame.responseText.y)
+        / COMM_LINE_HEIGHT);
+}
+
+/**
  * Fits a target picture inside a frame's image pane: the original's ship
  * pictures fill the pane (hail.png's Terrapin reaches its edges), and
  * anything larger scales down to fit. Returns the scale and the pane's
