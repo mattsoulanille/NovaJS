@@ -96,8 +96,10 @@ import { DistressCallEvent, DistressCallEventType } from './distress.js';
  * and EscortFollowJumpSystem, which would otherwise be the thing that
  * swept a player's escorts along behind a passing NPC.
  *
- * Deleting at NPC_DEPART_RADIUS survives only as the fallback for a
- * ship that cannot jump at all: see NpcSteeringSystem.
+ * A ship that cannot jump at all (disabled, or held in the system) is
+ * never deleted instead: it stays where it is (NpcSteeringSystem's
+ * 'depart' arm). NPC_DEPART_RADIUS is only where a fleeing ship with a
+ * chaser on its tail jumps anyway.
  *
  * MODULE MAP. The AI is split by concern; this file registers it and
  * re-exports the public surface so callers import from one place:

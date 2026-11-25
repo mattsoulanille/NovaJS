@@ -533,12 +533,61 @@ describe('a ship that cannot jump', () => {
             expect(runUntilGone(world).gone).toBeTrue();
         });
 
-    it('is still removed at the depart radius as a fallback', async () => {
-        // Disabled the whole way out, so it never manages a jump: the
-        // old delete-at-the-edge exit is what finally removes it.
+    // Playtest 2026-11-24: a disabled Fed Viper, then a Fed Destroyer hit
+    // with a disable-only weapon, vanished "right as it was disabled". The
+    // old delete-at-the-edge fallback removed a disabled ship in 'depart'
+    // or 'flee' the tick it was past NPC_DEPART_RADIUS. A disabled ship
+    // stays put, boardable, however far out it is.
+    /** Steps for `seconds` of sim time, failing at the first tick the NPC
+     * is gone or has started a jump. */
+    function expectStaysFor(world: World, seconds: number) {
+        for (let i = 0; i < ticksFor(seconds * 1000); i++) {
+            world.step();
+            if (!stillThere(world) || jumpOf(world)) {
+                fail(`left the system after ${i + 1} ticks`);
+                return;
+            }
+        }
+    }
+
+    it('stays past the depart radius while disabled (depart)', async () => {
         const { world } = await makeFleeWorld(null, NPC_DEPART_RADIUS + 10,
             { mode: 'depart', disabled: true });
-        world.step();
-        expect(stillThere(world)).toBeFalse();
+        expectStaysFor(world, 30);
     });
+
+    it('stays past the depart radius while disabled (flee, chaser on '
+        + 'its tail)', async () => {
+            // Facing +x (away from the center) with the chaser astern.
+            const { world } = await makeFleeWorld({ x: -200, y: 0 },
+                NPC_DEPART_RADIUS + 10, {
+                    disabled: true, rotation: new Angle(0),
+                });
+            expectStaysFor(world, 30);
+        });
+
+    it('stays when disabled out of its jump sequence past the depart '
+        + 'radius (the playtest case)', async () => {
+            const { world, npc, disable } = await makeFleeWorld(null,
+                NPC_DEPART_RADIUS + 200, { mode: 'depart' });
+            world.step();
+            stepWhileAligning(world);
+            expect(jumpOf(world)?.stage).toEqual('spinup');
+            disable(npc);
+            expectStaysFor(world, 30);
+        });
+
+    it('stays when it drifts across the depart radius while disabled',
+        async () => {
+            const { world } = await makeFleeWorld(null,
+                NPC_DEPART_RADIUS - 50, {
+                    mode: 'depart', disabled: true,
+                    rotation: new Angle(0), velocity: new Vector(200, 0),
+                });
+            expectStaysFor(world, 30);
+            const position = world.entities.get('npc')!.components
+                .get(MovementStateComponent)!.position;
+            expect(position.length).toBeGreaterThan(NPC_DEPART_RADIUS);
+            expect(speedOf(world)).toEqual(0);
+        });
 });

@@ -12,7 +12,8 @@ import { heldInSystem } from './system_hold.js';
  * takes (see the NPC DEPARTURE section of npc_ai_plugin.ts's overview).
  */
 
-/** Fleeing/departing ships are deleted ("jump out") beyond this radius. */
+/** Past this radius a fleeing ship jumps even with a chaser on its tail
+ * (NpcSteeringSystem's 'flee' arm). Nothing is deleted here any more. */
 export const NPC_DEPART_RADIUS = JUMP_DISTANCE + 500 * JUMP_ARRIVAL_MARGIN_S;
 
 // JUDGMENT CALL (Matthew wants to tune this): a fleeing ship that is
@@ -55,17 +56,16 @@ export function chaserBlocksJump(fleeing: MovementState,
  *    or run its hyperdrive, the same reason PlayerJumpControl refuses a
  *    disabled player. Nothing else about a player's jump applies: this
  *    needs no route, no destination system data, and no fuel. A ship
- *    disabled on its way out keeps drifting and is deleted at
- *    NPC_DEPART_RADIUS as before; if it is repaired first, it jumps
- *    normally.
+ *    disabled on its way out stays in the system, drifting to rest,
+ *    however far out it is (there is no delete-at-the-edge fallback any
+ *    more: it removed disabled ships the moment they were disabled out
+ *    there); if it is repaired, it jumps normally.
  *  - it is HELD in the system (system_hold.ts): a person whose refuel
  *    offer is still on the table, or a rescue target waiting to be
  *    boarded. Gated HERE rather than only in the decision system so that
  *    a 'flee' — which is not a departure decision at all, and which
  *    reaches the jump exit on its own — cannot carry the ship out of the
- *    system either. Held ships are exempted from the delete-at-the-edge
- *    fallback below for the same reason: refusing the jump must not
- *    despawn them through the back door.
+ *    system either.
  *
  * This is the only disabled check the NPC jump path needs. A ship
  * disabled AFTER the sequence starts is handled by the general
@@ -84,8 +84,8 @@ export function departByJump(entity: Entity, movement: MovementState,
     return true;
 }
 
-/** Fly outward and report whether the ship has reached the radius at
- * which a ship that never managed to jump is removed anyway. */
+/** Fly outward and report whether the ship has reached
+ * NPC_DEPART_RADIUS (where it stops steering and drifts). */
 export function steerOutward(movement: MovementState, away: Vector): boolean {
     if (movement.position.length > NPC_DEPART_RADIUS) {
         return true;

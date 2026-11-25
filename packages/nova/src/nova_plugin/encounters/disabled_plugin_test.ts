@@ -747,3 +747,66 @@ describe('ship disabling in a live world', () => {
             expect(ship.components.has(DisabledComponent)).toBeFalse();
         }, 120_000);
 });
+
+// Playtest 2026-11-24 (Matthew on novajs.net): a disabled Fed Viper
+// "disappeared before I could board it", then a Fed Destroyer hit with a
+// weapon that can only disable "disappeared right as it was disabled".
+// The cause was NpcSteeringSystem's delete-at-the-edge fallback: an NPC in
+// 'depart' (or 'flee') past NPC_DEPART_RADIUS that could not jump because
+// it was disabled was deleted on the very next tick. STAYS ON REAL DATA:
+// the stock hull, govt, system and disable-only Ion Cannon of the report.
+describe('a stock Fed Viper disabled by the Ion Cannon (real data)', () => {
+    it('stays boardable when shot out of its jump past the depart radius',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const { makeNpcShip } = await import('../spawn/index.js');
+            const { NpcComponent, NPC_DEPART_RADIUS } =
+                await import('../npc/index.js');
+            const { JumpComponent } = await import('../travel/index.js');
+            const { DamagedEvent } = await import('../ship/index.js');
+            // Sol (Federation), traffic off: one ship under test.
+            const world = await makeSystem('nova:130', gameData, 'worker',
+                { npcs: false });
+            const ion = await gameData.data.Weapon.get('nova:142');
+            if (!ion || !('damage' in ion)) {
+                throw new Error('No stock Ion Cannon');
+            }
+            expect(ion.damage.disableOnly).toBeTrue();
+            const viper = makeNpcShip(
+                (await gameData.data.Ship.get('nova:144'))!, 3, 'nova:128',
+                new Position(NPC_DEPART_RADIUS + 200, 0), new Angle(0),
+                new Vector(0, 0));
+            await completeEntity(world, viper);
+            world.entities.set('viper', viper);
+            // Its departure roll is up: it decides to leave and, already
+            // past the no-jump zone, starts the jump sequence.
+            viper.components.get(NpcComponent)!.departAt = 0;
+            for (let i = 0; i < 10; i++) {
+                world.step();
+            }
+            expect(viper.components.has(JumpComponent)).toBeTrue();
+
+            // Ion Cannon hits until it is disabled.
+            for (let i = 0; i < 600
+                && !viper.components.has(DisabledComponent); i++) {
+                world.emit(DamagedEvent,
+                    { damage: ion.damage, damager: 'nobody' }, ['viper']);
+                world.step();
+            }
+            expect(viper.components.has(DisabledComponent)).toBeTrue();
+
+            // Two minutes later it is still there, disabled, at rest, not
+            // jumping.
+            for (let i = 0; i < 120 * 60; i++) {
+                world.step();
+                if (!world.entities.has('viper')) {
+                    fail(`gone ${i + 1} ticks after being disabled`);
+                    return;
+                }
+            }
+            expect(viper.components.has(DisabledComponent)).toBeTrue();
+            expect(viper.components.has(JumpComponent)).toBeFalse();
+            expect(viper.components.get(MovementStateComponent)!
+                .velocity.length).toEqual(0);
+        }, 300_000);
+});

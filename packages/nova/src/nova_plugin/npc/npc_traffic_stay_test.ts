@@ -202,6 +202,17 @@ describe('Ordinary traffic that stays (reference "Stock Sol, wave 16")', () => {
             expect(fleetLeaderLeaving(player)).toBeFalse();
         }, 60_000);
 
+    it('fleetLeaderLeaving: a DISABLED leader in depart is not leaving',
+        async () => {
+            // It cannot jump (departByJump), so its escorts must not leave
+            // it behind on the strength of its mode alone.
+            const { addNpc } = await trafficWorld();
+            const lead = await addNpc('lead', { aiType: 3, mode: 'depart' });
+            expect(fleetLeaderLeaving(lead)).toBeTrue();
+            lead.components.set(DisabledComponent, { repairAt: null });
+            expect(fleetLeaderLeaving(lead)).toBeFalse();
+        }, 60_000);
+
     it('a stock-Sol-like mix freezes: the slots end up with interceptors '
         + 'and shuttles, and nothing arrives or leaves', async () => {
             const { world } = await trafficWorld(6);

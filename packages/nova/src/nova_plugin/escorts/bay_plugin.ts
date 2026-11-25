@@ -486,10 +486,10 @@ const CollectableEscortAI = new System({
  * launch velocity, occasionally firing a turret, and never despawned.
  *
  * WHAT IT DOES NOW: converts the orphan into a plain NPC in 'depart'
- * mode. NpcSteeringSystem then flies it out of the system and deletes
- * it at NPC_DEPART_RADIUS — the same simplified "jump out" every other
- * NPC uses — once EscortCommandComponent is gone and the AI stops
- * yielding to it. It withdraws rather than finishing its current fight:
+ * mode. NpcSteeringSystem then flies it out of the no-jump zone and
+ * jumps it out (departByJump) — the same exit every other NPC uses —
+ * once EscortCommandComponent is gone and the AI stops yielding to it.
+ * A DISABLED orphan cannot jump and stays, like any disabled ship. It withdraws rather than finishing its current fight:
  * with the carrier dead there is no hangar to dock in, no ammo to
  * refund, and no one left to command it.
  *

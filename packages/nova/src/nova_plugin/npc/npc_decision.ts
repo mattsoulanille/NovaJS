@@ -271,9 +271,15 @@ function travelOrDepart(destination: string | undefined,
  * Green went first) only through the jump's own timing, not by a roll.
  * A player's ships (the leader of a mission's ShipBehav 1 ship, a carrier
  * of bay fighters) never count: they are not NPC traffic.
+ *
+ * Nor does a DISABLED leader: it may still be in 'depart' (its brain keeps
+ * its mode), but it cannot jump (departByJump), so it is not leaving and
+ * its escorts have nothing to follow out. GUESS (unmeasured): what the
+ * original's escorts do around a disabled leader; see the reference queue.
  */
 export function fleetLeaderLeaving(leader: Entity | undefined): boolean {
-    if (!leader || leader.components.has(EscortCommandComponent)) {
+    if (!leader || leader.components.has(EscortCommandComponent)
+        || leader.components.has(DisabledComponent)) {
         return false;
     }
     const leaderNpc = leader.components.get(NpcComponent);

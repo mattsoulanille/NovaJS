@@ -1,4 +1,4 @@
-import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Entities, GetEntity } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -26,7 +26,7 @@ import {
 } from './npc_mining.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
-import { heldInSystem, waitingForRescue } from './system_hold.js';
+import { waitingForRescue } from './system_hold.js';
 import {
     SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, SHUTTLE_ONE_STOP_DWELL_MS,
     SHUTTLE_REST_SPEED, shuttleTurnPoint,
@@ -367,9 +367,9 @@ export const NpcSteeringSystem = new System({
         Optional(EscortCommandComponent), Optional(EscortLandingComponent),
         Optional(DisabledComponent), Optional(JumpComponent),
         Optional(WeaponsStateComponent),
-        TimeResource, Entities, GetEntity, UUID] as const,
+        TimeResource, Entities, GetEntity] as const,
     step(npc, movement, physics, target, formation, escortCommand, landing,
-        disabled, jump, weapons, time, entities, entity, uuid) {
+        disabled, jump, weapons, time, entities, entity) {
         // A 0x0800 trader's cloak (npc_cloak.ts), every tick, whatever
         // the arm below does or skips.
         updateNpcCloak(entity, npc, time.time);
@@ -660,12 +660,11 @@ export const NpcSteeringSystem = new System({
                     : new Vector(movement.position.x, movement.position.y);
                 // At the depart radius the ship is off the edge of the
                 // playfield, so a chaser on its tail no longer holds it
-                // here: it jumps anyway, and is deleted outright only if
-                // it cannot (disabled). See departByJump.
-                if (steerOutward(movement, away)
-                    && !departByJump(entity, movement, physics, disabled)
-                    && !heldInSystem(entity)) {
-                    entities.delete(uuid);
+                // here: it jumps anyway. A ship that CANNOT jump (disabled,
+                // or held: see departByJump) stays where it is — never
+                // deleted (see the 'depart' arm).
+                if (steerOutward(movement, away)) {
+                    departByJump(entity, movement, physics, disabled);
                 }
                 break;
             }
@@ -676,21 +675,21 @@ export const NpcSteeringSystem = new System({
                     && departByJump(entity, movement, physics, disabled)) {
                     break;
                 }
-                const away = new Vector(
-                    movement.position.x, movement.position.y);
-                // Only a ship that could not jump at all reaches the
-                // depart radius (it is well outside the no-jump zone, so
-                // the branch above already tried and was refused): the
-                // old delete-at-the-edge exit, now the disabled-ship
-                // fallback. A HELD ship is exempt: it is not allowed to
-                // leave the system, and despawning it here would be
-                // leaving by another name (see departByJump). It cannot
-                // normally be in 'depart' at all — the decision system
-                // refuses to put it there — but a hold applied to a ship
-                // already on its way out must still stop it.
-                if (steerOutward(movement, away) && !heldInSystem(entity)) {
-                    entities.delete(uuid);
-                }
+                // Only a ship that cannot jump at all is still here past
+                // the no-jump zone: a DISABLED one or a HELD one
+                // (departByJump). Neither leaves. There used to be a
+                // delete-at-the-edge fallback at NPC_DEPART_RADIUS, which
+                // by then only ever removed disabled ships — and removed
+                // them on the tick they were disabled when a player shot
+                // one out of its jump sequence out there (playtest
+                // 2026-11-24: a Fed Viper, then a Fed Destroyer hit with
+                // a disable-only weapon, vanished "right as it was
+                // disabled"). A disabled ship stays put, boardable, until
+                // it is destroyed, repaired, or the player leaves (EVN
+                // Bible: a disabled ship is dead in space; mïsn ShipGoal 5
+                // ships "stay that way until you board them").
+                steerOutward(movement, new Vector(
+                    movement.position.x, movement.position.y));
                 break;
             }
         }
