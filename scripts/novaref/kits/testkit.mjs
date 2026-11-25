@@ -345,8 +345,8 @@ function wave32Resources() {
     // Reinf Fleet H (wave 19's purple lead 472 + two blue guards 473, gövt 297, LinkSyst 1594). shïp 550 Kit RH Hunter
     // (red pointer, AI 3, the Kit Escort Gun, 3000 / 3000, Strength 10: weak, so the odds are against its side) and
     // 551 Kit RH Prey (green pointer, AI 1, unarmed, 30000 / 30000, Strength 500, Speed 20: it cannot get away);
-    // düde 478 (297's hunter) and 479 (296's prey), the only traffic of sÿst 1301 Kit Reinf Hunt (gövt 297,
-    // ReinfFleet 317, ReinfTime 150, ReinfIntrval 0; port spöb 1801 at the centre), avgShips 4 (each düde 50%).
+    // düde 478 (297's hunter) and 479 (296's prey; AI 3 since hunt2: as AI 1 traders no hunter ever attacked them), the only traffic of sÿst 1301 Kit Reinf Hunt (gövt 297,
+    // ReinfFleet 317, ReinfTime 150, ReinfIntrval 0; port spöb 1801 at the centre), avgShips 6 (hunter 60%, prey 40%; the first try, avgShips 4 at 50 / 50, drew four preys and no hunter).
     const pointerRled = { red: 1971, green: 1972 };
     const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
         set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
@@ -361,9 +361,9 @@ function wave32Resources() {
         weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
     out.push(...shareRled(551, "Kit RH Prey", pointerRled.green, 24, { ...mobile, ai: 1, accel: 50, speed: 20, armor: 30000, shield: 30000,
         shieldRecharge: 0, strength: 500 }));
-    out.push(dude(478, "Kit RH Hunter", 3, 297, 550), dude(479, "Kit RH Prey", 1, 296, 551));
+    out.push(dude(478, "Kit RH Hunter", 3, 297, 550), dude(479, "Kit RH Prey", 3, 296, 551));
     const hunt = system(1301, "Kit Reinf Hunt", -800, -2280, 297, [1801]);
-    hunt.set = { ...hunt.set, avgShips: 4, dudes: [478, 479, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+    hunt.set = { ...hunt.set, avgShips: 6, dudes: [478, 479, ...none8].slice(0, 8), dudeProbs: [60, 40, ...zero8].slice(0, 8),
         reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
     out.push(hunt, spob(1801, "Kit Reinf Hunt Port", 0, 0, 138, { flags: 0x43 }));
     return out;
