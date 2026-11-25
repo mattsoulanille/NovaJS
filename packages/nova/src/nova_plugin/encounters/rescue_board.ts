@@ -31,13 +31,20 @@ import {
  *    Raczak from this ship." and NOTHING ELSE: no plunder dialog, and the
  *    hulk stays Disabled. Every later press is "You can't board this
  *    ship.". The mission completes when the cargo is dropped off.
- *  - WITHOUT it, every press is "You can't board this ship.", from the
- *    first (the stock düde too: mïsn 1072), so the mission can never be
- *    completed by boarding (wave 11's kit refusals were this rule).
+ *  - WITHOUT it, the FIRST press past the gate is a SILENT board: nothing
+ *    on the status line, and it uses up the hulk's one board; every later
+ *    press is "You can't board this ship." (reference "H1 / rescue
+ *    leftovers, wave 21", finding 5: a misaligned press silent, the first
+ *    aligned one silent too, then the refusal twice; wave 19's single
+ *    silent press at 10 deg apart fits). Nothing is retrieved and the
+ *    goal is NOT credited, so the mission can never be completed by
+ *    boarding (the hulk stayed "Disabled" and the mission active; wave
+ *    11's kit refusals, and wave 13's stock mïsn 1072, were the later
+ *    presses).
  *
  * So for the ship of a LIVE rescue mission the board is never a plunder,
- * a capture, a bay stow or an escort repair: it is the retrieval or a
- * refusal. The retrieval credits the rescue goal on the spot (shipBoarded,
+ * a capture, a bay stow or an escort repair: it is the retrieval, the
+ * silent no-cargo board, or a refusal. The retrieval credits the rescue goal on the spot (shipBoarded,
  * the same transition a plunder board used to make), which is what lets
  * the drop-off complete the mission; the cargo's DropOffMode then does
  * the rest at landing, as for any mission cargo.
@@ -62,6 +69,10 @@ export type RescueBoard =
     | { kind: 'none' }
     /** A live rescue ship that cannot be boarded now. */
     | { kind: 'refuse' }
+    /** The owner's first board of a live rescue ship with no mission
+     * cargo to take: silent, and it spends the hull's one board
+     * ({@link spendRescueBoard}). */
+    | { kind: 'silent', objective: ShipObjective }
     /** The owner takes the mission cargo off it. */
     | {
         kind: 'retrieve', owner: Entity, active: ActiveMission,
@@ -86,9 +97,18 @@ export function rescueBoard(target: Entity, targetUuid: string,
         || active.autoAbortOnBoard) {
         return { kind: 'none' };
     }
-    if (missionShip.owner !== boarderUuid || !active.pickupOnBoard
-        || active.cargoLoaded || active.cargoQty <= 0
-        || objective.live.get(targetUuid)?.boarded) {
+    const flags = objective.live.get(targetUuid);
+    if (missionShip.owner !== boarderUuid || flags?.boarded) {
+        return { kind: 'refuse' };
+    }
+    // Nothing aboard to take (no PickupMode-2 cargo; GUESS: cargo loaded
+    // at the spaceport reads the same): the one board is spent silently.
+    // A hull not yet registered on the objective has no flag to spend it
+    // on, so it is refused as before.
+    if (!active.pickupOnBoard || active.cargoQty <= 0) {
+        return flags ? { kind: 'silent', objective } : { kind: 'refuse' };
+    }
+    if (active.cargoLoaded) {
         return { kind: 'refuse' };
     }
     // The cargo must fit. Not measured on the original (the reference
@@ -128,6 +148,23 @@ export function retrieveRescueCargo(
         if (npc) {
             npc.mode = 'depart';
         }
+    }
+}
+
+/**
+ * The silent no-cargo board: marks the hull boarded (its one board is
+ * spent, so every later press is refused) WITHOUT crediting the rescue
+ * goal (shipBoarded would count it, and the original's mission stayed
+ * active). Nothing else changes: the hulk stays disabled and held, and a
+ * WAITING ShipStart-2 ship stays where it waits (GUESS: the measured run
+ * was a hulk; only the retrieval was seen to release a waiting ship).
+ */
+export function spendRescueBoard(
+    silent: Extract<RescueBoard, { kind: 'silent' }>,
+    targetUuid: string): void {
+    const flags = silent.objective.live.get(targetUuid);
+    if (flags) {
+        flags.boarded = true;
     }
 }
 

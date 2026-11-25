@@ -46,8 +46,10 @@ import { MissionCargoRetrievedEvent } from './rescue_board.js';
  * wave 13": with PickupMode-2 cargo to take, the board (past the ordinary
  * gate) loads it with "You retrieved Admiral Raczak from this ship." — no
  * dialog, the hulk stays Disabled — and every later press is "You can't
- * board this ship."; without cargo, every press is refused from the first.
- * The mission then completes at the cargo's drop-off.
+ * board this ship."; the mission then completes at the cargo's drop-off.
+ * Without cargo ("H1 / rescue leftovers, wave 21", finding 5), the first
+ * press past the gate is a SILENT board that spends the hull's one board,
+ * and every later press is refused; the mission never completes.
  */
 describe('boarding a rescue ship', () => {
     const OWNER = 'owner';
@@ -266,20 +268,72 @@ describe('boarding a rescue ship', () => {
             expect(active(owner).cargoLoaded).toBeFalse();
         });
 
-    it('refuses from the first press without cargo to retrieve',
+    it('without cargo to retrieve, the first press is a SILENT board and '
+        + 'every later one is refused; the mission never completes '
+        + '(reference H1 / rescue leftovers, wave 21, finding 5)',
         async () => {
             const { world, owner, hulk, blocked, retrieved } =
                 await rescueWorld(rescueMission({
                     cargoType: -1, cargoQty: 0, pickupOnBoard: false,
                 }));
+            const goal = () => active(owner).shipObjective!;
+            expect(goal().live.get(HULK)?.boarded).toBeFalsy();
+            press(world, OWNER);
+            // Nothing on the status line, nothing retrieved, no session:
+            // the one board is spent.
+            expect(blocked).toEqual([]);
+            expect(retrieved).toEqual([]);
+            expect(owner.components.has(BoardingComponent)).toBeFalse();
+            expect(hulk.components.has(BoardedComponent)).toBeFalse();
+            expect(goal().live.get(HULK)?.boarded).toBeTrue();
             press(world, OWNER);
             press(world, OWNER);
             expect(blocked).toEqual([
                 "You can't board this ship.", "You can't board this ship."]);
             expect(retrieved).toEqual([]);
-            expect(owner.components.has(BoardingComponent)).toBeFalse();
-            expect(hulk.components.has(BoardedComponent)).toBeFalse();
-            expect(active(owner).shipObjective!.satisfied).toBe(0);
+            // Not credited: the hulk stays a disabled hulk and the
+            // mission stays active and incomplete.
+            expect(goal().satisfied).toBe(0);
+            expect(goal().complete).toBeFalse();
+            for (let i = 0; i < 60; i++) {
+                world.step();
+            }
+            expect(hulk.components.get(DisabledComponent)?.hulk).toBeTrue();
+            expect(hulk.components.get(SystemHoldComponent)?.reason)
+                .toBe('rescue');
+            expect(owner.components.get(MissionsComponent)!.has(MISSION))
+                .toBeTrue();
+        });
+
+    it('without cargo, a misaligned press stays silent and does NOT spend '
+        + 'the board (the gate first, wave 21\'s control press)',
+        async () => {
+            const { world, owner, blocked } = await rescueWorld(
+                rescueMission({
+                    cargoType: -1, cargoQty: 0, pickupOnBoard: false,
+                }));
+            placeShip(owner, 0, Math.PI / 2);
+            press(world, OWNER);
+            expect(blocked).toEqual(['']);
+            expect(active(owner).shipObjective!.live.get(HULK)?.boarded)
+                .toBeFalsy();
+            placeShip(owner, 0);
+            press(world, OWNER);
+            expect(blocked).toEqual(['']);
+            press(world, OWNER);
+            expect(blocked).toEqual(['', "You can't board this ship."]);
+        });
+
+    it('without cargo, a rival is refused at once and spends nothing',
+        async () => {
+            const { world, owner, blocked } = await rescueWorld(
+                rescueMission({
+                    cargoType: -1, cargoQty: 0, pickupOnBoard: false,
+                }));
+            press(world, RIVAL);
+            expect(blocked).toEqual(["You can't board this ship."]);
+            expect(active(owner).shipObjective!.live.get(HULK)?.boarded)
+                .toBeFalsy();
         });
 
     it('refuses anybody but the owner', async () => {

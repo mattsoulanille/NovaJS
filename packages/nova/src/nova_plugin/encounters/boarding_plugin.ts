@@ -26,7 +26,7 @@ import { GateDepartureSystem, LandEvent } from '../travel/index.js';
 import { SelfDestructSystem } from './disabled_plugin.js';
 import {
     MissionCargoRetrievedEvent, MissionCargoRetrievedEventType, rescueBoard,
-    retrieveRescueCargo,
+    retrieveRescueCargo, spendRescueBoard,
 } from './rescue_board.js';
 import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
@@ -555,6 +555,13 @@ const BoardingGateSystem = new System({
             entities);
         if (rescue.kind === 'refuse') {
             emit(BoardingBlockedEvent, { reason: 'alreadyBoarded' }, [uuid]);
+            return;
+        }
+        if (rescue.kind === 'silent') {
+            // No cargo to take: the first board says nothing and spends
+            // the hull's one board (reference "H1 / rescue leftovers,
+            // wave 21", finding 5).
+            spendRescueBoard(rescue, targetUuid!);
             return;
         }
         if (rescue.kind === 'retrieve') {
