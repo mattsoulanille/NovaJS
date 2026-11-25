@@ -122,13 +122,18 @@ export interface SystemProperties {
 export function systemProperties(system: SystemData | undefined,
     isCurrent: boolean, discovery: DiscoveryLevel,
     universe: Pick<MissionUniverse, 'getGovt' | 'getPlanet'>,
-    legalRecords: ReadonlyMap<string, number>): SystemProperties {
+    legalRecords: ReadonlyMap<string, number>,
+    /** The first group's caption in place of "Current System:" /
+     * "Destination System:" — the gate map's pick reads "Hypergate
+     * Destination:" (reference "Gate map, wave 24" / "wave 27"). */
+    titleOverride?: string): SystemProperties {
     const lines: PropertyLine[] = [];
     const addLine = (slot: PropSlot, label: string, values: string[]) => {
         lines.push({ slot, label, values });
     };
 
-    const title = isCurrent ? 'Current System:' : 'Destination System:';
+    const title = titleOverride
+        ?? (isCurrent ? 'Current System:' : 'Destination System:');
     const known = knownSystemProperties(discovery);
     if (!system || !known.identity) {
         addLine(PropSlot.System, title, ['<Unknown>']);

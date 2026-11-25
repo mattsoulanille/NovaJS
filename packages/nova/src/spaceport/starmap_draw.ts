@@ -12,7 +12,20 @@ import {
     BASE_SCALE, DEFAULT_ZOOM, scalePos, SYSTEM_RADIUS,
 } from "./starmap_viewport.js";
 
-const GREY = 0x666666;
+/**
+ * The star map's hyperspace lanes: 1 px #4a4a4a (sampled at 1:1 on
+ * ui_screenshots/original_macos_screenshots/map/borders_off.png, 5,783 px
+ * of #4a4a4a and none of the 0x666666 NovaJS used to draw; the same on
+ * every map/*.png shot and the `h` minimap's mini_map.png; reference "Gate
+ * map, wave 27").
+ */
+export const LANE_COLOR = 0x4a4a4a;
+/**
+ * The gate map's ordinary hyperspace lanes: drawn, but as 1 px #080808,
+ * nearly black (measured, reference "Gate map, wave 27": N1 - Kit Gate
+ * Lane and N1 - Kit Map Permit on the original's gate map at Kit Gate N1).
+ */
+export const GATE_MAP_LANE_COLOR = 0x080808;
 // System-dot colors, sampled off the original at 1:1 in
 // ui_screenshots/original_macos_screenshots/map/govt_borders.png (see
 // drawSystem for the rule each one encodes). All four share one black
@@ -275,7 +288,7 @@ export function drawSystem(graphics: PIXI.Graphics,
 }
 
 export function drawLink(graphics: PIXI.Graphics, a: SystemData, b: SystemData,
-    color = GREY, thickness = 1) {
+    color = LANE_COLOR, thickness = 1) {
     graphics.lineStyle(thickness, color);
     graphics.moveTo(...scalePos(a.position));
     graphics.lineTo(...scalePos(b.position));
@@ -284,10 +297,10 @@ export function drawLink(graphics: PIXI.Graphics, a: SystemData, b: SystemData,
 /** Draws the hyperspace lanes. (The gate map's hypergate arrows are a
  * layer of their own, over the dots: {@link drawGatePickOverlay}.) */
 export function drawLinks(graphics: PIXI.Graphics,
-    links: readonly [SystemData, SystemData][]) {
+    links: readonly [SystemData, SystemData][], color = LANE_COLOR) {
     graphics.clear();
     for (const [source, dest] of links) {
-        drawLink(graphics, source, dest);
+        drawLink(graphics, source, dest, color);
     }
 }
 

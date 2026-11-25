@@ -12,6 +12,7 @@ import {
 import { DiscoveryStoreResource, MissionsComponent } from '../nova_plugin/player/index.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { GateMap } from '../spaceport/gate_map.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
@@ -84,6 +85,8 @@ const OpenGateMapSystem = new System({
             // the entity too: they decide which systems (and gates) exist.
             playerBits: ship.components.get(ControlBitsComponent)
                 ?? new Set<number>(),
+            // And its records, for the column's Legal Status line.
+            legalRecords: ship.components.get(LegalRecordsComponent),
         }).then(({ destinationSpob }) =>
             emit(LeaveGateMapEvent, { ship, destinationSpob }));
     }

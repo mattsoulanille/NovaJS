@@ -7,9 +7,10 @@ import {
     ControlEvent, isSettledPort, landable,
 } from '../nova_plugin/core/index.js';
 import {
-    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
+    DISCOVERY_LANDED, DiscoveryLevel,
 } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
+import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
 import { Button } from "./button.js";
 import {
     DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
@@ -17,7 +18,12 @@ import {
 } from "./hypergate_network.js";
 import { Menu } from "./menu.js";
 import { MenuControls } from "./menu_controls.js";
+import { MissionUniverse } from "./mission_universe.js";
 import { MISSION_MARK_ACTIVE_CICN } from "./starmap_marks.js";
+import {
+    HAZARDS_VALUE_X, HAZARDS_Y, PORTS_LABEL_X, PORTS_VALUE_X, PORTS_Y,
+    PROP_LABEL_FONT, PROP_VALUE_FONT, renderPropertyLines, systemProperties,
+} from "./starmap_properties.js";
 import { DEFAULT_ZOOM } from "./starmap_viewport.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
 import {
@@ -51,7 +57,24 @@ export interface GateMapResult {
      * `missionMarks`. Omitted means no bits (a new pilot).
      */
     playerBits?: ReadonlySet<number>;
+    /** The docked ship's legal records, for the column's Legal Status
+     * line. Passed in for the same reason as `missionMarks`. Omitted means
+     * none (every system reads its status govt's InitialRec). */
+    legalRecords?: LegalRecordsState;
 }
+
+/** The column's first caption once a destination is picked (reference
+ * "Gate map, wave 24": "Hypergate Destination: Kit Gate A2"; "wave 27":
+ * "Hypergate Destination: <Unknown>" for an unexplored one). */
+export const HYPERGATE_DESTINATION_TITLE = 'Hypergate Destination:';
+/** The bottom line while nothing is picked, in the caption grey, centred
+ * where the Ports / Navigation Hazards readouts go once something is
+ * (reference "Gate map, wave 24"; ink 330..511 x 499..507 in wave 27's
+ * `04-map.png`, i.e. about 4 px right of the dialog's centre and 12 px
+ * under the Ports row). */
+export const GATE_MAP_PROMPT = '- Please select a hypergate destination -';
+const GATE_MAP_PROMPT_X = 4;
+const GATE_MAP_PROMPT_Y = PORTS_Y + 12;
 
 /**
  * Computes the systems the hypergate map offers for a gate: every system
@@ -94,10 +117,6 @@ export interface GateMapViewer {
     transitive: boolean;
     /** The docked ship's control bits, for NCB system visibility. */
     playerBits: ReadonlySet<number>;
-    /** How much the player knows about each system (discovery.ts): only an
-     * EXPLORED (entered) destination is offered. Omitted means every system
-     * is known. */
-    discoveryOf?: (systemId: string) => DiscoveryLevel;
 }
 
 /** What the hypergate map draws and offers for one showing. */
@@ -155,12 +174,14 @@ export interface GateMapView {
  * bit that swaps a system for its stacked copy (HG-Heraan's nova:344 / 540 /
  * 604) keeps the lane instead of pointing it at a copy the map hides.
  *
- * An UNEXPLORED destination keeps its lane but is not offered (measured,
- * reference "Wave-24 leftovers, wave 25", Kit Gate A1 with only its own
- * system explored: the arrow A1 -> A2 at full length, no dot or name at A2,
- * and a click on it selected nothing). The lane says where the gate goes;
- * picking a system needs the player to have been there. Its dot follows
- * the star map's rule (SystemGraph does not force it onto the map).
+ * An UNEXPLORED destination is offered like any other (measured,
+ * reference "Gate map, wave 27", Kit Gate N1 with N2 and N3 unexplored,
+ * N2 a hyperspace neighbour and N3 not: each is drawn as a #424242 ring
+ * with no label under its arrowhead, one click selects it, the column
+ * reads "Hypergate Destination: <Unknown>", and Done transits). Exploration
+ * decides only how the dot and the column read (SystemGraph forces every
+ * offered destination onto the map, dim until entered). Wave 25's "no dot,
+ * not selectable" was a misread (its click fell 54 px short of A2).
  *
  * Destroyed gates (unusable) stay out exactly as before. Pure, so it is
  * unit-testable: SystemGraph itself cannot be constructed headlessly.
@@ -246,14 +267,6 @@ export function computeGateMapView(index: GateMapIndex,
     }
     const selectable = computeSelectableSystems(visibleSystemsOfSpob,
         destinations);
-    const discoveryOf = viewer.discoveryOf;
-    if (discoveryOf) {
-        for (const id of [...selectable.keys()]) {
-            if (id !== systemId && discoveryOf(id) < DISCOVERY_ENTERED) {
-                selectable.delete(id);
-            }
-        }
-    }
 
     // What a pick whitens: the lane to it, or the shortest chain.
     const routes = new Map<string, [string, string][]>();
@@ -308,10 +321,11 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
      * where the galaxy then draws grey. */
     portSpobs?: ReadonlySet<string>,
     /** How much the player knows about each system (discovery.ts). The
-     * transit map obeys the same visibility rule as the star map: an
-     * unexplored destination's lane is drawn, its dot only if the star map
-     * would draw it (reference "Wave-24 leftovers, wave 25"). Omitted in
-     * tests, which then get the fully-known galaxy the map used to draw. */
+     * transit map obeys the same visibility rule as the star map, except
+     * that the gate's offered destinations are always drawn: an
+     * unexplored one as the dim unlabeled ring (reference "Gate map, wave
+     * 27"). Omitted in tests, which then get the fully-known galaxy the
+     * map used to draw. */
     discoveryOf?: (systemId: string) => DiscoveryLevel,
     /** The docked ship's control bits: the map draws the systems that
      * exist under them, as the star map does. Omitted means no bits. */
@@ -395,6 +409,17 @@ export class GateMap extends Menu<GateMapResult> {
      * in build() like the starmap's. Undefined in headless tests, where the
      * graph then draws no marks. */
     private missionMarkTexture?: PIXI.Texture;
+    /** Planets and governments for the properties column (shared with the
+     * star map; loaded in build()). */
+    private universe?: MissionUniverse;
+    /** The right-hand column, as the star map's (starmap_properties.ts). */
+    private propContainer = new PIXI.Container();
+    private portsLabel = new PIXI.Text('Ports:', PROP_LABEL_FONT);
+    private portsValue = new PIXI.Text('', PROP_VALUE_FONT);
+    private hazardsLabel = new PIXI.Text('Navigation Hazards:',
+        PROP_LABEL_FONT);
+    private hazardsValue = new PIXI.Text('', PROP_VALUE_FONT);
+    private prompt = new PIXI.Text(GATE_MAP_PROMPT, PROP_LABEL_FONT);
 
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
@@ -428,6 +453,16 @@ export class GateMap extends Menu<GateMapResult> {
                 .textureFromCicn(MISSION_MARK_ACTIVE_CICN);
         } catch {
             this.missionMarkTexture = undefined;
+        }
+        // The column's planets / govts. A failed load leaves the column
+        // with names only (systemProperties copes with missing lookups);
+        // the map's job is picking a destination.
+        const universe = MissionUniverse.shared(this.simulationData);
+        try {
+            await universe.load();
+            this.universe = universe;
+        } catch (e) {
+            console.warn('Gate map: mission universe failed to load', e);
         }
         const ids = await this.simulationData.ids;
         this.systems = await Promise.all(
@@ -472,6 +507,69 @@ export class GateMap extends Menu<GateMapResult> {
         } catch (e) {
             console.warn('Failed to load settings.json for the gate map', e);
         }
+
+        this.portsLabel.position.set(PORTS_LABEL_X, PORTS_Y);
+        this.portsValue.position.set(PORTS_VALUE_X, PORTS_Y);
+        this.hazardsLabel.position.set(PORTS_LABEL_X, HAZARDS_Y);
+        this.hazardsValue.position.set(HAZARDS_VALUE_X, HAZARDS_Y);
+        this.prompt.anchor.x = 0.5;
+        this.prompt.position.set(GATE_MAP_PROMPT_X, GATE_MAP_PROMPT_Y);
+        this.container.addChild(this.propContainer, this.portsLabel,
+            this.portsValue, this.hazardsLabel, this.hazardsValue,
+            this.prompt);
+    }
+
+    /**
+     * Fills the column (reference "Gate map, wave 24" / "wave 27"): with
+     * nothing picked, "Current System: <name>" and the rest of the star
+     * map's column for it, and the prompt line at the bottom; once a
+     * destination is picked, "Hypergate Destination: <name>" (or
+     * "<Unknown>", unexplored) with its Ports / Navigation Hazards
+     * readouts in the prompt's place.
+     */
+    private showProperties(systemId: string, picked: boolean,
+        legalRecords: LegalRecordsState) {
+        this.propContainer.removeChildren();
+        const universe = this.universe;
+        const { lines, ports, hazards } = systemProperties(
+            this.systemById.get(systemId), !picked,
+            this.discoveryOf(systemId),
+            universe ?? {
+                getGovt: () => undefined, getPlanet: () => undefined,
+            },
+            legalRecords,
+            picked ? HYPERGATE_DESTINATION_TITLE : undefined);
+        renderPropertyLines(this.propContainer, lines);
+        this.portsValue.text = ports;
+        this.hazardsValue.text = hazards;
+        for (const readout of [this.portsLabel, this.portsValue,
+            this.hazardsLabel, this.hazardsValue]) {
+            readout.visible = picked;
+        }
+        this.prompt.visible = !picked;
+    }
+
+    /** What the column shows right now, for specs and headless driving. */
+    get propertiesText(): string[] {
+        const texts: string[] = [];
+        for (const child of this.propContainer.children) {
+            if (child instanceof PIXI.Text) {
+                texts.push(child.text);
+            }
+        }
+        if (this.prompt.visible) {
+            texts.push(this.prompt.text);
+        } else {
+            texts.push(`Ports: ${this.portsValue.text}`,
+                `Navigation Hazards: ${this.hazardsValue.text}`);
+        }
+        return texts;
+    }
+
+    /** Picks `systemId` as a pointer click on it would, for specs and
+     * headless driving; ignored for a system the map does not offer. */
+    pickSystem(systemId: string) {
+        this.systemGraph?.clickSystem(systemId);
     }
 
     /** The hypergate graph this map walks, as built in {@link build}. */
@@ -494,7 +592,6 @@ export class GateMap extends Menu<GateMapResult> {
         }, {
             gateSpob: input.gateSpob, systemId: input.systemId,
             transitive: this.transitivity, playerBits,
-            discoveryOf: id => this.discoveryOf(id),
         });
         this.selectableSpobs = view.selectable;
 
@@ -513,8 +610,14 @@ export class GateMap extends Menu<GateMapResult> {
         // 120 map units, 212 px apart: "Gate map, wave 24").
         this.systemGraph.zoomBy(DEFAULT_ZOOM);
         this.systemGraph.container.position.set(-290, -248);
-        this.container.addChild(this.systemGraph.container);
+        // Under the column and readouts, as on the star map.
+        this.container.addChildAt(this.systemGraph.container,
+            Math.min(1, this.container.children.length));
         this.systemGraph.center();
+        const legalRecords = input.legalRecords ?? new Map();
+        this.showProperties(input.systemId, false, legalRecords);
+        this.systemGraph.infoSelection.subscribe(
+            id => this.showProperties(id, true, legalRecords));
 
         return super.show(input);
     }

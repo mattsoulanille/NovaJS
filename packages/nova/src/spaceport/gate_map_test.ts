@@ -5,8 +5,12 @@ import { getDefaultPlanetData } from "novadatainterface/planet_data";
 import { getDefaultSystemData, SystemData } from "novadatainterface/system_data";
 import { Entity } from "nova_ecs/entity";
 import * as PIXI from "pixi.js";
+import { Subject } from "rxjs";
+import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
+import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { gateMapMissionMarks } from "../display/gate_map_plugin.js";
+import { ControlEvent } from "../nova_plugin/core/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { ControlBitsComponent } from "../nova_plugin/ncb/index.js";
 import {
@@ -14,9 +18,10 @@ import {
 } from "../nova_plugin/player/index.js";
 import { landable } from "../nova_plugin/core/index.js";
 import {
-    computeGateMapView, computeSelectableSystems,
-    GateMapIndex, gateMapGraphOptions,
+    computeGateMapView, computeSelectableSystems, GATE_MAP_PROMPT, GateMap,
+    GateMapIndex, gateMapGraphOptions, HYPERGATE_DESTINATION_TITLE,
 } from "./gate_map.js";
+import { installHeadlessPixi } from "./headless_pixi_fixture.js";
 import { HypergateNetwork } from "./hypergate_network.js";
 import { MissionUniverse } from "./mission_universe.js";
 
@@ -447,47 +452,6 @@ describe('computeGateMapView', () => {
         });
     });
 
-    // Measured: reference "Wave-24 leftovers, wave 25", Kit Gate A1 with
-    // ONLY its own system explored: the arrow A1 -> A2 at full length, no
-    // dot or name at A2, and one click on it selected nothing.
-    describe('an UNEXPLORED destination (wave 25)', () => {
-        /** Only `entered` have been entered. */
-        function known(...entered: string[]) {
-            return (id: string) => entered.includes(id)
-                ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN;
-        }
-
-        it('keeps its lane but is not offered', () => {
-            const v = computeGateMapView(wave24(), {
-                gateSpob: 'a1', systemId: 'A1', transitive: false,
-                playerBits: new Set(), discoveryOf: known('A1'),
-            });
-            expect(arrows(v.gateLinks)).toEqual(['A1>A2']);
-            expect([...v.selectable]).toEqual([]);
-            expect(v.routes.size).toBe(0);
-        });
-
-        it('is offered once explored', () => {
-            const v = computeGateMapView(wave24(), {
-                gateSpob: 'a1', systemId: 'A1', transitive: false,
-                playerBits: new Set(), discoveryOf: known('A1', 'A2'),
-            });
-            expect([...v.selectable]).toEqual([['A2', 'a2']]);
-        });
-
-        it('under transitivity, offers only the explored gates of the '
-            + 'chain, the lanes all drawn', () => {
-                const v = computeGateMapView(wave24(), {
-                    gateSpob: 'c1', systemId: 'C1', transitive: true,
-                    playerBits: new Set(), discoveryOf: known('C1', 'C3'),
-                });
-                expect(arrows(v.gateLinks)).toEqual(['C1>C2', 'C2>C3']);
-                expect([...v.selectable.keys()]).toEqual(['C3']);
-                expect(v.routes.get('C3')).toEqual(
-                    [['C1', 'C2'], ['C2', 'C3']]);
-            });
-    });
-
     it('draws only the gate\'s own links with transitivity off, even inside '
         + 'a bigger network', () => {
             const v = view(index(), 'a1', 'A1', false);
@@ -624,5 +588,111 @@ describe('computeGateMapView', () => {
         expect(options.isSystemInhabited!(system('A1', ['a1', 'port'])))
             .toBeTrue();
         expect(options.isSystemInhabited!(system('B1', ['b1']))).toBeFalse();
+    });
+});
+
+/**
+ * The whole gate map at wave 27's rig (reference "Gate map, wave 27"): Kit
+ * Gate N1's gate links to N2 (also a hyperspace neighbour) and N3 (nobody's
+ * neighbour), the player has entered only N1 and Kit Gate Lane. The column
+ * reads "Current System: Kit Gate N1 / Uninhabited System" over the prompt;
+ * one click on N3 reads "Hypergate Destination: <Unknown>" with "Ports:
+ * <Unknown>" / "Navigation Hazards: <Unknown>", and Done transits to it.
+ */
+describe('the gate map at Kit Gate N1 (wave 27)', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    function displayAssets(): DisplayAssetDataInterface {
+        return {
+            spriteFromPict: () => new PIXI.Sprite(),
+            spriteFromPictAsync: async () => new PIXI.Sprite(),
+            textureFromPict: () => PIXI.Texture.EMPTY,
+            textureFromPictAsync: async () => PIXI.Texture.EMPTY,
+            textureFromCicn: async () => PIXI.Texture.EMPTY,
+            textureFromPpat: async () => PIXI.Texture.EMPTY,
+            data: {},
+        } as unknown as DisplayAssetDataInterface;
+    }
+
+    function gameData(): MockGameData {
+        const data = new MockGameData();
+        const gate = (id: string, name: string, destinations: string[]) => {
+            const base = getDefaultPlanetData();
+            data.data.Planet.map.set(id, {
+                ...base, id, name,
+                flags: { ...base.flags, canLand: true, uninhabited: false },
+                gate: { kind: 'hypergate', destinations, emergenceAngle: null },
+            });
+        };
+        gate('kit:1610', 'Kit Gate N1 Gate', ['kit:1611', 'kit:1612']);
+        gate('kit:1611', 'Kit Gate N2 Gate', ['kit:1610']);
+        gate('kit:1612', 'Kit Gate N3 Gate', ['kit:1610']);
+        const sys = (id: string, name: string, position: [number, number],
+            planets: string[], links: string[]) => {
+            data.data.System.map.set(id, {
+                ...getDefaultSystemData(), id, name, position, planets, links,
+            });
+        };
+        sys('kit:1204', 'Kit Gate N1', [-760, -1860], ['kit:1610'],
+            ['kit:1205', 'kit:1207']);
+        sys('kit:1205', 'Kit Gate N2', [-700, -1860], ['kit:1611'],
+            ['kit:1204']);
+        sys('kit:1206', 'Kit Gate N3', [-760, -1920], ['kit:1612'], []);
+        sys('kit:1207', 'Kit Gate Lane', [-820, -1860], [], ['kit:1204']);
+        return data;
+    }
+
+    const known = (id: string) => ['kit:1204', 'kit:1207'].includes(id)
+        ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN;
+
+    async function open() {
+        const map = new GateMap(displayAssets(),
+            gameData() as unknown as SimulationGameDataInterface,
+            new Subject<ControlEvent>(), known);
+        await map.buildPromise;
+        const shown = map.show({
+            gateSpob: 'kit:1610', systemId: 'kit:1204',
+            destinationSpob: null,
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        return { map, shown };
+    }
+
+    it('reads the current system over the prompt until something is picked',
+        async () => {
+            const { map, shown } = await open();
+            expect(map.propertiesText).toEqual([
+                'Current System:', 'Kit Gate N1', 'Uninhabited System',
+                GATE_MAP_PROMPT,
+            ]);
+            map.dismiss();
+            expect((await shown).destinationSpob).toBeNull();
+        });
+
+    for (const [system, spob] of
+        [['kit:1205', 'kit:1611'], ['kit:1206', 'kit:1612']] as const) {
+        it(`picks the unexplored ${system} in one click, reads it as `
+            + '"<Unknown>", and Done transits there', async () => {
+                const { map, shown } = await open();
+                map.pickSystem(system);
+                expect(map.propertiesText).toEqual([
+                    HYPERGATE_DESTINATION_TITLE, '<Unknown>',
+                    'Ports: <Unknown>', 'Navigation Hazards: <Unknown>',
+                ]);
+                map.dismiss();
+                expect((await shown).destinationSpob).toBe(spob);
+            });
+    }
+
+    it('names an explored destination', async () => {
+        const { map, shown } = await open();
+        (map as unknown as { discoveryOf: typeof known }).discoveryOf =
+            () => DISCOVERY_ENTERED;
+        map.pickSystem('kit:1205');
+        expect(map.propertiesText.slice(0, 3)).toEqual([
+            HYPERGATE_DESTINATION_TITLE, 'Kit Gate N2', 'Uninhabited System',
+        ]);
+        map.dismiss();
+        await shown;
     });
 });

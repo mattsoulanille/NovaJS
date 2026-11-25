@@ -19,7 +19,7 @@ import {
 } from "./route.js";
 import {
     drawCurrentSystemCentre, drawGatePickOverlay, drawLinks,
-    drawRouteOverlay,
+    drawRouteOverlay, GATE_MAP_LANE_COLOR, LANE_COLOR,
     drawSystem, installLabelFont, labelFontReady, makeSystemLabel, MapRefusal,
 } from "./starmap_draw.js";
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
@@ -151,8 +151,8 @@ export interface SystemGraphOptions {
 
 export class SystemGraph {
     readonly container = new PIXI.Container();
-    /** Emits the plainly-clicked system (route mode), for the properties
-     * panel. */
+    /** Emits the plainly-clicked system (route mode), or the picked one
+     * (destination-picker mode), for the properties panel. */
     readonly infoSelection = new Subject<string>();
     /** Emits whenever the pinned/single route state changes (route mode). */
     readonly routeChanged = new Subject<void>();
@@ -261,11 +261,12 @@ export class SystemGraph {
                 ...this.missionMarks.map(m => m.systemId),
                 ...this.viewedMarks.map(m => m.systemId),
                 // Somewhere this map exists to let the player PICK is
-                // always drawn: a hypergate's offered destinations (all
-                // explored, gate_map.ts computeGateMapView). A lane's far
-                // end is NOT forced: the original draws the arrow to an
-                // unexplored destination with no dot ("Wave-24 leftovers,
-                // wave 25"), so it follows the ordinary drawn rule.
+                // always drawn: a hypergate's offered destinations, an
+                // unexplored one as the dim unlabeled ring (reference
+                // "Gate map, wave 27": N3, no hyperspace neighbour of
+                // anything explored, has its #424242 ring under the
+                // arrowhead). Under transitivity every lane's end is
+                // offered too, so this covers the lanes as well.
                 ...(this.selectable ?? []),
             ],
             currentSystem);
@@ -351,7 +352,10 @@ export class SystemGraph {
         if (options.territoryOf) {
             this.drawBorders(options.territoryOf);
         }
-        drawLinks(this.linkGraphics, this.links);
+        // The gate map draws the hyperspace lanes nearly black, the star
+        // map grey (starmap_draw.ts GATE_MAP_LANE_COLOR / LANE_COLOR).
+        drawLinks(this.linkGraphics, this.links,
+            this.selectable ? GATE_MAP_LANE_COLOR : LANE_COLOR);
         if (this.selectable) {
             this.drawSelection();
         } else {
@@ -619,13 +623,16 @@ export class SystemGraph {
         }
         if (this.selectable) {
             // Destination-picker mode: only the offered systems respond, and
-            // clicking one selects it (clicking again deselects).
+            // clicking one selects it. Clicking it AGAIN keeps it selected
+            // (measured, reference "Gate map, wave 27": two more clicks and
+            // a double-click on N2 left it picked); Done with no pick is
+            // the only way out without a transit.
             if (!this.selectable.has(system)) {
                 return;
             }
-            this.selectedSystem =
-                this.selectedSystem === system ? undefined : system;
+            this.selectedSystem = system;
             this.drawSelection();
+            this.infoSelection.next(system);
             return;
         }
         if (shiftKey) {

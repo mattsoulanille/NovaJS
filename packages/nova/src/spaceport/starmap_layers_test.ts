@@ -6,7 +6,8 @@ import {
 } from '../nova_plugin/player/index.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import {
-    CURRENT_SYSTEM_CENTER_COLOR, SYSTEM_INTERIOR_COLOR,
+    CURRENT_SYSTEM_CENTER_COLOR, GATE_MAP_LANE_COLOR, LANE_COLOR,
+    SYSTEM_INTERIOR_COLOR, SYSTEM_UNEXPLORED_COLOR,
 } from './starmap_draw.js';
 import { scalePos } from './starmap_viewport.js';
 import { SystemGraph } from './system_graph.js';
@@ -96,38 +97,104 @@ describe('the star map\'s current-system centre', () => {
     });
 });
 
+/** The colour of every 1 px line the map's hyperspace-lane layer strokes. */
+function laneColors(graph: SystemGraph): number[] {
+    const g = (graph as unknown as { linkGraphics: PIXI.Graphics })
+        .linkGraphics;
+    // The last moveTo / lineTo path is still open until the next draw.
+    (g as unknown as { finishPoly(): void }).finishPoly();
+    return g.geometry.graphicsData
+        .filter(d => d.lineStyle.visible && d.lineStyle.width === 1)
+        .map(d => d.lineStyle.color);
+}
+
 /**
- * Measured: reference "Wave-24 leftovers, wave 25", Kit Gate A1 with ONLY
- * its own system explored. The gate map draws the arrow A1 -> A2 at full
- * length but no dot (and no name) at A2.
+ * Measured: reference "Gate map, wave 27", Kit Gate N1 with N2 (a
+ * hyperspace neighbour) and N3 (nobody's neighbour) unexplored. Each gets
+ * a #424242 ring with no label under its arrowhead, and one click picks it
+ * (wave 25's "no dot, not selectable" at A2 was a misread).
  */
 describe('the gate map\'s unexplored destination', () => {
     beforeAll(() => installHeadlessPixi());
 
-    // Two gate systems with no hyperspace link: A2 is nobody's neighbour.
-    const systems = [system('A1', [0, 0]), system('A2', [120, 0])];
+    // N1's gate links to N2 and N3; N1 - N2 is also a hyperspace lane.
+    const systems = [
+        system('N1', [0, 0], ['N2', 'Lane']),
+        system('N2', [60, 0], ['N1']),
+        system('N3', [0, -60]),
+        system('Lane', [-60, 0], ['N1']),
+    ];
 
-    function gateMap(discoveryOf: (id: string) => DiscoveryLevel,
-        selectable: string[]) {
-        return new SystemGraph(systems, 'A1', {
-            gateLinks: [['A1', 'A2']], selectable: new Set(selectable),
-            discoveryOf,
+    function gateMap() {
+        return new SystemGraph(systems, 'N1', {
+            gateLinks: [['N1', 'N2'], ['N1', 'N3']],
+            selectable: new Set(['N2', 'N3']),
+            discoveryOf: entered('N1', 'Lane'),
         });
     }
 
-    it('gets no dot while unexplored', () => {
-        const graph = gateMap(entered('A1'), []);
-        const [x, y] = scalePos([120, 0]);
-        expect(discs(graph).filter(d => d.x === x && d.y === y)).toEqual([]);
-        // ... and a click there picks nothing.
-        graph.clickSystem('A2');
-        expect(graph.selectedSystem).toBeUndefined();
-    });
+    for (const [id, position] of
+        [['N2', [60, 0]], ['N3', [0, -60]]] as const) {
+        it(`draws ${id} as the dark-grey ring and picks it in one click`,
+            () => {
+                const graph = gateMap();
+                const [x, y] = scalePos(position);
+                const rings = discs(graph)
+                    .filter(d => d.x === x && d.y === y
+                        && d.color !== SYSTEM_INTERIOR_COLOR);
+                expect(rings.map(d => d.color))
+                    .toEqual([SYSTEM_UNEXPLORED_COLOR]);
+                const picked: string[] = [];
+                graph.infoSelection.subscribe(s => picked.push(s));
+                graph.clickSystem(id);
+                expect(graph.selectedSystem).toBe(id);
+                expect(picked).toEqual([id]);
+            });
+    }
 
-    it('gets its dot once explored', () => {
-        const graph = gateMap(entered('A1', 'A2'), ['A2']);
-        const [x, y] = scalePos([120, 0]);
-        expect(discs(graph).filter(d => d.x === x && d.y === y).length)
-            .toBeGreaterThan(0);
+    it('keeps the pick on further clicks (two more and a double-click '
+        + 'left N2 picked)', () => {
+            const graph = gateMap();
+            for (let i = 0; i < 4; i++) {
+                graph.clickSystem('N2');
+            }
+            expect(graph.selectedSystem).toBe('N2');
+            // A plain system (Kit Gate Lane) does nothing; another offered
+            // destination moves the pick.
+            graph.clickSystem('Lane');
+            expect(graph.selectedSystem).toBe('N2');
+            graph.clickSystem('N3');
+            expect(graph.selectedSystem).toBe('N3');
+        });
+
+    it('draws the ordinary hyperspace lanes nearly black, #080808', () => {
+        const colors = laneColors(gateMap());
+        expect(colors.length).toBe(2);
+        expect(new Set(colors)).toEqual(new Set([GATE_MAP_LANE_COLOR]));
+    });
+});
+
+/**
+ * The regular star map's lanes are #4a4a4a (map/borders_off.png: 5,783 px
+ * of it and none of the 0x666666 NovaJS drew; the `h` minimap's
+ * mini_map.png too; reference "Gate map, wave 27").
+ */
+describe('the star map\'s hyperspace lanes', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    const systems = [
+        system('Here', [0, 0], ['There']),
+        system('There', [40, 0], ['Here']),
+    ];
+
+    it('are #4a4a4a on the full map and the minimap', () => {
+        for (const miniMap of [false, true]) {
+            const graph = new SystemGraph(systems, 'Here',
+                { discoveryOf: entered('Here', 'There'), miniMap });
+            expect(laneColors(graph)).withContext(`${miniMap}`)
+                .toEqual([LANE_COLOR]);
+        }
+        expect(LANE_COLOR).toBe(0x4a4a4a);
+        expect(GATE_MAP_LANE_COLOR).toBe(0x080808);
     });
 });
