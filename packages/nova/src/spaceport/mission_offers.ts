@@ -50,13 +50,13 @@ let visitRolls: { systemId: string | undefined, rolls: OfferRolls } = {
  * The rolls for the visit to `systemId`, started afresh when the system
  * differs from the last one asked about.
  *
- * KNOWN GAP: a jump out and straight back in — landing nowhere in
- * between — keeps the previous visit's rolls, because the spaceport is
- * the only caller and nothing here sees the intervening system entry.
- * {@link resetOfferRolls} is the hook a system-entry path can call to
- * close it; the spaceport-side cache is the faithful answer for every
- * other sequence (several landings in one system share their rolls, as
- * the original's do).
+ * A jump out and straight back in, landing nowhere in between, is a new
+ * visit too: client/system_entry.ts calls {@link resetOfferRolls} on every
+ * system entry, so the rolls (and the frozen offer sets keyed by them)
+ * start afresh. MEASURED (reference "#324 wave 24"): on the original a
+ * jump out and back brought the setter's shipyard / outfitter offers that
+ * a re-landing alone never did, and re-drew the AvailRandom set. Several
+ * landings in ONE visit share their rolls, as the original's do (wave 22).
  */
 export function offerRollsForSystem(systemId: string | undefined): OfferRolls {
     if (systemId !== visitRolls.systemId) {

@@ -114,9 +114,11 @@ describe('rollOffers and the visit\'s AvailRandom rolls', () => {
                 // Land in Sol, roll. Jump to Kane and back WITHOUT
                 // landing there: the spaceport never asks about Kane, so
                 // keying by system id alone would hand the old Sol rolls
-                // to the second visit. browser.ts's enterSystem calls
+                // to the second visit. client/system_entry.ts calls
                 // resetOfferRolls on every system entry, which is what
-                // makes "recalculated each time you warp in" hold.
+                // makes "recalculated each time you warp in" hold; the
+                // original re-rolls on a jump out and back too
+                // (reference "#324 wave 24").
                 offerRollsForSystem('nova:128').set('nova:1', 5);
                 resetOfferRolls(); // enterSystem(Kane)
                 resetOfferRolls(); // enterSystem(Sol)
