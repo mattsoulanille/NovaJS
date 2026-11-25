@@ -2,6 +2,7 @@ import { dateFromDayNumber, formatDate, ActiveMission } from '../nova_plugin/pla
 import {
     acceptOffer,
     AcceptResult,
+    checkAcceptable,
     missionCargoName,
     makeMissionOffer,
     MissionOffer,
@@ -187,6 +188,70 @@ export function rollOffers(session: MissionSession,
     }
     offers.sort((a, b) => b.data.dispWeight - a.data.dispWeight);
     return offers;
+}
+
+/**
+ * One LANDING's offers, frozen per location (mïsn AvailLoc -> the offers
+ * rolled for it). Kept on the landing's transaction
+ * (LandedTransaction.offerSets), so it lives exactly as long as the
+ * landing: no venue savepoint snapshots it (a rollback does not unroll
+ * it) and a hull swap keeps it.
+ */
+export type LandingOffers = Map<number, MissionOffer[]>;
+
+/**
+ * The offers at `location` for this landing (#324).
+ *
+ * THE SET IS ROLLED ONCE PER LANDING, PER LOCATION, and never grows in the
+ * landing. The original adds nothing in the visit (reference "#324 mission
+ * BBS after an accept, wave 21", finding 2): a BBS job, a bar offer and a
+ * trade-center offer that an accept made available were not offered on
+ * reopening the BBS or walking back into the bar or the trade center —
+ * only from the next landing on. They used to be rolled afresh on every
+ * open, so a reopened board listed what the last accept unlocked.
+ *
+ * Rolled at the FIRST open of the location in the landing, not at the
+ * touch-down. GUESS: the reference run entered the bar and the trade
+ * center before the accept, so either rule fits it; a first open after an
+ * in-visit accept was not measured. The lazy rule never hides an offer
+ * that a landing popup's accept unlocked from a venue the player had not
+ * opened yet.
+ *
+ * WITHDRAWALS STAY LIVE: every read re-filters the frozen set against the
+ * working copy (stillOffered), so an accept anywhere in the landing — the
+ * BBS, the bar, a popup — withdraws what no longer qualifies (finding 1).
+ * GUESS for a plain reopen: the original was seen to re-check only on an
+ * ACCEPT (a reopened board after an `i` abort still listed a job the
+ * abort's record change had disqualified, until the next accept withdrew
+ * it). Re-filtering on every read is the one consistent rule here, and it
+ * also keeps a job at the BBS from staying takeable after a bar accept
+ * falsified its gate (the mutually exclusive pair across two locations).
+ *
+ * An offer this visit auto-accepted (autoAcceptedThisVisit) is dropped
+ * too, so the #319 loop guard holds over the frozen set, and every offer
+ * comes back with its `acceptable` flag re-judged (checkAcceptable: the
+ * hold and the mission cap as they stand now) — a gate on TAKING an offer,
+ * not on offering it. The frozen choices (destinations, cargo, the
+ * AvailRandom answer) are untouched.
+ */
+export function landingOffers(landing: LandingOffers,
+    session: MissionSession, universe: MissionUniverse, location: number,
+    rolls?: OfferRolls): MissionOffer[] {
+    let frozen = landing.get(location);
+    if (!frozen) {
+        frozen = rollOffers(session, universe, location, rolls);
+        landing.set(location, frozen);
+    }
+    const ctx = session.machinery.offerContext();
+    return frozen
+        .filter(offer => !autoAcceptedThisVisit(rolls, offer.data.id)
+            && stillOffered(session, offer))
+        .map(offer => {
+            const check = checkAcceptable(offer, ctx);
+            return check.acceptable
+                ? { ...offer, acceptable: true, reason: undefined }
+                : { ...offer, acceptable: false, reason: check.reason };
+        });
 }
 
 /**

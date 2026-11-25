@@ -25,6 +25,7 @@ import {
     advanceEntityDate, drainPendingMissionNotices, MissionSession,
     processLandingOn, replaceMap, replaceSet,
 } from './mission_session.js';
+import type { LandingOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { commitPendingEscorts } from './pending_escorts.js';
 import { buildChangedShip } from './shipyard_rules.js';
@@ -232,6 +233,16 @@ export class LandedTransaction {
      * standalone venue.
      */
     landingEvents: MissionEvent[] = [];
+    /**
+     * The landing's mission offers, frozen per location as each is first
+     * opened (mission_offers.ts landingOffers, #324): the BBS, the bar and
+     * the venues roll their offers ONCE per landing. Deliberately outside
+     * the savepoints' snapshots — it belongs to the landing, not to a
+     * venue visit, so a rollback does not unroll it — and untouched by a
+     * hull swap (changeShip / adoptPurchasedShip). Player-local UI state,
+     * never in the sim or the save.
+     */
+    readonly offerSets: LandingOffers = new Map();
 
     private hull: Entity;
     /** The entity balance at the last sync (credit_commit.ts's baseline). */

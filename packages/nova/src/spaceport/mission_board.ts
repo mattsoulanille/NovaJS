@@ -17,8 +17,8 @@ import { Button } from './button.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import {
-    activeAsOffer, autoAcceptOffers, offerRollsForSystem, offerSubstitutions,
-    rollOffers, stillOffered,
+    activeAsOffer, autoAcceptOffers, landingOffers, offerRollsForSystem,
+    offerSubstitutions, stillOffered,
 } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { OpenStarmapOptions } from './starmap.js';
@@ -108,6 +108,13 @@ export class MissionBoard extends Menu<Entity> {
         return this.transaction?.session;
     }
     private offers: MissionOffer[] = [];
+    /**
+     * The briefing of the accept that emptied the board and closed it
+     * (see accept): the pane it would have been shown in is gone, so the
+     * Spaceport puts it up as a popup once the board is down
+     * ({@link takeClosingBriefing}).
+     */
+    private closingBriefing?: { text: string, pict: string | null };
     /** <PN>/<PSN>-style identity values for this docked visit. */
     private identity: PlayerIdentitySubs = {};
     private rows: Row[] = [];
@@ -302,15 +309,21 @@ export class MissionBoard extends Menu<Entity> {
             return input; // Torn down while opening; nothing edited yet.
         }
         this.visit = this.transaction.savepoint('mission board');
+        this.closingBriefing = undefined;
         // The system visit's rolls (mission_offers.ts OfferRolls): closing
-        // and reopening the board does not reroll a 10% mission.
+        // and reopening the board does not reroll a 10% mission. The
+        // listings are the LANDING's, rolled at the first open
+        // (landingOffers, #324): a reopen lists what is left of them and
+        // never a job an accept in this landing made available — that one
+        // is listed from the next landing on, as in the original.
         const rolls = offerRollsForSystem(this.universe.systemIdOfPlanet(
             this.planetId, session.state.bits));
         // A listing with no offer text has nothing to list it WITH: it is
         // taken on as the board opens, through the same accept a click
         // runs (#319, offerAutoAccepts), and never becomes a row.
         const { accepted, remaining } = autoAcceptOffers(session,
-            rollOffers(session, this.universe, this.location, rolls), rolls);
+            landingOffers(this.transaction.offerSets, session, this.universe,
+                this.location, rolls), rolls);
         this.offers = remaining;
         this.buildRows();
         this.selectedIndex = this.rows.findIndex(
@@ -577,6 +590,20 @@ export class MissionBoard extends Menu<Entity> {
         this.text.status.text = `Accepted: ${expandMissionText(
             missionDisplayName(row.offer.data.name), subs, ctx)}.`;
         this.buildRows();
+        if (this.offers.length === 0) {
+            // An accept that leaves nothing listed closes the board at once
+            // (reference "#324 mission BBS after an accept, wave 21",
+            // finding 3, and wave 10's one-job board); one that leaves a
+            // listing keeps it open on the rest. The briefing goes up as a
+            // popup after the board (takeClosingBriefing).
+            if (brief) {
+                this.closingBriefing = {
+                    text: brief, pict: row.offer.data.briefPict,
+                };
+            }
+            this.done();
+            return;
+        }
         this.selectedIndex = Math.min(this.selectedIndex,
             this.rows.length - 1);
         this.refreshHeader();
@@ -585,6 +612,17 @@ export class MissionBoard extends Menu<Entity> {
         if (brief) {
             this.text.description.text = brief;
         }
+    }
+
+    /**
+     * The briefing of the accept that closed the board (an accept that
+     * emptied it), once: the Spaceport shows it as a popup after the
+     * board's show() resolves. Undefined when the board was left.
+     */
+    takeClosingBriefing(): { text: string, pict: string | null } | undefined {
+        const briefing = this.closingBriefing;
+        this.closingBriefing = undefined;
+        return briefing;
     }
 
     /** Leave: the visit's accepts become the landing's (the release
