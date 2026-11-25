@@ -322,8 +322,9 @@ export function canRequestAssistance(opts: {
  * player's legal record does not change the refusal (a +2000 record was
  * refused, wave 17, findings 5 and 6, and wave 15 refused a +1000 pilot
  * under fire alike; the table's "Okay, since your reputation is so good."
- * group 160-164 is unused until a run shows when it is said); a NEGATIVE
- * record raises the fuel price ({@link fuelAskingBase}).
+ * group 160-164 is unused until a run shows when it is said), nor the fuel
+ * price, which only the pilot's CASH caps ({@link fuelAskingBase};
+ * reference "H1 wave 19").
  *
  * `need` is what the player needs help with ({@link assistNeed}); a request
  * with no need never reaches this function (the "You're not in any trouble."
@@ -371,7 +372,12 @@ export function isTraderAiType(aiType: number | undefined): boolean {
  * Assistance for the hailed ship's govt) makes THIS ship help. Not a trader
  * (reference "H1 wave 17", finding 7: "Not a chance." from a trader of the
  * affiliated govt); GUESS: a warship (AI 3 / 4, or a ship with no AI type)
- * still does, as before — none was met on the reference.
+ * still does, as before, for a pilot who is disabled or out of fuel (not
+ * measured). A HEALTHY pilot under attack is NOT helped: reference "H1
+ * wave 19", finding 4, four AI 4 warships of the affiliated govt answered
+ * "No way." / "Not a chance." / "You wish." (STR# 3000 95-99); that
+ * request never reaches this function (no need), and the dialog's
+ * under-fire refusal is said to a ränk holder as to anyone.
  */
 export function rankBattleAssistance(rankAlwaysAssists: boolean | undefined,
     aiType: number | undefined): boolean {
@@ -425,88 +431,99 @@ export interface FuelSaleTerms {
 export const FUEL_SALE_PRICE_STEP = 1000;
 
 /**
- * THE SHIP'S MOOD AND BASE PRICE. Reference "H1 wave 17" (six ships, two
- * pilots, 1,000,000 credits each), findings 1, 2 and 5: every opening line
- * stayed the same for its ship, and went with the base —
+ * THE SHIP'S MOOD AND ITS OWN ASK, before the pilot's cash caps it
+ * ({@link fuelAskingBase}). Reference "H1 wave 19", finding 2, over the
+ * waves 17-19 rows (34 first asks): every opening line stays the same for
+ * its ship, and each mood asks one of TWO steps —
  *
  *  - good mood ("You're in luck, I'm in a good mood today.", STR# 3000
- *    115-119): 1,000 (two ships);
+ *    115-119): 1,000 or 2,000;
  *  - neutral ("All right, I'll give you some help, but it'll cost you.",
- *    140-144): 2,000 or 3,000 (three ships: 3,000, 2,000, 3,000);
+ *    140-144): 2,000 or 3,000;
  *  - bad mood ("I'm in a bad mood today, so it's going to cost extra.",
- *    120-124): 3,000 (one ship);
+ *    120-124): 3,000 or 4,000;
  *
- * whatever the pilot's record (good and bad moods both at +2000).
+ * whatever the pilot's record: there is NO record term (a clean, a -1, a
+ * -5 and a -9 pilot were all asked prices inside these spreads). OPEN, a
+ * GUESS either way: bad 4,000 has only been seen at records of -5 and -9,
+ * and bad asked 3,000 at -1, 0 and +2000, so a bad mood adding 1,000
+ * below about -5 is not ruled out; this rule has no such term.
  *
- * WHAT PICKS 2,000 OR 3,000 for a neutral ship was not settled by the
- * data (no ship type or record separates them). The rule here draws the
- * BASE first, 1,000 / 2,000 / 3,000 alike, and lets the base pick the
- * mood: 1,000 is a good mood, 2,000 neutral, 3,000 neutral or bad alike.
- * That reproduces every row (good only at 1,000, bad only at 3,000,
- * neutral at both) and the frequencies seen, 2 good : 3 neutral : 1 bad
- * of six (this rule's 1/3 : 1/2 : 1/6). GUESS for the draw itself.
+ * GUESSES for the draw: the mood is 1 in 4 good, 2 in 4 neutral, 1 in 4
+ * bad (the first asks seen so far: 6 good, 19 neutral, 9 bad of 34), and
+ * the step within the mood's spread is an even draw.
  *
- * DETERMINISTIC without the PRNG: a salted hash of the ship's uuid, like
+ * DETERMINISTIC without the PRNG: salted hashes of the ship's uuid, like
  * every comm line here, so the dialog (which must quote the price before
  * any record is applied) and applyHail (which charges it) agree on every
- * peer, and the ship keeps its mood for every pilot and every ask.
- *
- * This is the SHIP's side of the price, for a pilot with plenty of cash
- * and a clean record; the pilot's side ({@link fuelAskingBase}) moves it.
+ * peer, and the ship keeps its mood and its ask for every pilot and every
+ * ask.
  */
 export function fuelSaleTerms(shipUuid: string): FuelSaleTerms {
-    const roll = hashString(`fuelSale:base:${shipUuid}`);
-    const base = FUEL_SALE_PRICE_STEP * (1 + roll % 3);
-    const mood: FuelSaleMood = base === FUEL_SALE_PRICE_STEP ? 'good'
-        : base === 2 * FUEL_SALE_PRICE_STEP ? 'neutral'
-            : hashString(`fuelSale:mood:${shipUuid}`) % 2 === 0
-                ? 'neutral' : 'bad';
-    return { mood, base };
+    // ONE hash, two bit fields: the low two bits pick the mood and bit 16
+    // the step. (Two hashes salted "mood" / "base" are correlated in their
+    // low bits, FNV-1a mixing upward only: they paired every mood with
+    // one step.)
+    const roll = hashString(`fuelSale:ask:${shipUuid}`);
+    const mood: FuelSaleMood = roll % 4 === 0 ? 'good'
+        : roll % 4 === 3 ? 'bad' : 'neutral';
+    const step = (roll >>> 16) & 1;
+    return {
+        mood,
+        base: FUEL_SALE_PRICE_STEP * (FUEL_SALE_MOOD_STEPS[mood] + step),
+    };
 }
+
+/** Each mood's LOWER ask, in {@link FUEL_SALE_PRICE_STEP}s; the higher
+ * one is a step more ({@link fuelSaleTerms}). */
+export const FUEL_SALE_MOOD_STEPS: Readonly<Record<FuelSaleMood, number>> = {
+    good: 1, neutral: 2, bad: 3,
+};
 
 /** What the price reads about the pilot asking (synced state). */
 export interface FuelSalePilot {
     /** The pilot's cash. */
     credits: number;
-    /** The pilot's legal record in the CURRENT system (local_law.ts's
-     * recordHere: the per-system record). */
-    record: number;
 }
 
-/** Under this much cash a pilot is POOR to a fuel seller
- * ({@link fuelAskingBase}). GUESS: 5,000 and 300 were poor and 1,000,000
- * was not (reference "P1 / H1 wave 18"); the cut is somewhere between, and
- * this is the round number just above the measured 5,000. */
-export const FUEL_SALE_POOR_CASH = 10_000;
+/**
+ * The CASH CAP on a ship's first ask is the pilot's cash divided by this,
+ * rounded down to a {@link FUEL_SALE_PRICE_STEP} ({@link fuelAskingBase}).
+ * GUESS within the measured bounds: reference "H1 wave 19", finding 1,
+ * needs a fraction f of the cash in [0.3, 0.4) (10,000 credits capped a
+ * bad mood at 3,000, so f >= 0.3; 5,000 capped a neutral at 1,000, so
+ * f < 0.4; 7,000 -> 2,000 fits both); a third is the round figure inside.
+ */
+export const FUEL_SALE_CASH_DIVISOR = 3;
 
 /**
- * THE SHIP'S FIRST ASK TO THIS PILOT: its base ({@link fuelSaleTerms}),
- * moved by the pilot's cash and record. Reference "P1 / H1 wave 18",
- * finding 2 (one ship per case; GUESS for the rule, the data points are):
+ * THE SHIP'S FIRST ASK TO THIS PILOT:
  *
- *  - POOR: with 5,000 credits a neutral-mood trader asked 1,000, and with
- *    300 credits a neutral-mood warship asked 1,000 (neutral ships asked
- *    2,000-3,000 of the 1,000,000-credit pilots of wave 17). So a pilot with
- *    less than {@link FUEL_SALE_POOR_CASH} is asked the LOWEST base, 1,000,
- *    whatever the ship's mood. (The reference write-up's "base - 1,000, not
- *    below 1,000" fits too, but only if both neutral ships happened to draw
- *    the 2,000 base; the flat 1,000 fits both rows for certain.)
- *  - A NEGATIVE RECORD here: at record -5 (1,000,000 credits) a bad-mood
- *    warship asked 4,000 and a good-mood trader 2,000, where bad asked 3,000
- *    and good 1,000 at record 0 and +2000 (wave 17). So any record below 0
- *    in the current system adds {@link FUEL_SALE_PRICE_STEP}. Only -5 was
- *    measured: whether a deeper record adds more is open, and a positive
- *    one adds nothing (+2000, wave 17).
+ *     min(the ship's own ask, max(1,000, cash / 3 rounded down to 1,000))
  *
- * The +1,000 an ask and the 3/4 counter apply on top ({@link
- * fuelSalePrice}). Pure over synced state, so the dialog's quote and
+ * Reference "H1 wave 19", finding 1, with waves 17 and 18 — every row
+ * fits: with 7,000 credits all six ships asked 2,000, bad moods included
+ * (which ask 3,000+ of a rich pilot); with 10,000 the bad moods asked
+ * 3,000 and the neutrals 2,000 or 3,000; with 5,000 and with 300 a
+ * neutral asked 1,000; with 1,000,000 nothing is capped. The cap never
+ * goes below 1,000: a pilot who cannot pay even that is still asked it,
+ * and answered "You can't fool me - you can't afford it." ({@link
+ * cantAffordText}). NO RECORD TERM (finding 2; see {@link fuelSaleTerms}
+ * for the one open bad-mood question). The cash divisor is a GUESS
+ * ({@link FUEL_SALE_CASH_DIVISOR}).
+ *
+ * The cap is on the FIRST ask: the +1,000 every later ask adds and the
+ * 3/4 counter apply on top ({@link fuelSalePrice}; reference "P1 / H1
+ * wave 18": a 5,000-credit pilot was asked 1,000, then 2,000 after a
+ * withdrawal). Pure over synced state, so the dialog's quote and
  * applyHail's charge agree.
  */
 export function fuelAskingBase(shipUuid: string, pilot: FuelSalePilot):
     number {
-    const base = pilot.credits < FUEL_SALE_POOR_CASH
-        ? FUEL_SALE_PRICE_STEP : fuelSaleTerms(shipUuid).base;
-    return base + (pilot.record < 0 ? FUEL_SALE_PRICE_STEP : 0);
+    const credits = Math.max(0, Math.floor(pilot.credits) || 0);
+    const cap = FUEL_SALE_PRICE_STEP * Math.max(1, Math.floor(
+        credits / (FUEL_SALE_CASH_DIVISOR * FUEL_SALE_PRICE_STEP)));
+    return Math.min(fuelSaleTerms(shipUuid).base, cap);
 }
 
 /**
@@ -567,6 +584,10 @@ export const FUEL_COUNTER_IN_FIVE = 2;
  * / "Fine, I guess you don't want my help."); on a counter it ALWAYS
  * withdraws (every second press did). A withdrawal ends that ask: the next
  * one costs 1,000 more.
+ *
+ * Reference "H1 wave 19", finding 3: the same at records of -1 and -9
+ * (counters at both, so the record does not read here either), and every
+ * second press on a counter withdrew.
  *
  * Which first press counters is a draw the reference could only count (5
  * of 13, no pattern by ship, mood, price or record): here a hash of the
@@ -1129,19 +1150,16 @@ export function hostileResponseText(strings: readonly string[] | undefined,
  * (Flags2 0x0010) always repair/refuel for free (unmeasured); an active ränk
  * with Flags 0x0800 ("Ships allied with the affiliated govt will always
  * repair or refuel the player for free") affiliated with the hailed ship's
- * government (`rankFreeRepair`, from rank_logic.ts's ranksGiveFreeRepair)
- * REFUELS for free and does NOT repair: reference "P1 / H1 wave 18",
- * finding 4 — with the ränk active, the affiliated govt's trader and
- * warship said "Okay, I'm on my way." to a fuelless pilot at once, with no
- * price, and came; three of its warships refused a disabled pilot ("You
- * wish." / "No way." / "Not a chance."), as without the ränk.
- *
- * NARROWING: the Bible says ships ALLIED WITH the affiliated govt, not only
- * ships OF it. Allies are expressed through gövt class numbers rather than
- * govt ids (govt_data.ts's classes/allies), so honouring the wider reading
- * would mean resolving the whole ally graph at every hail; the caller passes
- * the same-govt answer, which is the case every stock rank with 0x0800 is
- * written for. Documented, not silent.
+ * government OR ONE ALLIED WITH IT, in either direction (`rankFreeRepair`,
+ * from rank_logic.ts's ranksGiveFreeFuel) REFUELS for free and does NOT
+ * repair: reference "P1 / H1 wave 18", finding 4 — with the ränk active,
+ * the affiliated govt's trader and warship said "Okay, I'm on my way." to
+ * a fuelless pilot at once, with no price, and came; three of its warships
+ * refused a disabled pilot ("You wish." / "No way." / "Not a chance."), as
+ * without the ränk — and "H1 wave 19", finding 5 — an ALLY's ship
+ * answered "Hold on, I'll be right there." at once, no price, and the fuel
+ * came; two allies and three of the affiliated govt refused a disabled
+ * holder.
  *
  * Free help is what {@link assistWillingness} grants a non-hostile ship's
  * request with: without it a ship refuses a disabled pilot and sells a

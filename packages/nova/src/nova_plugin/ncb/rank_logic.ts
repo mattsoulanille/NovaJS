@@ -288,12 +288,24 @@ export function ranksAllowAssistance(active: Iterable<string> | undefined,
 
 /**
  * 0x0800: "Ships allied with the affiliated govt will always repair or refuel
- * the player for free."
+ * the player for free." As the Bible words it: does the player hold a rank whose
+ * affiliated government is `govtId` ITSELF or one ALLIED with it, so that
+ * `govtId`'s ships refuel him for free? `alliedWith(affilGovtId)` answers
+ * the alliance (the caller's: reputation/local_law.ts's alliedEitherWay,
+ * a one-way alliance being enough). Reference "H1 wave 19", finding 5: an
+ * ALLY of the affiliated govt refuelled a fuelless holder at once, no
+ * price ("Hold on, I'll be right there."); wave 18 had the affiliated
+ * govt's own ships do it. (Nobody repairs: hail.ts's assistIsFree.)
  */
-export function ranksGiveFreeRepair(active: Iterable<string> | undefined,
-    getRank: RankLookup, govtId: string | null | undefined): boolean {
-    return ranksForGovt(active, getRank, govtId)
-        .some(rank => rank.rankFlags.freeRefuelAndRepair);
+export function ranksGiveFreeFuel(active: Iterable<string> | undefined,
+    getRank: RankLookup, govtId: string | null | undefined,
+    alliedWith: (affilGovtId: string) => boolean): boolean {
+    if (!govtId) {
+        return false;
+    }
+    return activeRankData(active, getRank).some(rank =>
+        rank.rankFlags.freeRefuelAndRepair && !!rank.affilGovt
+        && (rank.affilGovt === govtId || alliedWith(rank.affilGovt)));
 }
 
 /**

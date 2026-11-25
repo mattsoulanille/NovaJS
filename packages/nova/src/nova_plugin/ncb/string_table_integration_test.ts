@@ -31,7 +31,7 @@ import {
     FUEL_SALE_BAD_MOOD_FIRST_INDEX, FUEL_SALE_BAD_MOOD_FALLBACK,
     fuelOfferWithdrawnText, fuelSaleMoodText, PAY_ME_INDEX, payMeText,
     CANT_AFFORD_COUNT, CANT_AFFORD_FALLBACK, CANT_AFFORD_FIRST_INDEX,
-    cantAffordText,
+    cantAffordText, underFireRefusalText,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -246,6 +246,12 @@ describe('StringTable against real Nova data', () => {
                 .toBe('A pleasure doing business with you.');
             for (const seed of [0, 1, 2, 3, 4, 987654]) {
                 expect(group).toContain(mercyRefusedText(table.strings, seed));
+                // The same group answers a healthy pilot under attack, a
+                // ränk 0x0400 holder asking a warship of his affiliated
+                // govt included (reference "H1 wave 19": "No way.", "Not a
+                // chance.", "You wish.").
+                expect(group)
+                    .toContain(underFireRefusalText(table.strings, seed));
             }
         });
 

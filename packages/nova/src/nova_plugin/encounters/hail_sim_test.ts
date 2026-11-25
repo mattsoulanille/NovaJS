@@ -19,7 +19,7 @@ import { SourceComponent } from '../combat/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
-    FUEL_SALE_AMOUNT, FUEL_SALE_POOR_CASH, fuelSaleTerms,
+    FUEL_SALE_AMOUNT, fuelSaleTerms,
     LegalRecordsComponent,
 } from '../reputation/index.js';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
@@ -739,14 +739,14 @@ describe('applyHail: a criminal record counts by the local law (#297/A14)',
                 expect(target(world).components.has(AssistingComponent))
                     .toBeFalse();
                 // Repaired but out of fuel: the neutral price, not a bribe
-                // — 1,000 dearer for the record below 0 HERE (reference
-                // "P1 / H1 wave 18": record -5, +1,000), whoever enforces.
+                // — and no dearer for the record (reference "H1 wave 19",
+                // finding 2: no record term).
                 player(world).components.delete(DisabledComponent);
                 player(world).components.get(FuelComponent)!.current = 0;
                 applyHail(world, PEER,
                     { kind: 'requestAssistance', target: 'target' });
                 expect(player(world).components.get(CreditsComponent)!.credits)
-                    .toBe(100_000 - fuelSaleTerms('target').base - 1000);
+                    .toBe(100_000 - fuelSaleTerms('target').base);
                 expect(target(world).components.get(AssistingComponent))
                     .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
             });
@@ -1240,11 +1240,11 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
                 .toEqual({ client: 'player', fuel: FUEL_SALE_AMOUNT });
         });
 
-    /** A neutral ship whose own base is 3,000 (a bad or neutral mood). */
-    async function dearWorld(credits: number, record = 0) {
+    /** A neutral ship whose own ask is `base` (4,000: a bad mood). */
+    async function dearWorld(credits: number, record = 0, base = 4000) {
         const made = await makeWorld();
         const uuid = Array.from({ length: 100 }, (_, i) => `seller-${i}`)
-            .find(id => fuelSaleTerms(id).base === 3000)!;
+            .find(id => fuelSaleTerms(id).base === base)!;
         await made.addShip(uuid, 150, 0, ship => {
             ship.components.set(GovtComponent, { id: 'test:neutral' });
             ship.components.set(NpcComponent, { aiType: 3, mode: 'travel' });
@@ -1256,47 +1256,60 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
         return { ...made, uuid };
     }
 
-    it('a POOR pilot is asked the lowest base, 1,000, whatever the ship\'s '
-        + 'mood (reference P1 / H1 wave 18: 5,000 and 300 credits; GUESS '
-        + 'for the rule and the 10,000 cut)', async () => {
-            for (const cash of [5000, FUEL_SALE_POOR_CASH - 1]) {
+    it('the pilot\'s CASH caps the first ask at a third, to a 1,000, never '
+        + 'below 1,000 (reference H1 wave 19, finding 1; the divisor a '
+        + 'GUESS inside the measured bounds)', async () => {
+            // A bad-mood 4,000 ship: 10,000 -> 3,000, 7,000 -> 2,000,
+            // 5,000 -> 1,000, 1,000,000 -> its own 4,000.
+            for (const [cash, price] of [[10_000, 3000], [7000, 2000],
+                [5000, 1000], [1_000_000, 4000]] as const) {
                 const { world, uuid } = await dearWorld(cash);
                 applyHail(world, PEER, { kind: 'requestAssistance', target: uuid });
                 expect(credits(world)).withContext(`${cash}`)
-                    .toBe(cash - 1000);
+                    .toBe(cash - price);
             }
-            // At the cut and above: the ship's own base.
-            const rich = await dearWorld(FUEL_SALE_POOR_CASH);
-            applyHail(rich.world, PEER,
-                { kind: 'requestAssistance', target: rich.uuid });
-            expect(credits(rich.world)).toBe(FUEL_SALE_POOR_CASH - 3000);
+            // The cap is on the FIRST ask: the next one adds its 1,000 on
+            // top (reference P1 / H1 wave 18: 5,000 credits, 1,000 then
+            // 2,000 after a withdrawal).
+            const poor = await dearWorld(5000);
+            const lowerIt = { kind: 'lowerPrice', target: poor.uuid } as const;
+            const poorHaggle = () => poor.world.entities.get(poor.uuid)!
+                .components.get(FuelHaggleComponent)?.get('player');
+            // A withdrawal within two presses (a counter's second press
+            // always withdraws).
+            for (let i = 0; i < 2 && !poorHaggle()?.asks; i++) {
+                applyHail(poor.world, PEER, lowerIt);
+            }
+            expect(poorHaggle()).toEqual({ asks: 1, countered: false });
+            applyHail(poor.world, PEER,
+                { kind: 'requestAssistance', target: poor.uuid });
+            expect(credits(poor.world)).toBe(5000 - 2000);
         });
 
-    it('a NEGATIVE record here adds 1,000 (reference P1 / H1 wave 18: '
-        + 'record -5, bad 4,000 and good 2,000); a positive one nothing',
-        async () => {
-            const bad = await dearWorld(1_000_000, -5);
-            applyHail(bad.world, PEER,
-                { kind: 'requestAssistance', target: bad.uuid });
-            expect(credits(bad.world)).toBe(1_000_000 - 4000);
-            const { world } = await neutralWorld();
-            fuelless(world);
-            player(world).components.set(LegalRecordsComponent,
-                new Map([['test:system', -5]]));
-            applyHail(world, PEER, assist);
-            expect(credits(world)).toBe(100_000 - 2000);
-            // The record of ANOTHER system does not count.
-            const elsewhere = await neutralWorld();
-            fuelless(elsewhere.world);
-            player(elsewhere.world).components.set(LegalRecordsComponent,
-                new Map([['test:other', -500]]));
-            applyHail(elsewhere.world, PEER, assist);
-            expect(credits(elsewhere.world)).toBe(100_000 - 1000);
-            // Poor AND negative: 1,000 + 1,000.
-            const both = await dearWorld(5000, -5);
-            applyHail(both.world, PEER,
-                { kind: 'requestAssistance', target: both.uuid });
-            expect(credits(both.world)).toBe(5000 - 2000);
+    it('NO record term: the record here moves neither the price nor the '
+        + 'counter (reference H1 wave 19, findings 2 and 3: records -1 and '
+        + '-9 asked a clean pilot\'s prices and got counters)', async () => {
+            for (const record of [-1, -5, -9, -500, 2000]) {
+                const bad = await dearWorld(1_000_000, record);
+                applyHail(bad.world, PEER,
+                    { kind: 'requestAssistance', target: bad.uuid });
+                expect(credits(bad.world)).withContext(`${record}`)
+                    .toBe(1_000_000 - 4000);
+                const { world } = await neutralWorld();
+                fuelless(world);
+                player(world).components.set(LegalRecordsComponent,
+                    new Map([['test:system', record]]));
+                // 'target' draws withdraw, then counter (hail_test): a
+                // counter at a negative record as at a clean one.
+                applyHail(world, PEER, lower);
+                applyHail(world, PEER, lower);
+                expect(haggle(world)).withContext(`${record}`)
+                    .toEqual({ asks: 1, countered: true });
+                // 2,000 -> 1,500, accepted.
+                applyHail(world, PEER, assist);
+                expect(credits(world)).withContext(`${record}`)
+                    .toBe(100_000 - 1500);
+            }
         });
 
     it('a Roadside Assistance govt still repairs and refuels for free',
@@ -1451,5 +1464,59 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
                     .toBeFalse();
                 expect(credits(disabled.world)).toBe(100_000);
             }
+        });
+
+    it('a ränk 0x0800 makes the affiliated govt\'s ALLIES refuel for free '
+        + 'too, and still nobody repairs (reference H1 wave 19, finding 5)',
+        async () => {
+            /** The ränk is affiliated with `test:friend`; the hailed ship
+             * flies for `test:host`, its ally (alliedWorld). */
+            async function allyRankWorld(aiType: number) {
+                const made = await alliedWorld(aiType);
+                const gameData = made.world.resources.get(
+                    SimulationGameDataResource) as unknown as MockGameData;
+                const base = getDefaultRankData();
+                gameData.data.Rank.map.set('test:free', {
+                    ...base, id: 'test:free', affilGovt: 'test:friend',
+                    rankFlags: { ...base.rankFlags, freeRefuelAndRepair: true },
+                });
+                await gameData.data.Rank.get('test:free');
+                player(made.world).components.set(ActiveRanksComponent,
+                    new Set(['test:free']));
+                return made;
+            }
+            for (const aiType of [1, 3]) {
+                const fuel = await allyRankWorld(aiType);
+                fuelless(fuel.world);
+                applyHail(fuel.world, PEER, assist);
+                expect(credits(fuel.world)).withContext(`AI ${aiType}`)
+                    .toBe(100_000);
+                expect(target(fuel.world).components.get(AssistingComponent))
+                    .withContext(`AI ${aiType}`).toEqual({ client: 'player' });
+
+                const disabled = await allyRankWorld(aiType);
+                player(disabled.world).components.set(DisabledComponent,
+                    { repairAt: null });
+                applyHail(disabled.world, PEER, assist);
+                expect(target(disabled.world).components
+                    .has(AssistingComponent)).withContext(`AI ${aiType}`)
+                    .toBeFalse();
+            }
+            // A ship of a govt that is NOT allied with the affiliated one
+            // still sells.
+            const stranger = await neutralWorld(1);
+            const gameData = stranger.world.resources.get(
+                SimulationGameDataResource) as unknown as MockGameData;
+            const base = getDefaultRankData();
+            gameData.data.Rank.map.set('test:free', {
+                ...base, id: 'test:free', affilGovt: 'test:friend',
+                rankFlags: { ...base.rankFlags, freeRefuelAndRepair: true },
+            });
+            await gameData.data.Rank.get('test:free');
+            player(stranger.world).components.set(ActiveRanksComponent,
+                new Set(['test:free']));
+            fuelless(stranger.world);
+            applyHail(stranger.world, PEER, assist);
+            expect(credits(stranger.world)).toBe(100_000 - 1000);
         });
 });

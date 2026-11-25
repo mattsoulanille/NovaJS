@@ -17,7 +17,7 @@ import {
     fuelHaggleAfterAccept,
     fuelLowerPriceCounters,
     fuelSalePrice,
-    fuelSaleTerms, fuelAskingBase, FUEL_SALE_POOR_CASH, cantAffordText,
+    fuelSaleTerms, fuelAskingBase, FUEL_SALE_CASH_DIVISOR, cantAffordText,
     CANT_AFFORD_FALLBACK, CANT_AFFORD_FIRST_INDEX, CANT_AFFORD_COUNT,
     isTraderAiType,
     laterFuelHaggle,
@@ -433,10 +433,11 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
 
 /**
  * Reference "H1 wave 17" (docs/reference_experiments.md): a ship's price for
- * a jump of fuel is a per-ship base set by its mood (good 1,000; neutral
- * 2,000-3,000; bad 3,000) plus 1,000 for every repeated ask; Lower Price
- * counters with floor(0.75 x P / 100) x 100 or withdraws, and always
- * withdraws a counter.
+ * a jump of fuel is a per-ship ask set by its mood plus 1,000 for every
+ * repeated ask; Lower Price counters with floor(0.75 x P / 100) x 100 or
+ * withdraws, and always withdraws a counter. "H1 wave 19": each mood asks
+ * one of two steps (good 1,000-2,000, neutral 2,000-3,000, bad
+ * 3,000-4,000), capped by the pilot's cash, with no record term.
  */
 describe('the fuel sale\'s price (reference H1 wave 17)', () => {
     it('counters with 3/4 rounded down to 100: all five measured counters',
@@ -474,53 +475,80 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
                 { asks: 1e12, countered: false }))).toBeTrue();
         });
 
-    it('draws a mood and base per ship: good at 1,000, neutral at 2,000 or '
-        + '3,000, bad at 3,000 (finding 2)', () => {
-            const seen = new Set<string>();
-            for (let i = 0; i < 300; i++) {
+    it('draws a mood and an ask per ship: good 1,000-2,000, neutral '
+        + '2,000-3,000, bad 3,000-4,000 (reference H1 wave 19, finding 2)',
+        () => {
+            const counts = new Map<string, number>();
+            const n = 4000;
+            for (let i = 0; i < n; i++) {
                 const terms = fuelSaleTerms(`ship ${i}`);
-                seen.add(`${terms.mood} ${terms.base}`);
+                const key = `${terms.mood} ${terms.base}`;
+                counts.set(key, (counts.get(key) ?? 0) + 1);
                 // The same ship, the same terms, every time.
                 expect(fuelSaleTerms(`ship ${i}`)).toEqual(terms);
             }
-            expect([...seen].sort()).toEqual(
-                ['bad 3000', 'good 1000', 'neutral 2000', 'neutral 3000']);
+            expect([...counts.keys()].sort()).toEqual([
+                'bad 3000', 'bad 4000', 'good 1000', 'good 2000',
+                'neutral 2000', 'neutral 3000',
+            ]);
+            // GUESS for the draw: moods 1 : 2 : 1, each step even.
+            const share = (key: string) => (counts.get(key) ?? 0) / n;
+            for (const key of ['good 1000', 'good 2000', 'bad 3000',
+                'bad 4000']) {
+                expect(share(key)).toBeGreaterThan(0.1);
+                expect(share(key)).toBeLessThan(0.15);
+            }
+            for (const key of ['neutral 2000', 'neutral 3000']) {
+                expect(share(key)).toBeGreaterThan(0.22);
+                expect(share(key)).toBeLessThan(0.28);
+            }
             // Pinned, so a change to the draw is a deliberate one.
-            expect(fuelSaleTerms('ship0')).toEqual({ mood: 'bad', base: 3000 });
-            expect(fuelSaleTerms('ship1')).toEqual({ mood: 'good', base: 1000 });
-            expect(fuelSaleTerms('ship2'))
+            expect(fuelSaleTerms('ship0'))
                 .toEqual({ mood: 'neutral', base: 2000 });
-            expect(fuelSaleTerms('ship3'))
+            expect(fuelSaleTerms('ship2')).toEqual({ mood: 'bad', base: 3000 });
+            expect(fuelSaleTerms('ship3')).toEqual({ mood: 'good', base: 1000 });
+            expect(fuelSaleTerms('ship10'))
                 .toEqual({ mood: 'neutral', base: 3000 });
+            expect(fuelSaleTerms('ship12'))
+                .toEqual({ mood: 'good', base: 2000 });
+            expect(fuelSaleTerms('ship13')).toEqual({ mood: 'bad', base: 4000 });
         });
 
-    it('the first ask reads the pilot: a poor one is asked 1,000, a '
-        + 'negative record here adds 1,000 (reference P1 / H1 wave 18, '
-        + 'finding 2; GUESS for the rule)', () => {
+    it('the first ask is capped by the pilot\'s cash: min(own ask, '
+        + 'max(1,000, cash / 3 to a 1,000)), no record term (reference H1 '
+        + 'wave 19, findings 1 and 2)', () => {
+            expect(FUEL_SALE_CASH_DIVISOR).toBe(3);
             const rich = 1_000_000;
-            // ship0: bad 3,000; ship1: good 1,000; ship3: neutral 3,000.
-            expect(fuelAskingBase('ship0', { credits: rich, record: 0 }))
-                .toBe(3000);
-            expect(fuelAskingBase('ship0', { credits: rich, record: 2000 }))
-                .toBe(3000);
-            // Record -5: bad 4,000, good 2,000 (the reference's two ships).
-            expect(fuelAskingBase('ship0', { credits: rich, record: -5 }))
-                .toBe(4000);
-            expect(fuelAskingBase('ship1', { credits: rich, record: -5 }))
-                .toBe(2000);
-            // 5,000 and 300 credits: neutral ships asked 1,000.
-            expect(fuelAskingBase('ship3', { credits: 5000, record: 0 }))
-                .toBe(1000);
-            expect(fuelAskingBase('ship3', { credits: 300, record: 0 }))
-                .toBe(1000);
-            expect(fuelAskingBase('ship3',
-                { credits: FUEL_SALE_POOR_CASH, record: 0 })).toBe(3000);
-            expect(fuelAskingBase('ship0', { credits: 300, record: -5 }))
-                .toBe(2000);
+            // A rich pilot pays the ship's own ask.
+            expect(fuelAskingBase('ship13', { credits: rich })).toBe(4000);
+            expect(fuelAskingBase('ship12', { credits: rich })).toBe(2000);
+            expect(fuelAskingBase('ship3', { credits: rich })).toBe(1000);
+            // 10,000 credits: a bad mood asks 3,000, neutrals 2,000 / 3,000.
+            expect(fuelAskingBase('ship13', { credits: 10_000 })).toBe(3000);
+            expect(fuelAskingBase('ship2', { credits: 10_000 })).toBe(3000);
+            expect(fuelAskingBase('ship10', { credits: 10_000 })).toBe(3000);
+            expect(fuelAskingBase('ship0', { credits: 10_000 })).toBe(2000);
+            // 7,000 credits: every mood 2,000, bad ones included.
+            for (const ship of ['ship13', 'ship2', 'ship10', 'ship0',
+                'ship12']) {
+                expect(fuelAskingBase(ship, { credits: 7000 })).toBe(2000);
+            }
+            expect(fuelAskingBase('ship3', { credits: 7000 })).toBe(1000);
+            // 5,000 and 300: 1,000, never less (300 is still asked it).
+            expect(fuelAskingBase('ship10', { credits: 5000 })).toBe(1000);
+            expect(fuelAskingBase('ship10', { credits: 300 })).toBe(1000);
+            expect(fuelAskingBase('ship13', { credits: 0 })).toBe(1000);
+            // The cap's edges: 9,000 -> 3,000, 8,999 -> 2,000.
+            expect(fuelAskingBase('ship13', { credits: 9000 })).toBe(3000);
+            expect(fuelAskingBase('ship13', { credits: 8999 })).toBe(2000);
+            // Nonsense cash is clamped rather than poisoning the price.
+            expect(fuelAskingBase('ship13', { credits: -50 })).toBe(1000);
+            expect(fuelAskingBase('ship13', { credits: NaN })).toBe(1000);
         });
 
     it('Lower Price: a counter or a withdrawal on the asking price, always a '
-        + 'withdrawal on a counter; a withdrawal ends the ask (finding 3)',
+        + 'withdrawal on a counter, whatever the record; a withdrawal ends '
+        + 'the ask (wave 17 finding 3, wave 19 finding 3)',
         () => {
             // 'target' / 'player' draw W, C, C, W for asks 0-3.
             expect([0, 1, 2, 3].map(asks =>

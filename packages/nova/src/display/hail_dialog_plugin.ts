@@ -1,3 +1,4 @@
+import { GovtData } from 'novadatainterface/govt_data';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
@@ -26,12 +27,12 @@ import {
     shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
     stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
     STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
+    alliedEitherWay,
     shipDisposition, LegalRecordsComponent, loadLocalLaw, underFireRefusalText,
     MERCY_REFUSED_FALLBACK, assistNeed, disabledRefusalText, fuelSaleMoodText,
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
-    NO_FUEL_HAGGLE, rankBattleAssistance, fuelAskingBase, cantAffordText,
-    LocalLaw, recordHere,
+    NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -52,7 +53,7 @@ import {
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
 import {
-    ActiveRanksComponent, ranksAllowAssistance, ranksGiveFreeRepair,
+    ActiveRanksComponent, ranksAllowAssistance, ranksGiveFreeFuel,
 } from '../nova_plugin/ncb/index.js';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
@@ -282,10 +283,12 @@ export interface AssistReplies {
     /**
      * "Yeah, right!" / "No way." (STR# 3000 95-99) — the player's ship is
      * fine but under attack (reference H1 wave 15; underFireRefusalText).
-     * A TRADER of a govt whose ränk 0x0400 the player holds says it too
-     * ("Not a chance.", reference H1 wave 17, finding 7). Absent for such a
-     * govt's WARSHIP (battle assistance, GUESS: not measured), which keeps
-     * the no-need line.
+     * A ship of a govt whose ränk 0x0400 the player holds says it too, a
+     * TRADER ("Not a chance.", reference H1 wave 17, finding 7) and a
+     * WARSHIP alike ("No way." / "Not a chance." / "You wish.", "H1 wave
+     * 19", finding 4: no battle assistance has been seen at all). Optional
+     * only so a hand-built reply set may leave it out (the no-need line is
+     * then said).
      */
     underFire?: string;
     /**
@@ -338,9 +341,6 @@ export interface FuelSaleLines {
     /** "You can't fool me - you can't afford it." (60-64), Accept Price or
      * Lower Price on a price the pilot cannot pay. */
     cantAfford: string;
-    /** The law of the system the channel opened in: the price reads the
-     * pilot's record HERE (hail.ts's fuelAskingBase). */
-    law: LocalLaw;
     /** STR# 2002, for the popup's "Pay me N credits." ({@link payMeText}). */
     miscStrings: readonly string[] | undefined;
 }
@@ -438,21 +438,19 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
 
 /**
  * The haggle popup's offer for the price on the table: `targetUuid`'s first
- * ask to this pilot (hail.ts's fuelAskingBase: the ship's base, the
- * pilot's cash, his record in this system) and `haggle` (1,000 an earlier
- * ask, or the 3/4 counter), the same figure applyHail charges on Accept
- * Price. A price he cannot pay is still offered (Accept Price is not
- * greyed); pressing either button answers `cantAfford`.
+ * ask to this pilot (hail.ts's fuelAskingBase: the ship's own ask, capped
+ * by the pilot's cash) and `haggle` (1,000 an earlier ask, or the 3/4
+ * counter), the same figure applyHail charges on Accept Price. A price he
+ * cannot pay is still offered (Accept Price is not greyed); pressing either
+ * button answers `cantAfford`.
  */
 export function fuelOffer(world: World, targetUuid: string,
     sale: FuelSaleLines, haggle: FuelHaggleState):
     NonNullable<HailContext['bribe']> {
     const entity = getPlayerShip(world)?.entity;
     const credits = entity?.components.get(CreditsComponent)?.credits ?? 0;
-    const records = entity?.components.get(LegalRecordsComponent);
-    const price = fuelSalePrice(fuelAskingBase(targetUuid, {
-        credits, record: records ? recordHere(records, sale.law) : 0,
-    }), haggle);
+    const price = fuelSalePrice(fuelAskingBase(targetUuid, { credits }),
+        haggle);
     return {
         amount: price, canAfford: credits >= price,
         purpose: 'fuel',
@@ -483,13 +481,17 @@ export function fuelHaggleOf(world: World, targetUuid: string,
  * literal, exactly as noShipsForHire does (spaceport/hire_escort.ts).
  */
 function resolveAssistReplies(strings: readonly string[] | undefined,
-    seed: number, rankAlwaysAssists = false): AssistReplies {
+    seed: number): AssistReplies {
     return {
         granted: assistGrantedText(strings, seed),
         busy: busyResponseText(strings, seed),
         noNeed: noNeedResponseText(strings, seed),
-        ...(rankAlwaysAssists
-            ? {} : { underFire: underFireRefusalText(strings, seed) }),
+        // A healthy pilot under attack is refused from STR# 3000 95-99
+        // ("No way." / "Not a chance." / "You wish.") by everyone, a ränk
+        // 0x0400 holder asking a warship of his affiliated govt included:
+        // reference "H1 wave 19", finding 4 (four AI 4 warships of the
+        // affiliated govt, already fighting the raider on him, refused).
+        underFire: underFireRefusalText(strings, seed),
     };
 }
 
@@ -946,16 +948,31 @@ export async function computeContext(world: World,
             gameData.data.Rank.getCached(id);
         const rankAlwaysAssists = ranksAllowAssistance(
             hailRanks, getHailRank, govt?.id);
-        // ...which only a WARSHIP of that govt honours (reference H1 wave
-        // 17, finding 7: a trader refused; hail.ts's rankBattleAssistance).
-        const rankHelps = rankBattleAssistance(rankAlwaysAssists, aiType);
         // THE BUTTON IS ALWAYS THERE for a ship that communicates (ruling
         // #297: "They just refuse to help you or make you pay") — only a
         // Flags2 0x0001 govt (the Dechtakar) has none. Whether the ship
         // HELPS is the answer's business, below.
         // ränk 0x0800 REFUELS for free and does not repair (reference
-        // "P1 / H1 wave 18"), so free help depends on the need.
-        const rankFree = ranksGiveFreeRepair(hailRanks, getHailRank, govt?.id);
+        // "P1 / H1 wave 18"), so free help depends on the need; and the
+        // ships of the affiliated govt's ALLIES refuel too ("H1 wave 19",
+        // finding 5), so each such rank's affiliated govt is loaded for
+        // the alliance test (the simulation reads the same gövts off
+        // GovtsResource).
+        const freeFuelAffils = new Map<string, GovtData | undefined>();
+        for (const id of hailRanks ?? []) {
+            const rank = getHailRank(id);
+            if (rank?.rankFlags.freeRefuelAndRepair && rank.affilGovt
+                && !freeFuelAffils.has(rank.affilGovt)) {
+                freeFuelAffils.set(rank.affilGovt, await gameData.data.Govt
+                    .get(rank.affilGovt).catch(() => undefined));
+            }
+        }
+        const rankFree = ranksGiveFreeFuel(hailRanks, getHailRank, govt?.id,
+            affil => {
+                const affilGovt = freeFuelAffils.get(affil);
+                return !!affilGovt && !!govt
+                    && alliedEitherWay(affilGovt, govt);
+            });
         const freeRepair = assistIsFree(govt, rankFree, 'disabled');
         const freeFuel = assistIsFree(govt, rankFree, 'fuel');
         // The caption says "(free)" when what the player needs right now
@@ -986,7 +1003,7 @@ export async function computeContext(world: World,
         // "You're not in any trouble." / "All right, I'll help you."). Only
         // the lines are resolved here — the press decides which is used.
         const replies: AssistReplies = {
-            ...resolveAssistReplies(shipStrings, shipSeed, rankHelps),
+            ...resolveAssistReplies(shipStrings, shipSeed),
             ...(escortLine !== undefined ? { escort: escortLine } : {}),
             // A ship another player owns can do nothing for us (applyHail
             // refuses it); an unfriendly government's ship that takes no
@@ -1017,7 +1034,6 @@ export async function computeContext(world: World,
                         accepted: assistPaidText(shipStrings, shipSeed),
                         cantAfford: cantAffordText(shipStrings, shipSeed),
                         miscStrings,
-                        law,
                     },
                 }
                 : {}),

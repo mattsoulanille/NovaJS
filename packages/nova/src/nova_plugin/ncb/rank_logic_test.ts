@@ -17,7 +17,7 @@ import {
     rankSalaryPerDay,
     ranksAllowAssistance,
     ranksAllowLanding,
-    ranksGiveFreeRepair,
+    ranksGiveFreeFuel,
     ranksSuppressAggression,
     suppressAggressionGovts,
 } from './rank_logic.js';
@@ -263,10 +263,38 @@ describe('rank privileges', () => {
             'nova:128')).toBeFalse();
         expect(ranksAllowAssistance(
             new Set(['nova:301']), get, 'nova:128')).toBeTrue();
-        expect(ranksGiveFreeRepair(
-            new Set(['nova:302']), get, 'nova:128')).toBeTrue();
-        expect(ranksGiveFreeRepair(
-            new Set(['nova:300']), get, 'nova:128')).toBeFalse();
+        const noAllies = () => false;
+        expect(ranksGiveFreeFuel(
+            new Set(['nova:302']), get, 'nova:128', noAllies)).toBeTrue();
+        expect(ranksGiveFreeFuel(
+            new Set(['nova:300']), get, 'nova:128', noAllies)).toBeFalse();
+    });
+
+    it('0x0800 reaches the affiliated govt\'s ALLIES too (reference H1 '
+        + 'wave 19, finding 5)', () => {
+        const get = lookup(rank('nova:302', { flags: 0x0800 }),
+            rank('nova:303', { flags: 0x0400 }));
+        const asked: string[] = [];
+        const allyOf128 = (other: string) => (affil: string) => {
+            asked.push(affil);
+            return affil === 'nova:128' && other === 'nova:129';
+        };
+        const free = new Set(['nova:302']);
+        // The affiliated govt itself, without asking about alliances.
+        expect(ranksGiveFreeFuel(free, get, 'nova:128', allyOf128('nova:128')))
+            .toBeTrue();
+        expect(asked).toEqual([]);
+        // Its ally, through the caller's alliance answer.
+        expect(ranksGiveFreeFuel(free, get, 'nova:129', allyOf128('nova:129')))
+            .toBeTrue();
+        expect(asked).toEqual(['nova:128']);
+        // Anybody else, a ship of no govt, and a rank without 0x0800: no.
+        expect(ranksGiveFreeFuel(free, get, 'nova:130', allyOf128('nova:130')))
+            .toBeFalse();
+        expect(ranksGiveFreeFuel(free, get, undefined, () => true))
+            .toBeFalse();
+        expect(ranksGiveFreeFuel(new Set(['nova:303']), get, 'nova:129',
+            () => true)).toBeFalse();
     });
 
     it('unions the active ranks\' Contribute sets', () => {

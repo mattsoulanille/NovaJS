@@ -718,19 +718,27 @@ describe('hail assistance answers (accept / busy / no need)', () => {
                 expect(answer.line).toBe(result!.replies.granted);
             });
 
-        it('and a WARSHIP whose govt\'s ränk 0x0400 the player holds keeps '
-            + 'the no-need line (battle assistance: GUESS, unmeasured)',
+        it('and a WARSHIP whose govt\'s ränk 0x0400 the player holds turns '
+            + 'him down flat too, AI 3 and AI 4 (reference H1 wave 19, '
+            + 'finding 4: "No way." / "Not a chance." / "You wish.")',
             async () => {
-                const { world, gameData } = await rankWorld(3);
-                const result = await computeContext(world, gameData,
-                    fakeDisplayAssets());
-                expect(result!.replies.underFire).toBeUndefined();
-                expect(assistAnswer(world, TARGET, result!.replies).line)
-                    .toBe(result!.replies.noNeed);
+                for (const aiType of [3, 4]) {
+                    const { world, gameData } = await rankWorld(aiType);
+                    const result = await computeContext(world, gameData,
+                        fakeDisplayAssets());
+                    expect(result!.replies.underFire)
+                        .withContext(`AI ${aiType}`).toBeDefined();
+                    const answer = assistAnswer(world, TARGET,
+                        result!.replies);
+                    expect(answer.line).withContext(`AI ${aiType}`)
+                        .toBe(result!.replies.underFire!);
+                    expect(answer.line).not.toBe(result!.replies.noNeed);
+                    expect(answer.dispatch).toBeFalse();
+                }
             });
 
-        it('but a TRADER of that govt turns him down flat (reference H1 '
-            + 'wave 17, finding 7: "Not a chance.")', async () => {
+        it('as does a TRADER of that govt (reference H1 wave 17, finding 7: '
+            + '"Not a chance.")', async () => {
                 const { world, gameData } = await rankWorld(1);
                 const result = await computeContext(world, gameData,
                     fakeDisplayAssets());
@@ -2104,8 +2112,9 @@ describe('computeContext: the shared hostility rule, for players too (#297)',
  * Reference "W1 / C1 / H1 wave 16" and "H1 wave 17", H1: a NEUTRAL ship
  * refuses a disabled pilot ("Not a chance." / "No way.") and offers a
  * fuelless one fuel — its mood line ("You're in luck, I'm in a good mood
- * today." at 1,000; "I'll help you out if you pay me." at 2,000-3,000; "I'm
- * in a bad mood today ..." at 3,000) over a "Pay me N credits." popup with
+ * today." at 1,000-2,000; "I'll help you out if you pay me." at
+ * 2,000-3,000; "I'm in a bad mood today ..." at 3,000-4,000, reference "H1
+ * wave 19") over a "Pay me N credits." popup with
  * Lower Price / Accept Price; Lower Price counters with 3/4 or withdraws the
  * offer ("If that's the way you feel, then you can sit here forever."), and
  * the next ask costs 1,000 more; Accept Price: "Hold on, I'll be right
@@ -2163,29 +2172,29 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
         expect(answer.line).toBe(result.replies.refusal!);
     });
 
-    // TARGET is a neutral-mood ship with a 2,000 base (hail.ts's
+    // TARGET is a good-mood ship with a 1,000 ask (hail.ts's
     // fuelSaleTerms, pinned below).
     it('the fixture ship\'s terms', () => {
-        expect(fuelSaleTerms(TARGET)).toEqual({ mood: 'neutral', base: 2000 });
+        expect(fuelSaleTerms(TARGET)).toEqual({ mood: 'good', base: 1000 });
     });
 
     it('offers a fuelless pilot fuel: the ship\'s mood line, then "Pay me '
-        + '2,000 credits." on the popup; nothing dispatched yet', async () => {
+        + '1,000 credits." on the popup; nothing dispatched yet', async () => {
             const { world, gameData } = neutralWorld();
             const result = (await computeContext(world, gameData, assets()))!;
             const sale = result.replies.fuelSale!;
-            // The neutral mood's line (STR# 3000 140-144), not the good one.
-            expect(sale.mood).toBe("I'll help you out if you pay me.");
+            // The good mood's line (STR# 3000 115-119), not the neutral one.
+            expect(sale.mood).toBe("You're in luck, I'm in a good mood today.");
             const answer = assistAnswer(world, TARGET, result.replies);
             expect(answer.dispatch).toBeFalse();
             expect(answer.haggle).toBeTrue();
             expect(answer.line).toBe(sale.mood);
             expect(answer.offer).toEqual(jasmine.objectContaining({
-                amount: 2000, canAfford: true, purpose: 'fuel',
-                demand: 'Pay me 2,000 credits.',
+                amount: 1000, canAfford: true, purpose: 'fuel',
+                demand: 'Pay me 1,000 credits.',
                 accepted: sale.accepted, withdrawn: sale.withdrawn,
             }));
-            expect(haggleText(answer.offer)).toBe('Pay me 2,000 credits.');
+            expect(haggleText(answer.offer)).toBe('Pay me 1,000 credits.');
         });
 
     it('quotes 1,000 more an ask, or the counter on the table, from the '
@@ -2196,26 +2205,26 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
             const quote = (local?: { asks: number, countered: boolean }) =>
                 assistAnswer(world, TARGET, result.replies, local).offer;
             expect(quote({ asks: 1, countered: false })?.demand)
-                .toBe('Pay me 3,000 credits.');
-            // A counter on the table: 3/4 of 4,000.
-            expect(quote({ asks: 2, countered: true })?.amount).toBe(3000);
+                .toBe('Pay me 2,000 credits.');
+            // A counter on the table: 3/4 of 3,000.
+            expect(quote({ asks: 2, countered: true })?.amount).toBe(2200);
             world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
                 new Map([[PLAYER, { asks: 2, countered: false }]]));
-            expect(quote()?.amount).toBe(4000);
+            expect(quote()?.amount).toBe(3000);
             // The further-along of the two wins.
-            expect(quote({ asks: 1, countered: false })?.amount).toBe(4000);
-            expect(quote({ asks: 2, countered: true })?.amount).toBe(3000);
+            expect(quote({ asks: 1, countered: false })?.amount).toBe(3000);
+            expect(quote({ asks: 2, countered: true })?.amount).toBe(2200);
             // Another pilot's haggling is not ours.
             world.entities.get(TARGET)!.components.set(FuelHaggleComponent,
                 new Map([['someone else', { asks: 5, countered: false }]]));
-            expect(quote()?.amount).toBe(2000);
+            expect(quote()?.amount).toBe(1000);
         });
 
     it('fuelOffer: the popup for a counter (2,000 -> 1,500)', async () => {
         const { world, gameData } = neutralWorld();
         const result = (await computeContext(world, gameData, assets()))!;
         const offer = fuelOffer(world, TARGET, result.replies.fuelSale!,
-            { asks: 0, countered: true });
+            { asks: 1, countered: true });
         expect(offer).toEqual(jasmine.objectContaining({
             amount: 1500, canAfford: true, purpose: 'fuel',
             demand: 'Pay me 1,500 credits.',
@@ -2256,23 +2265,36 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
             expect(haggleText(offer)).toBe('Pay me 1,000 credits.');
         });
 
-    it('quotes the pilot\'s side of the price: poor (5,000 credits) 1,000, '
-        + 'a negative record HERE 1,000 more (reference P1 / H1 wave 18)',
-        async () => {
-            const poor = neutralWorld(5000);
-            const poorContext = (await computeContext(poor.world,
-                poor.gameData, assets()))!;
-            expect(assistAnswer(poor.world, TARGET, poorContext.replies)
-                .offer?.amount).toBe(1000);
-
-            const { world, gameData } = neutralWorld();
-            world.resources.set(SystemIdResource, 'test:here');
-            world.entities.get(PLAYER)!.components.set(LegalRecordsComponent,
-                new Map([['test:here', -5], ['test:elsewhere', -900]]));
-            const result = (await computeContext(world, gameData, assets()))!;
-            // TARGET's own base is 2,000.
-            expect(assistAnswer(world, TARGET, result.replies).offer?.amount)
-                .toBe(3000);
+    it('quotes the pilot\'s side of the price: his cash caps the first ask, '
+        + 'his record does not move it (reference H1 wave 19, findings 1 and '
+        + '2)', async () => {
+            // 'ship13' asks 4,000 of a rich pilot (a bad mood; hail_test).
+            const quote = async (credits: number,
+                records?: Map<string, number>) => {
+                const { world, gameData } = neutralWorld(credits);
+                world.resources.set(SystemIdResource, 'test:here');
+                if (records) {
+                    world.entities.get(PLAYER)!.components.set(
+                        LegalRecordsComponent, records);
+                }
+                const result = (await computeContext(world, gameData,
+                    assets()))!;
+                return fuelOffer(world, 'ship13', result.replies.fuelSale!,
+                    { asks: 0, countered: false });
+            };
+            expect((await quote(1_000_000)).amount).toBe(4000);
+            expect((await quote(10_000)).amount).toBe(3000);
+            const sevenK = await quote(7000);
+            expect(sevenK.amount).toBe(2000);
+            expect(sevenK.canAfford).toBeTrue();
+            expect(sevenK.demand).toBe('Pay me 2,000 credits.');
+            expect((await quote(5000)).amount).toBe(1000);
+            // Records of -1, -9 here: a clean pilot's price.
+            for (const record of [-1, -9]) {
+                expect((await quote(1_000_000, new Map([
+                    ['test:here', record], ['test:elsewhere', -900]])))
+                    .amount).withContext(`${record}`).toBe(4000);
+            }
         });
 
     it('a ränk 0x0800 of the ship\'s govt: free fuel at once, "Okay, I\'m '
@@ -2318,6 +2340,34 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
                 repairContext.replies);
             expect(refused.dispatch).toBeFalse();
             expect(refused.line).toBe(repairContext.replies.refusal!);
+        });
+
+    it('a ränk 0x0800: an ALLY of the affiliated govt refuels for free too '
+        + '(reference H1 wave 19, finding 5)', async () => {
+            const { world, gameData } = neutralWorld();
+            gameData.data.Govt.map.set('test:affil', {
+                ...getDefaultGovtData(), id: 'test:affil', classes: [21],
+            });
+            gameData.data.Govt.map.set('test:ally', {
+                ...getDefaultGovtData(), id: 'test:ally', allies: [21],
+            });
+            world.entities.get(TARGET)!.components.set(GovtComponent,
+                { id: 'test:ally' });
+            const base = getDefaultRankData();
+            gameData.data.Rank.map.set('test:free', {
+                ...base, id: 'test:free', affilGovt: 'test:affil',
+                rankFlags: { ...base.rankFlags, freeRefuelAndRepair: true },
+            });
+            await gameData.data.Rank.get('test:free');
+            world.entities.get(PLAYER)!.components.set(
+                ActiveRanksComponent, new Set(['test:free']));
+            const result = (await computeContext(world, gameData, assets()))!;
+            expect(result.context.assist).toEqual({ free: true });
+            expect(result.replies.fuelSale).toBeUndefined();
+            expect(assistAnswer(world, TARGET, result.replies)).toEqual({
+                line: "Hold on, I'll be right there.", dispatch: true,
+                haggle: false,
+            });
         });
 
     it('a Roadside Assistance ship helps for free instead', async () => {

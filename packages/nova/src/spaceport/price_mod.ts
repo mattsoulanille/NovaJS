@@ -105,7 +105,7 @@ import { ActiveRanksComponent, RankLookup, rankPriceMod } from '../nova_plugin/n
  *   in play, trade_center.ts is the one other place a price is quoted.)
  * - REFUELLING and REPAIR. Ranks have their own field for those, Flags 0x0800
  *   "ships allied with the affiliated govt will always repair or refuel the
- *   player for free" (rank_logic.ts's ranksGiveFreeRepair), which would be
+ *   player for free" (rank_logic.ts's ranksGiveFreeFuel), which would be
  *   redundant if PriceMod already covered them.
  * - The hire POOL. shipyard_stock_rules' shipHireable gates on the ship's
  *   LIST price being nonzero, not the modified one, so a hull that is free

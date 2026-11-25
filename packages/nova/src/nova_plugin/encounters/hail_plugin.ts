@@ -47,11 +47,11 @@ import {
     StellarBribesComponent, STELLAR_BRIBE_MS,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
-import { ranksAllowAssistance, ranksGiveFreeRepair } from '../ncb/index.js';
+import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { ShipDataComponent } from '../ship/index.js';
 import {
-    LocalLaw, localLawIn, recordHere, shipDisposition,
+    alliedEitherWay, localLawIn, shipDisposition,
 } from '../reputation/index.js';
 import {
     isPacifiedToward, NpcComponent, NpcSteeringSystem,
@@ -482,18 +482,25 @@ export function applyHail(world: World, peerId: string | undefined,
         // refuses a disabled pilot ("Not a chance.") and sells a fuelless
         // one a jump of fuel (reference H1 waves 16 and 17); free help
         // comes only from a Roadside Assistance govt, a ränk 0x0800 (fuel
-        // only: reference "P1 / H1 wave 18" — a disabled holder is
-        // refused), or a ränk 0x0400's warship. The dialog only sends a request to a
-        // ship with a price from its haggle page's Pay / Accept Price
-        // button, so a request that arrives here for one IS the payment; the
-        // price is re-derived from synced state, never taken from the
-        // record.
+        // only, from the affiliated govt's ships or its ALLIES': reference
+        // "P1 / H1 wave 18" and "H1 wave 19" — a disabled holder is
+        // refused), or a ränk 0x0400's warship. The dialog only sends a
+        // request to a ship with a price from its haggle page's Pay /
+        // Accept Price button, so a request that arrives here for one IS
+        // the payment; the price is re-derived from synced state, never
+        // taken from the record. The alliance is read off GovtsResource
+        // (every gövt, staged at genesis), so every peer agrees.
+        const rankFreeFuel = ranksGiveFreeFuel(ranks, getRank,
+            targetGovt?.id, affil => {
+                const affilGovt = lookupGovt(world, affil);
+                return !!affilGovt && !!targetGovt
+                    && alliedEitherWay(affilGovt, targetGovt);
+            });
         const willingness: AssistWillingness = assistWillingness({
             disposition, govt: targetGovt,
             aiType: target.components.get(NpcComponent)?.aiType,
             rankAlwaysAssists,
-            free: assistIsFree(targetGovt,
-                ranksGiveFreeRepair(ranks, getRank, targetGovt?.id), need),
+            free: assistIsFree(targetGovt, rankFreeFuel, need),
             need,
         });
         // Already on its way to this player: the errand was paid for (or
@@ -511,7 +518,7 @@ export function applyHail(world: World, peerId: string | undefined,
             // changes nothing (reference "P1 / H1 wave 18", finding 3).
             if (willingness === 'sellFuel' && !alreadyComing) {
                 const haggle = fuelHaggleOf(target, found.uuid);
-                if (!canPayFuelPrice(player, action.target, haggle, law)) {
+                if (!canPayFuelPrice(player, action.target, haggle)) {
                     return;
                 }
                 setFuelHaggle(target, found.uuid, lowerFuelPrice(
@@ -541,8 +548,8 @@ export function applyHail(world: World, peerId: string | undefined,
             }
             case 'sellFuel': {
                 // ACCEPT PRICE: the price on the table — this ship's first
-                // ask to this pilot (its base, moved by his cash and
-                // record), 1,000 an earlier ask, or the counter to it — the
+                // ask to this pilot (its own ask, capped by his cash),
+                // 1,000 an earlier ask, or the counter to it — the
                 // fuel errand on its way. Credits move here and nowhere
                 // else (reference H1 wave 17: a 3,700 counter, 3,700 taken
                 // at once). A price he cannot pay takes nothing and does
@@ -553,8 +560,7 @@ export function applyHail(world: World, peerId: string | undefined,
                 }
                 const credits = player.components.get(CreditsComponent);
                 const haggle = fuelHaggleOf(target, found.uuid);
-                const price = fuelPriceFor(player, action.target, haggle,
-                    law);
+                const price = fuelPriceFor(player, action.target, haggle);
                 if (!credits || credits.credits < price) {
                     return;
                 }
@@ -684,24 +690,21 @@ function fuelHaggleOf(target: Entity, playerUuid: string): FuelHaggleState {
 
 /**
  * The fuel price `targetUuid` names `player` with `haggle` on the table:
- * hail.ts's fuelAskingBase (the ship's base, the pilot's cash, his record
- * in this system under `law`) plus the haggle. The dialog's fuelOffer
- * quotes the same figure.
+ * hail.ts's fuelAskingBase (the ship's own ask, capped by the pilot's
+ * cash) plus the haggle. The dialog's fuelOffer quotes the same figure.
  */
 function fuelPriceFor(player: Entity, targetUuid: string,
-    haggle: FuelHaggleState, law: LocalLaw): number {
-    const records = player.components.get(LegalRecordsComponent);
+    haggle: FuelHaggleState): number {
     return fuelSalePrice(fuelAskingBase(targetUuid, {
         credits: player.components.get(CreditsComponent)?.credits ?? 0,
-        record: records ? recordHere(records, law) : 0,
     }), haggle);
 }
 
 /** Whether `player` has the cash for the fuel price on the table. */
 function canPayFuelPrice(player: Entity, targetUuid: string,
-    haggle: FuelHaggleState, law: LocalLaw): boolean {
+    haggle: FuelHaggleState): boolean {
     const credits = player.components.get(CreditsComponent)?.credits ?? 0;
-    return credits >= fuelPriceFor(player, targetUuid, haggle, law);
+    return credits >= fuelPriceFor(player, targetUuid, haggle);
 }
 
 /**
