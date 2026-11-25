@@ -275,6 +275,19 @@ export interface PlanetData extends SpaceObjectData {
     spriteFrameSize: [number, number];
 
     /**
+     * The stellar's CLASS as the original names it: entry Type (0-based) of
+     * STR# 1100, the table of stellar-type captions ("[Earth/Luna System]",
+     * "[Rocky Moon - metallic]", "[Federation Station]", ...), indexed by
+     * the spöb Type that also picks the stellar's spïn (1000 + Type). The
+     * comm dialog prints it, in grey, under the stellar's name
+     * (hail/hail_planet.png: "Earth" / "[Earth/Luna System]"). Not in the
+     * EVN Bible; the alignment holds for every stock stellar (Type 59 is
+     * "[Wormhole]", Type 1 "[Hypergate]"). Empty when the table has no such
+     * entry.
+     */
+    typeDescription: string;
+
+    /**
      * Fee deducted from the player's credits on landing (spöb Fee field,
      * Bible p. 61). Hook only: credits are not yet modeled, so nothing charges
      * this today. Hypergates in stock EV Nova charge no fee (all observed
@@ -423,6 +436,7 @@ export function getDefaultPlanetData(): PlanetData {
         // A 50 px frame: an 85 px landing zone (planet_plugin.ts's
         // landingRange, 1.7 x the frame width).
         spriteFrameSize: [50, 50],
+        typeDescription: "",
         landingFee: 0,
         govt: null,
         // The Bible's "Ignored (player can always land)" sentinel: a default

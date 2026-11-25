@@ -220,6 +220,26 @@ describe("PlanetParse stellar graphic (spïn -> rlëD resolution)", () => {
             expect(await graphicOf(30)).toBe("nova:2030");
         });
 
+    it("names the stellar's class from STR# 1100, indexed 0-based by Type",
+        async () => {
+            // The comm dialog's grey caption (hail/hail_planet.png:
+            // "[Earth/Luna System]" under "Earth", Type 0).
+            idSpace["STR#"][1100] = {
+                strings: ["[Earth/Luna System]", "[Hypergate]",
+                    "[Methane Atmosphere]", "[Rocky Moon - metallic]"],
+            } as never;
+            expect((await parseType(0)).typeDescription)
+                .toBe("[Earth/Luna System]");
+            expect((await parseType(3)).typeDescription)
+                .toBe("[Rocky Moon - metallic]");
+            // Past the table's end: no caption.
+            expect((await parseType(30)).typeDescription).toBe("");
+        });
+
+    it("leaves the class caption empty without STR# 1100", async () => {
+        expect((await parseType(0)).typeDescription).toBe("");
+    });
+
     it("carries the spöb AnimDelay through to PlanetData.animationDelay",
         async () => {
             const spob = new SpobResource(

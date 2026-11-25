@@ -18,6 +18,9 @@ const MIN_RESOURCE_ID = 128;
 /** CustPicID is parsed as a uint16 (spob_resource.ts), so the usual
  * "omitted" encoding of -1 arrives as 65535 rather than a negative. */
 const NO_CUSTOM_LANDING_PICT = 65535;
+/** The STR# of stellar-type captions, one per spöb Type ("[Earth/Luna
+ * System]" is entry 0). See PlanetData.typeDescription. */
+const STELLAR_TYPE_STRINGS = 1100;
 
 /**
  * Decodes the spöb DefCount field (EVN Bible, spöb resource): below 1000 it
@@ -337,6 +340,11 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         landingPict: pictID,
         animation,
         spriteFrameSize,
+        // STR# 1100 is the stellar-type caption table, indexed (0-based)
+        // by the same spöb Type as the spïn (PlanetData.typeDescription).
+        typeDescription:
+            spob.idSpace["STR#"][STELLAR_TYPE_STRINGS]?.strings[spob.type]
+            ?? "",
         govt,
         // spöb MinStatus (int16 at offset 22), passed through verbatim
         // including both sentinels (-32767 ignored / 32767 never).
