@@ -48,6 +48,13 @@ export const ControlShipSystem = new System({
             }
         }
 
+        // Reverse: an inertial hull turns to face against its velocity
+        // (the player then thrusts to brake); an inertialess one brakes
+        // (reference "U9 and the inertialess hulls": "Down does brake an
+        // inertialess hull to a stop"). The two ADD to the thrust key, so
+        // an inertialess hull holding both thrust and reverse keeps its
+        // speed. Pinned through the bridge input path in
+        // reverse_point_to_bridge_test.ts.
         if (movementPhysics.movementType === MovementType.INERTIAL) {
             movementState.turnBack = Boolean(controlState.get('reverse'));
         } else if (movementPhysics.movementType === MovementType.INERTIALESS) {
