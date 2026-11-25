@@ -46,8 +46,10 @@ import { Component } from 'nova_ecs/component';
  * mass-proportional explosion) is NOT a gate on the damage: MEASURED, a
  * 5,000-ton hulk with DeathDelay 10 and one with DeathDelay 60 dealt the
  * same blast (reference "Plunder self-destruct, wave 26"); only its
- * timing differed. (Whether a DeathDelay-60 blast reaches FARTHER is not
- * measured: the wave-28 reach was read off DeathDelay-10 hulks.)
+ * timing differed. Nor on the REACH: MEASURED, the 5,000-ton DeathDelay-60
+ * wreck hit at 380 px and missed at 470 px exactly as the DeathDelay-10
+ * one did, for the same damage, its blast landing about 0.9 s later
+ * (reference "Ship explosion reach, wave 29", finding 3).
  *
  * The 60-frame threshold IS a gate on the fireball GRAPHIC, which is
  * the thing the Bible attaches it to — see
@@ -135,11 +137,18 @@ export const SHIP_EXPLOSION_DAMAGE_MIN_MASS = 100;
  * miss outside — 100 t hits up to 55.3, misses from 60.2; 1,000 t hits
  * up to 113, misses from 157.
  *
- * GUESS on the FORM (two masses only; a + b x mass with b anywhere in
- * 0.06-0.11 fits as well): twice the blast's damage, 2 x 28.4 = 57 and
- * 2 x 63.5 = 127, both inside their brackets — i.e. 51 + 0.074 x mass.
- * NO CAP: whether the original caps it is unmeasured, so a 10,000-ton
- * Leviathan reaches 791 px each way (a 1,582 px square).
+ * MEASURED, the FORM and NO CAP (reference "Ship explosion reach, wave
+ * 29", findings 1 and 4; eighteen runs, the wreck placed exactly by a
+ * mission): the half-side keeps growing as twice the blast's damage to
+ * 10,000 t, bracketed at 2,000 t (190 hit, 210 miss; 2 x 99.5 = 199),
+ * 5,000 t (400, 440; 421) and 10,000 t (760, 820; 791). With wave 28's
+ * 100 t (57) and 1,000 t (127) that is five masses over two decades on
+ * 2 x (25.5 + 0.037 x mass) = 51 + 0.074 x mass, the factor 2 good to
+ * about 5%; so a 10,000-ton Leviathan reaches 791 px each way (a 1,582 px
+ * square). Hull sizes play no part on EITHER side: a victim with the Fed
+ * Carrier's art whose hull reached well inside the square, and a wreck
+ * with that art whose side did, both missed: the test is centre to centre.
+ * Whether anything caps it past 10,000 t is unmeasured.
  */
 export const SHIP_EXPLOSION_REACH_PER_DAMAGE = 2;
 
@@ -308,9 +317,10 @@ export const FINAL_EXPLOSION_NATURAL_RADIUS = 32;
  *
  * Its radius is {@link finalFireballRadius}, mass-proportional with a
  * 200 px ceiling. It USED to be the blast's damage radius as well; since
- * the reach was measured to be a square of about twice the damage
- * (reference "Ship explosion blast, wave 28"; 791 px each way for a
- * Leviathan), the picture keeps its old size rather than growing to a
+ * the reach was measured to be a square of twice the damage (reference
+ * "Ship explosion blast, wave 28" and "Ship explosion reach, wave 29";
+ * 791 px each way for a Leviathan, with no cap and the same for a
+ * DeathDelay-60 hull), the picture keeps its old size rather than growing to a
  * 1,600 px fireball nobody has seen on the original (the original's
  * fireball size is unmeasured). A Leviathan's 10000 tons reach the 200 px
  * cap and so draw at 200/32 = 6.25x — a 400 px fireball; a 6000-ton

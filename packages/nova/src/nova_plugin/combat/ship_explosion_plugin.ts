@@ -35,13 +35,16 @@ import { ShipDataComponent } from '../ship/index.js';
  * entities itself, so there is no new ordering to get wrong.
  *
  * THE REACH IS A SQUARE, measured CENTRE TO CENTRE (reference "Ship
- * explosion blast, wave 28"): a ship is hit when max(|dx|, |dy|) from the
- * wreck is within {@link shipExplosionReach} (about twice the damage). The
+ * explosion blast, wave 28" and "Ship explosion reach, wave 29"): a ship
+ * is hit when max(|dx|, |dy|) from the wreck is within
+ * {@link shipExplosionReach} (twice the damage, no cap to 10,000 t). The
  * hurtbox is that axis-aligned square (never rotated: the blast's
  * rotation is 0), which finds every hull it overlaps; BlastCollisionSystem
  * then keeps only the victims whose CENTRE is inside it, so a big hull
- * whose edge pokes into the square is not hit (the measured brackets are
- * centre distances between two 24 px hulls).
+ * whose edge pokes into the square is not hit, and the square is centred
+ * on the wreck's position whatever the wreck's own size (MEASURED, wave
+ * 29 finding 4: a Fed Carrier-sized victim and a Fed Carrier-sized wreck
+ * both missed where their hulls reached inside).
  *
  * WHAT IT HITS. `hitTypes` carries BOTH 'normal' (every ship, and the
  * asteroids that share the tag, which a big enough blast shatters) and
