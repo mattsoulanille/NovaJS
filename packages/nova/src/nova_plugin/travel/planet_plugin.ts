@@ -10,12 +10,12 @@ import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
-import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { Position } from 'nova_ecs/datatypes/position';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
 import { World } from 'nova_ecs/world';
-import { landable } from '../core/index.js';
+import { landable, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
@@ -31,7 +31,7 @@ import { SystemIdResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { ExplodingFinishedSystem, ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { Target } from '../ship/index.js';
-import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
 import { LegalRecords, statusGovtOf } from '../reputation/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
@@ -70,24 +70,32 @@ export const PlanetDataProvider = ProvideFromCache({
 
 /**
  * A ship's selected stellar (`target`, the stellar entity's uuid) and,
- * for a hypergate, whether traffic control has CLEARED the ship there:
- * `cleared` holds the uuid of the gate whose clearance (STR# 2002 #91-93)
- * the ship holds, and counts only while it equals `target` (see
- * {@link holdsGateClearance}), so any write that changes the selection
- * drops the clearance with it. The clearance is what OPENS the gate
- * (display/gate_animation_plugin.ts) and what lets the next `l` inside
- * the entry zone enter it (the gate map); a request line outside the zone
- * leaves the gate closed (reference "Hypergate `l` range and the request
- * lines, wave 29": only the clearance opens the gate).
+ * for a hypergate, where the ship stands with traffic control there:
  *
- * OPTIONAL and absent until a gate clears the ship, so ships that never
+ * - `cleared` holds the uuid of the gate whose clearance (STR# 2002
+ *   #91-93) the ship holds. The clearance is what OPENS the gate
+ *   (display/gate_animation_plugin.ts) and what lets the next `l` inside
+ *   the entry window enter it (the gate map); a request line outside the
+ *   clearance zone leaves the gate closed (reference "Hypergate `l` range
+ *   and the request lines, wave 29": only the clearance opens the gate).
+ * - `requested` holds the uuid of the gate whose REQUEST line (#74 / #75)
+ *   the ship's selecting `l` drew from outside the clearance zone and that
+ *   has not cleared it yet: the ship that then comes inside the zone is
+ *   cleared with no press (HypergateAutoClearanceSystem; reference
+ *   "Hypergates, wave 30", finding 3), once, and the field is dropped.
+ *
+ * Each counts only while it equals `target` (see {@link holdsGateClearance}),
+ * and any write that changes the selection drops both (selectPlanetTarget).
+ *
+ * OPTIONAL and absent until a gate answers the ship, so ships that never
  * use a gate keep their components and hash inputs unchanged. Synced sim
  * state (delta-registered below), written only by AttemptLandingSystem on
- * the tick every peer applies the `l` press.
+ * the tick every peer applies the `l` press and by
+ * HypergateAutoClearanceSystem on the tick the ship enters the zone.
  */
 export const PlanetTargetType = t.intersection([
     Target,
-    t.partial({ cleared: t.string }),
+    t.partial({ cleared: t.string, requested: t.string }),
 ]);
 export type PlanetTarget = t.TypeOf<typeof PlanetTargetType>;
 
@@ -101,11 +109,19 @@ export function holdsGateClearance(planetTarget: PlanetTarget | undefined):
         && planetTarget.cleared === planetTarget.target;
 }
 
+/** Whether the ship holds a standing hypergate REQUEST (not yet cleared)
+ * at its selected stellar. */
+export function holdsGateRequest(planetTarget: PlanetTarget | undefined):
+    boolean {
+    return planetTarget?.target !== undefined
+        && planetTarget.requested === planetTarget.target;
+}
+
 /**
  * Selects `target` (or nothing) on a PlanetTargetComponent, dropping a
- * gate clearance held at a different stellar. Every in-sim writer of the
- * selection goes through this, so a stale `cleared` never lingers in the
- * synced (hashed) state.
+ * gate clearance or request held at a different stellar. Every in-sim
+ * writer of the selection goes through this, so a stale `cleared` /
+ * `requested` never lingers in the synced (hashed) state.
  */
 export function selectPlanetTarget(planetTarget: PlanetTarget,
     target: string | undefined) {
@@ -113,6 +129,10 @@ export function selectPlanetTarget(planetTarget: PlanetTarget,
     if (planetTarget.cleared !== undefined
         && planetTarget.cleared !== target) {
         delete planetTarget.cleared;
+    }
+    if (planetTarget.requested !== undefined
+        && planetTarget.requested !== target) {
+        delete planetTarget.requested;
     }
 }
 
@@ -177,20 +197,30 @@ export const LandingBlockedEvent =
 
 /**
  * Emitted (targeted at the player's ship) when traffic control CLEARS the
- * player's request: today only a working hypergate, on the first `l` that
- * finds the ship inside the gate's entry window (the press that selects
- * the gate there, or a later one after a request from farther out),
- * answered by one of the stock clearance lines (STR# 2002 one-based 91-93,
- * "You are cleared for hypergate entry." etc.; measured: reference "Gate
- * map, wave 27", "Hypergate `l` range and the request lines, wave 29").
- * The emitter also records the clearance (PlanetTarget `cleared`), which
- * opens the gate. A gate that refuses the player emits LandingBlockedEvent
- * 'denied' ("Hypergate usage denied.", wave 23's first `l` at HG-V01)
- * instead. Consumed display-side by the status line
+ * player's request: today only a working hypergate, when the ship is
+ * inside the gate's CLEARANCE zone (HYPERGATE_CLEARANCE_RANGE): on the
+ * `l` that selects the gate there (or a later `l` there after a click or
+ * number-key selection), answered by one of the stock clearance lines
+ * (STR# 2002 one-based 91-93, "You are cleared for hypergate entry."
+ * etc.; measured: reference "Gate map, wave 27", "Hypergate `l` range and
+ * the request lines, wave 29"), or with no press at all when a ship that
+ * holds a request comes inside the zone (`automatic`: "Cleared for
+ * hypergate entry, <ship>.", #91; reference "Hypergates, wave 30",
+ * finding 3). The emitter also records the clearance (PlanetTarget
+ * `cleared`), which opens the gate. A gate that refuses the player emits
+ * LandingBlockedEvent 'denied' ("Hypergate usage denied.", wave 23's first
+ * `l` at HG-V01) instead. Consumed display-side by the status line
  * (status_message_plugin.ts), which picks the form. The event itself
  * carries no state.
  */
-export const LandingClearedEventType = t.type({ gateKind: GateKindType });
+export const LandingClearedEventType = t.intersection([
+    t.type({ gateKind: GateKindType }),
+    t.partial({
+        /** Cleared on entering the zone with a standing request, no press:
+         * the line is #91 (GUESS that it always is: one run saw it). */
+        automatic: t.boolean,
+    }),
+]);
 export type LandingCleared = t.TypeOf<typeof LandingClearedEventType>;
 export const LandingClearedEvent =
     new EcsEvent<LandingCleared>('LandingClearedEvent');
@@ -211,9 +241,8 @@ export const LandingRequestEventType = t.intersection([
         form: t.number,
     }),
     t.partial({
-        /** A hypergate that is already open (another ship holds its
-         * clearance): "Hypergate is online" (#75) for "is energized"
-         * (#74). */
+        /** A hypergate's phrase drew "Hypergate is online" (#75) for "is
+         * energized" (#74): {@link hypergateRequestOnline}. */
         online: t.boolean,
     }),
 ]);
@@ -269,6 +298,48 @@ export function landingRequestForm(stellarId: string, pilotUuid: string,
  * withdrawal, wave 29").
  */
 export const HYPERGATE_SELECT_RANGE = 500;
+
+/**
+ * The half-side (px) of a hypergate's CLEARANCE zone, a SQUARE around the
+ * gate's centre (max(|dx|, |dy|), like the landing zone) that does NOT
+ * depend on the gate's art. Inside it the `l` that selects the gate clears
+ * the ship (#91-93) and opens the gate, and a ship holding a request is
+ * cleared on entering it with no press; outside it the selecting `l` only
+ * requests (#74 / #75 + #80). Measured (reference "Hypergates, wave 30",
+ * finding 2): the 150 px gate cleared at 248 px on the axis and at the
+ * (180, 180) diagonal (255 px away, so a square, not a circle) and only
+ * requested at 250 (wave 29); a 72 px gate cleared at 140 and at 230 px.
+ * GUESS on the exact edge inside the 248-250 bracket: 249 (the section's
+ * proposal), inclusive like the landing zone. The ENTRY window (the press
+ * that opens the gate map) is separate and goes by the art:
+ * {@link stellarLandingRange}.
+ */
+export const HYPERGATE_CLEARANCE_RANGE = 249;
+
+/**
+ * How often a gate's request line draws "Hypergate is online" (#75) for
+ * "Hypergate is energized" (#74): HYPERGATE_ONLINE in
+ * HYPERGATE_ONLINE_OUT_OF. Measured as a draw, not the gate's state
+ * (reference "Hypergates, wave 30", finding 4: every gate closed and
+ * nobody else in the system, "online" 4 and "energized" 4 there,
+ * energized 12 : online 5 over waves 28-30, and 300 px said one in wave 29
+ * and the other in wave 30). GUESS on the odds: the measured 5 in 17.
+ */
+export const HYPERGATE_ONLINE = 5;
+export const HYPERGATE_ONLINE_OUT_OF = 17;
+
+/**
+ * Whether one gate request draws #75 "online": a salted hash of the gate,
+ * the pilot and the sim time, so every peer and replay prints the same
+ * line. Its own salt, so the draw is independent of the line's form
+ * ({@link landingRequestForm}: the ship's name or not).
+ */
+export function hypergateRequestOnline(stellarId: string, pilotUuid: string,
+    now: number): boolean {
+    return avalanche(hashString(
+        `hypergateOnline:${stellarId}:${pilotUuid}:${now}`))
+        % HYPERGATE_ONLINE_OUT_OF < HYPERGATE_ONLINE;
+}
 
 /**
  * Per-player temporary landing clearance bought with a bribe: the stellar's
@@ -403,11 +474,25 @@ export function inLandingZone(dx: number, dy: number, range: number):
  * written before PlanetData had the field) use the default 50 px frame,
  * i.e. an 85 px zone. PlanetData is staged identically on every peer, so
  * every peer reads the same range.
+ *
+ * A HYPERGATE's entry window (the `l` that opens the gate map once the
+ * ship is cleared) goes by the art like a planet's, 1.7 x the frame's
+ * width, but WITHOUT the 212 px cap: the stock 150 px gate's map opened at
+ * 248 px and on the 255 px (180, 180) diagonal (1.7 x 150 = 255), and a
+ * 72 px gate's second `l` was "too far" at 140 px (1.7 x 72 = 122;
+ * reference "Hypergates, wave 30", finding 2). GUESS that the cap is a
+ * planet's only (nothing measured a gate wider than 150 px). Wormholes
+ * keep the planets' rule (not measured). Clearing the ship is a separate,
+ * art-independent zone: HYPERGATE_CLEARANCE_RANGE.
  */
 export function stellarLandingRange(planetData?: PlanetData): number {
     const frame = planetData?.spriteFrameSize;
-    return landingRange(Array.isArray(frame) && frame.length >= 2
-        ? frame : DEFAULT_SPRITE_FRAME_SIZE);
+    const size = Array.isArray(frame) && frame.length >= 2
+        ? frame : DEFAULT_SPRITE_FRAME_SIZE;
+    if (planetData?.gate?.kind === 'hypergate') {
+        return LAND_RANGE_PER_FRAME_WIDTH * size[0];
+    }
+    return landingRange(size);
 }
 
 /**
@@ -545,13 +630,10 @@ export function stellarClearanceWith(opts: {
 const LandablePlanetsQuery = new Query(
     [UUID, MovementStateComponent, PlanetComponent,
         Optional(PlanetDataComponent)] as const);
-/** Every ship's stellar selection, for "is this gate already open". */
-const GateClearancesQuery = new Query(
-    [UUID, PlanetTargetComponent] as const);
 const AttemptLandingSystem = new System({
     name: 'AttemptLandingSystem',
     events: [ShipControlEvent] as const,
-    args: [LandablePlanetsQuery, GateClearancesQuery, UUID,
+    args: [LandablePlanetsQuery, UUID,
         MovementStateComponent, PlanetTargetComponent,
         ShipControlStateComponent, Emit,
         Optional(LegalRecordsComponent), Optional(ShipDataComponent),
@@ -559,7 +641,7 @@ const AttemptLandingSystem = new System({
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
         Optional(TimeResource), Optional(SystemIdResource)] as const,
-    step(planets, clearances, playerUuid, { position, velocity }, planetTarget,
+    step(planets, playerUuid, { position, velocity }, planetTarget,
         controls, emit, records, shipData, outfits, bribes, ranks, missions,
         gameData, govts, time, systemId) {
         if (controls.get('land') !== 'start') {
@@ -577,7 +659,7 @@ const AttemptLandingSystem = new System({
         // Traffic control clears the ship at a hypergate: one of the #91-93
         // lines, and the gate opens (PlanetTarget `cleared`).
         const clearGate = (uuid: string) => {
-            planetTarget.cleared = uuid;
+            clearHypergate(planetTarget, uuid);
             emit(LandingClearedEvent, { gateKind: 'hypergate' },
                 [playerUuid]);
         };
@@ -588,7 +670,17 @@ const AttemptLandingSystem = new System({
             id: string, planetData: PlanetData | undefined) => {
             const offset = planetPosition.subtract(position);
             const isStation = planetData?.flags.isStation ?? false;
-            const range = stellarLandingRange(planetData);
+            // A hypergate the ship is not yet cleared at (selected by a
+            // click or a number key, or requested from farther out) answers
+            // the press by its CLEARANCE zone, distance only like the
+            // selecting press (wave 28: a coasting ship cleared); a cleared
+            // one by its ENTRY window, the art's (reference "Hypergates,
+            // wave 30", finding 2: a 72 px gate cleared at 140 px said "too
+            // far" to the next press there).
+            const awaitingClearance = planetData?.gate?.kind === 'hypergate'
+                && !holdsGateClearance(planetTarget);
+            const range = awaitingClearance ? HYPERGATE_CLEARANCE_RANGE
+                : stellarLandingRange(planetData);
             // A gate's window lines name the gate ("You're too far away to
             // enter this hypergate." / "... wormhole.", STR# 2002 one-based
             // 65 / 66 and 69 / 70, reference "Gate approach lines, wave
@@ -601,7 +693,8 @@ const AttemptLandingSystem = new System({
                 emit(LandingBlockedEvent,
                     { reason: 'tooFar', isStation, ...gateKind },
                     [playerUuid]);
-            } else if (velocity.lengthSquared >= LAND_SPEED_SQUARED) {
+            } else if (!awaitingClearance
+                && velocity.lengthSquared >= LAND_SPEED_SQUARED) {
                 emit(LandingBlockedEvent,
                     { reason: 'tooFast', isStation, ...gateKind },
                     [playerUuid]);
@@ -643,12 +736,13 @@ const AttemptLandingSystem = new System({
                     stellarName: displayName(planetData.name),
                     ...gateKind,
                 }, [playerUuid]);
-            } else if (planetData?.gate?.kind === 'hypergate'
-                && !holdsGateClearance(planetTarget)) {
-                // A hypergate the ship has only REQUESTED (or selected by
-                // a click or a number key): the press inside the entry
-                // window is the clearance, which opens the gate; the next
-                // `l` enters it (reference "Hypergate `l` range and the
+            } else if (awaitingClearance) {
+                // A hypergate the ship has only selected (a click or a
+                // number key; a ship holding a REQUEST is cleared on
+                // entering the zone, HypergateAutoClearanceSystem): the
+                // press inside the clearance zone is the clearance, which
+                // opens the gate; the next `l` inside the entry window
+                // enters it (reference "Hypergate `l` range and the
                 // request lines, wave 29": only the clearance opens the
                 // gate, and a cleared gate's second `l` opens the map).
                 clearGate(uuid);
@@ -733,16 +827,20 @@ const AttemptLandingSystem = new System({
         //    denied." from the very first `l`, wave 28; a port's or a
         //    station's denial the same way: GUESS, measured at gates only,
         //    though wave 28's Kit Map Picky row expected one far out);
-        //  - inside the stellar's entry window (distance only: a coasting
-        //    ship 250 px off was cleared, wave 28) a HYPERGATE clears the
-        //    ship (#91-93) and opens; a planet or station prints nothing
-        //    yet (the original's "you're cleared to land. Commence final
-        //    approach." is not modelled), its next `l` lands;
+        //  - inside a HYPERGATE's clearance zone (HYPERGATE_CLEARANCE_RANGE,
+        //    a 249 px square whatever the art; distance only: a coasting
+        //    ship 250 px off was cleared, wave 28) the gate clears the ship
+        //    (#91-93) and opens; inside a planet's or station's landing
+        //    zone nothing is printed yet (the original's "you're cleared
+        //    to land. Commence final approach." is not modelled), its next
+        //    `l` lands;
         //  - outside it, traffic control acknowledges the REQUEST ("...
         //    Begin initial approach.", LandingRequestEvent) and nothing
-        //    opens: later presses outside the window give the too-far /
-        //    too-fast lines (`attempt`), and entering the window and
-        //    pressing `l` clears the gate (`attempt`'s clearance step).
+        //    opens: later presses outside the zone give the too-far /
+        //    too-fast lines (`attempt`), and a gate clears the ship that
+        //    comes inside its clearance zone with no press
+        //    (HypergateAutoClearanceSystem; reference "Hypergates, wave
+        //    30", finding 3).
         const isStation = closestData.flags.isStation;
         const isHypergate = closestData.gate?.kind === 'hypergate';
         if (!cleared(closestId, closestData)) {
@@ -754,33 +852,111 @@ const AttemptLandingSystem = new System({
             return;
         }
         const offset = closestPosition.subtract(position);
-        if (inLandingZone(offset.x, offset.y,
-            stellarLandingRange(closestData))) {
+        if (inLandingZone(offset.x, offset.y, isHypergate
+            ? HYPERGATE_CLEARANCE_RANGE : stellarLandingRange(closestData))) {
             if (isHypergate) {
                 clearGate(closestUuid);
             }
             return;
         }
-        // GUESS (the section's guess, one #75 seen): "Hypergate is online"
-        // when the gate is already open, i.e. another ship holds its
-        // clearance; "is energized" otherwise.
-        let online = false;
+        const now = time?.time ?? 0;
+        // A gate's #74 / #75 is a draw (reference "Hypergates, wave 30",
+        // finding 4), independent of the form's.
+        const online = isHypergate
+            && hypergateRequestOnline(closestId, playerUuid, now);
         if (isHypergate) {
-            for (const [shipUuid, otherTarget] of clearances) {
-                if (shipUuid !== playerUuid && otherTarget.target === closestUuid
-                    && holdsGateClearance(otherTarget)) {
-                    online = true;
-                    break;
-                }
-            }
+            planetTarget.requested = closestUuid;
         }
         emit(LandingRequestEvent, {
             kind: isHypergate ? 'hypergate' : isStation ? 'station' : 'planet',
             stellarName: displayName(closestData.name),
-            form: landingRequestForm(closestId, playerUuid, time?.time ?? 0),
+            form: landingRequestForm(closestId, playerUuid, now),
             ...(online ? { online } : {}),
         }, [playerUuid]);
     }
+});
+
+/** Records a hypergate clearance on a ship's selection: the gate opens and
+ * the standing request (if any) is answered. */
+function clearHypergate(planetTarget: PlanetTarget, gateUuid: string) {
+    planetTarget.cleared = gateUuid;
+    delete planetTarget.requested;
+}
+
+/**
+ * A standing hypergate REQUEST is cleared with no press when the ship
+ * comes inside the gate's clearance zone: "Cleared for hypergate entry,
+ * <ship>." (#91) and the gate opens (reference "Hypergates, wave 30",
+ * finding 3: the Kit Ring Lancer coasting in at 49 px/s, its last press
+ * 2.5 s earlier, was cleared as the gate came about 245-250 px ahead).
+ * Once per request: the clearance drops `requested`, and a ship that
+ * leaves and comes back keeps its clearance and hears nothing more.
+ *
+ * Distance only, like the selecting press (speed never stopped a
+ * clearance). Traffic control re-judges the pilot on entry, with the same
+ * predicate as the press (stellarClearanceFor): a gate that would now
+ * refuse leaves the request standing, silent, and the next `l` gets the
+ * denial (GUESS: nothing measured a status change mid-approach).
+ *
+ * Deterministic sim state: reads synced positions, the sim clock (bribe
+ * expiries) and the player's records; writes only PlanetTarget and the
+ * targeted event, on whichever tick every peer sees the ship inside.
+ */
+export const HypergateAutoClearanceSystem = new System({
+    name: 'HypergateAutoClearanceSystem',
+    args: [LandablePlanetsQuery, UUID, MovementStateComponent,
+        PlanetTargetComponent, Emit,
+        Optional(LegalRecordsComponent), Optional(ShipDataComponent),
+        Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
+        Optional(ActiveRanksComponent), Optional(MissionsComponent),
+        SimulationGameDataResource, Optional(GovtsResource),
+        Optional(TimeResource), Optional(SystemIdResource)] as const,
+    step(planets, shipUuid, { position }, planetTarget, emit, records,
+        shipData, outfits, bribes, ranks, missions, gameData, govts, time,
+        systemId) {
+        if (planetTarget.requested === undefined) {
+            return;
+        }
+        if (!holdsGateRequest(planetTarget)) {
+            // Stale (every selection write goes through
+            // selectPlanetTarget, which drops it; belt and braces).
+            delete planetTarget.requested;
+            return;
+        }
+        for (const [uuid, { position: gatePosition }, { id }, planetData]
+            of planets) {
+            if (uuid !== planetTarget.requested) {
+                continue;
+            }
+            if (planetData?.gate?.kind !== 'hypergate') {
+                return;
+            }
+            const offset = gatePosition.subtract(position);
+            if (!inLandingZone(offset.x, offset.y,
+                HYPERGATE_CLEARANCE_RANGE)) {
+                return;
+            }
+            if (!stellarClearanceFor({
+                planetData, gameData, govts, records, shipData, outfits,
+                bribes, ranks, missions,
+                planetId: id, systemId, now: time?.time ?? 0,
+            }).cleared) {
+                return;
+            }
+            clearHypergate(planetTarget, uuid);
+            emit(LandingClearedEvent,
+                { gateKind: 'hypergate', automatic: true }, [shipUuid]);
+            return;
+        }
+        // The gate is gone from this system: the request lapses.
+        delete planetTarget.requested;
+    },
+    // After the move it judges, and after TimeSystem (bribe expiries).
+    // #237 pins (shared: MovementState, and * with the combat systems):
+    // before the hull updaters, so CollisionSystem and everything after it
+    // follow transitively; BeamSystem pins itself after this one.
+    after: [TimeSystem, MovementSystem],
+    before: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
 });
 
 /**
@@ -947,5 +1123,6 @@ export const PlanetPlugin: Plugin = {
         world.addSystem(PlanetDataProvider);
         world.addSystem(AttemptLandingSystem);
         world.addSystem(SelectStellarSystem);
+        world.addSystem(HypergateAutoClearanceSystem);
     }
 };

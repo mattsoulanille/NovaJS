@@ -224,7 +224,10 @@ const ShowLandingBlockedMessage = new System({
 // picked at random as the original seems to (ten clearances, 1 / 6 / 3;
 // reference "Hypergate clearance lines, wave 28"). Math.random is fine
 // here: the line is this client's own status line and nothing in the
-// simulation reads it.
+// simulation reads it. The clearance a standing request gets on entering
+// the zone with no press (`automatic`) is #91, "Cleared for hypergate
+// entry, <ship>." (reference "Hypergates, wave 30", finding 3; GUESS that
+// it is always that form: one run).
 // No beep: nothing was refused.
 const ShowLandingClearedMessage = new System({
     name: 'ShowLandingClearedMessage',
@@ -232,8 +235,9 @@ const ShowLandingClearedMessage = new System({
     args: [LandingClearedEvent, StatusLineResource, TimeResource,
         PlayerShipSelector, Optional(PlayerNamesComponent),
         Optional(ShipDataComponent)] as const,
-    step(_cleared, statusLine, { time }, _player, names, shipData) {
-        const form = Math.floor(Math.random() * HYPERGATE_CLEARED_FORMS);
+    step({ automatic }, statusLine, { time }, _player, names, shipData) {
+        const form = automatic ? 0
+            : Math.floor(Math.random() * HYPERGATE_CLEARED_FORMS);
         statusLine.setMessage(hypergateClearedMessage(form,
             playerShipName(names, shipData?.name)), time);
     },

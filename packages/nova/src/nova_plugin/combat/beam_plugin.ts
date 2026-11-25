@@ -37,6 +37,7 @@ import { TargetComponent } from '../ship/index.js';
 import { intervalElapsed, WeaponsSystem } from './weapon_plugin.js';
 import { TargetIndexProvider } from './target_plugin.js';
 import { SetControlledShipSystem } from '../player/index.js';
+import { HypergateAutoClearanceSystem } from '../travel/index.js';
 
 
 export interface BeamState {
@@ -176,7 +177,10 @@ export const BeamSystem = new System({
     // TimeSystem listed explicitly (determinism rule 4): reads time.time
     // for beam aging. after: [MovementSystem] already pins it after
     // TimeSystem transitively, but the explicit edge keeps it robust.
-    after: [TimeSystem, MovementSystem, WeaponsSystem],
+    // #237 pin (shared: *): after the hypergate auto clearance, which runs
+    // on the same move.
+    after: [TimeSystem, MovementSystem, WeaponsSystem,
+        HypergateAutoClearanceSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
         CreateTimeArgProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,
