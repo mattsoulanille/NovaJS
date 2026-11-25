@@ -18,10 +18,13 @@ import { World } from 'nova_ecs/world';
 import { GovtComponent } from '../core/index.js';
 import { makeSystem } from '../make_system.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
-import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
+import {
+    DistressCallEvent, DistressCallEventData, NpcComponent,
+    SystemHoldComponent,
+} from '../npc/index.js';
 import { extractSaveData, restorePlayerState, SaveData } from '../pilot/index.js';
 import {
-    ControlledByComponent, dayNumber, GameDateComponent,
+    ControlledByComponent, dayNumber, GameDateComponent, MissionShipComponent,
     PlayerEscortComponent, ReinforcementCallsComponent,
 } from '../player/index.js';
 import {
@@ -53,7 +56,8 @@ import {
  * a Strength-1 player's does not; an NPC's never does. Wave 20: the delay
  * is ReinfTime / 39 s, the fleet comes in around the victim (not the
  * player), an anchored victim never calls, and a victim that leaves before
- * the arrival takes the call with it.
+ * the arrival takes the call with it (a GUESS since wave 21). Wave 21: an
+ * AI 1 victim that calls sends its distress line with the call.
  */
 
 const SYSTEM = 'test:system';
@@ -62,6 +66,7 @@ const OWNER = 'test:owner';
 const ALLY = 'test:ally';
 const OTHER = 'test:other';
 const RAIDER = 'test:raider';
+const QUIET_ALLY = 'test:quiet-ally';
 
 const TRADER_HULL = 'test:trader';
 const ANCHORED_HULL = 'test:anchored';
@@ -85,6 +90,11 @@ const GOVTS: GovtData[] = [
     govt(ALLY, [31], { allies: [30] }),
     govt(OTHER, [32]),
     govt(RAIDER, [33], { enemies: [30] }),
+    // gövt Flags2 0x0008: its ships send no distress messages.
+    govt(QUIET_ALLY, [34], {
+        allies: [30],
+        flags2: { ...getDefaultGovtData().flags2, noDistressMessages: true },
+    }),
 ];
 
 function hull(id: string, strength: number): ShipData {
@@ -229,6 +239,7 @@ describe('reinforcement fleets in the sim', () => {
     let gameData: MockGameData;
     let world: World;
     let arrivals: ReinforcementArrivalEventData[];
+    let distress: DistressCallEventData[];
 
     async function build({ delayFrames = 300, regenerationDays = 0 } = {}) {
         gameData = new MockGameData();
@@ -267,6 +278,9 @@ describe('reinforcement fleets in the sim', () => {
         arrivals = [];
         world.events.get(ReinforcementArrivalEvent).subscribe(
             ({ data }) => arrivals.push(data));
+        distress = [];
+        world.events.get(DistressCallEvent).subscribe(
+            ({ data }) => distress.push(data));
     }
 
     function pin(ship: Entity, x: number, y: number) {
@@ -422,6 +436,104 @@ describe('reinforcement fleets in the sim', () => {
             expect(call().caller).toBe('player');
         });
 
+    describe('the caller\'s distress line (MEASURED for AI 1, wave 21)',
+        () => {
+            const npcOf = (uuid: string) =>
+                world.entities.get(uuid)!.components.get(NpcComponent)!;
+
+            it('an AI 1 victim that calls sends its line on the call, '
+                + 'once', async () => {
+                    await build();
+                    await scene();
+                    hit('trader1', 'player');
+                    expect(call().caller).toBe('player');
+                    expect(distress.length).toBe(1);
+                    expect(distress[0].ship).toBe('trader1');
+                    expect(distress[0].roll).toBeGreaterThanOrEqual(0);
+                    expect(distress[0].roll).toBeLessThan(1);
+                    expect(npcOf('trader1').distressAt).toBeDefined();
+                    // The call is pending: later hits call nothing, and
+                    // send no line of their own (the player's hits never
+                    // did, reference "P1 wave 15").
+                    advance(9_000);
+                    hit('trader1', 'player');
+                    hit('trader2', 'player');
+                    expect(distress.length).toBe(1);
+                });
+
+            it('a hit that calls nothing sends no line', async () => {
+                await build();
+                await scene(WEAK_HULL);
+                hit('trader1', 'player');
+                expect(call()).toEqual({});
+                expect(distress).toEqual([]);
+            });
+
+            it('an AI 2 victim says so too (GUESS, distress.ts\'s callers)',
+                async () => {
+                    await build();
+                    await addShip('player', PLAYER_HULL, 0, 0, pilot());
+                    await addShip('brave', TRADER_HULL, 0, -150,
+                        npcShip(2, OWNER));
+                    world.step();
+                    hit('brave', 'player');
+                    expect(call().victim).toBe('brave');
+                    expect(distress.map(d => d.ship)).toEqual(['brave']);
+                });
+
+            for (const aiType of [3, 4]) {
+                it(`an AI ${aiType} victim calls silently (wave 21's AI 4 `
+                    + 'guard)', async () => {
+                        await build();
+                        await addShip('player', PLAYER_HULL, 0, 0, pilot());
+                        await addShip('guard', TRADER_HULL, 0, -150,
+                            npcShip(aiType, OWNER));
+                        world.step();
+                        hit('guard', 'player');
+                        expect(call().victim).toBe('guard');
+                        expect(distress).toEqual([]);
+                    });
+            }
+
+            it('a mission ship and a silenced govt\'s trader call silently',
+                async () => {
+                    await build();
+                    await addShip('player', PLAYER_HULL, 0, 0, pilot());
+                    await addShip('special', TRADER_HULL, 0, -150, ship => {
+                        npcShip(1, OWNER)(ship);
+                        // Untethered, so the finished-mission sweep (the
+                        // pilot holds no such mission) leaves it be.
+                        ship.components.set(MissionShipComponent, {
+                            mission: 'test:mission', owner: 'player',
+                            untethered: true,
+                        });
+                    });
+                    world.step();
+                    hit('special', 'player');
+                    expect(call().victim).toBe('special');
+                    expect(distress).toEqual([]);
+
+                    await build();
+                    await addShip('player', PLAYER_HULL, 0, 0, pilot());
+                    await addShip('quiet', TRADER_HULL, 0, -150,
+                        npcShip(1, QUIET_ALLY));
+                    world.step();
+                    hit('quiet', 'player');
+                    expect(call().victim).toBe('quiet');
+                    expect(distress).toEqual([]);
+                });
+
+            it('a victim whose last line is still up calls without a '
+                + 'second one', async () => {
+                    await build();
+                    await scene();
+                    npcOf('trader1').distressAt = now();
+                    hit('trader1', 'player');
+                    expect(call().victim).toBe('trader1');
+                    expect(distress).toEqual([]);
+                });
+        });
+
     it('arrives ReinfTime / 39 s later: the whole flët, 1,800 px from the '
         + 'victim, held, and the line names the MediumName', async () => {
             await build();
@@ -522,7 +634,8 @@ describe('reinforcement fleets in the sim', () => {
         });
 
     it('a victim that left the system before the arrival takes the call '
-        + 'with it (MEASURED once, wave 20); the caller\'s day stays spent',
+        + 'with it (GUESS: no supporting run since wave 21); the caller\'s '
+        + 'day stays spent',
         async () => {
             await build({ delayFrames: 600 });
             await scene();
