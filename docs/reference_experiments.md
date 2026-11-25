@@ -14874,7 +14874,409 @@ Confidence: low (five boards; the crew effect needs many more).
 `pd_crew_5/` (the `*-dialog-*` / `*-sw-*` shots, `recording.mp4`),
 `sheet_crew.png`, `pd_ammo_1/` (`35-sw-ammo-32.png`, `pilot-after/`).
 
+### Planet and station clearance, wave 31: ports and stations have the gates' two zones: a fixed CLEARANCE square of about 245-250 px (any art) where the selecting press, or a standing request on entry, prints "... cleared to land / dock. Commence final approach. / Welcome to <port>.", and the 1.7 W landing window (no 212 cap) for a cleared ship; a clearance lapses within 13-25 s (2026-11-25)
+
+**Questions** (brief item 1): after a request, does coasting into the zone
+clear a planet or station automatically (which STR# lines)? Is there a
+clearance zone apart from the landing window (sizes against the art, the
+212 px cap)? What does the selecting press print INSIDE the zone (NovaJS
+prints nothing there and lands on the next `l`)?
+
+**Rig** (`wave31Resources` "L" / "M"). At rest: the Kit Lancer on a
+decoration stellar at (0, 0), ONE landable port at (d, 0) with a stock
+art (the clone's Type kept): Kit Land P72 140 / 230 / 260 (New England's
+72 x 72 planet: 1.7 W = 122), Kit Land P250 230 / 245 / 260 (spöb 176's
+250 x 250 planet: 1.7 W = 425, NovaJS caps it at 212), Kit Land S17 140 /
+230 (Holpa Station's 17 x 31 station: 29), Kit Land S315 230 / 260
+(Gladius Shipyards' 315 x 200 station: 535, NovaJS 212). `tools/gatefar.sh`
+(three `l` 3.7 s apart, a window shot 1.2 s after each). Coasting: the Kit
+Ring Lancer on Kit Land Toward P72 / P250 (the port at (1100, 0), moon
+rulers at (300 .. 800, 60)), turned east by `tools/move.mjs`, `Up@120`
+(about 49 px/s), ONE `l` 9 s later (about 430 px out: the request), then
+no press; `tools/navsel.mjs` reads the status line and the rulers per
+frame.
+
+| stellar | d | first `l` (selects) | second `l` |
+|---|---|---|---|
+| 72 px planet | 140 | **"Cleared to land, w31-land-p72-140. Welcome to Kit Land P72 140."** | too far |
+| 72 px planet | 230 | **"Cleared to land, w31-land-p72-230. Commence final approach."** | too far |
+| 72 px planet | 260 | request, "Kit Land P72 260 traffic control reads you. Begin initial approach." | too far |
+| 250 px planet | 230 | **"w31-land-p250-230, you're cleared to land. Welcome to Kit Land P250 230."** | **LANDED** |
+| 250 px planet | 245 | **"You are cleared to land. Commence final approach."** | **LANDED** |
+| 250 px planet | 260 | request, "Landing request received. Begin initial approach." | too far |
+| 17 x 31 station | 140 | **"w31-land-s17-140, you're cleared to dock. Commence final approach."** | "You're too far away to dock at this station." |
+| 17 x 31 station | 230 | **"Cleared to dock, w31-land-s17-230. Commence final approach."** | too far |
+| 315 x 200 station | 230 | **"w31-land-s315-230, you're cleared to dock. Welcome to Kit Land S315 230."** | **DOCKED** |
+| 315 x 200 station | 260 | request, "Docking request received. Begin initial approach." | too far |
+| 72 px planet, coasting in | `l` at ~430 px | request, "Landing request received. Begin initial approach." | no press: **"You are cleared to land. Welcome to Kit Land Toward P72."** printed by itself when the port was at (244, -186.5) (frame 1356; at 245 a frame earlier, none) |
+| 250 px planet, coasting in | `l` at ~430 px | request, "Kit Land Toward P250 traffic control reads you. ..." | no press: **"w31-toward-p250, you're cleared to land. Commence final approach."** by itself at (244.1, -155.5) (frame 1335; 246 a frame earlier, none) |
+
+**Findings.**
+1. **The selecting press inside the clearance zone CLEARS a planet or a
+   station and prints the line**: the first piece #97 "Cleared to land" /
+   #98 "you're cleared to land." / #99 "You are cleared to land." (a station
+   #94-96, "dock"), the ship's name after "Cleared to land," or before
+   "you're", then **#100 "Commence final approach."** or **#101 "Welcome to
+   <port>."**: two independent draws, as the gates' #91-93. Over the
+   sixteen clearances of this wave (the table, the coasting runs and the
+   walk-outs) the first piece was #97 / #94 8 times, #98 / #95 5, #99 / #96
+   3, and the tail Commence 9, Welcome 7.
+2. **The clearance zone is the gates' fixed square, NOT the landing
+   window**: a 72 px planet and a 17 px station (windows 122 and 29) were
+   cleared at 140 and 230 and then "too far"; every art was cleared at 230 /
+   245 and requested at 260; a request standing while the ship coasts in is
+   cleared AUTOMATICALLY (no press) at max(|dx|, |dy|) = 244-246 for the 72
+   and the 250 px port alike, where the Euclidean distance was 307 and 289
+   (a square, not a circle). So the clearance zone's half-side is about
+   245-250, the gates' 249 (the coasting edge reads 1-2 frames late).
+3. **The landing window is 1.7 x the WIDTH with NO 212 cap, for a CLEARED
+   ship**: the 250 px planet landed from 230 and 245 px at rest, and (the
+   walk-outs below) a ship cleared at 230 px that then backed away landed
+   from 294, 359 and **425.4 px** (1.7 x 250 = 425); the 315 x 200 station
+   docked from 230 px. The small arts stay at 1.7 W (too far at 140 for 72
+   px). Wave 6's "cap of about 210-215" came from stepping in from outside
+   (the reliability notes).
+4. **An uncleared press outside the zone answers "too far" even inside 1.7
+   W** (the 250 px planet and the 315 px station at 260, windows 425 and
+   535), as the gates.
+5. **A clearance LAPSES with time, not with distance**: cleared at 230 px
+   and left at rest there, the press 36.7 s later was answered with a FRESH
+   clearance (no landing); the two first walk-outs (25.1 and 26.5 s after
+   the clearance, at 294 and 325 px) got a fresh REQUEST; the quick ones
+   (13.4 s and less) landed. So the clearance lasts between 13.4 and 25.1 s
+   (wave 6: a request lapsed after "about 27 s"; wave 29: a gate REQUEST
+   did not lapse within 41 s: GUESS that only a clearance lapses).
+
+Walk-outs (`tools/walkout2.sh`: the Kit Ring Crawler Tough, inertialess at
+about 44 px/s, at rest on Kit Land P250 230's decoration; turned west
+first, `l`, then `Up@<ms>` + Down, then `l` once; the port's distance from
+the start decoration's offset in the stopped shot, `tools/moonx.mjs`):
+
+| run | after the clearance | port at | l1 -> l2 | second `l` |
+|---|---|---|---|---|
+| wk2_1500 | walked 64 px | 294 px | about 6 s | **LANDED** |
+| wk2_3000 | walked 129 px | 359 px | about 8 s | **LANDED** |
+| wk2_4500 | walked 195 px | 425.4 px | 13.4 s | **LANDED** |
+| wk2_wait30 | stayed | 230 px | 36.7 s | **a fresh clearance** ("Cleared to land, w31-walk-p250. Welcome to Kit Land P250 230.") |
+| walk_1500 (turned after the clearance) | walked 64 px | 294 px | 26.5 s | **a fresh request** ("Landing request received. Begin initial approach.") |
+| walk_2200 (the same) | walked 95 px | 325 px | 25.1 s | **a fresh request** ("Kit Land P250 230 traffic control reads you, w31-walk-p250. ...") |
+
+**NovaJS (main 2f13864f, after the wave-30 gate fixes).**
+`N/nova_plugin/travel/planet_plugin.ts`: the gates now have the two zones
+(`HYPERGATE_CLEARANCE_RANGE = 249`, `:317`; `HypergateAutoClearanceSystem`,
+`:925-980`), but planets and stations do not: their selecting press tests
+`stellarLandingRange` (`:875-876`) = `landingRange` = min(1.7 W,
+`LAND_RANGE_CAP` 212) (`:454`, `:470-474`, `:508-515`) and prints nothing
+inside it (comment `:850-857`: "... cleared to land. Commence final
+approach." is not modelled") or the request outside it (`:890`); `attempt`
+(`:689-770`) lands any later press inside that range, cleared or not. 1:
+**mismatch** (no cleared line in flight; `N/display/hail_dialog_plugin.ts:1298-1299`
+uses #96 / #99 only in the comm dialog). 2: **mismatch** (a press 123-245
+px from a 72 px planet requests where the original clears; nothing clears
+on entry). 3: **mismatch** for art wider than 125 px (the 212 cap; 425 for
+the 250 px planet). 4: **matches** while the cap hides it. 5: **mismatch**
+for gates if a gate clearance also lapses (unmeasured), and nothing lapses
+for planets in NovaJS.
+**Proposed** (one model for every stellar, the gates' machinery widened):
+(a) `HYPERGATE_CLEARANCE_RANGE` (249) becomes the clearance zone of
+    planets and stations too: the selecting press inside it clears and
+    prints the cleared line (a `LandingClearedEvent` for planets and
+    stations: first piece #97-99 / #94-96 drawn, the ship's name per form,
+    tail #100 / #101 "Welcome to <name>." drawn; GUESS on the odds, about
+    1/2 : 1/3 : 1/6 and 1 : 1); outside it the request line as now;
+(b) `HypergateAutoClearanceSystem` clears a standing planet / station
+    request too, with the same line, the first tick inside 249;
+(c) the landing window is `LAND_RANGE_PER_FRAME_WIDTH * W` with no cap for
+    every stellar (drop `LAND_RANGE_CAP`), and only a CLEARED ship lands;
+    an uncleared press outside 249 answers "too far" (as now);
+(d) a held clearance lapses after a time (GUESS 20 s, measured between
+    13.4 and 25.1 s); the next press starts over (a request outside 249, a
+    clearance inside).
+
+Confidence: high for 1-4 (twenty-one runs, every press read; two coasting
+runs agree to 2 px; the cleared window's 425 is one run at the edge);
+medium for 5 (three lapses, three holds; the exact time unmeasured).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w31/land_<art>_<d>/*/`
+(`03-l1.png`, `04-l2.png`), `sheet_a.png` .. `sheet_d.png`, `mv_p72/` and
+`mv_p250/` (`recording.mp4`, `navsel.jsonl`, `frames.png`: the request and
+the automatic clearance frames), `wk2_*/` and `walk_*/` (`*-l1.png`,
+`*-stopped.png`, `*-l2.png`, `sheet.png`), `sheet_walk.png`.
+
+### Hypergates across art sizes, wave 31: the clearance zone is the same 245-255 px square for a 17 px and a 325 px art; the entry window is 1.7 x the art's width at a second size (96 px: in at 155, out at 172) and is not reached without a clearance; main 2f13864f matches all of it (2026-11-25)
+
+**Questions** (brief item 2): is the gate clearance zone a fixed square
+for every art (wave 30: 248-250 for the 150 px art, 140 and 230 cleared for
+a 72 px one), and does the entry window follow 1.7 x the art at a second
+size (wave 30: the 72 px gate "too far" at 140)?
+
+**Rig** (`wave31Resources` "G"). As wave 30's Kit Gate Far: the Kit
+Lancer at rest on a decoration stellar at (0, 0), ONE usable hypergate
+(flags 0x11, Flags2 0x1000, HyperLinks to Kit Gate N1's gate 1610) at
+(d, 0), cloned from a stock stellar for its art (the clone's Type kept):
+Kit Gate S17 140 / 245 / 255 (Holpa Station's 17 x 31 art, sÿst
+1290-1292), Kit Gate J325 245 / 255 / 300 (Jupiter's 325 x 325, sÿst
+1293-1295), Kit Gate M96 155 / 172 (Sirius Prime's 96 x 96: 1.7 W = 163;
+sÿst 1296 / 1297), Kit Gate Small 245 / 255 (New England's 72 x 72, sÿst
+1298 / 1299). `tools/gatefar.sh` (`LATE=0`, three `l` presses 3.7 s
+apart, a window shot 1.2 s after each); `tools/lsheet.sh` stacks the
+status lines.
+
+| gate art | d | first `l` | second `l` |
+|---|---|---|---|
+| 17 x 31 | 140 | **cleared**, "Cleared for hypergate entry, w31-gate-s17-140." (#91) | too far (1.7 W = 29) |
+| 17 x 31 | 245 | **cleared**, "You are cleared for hypergate entry." (#93) | too far |
+| 17 x 31 | 255 | request, "Hypergate is **online**, w31-gate-s17-255. Begin initial approach." | too far |
+| 325 x 325 | 245 | **cleared** (#93) | **the gate map** (inside 1.7 W = 552) |
+| 325 x 325 | 255 | request, "Hypergate is energized, w31-gate-j325-255. ..." | **too far** |
+| 325 x 325 | 300 | request, "Hypergate is **online**, w31-gate-j325-300. ..." | **too far** (inside 1.7 W, never cleared) |
+| 96 x 96 | 155 | **cleared** (#92) | **the gate map** |
+| 96 x 96 | 172 | **cleared** (#92) | **too far** |
+| 72 x 72 | 245 | **cleared** (#92) | too far (1.7 W = 122) |
+| 72 x 72 | 255 | request, "Hypergate is energized, w31-gate-small-255. ..." (rerun: the first try failed at open_pilot) | too far |
+
+**Findings.**
+1. **The clearance zone is one fixed square for every art**: cleared at
+   245 and requested at 255 for the 17 px and the 325 px art alike (and
+   245 cleared for the 72 px art); with wave 30 (150 px: cleared at 248,
+   requested at 250) the half-side is **about 248-250 whatever the art**.
+   The coasting runs of "Planet and station clearance, wave 31" put the
+   automatic clearance at 244-246 px for two port arts, the same zone.
+2. **The entry window is 1.7 x the art's WIDTH, with no 212 cap**: the 96
+   px gate's map opened at 155 and was "too far" at 172 (1.7 x 96 = 163);
+   the 325 px gate's map opened at 245 (1.7 x 325 = 552 > 245); the 17 and
+   72 px gates were "too far" well inside the clearance zone.
+3. **A gate that has only been REQUESTED answers "too far" even inside
+   its entry window**: the 325 px gate at 300 px (window 552) said "too
+   far" to every press after the request. The entry window only matters
+   for a ship that holds a clearance.
+4. #74 / #75 drew "online" 2 and "energized" 2 here (with waves 28-30:
+   energized 14, online 7); the cleared forms #91 1, #92 4, #93 2.
+
+**NovaJS (main 2f13864f, the wave-30 gate fixes applied).**
+`N/nova_plugin/travel/planet_plugin.ts`: `HYPERGATE_CLEARANCE_RANGE = 249`
+(`:317`) is the selecting press's zone for a gate (`:875-876`), the
+uncleared press's zone in `attempt` (`:701-703`) and the automatic
+clearance's (`HypergateAutoClearanceSystem`, `:955-956`), whatever the
+art; the cleared gate's entry window is `stellarLandingRange` =
+`LAND_RANGE_PER_FRAME_WIDTH * W` with no cap for gates (`:508-515`).
+1 **matches** (249 for the 17, 72 and 325 px arts: cleared at 245,
+requested at 255). 2 **matches** (163 for 96 px: map at 155, too far at
+172; 552 for 325 px: map at 245). 3 **matches** (an uncleared gate press
+outside 249 is "too far", `:712-715`). 4: #74 / #75 is drawn 5 : 17
+(GUESS-fitted); the pooled 7 : 21 here and before is consistent.
+**Proposed:** none for gates; the comment at `:503-504` ("GUESS that the
+cap is a planet's only (nothing measured a gate wider than 150 px)") can
+cite this section (the 325 px gate's map at 245), and the planets' cap is
+gone too ("Planet and station clearance, wave 31").
+
+Confidence: high (one run per cell, every first and second press read;
+the zone's edge bracketed 245-255 at two extreme arts).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w31/gate_<art>_<d>/*/`
+(`03-l1.png`, `04-l2.png`, `05-l3.png`), `sheet_e.png` (S17 140),
+`sheet_f1.png` (S17 245 / 255, J325 245 / 255 / 300), `sheet_f2.png` (M96
+155 / 172, Small 245), `sheet_g.png` (Small 255).
+
+### Capture odds, wave 31: the odds shown are DRAWN per board (the same hulk, the same seven hits read 10-17%); the hulk's damage plays no part; crew 50 averages 12% over 13 boards, crew 40 about 10%, crew 20 about 16% (2026-11-25)
+
+**Question** (brief item 3): wave 30 read 8 / 15 / 7 / 10 / 11% against one
+crew-50 hulk with the same boarder (NovaJS 5.6%). What do the odds depend
+on: the boarder's crew or strength, a random roll per board, the hulk's
+damage when it was disabled?
+
+**Rig.** Wave 30's live immobile hulks (AI 4 of gövt 363, 300 armor, no
+shield, 50 t: shïp 546 Kit Hulk Crew 50 in sÿst 1275, and wave 8's Kit Live
+Pointer Crew 20 / 40, shïp 831 / 833 in sÿst 2040 / 2042), the only
+traffic of their systems; the boarder always the Kit Ring Crawler Tough
+(crew 10, no marines) with the Kit Escort Gun turret (30 armor a hit,
+reload 20 frames). **Controlled damage:** `scenarios/w31_plunder_crew7.json`
+/ `w31_plunder_crew9.json` replace wave 30's 5 s hold with exactly 7 (or
+9) single taps 900 ms apart at 150 px: 7 hits leave 90 armor (30%, the
+first hit count that disables: the panel read "Disabled" after the taps in
+every run), 9 hits 30 armor (10%); then board, read the dialog, Abort.
+`tools/odds.sh` crops each dialog (the shot BEFORE the Abort click).
+
+| hulk crew (ratio 10 / crew) | damage | Capture Odds per board |
+|---|---|---|
+| 50 (0.2) | 7 hits (90 armor) | 11, 17, 13, 10, 14 |
+| 50 (0.2) | 9 hits (30 armor) | 14, 11, 15 |
+| 50 (0.2) | wave 30, a 5 s hold | 8, 15, 7, 10, 11 |
+| 40 (0.25) | 7 hits | 11, 12 (a third run lost the hulk: "target not found") |
+| 20 (0.5) | 7 hits | 12, 17, 16 |
+
+(The dialog's Cargo 26-49 t and Energy 30-2,680 of the same hulk vary as
+much, and track neither each other nor the odds.)
+
+**Findings.**
+1. **The odds are drawn per board**: the same hulk, boarder and seven hits
+   read 11, 17, 13, 10 and 14%. Nothing in the rig differed between those
+   runs, so the shown odds carry a random part (spread about 7 points).
+2. **The hulk's damage does not enter**: seven hits (30% armor) averaged
+   13.0%, nine hits (10% armor) 13.3%; wave 8's 7 / 8 / 9 shots against crew
+   20 agree (17, 18, 17).
+3. **The crew ratio still matters, weakly in this range**: crew 50 (13
+   boards) 7-17, mean 12.0; crew 40 (two boards here + wave 8's 7) 7-12,
+   mean 10; crew 20 (three here + wave 8's three) 12-18, mean 16.2. Against
+   wave 8's crew 1 (75%), 5 (34%), 10 (20%), 15 (18%) the curve is steep
+   below a ratio of 1 and nearly flat from 0.5 to 0.2. The boarder's
+   strength was not varied (one boarder throughout).
+
+**NovaJS (main 2f13864f).** `captureChance`
+(`N/nova_plugin/ship/boarding_component.ts:706-726`) interpolates
+`CAPTURE_ODDS_BY_CREW_RATIO` (`:689-698`: [0.25, 0.07], [0.5, 0.175]; 5.6% at 0.2) with
+no random part, and its comment (`:678`) reads "The hulk's damage plays no part
+... and nothing else enters here either". 1: **mismatch** (a fixed value
+per crew ratio where the original draws one per board). 2: **matches**.
+3: **mismatch** in level: 5.6% at 0.2 and 7% at 0.25 against means of 12%
+and about 10%.
+**Proposed:** (a) re-fit the low end on the means: [0.2, 0.12],
+[0.25, 0.11] (GUESS: the 0.25 cell's three boards are too few to keep
+it below 0.2's), [0.5, 0.165]; extend the table's left end so ratio 0
+stays 0 (the 1% floor still applies); (b) if the dialog should show the
+spread, draw the shown odds per board as the table value +-5 points
+(uniform, GUESS from the 7-17 spread at 0.2, 12-18 at 0.5), from the
+board's seeded draw so every peer shows the same number, and roll the
+capture against the SHOWN value (the original's success rate against
+its shown odds is unmeasured: GUESS). A mean-only model is the simpler
+change and keeps the capture rate right on average.
+
+Confidence: medium for 1 and 2 (16 boards here, identical inputs), low
+for the exact means (two to thirteen boards a cell).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w31/pc7_*/`,
+`pc9_*/`, `c20_*/`, `c40_*/` (the `*-b-NN.png` shot with the dialog,
+`*-fired-*.png` "Disabled"), `odds_a.png` .. `odds_f.png`, `w30_crew_odds.png`
+(wave 30's five dialogs re-read).
+
+### Plunder Ammo take, wave 31: the kit's self-fed launcher is not plunderable; with a stock IR Missile pair the Ammo take works and tripped the self-destruct 7 times in 8 (NovaJS GUESS 0.5) (2026-11-25)
+
+**Question** (wave-30 leftover): wave 30's Ammo take did nothing with the
+kit's wëap 289 written into the pilot without its outfit; what does it
+take to read Ammo's self-destruct odds?
+
+**Rig.** First oütf 467 Kit Ammo Launcher (ModType 1, ModVal 289; wëap 289
+Kit Ammo Missile: AmmoType 161 = itself, MaxAmmo 5, no ammo oütf) on the
+Kit Ring Crawler Tough with 0 or 1 round, against wave 30's Kit Hulk Ammo
+(wëap 289 x1, 5 rounds; sÿst 1274). Then a STOCK pair, the IR Missile
+(wëap 134: AmmoType 6 = itself, MaxAmmo 0, so the ammo oütf 135's Max 200
+caps it; launcher oütf 134): shïp 547 Kit Hulk IR (the live 50 t hulk
+with wëap 134 x1 / 10 rounds; sÿst 1300) against the same boarder with
+oütf 134 and wëap 134 x1 / 0 rounds (`w31_pd_ir`).
+`scenarios/w30_plunder_ammo.json` (board, Ammo at window (510, 325), a
+shot 1 s later, Abort).
+
+| rig | runs | dialog's Ammo row | the Ammo click |
+|---|---|---|---|
+| kit wëap 289 + its outfit, 0 rounds | 1 | "5" (button lit) | nothing, no line |
+| kit wëap 289 + its outfit, 1 round | 1 | "5" | nothing, no line |
+| stock IR Missile pair | 8 (a ninth lost the hulk on the way in) | **"10 IR missiles"** | **tripped 7 times** ("Oops! You tripped this ship's security self-destruct mechanism.", the dialog closes); **once not** (ir_8: the dialog stayed, the Ammo row now "None", its button dark: all ten taken) |
+
+**Findings.**
+1. The kit's self-fed launcher is not plunderable ammo (three runs over
+   waves 30-31: the bare "5" row and a dead button, with or without the
+   outfit and a round). A stock launcher with an ammo outfit is: the row
+   names the ammo ("10 IR missiles") and the take moves all of it when it
+   does not trip. GUESS: the take needs the ammo's oütf (ModType 3) to
+   exist, as the row's name comes from it.
+2. **Ammo tripped 7 times in 8 takes** (0.875; 95% Wilson about
+   0.53-0.98), with Cargo's high rate rather than Credits' or Energy's.
+
+**NovaJS (main 2f13864f).** `PLUNDER_SELF_DESTRUCT_CHANCE.ammo = 0.5`
+(`N/nova_plugin/ship/boarding_component.ts:585`, GUESS: "never
+measured"): **mismatch** (7 / 8 against 0.5; a 0.5 rate gives 7+ in 8 3.5%
+of the time). **Proposed:** `ammo: 0.85` (Cargo's rate: GUESS that the two
+share it; the 8 takes cannot tell 0.85 from 0.9), the comment's table
+gaining "Ammo 7 / 8 (stock IR Missile, wave 31)".
+
+Confidence: medium (eight takes, one hulk type, one ammo).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w31/ammo_out/*/`,
+`ammo_out1/*/` (`*-sw-ammo-*.png`; `ammo_out*/sheet.png`), `ir_1` ..
+`ir_9/*/` (`*-ammo-*.png`, ir_3 failed "target not on screen", ir_8's
+untripped take), `ir_sheet.png`, `ir_sheet2.png`, `ir_sheet3.png`.
+
+### R7 a provoked freighter's Beg For Mercy above 20M, wave 31: an AI 1 freighter of a 0x2000 govt turns hostile when hit, offers Beg For Mercy and asks 16,000 at 200M (under the ships' 20,000 cap); its Lower Price withdraws ("What? How dare you! Prepare to die!") (2026-11-25)
+
+**Question** (wave-30 leftover): does a 0x2000 freighter's Beg For Mercy
+price go above 20,000 at 200M (wave 30: the AI 1 freighters of the govt
+were not hostile at record -50, so nothing could be asked)?
+
+**Rig.** Wave 30's sÿst 1277 Kit Bribe Freighters (gövt 304 Kit Bribe
+Plain: 0x4000 | 0x2000 | 0x0200; three düde 451 AI 1 freighters, shïp 504,
+unarmed), the Kit Lancer with the Kit Escort Gun turret at the port
+(`w31_freight_gun`: record -50, 200M); `tools/freight.sh` and hand-driven
+steps: Tab, hail (`y`), turret holds, hail, Beg For Mercy (window 309,
+361).
+
+| freighter | before | provoked | hail after | Beg For Mercy |
+|---|---|---|---|---|
+| 1 | no status, Greetings / Request Assistance | one hit (shield 99%) in six 3 s holds | (gone: "No Target" by the sixth hold) | - |
+| 2 (about 100 px off) | | a 1.5 s hold: brackets RED | "What is it you want?", **Status: Hostile**, Greetings / **Beg For Mercy** | "You'll have to pay me first." + **"Pay me 16,000 credits."**; Lower Price: **"What? How dare you! Prepare to die!"** |
+| 3 (99% shield, yellow brackets: freighter 1 back, GUESS) | "What do you want?", no status, Request Assistance | a 1.5 s hold | the hail did not open (the target lost) | - |
+
+**Findings.**
+1. A hit makes the AI 1 freighter of a bribe-taking 0x2000 govt hostile
+   at once ("Status: Hostile", red brackets) and the hail then offers Beg
+   For Mercy.
+2. **At 200M it asked 16,000**: under the ships' 20,000 cap (wave 27: four
+   20,000 asks at 50M / 200M were the highest), so nothing says the 0x2000
+   flag or a freighter lifts the cap. One ask.
+3. A ship's Lower Price on Beg For Mercy WITHDREW at the first press with
+   a line of its own ("What? How dare you! Prepare to die!"), where a fuel
+   sale's or a planet's counters 3/4 about one press in four.
+
+**NovaJS (main 2f13864f).** `shipBribePrice`
+(`N/nova_plugin/reputation/hail.ts:648-655`): an ordinary (not 0x8000)
+govt's ship asks its fuel-sale base plus the cash's growth, capped at
+`SHIP_BRIBE_CAP` 20,000 (`:600`): 2 **consistent** (16,000 is inside what it
+can ask). 3: NovaJS does not model a ship's Lower Price on a bribe (the
+section comment's "NOT MODELLED", `:572-576`). 1: not checked here.
+**Proposed:** none for the price; when the ship haggle is modelled, its
+withdrawal line is stock STR# 3000 ("Ship Comm Strings") one-based 151,
+and the ask's lead "You'll have to pay me first." is #91.
+
+Confidence: medium for 1 (one freighter), low for 2-3 (one ask, one
+Lower Price).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w31/freight1/`
+(`sheet.png`, `sheet2.png`, `sheet3.png`: the hostile hail, `beg2.png`:
+the 16,000 ask, `lower2.png`: the withdrawal, `s3.png`).
+
 ### Reliability notes (for anyone running the reference)
+
+- **U9's 212 px landing cap is superseded (wave 31):** at rest a 250 px
+  planet cleared at 230 / 245 px and LANDED on the next press, and a
+  cleared ship that backed away landed from 294, 359 and 425 px (1.7 W, no
+  cap). Wave 6 stepped IN from outside with a request made long before, so
+  its readings near 210-235 px mixed the clearance's time lapse (13-25 s)
+  and the 249 px automatic clearance with the window; the "cap" was never
+  the window. Measure a landing window only with a ship cleared seconds
+  earlier.
+- **Turn BEFORE the clearing press (wave 31 `walk_1500`):** `move.mjs`
+  took about 20 s to turn the Ring Crawler, so the press after the walk
+  came 25-27 s after the clearance and met a lapsed one (a fresh request).
+  `tools/walkout2.sh` turns first (`NO_THRUST=1`), then clears and walks
+  (l1 -> l2 under 14 s). `move.mjs` now takes `TOL` (the sprite reads in 10
+  degree steps, so 173.4 for a 180 target failed the old fixed 6).
+- **The board loop's `-dialog-<label>-` shot is taken AFTER that click:**
+  with an Abort-only `dialogClicks` the dialog is already gone in it. Read
+  the dialog (Capture Odds) from the shot before it (`tools/odds.sh`).
+- **"No Secondary Weapon" does not mean the launcher is missing:** it shows
+  until a secondary is selected (`w`); the pulled wave-31 Ammo pilots held
+  wëap 289 with its outfit and rounds all along.
+- **A run's open_pilot failure (1 in about 40 in wave 31) now stops the
+  driver at once:** `tools/waitready.mjs` also reads the run's
+  `run-*.json` for `{"ok":false}`; rerun the cell under a new subdir.
+- **`pilot-after` is the pushed copy unless the scenario lands again:**
+  a pilot is written when the player leaves a spaceport, so a plunder run
+  that ends in flight cannot show what a take delivered (wave 30's "the
+  pulled pilot still held 0 rounds" read nothing). Land and take off
+  before the pull when the hold matters.
+- **The kit's self-fed launcher (wëap 289, MaxAmmo 5, no ammo outfit) is
+  not plunderable ammo:** the dialog lists its rounds as a bare "5" and the
+  Ammo button does nothing; a stock pair (IR Missile, wëap 134 + oütf 134 /
+  135) lists "10 IR missiles" and the take works.
 
 - **Two driver scripts can feed one run (wave 30 `gate_diag180`):**
   `tools/waitready.mjs` only sees a failure that reaches `run.err`, but a
@@ -15555,7 +15957,8 @@ Confidence: low (five boards; the crew effect needs many more).
 | Wave 27 leftovers | Plunder: the blast cut-off between 50 and 100 t (a 75 t hulk; is it the Bible's "1-99 t" mass band or a radius?), whether a DeathDelay-60 "huge explosion" reaches farther than a DeathDelay-10 one (a boarder cannot stand off: an NPC or a second ship nearby), Ammo's odds, the odds against another hull / crew. R19: an NPC of the fleet's side attacking another NPC (no player); the arrival distance with the fleet first seen inside the radar (farmun entered at its edge). R7: a 0x2000 freighter's Beg For Mercy above 20M (is 20,000 every ship's cap?), the planet refusal's odds (2 in 15 so far). Map: a ränk 0x0200 override of a MinStatus refusal (does the dot turn blue?). Still open from wave 26: the coast of a second hull / start speed, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the 1 px pane width, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 28** answered ("... wave 28" sections): the blast cut-off is a MASS rule at 100 t (99 t did nothing at 4 px, 90 t at 8 px); an ORDINARY death (a hulk shot dead) is the same blast (63.5 at 1,000 t, 28.4 at 100 t, to the pixel), full damage inside and none outside, and its reach is a SQUARE, max(|dx|, |dy|) <= about 55-60 px at 100 t and 113-157 px at 1,000 t (GUESS: about twice the damage); NovaJS's damage and cut-off match (c82c9f03), its 20 px circle mismatches. A ränk 0x0200 of the owner turns Kit Map Picky's orange dot blue and opens the port (NovaJS matches). A withdrawn planet bribe makes the planet refuse every later offer that visit (11 of 11). Brief items: the hypergate clearance lines #91-93 are the random cleared answer to the `l` that selects a usable gate (1 / 6 / 3 in ten), a refusing gate says "Hypergate usage denied." from the first `l`, far out `l` selected nothing and a later far `l` said "Hypergate is online. Begin initial approach.". Carry-over: the hail pane is 311 on a second odd overflow (Jupiter's 325 px art; NovaJS's rule gives the same pixel: closed). Not run: DeathDelay 60's reach, Ammo's odds and the odds against another hull / crew, R19's NPC-vs-NPC attack and arrival distance, the 0x2000 freighter above 20M, the wave-26 and older carry-overs. Left: see Wave 28 leftovers. |
 | Wave 28 leftovers | Blast: the reach's size rule at a third mass (200 t: twice-the-damage predicts a half-side of 66 px, 500 t 88), its exact half-side at 100 t (55-60) and 1,000 t (113-157), whether it is measured to the centres or the hulls' edges (a bigger boarder), whether a DeathDelay-60 "huge explosion" or a 5,000+ t wreck is capped. Gates: the range inside which `l` selects an idle gate (a STOPPED ship at 500 / 1,000 / 2,000 px), when "Hypergate is online" / "is energized" (#74 / #75) replace the window lines, why "Hypergate jump cancelled." showed in only 3 of 6 cancels. R7: a fresh planet's refusal odds (one first offer per run), how long a withdrawal lasts (a day? a jump out and back?). Still open from wave 27: Ammo's odds, the odds against another hull / crew, R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar, a 0x2000 freighter's Beg For Mercy above 20M; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 29** answered ("... wave 29" sections): the blast reach has NO CAP and stays twice the damage, bracketed at 2,000 t (190, 210), 5,000 t (400, 440) and 10,000 t (760, 820) with the wreck placed exactly by a mission (ShipStart -2); DeathDelay 60 changes only the timing; the reach runs centre to centre (a Fed Carrier-sized victim and a Fed Carrier-sized wreck both missed where their hulls reached inside); 594aa038 matches all of it. A stopped ship's `l` selects a hypergate only inside a CIRCLE of 490-500 px (the 467 px diagonal yes, the 594 px one no) and ports from 1,000 px and more; the selecting press prints the clearance inside the gate's entry zone (200-250 px) and the REQUEST line outside ("Hypergate is energized[, <ship>]. Begin initial approach.", "<port> traffic control reads you.", "Docking request received, <ship>.", + #80), and the request does not lapse within 41 s at rest; NovaJS mismatches (selects gates at any distance, clears them from anywhere, prints no request line); **applied in e04f0f9c** (a 500 px circle, the request lines, only the clearance opens the gate). "Hypergate jump cancelled." printed after all six wave-28 cancels (the shots were stale; matches). A planet's bribe withdrawal OUTLASTS the day (a landing elsewhere in the system and a take-off still met a refusal) and ends with a jump out and back; a second Lower Price on a counter withdraws ("Yeah, you wish."); NovaJS's day key mismatches. Carry-over F1c: 10 / 11 / 12 hired escorts open row 4 from its centre (sets match NovaJS's guess, the even counts' rank order does not); NPC fleets of 6 and 9 fly the hired 6- and 9-layouts (matches). Not run: the fresh planet refusal odds beyond two draws, Ammo's odds, the odds against another hull / crew, R19's NPC-vs-NPC attack and arrival distance, the 0x2000 freighter above 20M, and the wave-26 and older carry-overs. Left: see Wave 29 leftovers. |
 | Wave 29 leftovers | Blast: none open on the reach (form, cap, DeathDelay, centres all measured); the knockback (unmeasured). Gates: the exact selection radius (490-500: 495?) and whether ports have one (selected from 1,000 px and from beyond the radar's edge); the entry zone between 200 and 250 px (U9's 212 px cap predicts it); #74 "energized" vs #75 "online" (GUESS: #75 for an already-open gate; one #75 seen); the odds of the ship-name form; whether a request ever lapses at rest (none within 41 s, against wave 6's 27 s). R7: the withdrawal's end (the system visit or a span of days: wait two or more days in the system, e.g. land and take off twice, then offer); the fresh refusal odds (2 in 19). F1c: past 12 (13+), and whether NPC fleets of 10+ follow the hired 10-12 layouts. Still open from wave 28: Ammo's odds, the plunder odds against another hull / crew, R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar, a 0x2000 freighter's Beg For Mercy above 20M; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first). | **Wave 30** answered ("... wave 30" sections; compared with main 059ce1e2): R7: the withdrawal lasts the whole system visit (still refused after eight days of landings at the system's other port; main's bbd1f6df matches); a FRESH refusal held through re-hails and a landing a day later (main re-draws by day: mismatch); fresh first offers refused 4 in 6 more (6 in 25); AI 1 freighters of the bribe govt at record -50 were not hostile (no Beg For Mercy). Gates: `l` selects inside 498-500 px whether still or coasting at ~50 px/s (main matches); the entry zone of the 150 px gate is a SQUARE of half-side 248-250 (cleared at 248 and on the 255 px diagonal; main uses 212: mismatch), and for a 72 px gate the first `l` CLEARED at 140 px while the second was "too far" (the clearance zone is not the entry window) (and at 230 px; the entry window goes by the art: 1.7 W, no 212 cap for gates); a standing request is cleared with NO press when the ship coasts into the zone (main needs a press: mismatch); #74 / #75 is a draw (online 5 of 17 with no other ship; main's "another ship's clearance" rule: mismatch); an idle gate IS drawn (its closed sprite; wave 24 misread a gate under the ship; main hides it: mismatch) and every gate is a 2 x 2 radar dot (matches); **the gate rows applied 2026-11-25 (3eb2b6ca, 83a2325a)**: a 249 px clearance square apart from the art's entry window (1.7 W, no cap for gates), the automatic clearance of a standing request (#91), #74 / #75 drawn 5 in 17, the idle gate drawn (the section's "Applied (wave-30 fixes)" note). F1c: 13-16 hired fill row 4 out to +-4 (left first) and open row 5 with its inner pair, the parity rule holds; NPC fleets of 10 / 12 / 13 fly the hired layouts in field order (main matches all). Plunder: against a crew-50 hulk Cargo tripped 3 in 5 and Credits 2 in 2 (consistent with main's per-item rates; pooled Cargo 15 / 22, Credits 8 / 23), capture odds 7-15% (main 5.6%: small mismatch); the Ammo take with a 0-round matching launcher took nothing (odds unread). Not run: R19's NPC-vs-NPC attack and arrival distance, the wave-26 and older carry-overs. Left: see Wave 30 leftovers. |
-| Wave 30 leftovers | Gates: the clearance zone across more art sizes (is it a fixed 250 for every gate? a 300 px art, a 72 px gate at 245 / 255), whether a 150 px gate's entry window is 1.7 W = 255 (cleared ship pressing at 251-254), whether a wormhole or a port also clears a standing request on entry, the #74 / #75 odds (12 : 5 so far). R7: whether a FRESH refusal ends with a jump out and back like the withdrawal (one refusal run), the refusal odds (6 in 25), the 0x2000 freighter's Beg For Mercy above 20M (provoke a freighter first: AI 1 ships of the govt were not hostile at -50). Plunder: Ammo's odds (the take did nothing with a 0-round wëap 289 in the pilot; try an outfit-installed launcher), the crew effect (more boards against crew 1 vs 50), why the capture odds against one crew-50 hulk read 7-15% (damage at the disable?). Still open from wave 29: R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first). | open |
+| Wave 30 leftovers | Gates: the clearance zone across more art sizes (is it a fixed 250 for every gate? a 300 px art, a 72 px gate at 245 / 255), whether a 150 px gate's entry window is 1.7 W = 255 (cleared ship pressing at 251-254), whether a wormhole or a port also clears a standing request on entry, the #74 / #75 odds (12 : 5 so far). R7: whether a FRESH refusal ends with a jump out and back like the withdrawal (one refusal run), the refusal odds (6 in 25), the 0x2000 freighter's Beg For Mercy above 20M (provoke a freighter first: AI 1 ships of the govt were not hostile at -50). Plunder: Ammo's odds (the take did nothing with a 0-round wëap 289 in the pilot; try an outfit-installed launcher), the crew effect (more boards against crew 1 vs 50), why the capture odds against one crew-50 hulk read 7-15% (damage at the disable?). Still open from wave 29: R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first). | **Wave 31** answered ("... wave 31" sections; compared with main 2f13864f, which applied the wave-30 gate and bribe fixes): Gates: the clearance zone is the same square for a 17 px and a 325 px art (cleared at 245, requested at 255; the 72 px art too) and the entry window is 1.7 W at a second size (96 px: the map at 155, too far at 172) with no cap (325 px: the map at 245); an uncleared gate press is "too far" inside the window; main's 249 / 1.7 W-uncapped rule matches all of it. Planets and stations (brief item 1) have the gates' two zones: the selecting press inside about 245-250 px CLEARS ("Cleared to land, <ship>. Commence final approach." / "... Welcome to <port>.", #94-101 drawn), a standing request is cleared with no press on entering it (244-246 px coasting, 72 and 250 px ports alike), the landing window is 1.7 W with NO 212 cap for a cleared ship (landed from 245, 294, 359, 425 px at a 250 px planet), an uncleared press outside the zone is "too far", and a clearance lapses within 13-25 s; main has none of it for planets (mismatch). Capture odds: DRAWN per board (the same seven hits read 10-17% against crew 50), damage plays no part (7 vs 9 hits), means crew 50 12% (13 boards), crew 40 about 10%, crew 20 about 16% (main 5.6 / 7 / 17.5%, fixed). Ammo: the kit's self-fed wëap 289 is not plunderable (nothing taken, with or without its outfit); the stock IR Missile pair is, and its Ammo take tripped the self-destruct 7 times in 8 (main's GUESS 0.5: mismatch). R7: a provoked AI 1 freighter of the 0x2000 govt turned hostile and asked 16,000 at 200M (under the 20,000 cap: consistent); its Lower Price withdrew ("What? How dare you! Prepare to die!", STR# 3000 #151). Not run: whether a FRESH refusal ends with a jump out and back, the refusal odds, R19's NPC-vs-NPC attack and arrival distance, the wave-26 and older carry-overs. Left: see Wave 31 leftovers. |
+| Wave 31 leftovers | Landing: the clearance lapse's exact time (13.4-25.1 s; does a gate CLEARANCE lapse too? wave 29's gate REQUEST did not in 41 s), whether a clearance survives a ship that leaves the 1.7 W window and comes back, the cleared window's edge past 425 (one landing at 425.4 for 250 px: a 430-440 press), the cleared-line form odds (#97 / #98 / #99 8 : 5 : 3, tails 9 : 7 so far), whether a wormhole clears a standing request on entry. Capture: the shown odds' spread at ratio 1+ (crew 10 / 5 hulks: is the draw additive or a share?), whether the capture roll uses the SHOWN odds, the boarder's strength or marines. Ammo: more IR boards for the trip rate, and whether a tripped Ammo take still delivers (land again before the pull). R7: one more provoked freighter ask above 20M (one 16,000 so far), whether a FRESH planet refusal ends with a jump out and back, the refusal odds (6 in 26). Still open from wave 30: R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c re-flow offsets, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). Kit: the mïsn ids are used up (retire an old kit mission first). | open |
 
 ## Catalogue
 
