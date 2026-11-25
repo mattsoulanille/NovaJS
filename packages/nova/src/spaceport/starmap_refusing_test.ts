@@ -171,7 +171,7 @@ describe('the map\'s orange / red dot: every port refuses the player', () => {
  * InitialRec, no ranks, no permits, no missions). Pins the list so a change
  * to the clearance rule or to the data shows up here.
  */
-describe('the map\'s orange dot on stock data (a fresh pilot)', () => {
+describe('the map\'s orange / red dots on stock data (a fresh pilot)', () => {
     let universe: MissionUniverse;
     let systems: SystemData[];
     beforeEach(requireNovaData);
@@ -186,22 +186,28 @@ describe('the map\'s orange dot on stock data (a fresh pilot)', () => {
     }, 120_000);
 
     it('colours only systems whose every settled port is closed to a '
-        + 'newcomer, and every one of them ORANGE (a clean record)', () => {
+        + 'newcomer: ORANGE at a clean record, RED where the owner\'s '
+        + 'InitialRec is negative', () => {
             const refusing = refusingSystems(systems, universe,
                 { records: new Map(), now: 0 }, () => true, () => undefined);
-            const names = [...refusing.keys()].sort().map(id =>
-                `${id} ${universe.systemName(id)}`);
+            const names = [...refusing].sort(([a], [b]) => a < b ? -1 : 1)
+                .map(([id, why]) => `${id} ${universe.systemName(id)} `
+                    + (why === 'clean' ? 'orange' : 'red'));
             // Sol (Earth MinStatus 0 vs Federation InitialRec 0) is open.
             expect(refusing.has('nova:130')).toBeFalse();
             // Every coloured system really has a settled port, all
-            // refusing, and the fresh pilot's record there is clean.
+            // refusing, and its colour is the sign of the owner's
+            // InitialRec (the fresh pilot's record there).
             for (const [id, why] of refusing) {
                 const system = systems.find(s => s.id === id)!;
                 expect(systemIsInhabited(system.planets,
                     p => universe.getPlanet(p))).withContext(id).toBeTrue();
-                expect(why).withContext(id).toBe('clean');
+                const initial = universe.getGovt(system.govt ?? '')
+                    ?.initialRecord ?? 0;
+                expect(why).withContext(id)
+                    .toBe(initial < 0 ? 'negative' : 'clean');
             }
-            expect(names).toEqual(STOCK_ORANGE_FOR_A_FRESH_PILOT);
+            expect(names).toEqual(STOCK_REFUSING_FOR_A_FRESH_PILOT);
             // MEASURED orange on the original for a fresh Shuttle (reference
             // "Map dot colours, wave 24"): Alphara, Kerella, Gateway,
             // Lesten, Rigel.
@@ -213,48 +219,51 @@ describe('the map\'s orange dot on stock data (a fresh pilot)', () => {
 });
 
 /**
- * A fresh stock pilot's ORANGE systems: each one's settled ports all ask for
- * more than the owner's InitialRec (0 for every owner here) — the Federation
- * spacedocks (MinStatus 2: Alphara, Kerella, Gateway), Menin (5, Lesten),
- * Rigel III (4), the Polaris worlds (2-10), the Heraan Landing Points (1-2),
- * Rebel I / II (5), and so on. MEASURED orange on the original for Alphara,
- * Gateway, Kerella, Lesten and Rigel (reference "Map dot colours, wave
- * 24"); the rest follow the same rule, unmeasured one by one.
+ * A fresh stock pilot's coloured systems: each one's settled ports all ask
+ * for more than the owner's InitialRec — the Federation spacedocks
+ * (MinStatus 2: Alphara, Kerella, Gateway), Menin (5, Lesten), Rigel III
+ * (4), the Polaris worlds (2-10), the Heraan Landing Points (1-2), Rebel I /
+ * II (5), and so on. ORANGE where that InitialRec is 0; RED in the
+ * Nil'kemorya systems (gövt nova:147, InitialRec -5: a fresh pilot starts
+ * at -5 there, the "No Convictions" record that drew Kit Map Wanted Planet
+ * red). MEASURED orange on the original for Alphara, Gateway, Kerella,
+ * Lesten and Rigel (reference "Map dot colours, wave 24"); the rest follow
+ * the same rule, unmeasured one by one (no Nil'kemorya system was seen).
  */
-const STOCK_ORANGE_FOR_A_FRESH_PILOT: string[] = [
-    "nova:131 Alphara",
-    "nova:134 Kerella",
-    "nova:159 Gateway",
-    "nova:167 Lesten",
-    "nova:188 Rigel",
-    "nova:197 Rimshot",
-    "nova:206 Mjolnir",
-    "nova:208 Nil'kvee",
-    "nova:209 Nil'kol",
-    "nova:210 Nil'vran",
-    "nova:218 Nil'kemorya",
-    "nova:226 Ver'ashan",
-    "nova:227 Til'hapin",
-    "nova:238 Ne'helipar",
-    "nova:239 Nil'nesa",
-    "nova:244 Nil'pesetra",
-    "nova:245 Mu'hari",
-    "nova:258 Ne'ritai",
-    "nova:259 P'aedt",
-    "nova:261 Ver'asplast",
-    "nova:263 Nil'blei",
-    "nova:265 Nil'ikro",
-    "nova:331 Chayos",
-    "nova:334 Ivia",
-    "nova:336 Vemap",
-    "nova:347 Vantra",
-    "nova:357 Aalolph",
-    "nova:368 Moash Nek",
-    "nova:390 Grak",
-    "nova:468 Evlei",
-    "nova:483 Koria",
-    "nova:491 Scheall",
-    "nova:606 Nil'kvee",
-    "nova:607 Nil'nesa",
-    "nova:610 Nil'blei",
+const STOCK_REFUSING_FOR_A_FRESH_PILOT: string[] = [
+    "nova:131 Alphara orange",
+    "nova:134 Kerella orange",
+    "nova:159 Gateway orange",
+    "nova:167 Lesten orange",
+    "nova:188 Rigel orange",
+    "nova:197 Rimshot orange",
+    "nova:206 Mjolnir red",
+    "nova:208 Nil'kvee red",
+    "nova:209 Nil'kol red",
+    "nova:210 Nil'vran red",
+    "nova:218 Nil'kemorya red",
+    "nova:226 Ver'ashan orange",
+    "nova:227 Til'hapin orange",
+    "nova:238 Ne'helipar red",
+    "nova:239 Nil'nesa red",
+    "nova:244 Nil'pesetra red",
+    "nova:245 Mu'hari orange",
+    "nova:258 Ne'ritai red",
+    "nova:259 P'aedt orange",
+    "nova:261 Ver'asplast orange",
+    "nova:263 Nil'blei red",
+    "nova:265 Nil'ikro red",
+    "nova:331 Chayos orange",
+    "nova:334 Ivia orange",
+    "nova:336 Vemap orange",
+    "nova:347 Vantra orange",
+    "nova:357 Aalolph orange",
+    "nova:368 Moash Nek orange",
+    "nova:390 Grak orange",
+    "nova:468 Evlei orange",
+    "nova:483 Koria orange",
+    "nova:491 Scheall orange",
+    "nova:606 Nil'kvee red",
+    "nova:607 Nil'nesa red",
+    "nova:610 Nil'blei red",
 ];
