@@ -114,7 +114,8 @@ skipped or exposed as `unused*`.
 ## Import (packages/nova)
 
 Implemented: `packages/nova/src/title/original_pilot_import.ts` maps
-`PilotData` onto `SaveData` (ship, outfits, credits, date, last stellar ->
+`PilotData` onto `SaveData` (ship, outfits, weapCount/ammo beyond what
+the outfits already hold, credits, date, last stellar ->
 system, control bits, ranks, combat rating, cargo/jünk, per-system legal
 status -> per-gövt records, active missions without special ships) and the
 title screen's Open Pilot import sniffs binary vs JSON. In a browser only

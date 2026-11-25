@@ -4,12 +4,14 @@ import {
     buildMacPilotBlobs, buildPltPilotFile, SYNTHETIC,
 } from 'novaparse/pilot/synthetic_pilot';
 import { simpleCrypt } from 'novaparse/pilot/simple_crypt';
+import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { dayNumber } from '../nova_plugin/player/index.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { decodeSave, SAVE_VERSION } from '../nova_plugin/pilot/index.js';
 import { PrefsStorage } from './client_prefs.js';
 import {
-    convertOriginalPilot, convertOriginalPilotBytes, looksLikeOriginalPilot,
-    OriginalPilotContext,
+    convertOriginalPilot, convertOriginalPilotBytes, loadOriginalPilotWeaponry,
+    looksLikeOriginalPilot, OriginalPilotContext, OriginalPilotWeaponry,
 } from './original_pilot_import.js';
 import { checkpointState, loadHistory } from './pilot_history.js';
 import { importOriginalPilot, listPilots } from './pilot_registry.js';
@@ -249,6 +251,16 @@ describe('original pilot import', () => {
                 .toBe(store.getItem(result.pilot.saveKey)!);
         });
 
+    it('notes the counts it could not read without the weapon data', () => {
+        const { save, notes } = convertOriginalPilot(pilot({
+            outfits: { 128: 1 },
+            weapons: { 128: 1 },
+        }), 'Ring.plt', { ...CTX, knownOutfit: () => true });
+        expect(save.outfits).toEqual([['nova:128', 1]]);
+        expect(notes).toContain(
+            'Weapon and ammunition counts were not imported.');
+    });
+
     it('refuses garbage and explains an empty (Mac data-fork) file', () => {
         const store = new MemoryStorage();
         const bad = importOriginalPilot(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -261,5 +273,130 @@ describe('original pilot import', () => {
         if (empty.ok) { return; }
         expect(empty.reason).toMatch(/resource fork/);
         expect(listPilots(store)).toEqual([]);
+    });
+});
+
+/** A synthetic pilot flying a Shuttle with exactly these counts. */
+function pilot(counts: {
+    outfits?: { [id: number]: number },
+    weapons?: { [id: number]: number },
+    ammo?: { [id: number]: number },
+}) {
+    const p = parsePilotBytes(buildPltPilotFile('Ring'));
+    p.player.shipClass = 0;  // shïp 128, the Shuttle
+    p.player.outfitCount = p.player.outfitCount.map(() => 0);
+    p.player.weaponCount = p.player.weaponCount.map(() => 0);
+    p.player.ammo = p.player.ammo.map(() => 0);
+    for (const [id, n] of Object.entries(counts.outfits ?? {})) {
+        p.player.outfitCount[Number(id) - 128] = n;
+    }
+    for (const [id, n] of Object.entries(counts.weapons ?? {})) {
+        p.player.weaponCount[Number(id) - 128] = n;
+    }
+    for (const [id, n] of Object.entries(counts.ammo ?? {})) {
+        p.player.ammo[Number(id) - 128] = n;
+    }
+    return p;
+}
+
+/**
+ * The file's weapCount[256] and ammo[256] (wëap id = index + 128), on the
+ * stock data. In a pilot the original wrote both mirror outfitCount — a
+ * new Shuttle stores oütf 128 and wëap 128 once each, and the stock Fed
+ * scenario pilot's Pirate Thunderhead Bays (wëap 176, oütf 284) carry
+ * their six fighters in ammo[48] and in oütf 285 alike — so only what the
+ * oütfs leave out is added.
+ */
+describe('original pilot import: weapons and ammunition (stock data)', () => {
+    let weaponry: OriginalPilotWeaponry;
+
+    beforeAll(async () => {
+        if (!novaDataInstalled()) {
+            return;
+        }
+        weaponry = await loadOriginalPilotWeaponry(
+            await getIntegrationGameData());
+    }, 120_000);
+    beforeEach(() => requireNovaData());
+
+    function convert(p: ReturnType<typeof pilot>) {
+        return convertOriginalPilot(p, 'Ring.plt', {
+            ...CTX,
+            knownShip: () => true,
+            knownOutfit: id => weaponry.getOutfit(id) !== undefined,
+            weaponry,
+        });
+    }
+
+    it('adds nothing when the oütfs already account for every weapon and '
+        + 'round, as the original writes them', () => {
+            const { save, notes } = convert(pilot({
+                outfits: { 128: 1, 284: 2, 285: 6 },
+                weapons: { 128: 1, 176: 2 },
+                ammo: { 176: 6 },
+            }));
+            expect(save.outfits).toEqual([
+                ['nova:128', 1], ['nova:284', 2], ['nova:285', 6],
+            ]);
+            expect(notes.filter(n => /weapon|ammunition/i.test(n)))
+                .toEqual([]);
+        });
+
+    it('mounts a weapon no owned item grants through the built-in outfit, '
+        + 'and loads its rounds capped by MaxAmmo per launcher', () => {
+            // Two Thunderhead Bays with no oütf 284: a bay's MaxAmmo is 3,
+            // so the file's 10 fighters fit as 6.
+            const { save, notes } = convert(pilot({
+                weapons: { 176: 2 },
+                ammo: { 176: 10 },
+            }));
+            expect(save.outfits).toEqual([
+                ['nova:176:builtInWeapon', 2], ['nova:285', 6],
+            ]);
+            expect(notes).toContain(
+                '4 rounds of ammunition did not fit this ship and were dropped.');
+        });
+
+    it('loads rounds onto the oütf feeding the weapon\'s AmmoType supply',
+        () => {
+            // The Raven Rocket Turret (wëap 139, oütf 144) draws on the
+            // Raven Rocket's supply (wëap 138), fed by oütf 143.
+            const { save } = convert(pilot({
+                outfits: { 144: 1 },
+                weapons: { 139: 1 },
+                ammo: { 139: 20 },
+            }));
+            expect(save.outfits).toEqual([['nova:144', 1], ['nova:143', 20]]);
+        });
+
+    it('tops up the rounds the owned ammo oütfs hold, capped by the oütf Max',
+        () => {
+            const topped = convert(pilot({
+                outfits: { 142: 1, 143: 5 },
+                weapons: { 138: 1 },
+                ammo: { 138: 20 },
+            }));
+            expect(topped.save.outfits)
+                .toEqual([['nova:142', 1], ['nova:143', 20]]);
+
+            // oütf 143 "Raven Rocket" is Max 300 (wëap 138's MaxAmmo is 0).
+            const capped = convert(pilot({
+                outfits: { 142: 1 },
+                weapons: { 138: 1 },
+                ammo: { 138: 500 },
+            }));
+            expect(capped.save.outfits)
+                .toEqual([['nova:142', 1], ['nova:143', 300]]);
+            expect(capped.notes).toContain(
+                '200 rounds of ammunition did not fit this ship and were '
+                + 'dropped.');
+        });
+
+    it('removes nothing when the oütfs mount more than weapCount', () => {
+        const { save } = convert(pilot({
+            outfits: { 128: 2 },
+            weapons: { 128: 1 },
+        }));
+        expect(save.outfits).toEqual([['nova:128', 2]]);
     });
 });

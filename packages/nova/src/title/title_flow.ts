@@ -37,7 +37,7 @@ import { OfferPopup } from '../spaceport/offer_popup.js';
 import { formatMapDate } from '../spaceport/route.js';
 import { loadPilotProfile, savePilotProfile } from './client_prefs.js';
 import {
-    looksLikeOriginalPilot, OriginalPilotContext,
+    loadOriginalPilotWeaponry, looksLikeOriginalPilot, OriginalPilotContext,
 } from './original_pilot_import.js';
 import {
     checkpointCount, loadHistory, rewindPilotSave,
@@ -174,6 +174,7 @@ async function originalPilotContext(runtime: ClientRuntime):
         initialRecordIn: id => universe.legalGeography().recordIn(
             new Map(), id),
         fallbackSystem,
+        weaponry: await loadOriginalPilotWeaponry(gameData),
     };
 }
 

@@ -5,7 +5,8 @@
  * SimpleCrypt-scrambled 'NpïL' blobs; this module maps its PilotData onto
  * our SaveData + PilotProfile. What comes across, and what cannot:
  *
- *   ship, outfits (index + 128 -> 'nova:<id>'), credits, date, last
+ *   ship, outfits (index + 128 -> 'nova:<id>'), mounted weapons and
+ *   ammunition (see below), credits, date, last
  *   stellar -> the system it is in, control bits (bare numbers, legacy
  *   `novaControlBits` field), ranks, combat rating (kill count), standard
  *   cargo + jünk aboard, legal records (see below), and active missions
@@ -26,6 +27,17 @@
  *   acceptedAt are not stored either, so the current day / last stellar
  *   stand in.
  *
+ *   Weapons and ammo: the file keeps a weapCount and an ammo count per
+ *   wëap alongside outfitCount. In a pilot the original wrote they mirror
+ *   the oütfs (a new Shuttle stores oütf 128 and wëap 128 once each; the
+ *   stock Fed scenario pilot's bay fighters sit in both ammo[] and their
+ *   ammo oütfs), so only what the oütfs do NOT already account for is
+ *   added: a weapon no owned item mounts (a hull weapon with no oütf, or
+ *   an edited file) through the implicit built-in weapon outfit, and
+ *   rounds beyond what the owned ammo oütfs hold onto the ammo oütf
+ *   feeding the weapon's AmmoType supply, as novaparse's ship_parse loads
+ *   a hull's stock AmmoLoad, capped like a purchase (see importWeaponry).
+ *
  *   Exploration: the file's 2048-entry per-system map imports as-is —
  *   its three states are the ones NovaJS uses (see discovery.ts).
  *
@@ -42,13 +54,23 @@
  * as resource-fork-format bytes.
  */
 
+import type { OutfitData } from 'novadatainterface/outfit_data';
+import type { ShipData } from 'novadatainterface/ship_data';
+import type { WeaponData } from 'novadatainterface/weapon_data';
+import {
+    ammoSupplyWeaponId, builtInAmmoOutfitId, builtInOutfitWeaponId,
+    builtInWeaponOutfitId, makeBuiltInAmmoOutfit, makeBuiltInWeaponOutfit,
+    preferredAmmoOutfit,
+} from 'novaparse/built_in_weapon_outfit';
 import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
 import {
     dayNumber, daysInMonth, DISCOVERY_UNKNOWN, toDiscoveryLevel, ActiveMission,
     sanitizeShipName,
 } from '../nova_plugin/player/index.js';
-import { SaveData, saveDefaults } from '../nova_plugin/pilot/index.js';
+import {
+    ammoPurchaseRoom, SaveData, saveDefaults,
+} from '../nova_plugin/pilot/index.js';
 import { PilotProfile } from './client_prefs.js';
 
 /** Arrays in a pilot file are indexed by resource id - 128. */
@@ -96,6 +118,21 @@ export interface OriginalPilotContext {
     initialRecordIn?(systemId: string): number;
     /** Where a pilot goes when its last stellar is unknown. */
     fallbackSystem: string;
+    /**
+     * Data lookups for the file's weapon and ammo counts (importWeaponry).
+     * Optional; without them those counts are not imported, with a note.
+     */
+    weaponry?: OriginalPilotWeaponry;
+}
+
+/** Game data the weapon and ammo import reads, by global id. */
+export interface OriginalPilotWeaponry {
+    /** An oütf, including an implicit built-in one; undefined if unknown. */
+    getOutfit(id: string): OutfitData | undefined;
+    getWeapon(id: string): WeaponData | undefined;
+    getShip(id: string): ShipData | undefined;
+    /** Every oütf whose ammoFor is `supply`, in id-space order. */
+    ammoOutfitsFeeding(supply: string): readonly string[];
 }
 
 export interface OriginalPilotConversion {
@@ -148,6 +185,170 @@ function clampDate(date: { year: number, month: number, day: number },
     return { year, month, day };
 }
 
+/** The slice of game data loadOriginalPilotWeaponry reads. */
+export interface WeaponryGameData {
+    readonly ids: Promise<{ readonly Outfit: readonly string[],
+        readonly Weapon: readonly string[], readonly Ship: readonly string[] }>;
+    readonly data: {
+        readonly Outfit: { get(id: string): Promise<OutfitData> };
+        readonly Weapon: { get(id: string): Promise<WeaponData> };
+        readonly Ship: { get(id: string): Promise<ShipData> };
+    };
+}
+
+/**
+ * Loads every oütf, wëap and shïp up front so the (synchronous) import
+ * can look them up. An implicit built-in outfit id resolves the way
+ * novaparse serves it, from its weapon. A resource that fails to load
+ * reads as unknown.
+ */
+export async function loadOriginalPilotWeaponry(gameData: WeaponryGameData):
+    Promise<OriginalPilotWeaponry> {
+    const ids = await gameData.ids;
+    async function load<T>(list: readonly string[],
+        get: (id: string) => Promise<T>): Promise<Map<string, T | undefined>> {
+        const loaded = await Promise.all(list.map(
+            id => get(id).catch(() => undefined)));
+        return new Map(list.map((id, i) => [id, loaded[i]]));
+    }
+    const [outfits, weapons, ships] = await Promise.all([
+        load(ids.Outfit, id => gameData.data.Outfit.get(id)),
+        load(ids.Weapon, id => gameData.data.Weapon.get(id)),
+        load(ids.Ship, id => gameData.data.Ship.get(id)),
+    ]);
+    const feeding = new Map<string, string[]>();
+    for (const id of ids.Outfit) {
+        const ammoFor = outfits.get(id)?.ammoFor;
+        if (ammoFor) {
+            feeding.set(ammoFor, [...(feeding.get(ammoFor) ?? []), id]);
+        }
+    }
+    return {
+        getOutfit(id) {
+            const builtIn = builtInOutfitWeaponId(id);
+            if (!builtIn) {
+                return outfits.get(id);
+            }
+            const weapon = weapons.get(builtIn.weaponId);
+            return weapon && (builtIn.kind === 'weapon'
+                ? makeBuiltInWeaponOutfit(weapon)
+                : makeBuiltInAmmoOutfit(weapon));
+        },
+        getWeapon: id => weapons.get(id),
+        getShip: id => ships.get(id),
+        ammoOutfitsFeeding: supply => feeding.get(supply) ?? [],
+    };
+}
+
+/**
+ * Adds to `outfits` (the file's oütfs, already imported) whatever the
+ * file's weapCount and ammo arrays hold that those oütfs do not.
+ *
+ * WEAPONS. For each wëap, the count the owned items already mount is
+ * subtracted from weapCount; any remainder is a weapon the pilot has but
+ * owns no item for, and it is mounted through the implicit built-in
+ * weapon outfit (novaparse built_in_weapon_outfit.ts) — massless and
+ * unsellable, as the original offers no item to sell. A weapon count
+ * BELOW what the items mount removes nothing: the items are what was
+ * bought.
+ *
+ * AMMO. ammo[i] is rounds for wëap i's supply: the weapon its AmmoType
+ * names (EVN Bible ~:3117), which ship_parse also follows for a hull's
+ * AmmoLoad. Rounds the owned ammo oütfs feeding that supply already hold
+ * are subtracted; the rest become the oütf preferredAmmoOutfit picks
+ * among those feeding it (or, when none does, the weapon's implicit
+ * magazine, as ship_parse does), capped like a purchase: the oütf's Max,
+ * the launchers' room when the supply weapon sets MaxAmmo, and the hull's
+ * free mass (ammoPurchaseRoom). Two entries drawing on one supply count
+ * once (the larger). A weapon with no supply (unlimited, fuel per shot)
+ * has no rounds to import.
+ */
+function importWeaponry(player: PilotData['player'], shipId: string,
+    outfits: [string, number][], data: OriginalPilotWeaponry,
+    notes: string[]) {
+    const add = (id: string, count: number) => {
+        const entry = outfits.find(([other]) => other === id);
+        if (entry) {
+            entry[1] += count;
+        } else {
+            outfits.push([id, count]);
+        }
+    };
+
+    let unknownWeapons = 0;
+    player.weaponCount.forEach((count, i) => {
+        if (count <= 0) {
+            return;
+        }
+        const weaponId = globalId(i);
+        if (!data.getWeapon(weaponId)) {
+            unknownWeapons++;
+            return;
+        }
+        let mounted = 0;
+        for (const [id, n] of outfits) {
+            mounted += (data.getOutfit(id)?.weapons[weaponId] ?? 0) * n;
+        }
+        if (count > mounted) {
+            add(builtInWeaponOutfitId(weaponId), count - mounted);
+        }
+    });
+    if (unknownWeapons > 0) {
+        notes.push(`${unknownWeapons} weapon${unknownWeapons === 1 ? '' : 's'}`
+            + ' not in this game\'s data were dropped.');
+    }
+
+    // Supply -> rounds, and the weapon whose implicit magazine carries
+    // them when no oütf feeds the supply (the first entry naming it).
+    const rounds = new Map<string, { count: number, carrier: string }>();
+    player.ammo.forEach((count, i) => {
+        if (count <= 0) {
+            return;
+        }
+        const weapon = data.getWeapon(globalId(i));
+        const supply = weapon && ammoSupplyWeaponId(weapon);
+        if (!weapon || supply === undefined) {
+            return;
+        }
+        const seen = rounds.get(supply);
+        rounds.set(supply, {
+            count: Math.max(count, seen?.count ?? 0),
+            carrier: seen?.carrier ?? weapon.id,
+        });
+    });
+    const ship = data.getShip(shipId);
+    let dropped = 0;
+    for (const [supply, { count, carrier }] of rounds) {
+        let held = 0;
+        for (const [id, n] of outfits) {
+            if (data.getOutfit(id)?.ammoFor === supply) {
+                held += n;
+            }
+        }
+        if (count <= held) {
+            continue;
+        }
+        const target = preferredAmmoOutfit(data.ammoOutfitsFeeding(supply))
+            ?? builtInAmmoOutfitId(carrier);
+        const targetData = data.getOutfit(target);
+        if (!targetData) {
+            dropped += count - held;
+            continue;
+        }
+        const room = ammoPurchaseRoom(targetData, outfits, ship,
+            id => data.getOutfit(id), data.getWeapon(supply));
+        const added = Math.min(count - held, room);
+        if (added > 0) {
+            add(target, added);
+        }
+        dropped += count - held - added;
+    }
+    if (dropped > 0) {
+        notes.push(`${dropped} round${dropped === 1 ? '' : 's'} of ammunition`
+            + ' did not fit this ship and were dropped.');
+    }
+}
+
 /** Maps a parsed original pilot onto a NovaJS save + profile. */
 export function convertOriginalPilot(pilot: PilotData,
     fileName: string, ctx: OriginalPilotContext): OriginalPilotConversion {
@@ -176,6 +377,13 @@ export function convertOriginalPilot(pilot: PilotData,
     if (unknownOutfits > 0) {
         notes.push(`${unknownOutfits} owned outfit${unknownOutfits === 1 ? '' : 's'}`
             + ' not in this game\'s data were dropped.');
+    }
+
+    if (ctx.weaponry) {
+        importWeaponry(player, shipId, outfits, ctx.weaponry, notes);
+    } else if (player.weaponCount.some(n => n > 0)
+        || player.ammo.some(n => n > 0)) {
+        notes.push('Weapon and ammunition counts were not imported.');
     }
 
     const novaControlBits: [string, number][] = [];

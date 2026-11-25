@@ -138,6 +138,30 @@ async function convertMagazines(outfits: Outfits, ship: ShipData | undefined,
 async function roomFor(outfit: OutfitData, supply: string,
     owned: Outfits, ship: ShipData | undefined,
     lookups: BuiltInAmmoLookups): Promise<number> {
+    const data = new Map<string, OutfitData | undefined>();
+    for (const [id] of owned) {
+        if (!data.has(id)) {
+            data.set(id, await lookups.getOutfit(id));
+        }
+    }
+    return ammoPurchaseRoom(outfit, owned, ship, id => data.get(id),
+        await lookups.getWeapon(supply));
+}
+
+/**
+ * roomFor with every lookup already in hand: how many more of ammo oütf
+ * `outfit` a ship of class `ship` owning `owned` could buy. Its Max
+ * (times its increase-maximum items), the launchers' room when the
+ * supply weapon (`supplyWeapon`, the weapon `outfit.ammoFor` names) sets
+ * MaxAmmo, and the hull's free mass when `ship` is known. The original
+ * pilot import (title/original_pilot_import.ts) caps a file's ammo with
+ * it too.
+ */
+export function ammoPurchaseRoom(outfit: OutfitData, owned: Outfits,
+    ship: ShipData | undefined,
+    getOutfit: (id: string) => OutfitData | undefined,
+    supplyWeapon: WeaponData | undefined): number {
+    const supply = outfit.ammoFor;
     let freeMass = ship?.physics.freeMass ?? Infinity;
     let multiplier = 0;
     let mounted = 0;
@@ -147,7 +171,7 @@ async function roomFor(outfit: OutfitData, supply: string,
         if (id === outfit.id) {
             held += count;
         }
-        const data = await lookups.getOutfit(id);
+        const data = getOutfit(id);
         if (!data) {
             continue;
         }
@@ -157,14 +181,15 @@ async function roomFor(outfit: OutfitData, supply: string,
         if (data.increasesMax === outfit.id) {
             multiplier += count;
         }
-        mounted += (data.weapons[supply] ?? 0) * count;
-        if (data.ammoFor === supply) {
-            supplied += count;
+        if (supply) {
+            mounted += (data.weapons[supply] ?? 0) * count;
+            if (data.ammoFor === supply) {
+                supplied += count;
+            }
         }
     }
     let room = outfit.max <= 0 ? Infinity
         : outfit.max * Math.max(1, multiplier) - held;
-    const supplyWeapon = await lookups.getWeapon(supply);
     if (supplyWeapon && supplyWeapon.maxAmmo > 0) {
         room = Math.min(room, supplyWeapon.maxAmmo * mounted - supplied);
     }
