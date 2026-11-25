@@ -53,10 +53,20 @@ import {
 } from '../nova_plugin/travel/index.js';
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
+import * as PIXI from 'pixi.js';
+import { Subject } from 'rxjs';
+import {
+    ControlEvent, ControlsSubject, DisplayAssetDataResource,
+    SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
+import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
+import { ScreenSize } from './screen_size_plugin.js';
+import { Stage } from './stage_resource.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
-    assistAnswer, computeContext, fuelOffer, hailIsUnanswerable,
+    assistAnswer, computeContext, fuelOffer, HailDialogPlugin,
+    HailDialogResource, hailIsUnanswerable,
     hailTargetIsDisabled,
     shipIdentityBlock,
     targetIsFighting,
@@ -1619,6 +1629,72 @@ describe('computeContext: hailing a STELLAR', () => {
             expect(NO_RESPONSE_FALLBACK).toBe('No response.');
         });
     });
+
+    /**
+     * The comm dialog through the plugin's own 'y' handler, with the
+     * stellar selection landing a snapshot AFTER the press (the number key
+     * pressed just ahead of 'y'): `before` is the selection the display
+     * world holds at the press, and the dialog must hail Philar.
+     */
+    async function hailRacingTheSelection(before: string | undefined) {
+        installHeadlessPixi();
+        const { world, gameData } = planetWorld({ isStation: true });
+        world.entities.set(OTHER_PLANET, new Entity()
+            .addComponent(PlanetComponent, { id: 'nova:129' })
+            .addComponent(PlanetDataComponent, {
+                ...world.entities.get(PLANET)!.components
+                    .get(PlanetDataComponent)!,
+                id: 'nova:129', name: 'Pholar',
+            }));
+        world.entities.get(PLANET)!.components.get(PlanetDataComponent)!
+            .name = 'Philar';
+        const player = world.entities.get(PLAYER)!;
+        player.components.set(PlanetTargetComponent, { target: before });
+        const keys = new Subject<ControlEvent>();
+        world.resources.set(SimulationGameDataResource, gameData);
+        world.resources.set(DisplayAssetDataResource, stellarAssets());
+        world.resources.set(ControlsSubject, keys);
+        world.resources.set(Stage, new PIXI.Container());
+        world.resources.set(ScreenSize, { x: 1024, y: 768 });
+        world.resources.set(SimulationTimeResource,
+            { time: 0, delta_s: 0, delta_ms: 0, frame: 0 });
+        await world.addPlugin(HailDialogPlugin);
+        const dialog = world.resources.get(HailDialogResource)!;
+        let shown: HailContext | undefined;
+        dialog.show = async (context: HailContext) => { shown = context; };
+
+        // The display sees 'y' at once, and the selection only once the
+        // simulation has stepped on it and its snapshot has landed.
+        keys.next({ action: 'hail', state: 'start' });
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+        await sleep(10);
+        player.components.set(PlanetTargetComponent, { target: PLANET });
+        for (let frame = 1; frame <= 2; frame++) {
+            world.resources.set(SimulationTimeResource,
+                { time: frame * 1000 / 60, delta_s: 0, delta_ms: 0, frame });
+            await sleep(10);
+        }
+        for (let i = 0; i < 100 && !shown; i++) {
+            await sleep(5);
+        }
+        await world.removePlugin(HailDialogPlugin);
+        return shown;
+    }
+    const OTHER_PLANET = 'planet-uuid-2';
+
+    it('hails the stellar selected just before the press, not the one '
+        + 'selected before that (Philar / Pholar, nova:603)', async () => {
+            const shown = await hailRacingTheSelection(OTHER_PLANET);
+            expect(shown?.heading.split('\n')[0]).toBe('Philar');
+        });
+
+    it('opens a channel when the press beat the first selection (Gladius '
+        + 'Shipyards, nova:281)', async () => {
+            const shown = await hailRacingTheSelection(undefined);
+            expect(shown).withContext('a dialog opened').toBeDefined();
+            expect(shown?.heading.split('\n')[0]).toBe('Philar');
+        });
+
 });
 
 /**

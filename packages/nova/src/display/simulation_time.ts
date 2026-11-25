@@ -21,8 +21,10 @@ export function defaultSimulationTime(): Time {
 /**
  * Resolves once the display world has applied `frames` more simulation
  * frames (applySimulationFrame replaces SimulationTimeResource with each
- * frame's time), or after `timeoutMs` (a paused or stalled simulation
- * sends none).
+ * frame's time), or after `timeoutMs` (a paused simulation sends none;
+ * a frame pump stalled on a cold load, the first moments in a system,
+ * sends them late, which is why the cap is a generous second rather than
+ * a few frames).
  *
  * WHY. A key reaches the display's own handlers synchronously, but the
  * simulation sees it only on its next step, and the display world shows
@@ -36,7 +38,7 @@ export function defaultSimulationTime(): Time {
  * returned, and so after the key had been sent.
  */
 export function afterSimulationFrames(world: World, frames = 2,
-    timeoutMs = 250): Promise<void> {
+    timeoutMs = 1000): Promise<void> {
     return new Promise(resolve => {
         const start = Date.now();
         let last = world.resources.get(SimulationTimeResource);
