@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w29-bribe-stay",
+  "edits": {
+    "ship": 497,
+    "stellar": 1675,
+    "credits": 2000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1246": 2,
+      "1247": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w29-bribe-stay",
+    "legal": {
+      "1246": -50
+    }
+  }
+}

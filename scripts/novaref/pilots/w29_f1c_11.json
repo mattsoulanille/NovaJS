@@ -1,0 +1,70 @@
+{
+  "name": "novaref-w29-f1c-11",
+  "edits": {
+    "ship": 720,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w29-f1c-11",
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "escorts": [
+      {
+        "ship": 721,
+        "hired": true
+      },
+      {
+        "ship": 722,
+        "hired": true
+      },
+      {
+        "ship": 723,
+        "hired": true
+      },
+      {
+        "ship": 724,
+        "hired": true
+      },
+      {
+        "ship": 725,
+        "hired": true
+      },
+      {
+        "ship": 726,
+        "hired": true
+      },
+      {
+        "ship": 505,
+        "hired": true
+      },
+      {
+        "ship": 506,
+        "hired": true
+      },
+      {
+        "ship": 507,
+        "hired": true
+      },
+      {
+        "ship": 721,
+        "hired": true
+      },
+      {
+        "ship": 722,
+        "hired": true
+      }
+    ]
+  }
+}

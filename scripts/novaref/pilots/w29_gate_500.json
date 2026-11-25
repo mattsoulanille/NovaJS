@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w29-gate-500",
+  "edits": {
+    "ship": 703,
+    "stellar": 1639,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1228": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w29-gate-500"
+  }
+}

@@ -300,8 +300,183 @@ export default {
         ...wave26Resources(),
         ...wave27Resources(),
         ...wave28Resources(),
+        ...wave29Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-29 experiments (docs/reference_experiments.md, "... wave 29").
+ * Nothing retired. sÿst 1222-1253, spöb 1627-1689, shïp 542-544, düde
+ * 473-474, flët 312-313, mïsn 959 / 969 / 1125 / 1126 / 1127 (bits
+ * 9245-9249; offer texts dësc 4831 / 4841 / 4997-4999). Map rows y = -1980
+ * (x -800 .. -480), -2040 (x -800 .. -480) and -2100 (x -800 .. -280). The
+ * next free ids: sÿst 1254+, spöb 1690+ (spares 1495, 1496, 1499), shïp
+ * 545+, düde 475+, ränk 205+, mïsn NONE (every id the pilot can reference,
+ * up to 1127, is used: retire an old kit mission to add one), gövt 297 and
+ * below, flët 314+, wëap 295+, oütf 467+, bits 9250+.
+ *
+ * LESSONS: a mission ship with ShipStart -2 sits EXACTLY on nav default 2
+ * (dx 170.0 from a player on nav default 1), so the B rig places a wreck at
+ * any distance, off screen too. The Kit Ring Lancer is inertial (Down does
+ * not brake): start a pilot ON the port it must land at (W2 below).
+ *
+ *  B   The blast reach at heavy masses, with the wreck at a CHOSEN distance:
+ *      sÿst 1222-1227 Kit Blast 170 / 230 / 380 / 470 / 700 / 880 each hold
+ *      a port at (0, 0) (nav default 1, where the pilot starts and lands) and
+ *      an uninhabited marker at (d, 0) (nav default 2). A mission accepted on
+ *      landing (AvailLoc 3, ShipSyst -1, ShipStart -2: "on top of nav default
+ *      2") puts ONE live immobile hulk on the marker, so after take-off the
+ *      player (at rest on the port) and the hulk are d px apart along x and
+ *      the Kit Pulse Beam (wëap 290, 5000 px) kills it from there: mïsn 959
+ *      the 2,000 t hulk (düde 463, b9245), 969 the 5,000 t DeathDelay-10
+ *      hulk (düde 459, b9246), 1125 the 5,000 t DeathDelay-60 hulk (düde 457,
+ *      b9247), 1126 a new 10,000 t DeathDelay-10 hulk (shïp 542 Kit Hulk
+ *      Pointer 10000, düde 473, b9248). No traffic in these systems.
+ *      Added during the wave: Kit Blast 760 / 820 (sÿst 1233 / 1234, ports
+ *      spöb 1649 / 1650, markers 1651 / 1652), Kit Blast 190 / 210 / 400 / 440
+ *      (sÿst 1240-1243, ports 1663-1666, markers 1667-1670), shïp 543 Kit
+ *      Big Boarder (the Tough boarder with the stock Fed Carrier's shän 143:
+ *      is the reach to the victim's centre or its hull?) and shïp 544 Kit
+ *      Hulk Big 2000 (the 2,000 t hulk with that art; düde 474, mïsn 1127,
+ *      b9249: the wreck's side).
+ *  G   The hypergate `l` selection range from a STOPPED ship: Kit Gate Far d,
+ *      each a decoration stellar (flags 0: no landing, not drawn) at (0, 0)
+ *      where the pilot starts and a usable kit hypergate (as wave 24's) at
+ *      (d, 0), HyperLinks to N1's gate 1610: sÿst 1228-1230 (d 500 / 1000 /
+ *      2000; decorations spöb 1639-1641, gates 1642-1644), 1235-1237 (150 /
+ *      300 / 400; 1653-1655, 1656-1658), 1238 (450; 1659, 1660), 1239 (the
+ *      gate at (330, 330); 1661, 1662), 1244 (475; 1671, 1672), 1245 (the
+ *      gate at (420, 420); 1673, 1674), 1248 / 1249 (485 / 490; 1678-1681),
+ *      1250 / 1251 (200 / 250; 1682-1685).
+ *  R   The request lines (#76-80) from a stopped ship: sÿst 1231 Kit Request
+ *      Port (decoration spöb 1645 at 0, 0; a landable port spöb 1646 at
+ *      (1000, 0)) and sÿst 1232 Kit Request Station (decoration 1647; a
+ *      landable station spöb 1648, a clone of stock spöb 299 Holpa Station,
+ *      at (1000, 0)).
+ *  N   NPC fleets of 6 and 9 escorts (F1c): flët 312 Kit Disc Fleet 6 / 313
+ *      Kit Disc Fleet 9 (white lead 720, discs 721-724 in field order),
+ *      the only traffic of sÿst 1252 Kit Fleet Six / 1253 Kit Fleet Nine
+ *      (ports spöb 1686 / 1687, markets 1688 / 1689).
+ *  W   How long a planet's bribe withdrawal lasts: sÿst 1246 Kit Bribe Stay
+ *      (gövt 304) with the refusing port spöb 1675 (gövt 304, MinStatus 0) at
+ *      (0, 0) and an open port spöb 1677 at (300, 0), linked to sÿst 1247 Kit
+ *      Bribe Away (port spöb 1676).
+ */
+function wave29Resources() {
+    const out = [];
+    const Y = -1980;
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const marker = (id, name, x, y) => spob(id, name, x, y, 132, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] });
+    const decoration = (id, name) => spob(id, name, 0, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+
+    // --- B: a 10,000 t live hulk (as wave 27's liveHulk, no traffic of its own).
+    out.push({ type: "shïp", id: 542, name: "Kit Hulk Pointer 10000", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Hulk Pointer 10000",
+        longName: "Kit Hulk Pointer 10000", commName: "Kit Hulk Pointer 10000", subtitle: "", armor: 300, shield: 0, accel: 0, speed: 0, turn: 0,
+        mass: 10000, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 } });
+    out.push({ type: "shän", id: 542, name: "Kit Hulk Pointer 10000", clone: "shän:128", set: { "@0:i16": 1959, "@2:i16": 1960, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+    const big = dude(473, "Kit Hulk Pointer 10000", 4, 363, 542);
+    big.set = { ...big.set, flags: 0x0041 };
+    out.push(big);
+    [170, 230, 380, 470, 700, 880].forEach((d, i) => {
+        const sid = 1222 + i;
+        out.push(system(sid, `Kit Blast ${d}`, -800 + 40 * i, Y, 363, [1627 + i, 1633 + i]),
+            port(1627 + i, `Kit Blast ${d} Port`), marker(1633 + i, `Kit Blast ${d} Mark`, d, 0));
+    });
+    // Added during the wave (10,000 t hit at 700 and missed at 880): Kit Blast 760 / 820 (sÿst 1233 / 1234, ports spöb
+    // 1649 / 1650, markers 1651 / 1652) on the row y = -2040.
+    [760, 820].forEach((d, i) => {
+        const sid = 1233 + i;
+        out.push(system(sid, `Kit Blast ${d}`, -720 + 40 * i, Y - 60, 363, [1649 + i, 1651 + i]),
+            port(1649 + i, `Kit Blast ${d} Port`), marker(1651 + i, `Kit Blast ${d} Mark`, d, 0));
+    });
+    // And (tighter brackets at 2,000 / 5,000 t): Kit Blast 190 / 210 / 400 / 440 (sÿst 1240-1243, ports spöb
+    // 1663-1666, markers 1667-1670) on the row y = -2100.
+    [190, 210, 400, 440].forEach((d, i) => {
+        const sid = 1240 + i;
+        out.push(system(sid, `Kit Blast ${d}`, -800 + 40 * i, Y - 120, 363, [1663 + i, 1667 + i]),
+            port(1663 + i, `Kit Blast ${d} Port`), marker(1667 + i, `Kit Blast ${d} Mark`, d, 0));
+    });
+    // And: is the reach to the victim's CENTRE or its hull? shïp 543 Kit Big Boarder, the Tough boarder (100 / 3000,
+    // shïp 528's numbers) drawn with the stock Fed Carrier's shän (143), against the 2,000 t hulk at 230 px (the 24 px
+    // Tough missed there).
+    out.push({ type: "shïp", id: 543, name: "Kit Big Boarder", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Big Boarder",
+        longName: "Kit Big Boarder", commName: "Kit Big Boarder", subtitle: "", accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100,
+        shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 } });
+    out.push({ type: "shän", id: 543, name: "Kit Big Boarder", clone: "shän:143" });
+    // And the WRECK's side: shïp 544 Kit Hulk Big 2000 (the 2,000 t live hulk with the Fed Carrier's art), düde 474,
+    // placed by mïsn 1127 (b9249, the kit's last free mïsn id) like the others.
+    out.push({ type: "shïp", id: 544, name: "Kit Hulk Big 2000", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Hulk Big 2000",
+        longName: "Kit Hulk Big 2000", commName: "Kit Hulk Big 2000", subtitle: "", armor: 300, shield: 0, accel: 0, speed: 0, turn: 0,
+        mass: 2000, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 } });
+    out.push({ type: "shän", id: 544, name: "Kit Hulk Big 2000", clone: "shän:143" });
+    const bigWreck = dude(474, "Kit Hulk Big 2000", 4, 363, 544);
+    bigWreck.set = { ...bigWreck.set, flags: 0x0041 };
+    out.push(bigWreck);
+    const hulkMisn = (id, name, bit, dudeId) => misn(id, name, bit, { availStel: -1, onAccept: `!b${bit}`, shipCount: 1, shipSyst: -1, shipDude: dudeId,
+        shipGoal: -1, shipBehav: -1, shipStart: -2 });
+    out.push(...hulkMisn(959, "Kit blast hulk 2000 t", 9245, 463), ...hulkMisn(969, "Kit blast hulk 5000 t DD10", 9246, 459),
+        ...hulkMisn(1125, "Kit blast hulk 5000 t DD60", 9247, 457), ...hulkMisn(1126, "Kit blast hulk 10000 t", 9248, 473),
+        ...hulkMisn(1127, "Kit blast big hulk 2000 t", 9249, 474));
+
+    // --- G: a usable hypergate at a chosen distance from where the pilot starts.
+    const farGate = (sid, d, x, y, startId, gateId) => {
+        out.push(system(sid, `Kit Gate Far ${d}`, x, y, 363, [startId, gateId]), decoration(startId, `Kit Gate Far ${d} Start`),
+            spob(gateId, `Kit Gate Far ${d}`, d, 0, 1400, { type: 1, flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767, techLevel: 0,
+                specialTech: [-1, -1, -1], custPic: 37, custSnd: 120, hyperlinks: [1610, ...none8].slice(0, 8) }));
+    };
+    [500, 1000, 2000].forEach((d, i) => farGate(1228 + i, d, -560 + 40 * i, Y, 1639 + i, 1642 + i));
+    // Added during the wave (nothing selected from 500 px): gates at 150 / 300 / 400 px, sÿst 1235-1237 (decorations
+    // spöb 1653-1655, gates 1656-1658) on the row y = -2040.
+    [150, 300, 400].forEach((d, i) => farGate(1235 + i, d, -640 + 40 * i, Y - 60, 1653 + i, 1656 + i));
+    // And (selected from 400, nothing from 500): 450 px, sÿst 1238 (decoration spöb 1659, gate 1660); a DIAGONAL gate
+    // at (330, 330) (max 330 < 400 < distance 467 < 500: square or circle?), sÿst 1239 (decoration 1661, gate 1662).
+    farGate(1238, 450, -520, Y - 60, 1659, 1660);
+    farGate(1239, "Diagonal", -480, Y - 60, 1661, 1662);
+    out.at(-1).set.x = 330;
+    out.at(-1).set.y = 330;
+    // And (450 and the 467 px diagonal both selected): 475 px, sÿst 1244 (decoration 1671, gate 1672), and a far
+    // diagonal at (420, 420) (max 420, distance 594: beyond the 500 px miss on the axis), sÿst 1245 (1673, 1674).
+    farGate(1244, 475, -640, Y - 120, 1671, 1672);
+    farGate(1245, "Diagonal 420", -600, Y - 120, 1673, 1674);
+    out.at(-1).set.x = 420;
+    out.at(-1).set.y = 420;
+    // And (475 selected, 500 not): 485 / 490 px, sÿst 1248 / 1249 (decorations 1678 / 1680, gates 1679 / 1681).
+    farGate(1248, 485, -480, Y - 120, 1678, 1679);
+    farGate(1249, 490, -440, Y - 120, 1680, 1681);
+    // And (150 px cleared, 300 px requested): 200 / 250 px, sÿst 1250 / 1251 (decorations 1682 / 1684, gates 1683 / 1685).
+    farGate(1250, 200, -400, Y - 120, 1682, 1683);
+    farGate(1251, 250, -360, Y - 120, 1684, 1685);
+
+    // --- R: a port and a station 1,000 px from where the pilot starts.
+    out.push(system(1231, "Kit Request Port", -800, Y - 60, 363, [1645, 1646]), decoration(1645, "Kit Request Port Start"), port(1646, "Kit Request Port", 1000, 0));
+    out.push(system(1232, "Kit Request Station", -760, Y - 60, 363, [1647, 1648]), decoration(1647, "Kit Request Station Start"),
+        spob(1648, "Kit Request Station", 1000, 0, 299, { flags: 0x11 }));
+
+    // --- N (added during the wave): NPC fleets of 6 and 9 escorts (F1c / F1n), placed by their system's DudeTypes as
+    // wave 3's flët 300: the white Kit Disc Leader (720) with discs in field order. flët 312 Kit Disc Fleet 6 (red x2,
+    // green x2, blue, yellow), flët 313 Kit Disc Fleet 9 (red x3, green x2, blue x2, yellow x2); sÿst 1252 / 1253 Kit
+    // Fleet Six / Nine (ports spöb 1686 / 1687 at 0, 0; markets 1688 / 1689 at 1200, 0), avgShips 6, row y = -2100.
+    [[312, "Kit Disc Fleet 6", [2, 2, 1, 1], 1252, "Six", -320], [313, "Kit Disc Fleet 9", [3, 2, 2, 2], 1253, "Nine", -280]]
+        .forEach(([fid, fname, counts, sid, sname, x], i) => {
+            out.push({ type: "flët", id: fid, name: fname, clone: "flët:128", set: { "@0:i16": 720, "@2:i16x4": [721, 722, 723, 724],
+                "@10:i16x4": counts, "@18:i16x4": counts, "@26:i16": 363, "@28:i16": sid, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+            const s = system(sid, `Kit Fleet ${sname}`, x, Y - 120, 363, [1686 + i, 1688 + i]);
+            s.set = { ...s.set, avgShips: 6, dudes: [-fid, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)] };
+            out.push(s, port(1686 + i, `Kit Fleet ${sname} Port`), port(1688 + i, `Kit Fleet ${sname} Market`, 1200, 0));
+        });
+
+    // --- W (added during the wave): how long a planet's bribe withdrawal lasts. sÿst 1246 Kit Bribe Stay (gövt 304,
+    // wave 22's Kit Bribe Plain govt) holds the refusing port spöb 1675 (gövt 304, MinStatus 0: a pilot at -50 is
+    // refused) at (0, 0) and an OPEN port spöb 1677 (gövt -1) at (300, 0) for a land-and-take-off in the same system;
+    // it links to sÿst 1247 Kit Bribe Away (port spöb 1676) for a jump out and back. Row y = -2100.
+    const stay = system(1246, "Kit Bribe Stay", -560, Y - 120, 304, [1675, 1677]);
+    stay.set = { ...stay.set, links: [1247, ...none16].slice(0, 16) };
+    const away = system(1247, "Kit Bribe Away", -520, Y - 120, 363, [1676]);
+    away.set = { ...away.set, links: [1246, ...none16].slice(0, 16) };
+    out.push(stay, away, port(1675, "Kit Bribe Stay Port", 0, 0, { govt: 304, minStatus: 0 }), port(1677, "Kit Bribe Stay Open", 300, 0),
+        port(1676, "Kit Bribe Away Port"));
+    return out;
+}
 
 /**
  * Wave-28 experiments (docs/reference_experiments.md, "... wave 28").

@@ -1,0 +1,44 @@
+{
+ "name": "w29_space_interactive",
+ "_comment": "Wave 29: Enter Ship, recording from the start at 30 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w29.jsonl) until {\"done\":true}; the pilot is pulled at the end. The blast reach at heavy masses (land, accept the hulk mission, take off, beam the hulk), the hypergate `l` range and the request lines from a stopped ship.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w29.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

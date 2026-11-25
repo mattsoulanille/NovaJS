@@ -1,0 +1,31 @@
+{
+  "name": "novaref-w29-bigwreck-230",
+  "edits": {
+    "ship": 528,
+    "stellar": 1628,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1223": 2
+    },
+    "missionBits": {
+      "9249": true
+    },
+    "nickname": "Probe",
+    "shipName": "w29-bigwreck-230",
+    "weapons": {
+      "128": 0,
+      "290": 1,
+      "361": 0,
+      "365": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "463": 1
+    }
+  }
+}
