@@ -1,13 +1,20 @@
+import { Entities } from 'nova_ecs/arg_types';
+import { Angle } from 'nova_ecs/datatypes/angle';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { wrapNearestDelta } from "nova_ecs/datatypes/position";
+import { Position, wrapNearestDelta } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { EntityMap } from 'nova_ecs/entity_map';
+import { MovementState, MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
-import { BeamDataComponent, BeamStateComponent, BeamSystem } from "../nova_plugin/combat/index.js";
+import {
+    aimBeam, anchorBeam, BeamDataComponent, BeamState, BeamStateComponent,
+    BeamSystem,
+} from "../nova_plugin/combat/index.js";
+import { SourceComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import { CollisionSystem, CreateTime } from '../nova_plugin/core/index.js';
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { CameraFocus, Space } from "./space_resource.js";
@@ -89,16 +96,65 @@ export function beamOrigin(position: { x: number, y: number },
 }
 
 /**
+ * Where a beam is drawn this frame, in world coordinates: re-anchored to
+ * the DRAWN movement of the entity that fired it (and, for a turret beam,
+ * re-aimed at its target's drawn position) by the simulation's own rule
+ * (anchorBeam / aimBeam). Exported for the spec.
+ *
+ * Why: the display extrapolates every ship between simulation snapshots
+ * (MovementExtrapolationPlugin), and a beam is not extrapolated (it has
+ * no MovementPhysics). So on every display frame that got no fresh
+ * snapshot, and by the snapshot's lead on one that landed late, the ship
+ * was drawn a frame of flight ahead of the beam it was firing, and the
+ * beam trailed behind its gun: an Ion Cannon on a Pirate Valkyrie at full
+ * speed sat 2-4 px off the hull on about half the frames (Matthew's
+ * novajs.net playtest, 2026-11-24). The simulation already anchors a beam
+ * to its ship every tick; this applies the same anchor to what is drawn.
+ *
+ * A beam whose source is not in this world (its firer already gone, or a
+ * submunition beam whose parent shot expired) draws where the simulation
+ * last put it, as before.
+ */
+export function drawnBeamPose(movement: MovementState, beamState: BeamState,
+    source: string | undefined, target: string | undefined,
+    entities: EntityMap): { position: Position, rotation: Angle } {
+    const sourceMovement = source === undefined ? undefined
+        : entities.get(source)?.components.get(MovementStateComponent);
+    if (!sourceMovement) {
+        return { position: movement.position, rotation: movement.rotation };
+    }
+    const { position, rotation } =
+        anchorBeam(sourceMovement, beamState.exitPointData);
+    const targetPosition = target === undefined ? undefined
+        : entities.get(target)?.components.get(MovementStateComponent)
+            ?.position;
+    if (beamState.pointToTarget && !targetPosition) {
+        // The simulation ends a turret beam whose target is gone; until
+        // that reaches this world, keep the aim it last had.
+        return {
+            position,
+            rotation: movement.rotation,
+        };
+    }
+    return {
+        position,
+        rotation: aimBeam(position, rotation, beamState, targetPosition),
+    };
+}
+
+/**
  * Exported for the spec; the plugin adds it. Reads only the synced beam
- * state plus this client's camera, so peers see the same beam.
+ * state, the synced (and extrapolated) movement of its firer and target,
+ * and this client's camera, so peers see the same beam.
  */
 export const BeamDisplaySystem: System = new System({
     name: 'BeamDisplay',
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent,
         BeamGraphicsResource, CameraFocus, Optional(CreateTime),
-        SimulationTimeResource] as const,
+        SimulationTimeResource, Optional(SourceComponent),
+        Optional(TargetComponent), Entities] as const,
     step(beamData, beamState, movement, beamGraphics, cameraFocus, createTime,
-        simTime) {
+        simTime, source, target, entities) {
         const { width, beamColor, coronaColor, coronaFalloff, length: dataLength, lightningAmplitude, lightningDensity }
             = beamData.beamAnimation;
         // A decaying beam shrinks over its tail (beamShrinkFraction);
@@ -109,8 +165,10 @@ export const BeamDisplaySystem: System = new System({
             simTime.time - createTime);
         const length = Math.min(dataLength * shrink,
             beamState.hitDist ?? Infinity);
-        const origin = beamOrigin(movement.position, cameraFocus);
-        const destination = movement.rotation.getUnitVector()
+        const pose = drawnBeamPose(movement, beamState, source,
+            target?.target, entities);
+        const origin = beamOrigin(pose.position, cameraFocus);
+        const destination = pose.rotation.getUnitVector()
             .scale(length).add(origin);
         //const rng = seedrandom.alea(uuid);  //for if not randomized every frame
         const rng = Math.random;
@@ -153,7 +211,11 @@ export const BeamDisplaySystem: System = new System({
         }
     },
     // DebrisDrawSystem is a #156 pin (shared: SimulationTime).
-    after: [ClearBeams, BeamSystem, CollisionSystem, DebrisDrawSystem],
+    // MovementSystem: the display's extrapolation (MovementExtrapolationPlugin)
+    // moves the firing ship THIS step, and drawnBeamPose must read the
+    // position the ship's sprite is drawn at, not the one before it.
+    after: [ClearBeams, BeamSystem, CollisionSystem, DebrisDrawSystem,
+        MovementSystem],
     before: []
 });
 

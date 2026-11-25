@@ -208,17 +208,10 @@ export const BeamSystem = new System({
             const parentMovement = parent?.components
                 .get(MovementStateComponent);
             if (parentMovement) {
-                movement.position =
-                    Position.fromVectorLike(parentMovement.position);
-                movement.rotation =
-                    Angle.fromAngleLike(parentMovement.rotation);
-
-                if (beamState.exitPointData) {
-                    const exitPoint = applyExitPoint(beamState.exitPointData,
-                        parentMovement.rotation)
-
-                    movement.position = movement.position.add(exitPoint) as Position;
-                }
+                const anchored = anchorBeam(parentMovement,
+                    beamState.exitPointData);
+                movement.position = anchored.position;
+                movement.rotation = anchored.rotation;
             }
         }
 
@@ -244,22 +237,61 @@ export const BeamSystem = new System({
         // Deleting here (before UpdateHitboxHullSystem and CollisionSystem,
         // which this system is ordered ahead of) is what keeps the
         // stray frame from landing damage.
+        let targetPosition: Position | undefined;
         if (beamState.pointToTarget) {
             const targetMovement = liveTargetMovement(entities, target?.target);
             if (!targetMovement) {
                 entities.delete(uuid);
                 return;
             }
-            movement.rotation = zeroOrderGuidance(movement.position,
-                targetMovement.position);
+            targetPosition = targetMovement.position;
         }
-        // The error the beam left the ship with, re-applied after the
-        // rebuild above so it is the same ray every tick (BeamState.aimOffset).
-        if (beamState.aimOffset) {
-            movement.rotation = movement.rotation.add(beamState.aimOffset);
-        }
+        movement.rotation = aimBeam(movement.position, movement.rotation,
+            beamState, targetPosition);
     }
 });
+
+/**
+ * Where a beam fired from `parent` starts, and the heading it takes
+ * before any turret aim: the parent's position plus the beam's exit
+ * point at the parent's heading. A beam is not a free-flying shot; it
+ * hangs off the gun that fired it for its whole life.
+ *
+ * Shared by BeamSystem (the simulation, every tick) and the display's
+ * BeamDisplaySystem, which re-anchors every drawn beam to its firing
+ * ship's DRAWN movement each frame: the display extrapolates ships
+ * between simulation snapshots (MovementExtrapolationPlugin) but not
+ * beams, so a beam drawn where the last snapshot left it trailed a
+ * moving ship by a frame of its flight.
+ */
+export function anchorBeam(parent: Pick<MovementState, 'position' | 'rotation'>,
+    exitPointData: ExitPointData | undefined): { position: Position, rotation: Angle } {
+    let position = Position.fromVectorLike(parent.position);
+    const rotation = Angle.fromAngleLike(parent.rotation);
+    if (exitPointData) {
+        const exitPoint = applyExitPoint(exitPointData, parent.rotation);
+        position = position.add(exitPoint) as Position;
+    }
+    return { position, rotation };
+}
+
+/**
+ * A beam's heading once anchored (anchorBeam): a turret beam
+ * (`pointToTarget`) swung onto `targetPosition` when there is one, then
+ * the inaccuracy it left the ship with (BeamState.aimOffset), re-applied
+ * so the ray keeps one error for its whole life. Shared by BeamSystem
+ * and BeamDisplaySystem like anchorBeam.
+ */
+export function aimBeam(position: Position, rotation: Angle,
+    beamState: BeamState, targetPosition: Position | undefined): Angle {
+    if (beamState.pointToTarget && targetPosition) {
+        rotation = zeroOrderGuidance(position, targetPosition);
+    }
+    if (beamState.aimOffset) {
+        rotation = rotation.add(beamState.aimOffset);
+    }
+    return rotation;
+}
 
 export const BeamResetSystem = new System({
     name: "BeamResetSystem",

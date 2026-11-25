@@ -4,12 +4,17 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { BOUNDARY, Position, WORLD_SIZE } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
-import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import {
+    MovementPhysicsComponent, MovementStateComponent, MovementSystem,
+    MovementType,
+} from 'nova_ecs/plugins/movement_plugin';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { BeamWeaponData } from 'novadatainterface/weapon_data';
 import { BeamDataComponent, BeamStateComponent } from '../nova_plugin/combat/index.js';
+import { SourceComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import {
-    BeamDisplaySystem, BeamGraphicsResource, beamOrigin,
+    BeamDisplaySystem, BeamGraphicsResource, beamOrigin, drawnBeamPose,
 } from './beam_display_plugin.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import { CameraFocus } from './space_resource.js';
@@ -106,5 +111,147 @@ describe('BeamDisplaySystem', () => {
         // The far end is offset from the WRAPPED origin, so the whole
         // beam sits next to the player.
         expect(lineTo).toContain([originX + heading.x, heading.y]);
+    });
+});
+
+/**
+ * Playtest 2026-11-24 (Matthew, novajs.net): "ion cannon rendering is
+ * lagging behind the ship as it flies." The display extrapolates ships
+ * between simulation snapshots (MovementExtrapolationPlugin runs the real
+ * MovementSystem on the display clock); beams have no MovementPhysics, so
+ * a beam drawn from its own synced position stayed where the last
+ * snapshot left it while its ship flew a frame ahead. The drawn beam is
+ * now re-anchored to its firing ship's drawn movement every frame.
+ */
+describe('BeamDisplaySystem anchoring to the firing ship', () => {
+    const FRAME_MS = 1000 / 60;
+    const SPEED = 600;
+    const EXIT = {
+        position: [10, 20, 0] as [number, number, number],
+        upCompress: [100, 100] as [number, number],
+        downCompress: [100, 100] as [number, number],
+    };
+
+    /**
+     * A display world one frame after a snapshot: the ship (moving up at
+     * SPEED) and its beam were synced together, the beam at the ship's
+     * gun point (the simulation's anchor), then a frame with no fresh
+     * snapshot is stepped. BeamDisplaySystem is added BEFORE
+     * MovementSystem (and sorts first by name), so only its declared
+     * edge orders it after the extrapolation.
+     */
+    function flyingShipWorld(beamState: Record<string, unknown>,
+        targetAt?: { x: number, y: number }) {
+        const world = new World('beam anchor test');
+        const moveTo: [number, number][] = [];
+        const lineTo: [number, number][] = [];
+        world.resources.set(BeamGraphicsResource, {
+            clear() { },
+            lineStyle() { },
+            moveTo(x: number, y: number) { moveTo.push([x, y]); },
+            lineTo(x: number, y: number) { lineTo.push([x, y]); },
+        } as unknown as PIXI.Graphics);
+        world.resources.set(CameraFocus, { x: 0, y: 0 });
+        world.resources.set(SimulationTimeResource, defaultSimulationTime());
+        world.resources.set(TimeResource, {
+            time: 1000, delta_ms: FRAME_MS, delta_s: FRAME_MS / 1000,
+            frame: 60,
+        });
+        world.addSystem(BeamDisplaySystem);
+        world.addSystem(MovementSystem);
+
+        const ship = new Entity('ship')
+            .addComponent(MovementStateComponent, {
+                position: new Position(0, 0),
+                velocity: new Vector(0, -SPEED),
+                rotation: new Angle(0),
+                accelerating: 0, turning: 0, turnBack: false,
+            })
+            .addComponent(MovementPhysicsComponent, {
+                maxVelocity: SPEED, turnRate: 0, acceleration: 0,
+                movementType: MovementType.INERTIAL,
+            });
+        world.entities.set('ship', ship);
+        if (targetAt) {
+            world.entities.set('target', new Entity('target')
+                .addComponent(MovementStateComponent, {
+                    position: new Position(targetAt.x, targetAt.y),
+                    velocity: new Vector(0, 0),
+                    rotation: new Angle(0),
+                    accelerating: 0, turning: 0, turnBack: false,
+                }));
+        }
+        // The gun point at the snapshot: ship (0, 0) + exit (10, -20).
+        const beam = new Entity('beam')
+            .addComponent(BeamDataComponent, beamData())
+            .addComponent(BeamStateComponent,
+                { exitPointData: EXIT, ...beamState })
+            .addComponent(SourceComponent, 'ship')
+            .addComponent(MovementStateComponent, {
+                position: new Position(10, -20),
+                velocity: new Vector(0, 0),
+                rotation: new Angle(0),
+                accelerating: 0, turning: 0, turnBack: false,
+            });
+        if (targetAt) {
+            beam.addComponent(TargetComponent, { target: 'target' });
+        }
+        world.entities.set('beam', beam);
+        world.step();
+        const shipPosition =
+            ship.components.get(MovementStateComponent)!.position;
+        return { moveTo, lineTo, shipPosition };
+    }
+
+    it('draws a forward beam from the extrapolated ship\'s gun point', () => {
+        const { moveTo, lineTo, shipPosition } = flyingShipWorld({});
+        // The ship flew a frame (10 px) up.
+        expect(shipPosition.y).toBeCloseTo(-SPEED * FRAME_MS / 1000, 6);
+        const gun = [shipPosition.x + 10, shipPosition.y - 20];
+        expect(moveTo.length).toBeGreaterThan(0);
+        for (const [x, y] of moveTo) {
+            // Before the fix: (10, -20), the gun point a frame ago.
+            expect(x).toBeCloseTo(gun[0], 6);
+            expect(y).toBeCloseTo(gun[1], 6);
+        }
+        expect(lineTo.at(-1)![0]).toBeCloseTo(gun[0], 6);
+        expect(lineTo.at(-1)![1]).toBeCloseTo(gun[1] - LENGTH, 6);
+    });
+
+    it('re-aims a turret beam from the moved gun point at its target', () => {
+        const { moveTo, lineTo, shipPosition } = flyingShipWorld(
+            { pointToTarget: true }, { x: 210, y: -30 });
+        const gun = new Vector(shipPosition.x + 10, shipPosition.y - 20);
+        expect(moveTo.length).toBeGreaterThan(0);
+        for (const [x, y] of moveTo) {
+            expect(x).toBeCloseTo(gun.x, 6);
+            expect(y).toBeCloseTo(gun.y, 6);
+        }
+        const end = new Vector(210, -30).subtract(gun).normalize(LENGTH)
+            .add(gun);
+        expect(lineTo.at(-1)![0]).toBeCloseTo(end.x, 6);
+        expect(lineTo.at(-1)![1]).toBeCloseTo(end.y, 6);
+    });
+
+    it('keeps the inaccuracy the beam left the ship with', () => {
+        const aimOffset = 0.1;
+        const { lineTo, shipPosition } = flyingShipWorld({ aimOffset });
+        const gun = new Vector(shipPosition.x + 10, shipPosition.y - 20);
+        const end = new Angle(aimOffset).getUnitVector().scale(LENGTH)
+            .add(gun);
+        expect(lineTo.at(-1)![0]).toBeCloseTo(end.x, 6);
+        expect(lineTo.at(-1)![1]).toBeCloseTo(end.y, 6);
+    });
+
+    it('draws a beam whose firer is gone where the simulation left it', () => {
+        const pose = drawnBeamPose({
+            position: new Position(5, 6), rotation: new Angle(1),
+            velocity: new Vector(0, 0), accelerating: 0, turning: 0,
+            turnBack: false,
+        }, { exitPointData: EXIT }, 'gone', undefined,
+            new World('empty').entities);
+        expect(pose.position.x).toEqual(5);
+        expect(pose.position.y).toEqual(6);
+        expect(pose.rotation.angle).toEqual(1);
     });
 });
