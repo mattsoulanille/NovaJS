@@ -1,7 +1,8 @@
 import * as t from 'io-ts';
 import { Component } from 'nova_ecs/component';
-import { Angle } from 'nova_ecs/datatypes/vector';
+import { Angle, Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
+import { MovementState } from 'nova_ecs/plugins/movement_plugin';
 import { GovtComponent } from '../core/index.js';
 import { ControlledByComponent } from '../player/index.js';
 
@@ -414,6 +415,40 @@ export function boardingBlockedReason(input: {
         return 'notAligned';
     }
     return null;
+}
+
+/**
+ * A board that SUCCEEDS leaves the boarder moving exactly with the ship it
+ * boarded (Matthew's ruling, 2026-11-24: "Upon boarding a ship, we should
+ * set the player's velocity equal to that ship's"). The gate above
+ * already holds the relative speed under BOARD_MAX_REL_SPEED, so this
+ * only removes the last few px/s of drift that would otherwise carry the
+ * two hulls apart while the plunder dialog is open (the simulation keeps
+ * running behind it). Unmeasured on the original (reference Pending,
+ * "U9 velocity"); a sim rule, listed in docs/novajs_enhancements.md.
+ *
+ * A hulk still COASTING to rest (DISABLED_DECELERATION) keeps braking
+ * after the board while the boarder keeps the speed it was given, so the
+ * two only stay together exactly when the hulk was already at rest (or
+ * is a waiting rescue ship, which holds still).
+ *
+ * Only the velocity changes: the heading, the turn and the thrust input
+ * are the boarder's own. The vector is a fresh value (never the hulk's
+ * own instance, never mutated in place). An INERTIALESS boarder steers
+ * its velocity toward heading x targetSpeed every step, so a targetSpeed
+ * it already carries is brought to the new speed too, or the match would
+ * be undone on the next tick.
+ *
+ * Applied by BoardingGateSystem on every board past the gate that is not
+ * then refused (plunder, own-escort repair, bay capture, a rescue's
+ * retrieval or silent first board). A refused board changes nothing.
+ */
+export function matchBoardedVelocity(boarder: MovementState,
+    boarded: Pick<MovementState, 'velocity'>) {
+    boarder.velocity = new Vector(boarded.velocity.x, boarded.velocity.y);
+    if (boarder.targetSpeed !== undefined) {
+        boarder.targetSpeed = boarder.velocity.length;
+    }
 }
 
 /**

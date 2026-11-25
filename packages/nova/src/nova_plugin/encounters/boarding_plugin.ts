@@ -18,8 +18,8 @@ import {
     BoardedState, boardingBlockedReason, BoardingComponent,
     boardingDistance, BoardingGovtLookup, boardingRange, BoardingState,
     capturable, captureChance, CaptureBayCandidate, chooseCaptureBay,
-    clearPlunderRecord, creditBooty, fuelTransferAmount, planAmmoPlunder,
-    planCargoPlunder, plunderSpent,
+    clearPlunderRecord, creditBooty, fuelTransferAmount, matchBoardedVelocity,
+    planAmmoPlunder, planCargoPlunder, plunderSpent,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
 import { GateDepartureSystem, LandEvent } from '../travel/index.js';
@@ -545,6 +545,13 @@ const BoardingGateSystem = new System({
             emit(BoardingBlockedEvent, { reason }, [uuid]);
             return;
         }
+        // Every SUCCESSFUL board below leaves the boarder moving with the
+        // hulk (Matthew's ruling 2026-11-24, matchBoardedVelocity); the
+        // refusals below ('alreadyBoarded') leave it untouched. Bound
+        // here, while the hulk is still in the world (a bay capture
+        // removes it).
+        const matchVelocity = () =>
+            matchBoardedVelocity(movement, targetMovement!);
 
         // 0. A LIVE RESCUE SHIP (mïsn ShipGoal 5) is never plundered,
         // captured, stowed or repaired: its board only retrieves the
@@ -562,10 +569,12 @@ const BoardingGateSystem = new System({
             // the hull's one board (reference "H1 / rescue leftovers,
             // wave 21", finding 5).
             spendRescueBoard(rescue, targetUuid!);
+            matchVelocity();
             return;
         }
         if (rescue.kind === 'retrieve') {
             retrieveRescueCargo(rescue, targetUuid!, targetEntity!);
+            matchVelocity();
             emit(MissionCargoRetrievedEvent,
                 { cargoType: rescue.active.cargoType }, [uuid]);
             return;
@@ -594,6 +603,7 @@ const BoardingGateSystem = new System({
         const targetGovtId = targetEntity!.components.get(GovtComponent)?.id;
         if (captureBay !== undefined && stowCaptureIntoBay(
             targetUuid!, captureBay, entity, entities, gameData)) {
+            matchVelocity();
             applyBoardCrime(entity, records, targetGovtId,
                 { gameData, govts, geography, systemId });
             // Same memory sweep the plunder-dialog capture runs: the hull
@@ -649,6 +659,7 @@ const BoardingGateSystem = new System({
         if ((!missionShip && isInFlock(targetUuid!, uuid, u => entities.get(u)))
             || owned?.player === uuid) {
             repairHulk(targetEntity!);
+            matchVelocity();
             // It was an escort, so it goes back to being one: formation
             // link, default command, player's firing group. Cheap and
             // idempotent for a ship whose links never lapsed.
@@ -752,6 +763,7 @@ const BoardingGateSystem = new System({
         targetEntity!.components.set(BoardedComponent, {
             ...priorBoarded, boarder: uuid, active: true, plundered: true,
         });
+        matchVelocity();
         // Local boarding beep for the boarding player only.
         emit(PlayerSoundEvent, { id: BOARD_SOUND }, [uuid]);
     },

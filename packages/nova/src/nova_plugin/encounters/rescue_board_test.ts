@@ -258,6 +258,29 @@ describe('boarding a rescue ship', () => {
                 .get(missionCargoKey(MISSION))).toBe(1);
         });
 
+    it('a retrieval and a silent first board leave the owner moving with '
+        + 'the hulk; a refusal changes nothing (Matthew 2026-11-24)',
+        async () => {
+            for (const mission of [rescueMission(), rescueMission({
+                cargoType: -1, cargoQty: 0, pickupOnBoard: false,
+            })]) {
+                const { world, owner, blocked } = await rescueWorld(mission);
+                const ownerMovement =
+                    owner.components.get(MovementStateComponent)!;
+                ownerMovement.velocity = new Vector(-5, 2);
+                press(world, OWNER);
+                expect(blocked).toEqual([]);
+                expect(ownerMovement.velocity.x).toBe(0);
+                expect(ownerMovement.velocity.y).toBe(0);
+                // The next press is refused and leaves it alone.
+                ownerMovement.velocity = new Vector(3, 0);
+                press(world, OWNER);
+                expect(blocked).toEqual(["You can't board this ship."]);
+                expect(ownerMovement.velocity.x).toBe(3);
+                expect(ownerMovement.velocity.y).toBe(0);
+            }
+        });
+
     it('keeps the ordinary gate in front: a misaligned press is silent',
         async () => {
             const { world, owner, blocked, retrieved } = await rescueWorld();

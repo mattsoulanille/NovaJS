@@ -1,6 +1,8 @@
 import 'jasmine';
-import { Angle } from 'nova_ecs/datatypes/vector';
+import { Angle, Vector } from 'nova_ecs/datatypes/vector';
+import { Position } from 'nova_ecs/datatypes/position';
 import { Entity } from 'nova_ecs/entity';
+import { MovementState } from 'nova_ecs/plugins/movement_plugin';
 import { GovtComponent } from '../core/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { PlayerShipSelector } from '../player/index.js';
@@ -28,6 +30,7 @@ import {
     CaptureBayCandidate,
     chooseCaptureBay,
     clearPlunderRecord,
+    matchBoardedVelocity,
     plunderSpent,
 } from './boarding_component.js';
 
@@ -610,4 +613,37 @@ describe('the one-plunder record', () => {
         clearPlunderRecord(ship);
         expect(ship.components.has(BoardedComponent)).toBeFalse();
     });
+});
+
+describe('matchBoardedVelocity (Matthew 2026-11-24)', () => {
+    function state(velocity: Vector, targetSpeed?: number): MovementState {
+        return {
+            position: new Position(10, 20), velocity,
+            rotation: new Angle(1), turning: 0.5, turnBack: false,
+            accelerating: 0,
+            ...(targetSpeed === undefined ? {} : { targetSpeed }),
+        };
+    }
+
+    it('copies the velocity as a new vector and nothing else', () => {
+        const hulkVelocity = new Vector(3, -4);
+        const boarder = state(new Vector(7, 0));
+        const before = { ...boarder };
+        matchBoardedVelocity(boarder, { velocity: hulkVelocity });
+        expect(boarder.velocity.x).toBe(3);
+        expect(boarder.velocity.y).toBe(-4);
+        expect(boarder.velocity).not.toBe(hulkVelocity);
+        expect(boarder.position).toBe(before.position);
+        expect(boarder.rotation).toBe(before.rotation);
+        expect(boarder.turning).toBe(before.turning);
+        expect('targetSpeed' in boarder).toBeFalse();
+    });
+
+    it('brings an inertialess boarder\'s targetSpeed to the new speed',
+        () => {
+            const boarder = state(new Vector(7, 0), 7);
+            matchBoardedVelocity(boarder,
+                { velocity: new Vector(3, -4) });
+            expect(boarder.targetSpeed).toBe(5);
+        });
 });

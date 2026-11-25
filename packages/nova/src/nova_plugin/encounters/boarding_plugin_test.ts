@@ -382,6 +382,159 @@ describe('boarding in a live world', () => {
         });
     });
 
+    /**
+     * Matthew's ruling (2026-11-24): "Upon boarding a ship, we should set
+     * the player's velocity equal to that ship's." Applied in the sim on
+     * the tick the board succeeds (matchBoardedVelocity); a refused board
+     * changes nothing.
+     */
+    describe('a successful board matches the hulk\'s velocity', () => {
+        /** Puts the boarder `dx` px behind the hulk on x, both moving:
+         * the hulk at `hulkVelocity`, the boarder `relSpeed` px/s faster
+         * along x. Returns the boarder's heading for the checks. */
+        function drift(boarder: Entity, target: Entity, {
+            dx = 2, hulkVelocity = new Vector(0, 0), relSpeed = 5,
+        } = {}) {
+            const hulk = target.components.get(MovementStateComponent)!;
+            hulk.velocity = hulkVelocity;
+            const movement = boarder.components.get(MovementStateComponent)!;
+            movement.position = new Position(hulk.position.x - dx,
+                hulk.position.y);
+            movement.velocity = new Vector(hulkVelocity.x + relSpeed,
+                hulkVelocity.y);
+            return movement.rotation.angle;
+        }
+
+        function velocityOf(ship: Entity) {
+            const { x, y } = ship.components.get(MovementStateComponent)!
+                .velocity;
+            return { x, y };
+        }
+
+        it('stops the boarder dead beside a hulk at rest, and the two '
+            + 'stay together', async () => {
+                const { world, boarder, target } = await boardingWorld();
+                const heading = drift(boarder, target, { relSpeed: 7 });
+                press(world, BOARDER, 'board');
+                expect(boarder.components.get(BoardingComponent)?.target)
+                    .toEqual(TARGET);
+                expect(velocityOf(boarder)).toEqual({ x: 0, y: 0 });
+                expect(velocityOf(target)).toEqual({ x: 0, y: 0 });
+                // The heading is the boarder's own.
+                expect(boarder.components.get(MovementStateComponent)!
+                    .rotation.angle).toEqual(heading);
+                // The dialog does not pause the sim: ten seconds later
+                // the two hulls are exactly where the board left them.
+                const gap = () => {
+                    const a = boarder.components.get(MovementStateComponent)!
+                        .position;
+                    const b = target.components.get(MovementStateComponent)!
+                        .position;
+                    return { x: b.x - a.x, y: b.y - a.y };
+                };
+                const atBoard = gap();
+                for (let i = 0; i < 600; i++) {
+                    world.step();
+                }
+                expect(gap()).toEqual(atBoard);
+            });
+
+        it('takes a DRIFTING hulk\'s velocity on the board tick, as a new '
+            + 'vector', async () => {
+                const { world, boarder, target } = await boardingWorld();
+                const hulkVelocity = new Vector(30, -4);
+                drift(boarder, target, { hulkVelocity, relSpeed: -6 });
+                press(world, BOARDER, 'board');
+                expect(boarder.components.get(BoardingComponent)?.target)
+                    .toEqual(TARGET);
+                // The hulk's velocity AT the board (it has braked a tick
+                // since, at DISABLED_DECELERATION); the boarder coasts.
+                expect(velocityOf(boarder)).toEqual({ x: 30, y: -4 });
+                const boarderVelocity = boarder.components
+                    .get(MovementStateComponent)!.velocity;
+                expect(boarderVelocity).not.toBe(hulkVelocity);
+            });
+
+        it('matches on an own-escort repair too', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            target.components.set(FormationComponent,
+                { leader: BOARDER, slot: 0 });
+            world.step();
+            drift(boarder, target, { relSpeed: 6 });
+            press(world, BOARDER, 'board');
+            expect(target.components.has(DisabledComponent)).toBeFalse();
+            expect(boarder.components.has(BoardingComponent)).toBeFalse();
+            expect(velocityOf(boarder)).toEqual({ x: 0, y: 0 });
+        });
+
+        describe('a refused board changes nothing', () => {
+            it('too slow a match ("not close enough" at 9 px/s)',
+                async () => {
+                    const { world, boarder, target } = await boardingWorld();
+                    drift(boarder, target, { relSpeed: 9 });
+                    press(world, BOARDER, 'board');
+                    expect(boarder.components.has(BoardingComponent))
+                        .toBeFalse();
+                    expect(velocityOf(boarder)).toEqual({ x: 9, y: 0 });
+                });
+
+            it('misaligned (the silent refusal)', async () => {
+                const { world, boarder, target } =
+                    await boardingWorld({ aligned: false });
+                drift(boarder, target, { relSpeed: 5 });
+                press(world, BOARDER, 'board');
+                expect(boarder.components.has(BoardingComponent))
+                    .toBeFalse();
+                expect(velocityOf(boarder)).toEqual({ x: 5, y: 0 });
+            });
+
+            it('a hulk already plundered ("You can\'t board this ship.")',
+                async () => {
+                    const { world, boarder, target } = await boardingWorld();
+                    target.components.set(BoardedComponent, {
+                        boarder: SECOND_BOARDER, active: false,
+                        plundered: true,
+                    });
+                    drift(boarder, target, { relSpeed: 5 });
+                    press(world, BOARDER, 'board');
+                    expect(boarder.components.has(BoardingComponent))
+                        .toBeFalse();
+                    expect(velocityOf(boarder)).toEqual({ x: 5, y: 0 });
+                });
+        });
+
+        it('replays identically after a rollback', async () => {
+            const { world, boarder, target } = await boardingWorld();
+            drift(boarder, target,
+                { hulkVelocity: new Vector(-20, 12), relSpeed: 4 });
+            world.step();
+            const beforeBoard = snapshotWorld(world);
+            const run = () => {
+                press(world, BOARDER, 'board');
+                const velocity = velocityOf(world.entities.get(BOARDER)!);
+                const hashes = [hashWorld(world).hash];
+                for (let i = 0; i < 30; i++) {
+                    world.step();
+                    hashes.push(hashWorld(world).hash);
+                }
+                return { velocity, hashes };
+            };
+            const first = run();
+            expect(world.entities.get(BOARDER)!.components
+                .get(BoardingComponent)?.target).toEqual(TARGET);
+            // The board is what set it: the snapshot's boarder is still
+            // 4 px/s off the hulk.
+            const restored = () => {
+                restoreWorld(world, beforeBoard, deriveEntityComponents);
+                return velocityOf(world.entities.get(BOARDER)!);
+            };
+            expect(restored()).not.toEqual(first.velocity);
+            const second = run();
+            expect(second.velocity).toEqual(first.velocity);
+            expect(second.hashes).toEqual(first.hashes);
+        });
+    });
+
     it('takes cargo, credits, and fuel and charges the board crime',
         async () => {
             const { world, boarder, target } = await boardingWorld();
