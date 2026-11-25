@@ -73,7 +73,22 @@ export interface PropertyLine {
     slot: PropSlot;
     label: string;
     values: string[];
+    /** The label is drawn in the VALUE font (white) rather than the grey
+     * caption font: "Uninhabited System" stands at the caption's place in
+     * white (reference "A14 wave 18", the map of Kit Disab One). */
+    bright?: boolean;
 }
+
+/**
+ * What a system with NO STELLARS shows in place of its Government, Legal
+ * Status, Goods Traded and Services groups: the stock STR# 2002 "misc
+ * strings" index 333 (0-based), "Uninhabited System", standing alone at
+ * the Government group's caption, in white. Reference "A14 wave 18" (the
+ * map in Kit Disab Unowned, Kit Disab One clicked: "Selected System: / Kit
+ * Disab One / Uninhabited System", nothing below it; Ports: None).
+ */
+export const UNINHABITED_SYSTEM_INDEX = 333;
+export const UNINHABITED_SYSTEM_TEXT = 'Uninhabited System';
 
 /** Everything the properties panel shows for one system. */
 export interface SystemProperties {
@@ -116,6 +131,24 @@ export function systemProperties(system: SystemData | undefined,
     }
 
     addLine(PropSlot.System, title, [displayName(system.name)]);
+
+    // A system with NO STELLARS is "Uninhabited System", and nothing else
+    // in the column: no Government (whoever owns it: Kit Disab One belongs
+    // to gövt 312), no Legal Status, no Goods Traded / Services. Measured
+    // for a stellar-less system only; GUESS that a system whose stellars
+    // are all uninhabited still shows its groups (unmeasured). The title
+    // keeps NovaJS's "Destination System:" (the reference's "Selected
+    // System:" for that click is one sample, not followed up).
+    if (system.planets.length === 0) {
+        lines.push({
+            slot: PropSlot.Government, label: UNINHABITED_SYSTEM_TEXT,
+            values: [], bright: true,
+        });
+        return {
+            lines, ports: 'None',
+            hazards: hazardDescription(system.asteroids, system.interference),
+        };
+    }
 
     const govt = system.govt
         ? universe.getGovt(system.govt) : undefined;
@@ -203,9 +236,10 @@ export function systemProperties(system: SystemData | undefined,
 export function renderPropertyLines(container: PIXI.Container,
     lines: readonly PropertyLine[]) {
     container.removeChildren();
-    for (const { slot, label, values } of lines) {
+    for (const { slot, label, values, bright } of lines) {
         const top = PROP_TOP + PROP_GROUP_Y[slot];
-        const labelText = new PIXI.Text(label, PROP_LABEL_FONT);
+        const labelText = new PIXI.Text(label,
+            bright ? PROP_VALUE_FONT : PROP_LABEL_FONT);
         labelText.position.set(PROP_X, top);
         container.addChild(labelText);
         values.forEach((value, i) => {

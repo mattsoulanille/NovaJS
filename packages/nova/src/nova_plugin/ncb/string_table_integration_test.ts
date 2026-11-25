@@ -36,6 +36,13 @@ import {
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
 } from '../../spaceport/hail_dialog.js';
+import {
+    UNINHABITED_SYSTEM_INDEX, UNINHABITED_SYSTEM_TEXT,
+} from '../../spaceport/starmap_properties.js';
+import {
+    TARGET_DISABLED_INDEX, TARGET_DISABLED_TEXT, TARGET_WAITING_INDEX,
+    TARGET_WAITING_TEXT,
+} from '../../display/target_readout.js';
 
 // These assertions run against the real Nova game data (Nova_Data). They
 // pin the STR# and dësc resources the title screen and the bar read their
@@ -48,6 +55,25 @@ describe('StringTable against real Nova data', () => {
         expect(table.name).toBe('misc strings');
         expect(table.strings.length).toBe(396);
     });
+
+    it('sources the map\'s "Uninhabited System" (333) and the target '
+        + 'pane\'s "Disabled" / "Waiting" (346 / 347) from STR# 2002',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const table = await gameData.data.StringTable.get('nova:2002');
+            expect(table.strings[UNINHABITED_SYSTEM_INDEX])
+                .toBe(UNINHABITED_SYSTEM_TEXT);
+            expect(table.strings[TARGET_DISABLED_INDEX])
+                .toBe(TARGET_DISABLED_TEXT);
+            expect(table.strings[TARGET_WAITING_INDEX])
+                .toBe(TARGET_WAITING_TEXT);
+            // The map column's neighbours, so an off-by-one shows.
+            expect(table.strings[UNINHABITED_SYSTEM_INDEX - 1])
+                .toBe('Independent');
+            expect(table.strings[337]).toBe('Selected System:');
+            expect(table.strings[338]).toBe('Destination System:');
+            expect(table.strings[TARGET_WAITING_INDEX + 1]).toBe('No Target');
+        });
 
     it('sources the hire message from STR# 2002 index 223', async () => {
         const gameData = await getIntegrationGameData();
