@@ -1,5 +1,8 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
+import {
+    builtInAmmoOutfitId, builtInOutfitWeaponId, builtInWeaponOutfitId,
+} from 'novaparse/built_in_weapon_outfit';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import {
     canEnterGame, ClientStateSlot, enterFailed, enterGame,
@@ -400,6 +403,58 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
             // session next writes the save (as v5).
             expect(store.getItem(stranded.saveKey)).toBe(bytes);
         });
+
+    // A stock ship whose built-in weapon no oütf provides carries an
+    // IMPLICIT outfit (novaparse's built_in_weapon_outfit.ts), absent from
+    // NovaIDs.Outfit by design but resolved by data.Outfit.get. Checking
+    // it against the outfit list quarantined every such pilot.
+    describe('owning an implicit built-in outfit', () => {
+        const AMMO = builtInAmmoOutfitId('nova:161');
+        const GUN = builtInWeaponOutfitId('nova:139');
+
+        /** The data set as NovaParse serves it: implicit ids resolve but
+         *  are not listed, and they exist only while the weapon does. */
+        function withBuiltIns(weapons: string[]): MockGameData {
+            const data = gameData();
+            for (const id of weapons) {
+                data.data.Weapon.map.set(id, data.data.Weapon.defaultValue!);
+                data.data.Outfit.map.set(builtInAmmoOutfitId(id),
+                    { ...data.data.Outfit.defaultValue!, ammoFor: id });
+                data.data.Outfit.map.set(builtInWeaponOutfitId(id),
+                    { ...data.data.Outfit.defaultValue!, weapons: { [id]: 1 } });
+            }
+            const listed = data.ids;
+            Object.defineProperty(data, 'ids', {
+                get: () => listed.then(ids => ({
+                    ...ids,
+                    Outfit: ids.Outfit.filter(
+                        id => builtInOutfitWeaponId(id) === undefined),
+                })),
+            });
+            return data;
+        }
+
+        it('enters when the weapon is defined', async () => {
+            pilots({ outfits: [[STOCK_OUTFIT, 1], [AMMO, 40], [GUN, 1]] });
+            const data = withBuiltIns(['nova:139', 'nova:161']);
+            expect((await data.ids).Outfit).not.toContain(AMMO);
+            const start = await preparePlayerStart(runtimeFor(data).runtime,
+                new URLSearchParams(), () => 'peer-1');
+            expect([...start.ship.components.get(OutfitsStateComponent)!
+                .keys()].sort()).toEqual([STOCK_OUTFIT, GUN, AMMO].sort());
+            expect(getActivePilot(store)?.quarantine).toBeUndefined();
+        });
+
+        it('is refused, naming the outfit, when the weapon is not defined',
+            async () => {
+                pilots({ outfits: [[STOCK_OUTFIT, 1], [AMMO, 40], [GUN, 1]] });
+                await expectAsync(preparePlayerStart(
+                    runtimeFor(withBuiltIns(['nova:139'])).runtime,
+                    new URLSearchParams(), () => 'peer-1'))
+                    .toBeRejectedWithError(MissingSaveContentError,
+                        /stock ids the game data does not define \(outfit nova:161:builtInAmmo\)/);
+            });
+    });
 
     it('says when a stock-prefixed id is what is missing', () => {
         expect(describeMissingSaveContent([

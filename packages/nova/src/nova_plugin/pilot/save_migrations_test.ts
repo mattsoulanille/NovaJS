@@ -607,6 +607,7 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
             expect(missingSaveContent(save, {
                 Ship: ['nova:128', `${NEW}:128`],
                 Outfit: ['nova:200', `${NEW}:447`],
+                Weapon: [],
             })).toEqual([]);
         });
 
@@ -638,6 +639,7 @@ describe('save_migrations 4 -> 5: plug-in prefixes renamed by #310', () => {
             const missing = missingSaveContent(result.data, {
                 Ship: ['nova:128', 'X 1.0:128', 'X 1.1:129'],
                 Outfit: ['nova:200', 'X 1.0:447', 'X 1.1:447'],
+                Weapon: [],
             });
             expect(missing).toEqual([
                 { kind: 'ship', id: 'X 1:128', renamedAs: ['X 1.0', 'X 1.1'] },

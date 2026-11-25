@@ -20,6 +20,7 @@
  *
  * Client-only bookkeeping; never runs in the simulation.
  */
+import { builtInOutfitWeaponId } from 'novaparse/built_in_weapon_outfit';
 import type { SaveData } from './save_game.js';
 
 /** One piece of a save that the installed game data does not define. */
@@ -41,21 +42,39 @@ export interface MissingSaveContent {
     readonly renamedAs?: readonly string[];
 }
 
-/** Existence lookups over the served id lists (NovaIDs). */
+/**
+ * Existence lookups over the served id lists (NovaIDs). `Weapon` is
+ * there for the IMPLICIT outfits (novaparse's built_in_weapon_outfit.ts):
+ * `<weapon>:builtInWeapon` / `<weapon>:builtInAmmo` mount or feed a
+ * ship's built-in weapon that no oütf provides. They are deliberately
+ * absent from `Outfit` (so the outfitter never shelves them) but
+ * `data.Outfit.get` resolves one whenever its weapon is defined, and any
+ * pilot flying such a ship owns one.
+ */
 export interface SaveContentIds {
     readonly Ship: readonly string[];
     readonly Outfit: readonly string[];
+    readonly Weapon: readonly string[];
 }
 
 /**
  * The ship and outfits `save` names that `ids` does not define, ship
- * first, outfits in save order, each id once.
+ * first, outfits in save order, each id once. An implicit outfit id is
+ * defined exactly when its weapon is: one whose weapon went with a
+ * removed plug-in is reported under its own (outfit) id.
  */
 export function missingSaveContent(save: SaveData, ids: SaveContentIds):
     MissingSaveContent[] {
     const ships = new Set(ids.Ship);
     const outfits = new Set(ids.Outfit);
-    const renames = oldPluginNames([...ids.Ship, ...ids.Outfit]);
+    const weapons = new Set(ids.Weapon);
+    const outfitDefined = (id: string): boolean => {
+        const builtIn = builtInOutfitWeaponId(id);
+        return builtIn === undefined ? outfits.has(id)
+            : weapons.has(builtIn.weaponId);
+    };
+    const renames = oldPluginNames([...ids.Ship, ...ids.Outfit,
+        ...ids.Weapon]);
     const record = (kind: MissingSaveContent['kind'], id: string):
         MissingSaveContent => {
         const plugin = pluginOfId(id);
@@ -69,7 +88,7 @@ export function missingSaveContent(save: SaveData, ids: SaveContentIds):
     }
     const seen = new Set<string>();
     for (const [id] of save.outfits) {
-        if (!outfits.has(id) && !seen.has(id)) {
+        if (!outfitDefined(id) && !seen.has(id)) {
             seen.add(id);
             missing.push(record('outfit', id));
         }
@@ -81,8 +100,9 @@ export function missingSaveContent(save: SaveData, ids: SaveContentIds):
  * The pre-#310 prefix of each installed plug-in whose prefix CHANGED
  * with #310 (one with a dot in it: the old rule cut at the first dot),
  * mapped to the installed prefixes it stood for, sorted. Derived from
- * the served ship and outfit ids, which are enough here: a save can only
- * be missing a plug-in's ship or outfit if that plug-in defines some.
+ * the served ship, outfit and weapon ids, which are enough here: a save
+ * can only be missing a plug-in's ship or outfit if that plug-in defines
+ * some (or, for an implicit outfit, the weapon it stands for).
  */
 function oldPluginNames(ids: readonly string[]): Map<string, string[]> {
     const installed = new Set<string>();
