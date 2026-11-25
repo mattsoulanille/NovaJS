@@ -16,9 +16,11 @@ import {
 import { makeShip } from './nova_plugin/ship/index.js';
 import { completeEntity } from './nova_plugin/spawn/index.js';
 import {
-    LandEvent, LandingBlockedEvent, landingDistance, PlanetDataComponent,
-    PlanetTargetComponent, stellarLandingRange,
+    LandEvent, LandingBlockedEvent, LandingClearedEvent, landingDistance,
+    PlanetDataComponent, PlanetTargetComponent, STELLAR_CLEARANCE_RANGE,
+    stellarApproachRange, stellarLandingRange,
 } from './nova_plugin/travel/index.js';
+import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 
 /**
  * The client autopilot flown in a real simulation world: its analog and
@@ -80,6 +82,8 @@ describe('Autopilot landing on the square zone', () => {
             frame: [325, 325], offset: [1200, 1200] },
         { name: 'a big 325 px planet, inertialess',
             frame: [325, 325], offset: [-1500, 200], inertialess: true },
+        { name: 'a 250 px planet (window 425, clearance zone 249)',
+            frame: [250, 250], offset: [1000, 0] },
     ];
     for (const { name, frame, offset, inertialess } of cases) {
         it(`lands on ${name}`, async () => {
@@ -141,9 +145,27 @@ describe('Autopilot landing on the square zone', () => {
                     applyAnalogControl(world, PEER, control),
             });
             autopilot.navigateTo(PORT);
-            const { lands, ticks } = fly(world, autopilot, 10);
+            const cleared: string[] = [];
+            world.events.get(LandingClearedEvent).subscribe(({ data }) =>
+                cleared.push(data.kind));
+            const { lands, ticks } = fly(world, autopilot, 60);
+            // The first tap clears the ship (wave 31: only a cleared ship
+            // lands), the next one lands.
             expect(sent[0]).toEqual('land:start');
+            expect(cleared).toEqual(['planet']);
+            expect(sent.filter(s => s === 'land:start').length).toBe(2);
             expect(lands).toEqual([PORT]);
-            expect(ticks).toBe(1);
+            expect(ticks).toBeLessThan(40);
         }, 60_000);
+
+    it('aims inside the 249 px clearance zone at a big planet whose window '
+        + 'is wider, and lands from there', () => {
+            const big = { ...getDefaultPlanetData(),
+                spriteFrameSize: [250, 250] as [number, number] };
+            expect(stellarLandingRange(big)).toBeCloseTo(425, 9);
+            expect(stellarApproachRange(big)).toBe(STELLAR_CLEARANCE_RANGE);
+            const small = { ...getDefaultPlanetData(),
+                spriteFrameSize: [72, 72] as [number, number] };
+            expect(stellarApproachRange(small)).toBeCloseTo(122.4, 9);
+        });
 });

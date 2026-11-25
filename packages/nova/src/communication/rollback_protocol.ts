@@ -786,6 +786,26 @@ export const STATE_HASH_INTERVAL = 60;
 //    in eight). The derived wire schema fingerprint changes
 //    (0df789d0f4d39d4c -> d442dd55b4b6c6ec), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-31 planet and station clearance
+//    (reference "Planet and station clearance, wave 31"). PlanetTarget's
+//    `cleared` and `requested` now name ports and stations too, and it
+//    gains a third OPTIONAL field, `clearedUntil` (travel/planet_plugin.ts
+//    PlanetTargetType: the sim time a port's or station's clearance
+//    lapses at), present only while the ship holds one.
+//    LandingClearedEvent's required `gateKind` becomes a required `kind`
+//    (hypergate / station / planet, LandingRequestEvent's) and it gains
+//    OPTIONAL `stellarName`, `form` and `welcome` (a port's or station's
+//    line, drawn in the sim; host -> display only). No input kind or
+//    message kind changes. Sim-rule changes alongside: ports and stations
+//    clear the ship inside the gates' 249 px square (the selecting `l`, or
+//    with no press once requested: StellarAutoClearanceSystem, renamed
+//    from HypergateAutoClearanceSystem, so the system-order hash changes
+//    too), only a cleared ship lands, inside 1.7 x the art's width with
+//    no 212 px cap (wormholes keep it), and a port's or station's
+//    clearance lapses 20 s after it is given. The derived wire schema
+//    fingerprint changes (d442dd55b4b6c6ec -> 9421bc2da0516e30), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

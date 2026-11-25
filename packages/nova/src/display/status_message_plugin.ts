@@ -19,7 +19,7 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, stellarClearedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
@@ -219,15 +219,17 @@ const ShowLandingBlockedMessage = new System({
     },
 });
 
-// A hypergate's first `l` cleared the player: one of the three stock
-// clearance lines (status_bar_content.ts hypergateClearedMessage), the form
-// picked at random as the original seems to (ten clearances, 1 / 6 / 3;
-// reference "Hypergate clearance lines, wave 28"). Math.random is fine
-// here: the line is this client's own status line and nothing in the
-// simulation reads it. The clearance a standing request gets on entering
-// the zone with no press (`automatic`) is #91, "Cleared for hypergate
-// entry, <ship>." (reference "Hypergates, wave 30", finding 3; GUESS that
-// it is always that form: one run).
+// Traffic control cleared the player. At a hypergate: one of the three
+// stock clearance lines (status_bar_content.ts hypergateClearedMessage),
+// the form picked at random as the original seems to (ten clearances,
+// 1 / 6 / 3; reference "Hypergate clearance lines, wave 28"). Math.random
+// is fine here: the line is this client's own status line and nothing in
+// the simulation reads it. The clearance a standing request gets on
+// entering the zone with no press (`automatic`) is #91, "Cleared for
+// hypergate entry, <ship>." (reference "Hypergates, wave 30", finding 3;
+// GUESS that it is always that form: one run). At a port or a station:
+// the two pieces the sim drew (stellarClearedMessage; reference "Planet
+// and station clearance, wave 31", finding 1), automatic or not.
 // No beep: nothing was refused.
 const ShowLandingClearedMessage = new System({
     name: 'ShowLandingClearedMessage',
@@ -235,11 +237,19 @@ const ShowLandingClearedMessage = new System({
     args: [LandingClearedEvent, StatusLineResource, TimeResource,
         PlayerShipSelector, Optional(PlayerNamesComponent),
         Optional(ShipDataComponent)] as const,
-    step({ automatic }, statusLine, { time }, _player, names, shipData) {
-        const form = automatic ? 0
+    step({ kind, automatic, form, welcome, stellarName }, statusLine,
+        { time }, _player, names, shipData) {
+        const shipName = playerShipName(names, shipData?.name);
+        if (kind !== 'hypergate') {
+            statusLine.setMessage(stellarClearedMessage(kind === 'station',
+                form ?? 0, welcome ?? false, stellarName ?? '', shipName),
+                time);
+            return;
+        }
+        const gateForm = automatic ? 0
             : Math.floor(Math.random() * HYPERGATE_CLEARED_FORMS);
-        statusLine.setMessage(hypergateClearedMessage(form,
-            playerShipName(names, shipData?.name)), time);
+        statusLine.setMessage(hypergateClearedMessage(gateForm, shipName),
+            time);
     },
 });
 

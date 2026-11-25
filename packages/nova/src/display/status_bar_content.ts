@@ -432,6 +432,45 @@ export function hypergateClearedMessage(form: number,
         : `${shipName}, you're cleared for hypergate entry.`;
 }
 
+/**
+ * Traffic control's answer when it clears the player at a port or a
+ * station (the selecting `l` inside the 249 px clearance zone, or a
+ * standing request on entering it; reference "Planet and station
+ * clearance, wave 31", finding 1): two stock pieces of STR# 2002,
+ * one-based,
+ *
+ *   97 "Cleared to land"            94 "Cleared to dock"
+ *   98 "you're cleared to land."    95 "you're cleared to dock."
+ *   99 "You are cleared to land."   96 "You are cleared to dock."
+ *
+ * with the ship's name after #97 / #94 ("Cleared to land, <ship>.") and
+ * before #98 / #95 ("<ship>, you're cleared to land."), then
+ *
+ *   100 "Commence final approach."  or  101 "Welcome to" <port>.
+ *
+ * as read on the original: "Cleared to land, w31-land-p72-140. Welcome to
+ * Kit Land P72 140.", "w31-land-s17-140, you're cleared to dock. Commence
+ * final approach.", "You are cleared to land. Commence final approach.".
+ * `form` 0..2 picks the first piece, `welcome` the tail (both drawn in the
+ * sim: LandingClearedEvent). With no ship name (or a blank one) the
+ * nameless #99 / #96 stands in for the named forms.
+ */
+export function stellarClearedMessage(isStation: boolean, form: number,
+    welcome: boolean, stellarName: string, shipName?: string): string {
+    const verb = isStation ? 'dock' : 'land';
+    let first: string;
+    if (!shipName || form === 2) {
+        first = `You are cleared to ${verb}.`;
+    } else if (form === 0) {
+        first = `Cleared to ${verb}, ${shipName}.`;
+    } else {
+        first = `${shipName}, you're cleared to ${verb}.`;
+    }
+    const tail = welcome ? `Welcome to ${stellarName}.`
+        : 'Commence final approach.';
+    return `${first} ${tail}`;
+}
+
 /** STR# 2002 one-based 80, the tail of every landing request line. */
 export const BEGIN_INITIAL_APPROACH = 'Begin initial approach.';
 

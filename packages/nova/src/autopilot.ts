@@ -4,7 +4,7 @@ import { ControlEvent } from './nova_plugin/core/index.js';
 import { AnalogControlState, ControlledByComponent } from './nova_plugin/player/index.js';
 import {
     landingDistance, LAND_SPEED_SQUARED, PlanetDataComponent,
-    stellarLandingRange,
+    stellarApproachRange,
 } from './nova_plugin/travel/index.js';
 
 /**
@@ -22,13 +22,14 @@ export interface ControlSinks {
 }
 
 /**
- * Landing wants the ship inside the stellar's landing zone, a SQUARE of
- * half-width stellarLandingRange (about 25-212 px by the frame's width)
- * around its centre measured as max(|dx|, |dy|) (landingDistance), and
- * slower than 20 px/s (LAND_SPEED_SQUARED); aim inside both: 90% of the
- * half-width on the same square, half the speed² (about 14 px/s). The
- * approach itself flies at the centre, so it enters the square on any
- * heading.
+ * Landing wants the ship cleared and inside the stellar's landing window:
+ * a SQUARE around its centre measured as max(|dx|, |dy|)
+ * (landingDistance) of half-width stellarApproachRange (the smaller of
+ * the 249 px clearance zone, where the first tap clears, and the art's
+ * 1.7 W window, where the next one lands), and slower than 20 px/s
+ * (LAND_SPEED_SQUARED); aim inside both: 90% of the half-width on the
+ * same square, half the speed² (about 14 px/s). The approach itself flies
+ * at the centre, so it enters the square on any heading.
  */
 const ARRIVE_RANGE_FRACTION = 0.9;
 const ARRIVE_SPEED_SQUARED = LAND_SPEED_SQUARED / 2;
@@ -108,7 +109,7 @@ export class Autopilot {
         const planet = world.entities.get(this.planetUuid);
         const planetMovement = planet?.components.get(MovementStateComponent);
         const landingRange =
-            stellarLandingRange(planet?.components.get(PlanetDataComponent));
+            stellarApproachRange(planet?.components.get(PlanetDataComponent));
         const arriveDistance = ARRIVE_RANGE_FRACTION * landingRange;
         const stopMargin = Math.min(STOP_MARGIN,
             STOP_MARGIN_RANGE_FRACTION * landingRange);
@@ -201,8 +202,10 @@ export class Autopilot {
             return;
         }
         // navigateTo already selected this planet (setPlanetTarget), so a
-        // single 'land' press lands on it. The tap repeats until the ship is
-        // inside the landing window, at which point the press takes.
+        // 'land' press acts on it: the first inside the clearance zone
+        // clears the ship (unless a standing request already was), the
+        // next inside the landing window lands. The tap repeats until one
+        // lands.
         this.sinks.controlEvents([{ action: 'land', state: 'start' }]);
         this.landHeldFrames = LAND_TAP_HOLD;
         this.framesUntilLandTap = LAND_TAP_INTERVAL;

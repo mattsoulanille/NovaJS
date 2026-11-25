@@ -15,10 +15,13 @@ import { makeSystem } from '../make_system.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { applyControlEvents } from '../player/index.js';
 import {
-    applySetPlanetTarget, holdsGateClearance, holdsGateRequest,
-    HYPERGATE_CLEARANCE_RANGE, HYPERGATE_ONLINE, HYPERGATE_ONLINE_OUT_OF,
+    applySetPlanetTarget, clearanceLapsed, holdsClearance,
+    holdsGateClearance, holdsRequest,
+    STELLAR_CLEARANCE_RANGE, HYPERGATE_ONLINE, HYPERGATE_ONLINE_OUT_OF,
     HYPERGATE_SELECT_RANGE, hypergateRequestOnline,
-    inLandingZone, LAND_RANGE_CAP, LANDING_REQUEST_FORMS,
+    inLandingZone, WORMHOLE_LAND_RANGE_CAP, LANDING_REQUEST_FORMS,
+    STELLAR_CLEARANCE_MS, STELLAR_CLEARED_FORM_ODDS, STELLAR_CLEARED_OUT_OF,
+    STELLAR_CLEARED_WELCOME, stellarApproachRange, stellarClearedForm,
     LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
     LandingBlockedEvent, LandingCleared, LandingClearedEvent,
     landingDistance, landingRange,
@@ -41,12 +44,12 @@ import {
 import { landable, SimulationGameDataResource } from '../core/index.js';
 import { applyShipChange } from '../missions/index.js';
 import { StoredShipsComponent } from '../player/index.js';
-import { ShipComponent } from '../ship/index.js';
+import { ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { buildPurchasedShip } from '../../spaceport/shipyard_rules.js';
 import { swapWithStored } from '../../spaceport/ship_storage.js';
 import {
     clearanceDeniedMessage, hypergateClearedMessage, landingBlockedMessage,
-    landingRequestMessage,
+    landingRequestMessage, stellarClearedMessage,
 } from '../../display/status_bar_content.js';
 
 // Thessaly Reach holds four stellars, in this order: Port Amberline (a
@@ -94,6 +97,27 @@ function place(ship: Entity, position: Position, velocity = new Vector(0, 0)) {
     const movement = ship.components.get(MovementStateComponent)!;
     movement.position = position;
     movement.velocity = velocity;
+}
+
+/**
+ * Selects `uuid` with traffic control's clearance held (what an `l` inside
+ * the 249 px clearance zone gives; a port's or station's for
+ * STELLAR_CLEARANCE_MS from now), so the next `l` inside the landing
+ * window lands. Since wave 31 only a cleared ship lands.
+ */
+function selectCleared(world: World, ship: Entity, uuid: string) {
+    const target = ship.components.get(PlanetTargetComponent)!;
+    selectPlanetTarget(target, uuid);
+    target.cleared = uuid;
+    delete target.requested;
+    const data = world.entities.get(uuid)?.components
+        .get(PlanetDataComponent);
+    if (data?.gate?.kind === 'hypergate') {
+        delete target.clearedUntil;
+    } else {
+        target.clearedUntil = (world.resources.get(TimeResource)?.time ?? 0)
+            + STELLAR_CLEARANCE_MS;
+    }
 }
 
 /** One world step with no input, recording every LandingClearedEvent. */
@@ -159,11 +183,11 @@ describe('AttemptLandingSystem', () => {
                 .get(PlanetDataComponent)!)).toBeTrue();
         }, 30_000);
 
-    it('lands on the ALREADY-selected stellar when in range and slow', async () => {
+    it('lands on the ALREADY-selected (cleared) stellar when in range and slow', async () => {
         const { world, ship } = await makeHarness();
         const planets = stellars(world);
         const target = planets[0];
-        ship.components.get(PlanetTargetComponent)!.target = target.uuid;
+        selectCleared(world, ship, target.uuid);
         place(ship, target.position);
 
         const { lands, blocked } = pressLand(world);
@@ -202,7 +226,7 @@ describe('AttemptLandingSystem', () => {
         const { world, ship } = await makeHarness();
         const planets = stellars(world);
         const target = planets[0];
-        ship.components.get(PlanetTargetComponent)!.target = target.uuid;
+        selectCleared(world, ship, target.uuid);
         // On the stellar (in range) but well above the landing speed gate.
         place(ship, target.position, new Vector(100, 0));
 
@@ -252,7 +276,7 @@ describe('AttemptLandingSystem', () => {
         const { world, ship } = await makeHarness();
         const port = stellars(world)
             .find(p => p.uuid === `planet ${SYNTHETIC.planets.port}`)!;
-        ship.components.get(PlanetTargetComponent)!.target = port.uuid;
+        selectCleared(world, ship, port.uuid);
         place(ship, port.position);
 
         const { lands, blocked } = pressLand(world);
@@ -278,17 +302,19 @@ describe('AttemptLandingSystem', () => {
 /**
  * The landing zone measured on the original (docs/reference_experiments.md,
  * "U9 wave 6: landing range of the tiny stations", which re-reads wave 4's
- * runs): a SQUARE, max(|dx|, |dy|) <= R, R = min(1.7 W, 212) from the
- * frame's width W; the speed gate is an absolute 20 px/s ("U9 wave 4").
+ * runs): a SQUARE, max(|dx|, |dy|) <= R, R = 1.7 W from the frame's
+ * width W, with no cap since wave 31 ("Planet and station clearance, wave
+ * 31", finding 3: wave 6's 212 px cap was the clearance zone and its lapse
+ * read through a stale request); the speed gate is an absolute 20 px/s
+ * ("U9 wave 4").
  */
 describe('landingRange', () => {
-    it('is 1.7 x the frame WIDTH, capped at 212 px', () => {
+    it('is 1.7 x the frame WIDTH, with no cap', () => {
         expect(LAND_RANGE_PER_FRAME_WIDTH).toBe(1.7);
-        expect(LAND_RANGE_CAP).toBe(212);
         expect(landingRange([40, 40])).toBeCloseTo(68, 9);
         expect(landingRange([112, 112])).toBeCloseTo(190.4, 9);
-        expect(landingRange([250, 250])).toBe(212);
-        expect(landingRange([325, 325])).toBe(212);
+        expect(landingRange([250, 250])).toBeCloseTo(425, 9);
+        expect(landingRange([325, 325])).toBeCloseTo(552.5, 9);
     });
 
     it('reads the width, never the height (tall and wide stations)', () => {
@@ -297,7 +323,7 @@ describe('landingRange', () => {
         expect(landingRange([15, 21])).toBeCloseTo(25.5, 9);
         expect(landingRange([17, 31])).toBeCloseTo(28.9, 9);
         expect(landingRange([35, 22])).toBeCloseTo(59.5, 9);
-        expect(landingRange([315, 200])).toBe(212);
+        expect(landingRange([315, 200])).toBeCloseTo(535.5, 9);
     });
 
     it('measures the zone as a square (max(|dx|, |dy|), inclusive)', () => {
@@ -328,7 +354,12 @@ describe('landingRange', () => {
  * through the real AttemptLandingSystem at rest: the stop that landed must
  * land, the stop before it must be "too far". Port Amberline stands in for
  * every stellar with its sprite frame swapped (the station flag changes
- * nothing measurable: wave 6 finding 3).
+ * nothing measurable: wave 6 finding 3), the ship holding a clearance (the
+ * landing window is a cleared ship's: "Planet and station clearance, wave
+ * 31"). The brackets of the 250 / 315 / 325 px arts are superseded: the
+ * 212 px "cap" they fitted was the clearance zone and its lapse read
+ * through a stale request (the reliability note "U9's 212 px landing cap
+ * is superseded").
  */
 describe('AttemptLandingSystem square zone vs the measured brackets', () => {
     const PORT = `planet ${SYNTHETIC.planets.port}`;
@@ -352,7 +383,7 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
                 ...planet.components.get(PlanetDataComponent)!,
                 spriteFrameSize: frame,
             });
-            ship.components.get(PlanetTargetComponent)!.target = PORT;
+            selectCleared(world, ship, PORT);
             // The stellar sits at (dx, dy) from the player.
             place(ship, new Position(centre.x - dx, centre.y - dy));
             lands.length = 0;
@@ -410,8 +441,6 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
         [[88, 88], 167, 146],
         [[96, 96], 175.5, 154.5],
         [[112, 112], 201.5, 177.5],
-        [[250, 250], 235.5, 209.5],
-        [[325, 325], 213, 199],
     ];
     it('matches every square bracket of waves 4 and 6', async () => {
         const press = await presser();
@@ -425,15 +454,19 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
         }
     }, 30_000);
 
-    it('misses the 315x200 art\'s 213.5 px landing by 1.5 px, inside the '
-        + 'big sprites\' 2-5 px centre error, as any cap must', async () => {
-            // 315x200 landed at 213.5 while the 325 px art was too far at
-            // 213: no single cap fits both, so the two are one bracket read
-            // within the error of a clipped sprite's centre.
+    it('lands a cleared ship at wave 6\'s big-art "too far" stops: the 212 '
+        + 'px cap is gone (wave 31)', async () => {
             const press = await presser();
-            expect(press([315, 200], [229.5, 0])).toEqual('tooFar');
-            expect(press([315, 200], [213.5 - 2, 0])).toEqual('landed');
-            expect(213.5 - LAND_RANGE_CAP).toBeLessThanOrEqual(2);
+            const stops: Array<[[number, number], number]> = [
+                [[250, 250], 235.5], [[325, 325], 213], [[315, 200], 229.5],
+                // Wave 31's walk-outs: a 250 px planet from 294, 359, 425.
+                [[250, 250], 294], [[250, 250], 359], [[250, 250], 425],
+            ];
+            for (const [frame, stop] of stops) {
+                expect(press(frame, [stop, 0]))
+                    .withContext(`${frame} at ${stop}`).toEqual('landed');
+            }
+            expect(press([250, 250], [426, 0])).toEqual('tooFar');
         }, 30_000);
 
     it('agrees with wave 4\'s circular (Euclidean) brackets', () => {
@@ -451,9 +484,6 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
             [[96, 96], 238, 211],
             [[112, 112], 233, 205],
             [[150, 150], 277, 235],
-            [[250, 250], 255, 229],
-            [[315, 200], 308, 280],
-            [[325, 325], 275, 247],
         ];
         for (const [frame, tooFar, landed] of circle) {
             const range = landingRange(frame);
@@ -472,7 +502,7 @@ describe('AttemptLandingSystem landing window', () => {
     async function atStellar(uuid: string, spriteFrameSize?: [number, number]) {
         const harness = await makeHarness();
         const stellar = stellars(harness.world).find(p => p.uuid === uuid)!;
-        harness.ship.components.get(PlanetTargetComponent)!.target = uuid;
+        selectCleared(harness.world, harness.ship, uuid);
         if (spriteFrameSize) {
             // A copy: the component holds the shared cached PlanetData.
             const planet = harness.world.entities.get(uuid)!;
@@ -517,12 +547,12 @@ describe('AttemptLandingSystem landing window', () => {
                 .toEqual(['tooFar']);
         }, 30_000);
 
-    it('lands on a big planet from far out (a 325 px frame lands within '
-        + '212 px)', async () => {
+    it('lands a cleared ship on a big planet from far out (a 325 px frame '
+        + 'lands within 552.5 px: no 212 px cap since wave 31)', async () => {
             const big: [number, number] = [325, 325];
-            expect((await pressAt(PORT, 211, undefined, big)).lands.length)
+            expect((await pressAt(PORT, 552, undefined, big)).lands.length)
                 .toBe(1);
-            expect((await pressAt(PORT, 213, undefined, big)).blocked
+            expect((await pressAt(PORT, 553, undefined, big)).blocked
                 .map(b => b.reason)).toEqual(['tooFar']);
         }, 30_000);
 
@@ -588,6 +618,13 @@ describe('AttemptLandingSystem landing clearance', () => {
             ship.components.set(LegalRecordsComponent,
                 new Map([[SYSTEM, 0]]));
 
+            // The first `l` there clears ("Cleared to land ..."), the next
+            // lands (wave 31: only a cleared ship lands).
+            const first = pressLand(world);
+            expect(first.blocked).toEqual([]);
+            expect(first.lands).toEqual([]);
+            expect(holdsClearance(ship.components.get(PlanetTargetComponent),
+                0)).toBeTrue();
             const { lands, blocked } = pressLand(world);
 
             expect(blocked).toEqual([]);
@@ -722,6 +759,8 @@ describe('planet bribes', () => {
             // Keyed by the stellar's NOVA id, not its entity uuid.
             expect(bribes.get(PORT_ID)).toBeDefined();
 
+            // Traffic control now clears the ship, and the next `l` lands.
+            expect(pressLand(world)).toEqual({ lands: [], blocked: [] });
             const { lands, blocked } = pressLand(world);
             expect(blocked).toEqual([]);
             expect(lands.length).toBe(1);
@@ -1078,6 +1117,8 @@ describe('planet bribes', () => {
                     const hull = await changeHull(path, world, ship);
                     expect(hull.components.get(StellarBribesComponent)!
                         .get(PORT_ID)).toBe(until);
+                    // Cleared by the first `l`, landed by the next.
+                    expect(pressLand(world).blocked).toEqual([]);
                     const { lands, blocked } = pressLand(world);
                     expect(blocked).toEqual([]);
                     expect(lands.length).toBe(1);
@@ -1186,7 +1227,8 @@ describe('planet bribes: a fresh refusal lasts the system visit (reference '
             // date a day (June 23 -> 24, as the pulled pilot read) and
             // keep the visit.
             approach(world, ship, OPEN);
-            expect(pressLand(world).lands.length).toBe(1);
+            pressLand(world); // The clearance ...
+            expect(pressLand(world).lands.length).toBe(1); // ... the landing.
             ship.components.set(GameDateComponent,
                 { day: 24, month: 6, year: 1177 });
             expect(ship.components.get(SystemVisitComponent))
@@ -1443,7 +1485,7 @@ describe('the gate approach lines', () => {
         async () => {
             const { world, ship, gate } = await atGate(
                 SYNTHETIC.systems.kestrel, KESTREL_GATE);
-            const range = HYPERGATE_CLEARANCE_RANGE;
+            const range = STELLAR_CLEARANCE_RANGE;
             for (const [position, velocity] of [
                 [gate.position, new Vector(0, 0)],
                 [new Position(gate.position.x, gate.position.y + range),
@@ -1452,7 +1494,7 @@ describe('the gate approach lines', () => {
             ] as const) {
                 ship.components.get(PlanetTargetComponent)!.target = undefined;
                 place(ship, position, velocity);
-                const cleared: { gateKind: string, entities?: unknown }[] = [];
+                const cleared: { kind: string, entities?: unknown }[] = [];
                 const sub = world.events.get(LandingClearedEvent)
                     .subscribe(({ data, entities }) =>
                         cleared.push({ ...data, entities }));
@@ -1465,7 +1507,7 @@ describe('the gate approach lines', () => {
                 expect(lands).toEqual([]);
                 expect(blocked).toEqual([]);
                 expect(cleared).toEqual([
-                    { gateKind: 'hypergate', entities: [SHIP_UUID] }]);
+                    { kind: 'hypergate', entities: [SHIP_UUID] }]);
                 // The clearance is held: it opens the gate.
                 expect(holdsGateClearance(
                     ship.components.get(PlanetTargetComponent))).toBeTrue();
@@ -1650,7 +1692,7 @@ describe('the hypergate `l` range and the request lines', () => {
             place(ship, gate.position);
             const clearance = step(world);
             expect(clearance).toEqual([
-                { gateKind: 'hypergate', automatic: true,
+                { kind: 'hypergate', automatic: true,
                     entities: [SHIP_UUID] }]);
             expect(target(ship).cleared).toBe(gate.uuid);
             expect(target(ship).requested).toBeUndefined();
@@ -1674,7 +1716,7 @@ describe('the hypergate `l` range and the request lines', () => {
         applySetPlanetTarget(world, undefined, gate.uuid);
         const again = press(world);
         expect(again.lands).toEqual([]);
-        expect(again.cleared).toEqual([{ gateKind: 'hypergate' }]);
+        expect(again.cleared).toEqual([{ kind: 'hypergate' }]);
     }, 30_000);
 
     it('draws "Hypergate is online" by the salted hash, not by another '
@@ -1767,7 +1809,7 @@ describe('the hypergate `l` range and the request lines', () => {
 // Measured: reference "Hypergates, wave 30". A hypergate has TWO zones:
 // the CLEARANCE zone (the selecting `l`, and the automatic clearance of a
 // standing request) is a square of half-side 248-250 px whatever the art
-// (HYPERGATE_CLEARANCE_RANGE, 249 a GUESS inside it); the ENTRY window
+// (STELLAR_CLEARANCE_RANGE, 249 a GUESS inside it); the ENTRY window
 // (the `l` that opens the gate map) goes by the art, 1.7 x its width, with
 // no 212 px cap. On the synthetic Kestrel Gate, its art set to the stock
 // 150 px gate's or to the 72 px planet art of Kit Gate Small.
@@ -1819,19 +1861,24 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
         return pressRecording(world);
     }
 
-    it('makes the gate entry window 1.7 x the art with no 212 px cap, and '
-        + 'keeps the cap for planets', () => {
-        expect(HYPERGATE_CLEARANCE_RANGE).toBe(249);
-        const gate = (w: number): PlanetData => ({
+    it('makes the gate entry window 1.7 x the art with no 212 px cap (a '
+        + 'planet\'s too since wave 31; a wormhole keeps it)', () => {
+        expect(STELLAR_CLEARANCE_RANGE).toBe(249);
+        const gate = (w: number, kind: 'hypergate' | 'wormhole' =
+            'hypergate'): PlanetData => ({
             ...getDefaultPlanetData(), spriteFrameSize: [w, w],
-            gate: { kind: 'hypergate', destinations: [], emergenceAngle: 0 },
+            gate: { kind, destinations: [], emergenceAngle: 0 },
         });
         expect(stellarLandingRange(gate(150))).toBeCloseTo(255, 9);
         expect(stellarLandingRange(gate(72))).toBeCloseTo(122.4, 9);
         expect(stellarLandingRange(gate(300))).toBeCloseTo(510, 9);
         expect(stellarLandingRange({
             ...getDefaultPlanetData(), spriteFrameSize: [300, 300],
-        })).toBe(LAND_RANGE_CAP);
+        })).toBeCloseTo(510, 9);
+        expect(WORMHOLE_LAND_RANGE_CAP).toBe(212);
+        expect(stellarLandingRange(gate(300, 'wormhole'))).toBe(212);
+        expect(stellarLandingRange(gate(72, 'wormhole')))
+            .toBeCloseTo(122.4, 9);
     });
 
     it('clears inside a 249 px SQUARE and requests outside it, the same '
@@ -1858,7 +1905,7 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
                     .toEqual(clears ? [] : ['hypergate']);
                 expect(holdsGateClearance(target(ship))).withContext(context)
                     .toBe(clears);
-                expect(holdsGateRequest(target(ship))).withContext(context)
+                expect(holdsRequest(target(ship))).withContext(context)
                     .toBe(!clears);
             }
         }
@@ -1908,7 +1955,7 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
         place(ship, new Position(gate.position.x + 247, gate.position.y),
             new Vector(-49, 0));
         expect(stepRecordingClearances(world)).toEqual([
-            { gateKind: 'hypergate', automatic: true,
+            { kind: 'hypergate', automatic: true,
                 entities: [SHIP_UUID] }]);
         expect(holdsGateClearance(target(ship))).toBeTrue();
         expect(target(ship).requested).toBeUndefined();
@@ -1926,7 +1973,7 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
         + 'selection without a request', async () => {
         const { world, ship, gate } = await kestrel(72);
         selectAt(world, ship, gate, 300, 300);
-        expect(holdsGateRequest(target(ship))).toBeTrue();
+        expect(holdsRequest(target(ship))).toBeTrue();
         place(ship, new Position(gate.position.x + 200,
             gate.position.y + 240));
         expect(stepRecordingClearances(world).length).toBe(1);
@@ -1944,7 +1991,7 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
     it('drops the request when the selection moves on', async () => {
         const { world, ship, gate } = await kestrel(150);
         selectAt(world, ship, gate, 300, 0);
-        expect(holdsGateRequest(target(ship))).toBeTrue();
+        expect(holdsRequest(target(ship))).toBeTrue();
         applySetPlanetTarget(world, undefined,
             `planet ${SYNTHETIC.planets.kestrelRock}`);
         expect(target(ship).requested).toBeUndefined();
@@ -1982,4 +2029,399 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
             expect(count / of).toBeLessThan(5 / 17 + 0.015);
         }
     });
+});
+
+// Measured: reference "Planet and station clearance, wave 31". Ports and
+// stations have the gates' two zones: the selecting `l` inside a fixed
+// 249 px square (whatever the art) CLEARS and prints "Cleared to land,
+// <ship>. Welcome to <port>." etc. (#94-101), a standing request is
+// cleared with no press on entering it, only a cleared ship lands, inside
+// 1.7 x the art's width with no 212 px cap, and a clearance lapses within
+// 13.4-25.1 s (20 s, GUESS). Port Amberline stands in for every art, its
+// frame and station flag swapped; the ship sits east of it, where it is
+// the nearest port.
+describe('planets and stations, wave 31: the clearance square, the cleared '
+    + 'lines, the uncapped window and the lapse', () => {
+    const PORT = `planet ${SYNTHETIC.planets.port}`;
+
+    async function port(frame: [number, number], isStation = false) {
+        const { world, ship } = await makeHarness();
+        const entity = world.entities.get(PORT)!;
+        const data = entity.components.get(PlanetDataComponent)!;
+        // A copy: the component holds the shared cached PlanetData.
+        entity.components.set(PlanetDataComponent, {
+            ...data, spriteFrameSize: frame,
+            flags: { ...data.flags, isStation },
+        });
+        const stellar = stellars(world).find(p => p.uuid === PORT)!;
+        return { world, ship, stellar };
+    }
+
+    function target(ship: Entity) {
+        return ship.components.get(PlanetTargetComponent)!;
+    }
+
+    function now(world: World) {
+        return world.resources.get(TimeResource)!.time;
+    }
+
+    function pressRecording(world: World) {
+        const cleared: LandingCleared[] = [];
+        const requests: LandingRequest[] = [];
+        const subs = [
+            world.events.get(LandingClearedEvent)
+                .subscribe(({ data }) => cleared.push(data)),
+            world.events.get(LandingRequestEvent)
+                .subscribe(({ data }) => requests.push(data)),
+        ];
+        const { lands, blocked } = pressLand(world);
+        subs.forEach(s => s.unsubscribe());
+        return {
+            lands: lands.length, blocked: blocked.map(b => b.reason),
+            cleared, requests: requests.map(r => r.kind),
+        };
+    }
+
+    /** Puts the ship at rest at the port + (dx, dy). */
+    function at(ship: Entity, stellar: { position: Position }, dx: number,
+        dy = 0) {
+        place(ship, new Position(stellar.position.x + dx,
+            stellar.position.y + dy));
+    }
+
+    /** One `l` with the ship at rest at port + (dx, dy) and nothing
+     * selected before it. */
+    function selectAt(world: World, ship: Entity,
+        stellar: { position: Position }, dx: number, dy = 0) {
+        selectPlanetTarget(target(ship), undefined);
+        at(ship, stellar, dx, dy);
+        return pressRecording(world);
+    }
+
+    it('clears inside a 249 px SQUARE whatever the art and requests '
+        + 'outside it: 72 and 250 px planets, 17 x 31 and 315 x 200 '
+        + 'stations', async () => {
+        for (const [frame, isStation] of [
+            [[72, 72], false], [[250, 250], false],
+            [[17, 31], true], [[315, 200], true],
+        ] as Array<[[number, number], boolean]>) {
+            const { world, ship, stellar } = await port(frame, isStation);
+            const kind = isStation ? 'station' : 'planet';
+            for (const [dx, dy, clears] of [
+                [140, 0, true], [230, 0, true], [245, 0, true],
+                [249, 0, true], [250, 0, false], [260, 0, false],
+                [0, -249, true], [0, -250, false],
+                // The (180, 180) diagonal, 255 px away: cleared (a square).
+                [180, 180, true], [249, -249, true],
+                [250, 100, false], [100, -250, false],
+            ] as const) {
+                const answer = selectAt(world, ship, stellar, dx, dy);
+                const context = `${frame} at (${dx}, ${dy})`;
+                expect(target(ship).target).withContext(context).toBe(PORT);
+                expect(answer.blocked).withContext(context).toEqual([]);
+                expect(answer.lands).withContext(context).toBe(0);
+                expect(answer.cleared.map(c => c.kind)).withContext(context)
+                    .toEqual(clears ? [kind] : []);
+                expect(answer.requests).withContext(context)
+                    .toEqual(clears ? [] : [kind]);
+                expect(holdsClearance(target(ship), now(world)))
+                    .withContext(context).toBe(clears);
+                expect(holdsRequest(target(ship))).withContext(context)
+                    .toBe(!clears);
+                if (clears) {
+                    const [line] = answer.cleared;
+                    expect(line.stellarName).toBe('Port Amberline');
+                    expect([0, 1, 2]).toContain(line.form!);
+                    expect(typeof line.welcome).toBe('boolean');
+                    expect(line.automatic).toBeUndefined();
+                    // The lapse is STELLAR_CLEARANCE_MS from the press.
+                    expect(target(ship).clearedUntil! - now(world))
+                        .toBeCloseTo(STELLAR_CLEARANCE_MS, -2);
+                }
+            }
+        }
+    }, 30_000);
+
+    it('answers "too far" to an uncleared press outside the square even '
+        + 'inside 1.7 W (finding 4: the 250 px planet and the 315 px '
+        + 'station requested at 260)', async () => {
+        for (const [frame, isStation] of [
+            [[250, 250], false], [[315, 200], true],
+        ] as Array<[[number, number], boolean]>) {
+            const { world, ship, stellar } = await port(frame, isStation);
+            expect(stellarLandingRange(world.entities.get(PORT)!.components
+                .get(PlanetDataComponent))).toBeGreaterThan(400);
+            expect(selectAt(world, ship, stellar, 260).requests.length)
+                .toBe(1);
+            const second = pressRecording(world);
+            expect(second.blocked).toEqual(['tooFar']);
+            expect(second.lands).toBe(0);
+            expect(second.cleared).toEqual([]);
+            // A click selection (no request, no clearance) at 300 px: too
+            // far as well, and nothing is cleared or requested.
+            applySetPlanetTarget(world, undefined, null);
+            applySetPlanetTarget(world, undefined, PORT);
+            at(ship, stellar, 300);
+            const click = pressRecording(world);
+            expect(click.blocked).toEqual(['tooFar']);
+            expect(click.cleared).toEqual([]);
+            expect(click.requests).toEqual([]);
+        }
+    }, 30_000);
+
+    it('lands a ship cleared at 230 px on a 250 px planet from 294, 359 '
+        + 'and 425 px (finding 3: no 212 px cap), and not from 426',
+        async () => {
+            const { world, ship, stellar } = await port([250, 250]);
+            for (const dx of [294, 359, 425]) {
+                expect(selectAt(world, ship, stellar, 230).cleared.length)
+                    .toBe(1);
+                at(ship, stellar, dx);
+                expect(pressRecording(world).lands).withContext(`${dx}`)
+                    .toBe(1);
+            }
+            expect(selectAt(world, ship, stellar, 230).cleared.length)
+                .toBe(1);
+            at(ship, stellar, 426);
+            const far = pressRecording(world);
+            expect(far.blocked).toEqual(['tooFar']);
+            // Still cleared: no fresh request, no fresh clearance.
+            expect(far.cleared).toEqual([]);
+            expect(far.requests).toEqual([]);
+            expect(holdsClearance(target(ship), now(world))).toBeTrue();
+        }, 30_000);
+
+    it('says "too far" to a cleared 72 px planet\'s second `l` at 140 and '
+        + '230 px (window 122), and lands inside it', async () => {
+        const { world, ship, stellar } = await port([72, 72]);
+        for (const dx of [140, 230]) {
+            expect(selectAt(world, ship, stellar, dx).cleared.length)
+                .toBe(1);
+            expect(pressRecording(world).blocked).withContext(`${dx}`)
+                .toEqual(['tooFar']);
+        }
+        at(ship, stellar, 122);
+        expect(pressRecording(world).lands).toBe(1);
+    }, 30_000);
+
+    it('clears a standing request ONCE with no press as the ship coasts '
+        + 'into the square, with a port\'s line (finding 2)', async () => {
+        const { world, ship, stellar } = await port([250, 250]);
+        // The request: the selecting `l` at about 430 px.
+        expect(selectAt(world, ship, stellar, 430).requests)
+            .toEqual(['planet']);
+        const events: unknown[] = [];
+        for (const dx of [400, 300, 260, 250]) {
+            place(ship, new Position(stellar.position.x + dx,
+                stellar.position.y), new Vector(-49, 0));
+            events.push(...stepRecordingClearances(world));
+        }
+        expect(events).toEqual([]);
+        place(ship, new Position(stellar.position.x + 247,
+            stellar.position.y), new Vector(-49, 0));
+        const [line, ...more] = stepRecordingClearances(world);
+        expect(more).toEqual([]);
+        expect(line).toEqual(jasmine.objectContaining({
+            kind: 'planet', automatic: true, stellarName: 'Port Amberline',
+            entities: [SHIP_UUID],
+        }));
+        expect([0, 1, 2]).toContain(line.form!);
+        expect(holdsClearance(target(ship), now(world))).toBeTrue();
+        expect(target(ship).requested).toBeUndefined();
+        // Once: on in, out again and back, nothing more is said.
+        for (const dx of [200, 300, 400, 240]) {
+            at(ship, stellar, dx);
+            expect(stepRecordingClearances(world)).withContext(`${dx}`)
+                .toEqual([]);
+        }
+        // And, at rest inside its window, the next `l` lands.
+        at(ship, stellar, 240);
+        expect(pressRecording(world).lands).toBe(1);
+    }, 30_000);
+
+    it('clears the request on the diagonal (a square: the 72 px port at '
+        + '(244, -186.5), 307 px away) and a station the same way',
+        async () => {
+            for (const isStation of [false, true]) {
+                const { world, ship, stellar } = await port([72, 72],
+                    isStation);
+                selectAt(world, ship, stellar, 430, -300);
+                expect(holdsRequest(target(ship))).toBeTrue();
+                at(ship, stellar, 250, -186.5);
+                expect(stepRecordingClearances(world)).toEqual([]);
+                at(ship, stellar, 244, -186.5);
+                expect(stepRecordingClearances(world).map(c => c.kind))
+                    .toEqual([isStation ? 'station' : 'planet']);
+            }
+        }, 30_000);
+
+    it('lapses a port\'s clearance after 20 s (GUESS in 13.4-25.1): a '
+        + 'press 13.4 s on lands, one 25.1 s on outside the square draws a '
+        + 'fresh request, one 36.7 s on inside it a fresh clearance '
+        + '(finding 5)', async () => {
+            expect(STELLAR_CLEARANCE_MS).toBe(20_000);
+            const time = (world: World) =>
+                world.resources.get(TimeResource)!;
+            {
+                const { world, ship, stellar } = await port([250, 250]);
+                selectAt(world, ship, stellar, 230);
+                time(world).time += 13_400;
+                at(ship, stellar, 425);
+                expect(clearanceLapsed(target(ship), now(world)))
+                    .toBeFalse();
+                expect(pressRecording(world).lands).toBe(1);
+            }
+            {
+                const { world, ship, stellar } = await port([250, 250]);
+                selectAt(world, ship, stellar, 230);
+                time(world).time += 19_900;
+                at(ship, stellar, 325);
+                expect(pressRecording(world).lands).toBe(1);
+            }
+            {
+                const { world, ship, stellar } = await port([250, 250]);
+                selectAt(world, ship, stellar, 230);
+                time(world).time += 25_100;
+                at(ship, stellar, 325);
+                expect(clearanceLapsed(target(ship), now(world)))
+                    .toBeTrue();
+                expect(holdsClearance(target(ship), now(world)))
+                    .toBeFalse();
+                const late = pressRecording(world);
+                expect(late.lands).toBe(0);
+                expect(late.blocked).toEqual([]);
+                expect(late.requests).toEqual(['planet']);
+                expect(target(ship).cleared).toBeUndefined();
+                expect(target(ship).clearedUntil).toBeUndefined();
+                expect(holdsRequest(target(ship))).toBeTrue();
+                // The fresh request clears on the way back in.
+                at(ship, stellar, 240);
+                expect(stepRecordingClearances(world).length).toBe(1);
+            }
+            {
+                const { world, ship, stellar } = await port([250, 250]);
+                selectAt(world, ship, stellar, 230);
+                time(world).time += 36_700;
+                // Sitting inside the square: no automatic re-clearance.
+                expect(stepRecordingClearances(world)).toEqual([]);
+                const again = pressRecording(world);
+                expect(again.lands).toBe(0);
+                expect(again.cleared.map(c => c.kind)).toEqual(['planet']);
+                expect(pressRecording(world).lands).toBe(1);
+            }
+        }, 30_000);
+
+    it('leaves a hypergate\'s clearance without a lapse (unmeasured)',
+        async () => {
+            const { world, ship } = await makeHarness(getSyntheticGameData(),
+                SYNTHETIC.systems.kestrel);
+            const gate = stellars(world).find(p =>
+                p.uuid === `planet ${SYNTHETIC.planets.kestrelGate}`)!;
+            selectPlanetTarget(target(ship), undefined);
+            place(ship, gate.position);
+            expect(pressRecording(world).cleared.map(c => c.kind))
+                .toEqual(['hypergate']);
+            expect(target(ship).clearedUntil).toBeUndefined();
+            world.resources.get(TimeResource)!.time += 60_000;
+            expect(holdsGateClearance(target(ship))).toBeTrue();
+            expect(pressRecording(world).lands).toBe(1);
+        }, 30_000);
+
+    it('leaves other ships alone: an NPC with the port selected inside the '
+        + 'square is never cleared and hears nothing', async () => {
+        const { world, ship, stellar } = await port([250, 250]);
+        const npc = makeShip(ship.components.get(ShipDataComponent)!);
+        await completeEntity(world, npc);
+        world.entities.set('wave 31 npc', npc);
+        world.step();
+        const npcTarget = npc.components.get(PlanetTargetComponent)!;
+        selectPlanetTarget(npcTarget, PORT);
+        place(npc, new Position(stellar.position.x + 100,
+            stellar.position.y));
+        const heard: unknown[] = [];
+        world.events.get(LandingClearedEvent)
+            .subscribe(({ data }) => heard.push(data));
+        for (let i = 0; i < 5; i++) {
+            world.step();
+        }
+        expect(heard).toEqual([]);
+        expect(npcTarget.cleared).toBeUndefined();
+        expect(npcTarget.requested).toBeUndefined();
+    }, 30_000);
+
+    it('draws the cleared line\'s two pieces by salted hash at the measured '
+        + '8 : 5 : 3 and Welcome 7 in 16, independently (GUESS)', () => {
+        expect(STELLAR_CLEARED_FORM_ODDS).toEqual([8, 5, 3]);
+        expect(STELLAR_CLEARED_OUT_OF).toBe(16);
+        expect(STELLAR_CLEARED_WELCOME).toBe(7);
+        const forms = [0, 0, 0];
+        // [welcome, draws] by form.
+        const welcomeBy = [[0, 0], [0, 0], [0, 0]];
+        let total = 0;
+        for (const stellar of ['nova:128', 'nova:131', 'nova:1400']) {
+            for (const pilot of ['pilot a', 'pilot b', SHIP_UUID]) {
+                for (let t = 0; t < 3000 * 16; t += 16) {
+                    const draw = stellarClearedForm(stellar, pilot, t);
+                    expect(stellarClearedForm(stellar, pilot, t))
+                        .toEqual(draw);
+                    forms[draw.form]++;
+                    welcomeBy[draw.form][0] += draw.welcome ? 1 : 0;
+                    welcomeBy[draw.form][1]++;
+                    total++;
+                }
+            }
+        }
+        expect(Math.abs(forms[0] / total - 8 / 16)).toBeLessThan(0.01);
+        expect(Math.abs(forms[1] / total - 5 / 16)).toBeLessThan(0.01);
+        expect(Math.abs(forms[2] / total - 3 / 16)).toBeLessThan(0.01);
+        for (const [welcome, of] of welcomeBy) {
+            expect(Math.abs(welcome / of - 7 / 16)).toBeLessThan(0.02);
+        }
+    });
+
+    it('words the port and station lines as STR# 2002 #94-101, as read on '
+        + 'the original', () => {
+        expect(stellarClearedMessage(false, 0, true, 'Kit Land P72 140',
+            'w31-land-p72-140')).toEqual(
+            'Cleared to land, w31-land-p72-140. Welcome to Kit Land P72 140.');
+        expect(stellarClearedMessage(false, 0, false, 'Kit Land P72 230',
+            'w31-land-p72-230')).toEqual(
+            'Cleared to land, w31-land-p72-230. Commence final approach.');
+        expect(stellarClearedMessage(false, 1, true, 'Kit Land P250 230',
+            'w31-land-p250-230')).toEqual('w31-land-p250-230, you\'re '
+            + 'cleared to land. Welcome to Kit Land P250 230.');
+        expect(stellarClearedMessage(false, 2, false, 'Kit Land P250 245',
+            'w31-land-p250-245')).toEqual(
+            'You are cleared to land. Commence final approach.');
+        expect(stellarClearedMessage(true, 1, false, 'Kit Land S17 140',
+            'w31-land-s17-140')).toEqual('w31-land-s17-140, you\'re '
+            + 'cleared to dock. Commence final approach.');
+        expect(stellarClearedMessage(true, 0, false, 'Kit Land S17 230',
+            'w31-land-s17-230')).toEqual(
+            'Cleared to dock, w31-land-s17-230. Commence final approach.');
+        expect(stellarClearedMessage(true, 1, true, 'Kit Land S315 230',
+            'w31-land-s315-230')).toEqual('w31-land-s315-230, you\'re '
+            + 'cleared to dock. Welcome to Kit Land S315 230.');
+        expect(stellarClearedMessage(false, 2, true,
+            'Kit Land Toward P72', 'w31-toward-p72')).toEqual(
+            'You are cleared to land. Welcome to Kit Land Toward P72.');
+        // With no ship name the nameless #99 / #96 stands in.
+        expect(stellarClearedMessage(true, 0, true, 'Holpa Station'))
+            .toEqual('You are cleared to dock. Welcome to Holpa Station.');
+    });
+
+    it('aims the autopilot inside the smaller of the square and the window',
+        () => {
+            const planet = (w: number): PlanetData => ({
+                ...getDefaultPlanetData(), spriteFrameSize: [w, w],
+            });
+            expect(stellarApproachRange(planet(250)))
+                .toBe(STELLAR_CLEARANCE_RANGE);
+            expect(stellarApproachRange(planet(72))).toBeCloseTo(122.4, 9);
+            expect(stellarApproachRange({
+                ...planet(325),
+                gate: { kind: 'wormhole', destinations: [],
+                    emergenceAngle: 0 },
+            })).toBe(WORMHOLE_LAND_RANGE_CAP);
+        });
 });
