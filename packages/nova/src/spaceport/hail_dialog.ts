@@ -5,7 +5,9 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SpriteSheetSprite } from '../display/sprite_sheet_sprite.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { EscortDeal } from '../nova_plugin/player/index.js';
-import { CANT_AFFORD_FALLBACK } from '../nova_plugin/reputation/index.js';
+import {
+    CANT_AFFORD_FALLBACK, STELLAR_BRIBE_DECLINED_FALLBACK,
+} from '../nova_plugin/reputation/index.js';
 import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 import { Button } from './button.js';
 import {
@@ -147,9 +149,18 @@ export interface HailContext {
         /**
          * What the ship says when Lower Price withdraws its offer ("If
          * that's the way you feel, then you can sit here forever.", STR#
-         * 3000 155-159). Fuel offers only.
+         * 3000 155-159), or a planet ("No deal, cheapskate.", STR# 3002
+         * 30-34; reference "R7 planet bribe, wave 28"). Fuel offers and
+         * a planet's bribe.
          */
         withdrawn?: string,
+        /**
+         * What a PLANET answers every later Offer Bribe with once Lower
+         * Price has made it withdraw ("You wish." / ... / "Stop being an
+         * insulting little ferret.", STR# 3002 45-49; reference "R7 planet
+         * bribe, wave 28"). A planet's bribe only.
+         */
+        refused?: string,
         /**
          * What the ship says to Accept Price or Lower Price on a price the
          * pilot cannot pay ("You can't fool me - you can't afford it.",
@@ -164,8 +175,10 @@ export interface HailContext {
      * and dispatches nothing — there is no deal to strike. Never set beside
      * `bribe`, which is the plea a ship answers with a price. A PLANET's
      * Offer Bribe uses it the same way when the port turns the bribe down
-     * flat (hail.ts's planetRefusesBribe: "Yeah, right.", reference "R7
-     * bribe price above 1M, wave 27").
+     * flat (hail.ts's planetBribeRefused: "Yeah, right.", STR# 3002 45-49,
+     * reference "R7 bribe price above 1M, wave 27"), and for the rest of
+     * the day once Lower Price has made it withdraw (reference "R7 planet
+     * bribe, wave 28").
      */
     mercyRefused?: string;
     /**
@@ -749,17 +762,32 @@ export function hailPress(state: HailPage, press: HailPress,
                 : state;
         case 'cancel':
             return { phase: 'main', context };
-        case 'lowerPrice':
-            if (phase !== 'haggle' || context.bribe?.purpose !== 'fuel') {
+        case 'lowerPrice': {
+            const purpose = context.bribe?.purpose;
+            if (phase !== 'haggle' || !context.bribe
+                || (purpose !== 'fuel' && purpose !== 'landing')) {
                 return state;
             }
-            // A COUNTER (reference H1 wave 17: 4,000 -> 3,000): the popup
+            // A COUNTER (reference H1 wave 17: 4,000 -> 3,000; a planet's
+            // 10,000 -> 7,500, "R7 bribe price, wave 22"): the popup
             // stays with the new price on it, the mood line in the well.
             // GUESS: the well keeps the mood line (the captures read the
             // popup).
-            if (press.counter?.purpose === 'fuel') {
+            if (press.counter && press.counter.purpose === purpose) {
                 return { phase: 'haggle',
                     context: { ...context, bribe: press.counter } };
+            }
+            // A PLANET that withdraws ("No deal, cheapskate.", reference
+            // "R7 planet bribe, wave 28") refuses every later offer: Offer
+            // Bribe stays in its slot and answers with its refusal.
+            if (purpose === 'landing') {
+                const { bribe: _withdrawn, ...rest } = context;
+                return { phase: 'main', context: {
+                    ...rest,
+                    body: context.bribe.withdrawn ?? context.body,
+                    mercyRefused: context.bribe.refused
+                        ?? STELLAR_BRIBE_DECLINED_FALLBACK,
+                } };
             }
             // "If that's the way you feel, then you can sit here forever."
             // (reference H1 wave 16): the offer is gone, Request Assistance
@@ -767,6 +795,7 @@ export function hailPress(state: HailPage, press: HailPress,
             return { phase: 'main', context: {
                 ...context, body: context.bribe.withdrawn ?? context.body,
             } };
+        }
         case 'cantAfford':
             if (phase !== 'haggle' || context.bribe?.purpose !== 'fuel') {
                 return state;
@@ -1457,7 +1486,8 @@ export class HailDialog {
             originY + frame.responseText.y);
         this.content.addChild(body);
 
-        if (bribe?.purpose === 'fuel') {
+        if (bribe?.purpose === 'fuel'
+            || (bribe?.purpose === 'landing' && bribe.canAfford)) {
             // A ship's fuel price (reference H1 waves 16 and 17): Lower
             // Price over Accept Price, the original's own captions (STR#
             // 150 30 and 29). Lower Price counters with 3/4 or withdraws
@@ -1466,6 +1496,12 @@ export class HailDialog {
             // / H1 wave 18": Accept Price was not greyed), and either
             // answers "You can't fool me - you can't afford it." without
             // dispatching anything.
+            //
+            // A planet's bribe has the same two buttons ("Pay us N
+            // credits.", reference "R7 bribe price, wave 22"; Lower Price
+            // counters or withdraws, "R7 planet bribe, wave 28"), when the
+            // pilot can pay it; an unaffordable planet price keeps
+            // NovaJS's own page below (unmeasured on the original).
             const lower =
                 this.placeButton('Lower Price', frame, originX, originY, 0);
             lower.click.subscribe(() => {

@@ -20,7 +20,7 @@ import {
     LandingBlockedEvent, LandingClearedEvent, landingDistance, landingRange,
     PlanetComponent,
     PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
-    stellarLandingRange,
+    stellarLandingRange, StellarHaggleComponent,
 } from './planet_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -28,7 +28,8 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { applyHail } from '../encounters/index.js';
 import { CreditsComponent, GameDateComponent } from '../player/index.js';
 import {
-    GovtsResource, LegalRecordsComponent, planetRefusesBribe,
+    bribeDay, GovtsResource, LegalRecordsComponent, planetLowerPriceCounters,
+    planetRefusesBribe,
 } from '../reputation/index.js';
 import { landable } from '../core/index.js';
 import {
@@ -806,6 +807,104 @@ describe('planet bribes', () => {
             expect(pressLand(priced.world).blocked).toEqual([]);
         }, 30_000);
 
+    /** The first day of Jan 1177 on which this port's first Lower Price
+     * counters (or withdraws): the draw is per planet, pilot and day. */
+    function dayWhere(counters: boolean) {
+        for (let day = 1; day <= 31; day++) {
+            const date = { day, month: 1, year: 1177 };
+            if (planetLowerPriceCounters(PORT, SHIP_UUID, bribeDay(date))
+                === counters) {
+                return date;
+            }
+        }
+        throw new Error('no such day');
+    }
+
+    it('Lower Price counters with 3/4, and Accept Price then pays the '
+        + 'counter (reference "R7 bribe price, wave 22": 3,000 -> 2,200)',
+        async () => {
+            const { world, ship } = await shutOutHarness();
+            const date = dayWhere(true);
+            ship.components.set(GameDateComponent, date);
+            applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+            expect(ship.components.get(StellarHaggleComponent)!.get(PORT_ID))
+                .toEqual({ day: bribeDay(date), countered: true,
+                    withdrawn: false });
+            // Nothing is charged for haggling.
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+
+            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            // The 0x8000 port's 4,000 -> 3,000.
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000 - 3_000);
+            // The haggle is over; the clearance is bought.
+            expect(ship.components.get(StellarHaggleComponent)!.has(PORT_ID))
+                .toBeFalse();
+            expect(pressLand(world).blocked).toEqual([]);
+        }, 30_000);
+
+    it('a withdrawal refuses every later offer that day, and the next day '
+        + 'names a price again (reference "R7 planet bribe, wave 28")',
+        async () => {
+            const { world, ship } = await shutOutHarness();
+            const date = dayWhere(false);
+            ship.components.set(GameDateComponent, date);
+            applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+            expect(ship.components.get(StellarHaggleComponent)!.get(PORT_ID))
+                .toEqual({ day: bribeDay(date), countered: false,
+                    withdrawn: true });
+
+            // Eleven later offers that day: all refused, nothing charged.
+            for (let i = 0; i < 11; i++) {
+                applyHail(world, undefined, { kind: 'bribe', target: PORT });
+                applyHail(world, undefined,
+                    { kind: 'lowerPrice', target: PORT });
+            }
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+            expect(ship.components.has(StellarBribesComponent)).toBeFalse();
+            expect(pressLand(world).blocked[0].reason).toEqual('denied');
+
+            // A jump moves the date: the old entry counts as none.
+            ship.components.set(GameDateComponent,
+                { ...date, day: date.day + 2 });
+            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000 - 4_000);
+        }, 30_000);
+
+    it('a second Lower Price on a counter withdraws', async () => {
+        const { world, ship } = await shutOutHarness();
+        const date = dayWhere(true);
+        ship.components.set(GameDateComponent, date);
+        applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+        applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+        expect(ship.components.get(StellarHaggleComponent)!.get(PORT_ID))
+            .toEqual({ day: bribeDay(date), countered: false,
+                withdrawn: true });
+        applyHail(world, undefined, { kind: 'bribe', target: PORT });
+        expect(ship.components.get(CreditsComponent)!.credits)
+            .toEqual(100_000);
+    }, 30_000);
+
+    it('does not haggle over a price the pilot cannot pay, nor at a port '
+        + 'that is not refusing him', async () => {
+            const poor = await shutOutHarness();
+            poor.ship.components.set(CreditsComponent, { credits: 300 });
+            applyHail(poor.world, undefined,
+                { kind: 'lowerPrice', target: PORT });
+            expect(poor.ship.components.has(StellarHaggleComponent))
+                .toBeFalse();
+
+            const { world, ship } = await makeHarness();
+            ship.components.set(CreditsComponent, { credits: 10_000 });
+            ship.components.set(LegalRecordsComponent,
+                new Map([[SYSTEM, 0]]));
+            applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+            expect(ship.components.has(StellarHaggleComponent)).toBeFalse();
+        }, 30_000);
+
     it('is a deterministic function of synced state: two independent worlds '
         + 'reach the same verdict and the same price', async () => {
             const a = await shutOutHarness();
@@ -847,6 +946,27 @@ describe('StellarBribesComponent wiring', () => {
             const delta = world.resources.get(DeltaResource)!;
             expect(delta.componentDeltas.has(
                 StellarBribesComponent as never)).toBeTrue();
+        }, 30_000);
+
+    it('carries the planet haggle (StellarHaggle) through the serializer '
+        + 'and the delta stream too', async () => {
+            const { world } = await makeHarness();
+            const serializer = world.resources.get(SerializerResource)!;
+            const haggle = new Map([
+                ['nova:128', { day: '1177-1-2', countered: true,
+                    withdrawn: false }],
+                ['nova:133', { day: '1177-1-3', countered: false,
+                    withdrawn: true }],
+            ]);
+            const encoded = serializer.encodeComponent(StellarHaggleComponent,
+                haggle);
+            const decoded = serializer.decodeComponent('StellarHaggle',
+                encoded) as { _tag: string, right: [unknown, unknown] };
+            expect(decoded?._tag).toEqual('Right');
+            expect([...(decoded.right[1] as typeof haggle)])
+                .toEqual([...haggle]);
+            expect(world.resources.get(DeltaResource)!.componentDeltas.has(
+                StellarHaggleComponent as never)).toBeTrue();
         }, 30_000);
 });
 

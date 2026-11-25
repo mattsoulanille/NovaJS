@@ -34,7 +34,9 @@ import {
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
     NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText, planetBribePrice,
-    planetRefusesBribe, shipBribePrice, StellarClearance,
+    planetBribeRefused, shipBribePrice, StellarClearance, bribeDay,
+    laterStellarHaggle, lowerPlanetBribe, planetBribeAsk,
+    StellarHaggleState, stellarBribeDeclinedText,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -59,7 +61,7 @@ import {
 } from '../nova_plugin/ncb/index.js';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
-    stellarClearanceFor, StellarBribesComponent,
+    stellarClearanceFor, StellarBribesComponent, StellarHaggleComponent,
 } from '../nova_plugin/travel/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
@@ -379,6 +381,55 @@ export interface AssistReplies {
      * a ship; the price is read at the press, off the synced haggle.
      */
     fuelSale?: FuelSaleLines;
+    /**
+     * A refusing planet's bribe (reference "R7 planet bribe, wave 28"):
+     * what Lower Price needs to counter or withdraw. Present only on a
+     * planet's channel that names a price.
+     */
+    planetBribe?: PlanetBribeLines;
+}
+
+/** What a planet naming a bribe needs for its haggle, resolved when the
+ * channel opens (the Lower Price handler is synchronous). */
+export interface PlanetBribeLines {
+    /** The stellar's NOVA id, StellarHaggleComponent's key. */
+    planetId: string;
+    /** The asking price before any counter (hail.ts's planetBribePrice). */
+    price: number;
+    /** "No deal, cheapskate." (STR# 3002 30-34), on a withdrawal. */
+    withdrawn: string;
+    /** "You wish." / ... (STR# 3002 45-49), every later offer that day. */
+    refused: string;
+    /** STR# 2002, for the popup's "Pay us N credits.". */
+    miscStrings: readonly string[] | undefined;
+}
+
+/**
+ * The planet's offer for the price on the table: `lines.price`, or its
+ * 3/4 counter while `haggle` has one (hail.ts's planetBribeAsk), the same
+ * figure applyHail charges on Accept Price.
+ */
+export function planetBribeOffer(lines: PlanetBribeLines,
+    haggle: StellarHaggleState, credits: number):
+    NonNullable<HailContext['bribe']> {
+    const amount = planetBribeAsk(lines.price, haggle);
+    return {
+        amount, canAfford: credits >= amount && amount > 0,
+        purpose: 'landing',
+        demand: payMeText(lines.miscStrings, amount, 'us'),
+        withdrawn: lines.withdrawn,
+        refused: lines.refused,
+    };
+}
+
+/**
+ * Where this player stands with the planet's bribe today, as the
+ * simulation last mirrored it (StellarHaggleComponent on the player).
+ */
+export function stellarHaggleOf(player: Entity, planetId: string,
+    day: string): StellarHaggleState {
+    return laterStellarHaggle(undefined,
+        player.components.get(StellarHaggleComponent)?.get(planetId), day);
 }
 
 /** What a ship selling fuel says, resolved when the channel opens. */
@@ -663,7 +714,12 @@ export async function escortUpgradeOffer(toShip: string | null,
 
 export async function computeContext(world: World,
     gameData: SimulationGameDataInterface,
-    displayAssets?: DisplayAssetDataInterface):
+    displayAssets?: DisplayAssetDataInterface,
+    /**
+     * The planet haggles as this dialog's own presses left them (by NOVA
+     * id), which the simulation may not have mirrored back yet.
+     */
+    localStellarHaggle?: ReadonlyMap<string, StellarHaggleState>):
     Promise<{
         context: HailContext, target: string, isEscort: boolean,
         replies: AssistReplies,
@@ -1190,28 +1246,43 @@ export async function computeContext(world: World,
         const bargains = !clearance.cleared && planetTakesBribes(govt);
         // An ordinary planet sometimes turns Offer Bribe down flat (hail.ts's
         // planetRefusesBribe; reference "R7 bribe price above 1M, wave 27":
-        // "Yeah, right." at 2M, "You wish." at 100M, the STR# 3000 95-99
-        // refusals). The button is offered all the same and answers the
-        // refusal in the well, as a ship's Beg For Mercy that will not be
-        // bought does; applyHail draws the same verdict and charges nothing.
-        const refuses = bargains && planetRefusesBribe(planetTargetUuid,
-            player.uuid, !!govt?.flags.largerBribes,
-            player.entity.components.get(GameDateComponent));
+        // "Yeah, right." at 2M, "You wish." at 100M), and every planet
+        // refuses for the rest of the day once a Lower Price has made it
+        // withdraw (reference "R7 planet bribe, wave 28"), both answered
+        // from STR# 3002 45-49. The button is offered all the same and
+        // answers the refusal in the well, as a ship's Beg For Mercy that
+        // will not be bought does; applyHail draws the same verdict and
+        // charges nothing.
+        const date = player.entity.components.get(GameDateComponent);
+        const day = bribeDay(date);
+        const haggle = planetId !== undefined
+            ? laterStellarHaggle(localStellarHaggle?.get(planetId),
+                stellarHaggleOf(player.entity, planetId, day), day)
+            : laterStellarHaggle(undefined, undefined, day);
+        const refuses = bargains && planetBribeRefused(planetTargetUuid,
+            player.uuid, !!govt?.flags.largerBribes, haggle, date);
         const canBribe = bargains && !refuses;
-        const amount = planetBribePrice(planetTargetUuid, player.uuid, credits,
-            !!govt?.flags.largerBribes);
-        const mercyRefused = refuses
-            ? mercyRefusedText(await loadStrings(displayAssets,
-                HAIL_RESPONSE_TABLE), hashString(planetTargetUuid))
-            : undefined;
-        const bribe = canBribe
-            ? {
-                amount, canAfford: credits >= amount && amount > 0,
-                purpose: 'landing' as const,
-                demand: payMeText(miscStrings, amount, 'us'),
-            }
-            : undefined;
         const seed = hashString(planetTargetUuid);
+        // A line per hail of the day, like the original's eleven (all five
+        // lines of the group): seeded by the planet and the clock.
+        const refusedLine = stellarBribeDeclinedText(stellarStrings,
+            hashString(`${planetTargetUuid}:${world.resources
+                .get(SimulationTimeResource)?.time ?? 0}`));
+        const planetBribe: PlanetBribeLines | undefined =
+            canBribe && planetId !== undefined
+                ? {
+                    planetId,
+                    price: planetBribePrice(planetTargetUuid, player.uuid,
+                        credits, !!govt?.flags.largerBribes),
+                    withdrawn: stellarBribeRefusedText(stellarStrings, seed),
+                    refused: refusedLine,
+                    miscStrings,
+                }
+                : undefined;
+        const mercyRefused = refuses ? refusedLine : undefined;
+        const bribe = planetBribe
+            ? planetBribeOffer(planetBribe, haggle, credits)
+            : undefined;
         // "Channel open to Earth." — the reference's own opening line
         // (hail/hail_planet.png), from STR# 3002's channel-open group with the
         // stellar's name appended to the group's trailing space.
@@ -1267,7 +1338,9 @@ export async function computeContext(world: World,
                 ...(mercyRefused !== undefined ? { mercyRefused } : {}),
             },
             target: planetTargetUuid, isEscort: false,
-            replies: ASSIST_REPLIES_FALLBACK,
+            replies: planetBribe
+                ? { ...ASSIST_REPLIES_FALLBACK, planetBribe }
+                : ASSIST_REPLIES_FALLBACK,
         };
     }
 
@@ -1310,6 +1383,10 @@ export const HailDialogPlugin: Plugin = {
         const haggleWith = (target: string, playerUuid: string) =>
             laterFuelHaggle(localHaggle.get(target),
                 fuelHaggleOf(world, target, playerUuid));
+        // The same for a planet's bribe (by NOVA id): a counter or a
+        // withdrawal this dialog has shown before the simulation mirrors
+        // it. Display-local; the sim is the authority.
+        const localStellarHaggle = new Map<string, StellarHaggleState>();
         const dialog = new HailDialog(displayAssets, controls, {
             requestAssistance: () => {
                 // ONE call decides and answers: the ship's line comes back
@@ -1361,6 +1438,27 @@ export const HailDialogPlugin: Plugin = {
                 const sale = currentReplies.fuelSale;
                 if (!target || !player) {
                     return undefined;
+                }
+                // A PLANET's bribe (reference "R7 planet bribe, wave 28"):
+                // a 3/4 counter or a withdrawal, the same pure draw
+                // applyHail makes from the record.
+                const planet = currentReplies.planetBribe;
+                if (currentBribePurpose === 'landing' && planet) {
+                    const day = bribeDay(player.entity.components
+                        .get(GameDateComponent));
+                    const lowered = lowerPlanetBribe(laterStellarHaggle(
+                        localStellarHaggle.get(planet.planetId),
+                        stellarHaggleOf(player.entity, planet.planetId, day),
+                        day), target, player.uuid);
+                    localStellarHaggle.set(planet.planetId, lowered.haggle);
+                    world.emit(HailRequestEvent, {
+                        action: { kind: 'lowerPrice', target },
+                    });
+                    return lowered.outcome === 'counter'
+                        ? planetBribeOffer(planet, lowered.haggle,
+                            player.entity.components.get(CreditsComponent)
+                                ?.credits ?? 0)
+                        : undefined;
                 }
                 const lowered = lowerFuelPrice(
                     haggleWith(target, player.uuid), target, player.uuid);
@@ -1516,7 +1614,7 @@ export const HailDialogPlugin: Plugin = {
                     return;
                 }
                 const computed = await computeContext(world, simulationData,
-                    displayAssets);
+                    displayAssets, localStellarHaggle);
                 if (!computed) {
                     // A targeted ship with no context is one that does not
                     // answer at all (computeContext's cantHail case).

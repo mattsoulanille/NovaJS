@@ -707,6 +707,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    a call as a hit is. The derived wire schema fingerprint changes
 //    (0afe73ee3aebe863 -> a94a3bd8ec90e8fc), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-28 planet bribe haggle (reference "R7
+//    planet bribe, wave 28"). A new delta-registered player component,
+//    StellarHaggle (travel/planet_plugin.ts: the stellar's NOVA id ->
+//    {day, countered, withdrawn}), present only on a pilot who has pressed
+//    Lower Price on a planet's bribe. The existing `lowerPrice` input
+//    ({ kind: 'lowerPrice', target }) is now also accepted with a STELLAR
+//    target; no input kind or message kind changes. Sim-rule changes
+//    alongside: Lower Price on a planet's bribe counters with 3/4 or
+//    withdraws it, Accept Price pays the counter, and a withdrawal refuses
+//    every offer for the rest of the game day; a ship's final explosion
+//    hits an axis-aligned square of half-side twice its damage by the
+//    victim's centre, not a circle (no schema change: the blast's hull is
+//    already a polygon on the wire). The derived wire schema fingerprint
+//    changes (a94a3bd8ec90e8fc -> 4a0fcd76ceddd9b4), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

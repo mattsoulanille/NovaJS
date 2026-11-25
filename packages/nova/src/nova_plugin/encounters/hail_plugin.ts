@@ -37,16 +37,21 @@ import {
     fuelSalePrice,
     lowerFuelPrice,
     NO_FUEL_HAGGLE,
+    bribeDay,
+    lowerPlanetBribe,
+    planetBribeAsk,
     planetBribePrice,
-    planetRefusesBribe,
+    planetBribeRefused,
     planetTakesBribes,
+    StellarHaggleState,
+    stellarHaggleOn,
     shipBribePrice,
     shipHailResponse,
     shipIsFighting,
 } from '../reputation/index.js';
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
-    StellarBribesComponent, STELLAR_BRIBE_MS,
+    StellarBribesComponent, STELLAR_BRIBE_MS, StellarHaggleComponent,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
@@ -286,8 +291,9 @@ function playerNeed(player: Entity) {
 }
 
 /**
- * Buys temporary landing clearance at a stellar. Re-checks EVERYTHING against
- * synced state — the record carries intent only:
+ * A refusing stellar's bribe terms for `player` right now, or undefined
+ * when there is no deal to strike. Re-checks EVERYTHING against synced
+ * state — the record carries intent only:
  *
  *  1. The stellar must actually be refusing this player (the same pure
  *    `stellarClearanceFor` verdict the landing gate and the radar use). You
@@ -296,29 +302,29 @@ function playerNeed(player: Entity) {
  *    this govt will take bribes", or 0x8000 whose Bible text ends "...and
  *    their planets will always take bribes" (hail.ts's planetTakesBribes).
  *    An INDEPENDENT stellar has no government and so never bargains.
- *  3. An ordinary planet must not turn this offer down flat (hail.ts's
- *    planetRefusesBribe: about one in eight, reference "R7 bribe price
- *    above 1M, wave 27"; the dialog draws the same verdict).
- *  4. The player must be able to afford the demand: hail.ts's
- *    planetBribePrice (reference "R7 bribe price, wave 22": 3,000, or
- *    4,000 for a 0x8000 govt, growing with the cash above about 1M,
- *    capped by a third of it, never below 1,000; a pilot with less than
- *    the floor cannot pay).
+ *  3. The planet must not be turning offers down today: an ordinary
+ *    planet's fresh refusal (about one in eight, reference "R7 bribe price
+ *    above 1M, wave 27") or a haggle it withdrew from earlier the same day
+ *    (reference "R7 planet bribe, wave 28"); hail.ts's planetBribeRefused,
+ *    the same verdict the dialog draws.
  *
- * The effect is one map entry on the player: this stellar's NOVA id -> the
- * simulation time the clearance lapses. Time comes from TimeResource, never
- * Date.now, so the expiry is identical on every peer.
+ * The price is hail.ts's planetBribePrice (reference "R7 bribe price, wave
+ * 22": 3,000, or 4,000 for a 0x8000 govt, growing with the cash above about
+ * 1M, capped by a third of it, never below 1,000), or its 3/4 counter while
+ * one is on the table (planetBribeAsk).
  */
-function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
-    target: Entity, targetUuid: string) {
+function planetBribeTerms(world: World, player: Entity, playerUuid: string,
+    target: Entity, targetUuid: string): {
+        planetId: string, price: number, haggle: StellarHaggleState,
+        now: number,
+    } | undefined {
     const planetData = target.components.get(PlanetDataComponent);
     const planetId = target.components.get(PlanetComponent)?.id;
     const gameData = world.resources.get(SimulationGameDataResource);
     if (!planetData || planetId === undefined || !gameData) {
-        return;
+        return undefined;
     }
     const now = world.resources.get(TimeResource)?.time ?? 0;
-    const bribes = player.components.get(StellarBribesComponent);
     const clearance = stellarClearanceFor({
         planetData, gameData,
         govts: world.resources.get(GovtsResource),
@@ -327,32 +333,81 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
         outfits: player.components.get(OutfitsStateComponent),
         ranks: player.components.get(ActiveRanksComponent),
         missions: player.components.get(MissionsComponent),
-        bribes, planetId, now,
+        bribes: player.components.get(StellarBribesComponent),
+        planetId, now,
         systemId: world.resources.get(SystemIdResource),
     });
     if (clearance.cleared) {
-        return;
+        return undefined;
     }
     const govt = lookupGovt(world, planetData.govt ?? undefined);
     if (!planetTakesBribes(govt)) {
-        return;
+        return undefined;
     }
     const credits = player.components.get(CreditsComponent);
     if (!credits) {
+        return undefined;
+    }
+    const date = player.components.get(GameDateComponent);
+    const haggle = stellarHaggleOn(
+        player.components.get(StellarHaggleComponent)?.get(planetId),
+        bribeDay(date));
+    const largerBribes = !!govt?.flags.largerBribes;
+    if (planetBribeRefused(targetUuid, playerUuid, largerBribes, haggle,
+        date)) {
+        return undefined;
+    }
+    const price = planetBribeAsk(planetBribePrice(targetUuid, playerUuid,
+        credits.credits, largerBribes), haggle);
+    return { planetId, price, haggle, now };
+}
+
+/** Records `haggle` as the player's standing with `planetId`, mutating
+ * the existing map when there is one (so the delta/serializer sees the
+ * component it already knows) and materializing it otherwise. */
+function setStellarHaggle(player: Entity, planetId: string,
+    haggle: StellarHaggleState) {
+    const entry = {
+        day: haggle.day, countered: haggle.countered,
+        withdrawn: haggle.withdrawn,
+    };
+    const haggles = player.components.get(StellarHaggleComponent);
+    if (haggles) {
+        haggles.set(planetId, entry);
+    } else {
+        player.components.set(StellarHaggleComponent,
+            new Map([[planetId, entry]]));
+    }
+}
+
+/**
+ * Buys temporary landing clearance at a stellar, at the price
+ * {@link planetBribeTerms} names (the counter, when one is on the table),
+ * which the player must be able to afford: a pilot with less than the
+ * price cannot pay.
+ *
+ * The effect is one map entry on the player: this stellar's NOVA id -> the
+ * simulation time the clearance lapses. Time comes from TimeResource, never
+ * Date.now, so the expiry is identical on every peer. The haggle with the
+ * planet is over (its entry is dropped).
+ */
+function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
+    target: Entity, targetUuid: string) {
+    const terms = planetBribeTerms(world, player, playerUuid, target,
+        targetUuid);
+    const credits = player.components.get(CreditsComponent);
+    if (!terms || !credits) {
         return;
     }
-    if (planetRefusesBribe(targetUuid, playerUuid,
-        !!govt?.flags.largerBribes, player.components.get(GameDateComponent))) {
-        return;
-    }
-    const amount = planetBribePrice(targetUuid, playerUuid, credits.credits,
-        !!govt?.flags.largerBribes);
+    const { planetId, price: amount, now } = terms;
     if (amount <= 0 || credits.credits < amount) {
         return;
     }
     credits.credits -= amount;
+    player.components.get(StellarHaggleComponent)?.delete(planetId);
     // Mutate the existing map when there is one so the delta/serializer sees
     // the component it already knows about, and materialize it otherwise.
+    const bribes = player.components.get(StellarBribesComponent);
     const until = now + STELLAR_BRIBE_MS;
     if (bribes) {
         bribes.set(planetId, until);
@@ -360,6 +415,27 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
         player.components.set(StellarBribesComponent,
             new Map([[planetId, until]]));
     }
+}
+
+/**
+ * LOWER PRICE on a stellar's bribe (reference "R7 planet bribe, wave 28"):
+ * the planet counters with 3/4 or withdraws its offer, and always withdraws
+ * a counter (hail.ts's lowerPlanetBribe, the same pure draw the dialog
+ * shows). Only a planet naming a price right now can be haggled with, and
+ * not over a price the pilot cannot pay (the dialog offers no Lower Price
+ * then). A withdrawal makes the planet refuse every offer for the rest of
+ * the game day.
+ */
+function applyPlanetLowerPrice(world: World, player: Entity,
+    playerUuid: string, target: Entity, targetUuid: string) {
+    const terms = planetBribeTerms(world, player, playerUuid, target,
+        targetUuid);
+    const credits = player.components.get(CreditsComponent);
+    if (!terms || !credits || credits.credits < terms.price) {
+        return;
+    }
+    setStellarHaggle(player, terms.planetId,
+        lowerPlanetBribe(terms.haggle, targetUuid, playerUuid).haggle);
 }
 
 /**
@@ -378,11 +454,14 @@ export function applyHail(world: World, peerId: string | undefined,
     if (!target) {
         return;
     }
-    // A STELLAR was hailed, not a ship: the only action it accepts is a bribe
-    // for landing clearance.
+    // A STELLAR was hailed, not a ship: the only actions it accepts are a
+    // bribe for landing clearance and a Lower Price on it.
     if (target.components.has(PlanetComponent)) {
         if (action.kind === 'bribe') {
             applyPlanetBribe(world, player, found.uuid, target,
+                action.target);
+        } else if (action.kind === 'lowerPrice') {
+            applyPlanetLowerPrice(world, player, found.uuid, target,
                 action.target);
         }
         return;

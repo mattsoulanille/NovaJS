@@ -36,7 +36,7 @@ import {
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
     JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX, fuelSaleTerms,
-    planetRefusesBribe,
+    planetRefusesBribe, planetLowerPriceCounters, bribeDay,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -50,7 +50,7 @@ import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/i
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
-    StellarBribesComponent,
+    StellarBribesComponent, StellarHaggleComponent,
 } from '../nova_plugin/travel/index.js';
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
@@ -1258,6 +1258,8 @@ describe('computeContext: hailing a STELLAR', () => {
         gate?: 'hypergate' | 'wormhole',
         /** The pilot's game date (it seeds planetRefusesBribe). */
         date?: { day: number, month: number, year: number },
+        /** The pilot's haggle with this port (StellarHaggleComponent). */
+        haggle?: { day: string, countered: boolean, withdrawn: boolean },
     } = {}) {
         const gameData = new MockGameData();
         const govt = {
@@ -1294,6 +1296,10 @@ describe('computeContext: hailing a STELLAR', () => {
         if (opts.date) {
             player.addComponent(GameDateComponent, opts.date);
         }
+        if (opts.haggle) {
+            player.addComponent(StellarHaggleComponent,
+                new Map([['nova:128', opts.haggle]]));
+        }
         world.entities.set(PLAYER, player
             .addComponent(CreditsComponent, { credits: opts.credits ?? 10_000 })
             .addComponent(LegalRecordsComponent,
@@ -1310,6 +1316,7 @@ describe('computeContext: hailing a STELLAR', () => {
         const stellar: string[] = [];
         stellar[0] = 'Communications channel open to ';
         stellar[30] = 'Yeah, you wish.';
+        stellar[45] = 'Yeah, right.';
         stellar[40] =
             "We'll let you slip by the security barrier if you pay us.";
         const misc: string[] = [];
@@ -1403,10 +1410,83 @@ describe('computeContext: hailing a STELLAR', () => {
             // A plain (0x4000) govt's planet asks 3,000, here also a third
             // of 10,000 (reference "R7 bribe price, wave 22"), in its own
             // words.
+            // Lower Price's two answers ride along (reference "R7 planet
+            // bribe, wave 28"): the withdrawal (STR# 3002 30-34) and the
+            // refusal of every later offer (45-49).
             expect(result?.context.bribe).toEqual({
                 amount: 3000, canAfford: true, purpose: 'landing',
                 demand: 'Pay us 3,000 credits.',
+                withdrawn: 'Yeah, you wish.', refused: 'Yeah, right.',
             });
+            expect(result?.replies.planetBribe?.planetId).toBe('nova:128');
+            expect(result?.replies.planetBribe?.price).toBe(3000);
+        });
+
+    it('refuses every offer the rest of the day once the planet has '
+        + 'withdrawn (reference "R7 planet bribe, wave 28")', async () => {
+            const date = { day: 1, month: 1, year: 1177 };
+            expect(planetRefusesBribe(PLANET, PLAYER, false, date))
+                .toBeFalse();
+            const withdrawn = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true, date,
+                haggle: { day: bribeDay(date), countered: false,
+                    withdrawn: true },
+            });
+            const result = await computeContext(withdrawn.world,
+                withdrawn.gameData, stellarAssets());
+            expect(result?.context.bribe).toBeUndefined();
+            // STR# 3002 45-49 ("Yeah, right." here).
+            expect(result?.context.mercyRefused).toBe('Yeah, right.');
+            expect(commButtonSlots('planet', result!.context))
+                .toEqual(['greetings', 'bribe', 'close']);
+
+            // The next day (a jump moved the date) it names a price again.
+            const nextDay = { day: 2, month: 1, year: 1177 };
+            expect(planetRefusesBribe(PLANET, PLAYER, false, nextDay))
+                .toBeFalse();
+            const later = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true,
+                date: nextDay,
+                haggle: { day: bribeDay(date), countered: false,
+                    withdrawn: true },
+            });
+            const offer = await computeContext(later.world, later.gameData,
+                stellarAssets());
+            expect(offer?.context.bribe?.amount).toBe(3000);
+            expect(offer?.context.mercyRefused).toBeUndefined();
+        });
+
+    it('quotes the 3/4 counter while one is on the table', async () => {
+        const date = { day: 1, month: 1, year: 1177 };
+        const { world, gameData } = planetWorld({
+            minStatus: 0, record: -1, planetsTakeBribes: true, date,
+            haggle: { day: bribeDay(date), countered: true,
+                withdrawn: false },
+        });
+        const result = await computeContext(world, gameData, stellarAssets());
+        // 3,000 -> 2,200 (reference "R7 bribe price, wave 22").
+        expect(result?.context.bribe?.amount).toBe(2200);
+        expect(result?.context.bribe?.demand).toBe('Pay us 2,200 credits.');
+    });
+
+    it('the dialog\'s own Lower Price outranks the mirrored haggle',
+        async () => {
+            const date = { day: 1, month: 1, year: 1177 };
+            const { world, gameData } = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true, date,
+            });
+            const local = new Map([['nova:128', {
+                day: bribeDay(date), countered: false, withdrawn: true,
+            }]]);
+            const result = await computeContext(world, gameData,
+                stellarAssets(), local);
+            expect(result?.context.bribe).toBeUndefined();
+            expect(result?.context.mercyRefused).toBe('Yeah, right.');
+            // The draw a first Lower Price makes is a pure function of the
+            // planet, the pilot and the day.
+            expect(planetLowerPriceCounters(PLANET, PLAYER, bribeDay(date)))
+                .toBe(planetLowerPriceCounters(PLANET, PLAYER,
+                    bribeDay(date)));
         });
 
     it('an ordinary port that turns the bribe down flat still offers it, '
@@ -1427,12 +1507,12 @@ describe('computeContext: hailing a STELLAR', () => {
             const result = await computeContext(refused.world,
                 refused.gameData, stellarAssets());
             // The opening is the bargaining port's; the press answers
-            // from STR# 3000 95-99 (empty here: the pinned fallback).
+            // from STR# 3002 45-49 ("Yeah, right.", reference "R7 planet
+            // bribe, wave 28").
             expect(result?.context.body).toContain(
                 "We'll let you slip by the security barrier if you pay us.");
             expect(result?.context.bribe).toBeUndefined();
-            expect(result?.context.mercyRefused)
-                .toBe(MERCY_REFUSED_FALLBACK);
+            expect(result?.context.mercyRefused).toBe('Yeah, right.');
             expect(commButtonSlots('planet', result!.context))
                 .toEqual(['greetings', 'bribe', 'close']);
 
@@ -2702,6 +2782,66 @@ describe('a NEUTRAL ship\'s answers (reference H1 waves 16 and 17)', () => {
                 const next = hailPress(haggle, { kind: 'pay' }) as HailPage;
                 expect(next.phase).toBe('main');
                 expect(next.context.body).toBe("Hold on, I'll be right there.");
+            });
+
+        describe('a planet\'s bribe (reference "R7 planet bribe, wave 28")',
+            () => {
+                const landing: NonNullable<HailContext['bribe']> = {
+                    amount: 3000, canAfford: true, purpose: 'landing',
+                    demand: 'Pay us 3,000 credits.',
+                    withdrawn: 'No deal, cheapskate.',
+                    refused: 'Stop being an insulting little ferret.',
+                };
+                const port: HailPage = {
+                    phase: 'main',
+                    context: {
+                        variant: 'planet', heading: 'Earth\nStatus: Hostile',
+                        image: null, body: 'Channel open to Earth.',
+                        bribe: landing,
+                    },
+                };
+
+                it('Lower Price withdrawn: "No deal, cheapskate." in the '
+                    + 'well, and Offer Bribe now answers the refusal', () => {
+                        const haggle = hailPress(port, { kind: 'beg' }) as
+                            HailPage;
+                        expect(haggle.phase).toBe('haggle');
+                        const next = hailPress(haggle,
+                            { kind: 'lowerPrice' }) as HailPage;
+                        expect(next.phase).toBe('main');
+                        expect(next.context.body)
+                            .toBe('No deal, cheapskate.');
+                        expect(next.context.bribe).toBeUndefined();
+                        expect(commButtonSlots('planet', next.context))
+                            .toEqual(['greetings', 'bribe', 'close']);
+                        const offered = hailPress(next, { kind: 'beg' }) as
+                            HailPage;
+                        expect(offered.phase).toBe('main');
+                        expect(offered.context.body)
+                            .toBe('Stop being an insulting little ferret.');
+                    });
+
+                it('Lower Price countered: the popup stays with 3/4 '
+                    + '(3,000 -> 2,200), and Accept Price closes the '
+                    + 'channel', () => {
+                        const haggle = hailPress(port, { kind: 'beg' }) as
+                            HailPage;
+                        const counter = {
+                            ...landing, amount: 2200,
+                            demand: 'Pay us 2,200 credits.',
+                        };
+                        const next = hailPress(haggle,
+                            { kind: 'lowerPrice', counter }) as HailPage;
+                        expect(next.phase).toBe('haggle');
+                        expect(haggleText(next.context.bribe))
+                            .toBe('Pay us 2,200 credits.');
+                        expect(hailPress(next, { kind: 'pay' }))
+                            .toBe('close');
+                        // A fuel counter is not a planet's.
+                        expect((hailPress(haggle, { kind: 'lowerPrice',
+                            counter: offer }) as HailPage).phase)
+                            .toBe('main');
+                    });
             });
     });
 });

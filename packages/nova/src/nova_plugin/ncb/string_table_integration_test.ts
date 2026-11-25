@@ -33,7 +33,9 @@ import {
     FUEL_SALE_BAD_MOOD_FIRST_INDEX, FUEL_SALE_BAD_MOOD_FALLBACK,
     fuelOfferWithdrawnText, fuelSaleMoodText, PAY_ME_INDEX, payMeText,
     CANT_AFFORD_COUNT, CANT_AFFORD_FALLBACK, CANT_AFFORD_FIRST_INDEX,
-    cantAffordText, underFireRefusalText,
+    cantAffordText, underFireRefusalText, STELLAR_RESPONSE_TABLE,
+    STELLAR_BRIBE_REFUSED_FIRST_INDEX, STELLAR_BRIBE_DECLINED_FIRST_INDEX,
+    STELLAR_BRIBE_DECLINED_FALLBACK, stellarBribeDeclinedText,
 } from '../reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -57,6 +59,31 @@ describe('StringTable against real Nova data', () => {
         expect(table.name).toBe('misc strings');
         expect(table.strings.length).toBe(396);
     });
+
+    it('pins STR# 3002\'s planet-bribe answers: the withdrawal (30-34) and '
+        + 'the refusal (45-49), reference "R7 planet bribe, wave 28"',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const table = await gameData.data.StringTable.get(
+                STELLAR_RESPONSE_TABLE);
+            expect(table.strings[STELLAR_BRIBE_REFUSED_FIRST_INDEX + 2])
+                .toBe('No deal, cheapskate.');
+            expect(table.strings[STELLAR_BRIBE_REFUSED_FIRST_INDEX + 3])
+                .toBe('Your greed has been noted. Go away.');
+            const declined = table.strings.slice(
+                STELLAR_BRIBE_DECLINED_FIRST_INDEX,
+                STELLAR_BRIBE_DECLINED_FIRST_INDEX + 5);
+            expect(declined).toEqual([
+                'Yeah, right.', 'You wish.', 'Are you trying to insult us?',
+                "We don't take kindly to insults.",
+                'Stop being an insulting little ferret.',
+            ]);
+            expect(declined[0]).toBe(STELLAR_BRIBE_DECLINED_FALLBACK);
+            for (const seed of [0, 1, 2, 3, 4, 99]) {
+                expect(declined).toContain(
+                    stellarBribeDeclinedText(table.strings, seed));
+            }
+        });
 
     it('sources the map\'s "Uninhabited System" (333) and the target '
         + 'pane\'s "Disabled" / "Waiting" (346 / 347) from STR# 2002',

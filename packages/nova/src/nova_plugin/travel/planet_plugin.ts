@@ -167,6 +167,31 @@ export const StellarBribesComponent =
     new Component<StellarBribes>('StellarBribes');
 
 /**
+ * Where the pilot stands with each planet's bribe haggle today: the
+ * stellar's NOVA id (as StellarBribes) -> { day, countered, withdrawn }
+ * (reputation/hail.ts's StellarHaggleState; reference "R7 planet bribe,
+ * wave 28"). `countered` while the planet's 3/4 counter to a Lower Price
+ * is on the table (Accept Price then pays it); `withdrawn` once a Lower
+ * Price made it withdraw its offer, after which it refuses every offer
+ * for the rest of that game day. An entry for another day counts as none
+ * (hail.ts's stellarHaggleOn), so nothing prunes the map.
+ *
+ * Player state like StellarBribes: written only by applyHail on the tick
+ * every peer applies the lowerPrice / bribe record, serialized and
+ * delta-synced so the comm dialog quotes and refuses what the simulation
+ * will.
+ */
+export const StellarHaggleEntryType = t.type({
+    day: t.string,
+    countered: t.boolean,
+    withdrawn: t.boolean,
+});
+export const StellarHaggleType = map(t.string, StellarHaggleEntryType);
+export type StellarHaggle = t.TypeOf<typeof StellarHaggleType>;
+export const StellarHaggleComponent =
+    new Component<StellarHaggle>('StellarHaggle');
+
+/**
  * How long a bribe keeps a stellar's landing pad open, in ms. TUNABLE /
  * ASSUMPTION: the Bible quantifies neither the price nor the duration of a
  * planet bribe. Two minutes matches the ship-bribe reprieve (hail_plugin's
@@ -681,6 +706,7 @@ export const PlanetPlugin: Plugin = {
         world.addComponent(PlanetComponent);
         world.addComponent(PlanetDataComponent);
         world.addComponent(StellarBribesComponent);
+        world.addComponent(StellarHaggleComponent);
         registerEntityDeriver(world, {
             name: 'PlanetDataDeriver',
             provided: PlanetDataComponent,
@@ -696,6 +722,8 @@ export const PlanetPlugin: Plugin = {
         // delta-synced so the display's comm dialog and radar see it.
         world.resources.get(SerializerResource)?.addComponent(
             StellarBribesComponent, StellarBribesType);
+        world.resources.get(SerializerResource)?.addComponent(
+            StellarHaggleComponent, StellarHaggleType);
         world.resources.get(SerializerResource)?.addEvent(LandEvent, LandEventType);
         world.resources.get(SerializerResource)?.addEvent(
             LandingBlockedEvent, LandingBlockedEventType);
@@ -709,6 +737,9 @@ export const PlanetPlugin: Plugin = {
         });
         deltaMaker.addComponent(StellarBribesComponent, {
             componentType: StellarBribesType,
+        });
+        deltaMaker.addComponent(StellarHaggleComponent, {
+            componentType: StellarHaggleType,
         });
         world.addSystem(PlanetTargetProvider);
         world.addSystem(PlanetAnimationProvider);
