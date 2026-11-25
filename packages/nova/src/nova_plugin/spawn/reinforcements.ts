@@ -100,12 +100,21 @@ import {
  * not happen on the original).
  *
  * THE COOLDOWN: per pilot, per system (ReinforcementCallsComponent, on the
- * player's ship, saved with the pilot). A call stamps EVERY pilot in the
- * system with their own date's day number, so the whole room shares the
- * system's fleet: one call a day for everyone present. A pilot who comes
- * in later the same day, unstamped, can call it again (GUESS; the simplest
- * room-wide rule that survives a save/load: the system worlds do not
- * outlive a visit).
+ * player's ship, saved with the pilot). A call stamps ONLY the caller (the
+ * pilot whose hit, or whose flock's hit, called it) with his own date's
+ * day number: "per game day" is private to each player (Matthew's ruling,
+ * 2026-11-24), so player 1 calling the fleet on his date X does not stop
+ * player 2 calling it on player 2's own date X.
+ *
+ * Two pilots, one system (CHOICES, the simplest rule consistent with the
+ * ruling; the original is single-player):
+ *  - while ANY pilot's fleet is pending (called, not yet arrived), a hit by
+ *    another pilot calls nothing and stamps nobody: one fleet en route per
+ *    system, and player 2 keeps his day's call for later;
+ *  - once that fleet is present, nothing special: player 2's hit calls a
+ *    second fleet if HIS odds exceed MaxOdds, and the present fleet's
+ *    ships count among the friends (NPCs of the govt), so while they stand
+ *    it usually does not.
  *
  * THE ARRIVAL (ReinforcementArrivalSystem): reinforcementDelayMs after the
  * call the whole flët (spawnFleet: the lead and every escort, counts drawn
@@ -328,9 +337,9 @@ const OddsShipsQuery = new Query([UUID, ShipDataComponent,
     Optional(ShieldComponent), Optional(DisabledComponent),
     Optional(GovtComponent), Optional(NpcComponent)] as const);
 
-/** Every player ship: the cooldown's stamps and the inhibitor. */
+/** Every player ship: the inhibitor. */
 const PlayersQuery = new Query([UUID, ControlledByComponent,
-    Optional(GameDateComponent), Optional(OutfitsStateComponent)] as const);
+    Optional(OutfitsStateComponent)] as const);
 
 function shieldFraction(shield: { current: number, max: number } | undefined)
     : number {
@@ -410,7 +419,7 @@ export const ReinforcementCallSystem = new System({
             reinforcements.intervalDays)) {
             return;
         }
-        for (const [, , , outfits] of players) {
+        for (const [, , outfits] of players) {
             for (const [outfitId] of outfits ?? []) {
                 if (inhibitsReinforcements(
                     gameData.data.Outfit.getCached(outfitId), fleetGovt)) {
@@ -439,18 +448,15 @@ export const ReinforcementCallSystem = new System({
         }
         call.arriveAt = time.time + reinforcements.delayMs;
         call.caller = caller;
-        // The whole room shares the system's fleet: every pilot here is
-        // stamped with their own day. Replaced, never mutated (the value
-        // may be shared with a traded-in hull, PLAYER_STATE_COMPONENTS).
-        for (const [player] of players) {
-            const entity = getEntity(player);
-            if (!entity) {
-                continue;
-            }
-            const calls = new Map(
-                entity.components.get(ReinforcementCallsComponent) ?? []);
-            calls.set(systemId, today(entity));
-            entity.components.set(ReinforcementCallsComponent, calls);
+        // Only the caller is stamped, with his own day: the cooldown is
+        // private to each pilot (Matthew's ruling, 2026-11-24). Replaced,
+        // never mutated (the value may be shared with a traded-in hull,
+        // PLAYER_STATE_COMPONENTS).
+        if (callerEntity) {
+            const calls = new Map(callerEntity.components
+                .get(ReinforcementCallsComponent) ?? []);
+            calls.set(systemId, today(callerEntity));
+            callerEntity.components.set(ReinforcementCallsComponent, calls);
         }
     },
     // After the hit is applied (the odds read the victim's shield after

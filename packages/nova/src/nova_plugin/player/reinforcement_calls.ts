@@ -12,9 +12,10 @@ import { map } from 'nova_ecs/datatypes/map';
  * follows the pilot across hull changes (missions/mission_ship_change.ts
  * PLAYER_STATE_COMPONENTS), and is saved with the pilot (pilot/
  * save_game.ts `reinforcementCalls`), so the cooldown survives a jump, a
- * landing and a save/load as the date does. A call stamps EVERY pilot in
- * the system (the whole room shares the system's cooldown), each with
- * their own date; the call itself reads only the hitting pilot's entry.
+ * landing and a save/load as the date does. A call stamps only the
+ * CALLER (the pilot whose hit, or whose flock's hit, called it), with his
+ * own date: the cooldown is private to each player (Matthew's ruling,
+ * 2026-11-24), and the call reads only the calling pilot's entry.
  * Written inside the simulation (identically on every peer: synced state
  * in, synced state out), and delta-registered so the display's mirror,
  * which an in-flight save reads, carries it too.

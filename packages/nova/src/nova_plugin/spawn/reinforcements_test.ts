@@ -22,7 +22,7 @@ import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
 import { extractSaveData, restorePlayerState, SaveData } from '../pilot/index.js';
 import {
     ControlledByComponent, dayNumber, GameDateComponent,
-    ReinforcementCallsComponent,
+    PlayerEscortComponent, ReinforcementCallsComponent,
 } from '../player/index.js';
 import {
     DamagedEvent, FiringGroupComponent, makeShip, OutfitsStateComponent,
@@ -500,21 +500,83 @@ describe('reinforcement fleets in the sim', () => {
         expect(call().caller).toBe('player');
     });
 
-    it('a call stamps every pilot in the system, each with his own day',
-        async () => {
+    it('a call stamps only the caller: the other pilot calls his own on '
+        + 'his own day (Matthew\'s ruling)', async () => {
             await build();
             await scene();
-            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_26));
+            // The other pilot's date is the SAME day: the cooldown is
+            // private to each player all the same.
+            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_23));
             world.step();
             // Two Strength-100 pilots: the hitter alone is the enemy side.
             hit('trader1', 'player');
             expect(call().caller).toBe('player');
-            expect(calls('wingman')?.get(SYSTEM)).toBe(dayNumber(JUNE_26));
+            expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+            expect(calls('wingman')).toBeUndefined();
             advance(11_000);
             dismissFleet();
-            // So the other pilot cannot call a second one that day.
+            // The caller cannot call a second one that day...
+            hit('trader2', 'player');
+            expect(call()).toEqual({});
+            // ...but the other pilot can, and only he is stamped for it.
+            hit('trader2', 'wingman');
+            expect(call().caller).toBe('wingman');
+            expect(calls('wingman')?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+            advance(11_000);
+            expect(fleetShips().length).toBe(3);
+            expect(arrivals.length).toBe(2);
+        });
+
+    it('while one pilot\'s fleet is pending, another\'s hit calls nothing '
+        + 'and stamps nobody (CHOICE)', async () => {
+            await build();
+            await scene();
+            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_26));
+            world.step();
+            hit('trader1', 'player');
+            const pending = { ...call() };
+            hit('trader2', 'wingman');
+            expect(call()).toEqual(pending);
+            expect(calls('wingman')).toBeUndefined();
+            advance(11_000);
+            expect(fleetShips().length).toBe(3);
+            expect(arrivals.length).toBe(1);
+        });
+
+    it('once it is present, its ships are the govt\'s friends: another '
+        + 'pilot\'s hit is outnumbered (CHOICE)', async () => {
+            await build();
+            await scene();
+            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_26));
+            world.step();
+            hit('trader1', 'player');
+            advance(11_000);
+            expect(fleetShips().length).toBe(3);
+            // 100 against two traders and a lead and two guards.
             hit('trader2', 'wingman');
             expect(call()).toEqual({});
+            expect(calls('wingman')).toBeUndefined();
+        });
+
+    it('an escort\'s hit stamps the pilot it escorts (GUESS: it counts as '
+        + 'his)', async () => {
+            await build();
+            await scene(WEAK_HULL);
+            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_26));
+            await addShip('escort', PLAYER_HULL, 50, 0, ship => {
+                ship.components.set(PlayerEscortComponent, {
+                    player: 'player', parent: 'player', deal: { kind: 'none' },
+                });
+            });
+            world.step();
+            // A Strength-1 pilot with a Strength-100 escort: 101 against
+            // 46.5 + 50.
+            hit('trader1', 'escort');
+            expect(call().caller).toBe('player');
+            expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+            expect(calls('wingman')).toBeUndefined();
+            expect(world.entities.get('escort')!.components
+                .has(ReinforcementCallsComponent)).toBeFalse();
         });
 
     it('the fleet does not fill the traffic\'s slots and never leaves',
