@@ -308,9 +308,9 @@ export default {
 /**
  * Wave-30 experiments (docs/reference_experiments.md, "... wave 30").
  * Nothing retired (no mïsn needed: the mïsn ids are still used up). sÿst
- * 1254-1276, spöb 1690-1742, shïp 545-546, düde 475-476, flët 314-316.
- * Map row y = -2160 (x -800 .. 80). The next free ids: sÿst 1277+, spöb
- * 1743+ (spares 1495, 1496, 1499), shïp 547+, düde 477+, ränk 205+, mïsn
+ * 1254-1277, spöb 1690-1743, shïp 545-546, düde 475-476, flët 314-316.
+ * Map row y = -2160 (x -800 .. 120). The next free ids: sÿst 1278+, spöb
+ * 1744+ (spares 1495, 1496, 1499), shïp 547+, düde 477+, ränk 205+, mïsn
  * NONE (retire an old kit mission to add one), gövt 297 and below, flët
  * 317+, wëap 295+, oütf 467+, bits 9250+.
  *
@@ -344,6 +344,10 @@ export default {
  *      Kit Hulk Ammo (wëap 289 with 5 rounds; düde 475; sÿst 1274 Kit Board
  *      Ammo, port spöb 1739) and shïp 546 Kit Hulk Crew 50 (crew 50; düde
  *      476; sÿst 1275 Kit Board Crew, port 1740).
+ *  R   (added during the wave) sÿst 1277 Kit Bribe Freighters (gövt 304,
+ *      port spöb 1743, MinStatus 0): wave 22's düde 451 AI 1 freighters as
+ *      its only traffic (a 0x2000 freighter's Beg For Mercy above 20M; they
+ *      were not hostile at record -50).
  *  N   NPC fleets of 10 / 12 / 13 escorts (F1c): flët 314 Kit Disc Fleet 10
  *      (red x3, green x3, blue x2, yellow x2), 315 Kit Disc Fleet 12 (three
  *      of each), 316 Kit Disc Fleet 13 (red x4, three of the others), as
