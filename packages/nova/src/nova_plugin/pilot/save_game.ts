@@ -30,6 +30,7 @@ import {
     PendingAutoAbortShipsComponent,
     PendingAutoAbortShipsType,
     PlayerNamesComponent,
+    ReinforcementCallsComponent,
     sanitizeShipName,
 } from '../player/index.js';
 import { PlayerEscortComponent } from '../player/index.js';
@@ -292,6 +293,14 @@ export const SaveData = t.intersection([
         // on the way out and on the way in, since a save file is as
         // untrusted as any typed name.
         shipName: t.string,
+        // The day (calendar.ts dayNumber) this pilot last saw each
+        // system's reinforcement fleet called, keyed by sÿst id
+        // (ReinforcementCallsComponent; spawn/reinforcements.ts reads it
+        // for the sÿst ReinfIntrval cooldown). Optional, with no
+        // migration, like `shipName`: absent means no fleet was ever
+        // called, which is what an empty list means, so every older save
+        // reads correctly without one. Written only when non-empty.
+        reinforcementCalls: t.array(t.tuple([t.string, t.number])),
         // A v5-or-older save's PER-GÖVT legal records, parked here by the
         // v5 -> v6 migration (which cannot see game data) for
         // restorePlayerState to seed into `legalRecords` with the
@@ -416,6 +425,12 @@ export function extractSaveData(entity: Entity, systemId: string,
     if (shipName !== undefined) {
         save.shipName = shipName;
     }
+    const calls = entity.components.get(ReinforcementCallsComponent);
+    if (calls && calls.size > 0) {
+        // Sorted so the same calls always write the same bytes.
+        save.reinforcementCalls = [...calls]
+            .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    }
     return save;
 }
 
@@ -539,6 +554,14 @@ export function restorePlayerState(entity: Entity, save: SaveData,
         save.cronStates.map(([id, state]) => [id, { ...state }])));
     entity.components.set(LegalRecordsComponent,
         restoredLegalRecords(save, geography));
+    // Replaced or removed, so a restore over a live entity never keeps
+    // the previous pilot's cooldowns.
+    if (save.reinforcementCalls && save.reinforcementCalls.length > 0) {
+        entity.components.set(ReinforcementCallsComponent,
+            new Map(save.reinforcementCalls));
+    } else {
+        entity.components.delete(ReinforcementCallsComponent);
+    }
     // Every save this build writes and every pre-v3 save it migrates has a
     // 'kills' entry, but the codec only requires `[string, number]` pairs,
     // so a v3 payload hand-edited (or written by another tool) to a list

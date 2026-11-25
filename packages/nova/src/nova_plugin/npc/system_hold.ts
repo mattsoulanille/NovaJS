@@ -105,6 +105,14 @@ import { openEnum } from '../../common/open_enum.js';
  *                on its first think, one tick after it spawned, with a
  *                departure timer that had been suppressed for the next
  *                thirty thousand years.
+ *   'reinforcement' the ship came in with a system's reinforcement fleet
+ *                (spawn/reinforcements.ts). Never released: the fleet
+ *                stays for the rest of the visit (GUESS, reference "R19
+ *                reinforcement fleets, wave 19": one stayed 2.5+ minutes,
+ *                until the player jumped out, longer than any ordinary
+ *                AI 3 ship). It is also how the traffic count tells the
+ *                fleet from the system's traffic (npc_spawn_plugin's
+ *                trafficCount).
  *
  * BELT AND BRACES ON THE 'rescue' SIDE, deliberately. A rescue target is
  * already pinned twice over — it spawns as a HULK, and a disabled ship
@@ -132,7 +140,7 @@ import { openEnum } from '../../common/open_enum.js';
  * so an unknown one is harmless once decoded.
  */
 export const SystemHoldReasonType = openEnum('SystemHoldReason',
-    ['shipOffer', 'rescue', 'missionGoal'] as const);
+    ['shipOffer', 'rescue', 'missionGoal', 'reinforcement'] as const);
 export type SystemHoldReason = t.TypeOf<typeof SystemHoldReasonType>;
 export const SystemHoldType = t.type({
     /** Why this ship is staying (see the module comment). */

@@ -536,7 +536,7 @@ const DamagerQuery = new Query([Optional(ProjectileDataComponent),
  * asteroid ejects sub-asteroids and scoopable resource-boxes, both
  * averaged ±50% per the Bible.
  */
-const AsteroidDamageSystem = new System({
+export const AsteroidDamageSystem = new System({
     name: 'AsteroidDamageSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, AsteroidComponent, AsteroidDataComponent,

@@ -39,8 +39,8 @@ export interface SystemPersonChance {
  * in." (The oütf ModType 44 "reinforcement inhibitor" —
  * OutfitData.reinforcementInhibitorClass — suppresses it.)
  *
- * PARSED ONLY: nothing in the game calls in reinforcements yet (see the
- * gameplay feature request, tracker issue #353).
+ * Read by nova's spawn/reinforcements.ts (the call, the delay, the
+ * cooldown; reference "R19 reinforcement fleets, wave 19").
  */
 export interface SystemReinforcements {
     /** Global flët id of the reinforcement fleet (ReinfFleet 128+). */

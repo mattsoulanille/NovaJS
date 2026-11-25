@@ -358,8 +358,8 @@ export interface OutfitData extends BaseData {
     iffScramblerClass: number | null,
     /**
      * Govt class whose reinforcements this outfit inhibits (ModType 44), or -1
-     * for all. null otherwise. Reinforcement summoning does not exist yet, so
-     * this is plumbed but unconsumed.
+     * for all. null otherwise. Read by nova's spawn/reinforcements.ts
+     * (inhibitsReinforcements).
      */
     reinforcementInhibitorClass: number | null,
     /**

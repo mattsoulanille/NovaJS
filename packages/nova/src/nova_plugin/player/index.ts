@@ -23,6 +23,7 @@ export * from './player_escort.js';
 export * from './player_names.js';
 export * from './player_ship_plugin.js';
 export * from './player_state_plugin.js';
+export * from './reinforcement_calls.js';
 export * from './ship_control.js';
 
 import { Domain, domainPlugin } from '../core/index.js';

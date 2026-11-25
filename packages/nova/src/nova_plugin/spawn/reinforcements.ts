@@ -1,0 +1,564 @@
+import * as t from 'io-ts';
+import { GovtData } from 'novadatainterface/govt_data';
+import { OutfitData } from 'novadatainterface/outfit_data';
+import { SystemData } from 'novadatainterface/system_data';
+import { Emit, Entities, GetWorld, UUID } from 'nova_ecs/arg_types';
+import { Component } from 'nova_ecs/component';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Entity } from 'nova_ecs/entity';
+import { EcsEvent } from 'nova_ecs/events';
+import { Optional } from 'nova_ecs/optional';
+import { Plugin } from 'nova_ecs/plugin';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
+import { Query } from 'nova_ecs/query';
+import { Resource } from 'nova_ecs/resource';
+import { System } from 'nova_ecs/system';
+import { World } from 'nova_ecs/world';
+import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
+import {
+    GovtComponent, IdFactoryResource, loadWithRetries,
+    SimulationGameDataResource, SystemIdResource,
+} from '../core/index.js';
+import {
+    flockPlayer, NpcAggressionSystem, NpcComponent, responsibleShip,
+    SystemHoldComponent,
+} from '../npc/index.js';
+import {
+    ControlledByComponent, dayNumber, GameDateComponent,
+    ReinforcementCallsComponent,
+} from '../player/index.js';
+import { alliedEitherWay, effectiveStrength } from '../reputation/index.js';
+import {
+    DamagedEvent, DisabledComponent, KnockbackSystem, OutfitsStateComponent,
+    ShieldComponent, ShipDataComponent,
+} from '../ship/index.js';
+import { AsteroidDamageSystem } from '../combat/index.js';
+import {
+    FleetSpawn, NpcRespawnSystem, spawnFleet, stageFleetSpawn,
+} from './npc_spawn_plugin.js';
+
+/**
+ * ============================================================================
+ * Reinforcement fleets (sÿst ReinfFleet / ReinfTime / ReinfIntrval)
+ * ============================================================================
+ *
+ * The Bible (sÿst): "If ships allied with the reinforcement fleet's
+ * government are under attack and the combat odds against them exceed the
+ * MaxOdds field of the reinforcement fleet's government, the reinforcement
+ * fleet will be called in." ReinfTime is the delay ("30 = one second"),
+ * ReinfIntrval the days before the fleet is available again (0: every
+ * day). gövt MaxOdds: the odds are "the strengths of the ship's enemies
+ * (... modified from between 30% and 100% of that value depending on the
+ * ship's present shield stat)" against "the sum of the strength of the
+ * ship's friends"; 100 is 1-to-1. gövt MediumName is "primarily used in
+ * the string 'Sensors detect xxx reinforcement fleet approaching.'"; oütf
+ * ModType 44 is a "reinforcement inhibitor".
+ *
+ * Measured on the original (docs/reference_experiments.md, "R19
+ * reinforcement fleets, wave 19"):
+ *  - the PLAYER's first hit on a Strength-50 trader of the fleet's govt
+ *    (MaxOdds 100) called it for a Strength-100 player and not for a
+ *    Strength-1 one: 100 against the two 50s, the hit one counting a
+ *    little less with its shield down (93% of 50 at 90% shield), passes;
+ *  - "Sensors detect <MediumName> reinforcement fleet approaching." is said
+ *    when the fleet ARRIVES, ReinfTime after the call: 10 s for 300, 23-25 s
+ *    (twice) for 900; the whole flët comes in about 1,800 px out;
+ *  - once a day: no second call in 8 more minutes of the same visit, and
+ *    one on each of two following days (ReinfIntrval 1);
+ *  - an NPC wearing a warship of the govt down to 27% shield did not call
+ *    it, nor did 311's warships call it for a pilot holding a ränk 0x0400
+ *    of their govt under attack;
+ *  - the fleet stayed 2.5+ minutes, until the player left; it fired on the
+ *    player in a long fight (1506) and stayed neutral after two hits whose
+ *    trader had left (1507); a new trader came in while it was there.
+ *
+ * So (GUESSES marked; docs/npc_behavior_gaps.md "Reinforcement fleets"):
+ *
+ * THE CALL (ReinforcementCallSystem, off DamagedEvent after the damage is
+ * applied): a hit whose responsible ship is a PLAYER's ship, or a ship of
+ * a player's flock (GUESS: an escort's hit counts as its player's), on an
+ * NPC that is not disabled (GUESS: a hulk is out of the fight) and not in
+ * a player's flock, of the fleet's govt or one allied with it either way
+ * (GUESS for allies: the Bible's "ships allied with"), calls the fleet when
+ *  - no call is pending in this system;
+ *  - the caller's own cooldown allows it (reinforcementAvailable);
+ *  - no player in the system carries an inhibitor for the fleet's govt
+ *    (inhibitsReinforcements; GUESS, unmeasured: the Bible's "while the
+ *    player is in the system and has this outfit", read for any player in
+ *    a room);
+ *  - the odds exceed MaxOdds (reinforcementOddsCall): the enemies are the
+ *    caller's ship and its flock, the friends every NPC of the fleet's
+ *    govt or an ally in the system, neither disabled, each at
+ *    effectiveStrength (GUESSES: the whole system, no range; "exceed" as
+ *    strictly greater; the shield after the hit).
+ * An NPC's hit never calls it, and nothing calls it ON a player's behalf
+ * (the ränk 0x0400 "call in reinforcements on the player's behalf" did
+ * not happen on the original).
+ *
+ * THE COOLDOWN: per pilot, per system (ReinforcementCallsComponent, on the
+ * player's ship, saved with the pilot). A call stamps EVERY pilot in the
+ * system with their own date's day number, so the whole room shares the
+ * system's fleet: one call a day for everyone present. A pilot who comes
+ * in later the same day, unstamped, can call it again (GUESS; the simplest
+ * room-wide rule that survives a save/load: the system worlds do not
+ * outlive a visit).
+ *
+ * THE ARRIVAL (ReinforcementArrivalSystem): reinforcementDelayMs after the
+ * call the whole flët (spawnFleet: the lead and every escort, counts drawn
+ * as the traffic's are) comes in REINFORCEMENT_ARRIVAL_DISTANCE from the
+ * caller on a random bearing, heading for him at the lead's top speed
+ * (GUESS: the bearing and the kinematics; around the system's centre when
+ * the caller has left), and every player in the system is told
+ * (ReinforcementArrivalEvent; the display's status line). Each ship is
+ * held in the system ('reinforcement', npc/system_hold.ts: GUESS, it
+ * stays for the visit) and is NOT traffic (npc_spawn_plugin's
+ * trafficCount; the new trader that came in beside it). Each takes the
+ * caller as its aggressor when the caller is still fighting the govt's
+ * side, i.e. some NPC of the fleet's govt or an ally holds the caller or
+ * his flock as ITS aggressor (GUESS, explaining 1506 against 1507);
+ * otherwise its govt's politics decide, as for any ship of it.
+ *
+ * Determinism: synced components, staged caches (the flët's ships, its
+ * govt, every gövt and ränk: makeSystem), the seeded Random (one draw for
+ * the bearing, then the escort counts), sums in uuid order.
+ */
+
+/** ReinfTime's unit: "A value of 30 = one second". */
+export const REINFORCEMENT_FRAMES_PER_SECOND = 30;
+
+/**
+ * The longest delay, ms. GUESS, fitted: ReinfTime 300 came in 10 s, the
+ * Bible's scale exactly, but 900 in 23-25 s (twice), not 30. A cap at 24 s
+ * fits both and keeps the Bible's scale for every ReinfTime up to 720; a
+ * line through the two points (3 s + ReinfTime / 43) fits them as well
+ * and differs from 600 up (cap: 600 -> 20 s, 1800 -> 24 s; line: 17 s,
+ * 45 s), which is the measurement that would tell them apart. The cap is
+ * the brief's reading. 109 of the 344 stock systems with a fleet set
+ * ReinfTime over 720.
+ */
+export const REINFORCEMENT_MAX_DELAY_MS = 24_000;
+
+/** How far from the caller the fleet comes in, px ("R19": a blip 1,770
+ * px south of the player, flying in). */
+export const REINFORCEMENT_ARRIVAL_DISTANCE = 1_800;
+
+/**
+ * The scenario's STR# with the arrival line's two halves: stock STR# 2002
+ * "misc strings", entries 306 "Sensors detect" and 307 "reinforcement
+ * fleet approaching." (1-based; 305 and 306 0-based, StringTableData
+ * order), with the govt's MediumName between them.
+ */
+export const REINFORCEMENT_STRING_TABLE = 'nova:2002';
+export const REINFORCEMENT_LINE_PREFIX_INDEX = 305;
+export const REINFORCEMENT_LINE_SUFFIX_INDEX = 306;
+
+/** The entity that carries the system's ReinforcementCall state. */
+export const REINFORCEMENTS_UUID = 'reinforcements';
+
+/** The delay between the call and the fleet's arrival, ms, for a sÿst
+ * ReinfTime of `delayFrames` (see REINFORCEMENT_MAX_DELAY_MS). */
+export function reinforcementDelayMs(delayFrames: number): number {
+    return Math.min(REINFORCEMENT_MAX_DELAY_MS,
+        Math.max(0, delayFrames) * 1000 / REINFORCEMENT_FRAMES_PER_SECOND);
+}
+
+/**
+ * Whether a pilot who last saw the fleet called on day `lastDay`
+ * (undefined: never) may call it on day `today`, with sÿst ReinfIntrval
+ * `intervalDays`. 0 is "available every day" and N "that number of days"
+ * after the call (Bible), so 0 and 1 both mean the next day (measured for
+ * 1: a call on each of two following days; GUESS for N over 1, unmeasured).
+ * A date earlier than the call (a pilot restored from an older save) does
+ * not hold the fleet back.
+ */
+export function reinforcementAvailable(lastDay: number | undefined,
+    today: number, intervalDays: number): boolean {
+    if (lastDay === undefined || today < lastDay) {
+        return true;
+    }
+    return today - lastDay >= Math.max(1, intervalDays);
+}
+
+/**
+ * Whether the odds against the govt's side call the fleet: the enemies'
+ * summed effective strength over the friends', x 100, EXCEEDS `maxOdds`
+ * (the Bible's "exceed"; 100 is 1-to-1). With no friend left standing any
+ * enemy at all does. Measured ("R19"): 100 against 46.5 + 50 calls it, 1
+ * against 100 does not.
+ */
+export function reinforcementOddsCall(maxOdds: number,
+    enemyStrength: number, friendStrength: number): boolean {
+    if (enemyStrength <= 0) {
+        return false;
+    }
+    if (friendStrength <= 0) {
+        return true;
+    }
+    return enemyStrength / friendStrength * 100 > maxOdds;
+}
+
+/**
+ * Whether an outfit inhibits `govt`'s reinforcements: oütf ModType 44, "a
+ * govt class value. any govt with this value in its Class1-4 fields will
+ * be prevented from calling in reinforcements ... setting this field to -1
+ * will inhibit reinforcements for all ships regardless of govt" (stock: the
+ * Transmission Jammer, oütf 441, -1).
+ */
+export function inhibitsReinforcements(outfit: OutfitData | undefined,
+    govt: GovtData): boolean {
+    const inhibits = outfit?.reinforcementInhibitorClass;
+    if (inhibits === undefined || inhibits === null) {
+        return false;
+    }
+    return inhibits === -1 || govt.classes.includes(inhibits);
+}
+
+/** The arrival line: "<prefix> <name> <suffix>", the halves from the
+ * scenario's STR# (REINFORCEMENT_STRING_TABLE), the Bible's wording when
+ * the scenario's table does not have them. */
+export function reinforcementArrivalMessage(misc: readonly string[],
+    name: string): string {
+    const prefix = misc[REINFORCEMENT_LINE_PREFIX_INDEX]?.trim()
+        || 'Sensors detect';
+    const suffix = misc[REINFORCEMENT_LINE_SUFFIX_INDEX]?.trim()
+        || 'reinforcement fleet approaching.';
+    return `${prefix} ${name} ${suffix}`;
+}
+
+/** The name the line gives a govt: its MediumName, else its name. */
+export function reinforcementGovtName(govt: GovtData): string {
+    return govt.mediumName.trim() || govt.name;
+}
+
+/**
+ * The system's reinforcement fleet, staged at genesis (makeSystem): static
+ * data, set identically on every peer, never mutated.
+ */
+export interface ReinforcementFleet {
+    /** The flët, staged (stageFleetSpawn). */
+    fleet: FleetSpawn;
+    /** The flët's govt: whose MaxOdds, allies and MediumName apply. */
+    govt: string;
+    /** reinforcementDelayMs of the sÿst ReinfTime. */
+    delayMs: number;
+    /** sÿst ReinfIntrval. */
+    intervalDays: number;
+}
+export const ReinforcementFleetResource =
+    new Resource<ReinforcementFleet>('ReinforcementFleet');
+
+/**
+ * A system's pending call (synced; on the REINFORCEMENTS_UUID entity).
+ * Both fields absent: nothing called.
+ */
+export const ReinforcementCallType = t.partial({
+    /** Sim time (ms) the called fleet arrives. */
+    arriveAt: t.number,
+    /** The player ship whose hit called it. */
+    caller: t.string,
+});
+export type ReinforcementCall = t.TypeOf<typeof ReinforcementCallType>;
+export const ReinforcementCallComponent =
+    new Component<ReinforcementCall>('ReinforcementCall');
+
+/**
+ * Emitted, untargeted, when a reinforcement fleet arrives. The display
+ * puts "Sensors detect <name> reinforcement fleet approaching." on the
+ * status line of every player in the system. `name` is the govt's
+ * MediumName (reinforcementGovtName), read from the sim's staged govt so
+ * the display needs no govt data of its own.
+ */
+export interface ReinforcementArrivalEventData {
+    govt: string;
+    name: string;
+}
+export const ReinforcementArrivalEventType = t.type({
+    govt: t.string,
+    name: t.string,
+});
+export const ReinforcementArrivalEvent =
+    new EcsEvent<ReinforcementArrivalEventData>('ReinforcementArrivalEvent');
+registerSimulationBridgeEvent({
+    event: ReinforcementArrivalEvent,
+    includeEntityUuids: false,
+});
+
+/**
+ * Stages a system's reinforcement fleet: undefined when it has none
+ * (ReinfFleet 0 / -1 parse as null), or when its flët has no govt (no
+ * MaxOdds to call it by). Genesis only.
+ */
+export async function stageReinforcements(world: World,
+    systemData: SystemData): Promise<ReinforcementFleet | undefined> {
+    const reinforcements = systemData.reinforcements;
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!reinforcements || !gameData) {
+        return undefined;
+    }
+    const fleetData = await loadWithRetries(
+        () => gameData.data.Fleet.get(reinforcements.fleet),
+        `reinforcement flët ${reinforcements.fleet}`);
+    if (!fleetData.govt) {
+        return undefined;
+    }
+    const fleet = await stageFleetSpawn(world, fleetData);
+    return {
+        fleet,
+        govt: fleetData.govt,
+        delayMs: reinforcementDelayMs(reinforcements.delayFrames),
+        intervalDays: reinforcements.regenerationDays,
+    };
+}
+
+/** Installs a staged reinforcement fleet (stageReinforcements) in a
+ * world being built: the static resource and the call's state entity. */
+export function installReinforcements(world: World,
+    reinforcements: ReinforcementFleet): void {
+    world.resources.set(ReinforcementFleetResource, reinforcements);
+    world.entities.set(REINFORCEMENTS_UUID, new Entity('reinforcements')
+        .addComponent(ReinforcementCallComponent, {}));
+}
+
+/** Every ship, for the odds' sums. */
+const OddsShipsQuery = new Query([UUID, ShipDataComponent,
+    Optional(ShieldComponent), Optional(DisabledComponent),
+    Optional(GovtComponent), Optional(NpcComponent)] as const);
+
+/** Every player ship: the cooldown's stamps and the inhibitor. */
+const PlayersQuery = new Query([UUID, ControlledByComponent,
+    Optional(GameDateComponent), Optional(OutfitsStateComponent)] as const);
+
+function shieldFraction(shield: { current: number, max: number } | undefined)
+    : number {
+    if (!shield || shield.max <= 0) {
+        return 1;
+    }
+    return shield.current / shield.max;
+}
+
+function byUuid<T extends readonly [string, ...unknown[]]>(rows: readonly T[])
+    : T[] {
+    return [...rows].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+}
+
+/** The pilot's day number (calendar.ts), 0 for a ship with no date. */
+function today(entity: Entity | undefined): number {
+    const date = entity?.components.get(GameDateComponent);
+    return date ? dayNumber(date) : 0;
+}
+
+/** Whether `govt` (by id) is on the fleet govt's side: the same govt or
+ * an ally either way (local_law.ts's alliedEitherWay). */
+function onFleetSide(govt: string | undefined, fleetGovt: GovtData,
+    getGovt: (id: string) => GovtData | undefined): boolean {
+    if (govt === undefined) {
+        return false;
+    }
+    if (govt === fleetGovt.id) {
+        return true;
+    }
+    const data = getGovt(govt);
+    return data !== undefined && alliedEitherWay(data, fleetGovt);
+}
+
+/**
+ * Calls the system's reinforcement fleet when a player's hit on an NPC of
+ * its govt's side turns the odds (see the module comment).
+ */
+export const ReinforcementCallSystem = new System({
+    name: 'ReinforcementCallSystem',
+    events: [DamagedEvent],
+    args: [DamagedEvent, NpcComponent, UUID, Entities,
+        Optional(GovtComponent), Optional(DisabledComponent), TimeResource,
+        SimulationGameDataResource, Optional(ReinforcementFleetResource),
+        Optional(SystemIdResource), OddsShipsQuery, PlayersQuery] as const,
+    step({ damager }, _npc, uuid, entities, govt, disabled, time, gameData,
+        reinforcements, systemId, ships, players) {
+        if (!reinforcements || systemId === undefined || disabled
+            || govt === undefined) {
+            return;
+        }
+        const call = entities.get(REINFORCEMENTS_UUID)
+            ?.components.get(ReinforcementCallComponent);
+        if (!call || call.arriveAt !== undefined) {
+            return;
+        }
+        const getEntity = (id: string) => entities.get(id);
+        const source = responsibleShip(entities.get(damager), getEntity);
+        if (source === undefined) {
+            return;
+        }
+        const caller = getEntity(source)?.components.has(ControlledByComponent)
+            ? source : flockPlayer(source, getEntity);
+        if (caller === undefined || flockPlayer(uuid, getEntity) !== undefined) {
+            return;
+        }
+        // getCached is deterministic here: makeSystem stages every gövt.
+        const getGovt = (id: string) => gameData.data.Govt.getCached(id);
+        const fleetGovt = getGovt(reinforcements.govt);
+        if (!fleetGovt || !onFleetSide(govt.id, fleetGovt, getGovt)) {
+            return;
+        }
+        const callerEntity = getEntity(caller);
+        const lastDay = callerEntity?.components
+            .get(ReinforcementCallsComponent)?.get(systemId);
+        if (!reinforcementAvailable(lastDay, today(callerEntity),
+            reinforcements.intervalDays)) {
+            return;
+        }
+        for (const [, , , outfits] of players) {
+            for (const [outfitId] of outfits ?? []) {
+                if (inhibitsReinforcements(
+                    gameData.data.Outfit.getCached(outfitId), fleetGovt)) {
+                    return;
+                }
+            }
+        }
+        let enemies = 0;
+        let friends = 0;
+        for (const [ship, shipData, shield, shipDisabled, shipGovt, npc]
+            of byUuid(ships)) {
+            if (shipDisabled) {
+                continue;
+            }
+            const strength = effectiveStrength(shipData.strength,
+                shieldFraction(shield));
+            if (ship === caller || flockPlayer(ship, getEntity) === caller) {
+                enemies += strength;
+            } else if (npc && flockPlayer(ship, getEntity) === undefined
+                && onFleetSide(shipGovt?.id, fleetGovt, getGovt)) {
+                friends += strength;
+            }
+        }
+        if (!reinforcementOddsCall(fleetGovt.maxOdds, enemies, friends)) {
+            return;
+        }
+        call.arriveAt = time.time + reinforcements.delayMs;
+        call.caller = caller;
+        // The whole room shares the system's fleet: every pilot here is
+        // stamped with their own day. Replaced, never mutated (the value
+        // may be shared with a traded-in hull, PLAYER_STATE_COMPONENTS).
+        for (const [player] of players) {
+            const entity = getEntity(player);
+            if (!entity) {
+                continue;
+            }
+            const calls = new Map(
+                entity.components.get(ReinforcementCallsComponent) ?? []);
+            calls.set(systemId, today(entity));
+            entity.components.set(ReinforcementCallsComponent, calls);
+        }
+    },
+    // After the hit is applied (the odds read the victim's shield after
+    // it: the measured call came at the FIRST hit, 100 against 46.5 + 50)
+    // and after the NPC records its aggressor; last of the DamagedEvent
+    // handlers (shared: *).
+    after: [KnockbackSystem, NpcAggressionSystem, AsteroidDamageSystem],
+});
+
+/** Every NPC, for the arrival's hostility test. */
+const AggressorsQuery = new Query([UUID, NpcComponent,
+    Optional(GovtComponent)] as const);
+
+/**
+ * The kinematics of a reinforcement fleet's lead coming in around
+ * `center`: REINFORCEMENT_ARRIVAL_DISTANCE out on a bearing drawn from
+ * `random` (one draw), heading for `center` at `speed`. GUESS: the
+ * original's blip came 1,770 px south of the player, flying in.
+ */
+export function reinforcementArrivalState(center: { x: number, y: number },
+    speed: number, random: { next(): number }) {
+    const bearing = new Angle(random.next() * 2 * Math.PI);
+    const outward = bearing.getUnitVector();
+    const inward = outward.scale(-1);
+    return {
+        position: new Position(
+            center.x + outward.x * REINFORCEMENT_ARRIVAL_DISTANCE,
+            center.y + outward.y * REINFORCEMENT_ARRIVAL_DISTANCE),
+        rotation: inward.angle,
+        velocity: inward.scale(speed),
+    };
+}
+
+/**
+ * Brings a called fleet in when its time comes (see the module comment):
+ * spawns it, holds it in the system, sets it on the caller when he is
+ * still fighting the govt's side, and tells the players.
+ */
+export const ReinforcementArrivalSystem = new System({
+    name: 'ReinforcementArrivalSystem',
+    args: [ReinforcementCallComponent, TimeResource, GetWorld,
+        RandomResource, IdFactoryResource, SimulationGameDataResource,
+        Optional(ReinforcementFleetResource), Entities, AggressorsQuery,
+        Emit] as const,
+    step(call, time, world, random, ids, gameData, reinforcements, entities,
+        aggressors, emit) {
+        if (call.arriveAt === undefined || time.time < call.arriveAt) {
+            return;
+        }
+        const caller = call.caller;
+        delete call.arriveAt;
+        delete call.caller;
+        if (!reinforcements) {
+            return;
+        }
+        const fleetGovt = gameData.data.Govt.getCached(reinforcements.govt);
+        const leadData = gameData.data.Ship.getCached(
+            reinforcements.fleet.leadShip);
+        if (!fleetGovt || !leadData) {
+            // Staged at genesis, so a miss is the same on every world.
+            return;
+        }
+        const getEntity = (id: string) => entities.get(id);
+        const getGovt = (id: string) => gameData.data.Govt.getCached(id);
+        const callerEntity = caller !== undefined
+            ? getEntity(caller) : undefined;
+        const center = callerEntity?.components.get(MovementStateComponent)
+            ?.position ?? { x: 0, y: 0 };
+        // Whether the caller is still fighting the govt's side: some NPC of
+        // it holds him, or a ship of his flock, as its aggressor.
+        const fighting = caller !== undefined && callerEntity !== undefined
+            && aggressors.some(([, npc, govt]) =>
+                npc.aggressor !== undefined
+                && onFleetSide(govt?.id, fleetGovt, getGovt)
+                && (npc.aggressor === caller
+                    || flockPlayer(npc.aggressor, getEntity) === caller));
+        const fleet = spawnFleet(world, gameData, ids, random,
+            reinforcements.fleet, leadData,
+            reinforcementArrivalState(center, leadData.physics.speed, random));
+        for (const ship of fleet) {
+            const entity = getEntity(ship);
+            entity?.components.set(SystemHoldComponent,
+                { reason: 'reinforcement' });
+            const npc = entity?.components.get(NpcComponent);
+            if (npc && fighting) {
+                npc.aggressor = caller;
+                npc.aggressorSince = time.time;
+            }
+        }
+        emit(ReinforcementArrivalEvent, {
+            govt: fleetGovt.id,
+            name: reinforcementGovtName(fleetGovt),
+        });
+    },
+    // Spawns NPCs like the traffic's respawn, and runs right after it
+    // (shared: *; MissionShipTrackSystem follows both).
+    after: [TimeSystem, NpcRespawnSystem],
+});
+
+export const ReinforcementsPlugin: Plugin = {
+    name: 'ReinforcementsPlugin',
+    build(world) {
+        const serializer = world.resources.get(SerializerResource);
+        serializer?.addComponent(ReinforcementCallComponent,
+            ReinforcementCallType);
+        serializer?.addEvent(ReinforcementArrivalEvent,
+            ReinforcementArrivalEventType);
+        world.addSystem(ReinforcementCallSystem);
+        world.addSystem(ReinforcementArrivalSystem);
+    },
+};

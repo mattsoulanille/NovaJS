@@ -5,7 +5,10 @@ import { Random, RandomResource } from "nova_ecs/plugins/random_plugin";
 import { useFixedTimestep } from "nova_ecs/plugins/time_plugin";
 import { fnv1a } from "nova_ecs/plugins/world_hash";
 import { World } from "nova_ecs/world";
-import { buildNpcSpawnTables, loadEntityGameData } from "./spawn/index.js";
+import {
+    buildNpcSpawnTables, installReinforcements, loadEntityGameData,
+    stageReinforcements,
+} from "./spawn/index.js";
 import { configureSnapshotPolicies } from "./snapshot_policies.js";
 import { DEFAULT_MISSILE_GUIDANCE, MissileGuidanceResource } from "./combat/index.js";
 import { SystemInterferenceResource } from "./combat/index.js";
@@ -205,9 +208,14 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
         : []);
     const npcTables = options.npcs !== false
         ? buildNpcSpawnTables(world, systemId, systemData) : undefined;
-    const [govts, , , planetEntities, , , , systems] = await Promise.all(
-        [govtEntries, ranks, links, planets, asteroidTypes, npcTables,
-            junks, allSystems]);
+    // The system's reinforcement fleet (sÿst ReinfFleet; spawn/
+    // reinforcements.ts), staged whether or not the traffic is: nothing
+    // calls it but a player's hit on a ship of its govt's side, which a
+    // controlled battlefield stages deliberately.
+    const reinforcements = stageReinforcements(world, systemData);
+    const [govts, , , planetEntities, , , , systems, reinforcementFleet] =
+        await Promise.all([govtEntries, ranks, links, planets,
+            asteroidTypes, npcTables, junks, allSystems, reinforcements]);
 
     world.resources.set(GovtsResource, new Map(govts));
     world.resources.set(LegalGeographyResource,
@@ -234,6 +242,9 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     // steps).
     if (npcTables) {
         await spawnNpcs(world, systemId, systemData, npcTables);
+    }
+    if (reinforcementFleet) {
+        installReinforcements(world, reinforcementFleet);
     }
 
     return world;

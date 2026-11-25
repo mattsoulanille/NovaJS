@@ -26,7 +26,7 @@ import {
     ActiveMission, CreditsComponent, Missions, MissionsComponent,
 } from '../player/index.js';
 import { DeathAISystem } from '../npc/index.js';
-import { NpcRespawnSystem } from '../spawn/index.js';
+import { NpcRespawnSystem, ReinforcementArrivalSystem } from '../spawn/index.js';
 import { AttributionResetSystem } from '../reputation/index.js';
 import { MarkPlayerEscortsSystem } from '../escorts/index.js';
 import { ShipExplosionBlastSystem } from '../combat/index.js';
@@ -348,8 +348,9 @@ const MissionShipTrackSystem = new System({
         }
     },
     // NpcRespawnSystem is a #237 pin (shared: *): MissionShipPlugin
-    // registers after NpcSpawnPlugin.
-    after: [TimeSystem, NpcRespawnSystem],
+    // registers after NpcSpawnPlugin. The reinforcement fleet's arrival
+    // (spawn/reinforcements.ts) runs between the two (shared: *).
+    after: [TimeSystem, NpcRespawnSystem, ReinforcementArrivalSystem],
 });
 
 /**

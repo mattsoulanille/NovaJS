@@ -618,6 +618,27 @@ export const STATE_HASH_INTERVAL = 60;
 //    fingerprint changes back (7110220773935a73 -> 51a63184211e887b, the
 //    value before the wave-17 field): a pre-wave-17 build would pass the
 //    join gate against this one, though its sim rules differ.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): reinforcement fleets (sÿst ReinfFleet /
+//    ReinfTime / ReinfIntrval; reference "R19 reinforcement fleets, wave
+//    19"; nova_plugin/spawn/reinforcements.ts). A new serializer-registered
+//    component, ReinforcementCall (`{arriveAt?, caller?}`, the system's
+//    pending call, on a 'reinforcements' entity makeSystem adds to a
+//    system that has a fleet), a new delta-registered player component,
+//    ReinforcementCalls (player/reinforcement_calls.ts, a map of sÿst id
+//    -> the day number of the pilot's last call there, carried across hull
+//    changes and saved with the pilot as the optional `reinforcementCalls`,
+//    no save-version bump), one new serializer event,
+//    ReinforcementArrivalEvent (`{govt, name}`, the status line), and a
+//    fourth SystemHold reason, 'reinforcement' (an open enum: additive).
+//    Sim-rule changes alongside: a player's hit on an NPC of the fleet
+//    govt's side calls the fleet when the odds exceed its MaxOdds, once a
+//    game day per system (or every ReinfIntrval days); it arrives
+//    min(ReinfTime / 30, 24) s later 1,800 px from the caller, stays, and
+//    is not counted as traffic. No input kind or message kind changes. The
+//    derived wire schema fingerprint changes (51a63184211e887b ->
+//    d3e842c4cfaedd4b), and the join gate keeps older and newer builds
+//    apart.
 
 export const PROTOCOL_VERSION = 8;
 

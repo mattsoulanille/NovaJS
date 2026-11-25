@@ -1,0 +1,580 @@
+import 'jasmine';
+import { getDefaultFleetData } from 'novadatainterface/fleet_data';
+import { GovtData, getDefaultGovtData } from 'novadatainterface/govt_data';
+import { MockGameData } from 'novadatainterface/mock_game_data';
+import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
+import { getDefaultRankData, getDefaultRankFlags } from 'novadatainterface/rank_data';
+import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
+import { WeaponDamage } from 'novadatainterface/weapon_data';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
+import { Entity } from 'nova_ecs/entity';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { Random } from 'nova_ecs/plugins/random_plugin';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { World } from 'nova_ecs/world';
+import { GovtComponent } from '../core/index.js';
+import { makeSystem } from '../make_system.js';
+import { ActiveRanksComponent } from '../ncb/index.js';
+import { NpcComponent, SystemHoldComponent } from '../npc/index.js';
+import { extractSaveData, restorePlayerState, SaveData } from '../pilot/index.js';
+import {
+    ControlledByComponent, dayNumber, GameDateComponent,
+    ReinforcementCallsComponent,
+} from '../player/index.js';
+import {
+    DamagedEvent, FiringGroupComponent, makeShip, OutfitsStateComponent,
+    ShieldComponent, SourceComponent, TargetComponent,
+} from '../ship/index.js';
+import { completeEntity } from './entity_data_loader.js';
+import { trafficCount } from './npc_spawn_plugin.js';
+import {
+    inhibitsReinforcements, REINFORCEMENT_ARRIVAL_DISTANCE,
+    REINFORCEMENT_LINE_PREFIX_INDEX, REINFORCEMENT_LINE_SUFFIX_INDEX,
+    REINFORCEMENT_MAX_DELAY_MS, ReinforcementArrivalEvent,
+    ReinforcementArrivalEventData, reinforcementArrivalMessage,
+    reinforcementArrivalState, reinforcementAvailable,
+    ReinforcementCallComponent, reinforcementDelayMs, reinforcementOddsCall,
+    REINFORCEMENTS_UUID,
+} from './reinforcements.js';
+
+/**
+ * ============================================================================
+ * Reinforcement fleets (reference "R19 reinforcement fleets, wave 19")
+ * ============================================================================
+ *
+ * The rig mirrors the reference's: gövt OWNER (MaxOdds 100, MediumName
+ * "Kit Reinf") owns the system, whose ReinfFleet is a lead and two guards
+ * of OWNER; two Strength-50 traders of OWNER sit by the player. A
+ * Strength-100 player's first hit (3000 of a 30000 shield) calls the fleet;
+ * a Strength-1 player's does not; an NPC's never does.
+ */
+
+const SYSTEM = 'test:system';
+const FLEET = 'test:reinf-fleet';
+const OWNER = 'test:owner';
+const ALLY = 'test:ally';
+const OTHER = 'test:other';
+const RAIDER = 'test:raider';
+
+const TRADER_HULL = 'test:trader';
+const PLAYER_HULL = 'test:lancer';
+const WEAK_HULL = 'test:lancer-weak';
+const LEAD_HULL = 'test:lead';
+const GUARD_HULL = 'test:guard';
+const JAMMER = 'test:jammer';
+const AFFILIATED_RANK = 'test:rank-0400';
+
+function govt(id: string, classes: number[], more: Partial<GovtData> = {})
+    : GovtData {
+    return { ...getDefaultGovtData(), ...more, id, classes };
+}
+
+const GOVTS: GovtData[] = [
+    govt(OWNER, [30], {
+        maxOdds: 100, mediumName: 'Kit Reinf', name: 'Kit Reinf Owner',
+        crimeTol: 30000,
+    }),
+    govt(ALLY, [31], { allies: [30] }),
+    govt(OTHER, [32]),
+    govt(RAIDER, [33], { enemies: [30] }),
+];
+
+function hull(id: string, strength: number): ShipData {
+    const base = getDefaultShipData();
+    return {
+        ...base, id, strength,
+        physics: {
+            ...base.physics, shield: 30000, armor: 30000, shieldRecharge: 0,
+        },
+    };
+}
+
+/** 3,000 shield: the reference's Disable Gun hit (100% -> 90%). */
+const HIT: WeaponDamage = {
+    shield: 3000, armor: 0, ionization: 0, ionizationColor: 0xffffff,
+    passThroughShield: 0, knockback: 0,
+};
+
+/** Never thinks until a test says so. */
+const ASLEEP = Number.MAX_SAFE_INTEGER;
+
+const JUNE_23 = { day: 23, month: 6, year: 1177 };
+const JUNE_24 = { day: 24, month: 6, year: 1177 };
+const JUNE_26 = { day: 26, month: 6, year: 1177 };
+
+describe('reinforcement rules', () => {
+    it('ReinfTime 300 arrives in 10 s, on the Bible\'s 30 a second '
+        + '(reference R19)', () => {
+            expect(reinforcementDelayMs(300)).toBe(10_000);
+            expect(reinforcementDelayMs(450)).toBe(15_000);
+        });
+
+    it('ReinfTime 900 in 24 s, not 30 (measured 23-25 s twice): the GUESS '
+        + 'caps the delay', () => {
+            expect(REINFORCEMENT_MAX_DELAY_MS).toBe(24_000);
+            expect(reinforcementDelayMs(900)).toBe(24_000);
+            expect(reinforcementDelayMs(2700)).toBe(24_000);
+            expect(reinforcementDelayMs(-1)).toBe(0);
+        });
+
+    it('once a day: ReinfIntrval 0 and 1 both mean the next day', () => {
+        const day = dayNumber(JUNE_23);
+        for (const interval of [0, 1]) {
+            expect(reinforcementAvailable(undefined, day, interval))
+                .toBeTrue();
+            expect(reinforcementAvailable(day, day, interval)).toBeFalse();
+            expect(reinforcementAvailable(day, day + 1, interval))
+                .toBeTrue();
+        }
+    });
+
+    it('every ReinfIntrval days after the last call (GUESS over 1)', () => {
+        const day = dayNumber(JUNE_23);
+        expect(reinforcementAvailable(day, day + 2, 3)).toBeFalse();
+        expect(reinforcementAvailable(day, day + 3, 3)).toBeTrue();
+        // A pilot restored to an earlier date is not held back.
+        expect(reinforcementAvailable(day, day - 1, 3)).toBeTrue();
+    });
+
+    it('the odds call it when they EXCEED MaxOdds (100 = 1-to-1)', () => {
+        // Strength 100 against two 50s, the hit one at 90% shield (93%).
+        expect(reinforcementOddsCall(100, 100, 46.5 + 50)).toBeTrue();
+        // Exactly even does not exceed.
+        expect(reinforcementOddsCall(100, 100, 100)).toBeFalse();
+        // Strength 1 against them does not.
+        expect(reinforcementOddsCall(100, 1, 96.5)).toBeFalse();
+        // MaxOdds 200: only more than twice as strong.
+        expect(reinforcementOddsCall(200, 150, 100)).toBeFalse();
+        expect(reinforcementOddsCall(200, 201, 100)).toBeTrue();
+        // Nobody left standing on the govt's side: any attacker does.
+        expect(reinforcementOddsCall(100, 1, 0)).toBeTrue();
+        expect(reinforcementOddsCall(100, 0, 0)).toBeFalse();
+    });
+
+    it('oütf ModType 44: a class value inhibits that class\'s govts, -1 '
+        + 'every govt', () => {
+            const owner = GOVTS[0]!;
+            const outfit = (inhibitor: number | null) => ({
+                ...getDefaultOutfitData(),
+                reinforcementInhibitorClass: inhibitor,
+            });
+            expect(inhibitsReinforcements(outfit(-1), owner)).toBeTrue();
+            expect(inhibitsReinforcements(outfit(30), owner)).toBeTrue();
+            expect(inhibitsReinforcements(outfit(31), owner)).toBeFalse();
+            expect(inhibitsReinforcements(outfit(null), owner)).toBeFalse();
+            expect(inhibitsReinforcements(undefined, owner)).toBeFalse();
+        });
+
+    it('the line: "Sensors detect <MediumName> reinforcement fleet '
+        + 'approaching.", from STR# 2002 306 / 307', () => {
+            const misc: string[] = [];
+            misc[REINFORCEMENT_LINE_PREFIX_INDEX] = 'Sensors detect';
+            misc[REINFORCEMENT_LINE_SUFFIX_INDEX] =
+                'reinforcement fleet approaching.';
+            expect(reinforcementArrivalMessage(misc, 'Kit Reinf')).toBe(
+                'Sensors detect Kit Reinf reinforcement fleet approaching.');
+            misc[REINFORCEMENT_LINE_PREFIX_INDEX] = 'Radar shows';
+            expect(reinforcementArrivalMessage(misc, 'Kit Reinf')).toBe(
+                'Radar shows Kit Reinf reinforcement fleet approaching.');
+            // A scenario without the strings: the Bible's wording.
+            expect(reinforcementArrivalMessage([], 'Federation')).toBe(
+                'Sensors detect Federation reinforcement fleet approaching.');
+        });
+
+    it('the fleet comes in 1,800 px out, heading in', () => {
+        const state = reinforcementArrivalState({ x: 100, y: -50 }, 200,
+            new Random(7));
+        const offset = new Vector(state.position.x - 100,
+            state.position.y + 50);
+        expect(offset.length).toBeCloseTo(REINFORCEMENT_ARRIVAL_DISTANCE, 6);
+        expect(state.velocity.length).toBeCloseTo(200, 6);
+        // Velocity points back at the centre.
+        const inward = offset.scale(-1).normalize();
+        expect(state.velocity.normalize().x).toBeCloseTo(inward.x, 6);
+        expect(state.velocity.normalize().y).toBeCloseTo(inward.y, 6);
+    });
+
+    it('the fleet is not traffic: held \'reinforcement\' ships are left '
+        + 'out of the population count', () => {
+            expect(trafficCount([
+                [{}, undefined],
+                [{}, { reason: 'reinforcement' }],
+                [{}, { reason: 'missionGoal' }],
+                [{}, { reason: 'reinforcement' }],
+            ])).toBe(2);
+        });
+});
+
+describe('reinforcement fleets in the sim', () => {
+    let gameData: MockGameData;
+    let world: World;
+    let arrivals: ReinforcementArrivalEventData[];
+
+    async function build({ delayFrames = 300, regenerationDays = 0 } = {}) {
+        gameData = new MockGameData();
+        for (const g of GOVTS) {
+            gameData.data.Govt.map.set(g.id, g);
+        }
+        for (const [id, strength] of [[TRADER_HULL, 50], [PLAYER_HULL, 100],
+            [WEAK_HULL, 1], [LEAD_HULL, 80], [GUARD_HULL, 40]] as const) {
+            gameData.data.Ship.map.set(id, hull(id, strength));
+        }
+        gameData.data.Fleet.map.set(FLEET, {
+            ...getDefaultFleetData(), id: FLEET, name: 'Kit Reinf Fleet',
+            leadShip: LEAD_HULL, escorts: [{ id: GUARD_HULL, min: 2, max: 2 }],
+            govt: OWNER,
+        });
+        gameData.data.System.map.set(SYSTEM, {
+            ...getDefaultSystemData(), id: SYSTEM, govt: OWNER,
+            reinforcements: { fleet: FLEET, delayFrames, regenerationDays },
+        });
+        gameData.data.Outfit.map.set(JAMMER, {
+            ...getDefaultOutfitData(), id: JAMMER,
+            reinforcementInhibitorClass: -1,
+        });
+        gameData.data.Rank.map.set(AFFILIATED_RANK, {
+            ...getDefaultRankData(), id: AFFILIATED_RANK, affilGovt: OWNER,
+            flags: 0x0400,
+            rankFlags: {
+                ...getDefaultRankFlags(), canRequestBattleAssistance: true,
+            },
+        });
+        world = await makeSystem(SYSTEM, gameData, undefined, { npcs: false });
+        arrivals = [];
+        world.events.get(ReinforcementArrivalEvent).subscribe(
+            ({ data }) => arrivals.push(data));
+    }
+
+    function pin(ship: Entity, x: number, y: number) {
+        ship.components.set(MovementStateComponent, {
+            position: new Position(x, y),
+            velocity: new Vector(0, 0),
+            rotation: new Angle(0),
+            accelerating: 0,
+            turning: 0,
+            turnBack: false,
+        });
+    }
+
+    async function addShip(uuid: string, hullId: string, x: number, y: number,
+        setup: (ship: Entity) => void) {
+        const ship = makeShip(gameData.data.Ship.map.get(hullId)!);
+        setup(ship);
+        await completeEntity(world, ship);
+        pin(ship, x, y);
+        world.entities.set(uuid, ship);
+        return ship;
+    }
+
+    const npcShip = (aiType: number, govtId: string) => (ship: Entity) => {
+        ship.components.set(NpcComponent,
+            { aiType, nextDecision: ASLEEP, departAt: 1e12 });
+        ship.components.set(GovtComponent, { id: govtId });
+    };
+
+    const pilot = (date = JUNE_23) => (ship: Entity) => {
+        ship.components.set(ControlledByComponent, { peerId: 'peer' });
+        ship.components.set(GameDateComponent, { ...date });
+    };
+
+    /** The reference rig: the player beside two Strength-50 traders of the
+     * fleet's govt. */
+    async function scene(playerHull = PLAYER_HULL,
+        traderGovt = OWNER, more: (ship: Entity) => void = () => { }) {
+        await addShip('player', playerHull, 0, 0, ship => {
+            pilot()(ship);
+            more(ship);
+        });
+        await addShip('trader1', TRADER_HULL, 0, -150, npcShip(1, traderGovt));
+        await addShip('trader2', TRADER_HULL, 300, 0, npcShip(1, traderGovt));
+        world.step();
+    }
+
+    /** A hit on `victim` through the real DamagedEvent path. */
+    function hit(victim: string, firer: string, damage = HIT) {
+        const shot = new Entity('shot')
+            .addComponent(SourceComponent, firer)
+            .addComponent(FiringGroupComponent, { group: firer })
+            .addComponent(TargetComponent, { target: victim });
+        const shotUuid = `shot ${now()}`;
+        world.entities.set(shotUuid, shot);
+        world.step();
+        world.emit(DamagedEvent, { damage, damager: shotUuid }, [victim]);
+        world.step();
+        world.entities.delete(shotUuid);
+        world.step();
+    }
+
+    function now() {
+        return world.resources.get(TimeResource)!.time;
+    }
+
+    function advance(ms: number) {
+        const until = now() + ms;
+        while (now() < until) {
+            world.step();
+        }
+    }
+
+    function call() {
+        return world.entities.get(REINFORCEMENTS_UUID)!.components
+            .get(ReinforcementCallComponent)!;
+    }
+
+    function fleetShips() {
+        return [...world.entities].filter(([, entity]) =>
+            entity.components.get(SystemHoldComponent)?.reason
+            === 'reinforcement');
+    }
+
+    /** The fleet leaves the scene (as a new visit would find it gone), so
+     * the odds are the traders' alone again. */
+    function dismissFleet() {
+        for (const [uuid] of fleetShips()) {
+            world.entities.delete(uuid);
+        }
+        world.step();
+    }
+
+    function calls(uuid = 'player') {
+        return world.entities.get(uuid)!.components
+            .get(ReinforcementCallsComponent);
+    }
+
+    it('the system\'s fleet is staged at genesis, nothing called', async () => {
+        await build();
+        expect(call()).toEqual({});
+    });
+
+    it('a Strength-100 player\'s FIRST hit on a Strength-50 trader calls '
+        + 'it (100 against 46.5 + 50)', async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            expect(world.entities.get('trader1')!.components
+                .get(ShieldComponent)!.current).toBe(27000);
+            expect(call().caller).toBe('player');
+            expect(call().arriveAt).toBeDefined();
+            expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
+        });
+
+    it('at exactly even odds it does not (a hit that takes no shield: '
+        + '100 against 100)', async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player', { ...HIT, shield: 0 });
+            expect(call()).toEqual({});
+        });
+
+    it('a Strength-1 player\'s hit does not call it', async () => {
+        await build();
+        await scene(WEAK_HULL);
+        hit('trader1', 'player');
+        expect(call()).toEqual({});
+        expect(calls()).toBeUndefined();
+    });
+
+    it('an NPC\'s hit never calls it, odds or not', async () => {
+        await build();
+        await scene();
+        await addShip('raider', PLAYER_HULL, 200, 200, npcShip(3, RAIDER));
+        world.step();
+        hit('trader1', 'raider');
+        hit('trader1', 'raider');
+        expect(call()).toEqual({});
+        advance(30_000);
+        expect(fleetShips().length).toBe(0);
+    });
+
+    it('a hit on an ALLY\'s ship calls it (GUESS); an unrelated govt\'s '
+        + 'does not', async () => {
+            await build();
+            await scene(PLAYER_HULL, OTHER);
+            hit('trader1', 'player');
+            expect(call()).toEqual({});
+            await addShip('allied', TRADER_HULL, -300, 0, npcShip(1, ALLY));
+            world.step();
+            hit('allied', 'player');
+            expect(call().caller).toBe('player');
+        });
+
+    it('arrives ReinfTime later: the whole flët, 1,800 px out, held, and '
+        + 'the line names the MediumName', async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            const calledAt = call().arriveAt! - 10_000;
+            advance(calledAt + 9_900 - now());
+            expect(fleetShips().length).toBe(0);
+            expect(arrivals).toEqual([]);
+            advance(calledAt + 10_100 - now());
+            const fleet = fleetShips();
+            expect(fleet.length).toBe(3);
+            expect(arrivals).toEqual([{ govt: OWNER, name: 'Kit Reinf' }]);
+            expect(call()).toEqual({});
+            const player = world.entities.get('player')!.components
+                .get(MovementStateComponent)!.position;
+            for (const [, ship] of fleet) {
+                expect(ship.components.get(GovtComponent)?.id).toBe(OWNER);
+                const position = ship.components
+                    .get(MovementStateComponent)!.position;
+                const distance = position.subtract(player).length;
+                expect(distance).toBeGreaterThan(1_500);
+                expect(distance).toBeLessThan(2_100);
+            }
+        });
+
+    it('ReinfTime 900 waits 24 s', async () => {
+        await build({ delayFrames: 900 });
+        await scene();
+        hit('trader1', 'player');
+        const calledAt = now();
+        advance(23_000);
+        expect(fleetShips().length).toBe(0);
+        advance(calledAt + 24_500 - now());
+        expect(fleetShips().length).toBe(3);
+    });
+
+    it('the fleet attacks a caller still fighting the govt\'s side '
+        + '(GUESS)', async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            advance(11_000);
+            for (const [, ship] of fleetShips()) {
+                expect(ship.components.get(NpcComponent)!.aggressor)
+                    .toBe('player');
+            }
+        });
+
+    it('and leaves him to its govt\'s politics once nobody is fighting him '
+        + '(the trader he hit has gone)', async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            world.entities.delete('trader1');
+            advance(11_000);
+            expect(fleetShips().length).toBe(3);
+            for (const [, ship] of fleetShips()) {
+                expect(ship.components.get(NpcComponent)!.aggressor)
+                    .toBeUndefined();
+            }
+        });
+
+    it('once a day: no second call the same day, one the next day',
+        async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            advance(11_000);
+            expect(fleetShips().length).toBe(3);
+            dismissFleet();
+            // The odds still favour him (100 against 43 + 46.5), but the
+            // fleet was called today.
+            hit('trader2', 'player');
+            expect(call()).toEqual({});
+            // The next day (a landing and take-off advance the date).
+            world.entities.get('player')!.components
+                .set(GameDateComponent, { ...JUNE_24 });
+            hit('trader2', 'player');
+            expect(call().caller).toBe('player');
+            expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_24));
+        });
+
+    it('ReinfIntrval 3: not two days later, three days later', async () => {
+        await build({ regenerationDays: 3 });
+        await scene();
+        hit('trader1', 'player');
+        advance(11_000);
+        dismissFleet();
+        world.entities.get('player')!.components
+            .set(GameDateComponent, { ...JUNE_24 });
+        hit('trader2', 'player');
+        expect(call()).toEqual({});
+        world.entities.get('player')!.components
+            .set(GameDateComponent, { ...JUNE_26 });
+        hit('trader2', 'player');
+        expect(call().caller).toBe('player');
+    });
+
+    it('a call stamps every pilot in the system, each with his own day',
+        async () => {
+            await build();
+            await scene();
+            await addShip('wingman', PLAYER_HULL, 0, 400, pilot(JUNE_26));
+            world.step();
+            // Two Strength-100 pilots: the hitter alone is the enemy side.
+            hit('trader1', 'player');
+            expect(call().caller).toBe('player');
+            expect(calls('wingman')?.get(SYSTEM)).toBe(dayNumber(JUNE_26));
+            advance(11_000);
+            dismissFleet();
+            // So the other pilot cannot call a second one that day.
+            hit('trader2', 'wingman');
+            expect(call()).toEqual({});
+        });
+
+    it('the fleet does not fill the traffic\'s slots and never leaves',
+        async () => {
+            await build();
+            await scene();
+            hit('trader1', 'player');
+            advance(11_000);
+            for (const [, ship] of fleetShips()) {
+                expect(ship.components.get(SystemHoldComponent))
+                    .toEqual({ reason: 'reinforcement' });
+            }
+        });
+
+    it('a pilot carrying a ModType 44 inhibitor never calls it (GUESS)',
+        async () => {
+            await build();
+            await scene(PLAYER_HULL, OWNER, ship => ship.components.set(
+                OutfitsStateComponent, new Map([[JAMMER, { count: 1 }]])));
+            hit('trader1', 'player');
+            expect(call()).toEqual({});
+        });
+
+    it('a ränk 0x0400 pilot under an NPC\'s attack gets no fleet: nobody '
+        + 'calls it on his behalf (reference R19)', async () => {
+            await build();
+            await scene();
+            world.entities.get('player')!.components.set(ActiveRanksComponent,
+                new Set([AFFILIATED_RANK]));
+            await addShip('raider', PLAYER_HULL, 200, 200, npcShip(3, RAIDER));
+            world.step();
+            hit('player', 'raider');
+            hit('player', 'raider');
+            // The raider wears down a ship of the affiliated govt too.
+            hit('trader1', 'raider');
+            hit('trader1', 'raider');
+            expect(call()).toEqual({});
+            advance(30_000);
+            expect(fleetShips().length).toBe(0);
+            expect(arrivals).toEqual([]);
+        });
+
+    it('the cooldown is saved with the pilot', async () => {
+        await build();
+        await scene();
+        hit('trader1', 'player');
+        const player = world.entities.get('player')!;
+        const save = extractSaveData(player, SYSTEM)!;
+        expect(save.reinforcementCalls)
+            .toEqual([[SYSTEM, dayNumber(JUNE_23)]]);
+        const restored = new Entity('restored');
+        restorePlayerState(restored, save as SaveData);
+        expect(restored.components.get(ReinforcementCallsComponent))
+            .toEqual(new Map([[SYSTEM, dayNumber(JUNE_23)]]));
+        // A pilot with no calls writes nothing and restores none.
+        player.components.delete(ReinforcementCallsComponent);
+        const clean = extractSaveData(player, SYSTEM)!;
+        expect(clean.reinforcementCalls).toBeUndefined();
+        restorePlayerState(restored, clean);
+        expect(restored.components.has(ReinforcementCallsComponent))
+            .toBeFalse();
+    });
+});

@@ -25,7 +25,10 @@ import {
     PlayerPlunderedEvent,
 } from "../nova_plugin/npc/index.js";
 import { MissionShipComponent } from '../nova_plugin/player/index.js';
-import { PersComponent } from '../nova_plugin/spawn/index.js';
+import {
+    PersComponent, REINFORCEMENT_STRING_TABLE, ReinforcementArrivalEvent,
+    reinforcementArrivalMessage,
+} from '../nova_plugin/spawn/index.js';
 import { loadPilotProfile } from '../title/client_prefs.js';
 import { targetIdentity } from './target_identity.js';
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
@@ -312,6 +315,28 @@ const ShowDistressCallMessage = new System({
     },
 });
 
+/** The scenario's misc strings (STR# 2002), for the reinforcement line's
+ * halves; a display asset the sim never reads. */
+const ReinforcementLinesResource = new Resource<{ lines: string[] }>(
+    'ReinforcementLines');
+
+// A system's reinforcement fleet arrived (spawn/reinforcements.ts):
+// "Sensors detect <MediumName> reinforcement fleet approaching." on the
+// status line of EVERY player in the system, as the original said it to the
+// player when the fleet came in (reference "R19 reinforcement fleets, wave
+// 19"). GUESS: every player in a room hears it, not only the caller. The
+// event is untargeted, so this runs once on the singleton. No sound (none
+// noticed; not checked).
+const ShowReinforcementArrivalMessage = new System({
+    name: 'ShowReinforcementArrivalMessage',
+    events: [ReinforcementArrivalEvent],
+    args: [ReinforcementArrivalEvent, StatusLineResource, TimeResource,
+        ReinforcementLinesResource, SingletonComponent] as const,
+    step({ name }, statusLine, { time }, { lines }) {
+        statusLine.setMessage(reinforcementArrivalMessage(lines, name), time);
+    },
+});
+
 // Success feedback when boarding repairs one of your own disabled flock
 // members (EscortRepairedEvent from the boarding gate). Like the blocked
 // messages it is emitted in the sim targeted at the boarding ship and
@@ -451,6 +476,14 @@ export const StatusMessagePlugin: Plugin = {
             .get(DISTRESS_MESSAGES_STRING_TABLE)
             .then(table => { distressLines.lines = [...table.strings]; })
             .catch(e => console.warn('Failed to load distress lines:', e));
+        // The reinforcement line's halves, likewise (until they load, or
+        // in a scenario without them, the line uses the Bible's wording).
+        const reinforcementLines = { lines: [] as string[] };
+        world.resources.set(ReinforcementLinesResource, reinforcementLines);
+        void world.resources.get(DisplayAssetDataResource)?.data.StringTable
+            .get(REINFORCEMENT_STRING_TABLE)
+            .then(table => { reinforcementLines.lines = [...table.strings]; })
+            .catch(e => console.warn('Failed to load misc strings:', e));
 
         const statusLine = new StatusLine();
         const screen = world.resources.get(ScreenSize);
@@ -466,6 +499,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(ShowPlayerPlunderedMessage);
         world.addSystem(ShowContrabandScanMessage);
         world.addSystem(ShowDistressCallMessage);
+        world.addSystem(ShowReinforcementArrivalMessage);
         world.addSystem(ShowEscortRepairedMessage);
         world.addSystem(ShowBayCaptureMessage);
         world.addSystem(ShowCargoRetrievedMessage);
@@ -481,6 +515,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowContrabandScanMessage);
         world.removeSystem(ShowDistressCallMessage);
+        world.removeSystem(ShowReinforcementArrivalMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
         world.removeSystem(ShowCargoRetrievedMessage);

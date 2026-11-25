@@ -23,7 +23,8 @@ import {
     ControlledByComponent, CreditsComponent, CronStatesComponent,
     EscortPayrollComponent, GameDateComponent, MissionsComponent,
     PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
-    PlayerNamesComponent, PlayerShipSelector, StrictPlayComponent,
+    PlayerNamesComponent, PlayerShipSelector, ReinforcementCallsComponent,
+    StrictPlayComponent,
 } from '../player/index.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/index.js';
 import {
@@ -175,6 +176,11 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // Unmeasured for a ship purchase; the pilot, not the hull, is the one
     // who was scanned. Replaced, never mutated, so safe to share.
     ContrabandScannedComponent,
+    // The days this pilot last saw each system's reinforcement fleet
+    // called (player/reinforcement_calls.ts): the pilot's cooldown, not
+    // the hull's. Replaced, never mutated (spawn/reinforcements.ts), so
+    // safe to share.
+    ReinforcementCallsComponent,
 ];
 
 /**

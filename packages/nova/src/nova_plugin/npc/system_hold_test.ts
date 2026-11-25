@@ -22,7 +22,8 @@ describe('SystemHoldType', () => {
             expect(decoded.right).toEqual({ reason });
         }
         expect(SystemHoldReasonType.members)
-            .toEqual(['shipOffer', 'rescue', 'missionGoal']);
+            .toEqual(['shipOffer', 'rescue', 'missionGoal',
+                'reinforcement']);
     });
 
     it('encodes a reason as the bare string it was before', () => {

@@ -169,7 +169,8 @@ const DudeSpawn = t.type({
 });
 type DudeSpawn = t.TypeOf<typeof DudeSpawn>;
 
-const FleetSpawn = t.type({
+/** A flët as the spawner keeps it: what spawnFleet needs, staged. */
+export const FleetSpawn = t.type({
     leadShip: t.string,
     escorts: t.array(t.type({
         id: t.string,
@@ -178,7 +179,7 @@ const FleetSpawn = t.type({
     })),
     govt: t.union([t.string, t.null]),
 });
-type FleetSpawn = t.TypeOf<typeof FleetSpawn>;
+export type FleetSpawn = t.TypeOf<typeof FleetSpawn>;
 
 export const NpcSpawnEntry = t.intersection([t.type({
     weight: t.number,
@@ -394,6 +395,24 @@ async function stageShip(world: World, shipId: string, govt: string | null) {
 }
 
 /**
+ * Stages every ship class of a flët (with its weapon closure) and the
+ * flët's govt, and returns the spawner's form of it (FleetSpawn). Genesis
+ * only: the spawn table's fleets and the system's reinforcement fleet
+ * (reinforcements.ts) both come through here.
+ */
+export async function stageFleetSpawn(world: World, fleet: FleetData)
+    : Promise<FleetSpawn> {
+    await Promise.all([fleet.leadShip, ...fleet.escorts.map(({ id }) => id)]
+        .map(shipId => stageShip(world, shipId, fleet.govt)));
+    return {
+        leadShip: fleet.leadShip,
+        escorts: fleet.escorts.map(({ id, min, max }) =>
+            ({ id, min, max })),
+        govt: fleet.govt,
+    };
+}
+
+/**
  * Builds the system's CANDIDATE NPC spawn table: resolves the sÿst
  * dude/fleet entries and the roaming LinkSyst fleets, decides every flët
  * AppearOn and düde ship class's shïp AppearOn that reads no control
@@ -498,16 +517,7 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
             } : undefined;
         }));
 
-    const stageFleet = async (fleet: FleetData) => {
-        await Promise.all([fleet.leadShip, ...fleet.escorts.map(({ id }) => id)]
-            .map(shipId => stageShip(world, shipId, fleet.govt)));
-        return {
-            leadShip: fleet.leadShip,
-            escorts: fleet.escorts.map(({ id, min, max }) =>
-                ({ id, min, max })),
-            govt: fleet.govt,
-        };
-    };
+    const stageFleet = (fleet: FleetData) => stageFleetSpawn(world, fleet);
 
     // Fleets referenced directly by the sÿst DudeTypes table.
     const directFleetEntries = Promise.all(systemData.fleets.map(
@@ -1032,7 +1042,6 @@ export function spawnNpc(world: World,
     candidates: readonly NpcSpawnEntry[], atEdge: boolean,
     persCandidates: readonly PersSpawnEntry[] = [],
     bits: ReadonlySet<number> = NO_SPAWN_BITS): number {
-    const entities = world.entities;
     // The tables `bits` (the room's spawn bits, or the empty set before
     // the latch — spawn_bits.ts) admit; for an ungated table, the table.
     const entries = effectiveNpcSpawnEntries(candidates, bits);
@@ -1046,12 +1055,8 @@ export function spawnNpc(world: World,
     if (!entry) {
         return spawnedPers;
     }
-    const insert = (uuid: string, entity: Entity) => {
-        deriveEntityComponents(world, entity);
-        // Derelict-govt ships spawn disabled (gövt Flags1 0x0800).
-        applyStartsDisabled(entity, gameData);
-        entities.set(uuid, entity);
-    };
+    const insert = (uuid: string, entity: Entity) =>
+        insertNpc(world, gameData, uuid, entity);
 
     const scatter = () => new Position(
         (random.next() * 2 - 1) * INITIAL_SPAWN_HALF_SIZE,
@@ -1104,6 +1109,36 @@ export function spawnNpc(world: World,
             velocity: new Vector(0, 0),
         };
     }
+    return spawnedPers + spawnFleet(world, gameData, ids, random, fleet,
+        leadData, leadState).length;
+}
+
+/**
+ * Inserts an NPC built by makeNpcShip, fully formed (see spawnNpc), with
+ * a derelict govt's ships disabled (gövt Flags1 0x0800).
+ */
+function insertNpc(world: World, gameData: SimulationGameDataInterface,
+    uuid: string, entity: Entity): void {
+    deriveEntityComponents(world, entity);
+    applyStartsDisabled(entity, gameData);
+    world.entities.set(uuid, entity);
+}
+
+/**
+ * Inserts a whole flët: the lead (`leadData`) at `leadState`, then its
+ * escorts in formation slots on it, every escort count drawn from
+ * `random` first. Returns the uuids inserted, the lead first. The traffic
+ * spawner (spawnNpc) and the reinforcement fleet (reinforcements.ts) both
+ * spawn fleets through here. Deterministic: seeded Random, the IdFactory,
+ * and staged caches only.
+ */
+export function spawnFleet(world: World,
+    gameData: SimulationGameDataInterface, ids: IdFactory, random: Random,
+    fleet: FleetSpawn, leadData: ShipData,
+    leadState: { position: Position, rotation: Angle, velocity: Vector })
+    : string[] {
+    const insert = (uuid: string, entity: Entity) =>
+        insertNpc(world, gameData, uuid, entity);
     const leadUuid = ids.next('npc');
     const leadShip = makeNpcShip(leadData, 0, fleet.govt,
         leadState.position, leadState.rotation, leadState.velocity);
@@ -1113,7 +1148,7 @@ export function spawnNpc(world: World,
     // escort shot must never turn the leader hostile to its own fleet.
     leadShip.components.set(FiringGroupComponent, { group: leadUuid });
     insert(leadUuid, leadShip);
-    let spawned = spawnedPers + 1;
+    const spawned = [leadUuid];
     let slot = 0;
     // Every escort count is drawn first (the same draws, in the same order,
     // as when they were drawn inside the placement loop), so the formation
@@ -1149,9 +1184,10 @@ export function spawnNpc(world: World,
             });
             escortEntity.components.set(FiringGroupComponent,
                 { group: leadUuid });
-            insert(ids.next('npc'), escortEntity);
+            const escortUuid = ids.next('npc');
+            insert(escortUuid, escortEntity);
+            spawned.push(escortUuid);
             slot++;
-            spawned++;
         }
     }
     return spawned;
@@ -1227,7 +1263,30 @@ export async function spawnNpcs(world: World, systemId: string,
     world.entities.set('npc spawner', spawner);
 }
 
-const LiveNpcsQuery = new Query([NpcComponent] as const);
+/** Every NPC, with its hold: the traffic count leaves out the
+ * reinforcement fleet (trafficCount). */
+const LiveNpcsQuery = new Query(
+    [NpcComponent, Optional(SystemHoldComponent)] as const);
+
+/**
+ * How many of `npcs` count as the system's TRAFFIC against its population
+ * target: every NPC but a reinforcement fleet's ships (held with reason
+ * 'reinforcement', reinforcements.ts). Reference "R19 reinforcement
+ * fleets, wave 19": with AvgShips 2 a new trader arrived while the
+ * three-ship fleet was still there, so the fleet does not fill the
+ * system's slots.
+ */
+export function trafficCount(
+    npcs: ReadonlyArray<readonly [unknown, { reason: string } | undefined]>)
+    : number {
+    let count = 0;
+    for (const [, hold] of npcs) {
+        if (hold?.reason !== 'reinforcement') {
+            count++;
+        }
+    }
+    return count;
+}
 /** Player ships: the room's entrants (spawn_bits.ts). */
 const EntrantsQuery = new Query(
     [ControlledByComponent, Optional(ControlBitsComponent), UUID] as const);
@@ -1380,7 +1439,7 @@ export const NpcRespawnSystem = new System({
         }
         latchSpawnBits(spawner, entrants);
         if (time.time < spawner.nextSpawn
-            || liveNpcs.length >= spawner.targetCount) {
+            || trafficCount(liveNpcs) >= spawner.targetCount) {
             return;
         }
         spawner.nextSpawn = time.time + NPC_RESPAWN_INTERVAL_MS;
