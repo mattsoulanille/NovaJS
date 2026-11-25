@@ -566,14 +566,17 @@ export function creditBooty(price: number, roll: number): number {
  *   | Cargo   | 10 / 12       | 0.83  | 0.55 - 0.95            | 0.85 |
  *   | Credits |  4 / 15       | 0.27  | 0.11 - 0.52            | 0.25 |
  *   | Energy  |  2 / 4        | 0.50  | 0.15 - 0.85            | 0.50 |
- *   | Ammo    |  never taken  |   -   |   -                    | 0.50 |
+ *   | Ammo    |  7 / 8        | 0.875 | 0.53 - 0.98            | 0.85 |
  *
  * These are FITS FROM SMALL SAMPLES: each rate is the count's own ratio
- * rounded to the nearest 0.05 (one rule for all three; the samples
- * cannot tell, say, 0.80 from 0.85, so no digit past that is meant).
- * Ammo was "None" on every measured hulk: its 0.5 is a GUESS, Energy's
- * rate for the other consumable. The hull, govt, the player's crew and
- * rating were never varied, so whether they matter is open.
+ * rounded to the nearest 0.05 (one rule for all; the samples cannot tell,
+ * say, 0.80 from 0.85, so no digit past that is meant). Ammo's row is
+ * reference "Plunder Ammo take, wave 31": EIGHT takes of a stock IR
+ * Missile pair from one 50 t hulk type (Ammo was "None" on every earlier
+ * hulk, and the kit's self-fed launcher is not plunderable); 7 / 8 cannot
+ * tell 0.85 from 0.9, so it uses Cargo's 0.85 (GUESS: the two share a
+ * rate). The hull, govt, the player's crew and rating were never varied,
+ * so whether they matter is open.
  */
 export type PlunderItem = 'cargo' | 'credits' | 'fuel' | 'ammo';
 export const PLUNDER_SELF_DESTRUCT_CHANCE: Readonly<Record<PlunderItem, number>> = {
@@ -581,8 +584,9 @@ export const PLUNDER_SELF_DESTRUCT_CHANCE: Readonly<Record<PlunderItem, number>>
     credits: 0.25,
     /** The dialog's "Energy" row (fuel). */
     fuel: 0.5,
-    /** GUESS: never measured (see above). */
-    ammo: 0.5,
+    /** 7 / 8 takes (wave 31, see above): Cargo's rate, GUESS that the
+     * two share it. */
+    ammo: 0.85,
 };
 
 /** Whether taking `item` trips the hulk's self-destruct, given ONE

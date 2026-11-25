@@ -1718,10 +1718,11 @@ describe('boarding in a live world', () => {
 
             it('the odds differ by item: fits from small samples', () => {
                 // Measured: Cargo 10 trips in 12 takes, Credits 4 in 15,
-                // Energy 2 in 4; Ammo never taken (GUESS). Each the
-                // count's ratio to the nearest 0.05.
+                // Energy 2 in 4, Ammo 7 in 8 (wave 31, a stock IR Missile
+                // pair). Each the count's ratio to the nearest 0.05;
+                // Ammo's 0.875 takes Cargo's 0.85 (GUESS: one rate).
                 expect(PLUNDER_SELF_DESTRUCT_CHANCE).toEqual({
-                    cargo: 0.85, credits: 0.25, fuel: 0.5, ammo: 0.5,
+                    cargo: 0.85, credits: 0.25, fuel: 0.5, ammo: 0.85,
                 });
                 const measured = { cargo: [10, 12], credits: [4, 15],
                     fuel: [2, 4] } as const;
@@ -1732,6 +1733,12 @@ describe('boarding in a live world', () => {
                     expect(Math.abs(chance - trips / takes))
                         .withContext(item).toBeLessThanOrEqual(0.025);
                 }
+                // Ammo's 0.875 is a tie between 0.85 and 0.9; it takes
+                // Cargo's.
+                expect(PLUNDER_SELF_DESTRUCT_CHANCE.ammo)
+                    .toEqual(PLUNDER_SELF_DESTRUCT_CHANCE.cargo);
+                expect(Math.abs(PLUNDER_SELF_DESTRUCT_CHANCE.ammo - 7 / 8))
+                    .toBeLessThan(0.03);
                 expect(plunderTripsSelfDestruct('cargo', 0)).toBeTrue();
                 expect(plunderTripsSelfDestruct('cargo', 0.8499)).toBeTrue();
                 expect(plunderTripsSelfDestruct('cargo', 0.85)).toBeFalse();
@@ -1740,34 +1747,37 @@ describe('boarding in a live world', () => {
                 expect(plunderTripsSelfDestruct('credits', 0.25)).toBeFalse();
                 expect(plunderTripsSelfDestruct('fuel', 0.4999)).toBeTrue();
                 expect(plunderTripsSelfDestruct('fuel', 0.5)).toBeFalse();
-                expect(plunderTripsSelfDestruct('ammo', 0.5)).toBeFalse();
+                expect(plunderTripsSelfDestruct('ammo', 0.8499)).toBeTrue();
+                expect(plunderTripsSelfDestruct('ammo', 0.85)).toBeFalse();
                 expect(plunderTripsSelfDestruct('ammo', 0.99)).toBeFalse();
             });
 
             it('each take draws at its own item\'s odds, in any order',
                 async () => {
-                    // 0.6 trips Cargo (0.85) and nothing else.
+                    // 0.6 trips Cargo and Ammo (0.85) and nothing else.
                     const { world, boarder, target, lines } =
                         await boarded();
                     const counter = pinDraws(world, 0.6);
-                    for (const action of ['plunderCredits', 'plunderFuel',
-                        'plunderAmmo']) {
+                    for (const action of ['plunderCredits', 'plunderFuel']) {
                         press(world, BOARDER, action);
                     }
-                    expect(counter.draws).toBe(3);
+                    expect(counter.draws).toBe(2);
                     expect(lines).toEqual([]);
                     expect(boarder.components.has(BoardingComponent))
                         .toBeTrue();
                     press(world, BOARDER, 'plunderCargo');
-                    expect(counter.draws).toBe(4);
+                    expect(counter.draws).toBe(3);
                     expect(lines).toEqual([[BOARDER]]);
                     expect(target.components.has(ExplodingComponent))
                         .toBeTrue();
-                    // Cargo first trips at the same draw.
-                    const first = await boarded();
-                    pinDraws(first.world, 0.6);
-                    press(first.world, BOARDER, 'plunderCargo');
-                    expect(first.lines).toEqual([[BOARDER]]);
+                    // Cargo or Ammo first trips at the same draw.
+                    for (const action of ['plunderCargo', 'plunderAmmo']) {
+                        const first = await boarded();
+                        pinDraws(first.world, 0.6);
+                        press(first.world, BOARDER, action);
+                        expect(first.lines).withContext(action)
+                            .toEqual([[BOARDER]]);
+                    }
                 });
 
             it('the line is STR# 2002 index 112, verbatim', () => {
