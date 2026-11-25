@@ -11396,6 +11396,32 @@ was off the radar of the port: see the reliability notes).
 Confidence: high for 1-3 (each step shot, a control), medium for 4 (one
 run; the random draw matched by chance at 1 in 16).
 
+**Applied (68296920).** Every location's set (AvailLoc 0, 1, 3, 4, 5
+and 6) is rolled at the TOUCH-DOWN, after the landing pass (completions
+and their set strings) and before the AvailLoc 3 popups
+(`LandedTransaction.rollOfferSets`, `rollLandingOffers` in
+`N/spaceport/mission_offers.ts`), and kept PER STELLAR for the SYSTEM
+VISIT with the AvailRandom rolls (`visitOfferSets`, keyed by the visit's
+`OfferRolls`): a re-landing on the same stellar in the visit gets the
+same frozen sets back, re-filtered. A set is discarded with the rolls at
+every system entry (`resetOfferRolls` in `N/client/system_entry.ts`: a
+jump, a gate or wormhole transit, an `Mxxx` / `Nxxx` move, a game start
+or a load) and on a landing in another system; a new day keeps it. A
+stellar with no set yet in the visit (a second port of the system) rolls
+its own at its first touch-down. GUESS: the touch-down rather than the
+system entry itself; they differ only for an in-flight accept, a
+completion this landing processes (here the next job of a string is
+offered at once), or an accept at another stellar of the system before
+landing here. Finding 1's re-filter on every read is kept and its
+comment now says MEASURED (wave 21's `i`-abort case, a record change
+seen only at the next accept, is the known difference). AvailLoc 5 / 6:
+already rolled like 4 (`venue_offers.ts`), unchanged. The sets are
+client-local UI state (a module-level visit in `mission_offers.ts`, as
+the rolls were): not in the sim, the save or the wire, so no schema
+change; a load rolls afresh. Specs: `N/spaceport/landing_offers_test.ts`
+(a first open after the accept, a re-landing, a system entry, the
+touch-down roll).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w22/refilter/`
 (run shots `03-bbs0`, `04-bar0`, `06-bbs1`, `07-bbs_set`, `08-bbs2`,
 `09-yard1`, `10-outf1`, `12-land2`, `13-yard2`, `14-outf2`, `15-bbs3`),
@@ -11456,6 +11482,23 @@ way.
 
 Confidence: high (three runs, every blip named by the layout; the
 station control in the same shot as a 96 px planet ring).
+
+**Applied (4c6a58ab).** `stellarRadarShape(size, isStation)` and
+`planetRadarShape(planetData)` (`N/display/status_bar_radar.ts`): a
+station (spöb Flags 0x0010) is a dot; a planet is a ring from
+`STELLAR_RING_MIN_SIZE` = 96. GUESS: 89-95 px planets are dots (no stock
+frame falls in that gap: the stock sizes jump from 88 to 96, so only a
+plug-in can tell). Wormholes follow the planet rule (all 24 stock ones,
+104 px, flags 0x21, rings): UNMEASURED, as predicted. 140 stock stellars
+change, every one ring to dot: 94 stations of 75-315 px (the 19 working
+hypergates nova:1400-1418, Spacedock I-VI, Port Kane, the Nil'a / Tre'a
+/ Ver'a / P'a stations, Gladius and Forticus Shipyards) and 46 planets
+of 72-88 px (New England, New Ireland, Las Vegas, Alt, Fermia, Capella I
+(80), Codec, GLi-Tech-nia, UHP-23155, Ormond, Pan, Korell, Vellos,
+Llyrithra, the 72-88 px Nil'ar / Tre'ar worlds, ...). Specs:
+`status_bar_radar_test.ts`
+(the K8 sizes, the station rule, Nesre Secundus and Fermia / Georgia /
+Spica's wormhole on the stock data).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w22/k8_gate/radar_zoom.png`
 (left: 2.5 s off the gate, right: 5 s), `k8_shapes/radar_zoom.png`,
@@ -12083,7 +12126,7 @@ cosmetic or rare.
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
 | K6 | Venue buttons when a stellar lacks a venue: hidden or greyed? (#373) | `N/spaceport/spaceport.ts:1037-1050` | CPg Kit Market (no outfitter/shipyard): SS its spaceport | H |
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
-| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar | L |
+| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). Centre arrow range not asked | L |
 | K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix applied in c43cddcc | L |
 
 ### Edge cases
