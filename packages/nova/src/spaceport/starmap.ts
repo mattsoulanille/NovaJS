@@ -17,7 +17,9 @@ import {
 } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { ActiveRanks } from "../nova_plugin/ncb/index.js";
-import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
+import {
+    LegalRecordsState, recordIn, statusGovtOf,
+} from "../nova_plugin/reputation/index.js";
 import { OutfitsState } from "../nova_plugin/ship/index.js";
 import {
     StellarBribes, stellarClearanceWith,
@@ -39,6 +41,7 @@ import {
 import {
     DEFAULT_ZOOM, KEY_PAN_STEP, ZOOM_STEP,
 } from "./starmap_viewport.js";
+import { MapRefusal } from "./starmap_draw.js";
 import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
 import { ZoomButton } from "./starmap_zoom_button.js";
 import { TerritoryOwner } from "./starmap_borders.js";
@@ -74,26 +77,30 @@ export interface MapClearancePlayer {
 }
 
 /**
- * The systems the star map draws RED: the explored ones whose every settled
- * port would refuse `player` landing (landable.ts systemRefusesLanding),
- * judged by the SAME clearance assembly the landing gate uses
- * (stellarClearanceWith), each port against the player's record in ITS
- * system — so a neighbour is red from afar, as Kit Map Wanted was
- * (reference "Map dot colours, wave 23").
+ * The systems the star map draws ORANGE or RED: the explored ones whose
+ * every settled port would refuse `player` landing (landable.ts
+ * systemRefusesLanding), judged by the SAME clearance assembly the landing
+ * gate uses (stellarClearanceWith), each port against the player's record
+ * in ITS system — so a neighbour is coloured from afar, as Kit Map Wanted
+ * was (reference "Map dot colours, wave 23"). Each maps to the sign of
+ * that record (starmap_draw.ts MapRefusal): 'clean' (0 or above, orange)
+ * or 'negative' (red), the record read as the sim reads it (recordIn: an
+ * absent entry is the status govt's InitialRec). Reference "Map dot
+ * colours, wave 24".
  */
 export function refusingSystems(systems: readonly SystemData[],
     universe: Pick<MissionUniverse, 'getPlanet' | 'getGovt'
         | 'getSystemInfo' | 'getRank' | 'sameStellar'>,
     player: MapClearancePlayer, explored: (systemId: string) => boolean,
     outfitContribute: (outfitId: string) => string | undefined):
-    Set<string> {
+    Map<string, MapRefusal> {
     const lookups = {
         govt: (id: string) => universe.getGovt(id),
         systemGovt: (id: string) => universe.getSystemInfo(id)?.govt,
         outfitContribute,
         rank: (id: string) => universe.getRank(id),
     };
-    const refusing = new Set<string>();
+    const refusing = new Map<string, MapRefusal>();
     for (const system of systems) {
         if (!explored(system.id)) {
             continue;
@@ -109,7 +116,10 @@ export function refusingSystems(systems: readonly SystemData[],
                 planetId, systemId: system.id, now: player.now,
             }).cleared);
         if (refuses) {
-            refusing.add(system.id);
+            const record = recordIn(player.records ?? new Map(), system.id,
+                universe.getGovt(statusGovtOf(
+                    universe.getSystemInfo(system.id)?.govt)));
+            refusing.set(system.id, record < 0 ? 'negative' : 'clean');
         }
     }
     return refusing;
@@ -339,7 +349,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
      */
     private graphOptions(bits: ReadonlySet<number>,
         missionMarks: MissionMapMark[], viewedMarks: MissionMapMark[],
-        refusing: ReadonlySet<string> = this.refusingSystems())
+        refusing: ReadonlyMap<string, MapRefusal> = this.refusingSystems())
         : SystemGraphOptions {
         return {
             playerBits: bits,
@@ -351,16 +361,16 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
                 id => this.universe.getPlanet(id)),
             hasInhabitedStellar: system => systemHasInhabitedStellar(
                 system.planets, id => this.universe.getPlanet(id)),
-            systemRefusesLanding: system => refusing.has(system.id),
+            systemRefusal: system => refusing.get(system.id),
             discoveryOf: id => this.discoveryOf(id),
         };
     }
 
     /** {@link refusingSystems} for this map's player, right now. */
-    private refusingSystems(): Set<string> {
+    private refusingSystems(): Map<string, MapRefusal> {
         const player = this.getClearancePlayer();
         if (!player || !this.allSystems) {
-            return new Set();
+            return new Map();
         }
         return refusingSystems(this.allSystems, this.universe, {
             ...player,
@@ -425,12 +435,13 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         const discoveryKey = this.allSystems
             .map(s => this.discoveryOf(s.id)).join('');
         // Which systems refuse the player moves with their records, ranks,
-        // missions and outfits — all while the map is closed — so the red
-        // set is part of the key too.
+        // missions and outfits — all while the map is closed — so the
+        // orange / red set (and each one's colour) is part of the key too.
         const refusing = this.refusingSystems();
         const key = [...bits].sort((a, b) => a - b).join(',')
             + '#' + marksKey + '#' + discoveryKey
-            + '#' + [...refusing].sort().join(',');
+            + '#' + [...refusing].map(([id, why]) => `${id}:${why}`)
+                .sort().join(',');
         if (this.systemGraph && key === this.graphBitsKey) {
             return;
         }

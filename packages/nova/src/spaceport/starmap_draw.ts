@@ -22,8 +22,21 @@ export const SYSTEM_UNINHABITED_COLOR = 0xc6c6c6;
 /** A system the player has never entered — nothing is known about it. */
 export const SYSTEM_UNEXPLORED_COLOR = 0x424242;
 /** An EXPLORED system whose every port would refuse the player's landing
- * (reference "Map dot colours, wave 23", Kit Map Wanted, 1:1 ring pixels). */
+ * while their record there is NEGATIVE (reference "Map dot colours, wave
+ * 23", Kit Map Wanted at -500; wave 24, Kit Map Wanted Planet at -5; 1:1
+ * ring pixels). */
 export const SYSTEM_REFUSING_COLOR = 0xff0000;
+/** An EXPLORED system whose every port would refuse the player's landing
+ * while their record there is CLEAN, 0 or above (reference "Map dot
+ * colours, wave 24": Kit Map Picky at record 0, and stock Alphara,
+ * Gateway, Kerella, Lesten and Rigel for a fresh pilot; 1:1 ring pixels). */
+export const SYSTEM_REFUSING_CLEAN_COLOR = 0xff6300;
+/**
+ * Why a system's every port refuses the player, as the dot tells it: at a
+ * CLEAN record (0 or above, orange) or a NEGATIVE one (red). See
+ * {@link systemDotColor} rule 3.
+ */
+export type MapRefusal = 'clean' | 'negative';
 export const SYSTEM_INTERIOR_COLOR = 0x000000;
 // Hypergate network links, drawn in a distinct cyan so the instant-travel
 // hypergate routes read apart from the grey normal-jump hyperspace links.
@@ -144,16 +157,25 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *  3. DOES IT LET THE PLAYER LAND? An inhabited system whose every port
  *     would refuse the player's landing (the landing-clearance rule of
  *     stellar_clearance.ts: MinStatus, a travel permit, a ränk 0x0200
- *     override, a bribe, a mission destination) is RED, #ff0000. Measured
- *     on one system, Kit Map Wanted (record -500, its only port MinStatus
- *     0, "Docking request denied."), red from a neighbour and as the current
- *     system. GUESS: a mixed system (one port open) stays blue; see
- *     landable.ts systemRefusesLanding.
+ *     override, a bribe, a mission destination) is ORANGE, #ff6300, while
+ *     the player's record in that system is 0 or above, and RED, #ff0000,
+ *     once it is negative. MEASURED (reference "Map dot colours", waves 23
+ *     and 24): Kit Map Picky (its only port MinStatus 100) orange at record
+ *     0 and red at -500; Kit Map Wanted / Wanted Planet (MinStatus 0) red at
+ *     -500 and already at -5 ("No Convictions", far above -CrimeTol, not
+ *     hostile); stock Alphara, Gateway, Kerella, Lesten and Rigel orange
+ *     for a fresh pilot. So the colour follows the record's SIGN, not
+ *     hostility nor the Legal Status word. A mixed system (one port open)
+ *     stays blue at any record (measured, Kit Map Mixed at -500 and -5); see
+ *     landable.ts systemRefusesLanding. GUESS: a positive record still
+ *     below MinStatus is orange (unmeasured; predicted by the sign rule),
+ *     and a refusal for another reason (a travel permit, ränk 0x0200)
+ *     follows the same record rule.
  *
  * NOT THE LEGAL STATUS WORD, NOR THE GOVERNMENT'S FLAGS (Matthew's playtest,
  * 2026-11-24: "the system does not like me, but it's still blue instead of
  * orange or red", South Manchester at "Criminal"). A bad record alone does
- * not redden a dot whose ports still let the player land, measured twice:
+ * not colour a dot whose ports still let the player land, measured twice:
  *  - CURRENT system, hostile: reference "A14" cell c1 (A14 Own, record -500
  *    against CrimeTol 10, the map reads "Legal Status: Criminal" and the
  *    owner's warships open fire, but its port is MinStatus -32767): the
@@ -208,20 +230,27 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  * missions on it is therefore no evidence of habitation.
  */
 export function systemDotColor(explored: boolean,
-    inhabited: boolean, refusesLanding = false): number {
+    inhabited: boolean, refusal?: MapRefusal): number {
     if (!explored) {
         return SYSTEM_UNEXPLORED_COLOR;
     }
     if (!inhabited) {
         return SYSTEM_UNINHABITED_COLOR;
     }
-    return refusesLanding ? SYSTEM_REFUSING_COLOR : SYSTEM_INHABITED_COLOR;
+    switch (refusal) {
+        case 'clean':
+            return SYSTEM_REFUSING_CLEAN_COLOR;
+        case 'negative':
+            return SYSTEM_REFUSING_COLOR;
+        default:
+            return SYSTEM_INHABITED_COLOR;
+    }
 }
 
 export function drawSystem(graphics: PIXI.Graphics,
     x: number, y: number, explored: boolean, inhabited: boolean,
-    refusesLanding = false) {
-    const outColor = systemDotColor(explored, inhabited, refusesLanding);
+    refusal?: MapRefusal) {
+    const outColor = systemDotColor(explored, inhabited, refusal);
     graphics.lineStyle(1, outColor);
     graphics.beginFill(outColor);
     graphics.drawCircle(x, y, SYSTEM_RADIUS);

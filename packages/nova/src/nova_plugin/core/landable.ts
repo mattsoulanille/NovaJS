@@ -162,19 +162,21 @@ export function systemIsInhabited(planetIds: readonly string[],
  * everywhere: it has at least one settled port and every one of them would
  * deny the player landing (`refuses`, the caller's landing-clearance
  * verdict — stellar_clearance.ts through stellarClearanceWith). The star
- * map draws such a system RED.
+ * map draws such a system ORANGE at a clean record and RED at a negative
+ * one (starmap_draw.ts systemDotColor).
  *
- * MEASURED for one system (docs/reference_experiments.md, "Map dot colours,
- * wave 23"): Kit Map Wanted, whose only port (MinStatus 0) refused a pilot
- * at record -500 ("Docking request denied."), is #ff0000 as a neighbour and
+ * MEASURED (docs/reference_experiments.md, "Map dot colours", waves 23 and
+ * 24): Kit Map Wanted, whose only port (MinStatus 0) refused a pilot at
+ * record -500 ("Docking request denied."), is #ff0000 as a neighbour and
  * as the current system, while systems at "Criminal" whose ports still let
- * the player land stayed blue.
+ * the player land stayed blue; Kit Map Picky (MinStatus 100) is #ff6300 at
+ * record 0.
  *
- * GUESS, the MIXED system: one refusing port and one open port is blue
- * (red only when EVERY settled port refuses) — the reading "red = you can
- * land nowhere here". Gates never vote (they are not settled ports), so a
- * gate's MinStatus 32767 does not redden a system. Stellars that fail to
- * resolve are skipped.
+ * MEASURED, the MIXED system (wave 24, Kit Map Mixed: one port MinStatus 0,
+ * one -32767): blue at -500 and at -5, so one open port keeps the system
+ * blue — "coloured = you can land nowhere here". Gates never vote (they are
+ * not settled ports), so a gate's MinStatus 32767 does not colour a system.
+ * Stellars that fail to resolve are skipped.
  */
 export function systemRefusesLanding(planetIds: readonly string[],
     getPlanet: (id: string) => {

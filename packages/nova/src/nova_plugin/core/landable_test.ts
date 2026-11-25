@@ -131,7 +131,7 @@ describe('systemIsInhabited', () => {
         });
 });
 
-describe('systemRefusesLanding (the red dot)', () => {
+describe('systemRefusesLanding (the orange / red dot)', () => {
     const port = planet({ canLand: true, uninhabited: false });
     const rock = planet({ canLand: true, uninhabited: true });
     const gate: PlanetData = {
@@ -147,7 +147,8 @@ describe('systemRefusesLanding (the red dot)', () => {
             refusing(['a']))).toBeTrue();
     });
 
-    it('is false when any settled port lets the player land (GUESS: mixed)',
+    it('is false when any settled port lets the player land (Kit Map Mixed, '
+        + 'measured in wave 24)',
         () => {
             expect(systemRefusesLanding(['a', 'b'],
                 lookup({ a: port, b: port }), refusing(['a']))).toBeFalse();

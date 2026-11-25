@@ -19,7 +19,7 @@ import {
 } from "./route.js";
 import {
     drawLinks, drawRouteOverlay, drawSelectionOverlay,
-    drawSystem, installLabelFont, labelFontReady, makeSystemLabel,
+    drawSystem, installLabelFont, labelFontReady, makeSystemLabel, MapRefusal,
 } from "./starmap_draw.js";
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
 import { bindMapPointer } from "./starmap_input.js";
@@ -98,13 +98,14 @@ export interface SystemGraphOptions {
     isSystemInhabited?: (system: SystemData) => boolean;
     /**
      * Whether an inhabited system's every port would refuse the player's
-     * landing, which turns its dot RED (starmap_draw.ts systemDotColor,
-     * landable.ts systemRefusesLanding). Injected for the same reason as
-     * {@link isSystemInhabited}; only the player's own maps pass it (it
-     * needs the player's records), so the rollback screen and the gate map
-     * default to "never".
+     * landing, and at which record sign, which turns its dot ORANGE or RED
+     * (starmap_draw.ts systemDotColor, landable.ts systemRefusesLanding);
+     * undefined when the player may land somewhere there. Injected for the
+     * same reason as {@link isSystemInhabited}; only the player's own maps
+     * pass it (it needs the player's records), so the rollback screen and
+     * the gate map default to "never".
      */
-    systemRefusesLanding?: (system: SystemData) => boolean;
+    systemRefusal?: (system: SystemData) => MapRefusal | undefined;
     /**
      * Whether a system holds at least one INHABITED stellar, landable or
      * not, deciding whether an explored system radiates territory under
@@ -187,7 +188,8 @@ export class SystemGraph {
     // The two questions drawSystem asks about each dot. Injected; see
     // SystemGraphOptions.
     private readonly isSystemInhabited: (system: SystemData) => boolean;
-    private readonly systemRefusesLanding: (system: SystemData) => boolean;
+    private readonly systemRefusal:
+        (system: SystemData) => MapRefusal | undefined;
     private readonly hasInhabitedStellar: (system: SystemData) => boolean;
     private readonly discoveryOf: (systemId: string) => DiscoveryLevel;
     /**
@@ -207,8 +209,7 @@ export class SystemGraph {
         this.missionMarks = options.missionMarks ?? [];
         this.viewedMarks = options.viewedMarks ?? [];
         this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
-        this.systemRefusesLanding =
-            options.systemRefusesLanding ?? (() => false);
+        this.systemRefusal = options.systemRefusal ?? (() => undefined);
         this.hasInhabitedStellar = options.hasInhabitedStellar
             ?? (() => false);
         this.discoveryOf = options.discoveryOf ?? (() => DISCOVERY_LANDED);
@@ -308,7 +309,7 @@ export class SystemGraph {
             const discovered = this.discoveryOf(system.id) >= DISCOVERY_ENTERED;
             drawSystem(circleGraphics, x, y, discovered,
                 this.isSystemInhabited(system),
-                discovered && this.systemRefusesLanding(system));
+                discovered ? this.systemRefusal(system) : undefined);
             // The original labels only the systems the player has entered:
             // in map_zoomed_out_showing_far_away_mission.png every dim
             // #424242 dot is nameless, and every named one is blue or
