@@ -47,6 +47,7 @@ import { GovtParse } from "./parsers/govt_parse.js";
 import { MisnParse } from "./parsers/misn_parse.js";
 import {
     builtInOutfitWeaponId, makeBuiltInAmmoOutfit, makeBuiltInWeaponOutfit,
+    preferredAmmoOutfit,
 } from "./built_in_weapon_outfit.js";
 import { OutfitParse } from "./parsers/outfit_parse.js";
 import { PersParse } from "./parsers/pers_parse.js";
@@ -595,14 +596,19 @@ export class NovaParse implements GameDataInterface {
             return {};
         }
 
-        // Maps a weapon to the first outfit that is its ammo.
-        var ammoOutfitMap: { [index: string]: string } = {};
-
+        // Maps a SUPPLY weapon to the outfit its stock ammo loads become:
+        // of every oütf feeding it (in id-space order), the one
+        // preferredAmmoOutfit picks.
+        const feeding: { [index: string]: string[] } = {};
         for (let outfitID in idSpace.oütf) {
             var outfit = await this.data.Outfit.get(outfitID);
-            if (outfit.ammoFor && !(ammoOutfitMap[outfit.ammoFor])) {
-                ammoOutfitMap[outfit.ammoFor] = outfitID;
+            if (outfit.ammoFor) {
+                (feeding[outfit.ammoFor] ??= []).push(outfitID);
             }
+        }
+        const ammoOutfitMap: { [index: string]: string } = {};
+        for (const [weaponID, outfitIDs] of Object.entries(feeding)) {
+            ammoOutfitMap[weaponID] = preferredAmmoOutfit(outfitIDs)!;
         }
         return ammoOutfitMap;
     }

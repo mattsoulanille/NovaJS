@@ -256,18 +256,30 @@ export async function ShipParse(ship: ShipResource,
         }
         outfits[outfitID] += count;
 
-        // The stock ammo load (AmmoLoad) becomes that many of the
-        // weapon's ammo outfit. It is ignored for weapons that don't
-        // draw ammo from an outfit. Bay weapons DO draw from one (their
-        // fighters — see AmmoTypeParse). When the weapon burns ammo but
-        // no oütf feeds it, the load rides in an implicit magazine for
-        // the same reason the weapon itself does: otherwise the ship
-        // carries a weapon it can never fire.
+        // The stock ammo load (AmmoLoad) becomes that many of the ammo
+        // outfit feeding the weapon's SUPPLY: the wëap its AmmoType
+        // names, "Draws ammo from this type of weapon" (EVN Bible
+        // ~:3117), which need not be the weapon itself. Stock's Raven
+        // Turret (139) draws on the Raven Rocket (138), fed by oütf 143,
+        // and its Storm Chaingun (161) on the Hail Chaingun (155), fed by
+        // 170; keyed by the weapon itself, both loads became implicit
+        // magazines that nothing ever drew on. Bay weapons draw on their
+        // own supply (their fighters — see AmmoTypeParse). When the
+        // weapon burns ammo but no oütf feeds its supply, the load rides
+        // in an implicit magazine (feeding that supply) for the same
+        // reason the weapon itself does: otherwise the ship carries a
+        // weapon it can never fire. A weapon with no supply (unlimited,
+        // fuel per shot) keeps the lookup by its own id and never gets a
+        // magazine.
         if (w.ammo > 0) {
-            const usesAmmoOutfit = BayGuidanceSet.has(weapon.guidance)
-                || (weapon.ammoType >= 0 && weapon.ammoType <= 255);
-            var ammoOutfitID = (await ammoOutfitMap)[globalID]
-                ?? (usesAmmoOutfit ? builtInAmmoOutfitId(globalID) : undefined);
+            const supplyID = BayGuidanceSet.has(weapon.guidance) ? globalID
+                : (weapon.ammoType >= 0 && weapon.ammoType <= 255)
+                    ? weapon.idSpace.wëap[weapon.ammoType + 128]?.globalID
+                    : undefined;
+            var ammoOutfitID = supplyID !== undefined
+                ? ((await ammoOutfitMap)[supplyID]
+                    ?? builtInAmmoOutfitId(globalID))
+                : (await ammoOutfitMap)[globalID];
             if (ammoOutfitID) {
                 if (!outfits[ammoOutfitID]) {
                     outfits[ammoOutfitID] = 0;
