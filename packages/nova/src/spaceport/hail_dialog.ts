@@ -829,8 +829,13 @@ export class HailDialog {
      * Assistance / Beg For Mercy on a ship, Offer Bribe / Demand Tribute
      * at a stellar). Empty on the haggle page and in the escort box, which
      * have neither row, so the keys do nothing there.
+     *
+     * `bribe` is the offer slot again, set only while it is drawn as Offer
+     * Bribe: 'o' presses it then and does nothing otherwise.
      */
-    private keyedButtons: { greetings?: Button, offer?: Button } = {};
+    private keyedButtons: {
+        greetings?: Button, offer?: Button, bribe?: Button,
+    } = {};
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private controlEvents: Observable<ControlEvent>,
@@ -859,6 +864,13 @@ export class HailDialog {
             // button would not, and a greyed button ignores its key.
             gamble: () => this.keyedButtons.greetings?.activate(),
             recharge: () => this.keyedButtons.offer?.activate(),
+            // 'o' (the 'outfitter' action, KeyO) presses Offer Bribe
+            // (Matthew, 2026-11-24): the offer slot again, but only while
+            // it reads Offer Bribe, so on a ship's Request Assistance or
+            // Beg For Mercy, or a port's greyed Demand Tribute, it does
+            // nothing. 'outfitter' has no in-flight handler, and the
+            // focused dialog keeps the press out of the simulation anyway.
+            outfitter: () => this.keyedButtons.bribe?.activate(),
         });
     }
 
@@ -1262,6 +1274,9 @@ export class HailDialog {
                 this.keyedButtons.greetings = button;
             } else if (slot !== 'close') {
                 this.keyedButtons.offer = button;
+                if (slot === 'bribe') {
+                    this.keyedButtons.bribe = button;
+                }
             }
             this.content.addChild(button.container);
         });

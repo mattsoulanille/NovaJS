@@ -21,8 +21,11 @@ import { MenuControls } from './menu_controls.js';
  *
  * The keys arrive the way every landed-UI key does — as ControlActions
  * matched on KeyboardEvent.code through settings/controls.json — so 'g' is
- * the 'gamble' action (KeyG) and 'r' is 'recharge' (KeyR). Each presses the
- * BUTTON the dialog drew, so these specs drive a real (headless) HailDialog
+ * the 'gamble' action (KeyG) and 'r' is 'recharge' (KeyR). Matthew,
+ * 2026-11-24: "'o' should offer bribe when hailing a planet", so 'o' (the
+ * 'outfitter' action, KeyO) presses the offer slot, but only while it reads
+ * Offer Bribe. Each key presses the BUTTON the dialog drew, so these specs
+ * drive a real (headless) HailDialog
  * through its control stream and read back what it drew, rather than
  * pinning a parallel decision function.
  */
@@ -48,6 +51,12 @@ const HOSTILE: HailContext = {
 const HOSTILE_UNBUYABLE: HailContext = {
     variant: 'ship', heading: 'Class: Fed Destroyer\nStatus: Hostile',
     image: null, body: 'What is it?', mercyRefused: 'In your dreams, pal.',
+};
+/** A port that takes bribes: its offer slot is a live Offer Bribe. */
+const PORT_BRIBE: HailContext = {
+    variant: 'planet', heading: 'Earth', image: null,
+    body: 'Channel open to Earth.',
+    bribe: { amount: 5000, canAfford: true, purpose: 'landing' },
 };
 /** A port with nothing to sell: its offer slot is a GREYED Demand Tribute. */
 const PORT_TRIBUTE: HailContext = {
@@ -77,7 +86,8 @@ function drawnText(dialog: HailDialog): string[] {
     return out;
 }
 
-describe('the hail dialog\'s letter keys (g greets, r assists / begs)', () => {
+describe('the hail dialog\'s letter keys (g greets, r assists / begs, ' +
+    'o bribes)', () => {
     let controls: Subject<ControlEvent>;
     let callbacks: jasmine.SpyObj<HailCallbacks>;
     let dialog: HailDialog;
@@ -178,6 +188,44 @@ describe('the hail dialog\'s letter keys (g greets, r assists / begs)', () => {
             expect(callbacks.requestAssistance).not.toHaveBeenCalled();
             expect(drawnText(dialog)).toEqual(before);
         });
+
+    it('o (KeyO, the \'outfitter\' action) presses a port\'s Offer Bribe',
+        async () => {
+            await open(PORT_BRIBE);
+            expect(drawnText(dialog)).toContain('Offer Bribe');
+            await press('outfitter');
+            expect(buttonBeeps()).toBe(1);
+            expect(drawnText(dialog))
+                .toContain('They demand 5,000 credits to let you land.');
+        });
+
+    it('o is ignored by an Offer Bribe drawn greyed', async () => {
+        await open(PORT_BRIBE);
+        // No context greys Offer Bribe today; grey the drawn button itself,
+        // which is all the key ever looks at.
+        const bribe = dialog['keyedButtons'].bribe;
+        expect(bribe).toBeDefined();
+        bribe!.state = 'grey';
+        const before = drawnText(dialog);
+        await press('outfitter');
+        expect(buttonBeeps()).toBe(0);
+        expect(drawnText(dialog)).toEqual(before);
+    });
+
+    it('o does nothing when the offer slot is not Offer Bribe', async () => {
+        // A ship's Request Assistance, a hostile ship's Beg For Mercy and a
+        // port's greyed Demand Tribute all leave 'o' with nothing to press.
+        for (const context of [SHIP, HOSTILE, PORT_TRIBUTE]) {
+            await open(context);
+            const before = drawnText(dialog);
+            await press('outfitter');
+            expect(drawnText(dialog)).toEqual(before);
+            await press('depart');
+        }
+        expect(buttonBeeps()).toBe(0);
+        expect(callbacks.requestAssistance).not.toHaveBeenCalled();
+        expect(callbacks.bribe).not.toHaveBeenCalled();
+    });
 
     it('neither key does anything on the haggle page, which has no ' +
         'Greetings or offer row', async () => {
