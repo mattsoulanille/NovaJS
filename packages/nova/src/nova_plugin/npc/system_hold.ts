@@ -2,7 +2,7 @@ import * as t from 'io-ts';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { openEnum } from '../../common/open_enum.js';
-import { DisabledComponent } from '../ship/disabled_component.js';
+import { DisabledComponent } from '../ship/index.js';
 
 /**
  * ============================================================================

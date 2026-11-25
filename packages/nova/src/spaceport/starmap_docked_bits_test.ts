@@ -1,6 +1,7 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
+import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
@@ -49,9 +50,16 @@ describe('the docked starmap\'s control bits', () => {
             ...getDefaultGovtData(), id: 'nova:128', name: 'Federation',
             crimeTol: 6,
         });
+        // Kania has a stellar: a system with none reads "Uninhabited
+        // System" and no Legal Status line (starmap_properties.ts).
+        data.data.Planet.map.set('nova:128', {
+            ...getDefaultPlanetData(), id: 'nova:128', name: 'Kania Port',
+            govt: 'nova:128',
+        });
         data.data.System.map.set(KANIA, {
             ...getDefaultSystemData(), id: KANIA, name: 'Kania',
             position: [0, 0], links: [S7EVYN], govt: 'nova:128',
+            planets: ['nova:128'],
         });
         data.data.System.map.set(S7EVYN, {
             ...getDefaultSystemData(), id: S7EVYN, name: 'S7evyn',
