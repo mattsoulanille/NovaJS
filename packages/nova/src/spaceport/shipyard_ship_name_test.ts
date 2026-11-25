@@ -9,9 +9,11 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
-    CreditsComponent, PlayerNamesComponent,
+    CreditsComponent, PlayerNamesComponent, StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import { OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
+import { overrideEnhancements } from '../enhancements.js';
+import { Button } from './button.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Shipyard } from './shipyard.js';
 
@@ -175,4 +177,79 @@ describe('the shipyard\'s ship name prompt', () => {
             shipyard.dismiss();
             await shown;
         });
+    describe('buy and keep (Option-click, ship storage)', () => {
+        const OPTION = { option: true, shift: false };
+
+        it('goes through the same prompt: OK buys at the full price, names '
+            + 'the new ship and stores the old one under its own name',
+            async () => {
+                const { shipyard, shown, purchased } =
+                    await openOnNewHull(player());
+                const buying = shipyard.buyShip(OPTION);
+                await settle();
+                const prompt = shipyard.namePrompt.alert;
+                expect(prompt.shown).toBeTrue();
+                expect(purchased.length).toBe(0);
+                prompt.type('Rocinante');
+                prompt.confirm();
+                await buying;
+                expect(purchased.length).toBe(1);
+                const bought = purchased[0];
+                expect(bought.components.get(ShipComponent)?.id).toBe(NEW);
+                expect(bought.components.get(PlayerNamesComponent))
+                    .toEqual({ pilot: 'Matt', ship: 'Rocinante' });
+                // The full asking price: nothing was traded in.
+                expect(bought.components.get(CreditsComponent)!.credits)
+                    .toBe(1_000_000 - 100_000);
+                const stored = bought.components.get(StoredShipsComponent);
+                expect(stored?.map(record => [record.ship, record.name,
+                    record.shipName])).toEqual([[OLD, 'Shuttle', 'Shuttle 552']]);
+                shipyard.dismiss();
+                await shown;
+            });
+
+        it('with ship storage OFF, Option-click is the ordinary trade-in '
+            + 'and the Your Ships pill is hidden', async () => {
+                overrideEnhancements({ enhShipStorage: false });
+                try {
+                    const { shipyard, shown, purchased } =
+                        await openOnNewHull(player());
+                    expect((shipyard as unknown as { hangarButton: Button })
+                        .hangarButton.container.visible).toBeFalse();
+                    const buying = shipyard.buyShip(OPTION);
+                    await settle();
+                    shipyard.namePrompt.alert.confirm();
+                    await buying;
+                    expect(purchased.length).toBe(1);
+                    expect(purchased[0].components.has(StoredShipsComponent))
+                        .toBeFalse();
+                    // The trade-in was credited.
+                    expect(purchased[0].components.get(CreditsComponent)!
+                        .credits).toBeGreaterThan(1_000_000 - 100_000);
+                    shipyard.dismiss();
+                    await shown;
+                } finally {
+                    overrideEnhancements({});
+                }
+            });
+
+        it('Cancel buys and stores nothing', async () => {
+            const entity = player();
+            const { shipyard, shown, purchased } = await openOnNewHull(entity);
+            const buying = shipyard.buyShip(OPTION);
+            await settle();
+            shipyard.namePrompt.alert.cancel();
+            await buying;
+            expect(purchased.length).toBe(0);
+            shipyard.dismiss();
+            const final = await shown;
+            expect(final).toBe(entity);
+            expect(final.components.get(ShipComponent)?.id).toBe(OLD);
+            expect(final.components.get(CreditsComponent)?.credits)
+                .toBe(1_000_000);
+            expect(final.components.has(StoredShipsComponent)).toBeFalse();
+            expect(final.components.get(PlayerNamesComponent))
+                .toEqual({ pilot: 'Matt', ship: 'Shuttle 552' });
+        });
+    });
 });

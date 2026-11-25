@@ -552,7 +552,12 @@ export class Shipyard extends Menu<Entity> {
         // Re-adding moves the dialog to the top of the shipyard's
         // display list, so it draws over the ship grid.
         this.container.addChild(this.shipInfo.container);
-        await this.shipInfo.show(ship);
+        this.search.suspend();
+        try {
+            await this.shipInfo.show(ship);
+        } finally {
+            this.search.resume();
+        }
         this.controls.bind();
     }
 
@@ -566,8 +571,10 @@ export class Shipyard extends Menu<Entity> {
             return;
         }
         this.controls.unbind();
-        // Drawn over the grid, like the info dialog.
+        // Drawn over the grid, like the info dialog. The search field
+        // under it lets go of Cmd/Ctrl+F meanwhile (review finding 5).
         this.container.addChild(this.hangar.container);
+        this.search.suspend();
         try {
             await this.hangar.show({
                 hull: () => this.input,
@@ -579,10 +586,20 @@ export class Shipyard extends Menu<Entity> {
                 world: this.world ? () => this.world! : undefined,
             });
         } finally {
-            if (this.container.visible) {
-                this.controls.bind();
+            // A teardown (dismiss) closes the hangar and then destroys the
+            // shipyard before this runs: nothing to bind or redraw then
+            // (review finding 4).
+            if (this.alive) {
+                this.search.resume();
+                if (this.container.visible) {
+                    this.controls.bind();
+                }
+                // A swap can change what this shipyard stocks (the hull's
+                // and its outfits' Contribute bits), so the grid is
+                // repopulated before the re-quote.
+                this.refreshGrid();
+                this.refreshTradeState();
             }
-            this.refreshTradeState();
         }
     }
 
@@ -681,9 +698,11 @@ export class Shipyard extends Menu<Entity> {
         try {
             // On top of everything the shipyard draws.
             this.container.addChild(this.namePrompt.container);
+            this.search.suspend();
             name = await this.namePrompt.ask(newShip.name);
         } finally {
             this.naming = false;
+            this.search.resume();
         }
         if (name === undefined) {
             return;

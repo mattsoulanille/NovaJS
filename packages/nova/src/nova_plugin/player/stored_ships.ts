@@ -38,13 +38,13 @@ import { Component } from 'nova_ecs/component';
  * by index, and swapping a hull for a stored one puts the outgoing hull in the
  * incoming one's slot, so the order the player sees is stable.
  */
-export const StoredShipType = t.type({
+export const StoredShipType = t.intersection([t.type({
     /** Global shïp id of the hull (its class). */
     ship: t.string,
     /**
-     * The hull's display name when it was stored — its class name, since
-     * hulls carry no names of their own. Kept so the hangar can list the ship
-     * even when its class no longer loads (a plug-in removed).
+     * The hull's CLASS name when it was stored (the shïp's display name).
+     * Kept so the hangar can list the ship even when its class no longer
+     * loads (a plug-in removed). The ship's own name is `shipName`.
      */
     name: t.string,
     /**
@@ -64,7 +64,19 @@ export const StoredShipType = t.type({
      * so a location-specific mode can be added without a save migration.
      */
     storedAt: t.string,
-});
+}), t.partial({
+    /**
+     * The ship's OWN name (player/player_names.ts `ship`: what the player
+     * typed at the shipyard's "Please name your new <ship>:" prompt), when
+     * it had one: the pilot's hull keeps its name in storage, and taking it
+     * out again makes it the ship's name once more (spaceport/
+     * ship_storage.ts). Absent for a hull that never had one — a captured
+     * escort put away, since escorts carry no names. Untrusted like every
+     * player-typed name: cleaned (sanitizeShipName) where it is written and
+     * where it is read. Blank is a name (an emptied prompt).
+     */
+    shipName: t.string,
+})]);
 export type StoredShip = t.TypeOf<typeof StoredShipType>;
 
 export const StoredShipsType = t.array(StoredShipType);

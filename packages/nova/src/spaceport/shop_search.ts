@@ -97,6 +97,9 @@ export class ShopSearchField {
     private readonly caret = new PIXI.Graphics();
     private focused = false;
     private enabled = false;
+    /** Set while a dialog covers the shop (suspend): the field and its
+     * Cmd/Ctrl+F shortcut stand down, though the well stays drawn. */
+    private suspended = false;
     private releaseTextEntry?: () => void;
     /** Set by the well's own pointerdown, so the page-level listener that
      * runs after it knows the click was on the field. */
@@ -152,6 +155,7 @@ export class ShopSearchField {
      */
     open(enabled: boolean) {
         this.blur(true);
+        this.suspended = false;
         this.enabled = enabled;
         this.container.visible = enabled;
         if (enabled) {
@@ -168,9 +172,27 @@ export class ShopSearchField {
         this.container.visible = false;
     }
 
+    /**
+     * A dialog opens over the shop (the shipyard's hangar, its ship info,
+     * its name prompt): the field lets go of the keyboard, keeping its
+     * query, and neither a click nor Cmd/Ctrl+F gives it back until
+     * {@link resume}. The well is still "visible" under the dialog, so
+     * worldVisible alone would let the shortcut take the dialog's keys.
+     */
+    suspend() {
+        this.suspended = true;
+        this.blur(false);
+    }
+
+    /** The dialog over the shop closed (see {@link suspend}). */
+    resume() {
+        this.suspended = false;
+    }
+
     /** Gives the field the keyboard (a click on it, or Cmd/Ctrl+F). */
     focus() {
-        if (!this.enabled || this.focused || !this.container.worldVisible) {
+        if (!this.enabled || this.suspended || this.focused
+            || !this.container.worldVisible) {
             return;
         }
         this.focused = true;
@@ -227,7 +249,7 @@ export class ShopSearchField {
     }
 
     private handleShortcut(event: KeyboardEvent) {
-        if (this.focused || !this.container.worldVisible
+        if (this.focused || this.suspended || !this.container.worldVisible
             || !isFocusShortcut(event)) {
             return;
         }

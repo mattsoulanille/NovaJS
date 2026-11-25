@@ -10,11 +10,12 @@ import {
 } from '../nova_plugin/escorts/index.js';
 import {
     CreditsComponent, escortProvenance, NO_DEAL, PlayerEscortComponent,
-    StoredShip, StoredShips, StoredShipsComponent,
+    PlayerNamesComponent, sanitizeShipName, StoredShip, StoredShips,
+    StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
-    Cargo, CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent,
-    SourceComponent,
+    applyOutfitPhysics, Cargo, CargoComponent, cargoUsed, FuelComponent,
+    OutfitsStateComponent, ShipComponent, SourceComponent,
 } from '../nova_plugin/ship/index.js';
 import { makeNpcShip } from '../nova_plugin/spawn/index.js';
 import {
@@ -42,8 +43,9 @@ import {
  * storage, a stored ship out as an escort — write the list, and they write a
  * new array rather than edit the old one.
  *
- * THE SNAPSHOT (see the design note's table): the class, its name, every
- * outfit aboard at its count, the hold and the fuel. Shield, armor and
+ * THE SNAPSHOT (see the design note's table): the class, its class name,
+ * the ship's own name (player_names.ts) when it has one, every outfit
+ * aboard at its count, the hold and the fuel. Shield, armor and
  * ionization are not kept — a stored ship comes back fully repaired, as a
  * hull from the shipyard does — and the pilot's PERSISTENT outfits (oütf
  * 0x0004) are never stored: they follow the pilot onto whatever hull they
@@ -52,8 +54,21 @@ import {
  * THE HOLD: each hull has its own, and a swap destroys nothing. The pilot's
  * hold and the incoming hull's are pooled; the incoming hull takes every ton
  * of mission cargo and as many commodities as it has room for, in
- * cargoForNewShip's order; the rest stays aboard the hull being put away,
- * which always has room for it (it is at most what that hull held already).
+ * cargoForNewShip's order; the rest stays aboard the hull being put away.
+ * That is usually at most what the hull held already, but not always: mission
+ * cargo the incoming hull must take can push commodities out past what the
+ * outgoing hull can hold (a 10 t hull carrying 20 t of mission cargo swapped
+ * for a full 100 t freighter). Each hull keeps its own capacity, so such a
+ * swap is REFUSED (swapHoldRefusal: 'holdFull') rather than overfill the
+ * hull put away; the pilot can sell or jettison commodities first.
+ *
+ * NAMES (player/player_names.ts): the ship being flown has the pilot's name
+ * for it, and a stored ship keeps its own (StoredShip `shipName`). A swap
+ * brings the stored ship's name back as the ship's name and puts the
+ * outgoing hull away under its own. Escorts carry no names (as in the
+ * original), so a hull that becomes an escort leaves its name behind, and a
+ * ship taken from an escort has none until the player names one at the
+ * shipyard (until then the `p` screen shows the derived "<class> <number>").
  */
 
 /** The game data the operations read; all synchronous (preloaded). */
@@ -118,15 +133,51 @@ export function snapshotHull(entity: Entity, storedAt: string,
     for (const [id, count] of options.strip ?? []) {
         outfits.set(id, (outfits.get(id) ?? 0) - count);
     }
+    const ownName = sanitizeShipName(
+        entity.components.get(PlayerNamesComponent)?.ship);
     return {
         ship: shipId,
         name: shipName(shipId, lookups),
+        ...(ownName !== undefined ? { shipName: ownName } : {}),
         outfits: sortedPairs(outfits),
         cargo: sortedPairs(options.cargo
             ?? entity.components.get(CargoComponent) ?? []),
         fuel: entity.components.get(FuelComponent)?.current ?? 0,
         storedAt,
     };
+}
+
+/**
+ * The name a stored ship is listed under: its own name when it has a
+ * non-blank one, else its class name.
+ */
+export function storedShipLabel(record: StoredShip): string {
+    const own = sanitizeShipName(record.shipName);
+    return own ? own : record.name;
+}
+
+/**
+ * Gives `hull` the ship name `name` (player_names.ts), or none (`ship`
+ * dropped, so the derived "<class> <number>" stands in). The record is
+ * replaced, never mutated: the hull it was carried from shares it.
+ */
+function nameHull(hull: Entity, name: string | undefined): void {
+    const { ship: _old, ...names } =
+        hull.components.get(PlayerNamesComponent) ?? {};
+    const cleaned = sanitizeShipName(name);
+    hull.components.set(PlayerNamesComponent,
+        cleaned !== undefined ? { ...names, ship: cleaned } : names);
+}
+
+/**
+ * Whether every outfit a record carries is loaded. A stored ship can hold
+ * a plug-in outfit whose plug-in has since been removed; taking it out
+ * would leave a hull whose physics and weapons can never be derived (and
+ * a save that quarantines), so the hangar refuses it as 'notLoaded'.
+ */
+export function recordOutfitsLoaded(record: StoredShip,
+    lookups: StorageLookups): boolean {
+    return record.outfits.every(([id]) => lookups.getOutfit(id) !== undefined);
 }
 
 /** The pilot's persistent outfits aboard `hull`: what follows the pilot. */
@@ -178,9 +229,36 @@ export function exchangeHolds(pilot: Cargo, incoming: Iterable<[string, number]>
     return { aboard, leftBehind };
 }
 
-/** A fuel stat holding `units`; the hull's providers set its bounds. */
-function fuelStat(units: number): Stat {
-    return new Stat({ current: units, max: units, min: 0, recharge: 0 });
+/**
+ * The fuel tank of a `shipData` hull carrying `outfits`: the class's energy
+ * plus every outfit's (applyOutfitPhysics, as ShipPhysicsProvider derives
+ * it). An outfit that is not loaded counts for nothing (the hangar refuses
+ * such a ship before it gets here).
+ */
+export function fuelCapacity(shipData: ShipData,
+    outfits: Iterable<[string, number]>, lookups: StorageLookups): number {
+    const resolved: [OutfitData, number][] = [];
+    for (const [id, count] of outfits) {
+        const outfit = lookups.getOutfit(id);
+        if (outfit) {
+            resolved.push([outfit, count]);
+        }
+    }
+    return applyOutfitPhysics(shipData.physics, resolved).energy;
+}
+
+/**
+ * A fuel stat holding `units` of a `capacity` tank. The max is the real
+ * tank, not `units`: an escort is refuelled at lift-off to its stat's max
+ * (escort_restock.ts) before any provider has run on it, so a max of
+ * `units` would send a ship stored dry out dry (review finding 2). The
+ * providers still own recharge.
+ */
+function fuelStat(units: number, capacity: number): Stat {
+    return new Stat({
+        current: Math.max(0, Math.min(units, capacity)), max: capacity,
+        min: 0, recharge: 0,
+    });
 }
 
 /**
@@ -208,7 +286,12 @@ export function buildHullFromRecord(oldHull: Entity, record: StoredShip,
         oldHull.components.get(CreditsComponent)?.credits ?? 0,
         lookups.getOutfit);
     hull.components.set(CargoComponent, aboard);
-    hull.components.set(FuelComponent, fuelStat(record.fuel));
+    hull.components.set(FuelComponent, fuelStat(record.fuel,
+        fuelCapacity(shipData, [...outfits].map(([id, { count }]) =>
+            [id, count] as [string, number]), lookups)));
+    // The ship's own name comes back with it (or none, for a ship that
+    // never had one); the pilot's name is carried with the pilot's state.
+    nameHull(hull, record.shipName);
     return { hull, leftBehind };
 }
 
@@ -232,6 +315,35 @@ export function swapWithStored(hull: Entity, index: number, storedAt: string,
     setStoredShips(built.hull, list.map((entry, i) =>
         i === index ? outgoing : entry));
     return built.hull;
+}
+
+/**
+ * Whether swapping `hull` for `incoming` (a stored ship's record, or an
+ * escort's snapshot) would leave more cargo aboard the hull being put away
+ * than its hold takes: 'holdFull', else undefined. See the module comment's
+ * THE HOLD. Needs the outgoing class and every outfit loaded; with them
+ * missing it does not refuse (the caller's 'notLoaded' checks come first).
+ */
+export function swapHoldRefusal(hull: Entity, incoming: StoredShip,
+    lookups: StorageLookups): 'holdFull' | undefined {
+    const incomingData = lookups.getShip(incoming.ship);
+    const outgoingId = hull.components.get(ShipComponent)?.id;
+    const outgoingData = outgoingId ? lookups.getShip(outgoingId) : undefined;
+    if (!incomingData || !outgoingData) {
+        return undefined;
+    }
+    const persistent = persistentOutfits(hull, lookups);
+    const { leftBehind } = exchangeHolds(
+        hull.components.get(CargoComponent) ?? new Map(), incoming.cargo,
+        newShipCargoCapacity(incomingData,
+            incomingOutfits(incoming, persistent), lookups));
+    const kept = outfitCounts(hull);
+    for (const [id, count] of persistent) {
+        kept.set(id, (kept.get(id) ?? 0) - count);
+    }
+    const outgoingCapacity = newShipCargoCapacity(outgoingData,
+        new Map([...kept].map(([id, count]) => [id, { count }])), lookups);
+    return cargoUsed(leftBehind) > outgoingCapacity ? 'holdFull' : undefined;
 }
 
 // ── Captured escorts ────────────────────────────────────────────────────
@@ -299,7 +411,8 @@ export function buildEscortFromRecord(record: StoredShip, player: string,
     escort.components.set(OutfitsStateComponent, new Map(
         record.outfits.map(([id, count]) => [id, { count }])));
     escort.components.set(CargoComponent, new Map(record.cargo));
-    escort.components.set(FuelComponent, fuelStat(record.fuel));
+    escort.components.set(FuelComponent, fuelStat(record.fuel,
+        fuelCapacity(shipData, record.outfits, lookups)));
     escort.components.set(PlayerEscortComponent, {
         player, parent: player, provenance: 'captured', deal: NO_DEAL,
     });
@@ -419,7 +532,8 @@ export type StorageRefusal =
     | 'wingDeployed'
     | 'escortCap'
     | 'notLoaded'
-    | 'notCaptured';
+    | 'notCaptured'
+    | 'holdFull';
 
 /** What the hangar says for each refusal. */
 export const STORAGE_REFUSAL_TEXT: Record<StorageRefusal, string> = {
@@ -428,4 +542,6 @@ export const STORAGE_REFUSAL_TEXT: Record<StorageRefusal, string> = {
     escortCap: 'You already have the maximum possible number of escorts.',
     notLoaded: 'That ship\'s data could not be loaded.',
     notCaptured: 'Only a ship you own can be stored.',
+    holdFull: 'Your old ship has no room for the cargo that would be left '
+        + 'aboard it. Sell some first.',
 };

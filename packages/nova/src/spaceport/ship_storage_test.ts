@@ -8,18 +8,20 @@ import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
 import {
     CreditsComponent, MissionShipComponent, MissionsComponent, NO_DEAL,
-    PlayerEscortComponent, PlayerShipSelector, StoredShip,
-    StoredShipsComponent,
+    PlayerEscortComponent, PlayerNamesComponent, PlayerShipSelector,
+    StoredShip, StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
 import {
     CargoComponent, FuelComponent, OutfitsStateComponent, ShipComponent,
     SourceComponent,
 } from '../nova_plugin/ship/index.js';
+import { restockCarriedEscorts } from './escort_restock.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import {
     buildEscortFromRecord, buyAndKeep, canBuyAndKeep, escortToStorage, escortWingOut, exchangeHolds,
-    setStoredShips, snapshotHull, StorageLookups, storableEscort, storedShipsOf,
-    storedToEscort, swapWithEscort, swapWithStored,
+    recordOutfitsLoaded, setStoredShips, snapshotHull, StorageLookups,
+    storableEscort, storedShipLabel, storedShipsOf, storedToEscort,
+    swapHoldRefusal, swapWithEscort, swapWithStored,
 } from './ship_storage.js';
 
 /**
@@ -34,13 +36,16 @@ describe('ship storage rules', () => {
     const BLASTER = 'nova:300';
     const LICENCE = 'nova:301';
     const POD = 'nova:302';
+    const TANK = 'nova:303';
 
     function ship(id: string, name: string, freeCargo: number,
         outfits: Record<string, number> = {}): ShipData {
         const base = getDefaultShipData();
         return {
             ...base, id, name, outfits,
-            physics: { ...base.physics, freeCargo },
+            // A 300-unit tank, as the pilot fixture's: a hull built from
+            // storage gets its class's real tank (plus outfits) as its max.
+            physics: { ...base.physics, freeCargo, energy: 300 },
         };
     }
     function outfit(id: string, fields: Partial<OutfitData> = {}): OutfitData {
@@ -58,6 +63,8 @@ describe('ship storage rules', () => {
         [LICENCE, outfit(LICENCE, { persistent: true })],
         // Adds hold: counts toward the incoming hull's capacity.
         [POD, outfit(POD, { physics: { freeCargo: 5 } } as Partial<OutfitData>)],
+        // A fuel tank: 100 more units of energy.
+        [TANK, outfit(TANK, { physics: { energy: 100 } } as Partial<OutfitData>)],
     ]);
     const lookups: StorageLookups = {
         getShip: id => SHIPS.get(id),
@@ -394,7 +401,7 @@ describe('ship storage rules', () => {
                     cargo: [['cargo:1', 4]], fuel: 120, storedAt: HERE,
                 });
                 const hull = pilot(SHUTTLE, { stored: [record] });
-                const escort = storedToEscort(hull, 0, PLAYER, lookups);
+                const escort = storedToEscort(hull, 0, 'player-uuid', lookups);
                 escortToStorage(hull, escort, HERE, lookups);
                 expect(storedShipsOf(hull)).toEqual([record]);
             });
@@ -460,4 +467,127 @@ describe('ship storage rules', () => {
             setStoredShips(hull, []);
             expect(hull.components.has(StoredShipsComponent)).toBeFalse();
         });
+    describe('names (player_names.ts)', () => {
+        function named(entity: Entity, ship: string): Entity {
+            entity.components.set(PlayerNamesComponent,
+                { pilot: 'Matt', ship });
+            return entity;
+        }
+
+        it('a snapshot keeps the ship\'s own name beside its class name',
+            () => {
+                const record = snapshotHull(
+                    named(pilot(SHUTTLE), 'Rocinante'), HERE, lookups);
+                expect(record.name).toBe('Shuttle');
+                expect(record.shipName).toBe('Rocinante');
+                expect(storedShipLabel(record)).toBe('Rocinante');
+                // An escort has no name of its own: listed by class.
+                const escort = snapshotHull(pilot(FREIGHTER), HERE, lookups);
+                expect(escort.shipName).toBeUndefined();
+                expect(storedShipLabel(escort)).toBe('Freighter');
+                // A blank name is a name, but lists as the class.
+                expect(storedShipLabel({ ...record, shipName: '' }))
+                    .toBe('Shuttle');
+            });
+
+        it('a swap brings the stored ship\'s name back and stores the '
+            + 'outgoing hull under its own', () => {
+                const hull = named(pilot(SHUTTLE, {
+                    stored: [stored(FREIGHTER, { shipName: 'Tub' })],
+                }), 'Rocinante');
+                const swapped = swapWithStored(hull, 0, HERE, lookups);
+                expect(swapped.components.get(PlayerNamesComponent))
+                    .toEqual({ pilot: 'Matt', ship: 'Tub' });
+                expect(storedShipsOf(swapped)[0].shipName).toBe('Rocinante');
+                // And back again.
+                const back = swapWithStored(swapped, 0, HERE, lookups);
+                expect(back.components.get(PlayerNamesComponent))
+                    .toEqual({ pilot: 'Matt', ship: 'Rocinante' });
+                expect(storedShipsOf(back)[0].shipName).toBe('Tub');
+                // The hull swapped away still has its record untouched.
+                expect(hull.components.get(PlayerNamesComponent)?.ship)
+                    .toBe('Rocinante');
+            });
+
+        it('a stored ship that never had a name comes out with none (the '
+            + 'derived "<class> <number>" stands in)', () => {
+                const hull = named(pilot(SHUTTLE, {
+                    stored: [stored(FREIGHTER)],
+                }), 'Rocinante');
+                const swapped = swapWithStored(hull, 0, HERE, lookups);
+                expect(swapped.components.get(PlayerNamesComponent))
+                    .toEqual({ pilot: 'Matt' });
+            });
+
+        it('buy and keep stores the old hull under its own name', () => {
+            const hull = named(pilot(SHUTTLE), 'Rocinante');
+            const bought = buyAndKeep(hull, SHIPS.get(FREIGHTER)!, {
+                currentShip: SHIPS.get(SHUTTLE)!, outfits: new Map(),
+                getOutfit: id => OUTFITS.get(id), credits: 1_000_000,
+            }, HERE, lookups);
+            expect(storedShipsOf(bought).map(record => record.shipName))
+                .toEqual(['Rocinante']);
+        });
+    });
+
+    describe('review findings', () => {
+        it('a stored ship with an outfit that is not loaded is known as '
+            + 'such (finding 1)', () => {
+                expect(recordOutfitsLoaded(stored(SHUTTLE,
+                    { outfits: [[BLASTER, 1]] }), lookups)).toBeTrue();
+                expect(recordOutfitsLoaded(stored(SHUTTLE,
+                    { outfits: [[BLASTER, 1], ['gone:128', 1]] }), lookups))
+                    .toBeFalse();
+            });
+
+        it('an escort built from storage lifts off with a FULL tank, its '
+            + 'class\'s and its outfits\' (finding 2)', async () => {
+                const hull = pilot(SHUTTLE, {
+                    stored: [stored(FREIGHTER,
+                        { outfits: [[TANK, 1]], fuel: 0 })],
+                });
+                const escort = storedToEscort(hull, 0, 'player-uuid', lookups);
+                const fuel = escort.components.get(FuelComponent)!;
+                // Stored dry, and dry until the lift-off refuels it...
+                expect(fuel.current).toBe(0);
+                expect(fuel.max).toBe(400);
+                // ...which fills it to the real tank, not to what it held.
+                await restockCarriedEscorts([{ uuid: 'e', entity: escort }], {
+                    getOutfit: async id => OUTFITS.get(id),
+                    getWeapon: async () => undefined,
+                });
+                expect(escort.components.get(FuelComponent)!.current)
+                    .toBe(400);
+            });
+
+        it('a hull taken out of storage keeps its stored fuel in a tank of '
+            + 'its real size (finding 2)', () => {
+                const hull = pilot(SHUTTLE, {
+                    stored: [stored(FREIGHTER,
+                        { outfits: [[TANK, 2]], fuel: 120 })],
+                });
+                const fuel = swapWithStored(hull, 0, HERE, lookups)
+                    .components.get(FuelComponent)!;
+                expect(fuel.current).toBe(120);
+                expect(fuel.max).toBe(500);
+            });
+
+        it('refuses a swap that would overfill the hull put away '
+            + '(finding 6)', () => {
+                // A 10 t Shuttle with 20 t of mission cargo, for a full
+                // 100 t Freighter: 20 t of commodities would be left in a
+                // 10 t hold.
+                const hull = pilot(SHUTTLE, {
+                    cargo: [['mission:nova:400', 20]],
+                });
+                const full = stored(FREIGHTER, { cargo: [['cargo:0', 100]] });
+                expect(swapHoldRefusal(hull, full, lookups)).toBe('holdFull');
+                // 90 t aboard: 10 t left behind fits the Shuttle exactly.
+                const fits = stored(FREIGHTER, { cargo: [['cargo:0', 90]] });
+                expect(swapHoldRefusal(hull, fits, lookups)).toBeUndefined();
+                // Without the mission cargo there is nothing to displace.
+                expect(swapHoldRefusal(pilot(SHUTTLE), full, lookups))
+                    .toBeUndefined();
+            });
+    });
 });

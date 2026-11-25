@@ -27,9 +27,10 @@ import { MenuControls } from './menu_controls.js';
 import { FONT } from './outfitter.js';
 import { ScrollArrow } from './scroll_arrow.js';
 import {
-    escortToStorage, escortWingOut, snapshotHull, STORAGE_REFUSAL_TEXT,
-    StorageLookups, StorageRefusal, storableEscort, storedShipsOf,
-    storedToEscort, swapWithEscort, swapWithStored,
+    escortToStorage, escortWingOut, recordOutfitsLoaded, snapshotHull,
+    STORAGE_REFUSAL_TEXT, StorageLookups, StorageRefusal, storableEscort,
+    storedShipLabel, storedShipsOf, storedToEscort, swapHoldRefusal,
+    swapWithEscort, swapWithStored,
 } from './ship_storage.js';
 
 /**
@@ -51,8 +52,21 @@ import {
  * Every button is one storage operation (ship_storage.ts), done at the
  * click and handed to the shipyard (HangarContext.adoptHull), which adopts
  * a new hull exactly as it adopts a purchase. There is no Cancel: like the
- * shipyard's Buy, each press is the transaction.
+ * shipyard's Buy, each press is the transaction. Return presses Done.
+ *
+ * Ships are listed under their own names (player_names.ts) where they have
+ * one: the tile's first line when the name fits on it
+ * (HANGAR_CAPTION_NAME_CHARS), the class's short name otherwise, and the
+ * description pane always names both.
  */
+
+/**
+ * The longest ship name a tile's caption shows in place of the class's
+ * short name: one line of the 77 px caption at the 9.4 px caption font
+ * (item_grid.ts). A longer name would wrap into the subtitle and the
+ * picture, so the tile keeps the class name and the pane shows the name.
+ */
+export const HANGAR_CAPTION_NAME_CHARS = 14;
 
 /** What a tile stands for. */
 export type HangarEntryKind = 'current' | 'stored' | 'escort';
@@ -119,16 +133,20 @@ function n(value: number): string {
 }
 
 /**
- * The description pane's text for a ship: its name, where it is, and its
+ * The description pane's text for a ship: its name (and its class, when
+ * the name is the ship's own), where it is, and its
  * key figures with its outfits fitted, then the outfits themselves. Pure
  * over the cached game data, so the specs pin it without PIXI.
  */
 export function hangarDescription(entry: {
-    name: string, where: string, shipId: string,
+    name: string, className?: string, where: string, shipId: string,
     outfits: [string, number][], cargo: [string, number][], fuel: number,
 }, gameData: SimulationGameDataInterface): string {
     const ship = gameData.data.Ship.getCached(entry.shipId);
-    const lines = [entry.name, entry.where, ''];
+    const lines = [entry.name,
+        ...(entry.className && entry.className !== entry.name
+            ? [entry.className] : []),
+        entry.where, ''];
     if (ship) {
         const outfitsState: OutfitsState = new Map(entry.outfits
             .map(([id, count]) => [id, { count }]));
@@ -173,12 +191,18 @@ export function hangarEntries(hull: Entity, lookups: StorageLookups,
     const tile = (record: StoredShip, kind: HangarEntryKind,
         where: string, subtitle: string, extra: Partial<HangarEntry>) => {
         const ship = lookups.getShip(record.ship);
+        const label = storedShipLabel(record);
+        const first = label !== record.name
+            && Array.from(label).length <= HANGAR_CAPTION_NAME_CHARS
+            ? label : captionName(ship, record.name);
         entries.push({
             id: `${kind}:${extra.uuid ?? extra.index ?? 0}`,
-            name: record.name,
-            shortName: `${captionName(ship, record.name)}\n${subtitle}`,
-            desc: hangarDescription({ ...record, shipId: record.ship, where },
-                gameData),
+            name: label,
+            shortName: `${first}\n${subtitle}`,
+            desc: hangarDescription({
+                ...record, name: label, className: record.name,
+                shipId: record.ship, where,
+            }, gameData),
             pict: ship?.pict ?? '',
             kind, shipId: record.ship, ...extra,
         });
@@ -303,6 +327,10 @@ export class HangarDialog {
             down: navigate(grid => grid.down()),
             depart: () => this.closed.next(),
         });
+        // Return presses Done (MenuControls.defaultButton), as it does in
+        // the shipyard under it: closing changes nothing, and every swap
+        // was already made at its own click.
+        this.controls.defaultButton = () => this.closed.next();
     }
 
     /** The synchronous game-data lookups, over what {@link preload} warmed. */
@@ -351,6 +379,15 @@ export class HangarDialog {
             this.simulationData.data.Ship.get(id).catch(() => undefined)));
         const outfitIds = new Set<string>();
         const hull = this.context?.hull();
+        // The hull being flown's own outfits too: a swap decides which of
+        // them are the pilot's persistent ones (isPersistent over the
+        // cache), and an uncached one would read as not persistent and be
+        // put away with the hull (review finding 3; the shipyard's own
+        // outfit load is not awaited before the hangar can open).
+        for (const id of hull?.components.get(OutfitsStateComponent)
+            ?.keys() ?? []) {
+            outfitIds.add(id);
+        }
         for (const record of hull ? storedShipsOf(hull) : []) {
             for (const [id] of record.outfits) {
                 outfitIds.add(id);
@@ -385,12 +422,24 @@ export class HangarDialog {
     /** Rebuilds the grid, selecting `select` (an entry id) if it exists. */
     protected async refresh(select?: string): Promise<void> {
         await this.preload();
+        if (this.container.destroyed) {
+            // Torn down while the data loaded (dismiss).
+            return;
+        }
         const entries = this.entries();
+        // The old grid's tiles go with it (their caption textures too);
+        // only the large picture shown beside it lives elsewhere, and
+        // setSelected below replaces that.
+        const old = this.itemGrid;
         this.gridContainer.removeChildren();
+        old?.activeTile.complete();
+        old?.container.destroy({ children: true });
         const grid = new ItemGrid(this.displayAssets, entries);
         this.itemGrid = grid;
         this.gridContainer.addChild(grid.container);
         grid.activeTile.subscribe(tile => this.setSelected(tile));
+        // The wheel scrolls the page without the arrows' help.
+        grid.scrolled.subscribe(() => this.updateArrows());
         const selected = entries.find(entry => entry.id === select)
             ?? entries[0];
         if (selected) {
@@ -419,12 +468,43 @@ export class HangarDialog {
         this.refreshButtons();
     }
 
+    /**
+     * The record a stored or escort entry stands for: the stored one, or a
+     * snapshot of the escort on the roster now. Undefined for the hull
+     * being flown, or an escort no longer on the roster.
+     */
+    protected entryRecord(entry: HangarEntry): StoredShip | undefined {
+        if (entry.kind === 'stored') {
+            return entry.stored;
+        }
+        const context = this.context;
+        const escort = entry.kind === 'escort' ? context?.roster?.()
+            .find(row => row.uuid === entry.uuid) : undefined;
+        return escort && context
+            ? snapshotHull(escort.entity, context.stellarId, this.lookups)
+            : undefined;
+    }
+
+    /**
+     * Whether the ship an entry stands for can be built: its class and
+     * every outfit aboard it loaded (review finding 1: a stored ship can
+     * carry an outfit of a plug-in since removed).
+     */
+    protected entryLoaded(entry: HangarEntry): boolean {
+        if (!this.lookups.getShip(entry.shipId)) {
+            return false;
+        }
+        const record = this.entryRecord(entry);
+        return record === undefined
+            || recordOutfitsLoaded(record, this.lookups);
+    }
+
     /** What the Swap button would be refused for, for the selection. */
     protected swapRefusal(entry: HangarEntry): StorageRefusal | undefined {
         if (this.context?.fightersOut()) {
             return 'fightersDeployed';
         }
-        if (!this.lookups.getShip(entry.shipId)) {
+        if (!this.entryLoaded(entry)) {
             return 'notLoaded';
         }
         if (entry.kind === 'escort' && entry.uuid !== undefined
@@ -432,12 +512,17 @@ export class HangarDialog {
                 this.context?.world?.())) {
             return 'wingDeployed';
         }
+        const record = this.entryRecord(entry);
+        const hull = this.context?.hull();
+        if (record && hull) {
+            return swapHoldRefusal(hull, record, this.lookups);
+        }
         return undefined;
     }
 
     /** What the move button would be refused for, for the selection. */
     protected moveRefusal(entry: HangarEntry): StorageRefusal | undefined {
-        if (!this.lookups.getShip(entry.shipId)) {
+        if (!this.entryLoaded(entry)) {
             return 'notLoaded';
         }
         if (entry.kind === 'stored' && this.escortCapFull()) {
@@ -612,21 +697,50 @@ export class HangarDialog {
         }
     }
 
-    /** Shows the hangar over the shipyard until Done. */
+    /**
+     * Shows the hangar over the shipyard until Done (or a dismiss). The
+     * close is listened for from the start, so a dismiss that arrives
+     * while the first grid is still loading closes it too, and nothing is
+     * bound or drawn afterwards (review finding 4).
+     */
     async show(context: HangarContext): Promise<void> {
         this.context = context;
         this.say('');
-        await this.refresh();
-        this.container.visible = true;
-        this.controls.bind();
-        await firstValueFrom(this.closed);
-        this.controls.unbind();
-        this.container.visible = false;
+        this.showing = true;
+        let closed = false;
+        const subscription = this.closed.subscribe(() => { closed = true; });
+        try {
+            await this.refresh();
+            if (closed || this.container.destroyed) {
+                return;
+            }
+            this.container.visible = true;
+            this.controls.bind();
+            if (!closed) {
+                await firstValueFrom(this.closed);
+            }
+        } finally {
+            subscription.unsubscribe();
+            this.showing = false;
+            this.controls.unbind();
+            if (!this.container.destroyed) {
+                this.container.visible = false;
+            }
+        }
     }
 
-    /** Closes the hangar from outside (the shipyard is being dismissed). */
+    /** Whether show() is running (loading or up). */
+    private showing = false;
+
+    /**
+     * Closes the hangar from outside: the shipyard is being dismissed
+     * because its display world is torn down. Its keys are RELEASED for
+     * good (MenuControls.release), since a show() continuation that has
+     * not run yet must not bind them again.
+     */
     dismiss() {
-        if (this.container.visible) {
+        this.controls.release();
+        if (this.showing) {
             this.closed.next();
         }
     }
