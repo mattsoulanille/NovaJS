@@ -335,13 +335,17 @@ export function planetClearance(opts: {
     rankLandingOverride?: boolean,
     /** An active mission sends the player here; see ClearancePlayer. */
     missionDestination?: boolean,
+    /** Leave out the gövt Require travel-permit test (as if the govt
+     * required nothing); see stellarClearanceWith. */
+    ignoreTravelPermit?: boolean,
 }): StellarClearance {
     const bribed = opts.bribedUntil !== undefined
         && opts.bribedUntil > (opts.now ?? 0);
     return stellarClearance(opts.planet, {
         record: stellarRecord(opts.records, opts.systemId,
             opts.systemStatusGovt),
-        govtRequire: opts.planetGovt?.require,
+        govtRequire: opts.ignoreTravelPermit
+            ? undefined : opts.planetGovt?.require,
         contribute: opts.contribute,
         bribed,
         rankLandingOverride: opts.rankLandingOverride,

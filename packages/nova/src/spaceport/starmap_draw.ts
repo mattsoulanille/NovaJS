@@ -183,10 +183,10 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *
  *  3. DOES IT LET THE PLAYER LAND? An inhabited system whose every port
  *     would refuse the player's landing (the landing-clearance rule of
- *     stellar_clearance.ts: MinStatus, a travel permit, a ränk 0x0200
- *     override, a bribe, a mission destination) is ORANGE, #ff6300, while
- *     the player's record in that system is 0 or above, and RED, #ff0000,
- *     once it is negative. MEASURED (reference "Map dot colours", waves 23
+ *     stellar_clearance.ts: MinStatus, a ränk 0x0200 override, a bribe, a
+ *     mission destination; NOT the travel permit, below) is ORANGE,
+ *     #ff6300, while the player's record in that system is 0 or above,
+ *     and RED, #ff0000, once it is negative. MEASURED (reference "Map dot colours", waves 23
  *     and 24): Kit Map Picky (its only port MinStatus 100) orange at record
  *     0 and red at -500; Kit Map Wanted / Wanted Planet (MinStatus 0) red at
  *     -500 and already at -5 ("No Convictions", far above -CrimeTol, not
@@ -196,9 +196,14 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     stays blue at any record (measured, Kit Map Mixed at -500 and -5); see
  *     landable.ts systemRefusesLanding. A positive record still below
  *     MinStatus is orange too (measured, reference "Wave-24 leftovers,
- *     wave 25": Kit Map Picky at +50 against MinStatus 100). GUESS: a
- *     refusal for another reason (a travel permit, ränk 0x0200) follows
- *     the same record rule.
+ *     wave 25": Kit Map Picky at +50 against MinStatus 100). A TRAVEL
+ *     PERMIT refusal does not colour the dot at all (measured, "Map dot
+ *     colours, wave 27": Kit Map Permit, gövt Require 0x1 unmet, its only
+ *     port MinStatus -32767, stays #0000ff while `l` there says "Landing
+ *     request denied."), so the rule asks only the MinStatus / record
+ *     test (starmap.ts refusingSystems). GUESS: a ränk 0x0200 override, a
+ *     bribe or a mission destination that lets the player land un-colours
+ *     the dot (unmeasured).
  *
  * NOT THE LEGAL STATUS WORD, NOR THE GOVERNMENT'S FLAGS (Matthew's playtest,
  * 2026-11-24: "the system does not like me, but it's still blue instead of

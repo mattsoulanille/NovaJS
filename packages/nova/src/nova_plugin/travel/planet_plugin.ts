@@ -349,6 +349,10 @@ export function stellarClearanceWith(opts: {
     planetId: string,
     systemId: string | undefined,
     now: number,
+    /** Skip the gövt Require travel-permit test (the star map's dot
+     * colour, which a permit refusal does not change: reference "Map dot
+     * colours, wave 27"). The landing gate never sets it. */
+    ignoreTravelPermit?: boolean,
 }): StellarClearance {
     const { lookups } = opts;
     const govtId = opts.planetData.govt ?? undefined;
@@ -380,6 +384,7 @@ export function stellarClearanceWith(opts: {
         rankLandingOverride,
         missionDestination: isMissionDestination(opts.missions?.values(),
             opts.planetId, opts.sameStellar),
+        ignoreTravelPermit: opts.ignoreTravelPermit,
     });
 }
 

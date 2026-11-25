@@ -6,6 +6,7 @@ import { getIntegrationGameData } from '../communication/simulation_test_fixture
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { systemIsInhabited } from '../nova_plugin/core/index.js';
 import { MissionUniverse } from './mission_universe.js';
+import { stellarClearanceWith } from '../nova_plugin/travel/index.js';
 import { MapClearancePlayer, refusingSystems } from './starmap.js';
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_REFUSING_CLEAN_COLOR, SYSTEM_REFUSING_COLOR,
@@ -162,6 +163,66 @@ describe('the map\'s orange / red dot: every port refuses the player', () => {
             .toBe(SYSTEM_UNEXPLORED_COLOR);
         expect(systemDotColor(true, true, undefined))
             .toBe(SYSTEM_INHABITED_COLOR);
+    });
+});
+
+/**
+ * A TRAVEL-PERMIT refusal does not colour the dot (reference "Map dot
+ * colours, wave 27"): gövt 298 Kit Permit Owner, Require 0x1 (nothing the
+ * Kit Lancer carries contributes it), owns Kit Map Permit, whose only port
+ * is MinStatus -32767. `l` there said "Landing request denied."; the map
+ * drew it #0000ff BLUE. Only the MinStatus / record test colours.
+ */
+describe('the map\'s dot for a travel-permit refusal', () => {
+    const permitGovt: GovtData = {
+        ...getDefaultGovtData(), id: 'kit:298', require: '1',
+    };
+    const port = (id: string, minStatus: number): PlanetData => ({
+        ...getDefaultPlanetData(), id, name: id, govt: permitGovt.id,
+        minStatus,
+        flags: { ...getDefaultPlanetData().flags, canLand: true,
+            uninhabited: false },
+    });
+    const permitPort = port('kit:1613', -32767);
+    const permitPicky = port('kit:picky', 100);
+    const planets = new Map([permitPort, permitPicky].map(p => [p.id, p]));
+    const systems: SystemData[] = [
+        { ...getDefaultSystemData(), id: 'kit:1208', name: 'Kit Map Permit',
+            govt: permitGovt.id, planets: [permitPort.id] },
+        { ...getDefaultSystemData(), id: 'kit:both', name: 'Both',
+            govt: permitGovt.id, planets: [permitPicky.id] },
+    ];
+    const universe = {
+        getPlanet: (id: string) => planets.get(id),
+        getGovt: (id: string) => id === permitGovt.id ? permitGovt : undefined,
+        getSystemInfo: (id: string) => {
+            const s = systems.find(system => system.id === id);
+            return s ? { id, govt: s.govt, links: [] } : undefined;
+        },
+        getRank: () => undefined,
+        sameStellar: (a: string, b: string) => a === b,
+    };
+    const lookups = {
+        govt: universe.getGovt, systemGovt: () => permitGovt.id,
+        outfitContribute: () => undefined, rank: () => undefined,
+    };
+
+    it('leaves the system blue while its port still refuses the landing',
+        () => {
+            const refusing = refusingSystems(systems, universe,
+                { records: new Map(), now: 0 }, () => true, () => undefined);
+            expect(refusing.has('kit:1208')).toBeFalse();
+            // ... which the landing gate does refuse, for the permit.
+            expect(stellarClearanceWith({
+                planetData: permitPort, lookups, planetId: permitPort.id,
+                systemId: 'kit:1208', now: 0,
+            })).toEqual({ cleared: false, reason: 'permit' });
+        });
+
+    it('still colours a port that ALSO refuses on MinStatus', () => {
+        const refusing = refusingSystems(systems, universe,
+            { records: new Map(), now: 0 }, () => true, () => undefined);
+        expect([...refusing]).toEqual([['kit:both', 'clean']]);
     });
 });
 

@@ -86,7 +86,11 @@ export interface MapClearancePlayer {
  * that record (starmap_draw.ts MapRefusal): 'clean' (0 or above, orange)
  * or 'negative' (red), the record read as the sim reads it (recordIn: an
  * absent entry is the status govt's InitialRec). Reference "Map dot
- * colours, wave 24".
+ * colours, wave 24". The gövt Require travel permit is left out: a port
+ * that refuses only for a missing permit leaves the dot blue (MEASURED,
+ * "Map dot colours, wave 27"), so only the MinStatus / record test colours
+ * it. The ränk 0x0200, bribe and mission-destination overrides still
+ * un-colour a port they open (GUESS: unmeasured).
  */
 export function refusingSystems(systems: readonly SystemData[],
     universe: Pick<MissionUniverse, 'getPlanet' | 'getGovt'
@@ -114,6 +118,11 @@ export function refusingSystems(systems: readonly SystemData[],
                 ranks: player.ranks, missions: player.missions,
                 sameStellar: (a, b) => universe.sameStellar(a, b),
                 planetId, systemId: system.id, now: player.now,
+                // A missing travel permit refuses the landing ("Landing
+                // request denied.") but leaves the dot BLUE (measured,
+                // reference "Map dot colours, wave 27": gövt 298 Kit
+                // Permit Owner, Require 0x1, its Kit Map Permit #0000ff).
+                ignoreTravelPermit: true,
             }).cleared);
         if (refuses) {
             const record = recordIn(player.records ?? new Map(), system.id,
