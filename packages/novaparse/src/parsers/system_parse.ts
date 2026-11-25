@@ -135,8 +135,8 @@ export async function SystemParse(syst: SystResource,
         }
     }
 
-    // The reinforcement fleet (#306; parsed only, no gameplay reads it
-    // yet). ReinfFleet "Set to 0 or -1 if unused"; otherwise a flët id,
+    // The reinforcement fleet (#306; nova_plugin/spawn/reinforcements.ts
+    // calls it). ReinfFleet "Set to 0 or -1 if unused"; otherwise a flët id,
     // soft-referenced like the spawn tables above.
     let reinforcements: SystemReinforcements | null = null;
     if (syst.reinforcementFleet >= 128) {
