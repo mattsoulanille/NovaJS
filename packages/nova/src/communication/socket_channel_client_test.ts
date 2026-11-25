@@ -551,6 +551,128 @@ describe("SocketChannelClient", function () {
         });
     });
 
+    /**
+     * The keepalive's count of pings since the last inbound frame belonged
+     * to the LOST connection and was already past maxPings when the
+     * keepalive gave up on it, so every replacement inherited it: one
+     * keepalive interval (1.2 s in the browser) to complete its handshake
+     * AND deliver the server's first frame, else it was replaced in turn —
+     * on a link slower than that, forever. A replacement now gets the
+     * grace the first socket had, and an established connection's
+     * dead-socket detection is unchanged.
+     */
+    describe("a replacement socket's handshake grace", () => {
+        const TIMEOUT = 100;
+        const MAX_PINGS = 3;
+        /** Keepalive intervals of silence before a socket is given up on:
+         * maxPings + 2 (the count must EXCEED maxPings, and is checked
+         * before each interval's ping). */
+        const LIMIT = MAX_PINGS + 2;
+        let sockets: BrowserLikeSocket[];
+        let client: SocketChannelClient;
+
+        beforeEach(() => {
+            sockets = [];
+            client = new SocketChannelClient({
+                webSocketFactory: () => {
+                    const socket = new BrowserLikeSocket();
+                    sockets.push(socket);
+                    return socket as unknown as WebSocket;
+                },
+                warn, codec, timeout: TIMEOUT, maxPings: MAX_PINGS,
+            });
+            sockets[0].open();
+            sockets[0].receive({ pong: true });
+            expect(client.connected.value).toBeTrue();
+        });
+
+        afterEach(() => {
+            client.disconnect();
+        });
+
+        /** Ticks one keepalive interval at a time until a new socket is
+         * made; how many intervals that took (undefined: none in `max`). */
+        function intervalsUntilReplaced(max = 3 * LIMIT): number | undefined {
+            const before = sockets.length;
+            for (let i = 1; i <= max; i++) {
+                clock.tick(TIMEOUT);
+                if (sockets.length > before) {
+                    return i;
+                }
+            }
+            return undefined;
+        }
+
+        /** The established connection goes half-open and is given up on;
+         * returns its replacement. */
+        function loseTheConnection(): BrowserLikeSocket {
+            expect(intervalsUntilReplaced())
+                .withContext('the established connection\'s limit')
+                .toBe(LIMIT);
+            expect(client.connected.value).toBeFalse();
+            return sockets[sockets.length - 1];
+        }
+
+        it("gives up on an established connection after the same silence as before", () => {
+            // Frames keep it alive however long it runs...
+            for (let i = 0; i < 3 * LIMIT; i++) {
+                clock.tick(TIMEOUT);
+                sockets[0].receive({ pong: true });
+            }
+            expect(sockets.length).toBe(1);
+            // ...and LIMIT intervals of silence end it, as they always did.
+            loseTheConnection();
+        });
+
+        it("keeps a replacement whose handshake and first frame take longer than one interval but less than the limit", () => {
+            const slow = loseTheConnection();
+            // The handshake takes most of the limit.
+            clock.tick((LIMIT - 1) * TIMEOUT);
+            expect(sockets.length).withContext('replaced mid-handshake')
+                .toBe(2);
+            slow.open();
+            // ...and the server's first frame arrives just inside it.
+            clock.tick(TIMEOUT / 2);
+            expect(sockets.length).toBe(2);
+            slow.receive({ pong: true });
+            expect(client.connected.value).toBeTrue();
+            // Established from here on: frames keep it, as for any other.
+            for (let i = 0; i < 3 * LIMIT; i++) {
+                clock.tick(TIMEOUT);
+                slow.receive({ pong: true });
+            }
+            expect(sockets.length).toBe(2);
+            expect(client.connected.value).toBeTrue();
+        });
+
+        it("still replaces a replacement that never completes its handshake, each one after the full limit", () => {
+            loseTheConnection();
+            // Three dead replacements in a row: none is cut short.
+            for (let i = 0; i < 3; i++) {
+                expect(intervalsUntilReplaced())
+                    .withContext(`dead replacement ${i + 1}`).toBe(LIMIT);
+            }
+            expect(client.connected.value).toBeFalse();
+            // The one that finally connects is kept.
+            const fresh = sockets[sockets.length - 1];
+            fresh.open();
+            fresh.receive({ pong: true });
+            expect(client.connected.value).toBeTrue();
+        });
+
+        it("still replaces a replacement that opens but never sends a frame", () => {
+            const mute = loseTheConnection();
+            mute.open();
+            expect(intervalsUntilReplaced()).toBe(LIMIT);
+        });
+
+        it("replaces a replacement the server closes at the next interval", () => {
+            const refused = loseTheConnection();
+            refused.close();
+            expect(intervalsUntilReplaced()).toBe(1);
+        });
+    });
+
     it("keeps the queue of a FIRST connection: nothing to drop before any connection existed", () => {
         const created: BrowserLikeSocket[] = [];
         const client = new SocketChannelClient({

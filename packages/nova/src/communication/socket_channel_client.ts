@@ -227,6 +227,17 @@ export class SocketChannelClient implements ChannelClient {
         }
         this.resetTimeout();
         this.sendPing();
+        // The new socket gets the grace the FIRST one had: the whole
+        // dead-socket limit (maxPings + 2 keepalive intervals) to complete
+        // its handshake and deliver the server's first frame. The count
+        // was the lost connection's, already past maxPings when the
+        // keepalive gave up on it, so a replacement inherited one interval
+        // (1.2 s in the browser) and, on a link slower than that, was
+        // replaced in turn, forever. The probe just written does not count:
+        // a CONNECTING socket drops it (sendRaw). An established
+        // connection's detection is untouched: every inbound frame resets
+        // the count, and a replacement is established by its first.
+        this.pingsSentSinceMessage = 0;
     }
 
     setReconnectPreamble(preamble: () => unknown) {
@@ -263,7 +274,11 @@ export class SocketChannelClient implements ChannelClient {
             || this.pingsSentSinceMessage > this.maxPings) {
             this.disconnect();
             this.warn("Lost connection. Reconnecting...");
+            // reconnect() has probed the new socket and re-armed the
+            // keepalive (or, refused, deliberately left it unarmed); a
+            // second ping here would only spend the replacement's grace.
             this.reconnect();
+            return;
         }
 
         this.sendPing();
