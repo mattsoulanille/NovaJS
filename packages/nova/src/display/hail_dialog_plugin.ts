@@ -62,6 +62,7 @@ import {
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
     stellarClearanceFor, StellarBribesComponent, StellarHaggleComponent,
+    SystemVisitComponent,
 } from '../nova_plugin/travel/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
@@ -1247,20 +1248,23 @@ export async function computeContext(world: World,
         const bargains = !clearance.cleared && planetTakesBribes(govt);
         // An ordinary planet sometimes turns Offer Bribe down flat (hail.ts's
         // planetRefusesBribe; reference "R7 bribe price above 1M, wave 27":
-        // "Yeah, right." at 2M, "You wish." at 100M), and every planet
+        // "Yeah, right." at 2M, "You wish." at 100M), drawn once per system
+        // visit (the pilot's SystemVisit ordinal; reference "R7 planet
+        // bribe withdrawal, wave 30": a fresh refusal held through re-hails
+        // and a landing a day later), and every planet
         // refuses until the pilot leaves the system once a Lower Price has
         // made it withdraw (reference "R7 planet bribe withdrawal, wave
         // 29"), both answered from STR# 3002 45-49. The button is offered
         // all the same and answers the refusal in the well, as a ship's Beg
         // For Mercy that will not be bought does; applyHail draws the same
         // verdict and charges nothing.
-        const date = player.entity.components.get(GameDateComponent);
         const haggle = planetId !== undefined
             ? laterStellarHaggle(localStellarHaggle?.get(planetId),
                 stellarHaggleOf(player.entity, planetId))
             : laterStellarHaggle(undefined, undefined);
         const refuses = bargains && planetBribeRefused(planetTargetUuid,
-            player.uuid, !!govt?.flags.largerBribes, haggle, date);
+            player.uuid, !!govt?.flags.largerBribes, haggle,
+            player.entity.components.get(SystemVisitComponent));
         const canBribe = bargains && !refuses;
         const seed = hashString(planetTargetUuid);
         // A line per hail of the day, like the original's eleven (all five

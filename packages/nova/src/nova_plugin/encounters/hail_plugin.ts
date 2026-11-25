@@ -52,6 +52,7 @@ import {
 import {
     PlanetComponent, PlanetDataComponent, stellarClearanceFor,
     StellarBribesComponent, STELLAR_BRIBE_MS, StellarHaggleComponent,
+    SystemVisitComponent,
 } from '../travel/index.js';
 import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
@@ -303,10 +304,11 @@ function playerNeed(player: Entity) {
  *    their planets will always take bribes" (hail.ts's planetTakesBribes).
  *    An INDEPENDENT stellar has no government and so never bargains.
  *  3. The planet must not be turning offers down: an ordinary planet's
- *    fresh refusal of the day (about one in eight, reference "R7 bribe
- *    price above 1M, wave 27") or a haggle it withdrew from earlier in this
- *    system visit (reference "R7 planet bribe withdrawal, wave 29");
- *    hail.ts's planetBribeRefused, the same verdict the dialog draws.
+ *    fresh refusal, drawn once per system visit (one in four, reference
+ *    "R7 bribe price above 1M, wave 27" and "R7 planet bribe withdrawal,
+ *    wave 30") or a haggle it withdrew from earlier in this system visit
+ *    (reference "R7 planet bribe withdrawal, wave 29"); hail.ts's
+ *    planetBribeRefused, the same verdict the dialog draws.
  *
  * The price is hail.ts's planetBribePrice (reference "R7 bribe price, wave
  * 22": 3,000, or 4,000 for a 0x8000 govt, growing with the cash above about
@@ -348,12 +350,11 @@ function planetBribeTerms(world: World, player: Entity, playerUuid: string,
     if (!credits) {
         return undefined;
     }
-    const date = player.components.get(GameDateComponent);
     const haggle = stellarHaggleFrom(
         player.components.get(StellarHaggleComponent)?.get(planetId));
     const largerBribes = !!govt?.flags.largerBribes;
     if (planetBribeRefused(targetUuid, playerUuid, largerBribes, haggle,
-        date)) {
+        player.components.get(SystemVisitComponent))) {
         return undefined;
     }
     const price = planetBribeAsk(planetBribePrice(targetUuid, playerUuid,

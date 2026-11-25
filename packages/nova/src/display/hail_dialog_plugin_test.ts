@@ -50,7 +50,7 @@ import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/i
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
-    StellarBribesComponent, StellarHaggleComponent,
+    StellarBribesComponent, StellarHaggleComponent, SystemVisitComponent,
 } from '../nova_plugin/travel/index.js';
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
@@ -1256,8 +1256,11 @@ describe('computeContext: hailing a STELLAR', () => {
         typeDescription?: string,
         /** A transit stellar (PlanetData.gate). */
         gate?: 'hypergate' | 'wormhole',
-        /** The pilot's game date (it seeds planetRefusesBribe). */
+        /** The pilot's game date (it seeds planetLowerPriceCounters). */
         date?: { day: number, month: number, year: number },
+        /** The pilot's system-visit ordinal (SystemVisitComponent; it
+         * seeds planetRefusesBribe). */
+        visit?: number,
         /** The pilot's haggle with this port (StellarHaggleComponent). */
         haggle?: { countered: boolean, withdrawn: boolean },
     } = {}) {
@@ -1295,6 +1298,9 @@ describe('computeContext: hailing a STELLAR', () => {
         }
         if (opts.date) {
             player.addComponent(GameDateComponent, opts.date);
+        }
+        if (opts.visit !== undefined) {
+            player.addComponent(SystemVisitComponent, opts.visit);
         }
         if (opts.haggle) {
             player.addComponent(StellarHaggleComponent,
@@ -1426,7 +1432,9 @@ describe('computeContext: hailing a STELLAR', () => {
         + 'planet has withdrawn, on later days too (reference "R7 planet '
         + 'bribe withdrawal, wave 29")', async () => {
             const date = { day: 1, month: 1, year: 1177 };
-            expect(planetRefusesBribe(PLANET, PLAYER, false, date))
+            // The visit's fresh draw names a price: only the withdrawal
+            // refuses.
+            expect(planetRefusesBribe(PLANET, PLAYER, false, 0))
                 .toBeFalse();
             const withdrawn = planetWorld({
                 minStatus: 0, record: -1, planetsTakeBribes: true, date,
@@ -1443,8 +1451,6 @@ describe('computeContext: hailing a STELLAR', () => {
             // The next day, still in the system (a landing elsewhere and
             // a take-off moved the date): still refused.
             const nextDay = { day: 2, month: 1, year: 1177 };
-            expect(planetRefusesBribe(PLANET, PLAYER, false, nextDay))
-                .toBeFalse();
             const later = planetWorld({
                 minStatus: 0, record: -1, planetsTakeBribes: true,
                 date: nextDay,
@@ -1456,13 +1462,13 @@ describe('computeContext: hailing a STELLAR', () => {
             expect(still?.context.mercyRefused).toBe('Yeah, right.');
 
             // After a jump out and back the entry is gone (the crossing
-            // drops it: pilot/transition_prep.ts): a fresh price.
+            // drops it and advances the visit twice:
+            // pilot/transition_prep.ts): a fresh price.
             const back = planetWorld({
                 minStatus: 0, record: -1, planetsTakeBribes: true,
-                date: { day: 3, month: 1, year: 1177 },
+                date: { day: 3, month: 1, year: 1177 }, visit: 2,
             });
-            expect(planetRefusesBribe(PLANET, PLAYER, false,
-                { day: 3, month: 1, year: 1177 })).toBeFalse();
+            expect(planetRefusesBribe(PLANET, PLAYER, false, 2)).toBeFalse();
             const offer = await computeContext(back.world, back.gameData,
                 stellarAssets());
             expect(offer?.context.bribe?.amount).toBe(3000);
@@ -1504,17 +1510,17 @@ describe('computeContext: hailing a STELLAR', () => {
     it('an ordinary port that turns the bribe down flat still offers it, '
         + 'and answers the press with the refusal (reference "R7 bribe '
         + 'price above 1M, wave 27": "Yeah, right." at 2M)', async () => {
-            // planetRefusesBribe draws per planet, pilot and day: this
-            // pilot is refused by this port on the 15th, not on the 1st.
-            const refusedOn = { day: 15, month: 1, year: 1177 };
-            const pricedOn = { day: 1, month: 1, year: 1177 };
-            expect(planetRefusesBribe(PLANET, PLAYER, false, refusedOn))
+            // planetRefusesBribe draws per planet, pilot and system visit:
+            // this pilot is refused by this port on visit 1, not on visit
+            // 0 (no SystemVisit yet).
+            expect(planetRefusesBribe(PLANET, PLAYER, false, 1))
                 .toBeTrue();
-            expect(planetRefusesBribe(PLANET, PLAYER, false, pricedOn))
+            expect(planetRefusesBribe(PLANET, PLAYER, false, 0))
                 .toBeFalse();
             const refused = planetWorld({
                 minStatus: 0, record: -1, planetsTakeBribes: true,
-                credits: 2_000_000, date: refusedOn,
+                credits: 2_000_000, date: { day: 15, month: 1, year: 1177 },
+                visit: 1,
             });
             const result = await computeContext(refused.world,
                 refused.gameData, stellarAssets());
@@ -1528,9 +1534,22 @@ describe('computeContext: hailing a STELLAR', () => {
             expect(commButtonSlots('planet', result!.context))
                 .toEqual(['greetings', 'bribe', 'close']);
 
+            // A landing in the system a day later is the same visit: still
+            // refused (reference "R7 planet bribe withdrawal, wave 30",
+            // finding 3: "Yeah, right." the next day).
+            const nextDay = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true,
+                credits: 2_000_000, date: { day: 16, month: 1, year: 1177 },
+                visit: 1,
+            });
+            const still = await computeContext(nextDay.world,
+                nextDay.gameData, stellarAssets());
+            expect(still?.context.bribe).toBeUndefined();
+            expect(still?.context.mercyRefused).toBe('Yeah, right.');
+
             const priced = planetWorld({
                 minStatus: 0, record: -1, planetsTakeBribes: true,
-                credits: 2_000_000, date: pricedOn,
+                credits: 2_000_000, date: { day: 15, month: 1, year: 1177 },
             });
             const offer = await computeContext(priced.world,
                 priced.gameData, stellarAssets());

@@ -391,6 +391,26 @@ export const StellarHaggleComponent =
     new Component<StellarHaggle>('StellarHaggle');
 
 /**
+ * The pilot's SYSTEM-VISIT ordinal: how many crossings into another system
+ * (a jump, a hypergate or wormhole transit, a mission's system move) this
+ * ship has made in the session, absent (0) before the first.
+ * pilot/transition_prep.ts's prepareCarriedEntitiesForFreshWorld advances
+ * it at the same crossing that drops StellarHaggle, and a planet's fresh
+ * bribe refusal is drawn by it (reputation/hail.ts's planetRefusesBribe;
+ * reference "R7 planet bribe withdrawal, wave 30": a fresh refusal held
+ * through re-hails and a landing a day later), so the verdict lasts the
+ * visit, landings and take-offs included, and is drawn afresh on the next.
+ * Only ever compared for equality inside a hash seed, so its absolute
+ * value means nothing.
+ *
+ * Player state like StellarHaggle: replaced (never mutated), serialized
+ * and delta-synced so the comm dialog draws the verdict the simulation
+ * will.
+ */
+export const SystemVisitType = t.number;
+export const SystemVisitComponent = new Component<number>('SystemVisit');
+
+/**
  * How long a bribe keeps a stellar's landing pad open, in ms. TUNABLE /
  * ASSUMPTION: the Bible quantifies neither the price nor the duration of a
  * planet bribe. Two minutes matches the ship-bribe reprieve (hail_plugin's
@@ -1082,6 +1102,7 @@ export const PlanetPlugin: Plugin = {
         world.addComponent(PlanetDataComponent);
         world.addComponent(StellarBribesComponent);
         world.addComponent(StellarHaggleComponent);
+        world.addComponent(SystemVisitComponent);
         registerEntityDeriver(world, {
             name: 'PlanetDataDeriver',
             provided: PlanetDataComponent,
@@ -1099,6 +1120,8 @@ export const PlanetPlugin: Plugin = {
             StellarBribesComponent, StellarBribesType);
         world.resources.get(SerializerResource)?.addComponent(
             StellarHaggleComponent, StellarHaggleType);
+        world.resources.get(SerializerResource)?.addComponent(
+            SystemVisitComponent, SystemVisitType);
         world.resources.get(SerializerResource)?.addEvent(LandEvent, LandEventType);
         world.resources.get(SerializerResource)?.addEvent(
             LandingBlockedEvent, LandingBlockedEventType);
@@ -1117,6 +1140,9 @@ export const PlanetPlugin: Plugin = {
         });
         deltaMaker.addComponent(StellarHaggleComponent, {
             componentType: StellarHaggleType,
+        });
+        deltaMaker.addComponent(SystemVisitComponent, {
+            componentType: SystemVisitType,
         });
         world.addSystem(PlanetTargetProvider);
         world.addSystem(PlanetAnimationProvider);

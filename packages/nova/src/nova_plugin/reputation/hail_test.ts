@@ -277,37 +277,39 @@ describe('the bribe price', () => {
         expect(Math.min(...asks)).toBeLessThan(20_000);
     });
 
-    it('an ordinary planet refuses outright about one time in eight, at '
-        + 'any cash; a 0x8000 planet never (wave 27: 2 in 15)', () => {
-            expect(PLANET_BRIBE_REFUSAL_ONE_IN).toBe(8);
-            const date = { day: 1, month: 1, year: 1177 };
+    it('an ordinary planet refuses outright about one time in four, at '
+        + 'any cash; a 0x8000 planet never (waves 22-30: 6 in 26)', () => {
+            expect(PLANET_BRIBE_REFUSAL_ONE_IN).toBe(4);
+            const visit = 0;
             for (const pilot of ['player', 'p2', 'p3']) {
                 const refused = ships.filter(id =>
-                    planetRefusesBribe(id, pilot, false, date));
-                // 400 planets: 50 expected; a generous binomial band.
+                    planetRefusesBribe(id, pilot, false, visit));
+                // 400 planets: 100 expected; a generous binomial band.
                 expect(refused.length).withContext(pilot)
-                    .toBeGreaterThan(25);
+                    .toBeGreaterThan(65);
                 expect(refused.length).withContext(pilot)
-                    .toBeLessThan(80);
+                    .toBeLessThan(135);
                 expect(ships.some(id => planetRefusesBribe(id, pilot,
-                    true, date))).toBeFalse();
+                    true, visit))).toBeFalse();
             }
             // A pure hash: the same verdict for the same planet, pilot
-            // and day ...
+            // and system visit ...
             for (const id of ships.slice(0, 50)) {
-                expect(planetRefusesBribe(id, 'p', false, date))
-                    .toBe(planetRefusesBribe(id, 'p', false, date));
+                expect(planetRefusesBribe(id, 'p', false, visit))
+                    .toBe(planetRefusesBribe(id, 'p', false, visit));
             }
-            // ... re-drawn on another day (a jump moves the date).
-            const refusedToday = ships.filter(id =>
-                planetRefusesBribe(id, 'p', false, date));
-            const nextDay = { ...date, day: 2 };
-            expect(refusedToday.filter(id =>
-                planetRefusesBribe(id, 'p', false, nextDay)).length)
-                .toBeLessThan(refusedToday.length);
-            // A missing date is still a verdict.
-            expect(typeof planetRefusesBribe('x', 'p', false))
-                .toBe('boolean');
+            // ... re-drawn on the next visit (the crossing into another
+            // system advances the ordinal).
+            const refusedNow = ships.filter(id =>
+                planetRefusesBribe(id, 'p', false, visit));
+            expect(refusedNow.filter(id =>
+                planetRefusesBribe(id, 'p', false, visit + 1)).length)
+                .toBeLessThan(refusedNow.length);
+            // No ordinal is the first visit's.
+            for (const id of ships.slice(0, 50)) {
+                expect(planetRefusesBribe(id, 'p', false))
+                    .toBe(planetRefusesBribe(id, 'p', false, 0));
+            }
         });
 
     describe('a planet\'s haggle (reference "R7 planet bribe, wave 28" '
@@ -396,22 +398,20 @@ describe('the bribe price', () => {
                         stellarHaggleFrom(undefined))).toBe(3000);
                 });
 
-            it('refuses after a withdrawal on every later day of the visit, '
-                + 'a 0x8000 planet included, and otherwise only on the '
-                + 'fresh draw', () => {
+            it('refuses after a withdrawal whatever the visit\'s draw, a '
+                + '0x8000 planet included, and otherwise only on the '
+                + 'fresh draw of the visit', () => {
                     const withdrawn = { countered: false, withdrawn: true };
                     for (const id of ships.slice(0, 50)) {
-                        for (const date of [{ day: 1, month: 1, year: 1177 },
-                            { day: 2, month: 1, year: 1177 },
-                            { day: 9, month: 3, year: 1178 }]) {
+                        for (const visit of [0, 1, 7]) {
                             expect(planetBribeRefused(id, 'p', false,
-                                withdrawn, date)).toBeTrue();
+                                withdrawn, visit)).toBeTrue();
                             expect(planetBribeRefused(id, 'p', true,
-                                withdrawn, date)).toBeTrue();
+                                withdrawn, visit)).toBeTrue();
                             expect(planetBribeRefused(id, 'p', false,
-                                stellarHaggleFrom(undefined), date))
+                                stellarHaggleFrom(undefined), visit))
                                 .toBe(planetRefusesBribe(id, 'p', false,
-                                    date));
+                                    visit));
                         }
                     }
                 });

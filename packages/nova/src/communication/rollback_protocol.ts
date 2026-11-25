@@ -770,6 +770,22 @@ export const STATE_HASH_INTERVAL = 60;
 //    request line's #74 / #75 is a salted draw. The derived wire schema
 //    fingerprint changes (794b422a9a516ea5 -> 0df789d0f4d39d4c), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-30 planet bribe refusal scope
+//    (reference "R7 planet bribe withdrawal, wave 30"). A new
+//    delta-registered player component, SystemVisit
+//    (travel/planet_plugin.ts: a number, the pilot's count of crossings
+//    into another system this session), absent until the first crossing
+//    and advanced by pilot/transition_prep.ts at the same crossing that
+//    drops StellarHaggle, applied to the carried player before the
+//    destination inserts it. No input kind or message kind changes.
+//    Sim-rule changes alongside: a plain planet's fresh bribe refusal is
+//    drawn per planet, pilot and system visit instead of per game day,
+//    so it holds through re-hails and landings in the system and is drawn
+//    afresh after a crossing, and the refusal rate is one in four (was one
+//    in eight). The derived wire schema fingerprint changes
+//    (0df789d0f4d39d4c -> FPNEW), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

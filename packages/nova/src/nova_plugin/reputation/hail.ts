@@ -556,7 +556,8 @@ export function askingCashCap(credits: number): number {
  *    ({@link SHIP_BRIBE_CAP}, reference "R7 bribe price above 1M, wave
  *    27"), a planet's does not;
  *  - an ordinary (0x4000) planet sometimes refuses outright, whatever the
- *    cash ({@link planetRefusesBribe}, wave 27);
+ *    cash, and keeps refusing for the rest of the system visit
+ *    ({@link planetRefusesBribe}, waves 27 and 30);
  *  - a third of the cash caps it and 1,000 is the floor
  *    ({@link askingCashCap});
  *  - the legal record (-50 vs -2000) and the combat rating (0 vs 30000)
@@ -671,15 +672,20 @@ export function planetBribePrice(planetUuid: string, playerUuid: string,
  * finding 3): a plain (0x4000) planet answered Offer Bribe with a flat
  * refusal at 2M ("Yeah, right.") and at 100M (wave 22, "You wish."), and
  * named a price at 300, 10k, 1M, 5M, 20M, 50M and 200M, so it is a chance,
- * not a cash level. GUESS: the rate, about one in eight (2 refusals in 16
- * FRESH first offers, reference "R7 planet bribe, wave 28": only the first
- * offer of a flight counts, since a withdrawn haggle refuses the rest),
- * and that the draw does not depend on the cash.
+ * not a cash level. GUESS: the rate, one in four, the pooled FRESH first
+ * offers of the R7 sections (only the first offer of a visit counts, since
+ * a withdrawn haggle or a refusal holds for the rest of it): waves 22 and
+ * 27, 2 refused in 15; wave 28, 0 in 1; wave 29, 0 in 3; wave 30, 4 in 7
+ * (r7_days3's priced first offer, r7_first_1-4, r7_fresh_1 and
+ * bribe_freight; the section's "4 in 6" leaves out r7_days3): 6 in 26
+ * (23%, about 0.11-0.42 at 95%). Wave 30's own seven lean higher, and one
+ * of them (r7_fresh_1) came from runs hunting a refusal. Also a GUESS that
+ * the draw does not depend on the cash.
  */
-export const PLANET_BRIBE_REFUSAL_ONE_IN = 8;
+export const PLANET_BRIBE_REFUSAL_ONE_IN = 4;
 
 /**
- * The game day a planet's bribe draws and haggle are keyed by:
+ * The game day the first Lower Price's counter draw is keyed by:
  * "year-month-day", or '' for a pilot with no date.
  */
 export function bribeDay(
@@ -693,24 +699,30 @@ export function bribeDay(
  * never does: the Bible's "their planets will always take bribes", and
  * none of its ten offers (wave 22, gövts 302 and 303) was refused.
  *
- * The draw is a pure hash of the planet, the pilot and the game day
- * (GUESS: the seed), so the dialog's verdict and applyHail's agree on
- * every peer without the PRNG, and a refused pilot is answered the same
- * until the date changes (a jump moves it). Repeated hails are NOT
- * independent draws on the original either (reference "R7 planet bribe,
- * wave 28": after a withdrawal all eleven later offers were refused);
- * whether a FRESH refusal also holds for the rest of the flight is
- * unmeasured. The cash plays no part (refused at 2M and 100M, priced
- * between).
+ * The verdict is drawn ONCE PER SYSTEM VISIT: a pure hash of the planet,
+ * the pilot and `visit`, the pilot's system-visit ordinal
+ * (travel/planet_plugin.ts's SystemVisitComponent, which the crossing
+ * into another system advances; 0 for a pilot who has not crossed yet).
+ * MEASURED (reference "R7 planet bribe withdrawal, wave 30", finding 3):
+ * a fresh refusal held through two re-hails and a landing at the
+ * system's other port a day later, like a withdrawal (one run, four
+ * refusals in a row). GUESS: that it ends with the crossing, as the
+ * withdrawal does (a fresh refusal followed by a jump out and back is
+ * unmeasured), and that a priced first offer is likewise kept for the
+ * visit. A pure hash rather than a recorded verdict, because Offer Bribe
+ * reaches the simulation only as the Accept / Lower Price that follows
+ * it: the dialog's verdict and applyHail's agree on every peer without
+ * the PRNG, and neither needs an input of its own. The game day plays no
+ * part (it did until wave 30: a landing moved it and re-drew), nor does
+ * the cash (refused at 2M and 100M, priced between).
  */
 export function planetRefusesBribe(planetUuid: string, playerUuid: string,
-    largerBribes: boolean,
-    date?: { day: number, month: number, year: number }): boolean {
+    largerBribes: boolean, visit = 0): boolean {
     if (largerBribes) {
         return false;
     }
     const draw = avalanche(hashString(
-        `bribe:refuse:${planetUuid}:${playerUuid}:${bribeDay(date)}`))
+        `bribe:refuse:${planetUuid}:${playerUuid}:visit${visit}`))
         & 0xffff;
     return draw * PLANET_BRIBE_REFUSAL_ONE_IN < 0x10000;
 }
@@ -739,17 +751,18 @@ export function planetRefusesBribe(planetUuid: string, playerUuid: string,
  *  - the withdrawal OUTLASTS THE GAME DAY (wave 29): a landing elsewhere in
  *    the same system and a take-off a day later still met a refusal, and a
  *    jump out to a neighbour and back ended it (the next offer named a
- *    fresh price).
+ *    fresh price);
+ *  - it lasts the WHOLE STAY (wave 30): eight days of landings and
+ *    take-offs at the system's other port did not end it (refused at day 3
+ *    and again at day 8).
  *
  * So the haggle's SCOPE is the SYSTEM VISIT: it lasts while the pilot stays
  * in the system, landings and take-offs included, and ends when the pilot
  * crosses into another system (a jump, a hypergate or wormhole transit, a
  * mission's system move: pilot/transition_prep.ts drops the whole
  * StellarHaggle component at that crossing, as it drops the contraband
- * scan marker, the other per-visit fact). GUESS on the exact end: one jump
- * out and back ended it; whether waiting several days in the system does
- * is unmeasured, and a counter on the table is taken to share the
- * withdrawal's scope.
+ * scan marker, and advances the SystemVisit ordinal the fresh refusal is
+ * drawn by). GUESS: a counter on the table shares the withdrawal's scope.
  *
  * GUESSES: how often the first Lower Price counters (the fuel sale's one
  * in four, {@link FUEL_COUNTER_IN_FOUR}; planets countered 3 of 7 first
@@ -811,15 +824,15 @@ export function planetBribeAsk(price: number,
 }
 
 /**
- * Whether the planet turns Offer Bribe down: the fresh refusal of the day
- * ({@link planetRefusesBribe}), or a haggle it withdrew from earlier in
- * this system visit (reference "R7 planet bribe withdrawal, wave 29").
+ * Whether the planet turns Offer Bribe down: the fresh refusal of this
+ * system visit ({@link planetRefusesBribe}, drawn by `visit`), or a haggle
+ * it withdrew from earlier in the visit (reference "R7 planet bribe
+ * withdrawal, wave 29").
  */
 export function planetBribeRefused(planetUuid: string, playerUuid: string,
-    largerBribes: boolean, haggle: StellarHaggleState,
-    date?: { day: number, month: number, year: number }): boolean {
+    largerBribes: boolean, haggle: StellarHaggleState, visit = 0): boolean {
     return haggle.withdrawn
-        || planetRefusesBribe(planetUuid, playerUuid, largerBribes, date);
+        || planetRefusesBribe(planetUuid, playerUuid, largerBribes, visit);
 }
 
 /** How far along a planet haggle is: a withdrawal (2) beats a counter (1)

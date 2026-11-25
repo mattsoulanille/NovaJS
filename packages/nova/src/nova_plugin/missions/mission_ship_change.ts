@@ -32,7 +32,7 @@ import {
 } from '../ship/index.js';
 import {
     GateArrivalComponent, JumpComponent, JumpRouteComponent,
-    MultiJumpContinueComponent, PlanetTargetComponent,
+    MultiJumpContinueComponent, PlanetTargetComponent, SystemVisitComponent,
 } from '../travel/index.js';
 import { sweepableEscorts, sweepJumpingEscort } from '../escorts/index.js';
 import { ContrabandScannedComponent } from '../npc/index.js';
@@ -176,6 +176,12 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // Unmeasured for a ship purchase; the pilot, not the hull, is the one
     // who was scanned. Replaced, never mutated, so safe to share.
     ContrabandScannedComponent,
+    // The pilot's system-visit ordinal (travel/planet_plugin.ts), which a
+    // planet's fresh bribe refusal is drawn by: a hull bought at the port
+    // is still the same visit, so a refusing planet keeps refusing on
+    // takeoff. Unmeasured for a ship purchase. A number, set (never
+    // mutated) at each crossing, so safe to share.
+    SystemVisitComponent,
     // The days this pilot last saw each system's reinforcement fleet
     // called (player/reinforcement_calls.ts): the pilot's cooldown, not
     // the hull's. Replaced, never mutated (spawn/reinforcements.ts), so

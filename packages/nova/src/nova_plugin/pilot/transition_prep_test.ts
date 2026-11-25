@@ -3,10 +3,12 @@ import { Entity } from 'nova_ecs/entity';
 import { AggressionComponent } from '../combat/index.js';
 import { BoardedComponent } from '../ship/index.js';
 import { NpcComponent } from '../npc/index.js';
-import { PlanetTargetComponent, StellarHaggleComponent } from '../travel/index.js';
+import {
+    PlanetTargetComponent, StellarHaggleComponent, SystemVisitComponent,
+} from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 import {
-    clearPlayerTargetsForTransition, clearStaleReferences,
+    clearPlayerTargetsForTransition, clearStaleReferences, nextSystemVisit,
     prepareCarriedEntitiesForFreshWorld,
 } from './transition_prep.js';
 
@@ -143,6 +145,24 @@ describe('carried-entity preparation for a fresh world', () => {
                 prepareCarriedEntitiesForFreshWorld(clean, 'clean-uuid', []);
                 expect(clean.components.has(StellarHaggleComponent))
                     .toBeFalse();
+            });
+
+        it('advances the system-visit ordinal a planet\'s fresh bribe '
+            + 'refusal is drawn by (reference "R7 planet bribe withdrawal, '
+            + 'wave 30")', () => {
+                const player = new Entity('player');
+                // A pilot who has not crossed yet is on visit 0.
+                prepareCarriedEntitiesForFreshWorld(player, 'player-uuid',
+                    []);
+                expect(player.components.get(SystemVisitComponent)).toBe(1);
+                prepareCarriedEntitiesForFreshWorld(player, 'player-uuid',
+                    []);
+                expect(player.components.get(SystemVisitComponent)).toBe(2);
+                expect(nextSystemVisit(undefined)).toBe(1);
+                expect(nextSystemVisit(41)).toBe(42);
+                // Junk or the very top wraps rather than going astray.
+                expect(nextSystemVisit(Number.NaN)).toBe(1);
+                expect(nextSystemVisit(Number.MAX_SAFE_INTEGER)).toBe(0);
             });
     });
 });

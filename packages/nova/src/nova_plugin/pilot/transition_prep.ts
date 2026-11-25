@@ -2,7 +2,9 @@ import { Entity } from 'nova_ecs/entity';
 import { clearCarriedAggressionForTransition } from '../combat/index.js';
 import { clearPlunderRecord } from '../ship/index.js';
 import { clearContrabandScan, NpcComponent } from '../npc/index.js';
-import { PlanetTargetComponent, StellarHaggleComponent } from '../travel/index.js';
+import {
+    PlanetTargetComponent, StellarHaggleComponent, SystemVisitComponent,
+} from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 
 /**
@@ -94,11 +96,21 @@ export function clearPlayerTargetsForTransition(player: Entity): void {
 }
 
 /**
+ * The system-visit ordinal after a crossing: one more, wrapping inside the
+ * safe integers (it only ever seeds a hash, so a wrap is harmless).
+ */
+export function nextSystemVisit(visit: number | undefined): number {
+    const current = Number.isSafeInteger(visit) ? visit! : 0;
+    return current >= Number.MAX_SAFE_INTEGER ? 0 : current + 1;
+}
+
+/**
  * THE GATE for everything crossing into a fresh world: the aggression
  * tables (aggression.ts), the player's reticles, the player's
  * scanned-this-visit marker (npc/contraband_target.ts), the player's
- * planet bribe haggles (travel/planet_plugin.ts's StellarHaggle), and
- * every escort's out-of-batch references.
+ * planet bribe haggles (travel/planet_plugin.ts's StellarHaggle) and
+ * system-visit ordinal (its SystemVisit), and every escort's out-of-batch
+ * references.
  */
 export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     playerUuid: string,
@@ -114,6 +126,12 @@ export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     // crossing (reference "R7 planet bribe withdrawal, wave 29": a jump out
     // and back ended it; travel/planet_plugin.ts's StellarHaggleComponent).
     player.components.delete(StellarHaggleComponent);
+    // ...and it is a new VISIT, by which a planet's fresh bribe refusal is
+    // drawn (reference "R7 planet bribe withdrawal, wave 30": a fresh
+    // refusal held through re-hails and a landing a day later; GUESS that
+    // the crossing ends it like the withdrawal). Set, never mutated.
+    player.components.set(SystemVisitComponent,
+        nextSystemVisit(player.components.get(SystemVisitComponent)));
     const live = new Set<string>([playerUuid, ...batch.map(e => e.uuid)]);
     for (const escort of batch) {
         clearStaleReferences(escort.entity, live);

@@ -25,7 +25,7 @@ import {
     LandingRequest, LandingRequestEvent, landingRequestForm,
     PlanetComponent, selectPlanetTarget,
     PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
-    stellarLandingRange, StellarHaggleComponent,
+    stellarLandingRange, StellarHaggleComponent, SystemVisitComponent,
 } from './planet_plugin.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -788,25 +788,22 @@ describe('planet bribes', () => {
             // Coldharbour's govt as a PLAIN bargainer (0x4000 without
             // 0x8000, whose planets always take bribes). A per-world copy:
             // the cached govt data is shared.
-            const plainPort = async (day: number) => {
+            const plainPort = async (visit: number) => {
                 const harness = await shutOutHarness();
                 const govts = harness.world.resources.get(GovtsResource)!;
                 const id = SYNTHETIC.govts.compact;
                 const govt = govts.get(id)!;
                 govts.set(id, { ...govt, flags: { ...govt.flags,
                     planetsTakeBribes: true, largerBribes: false } });
-                harness.ship.components.set(GameDateComponent,
-                    { day, month: 1, year: 1177 });
+                harness.ship.components.set(SystemVisitComponent, visit);
                 return harness;
             };
-            // The draw is per planet, pilot and day: refused on the 3rd,
-            // priced on the 2nd.
-            expect(planetRefusesBribe(PORT, SHIP_UUID, false,
-                { day: 3, month: 1, year: 1177 })).toBeTrue();
-            expect(planetRefusesBribe(PORT, SHIP_UUID, false,
-                { day: 2, month: 1, year: 1177 })).toBeFalse();
+            // The draw is per planet, pilot and system visit: refused on
+            // visit 1, priced on visit 0.
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false, 1)).toBeTrue();
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false, 0)).toBeFalse();
 
-            const refused = await plainPort(3);
+            const refused = await plainPort(1);
             applyHail(refused.world, undefined,
                 { kind: 'bribe', target: PORT });
             expect(refused.ship.components.get(CreditsComponent)!.credits)
@@ -816,7 +813,7 @@ describe('planet bribes', () => {
             expect(pressLand(refused.world).blocked[0].reason)
                 .toEqual('denied');
 
-            const priced = await plainPort(2);
+            const priced = await plainPort(0);
             applyHail(priced.world, undefined,
                 { kind: 'bribe', target: PORT });
             // A plain planet's 3,000 (no growth under 1M).
@@ -960,6 +957,138 @@ describe('planet bribes', () => {
                 .toEqual([...b.ship.components.get(StellarBribesComponent)!]);
             expect(pressLand(a.world).lands.length)
                 .toEqual(pressLand(b.world).lands.length);
+        }, 30_000);
+});
+
+describe('planet bribes: a fresh refusal lasts the system visit (reference '
+    + '"R7 planet bribe withdrawal, wave 30")', () => {
+    /** Coldharbour, its govt made a PLAIN (0x4000) bargainer: only a plain
+     * planet refuses outright (a 0x8000 one always takes bribes). */
+    const PORT = `planet ${SYNTHETIC.planets.coldharbour}`;
+    /** Port Amberline: the system's open port, where the pilot lands. */
+    const OPEN = `planet ${SYNTHETIC.planets.port}`;
+    /** The visit on which Coldharbour refuses this pilot outright. */
+    const REFUSED_VISIT = 1;
+
+    async function plainHarness(visit: number) {
+        const { world, ship } = await makeHarness();
+        const govts = world.resources.get(GovtsResource)!;
+        const id = SYNTHETIC.govts.compact;
+        const govt = govts.get(id)!;
+        // A per-world copy: the cached govt data is shared.
+        govts.set(id, { ...govt, flags: { ...govt.flags,
+            planetsTakeBribes: true, largerBribes: false } });
+        ship.components.set(LegalRecordsComponent, new Map([[SYSTEM, -1]]));
+        ship.components.set(CreditsComponent, { credits: 100_000 });
+        ship.components.set(GameDateComponent,
+            { day: 23, month: 6, year: 1177 });
+        ship.components.set(SystemVisitComponent, visit);
+        return { world, ship };
+    }
+
+    function approach(world: World, ship: Entity, uuid: string) {
+        const stellar = stellars(world).find(p => p.uuid === uuid)!;
+        ship.components.get(PlanetTargetComponent)!.target = stellar.uuid;
+        place(ship, stellar.position);
+    }
+
+    /** One hail's Offer Bribe followed by Accept Price and Lower Price:
+     * on a refusing planet neither does anything. */
+    function offerAndHaggle(world: World) {
+        applyHail(world, undefined, { kind: 'bribe', target: PORT });
+        applyHail(world, undefined, { kind: 'lowerPrice', target: PORT });
+    }
+
+    it('holds a fresh refusal through re-hails and a landing at the '
+        + 'system\'s other port a day later (finding 3, run r7_fresh_1)',
+        async () => {
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false,
+                REFUSED_VISIT)).toBeTrue();
+            const { world, ship } = await plainHarness(REFUSED_VISIT);
+            approach(world, ship, PORT);
+
+            // The first offer and two re-hails: refused, nothing charged,
+            // nothing haggled, the port still shut.
+            for (let hail = 0; hail < 3; hail++) {
+                offerAndHaggle(world);
+            }
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+            expect(ship.components.has(StellarBribesComponent)).toBeFalse();
+            expect(ship.components.has(StellarHaggleComponent)).toBeFalse();
+            expect(pressLand(world).blocked[0].reason).toEqual('denied');
+
+            // Land on the open port; the landing and take-off move the
+            // date a day (June 23 -> 24, as the pulled pilot read) and
+            // keep the visit.
+            approach(world, ship, OPEN);
+            expect(pressLand(world).lands.length).toBe(1);
+            ship.components.set(GameDateComponent,
+                { day: 24, month: 6, year: 1177 });
+            expect(ship.components.get(SystemVisitComponent))
+                .toBe(REFUSED_VISIT);
+
+            // Back at the refusing port: still refused.
+            approach(world, ship, PORT);
+            offerAndHaggle(world);
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+            expect(ship.components.has(StellarBribesComponent)).toBeFalse();
+            expect(pressLand(world).blocked[0].reason).toEqual('denied');
+        }, 30_000);
+
+    it('draws the refusal afresh after a jump out and back: the next offer '
+        + 'names a price (GUESS: the withdrawal\'s scope, wave 29)',
+        async () => {
+            const { world, ship } = await plainHarness(REFUSED_VISIT);
+            approach(world, ship, PORT);
+            offerAndHaggle(world);
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+
+            // Out to a neighbour and back: two crossings, two days.
+            prepareCarriedEntitiesForFreshWorld(ship, SHIP_UUID, []);
+            prepareCarriedEntitiesForFreshWorld(ship, SHIP_UUID, []);
+            ship.components.set(GameDateComponent,
+                { day: 25, month: 6, year: 1177 });
+            const back = ship.components.get(SystemVisitComponent)!;
+            expect(back).toBe(REFUSED_VISIT + 2);
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false, back))
+                .toBeFalse();
+
+            applyHail(world, undefined, { kind: 'bribe', target: PORT });
+            // A plain planet's 3,000 (no growth under 1M).
+            expect(ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000 - 3_000);
+            expect(pressLand(world).blocked).toEqual([]);
+        }, 30_000);
+
+    it('keeps a priced first offer priced for the visit, a later day '
+        + 'included (GUESS: drawn once per visit either way)', async () => {
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false, 0)).toBeFalse();
+            for (const day of [23, 24, 30]) {
+                const { world, ship } = await plainHarness(0);
+                ship.components.set(GameDateComponent,
+                    { day, month: 6, year: 1177 });
+                approach(world, ship, PORT);
+                applyHail(world, undefined, { kind: 'bribe', target: PORT });
+                expect(ship.components.get(CreditsComponent)!.credits)
+                    .withContext(`June ${day}`).toEqual(100_000 - 3_000);
+            }
+        }, 30_000);
+
+    it('carries the visit through the serializer and the delta stream',
+        async () => {
+            const { world } = await makeHarness();
+            const serializer = world.resources.get(SerializerResource)!;
+            const encoded = serializer.encodeComponent(SystemVisitComponent,
+                7);
+            const decoded = serializer.decodeComponent('SystemVisit',
+                encoded) as { _tag: string, right: [unknown, unknown] };
+            expect(decoded?._tag).toEqual('Right');
+            expect(decoded.right[1]).toBe(7);
+            expect(world.resources.get(DeltaResource)!.componentDeltas.has(
+                SystemVisitComponent as never)).toBeTrue();
         }, 30_000);
 });
 
