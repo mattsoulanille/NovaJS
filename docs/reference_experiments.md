@@ -11715,6 +11715,25 @@ response." once, on a gate that also denied usage).
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/{hail_gladius,hail_vano,vnp,map_wanted}/*/` (`03-hail.png`;
 vnp `04-hail.png` "No response.", `03-l1.png`; map_wanted `03-hail.png` .. `05-hail3.png`, `l1_msg.png`).
 
+**Applied (wave-23 fixes, 2026-11-24, `N/spaceport/hail_layout.ts`, `N/display/hail_dialog_plugin.ts`).**
+- Placement: `stellarSpriteOrigin` now centres by halving each side
+  separately, `pane.x + floor(310 / 2) - floor(w / 2)` (and
+  `5 + floor(283 / 2) - floor(h / 2)` down), which puts Earth at (302,71),
+  Tre'ar Vano at (227,-4) and Gladius at (220,46), all three measured. The
+  CLIP stays the 310 px interior (222-531): the "311" fit is the centring
+  only, and the measured 2 px left / 3 px right cut of Gladius needs the
+  310 px clip. The clip and Status-line GUESS marks are dropped.
+- Gate hails: a hailed hypergate or wormhole the player may NOT use (the
+  landing gate's clearance, `stellarClearanceFor`: every working stock gate
+  is MinStatus 32767 until ränk 147) prints "No response." with the
+  can't-do beep and opens no comm (`gateRefusesHail`, checked in
+  `hailIsUnanswerable` and `computeContext`). A gate the player MAY use
+  keeps NovaJS's planet comm ("You are cleared to dock."): GUESS.
+  Wormholes follow the same rule: GUESS (every stock one is uninhabited
+  and was already silent; only a plug-in's inhabited wormhole is affected).
+- Not changed here: NovaJS's `l` at a refusing working gate still says
+  "Docking request denied.", not the original's "Hypergate usage denied.".
+
 ### Map dot colours, wave 23: a gate-only system is GREY and "Uninhabited System"; a system whose port refuses the player's landing is RED; gövt flags (0x0004, 0x0001) change nothing; a xenophobic owner reads "Legal Status: N/A" (2026-11-24)
 
 **Question** (map agent 48022dd4; Matthew expected South Manchester at
@@ -11785,6 +11804,43 @@ reading of red rests on one system against two earlier blue ones.
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/vnp/*/08-map0.png` .. `10-map_vellos.png`;
 `map_hub/*/02-map0.png` .. `16-map_xeno.png`, `map_hub/sel_columns.png`; `map_wanted/*/06-map_cur.png`.
 
+**Applied (wave-23 fixes, 2026-11-24, `N/nova_plugin/core/landable.ts`, `N/spaceport/starmap*.ts`, `N/nova_plugin/reputation/reputation.ts`).**
+- Grey: `systemIsInhabited` counts only `isSettledPort` stellars, a port
+  that is not a gate (`PlanetData.gate`); `isPort` is unchanged, so the
+  Ports line, mission destinations and the hail gate still see the gate.
+  Stock systems that turn grey: eight sÿst, the two NCB copies each of
+  VNP-001 (427 / 621), VNP-002 (425 / 619), Korell (414 / 611) and Vellos
+  (424 / 618); no other stock system changes (spec'd). Wormholes are
+  excluded too: GUESS (no stock wormhole is a port). A ModVal -1 map
+  outfit's "inhabited independent systems" uses the same predicate (no
+  stock map uses -1). Show Borders still radiates from these systems (its
+  "is anybody there?" is 0x0020, which a gate clears): unmeasured.
+- "Uninhabited System": the column shows it whenever the dot is grey
+  (`!systemIsInhabited`), with the Ports line still naming any gate.
+  Measured for no stellars and gate-only systems; GUESS for a system whose
+  stellars are all uninhabited or unlandable, which used to keep its
+  groups.
+- Red #ff0000 (`SYSTEM_REFUSING_COLOR`): an explored inhabited system whose
+  EVERY settled port would refuse the player's landing by the landing
+  gate's own rule (`stellarClearanceWith`, the assembly behind
+  `stellarClearanceFor`: MinStatus against the record in THAT system, the
+  travel permit, ränk 0x0200, a live bribe, an active mission's
+  destination), read from the landing's working copy when docked. MIXED
+  rule (GUESS): one port that lets the player land keeps the dot blue;
+  gates never vote. Side effect to check: a FRESH stock pilot with the
+  galaxy explored sees 35 systems red, every one a system whose ports all
+  ask more than the owner's InitialRec (the Federation spacedocks of
+  Alphara, Kerella and Gateway at MinStatus 2, Lesten's Menin at 5, the
+  Polaris worlds, the Heraan Landing Points, Rebel I / II; listed in
+  `N/spaceport/starmap_refusing_test.ts`). Only Kit Map Wanted (record
+  -500 under MinStatus 0) was seen red; a fresh pilot's map over Kerella or
+  Gateway would confirm or refute "red = refused, whatever the record's
+  sign".
+- "Legal Status: N/A" under a xenophobic (0x0001) status govt
+  (`legalStatusInSystem`, `LEGAL_STATUS_NOT_APPLICABLE`); the 'p' dialog
+  shares the reading, so it says N/A there too (unmeasured on that
+  screen). 0x0004 owners keep their status word and their blue.
+
 ### K8 wormhole on the radar, wave 23: a 2 x 2 grey dot, not a ring (2026-11-24)
 
 Stock data, `w23_worm` (a Shuttle on Sol's wormhole, spöb 465). `l` at
@@ -11804,6 +11860,20 @@ threshold. Which of the two (wormhole flag or 0x20) decides is untested
 (an inhabited wormhole or an uninhabited 100 px planet would split them).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/worm/*/03-l1.png`, `radar_l1_zoom.png`.
+
+**Applied (wave-23 fixes, 2026-11-24, `N/display/status_bar_radar.ts`).**
+A wormhole (`PlanetData.gate` 'wormhole', spöb Flags2 0x2000) is a 2 x 2
+dot whatever its size; stock effect: the 24 wormholes (all 104 px) go from
+ring to dot. NOT the proposed "station OR 0x0020": Jupiter (spöb 159, flags
+0x0020 set, 0x0001 clear, 325 px) is a RING on the original's
+`space/in_space.png`, so 0x0020 alone is refuted. What remains is the
+wormhole flag or "landable AND 0x0020" (which would also dot Spica, Neo New
+York, the UHP-1002 copies, Kont and ten more uninhabited landable planets of
+96 px and up): GUESS for the narrower one; Spica (120 px) on the original's
+radar would decide it. The dot's colour is the status bar's dimRadar grey
+without IFF (stock #808080, the measured colour, like every unscanned
+stellar); with IFF NovaJS draws a wormhole yellow ('neutral': clearance
+ignores an uninhabited stellar), unmeasured.
 
 ### Boarding velocity, wave 23: the original keeps the boarder's own velocity (from wave 7's recordings) (2026-11-24)
 
@@ -12570,7 +12640,7 @@ cosmetic or rare.
 | K5 | Hail dialog (`y`) keys and buttons per govt flags (#297, Flags2 0x0001) | `N/nova_plugin/reputation/hail.ts:118-151,242` | CPg govts with each flag, SS | M |
 | K6 | Venue buttons when a stellar lacks a venue: hidden or greyed? (#373) | `N/spaceport/spaceport.ts:1037-1050` | CPg Kit Market (no outfitter/shipyard): SS its spaceport | H |
 | K7 | Escort command keys (escortCmd 0-3 = f/d/v/c, escort menu e), from the prefs | escort commands | **answered (wave 2, E-view)** | M |
-| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). Centre arrow range not asked | L |
+| K8 | Radar centre arrow range and hypergate ring vs dot (#358) | `N/display/status_bar_radar.ts:209-225,646-668` | VID flying out from a kit stellar. **Answered (wave 22)**: every station (spöb Flags 0x0010, the working hypergates too) is a 2 x 2 dot; a planet rings from 89-96 px. **Applied in 4c6a58ab** (threshold 96; wormholes rings, unmeasured). **Wave 23**: a wormhole is a 2 x 2 dot; applied 2026-11-24 by the wormhole flag (not 0x0020: Jupiter is a ring; see "K8 wormhole on the radar, wave 23"). Centre arrow range not asked | L |
 | K10 | Target bracket corners: distance from the centre, shape, what sets them | `N/display/target_corners_plugin.ts:98-117,180`, `N/display/planet_corners_plugin.ts:36` | **answered (wave 9)**: base frame + 15 px per side, square from max(w, h), fixed glyphs, additive fly-in. **Mismatch** (NovaJS: +-0.354 x the largest layer, inside the sprite); fix applied in c43cddcc | L |
 
 ### Edge cases
