@@ -20,7 +20,8 @@ import {
     boardingDistance, BoardingGovtLookup, boardingRange, BoardingState,
     capturable, captureChance, CaptureBayCandidate, chooseCaptureBay,
     clearPlunderRecord, creditBooty, fuelTransferAmount, matchBoardedVelocity,
-    planAmmoPlunder, planCargoPlunder, plunderSpent, plunderTripsSelfDestruct,
+    planAmmoPlunder, planCargoPlunder, PlunderItem, plunderSpent,
+    plunderTripsSelfDestruct,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
 import { GateDepartureSystem, LandEvent } from '../travel/index.js';
@@ -1392,15 +1393,15 @@ const BoardingActionSystem = new System({
         }
 
         // Each booty take may trip the hulk's security self-destruct (one
-        // seeded draw, tripPlunderSelfDestruct). The take is already
-        // marked spent; when it trips nothing moves and the session is
-        // over.
-        const tripped = (): boolean => {
-            if (!tripPlunderSelfDestruct(target, boarding.target, random,
-                time, emit)) {
+        // seeded draw, tripPlunderSelfDestruct, at that item's odds). The
+        // draw comes AFTER the take is delivered and charged (measured: a
+        // tripped Cargo take still filled the hold), so a trip only ends
+        // the session and destroys the hulk.
+        const tripped = (item: PlunderItem): boolean => {
+            if (!tripPlunderSelfDestruct(item, target, boarding.target,
+                random, time, emit)) {
                 return false;
             }
-            chargeCrime();
             endBoardingSession(entity, target);
             emit(PlunderSelfDestructEvent, {}, [uuid]);
             return true;
@@ -1409,9 +1410,6 @@ const BoardingActionSystem = new System({
         if (controls.get('plunderCargo') === 'start' && !boarding.cargoTaken) {
             boarding.cargoTaken = true;
             markBootyTaken(target, uuid, 'cargoTaken');
-            if (tripped()) {
-                return;
-            }
             const targetCargo = target.components.get(CargoComponent);
             if (targetCargo) {
                 const free = physics.freeCargo - cargoUsed(cargo);
@@ -1426,25 +1424,29 @@ const BoardingActionSystem = new System({
                 }
             }
             chargeCrime();
+            if (tripped('cargo')) {
+                return;
+            }
         }
 
         if (controls.get('plunderCredits') === 'start'
             && !boarding.creditsTaken) {
             boarding.creditsTaken = true;
             markBootyTaken(target, uuid, 'creditsTaken');
-            if (tripped()) {
-                return;
-            }
+            // Delivered on a trip too: unread on the original (the HUD
+            // read 1.00M either way), the Cargo rule taken for every item.
             credits.credits += boarding.creditsAvailable;
             chargeCrime();
+            if (tripped('credits')) {
+                return;
+            }
         }
 
         if (controls.get('plunderFuel') === 'start' && !boarding.fuelTaken) {
             boarding.fuelTaken = true;
             markBootyTaken(target, uuid, 'fuelTaken');
-            if (tripped()) {
-                return;
-            }
+            // Delivered on a trip too (unread: the measured tripped
+            // Energy takes found the player's fuel already full).
             const targetFuel = target.components.get(FuelComponent);
             if (targetFuel) {
                 const moved = fuelTransferAmount(
@@ -1453,14 +1455,14 @@ const BoardingActionSystem = new System({
                 targetFuel.current -= moved;
             }
             chargeCrime();
+            if (tripped('fuel')) {
+                return;
+            }
         }
 
         if (controls.get('plunderAmmo') === 'start' && !boarding.ammoTaken) {
             boarding.ammoTaken = true;
             markBootyTaken(target, uuid, 'ammoTaken');
-            if (tripped()) {
-                return;
-            }
             const targetOutfits = target.components.get(OutfitsStateComponent);
             if (boarderOutfits && targetOutfits) {
                 const { victim, boarderRoundsByWeapon, info } = ammoPlunderInputs(
@@ -1486,6 +1488,9 @@ const BoardingActionSystem = new System({
                 }
             }
             chargeCrime();
+            if (tripped('ammo')) {
+                return;
+            }
         }
 
         // The capture contest — ONE ATTEMPT PER SESSION (Matthew's
@@ -1554,47 +1559,53 @@ const BoardingActionSystem = new System({
 
 /**
  * ============================================================================
- * THE PLUNDER SELF-DESTRUCT (reference "Disabled ships, wave 24")
+ * THE PLUNDER SELF-DESTRUCT (reference "Disabled ships, wave 24" and
+ * "Plunder self-destruct, wave 25")
  * ============================================================================
  *
- * Draws once from the seeded RandomResource for a booty take on `hulk`
- * and, when it trips (plunderTripsSelfDestruct, a GUESSED 5% a take),
+ * Draws once from the seeded RandomResource for a booty take of `item`
+ * from `hulk` and, when it trips (plunderTripsSelfDestruct, at that
+ * item's odds, PLUNDER_SELF_DESTRUCT_CHANCE: fits from small samples),
  * destroys the hulk through the ordinary zero-armor death path (shield to
  * its min, armor 0, ZeroArmorEvent: the breakup, the final explosion and
  * DeathEvent follow as for any other ship). Returns whether it tripped.
+ * The caller has already DELIVERED the take and charged the piracy.
  *
- * MEASURED (one run): the line, the hulk destroyed, the dialog gone, the
- * player undamaged. NovaJS's final explosion still deals its small
- * mass-scaled blast (Matthew's ruling, ship_explosion.ts): 1.5 shield for
- * the measured 50-ton hull, nothing a player would see.
+ * MEASURED: the line, the hulk destroyed at once, the dialog gone, the
+ * player undamaged and at rest, the tripped take delivered (Cargo: the
+ * hold filled; Credits and Energy could not be read, and are delivered
+ * too for one rule). Derelicts trip like any hulk (waves 6-7's derelict
+ * boards tripped 8 times in 15 takes), so there is no govt exemption.
+ * NovaJS's final explosion still deals its small mass-scaled blast
+ * (Matthew's ruling, ship_explosion.ts): 1.5 shield for the 50-ton hull of
+ * wave 24, nothing a player would see.
  *
- * GUESSES:
- *  - the booty of the take that trips is LOST (only the "Oops!" line was
- *    shown, no "You salvaged ..." or energy line; the run could not read
- *    the player's fuel, which was full before the take);
+ * GUESSES (wave 25 read the dialog and the hold, never the records or
+ * the combat rating, so these stand as they were):
  *  - the piracy is charged as for any take (BoardPenalty, once per
- *    session);
+ *    session; the tripped take is a take);
  *  - it is NOT the player's kill: the hulk blew itself up, so no combat
  *    rating and no Kill / Disab penalty (its DamageAttribution is marked
- *    `killCredited` before the event; the original's records after a
- *    self-destruct were not read);
+ *    `killCredited` before the event);
  *  - no draw and no self-destruct for a ship a PLAYER is flying (a
  *    rival's disabled ship: destroying a player on a random draw is not
  *    plunder) or a MISSION special ship (a random draw must not decide a
- *    mission's ship goal; the original was only seen with a traffic
- *    trader).
+ *    mission's ship goal; the original was only seen with traffic and
+ *    derelicts).
  *
  * Determinism: the draw is made only for a take that applies (the
- * per-action flags guard replays) and the exemptions read synced
- * components, so every peer draws the same count.
+ * per-action flags guard replays), one per take whatever the item, and
+ * the exemptions read synced components, so every peer draws the same
+ * count.
  */
-function tripPlunderSelfDestruct(hulk: Entity, hulkUuid: string,
-    random: { next(): number }, time: Time, emit: EmitFunction): boolean {
+function tripPlunderSelfDestruct(item: PlunderItem, hulk: Entity,
+    hulkUuid: string, random: { next(): number }, time: Time,
+    emit: EmitFunction): boolean {
     if (hulk.components.has(ControlledByComponent)
         || hulk.components.has(MissionShipComponent)) {
         return false;
     }
-    if (!plunderTripsSelfDestruct(random.next())) {
+    if (!plunderTripsSelfDestruct(item, random.next())) {
         return false;
     }
     const attribution = hulk.components.get(DamageAttributionComponent);

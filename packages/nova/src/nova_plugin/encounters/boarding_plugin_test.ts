@@ -554,6 +554,11 @@ describe('boarding in a live world', () => {
             const { world, boarder, target } = await boardingWorld();
             const price = target.components.get(ShipDataComponent)!.price;
             press(world, BOARDER, 'board');
+            // No take trips the hulk's self-destruct (Cargo's is 0.85:
+            // the seeded draws would end the session here).
+            const random = new Random();
+            random.next = () => 0.99;
+            world.resources.set(RandomResource, random);
 
             press(world, BOARDER, 'plunderCargo');
             expect(boarder.components.get(CargoComponent)!.get('cargo:0'))
@@ -1672,26 +1677,12 @@ describe('boarding in a live world', () => {
     });
 
     /**
-     * ========================================================================
-     * ONE PLUNDER PER LIFE SEGMENT, ONE CAPTURE ATTEMPT (Matthew's ruling)
-     * ========================================================================
-     *
-     * A hulk may be boarded FOR PLUNDER exactly once, however many times
-     * it is repaired and disabled again, and however many pirates come
-     * calling. Inside that one session the player gets exactly ONE capture
-     * attempt: if it is repelled the boarders are thrown off, the dialog
-     * closes on the spot, and nothing further can be had from that ship.
-     * The record resets only at a LIFE-SEGMENT boundary — the ship lands
-     * and departs, or jumps to another system.
-     *
-     * This suite replaces the old "a hulk can be boarded again after a
-     * session ends" block wholesale: that behaviour (re-board to retry a
-     * 5%-odds capture until it lands) is exactly what the ruling removes.
-     * Boarding for NON-plunder purposes is untouched, which the escort
-     * repair spec at the end pins.
+     * The plunder self-destruct (reference "Disabled ships, wave 24" and
+     * "Plunder self-destruct, wave 25"): one draw a take at that item's
+     * odds, made after the take is delivered; nothing exempt by govt.
      */
     describe('a booty take can trip the hulk\'s security self-destruct '
-        + '(reference "Disabled ships, wave 24")', () => {
+        + '(reference "Plunder self-destruct, wave 25")', () => {
             /** The world's PRNG replaced: every draw returns `roll` and is
              * counted. */
             function pinDraws(world: World, roll: number) {
@@ -1725,13 +1716,59 @@ describe('boarding in a live world', () => {
                 return { ...ctx, lines };
             }
 
-            it('the chance: a GUESSED 5% a take', () => {
-                expect(PLUNDER_SELF_DESTRUCT_CHANCE).toBe(0.05);
-                expect(plunderTripsSelfDestruct(0)).toBeTrue();
-                expect(plunderTripsSelfDestruct(0.0499)).toBeTrue();
-                expect(plunderTripsSelfDestruct(0.05)).toBeFalse();
-                expect(plunderTripsSelfDestruct(0.99)).toBeFalse();
+            it('the odds differ by item: fits from small samples', () => {
+                // Measured: Cargo 10 trips in 12 takes, Credits 4 in 15,
+                // Energy 2 in 4; Ammo never taken (GUESS). Each the
+                // count's ratio to the nearest 0.05.
+                expect(PLUNDER_SELF_DESTRUCT_CHANCE).toEqual({
+                    cargo: 0.85, credits: 0.25, fuel: 0.5, ammo: 0.5,
+                });
+                const measured = { cargo: [10, 12], credits: [4, 15],
+                    fuel: [2, 4] } as const;
+                for (const [item, [trips, takes]] of
+                    Object.entries(measured)) {
+                    const chance = PLUNDER_SELF_DESTRUCT_CHANCE[
+                        item as keyof typeof measured];
+                    expect(Math.abs(chance - trips / takes))
+                        .withContext(item).toBeLessThanOrEqual(0.025);
+                }
+                expect(plunderTripsSelfDestruct('cargo', 0)).toBeTrue();
+                expect(plunderTripsSelfDestruct('cargo', 0.8499)).toBeTrue();
+                expect(plunderTripsSelfDestruct('cargo', 0.85)).toBeFalse();
+                expect(plunderTripsSelfDestruct('credits', 0.2499))
+                    .toBeTrue();
+                expect(plunderTripsSelfDestruct('credits', 0.25)).toBeFalse();
+                expect(plunderTripsSelfDestruct('fuel', 0.4999)).toBeTrue();
+                expect(plunderTripsSelfDestruct('fuel', 0.5)).toBeFalse();
+                expect(plunderTripsSelfDestruct('ammo', 0.5)).toBeFalse();
+                expect(plunderTripsSelfDestruct('ammo', 0.99)).toBeFalse();
             });
+
+            it('each take draws at its own item\'s odds, in any order',
+                async () => {
+                    // 0.6 trips Cargo (0.85) and nothing else.
+                    const { world, boarder, target, lines } =
+                        await boarded();
+                    const counter = pinDraws(world, 0.6);
+                    for (const action of ['plunderCredits', 'plunderFuel',
+                        'plunderAmmo']) {
+                        press(world, BOARDER, action);
+                    }
+                    expect(counter.draws).toBe(3);
+                    expect(lines).toEqual([]);
+                    expect(boarder.components.has(BoardingComponent))
+                        .toBeTrue();
+                    press(world, BOARDER, 'plunderCargo');
+                    expect(counter.draws).toBe(4);
+                    expect(lines).toEqual([[BOARDER]]);
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeTrue();
+                    // Cargo first trips at the same draw.
+                    const first = await boarded();
+                    pinDraws(first.world, 0.6);
+                    press(first.world, BOARDER, 'plunderCargo');
+                    expect(first.lines).toEqual([[BOARDER]]);
+                });
 
             it('the line is STR# 2002 index 112, verbatim', () => {
                 expect(plunderSelfDestructMessage()).toEqual(
@@ -1741,8 +1778,8 @@ describe('boarding in a live world', () => {
 
             for (const action of ['plunderCredits', 'plunderCargo',
                 'plunderFuel', 'plunderAmmo']) {
-                it(`a tripped ${action}: the hulk is destroyed, the booty `
-                    + 'lost, the session over, the player told and '
+                it(`a tripped ${action}: the take is delivered, the hulk `
+                    + 'destroyed, the session over, the player told and '
                     + 'unharmed', async () => {
                         const { world, boarder, target, lines } =
                             await boarded();
@@ -1758,12 +1795,15 @@ describe('boarding in a live world', () => {
                             .toBeTrue();
                         expect(target.components.get(ArmorComponent)!.current)
                             .toBe(0);
+                        // The tripped take was delivered (measured for
+                        // Cargo: the hold filled), and only that one.
                         expect(boarder.components.get(CreditsComponent)!
-                            .credits).toBe(0);
-                        expect(boarder.components.get(CargoComponent)!.size)
-                            .toBe(0);
-                        expect(boarder.components.get(FuelComponent)!.current)
-                            .toBe(0);
+                            .credits > 0).toBe(action === 'plunderCredits');
+                        expect(boarder.components.get(CargoComponent)!
+                            .get('cargo:0') ?? 0).toBe(
+                                action === 'plunderCargo' ? 2 : 0);
+                        expect(boarder.components.get(FuelComponent)!
+                            .current > 0).toBe(action === 'plunderFuel');
                         expect(boarder.components.get(ArmorComponent)!.current)
                             .toBe(armor);
                         // Not his kill (GUESS): no combat rating.
@@ -1778,7 +1818,7 @@ describe('boarding in a live world', () => {
             }
 
             it('the piracy is charged as for any take, and the kill is not '
-                + '(GUESS)', async () => {
+                + '(GUESS: wave 25 read neither)', async () => {
                     const kept = await boarded();
                     pinDraws(kept.world, 0.99);
                     press(kept.world, BOARDER, 'plunderCredits');
@@ -1795,8 +1835,8 @@ describe('boarding in a live world', () => {
                     expect(records(tripped)).toEqual(records(kept));
                 });
 
-            it('a draw that does not trip moves every booty as before, one '
-                + 'draw a take', async () => {
+            it('a draw that does not trip moves every booty and leaves the '
+                + 'dialog open, one draw a take', async () => {
                     const { world, boarder, target, lines } = await boarded();
                     const counter = pinDraws(world, 0.99);
                     for (const action of ['plunderCredits', 'plunderCargo',
@@ -1832,6 +1872,21 @@ describe('boarding in a live world', () => {
                     expect(lines).toEqual([]);
                 });
 
+            it('a DERELICT trips like any hulk (waves 6-7: 8 trips in 15 '
+                + 'derelict takes)', async () => {
+                    const { world, boarder, target, lines } = await boarded();
+                    target.components.set(GovtComponent,
+                        { id: SYNTHETIC.govts.wrecks });
+                    const counter = pinDraws(world, 0);
+                    press(world, BOARDER, 'plunderCredits');
+                    expect(counter.draws).toBe(1);
+                    expect(lines).toEqual([[BOARDER]]);
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeTrue();
+                    expect(boarder.components.get(CreditsComponent)!.credits)
+                        .toBeGreaterThan(0);
+                });
+
             it('never for a ship a player is flying, nor a mission ship: no '
                 + 'draw (GUESS)', async () => {
                     for (const exempt of ['player', 'mission']) {
@@ -1856,6 +1911,25 @@ describe('boarding in a live world', () => {
                 });
         });
 
+    /**
+     * ========================================================================
+     * ONE PLUNDER PER LIFE SEGMENT, ONE CAPTURE ATTEMPT (Matthew's ruling)
+     * ========================================================================
+     *
+     * A hulk may be boarded FOR PLUNDER exactly once, however many times
+     * it is repaired and disabled again, and however many pirates come
+     * calling. Inside that one session the player gets exactly ONE capture
+     * attempt: if it is repelled the boarders are thrown off, the dialog
+     * closes on the spot, and nothing further can be had from that ship.
+     * The record resets only at a LIFE-SEGMENT boundary — the ship lands
+     * and departs, or jumps to another system.
+     *
+     * This suite replaces the old "a hulk can be boarded again after a
+     * session ends" block wholesale: that behaviour (re-board to retry a
+     * 5%-odds capture until it lands) is exactly what the ruling removes.
+     * Boarding for NON-plunder purposes is untouched, which the escort
+     * repair spec at the end pins.
+     */
     describe('a hulk gets one plunder and one capture attempt', () => {
         it('refuses a second plunder session after the first one closes',
             async () => {

@@ -12715,6 +12715,28 @@ exemptions (a player's ship, a mission ship: unmeasured).
 Confidence: high that every item can trip and that the dialog survives an
 untripped take; medium for the per-item rates (12 / 15 / 4 takes).
 
+**Applied (wave-25 fixes, 2026-11-25).** `PLUNDER_SELF_DESTRUCT_CHANCE`
+(`N/nova_plugin/ship/boarding_component.ts`) is per item now: **Cargo
+0.85, Credits 0.25, Energy 0.5, Ammo 0.5 (GUESS, never taken)**, each the
+count's own ratio rounded to the nearest 0.05, one rule for all three
+(10/12 = 0.83, 4/15 = 0.27, 2/4; the ~95% Wilson intervals 0.55-0.95,
+0.11-0.52, 0.15-0.85 are in the comment, which calls them fits from small
+samples; the proposal's 0.8 rounded Cargo down past its own count).
+`BoardingActionSystem` (`N/nova_plugin/encounters/boarding_plugin.ts`)
+now DELIVERS each take and charges the piracy first, then makes the take's
+one seeded draw (`tripPlunderSelfDestruct(item, ...)`), for every item
+(Credits and Energy unread: one rule); a trip ends the session and
+destroys the hulk as before. One draw per take, same count as before, so
+determinism is unchanged; no schema change. The "no derelict trips"
+premise is gone from the comments (no govt exemption, as before); the
+player-flown and mission-ship exemptions stay (GUESS). Kill credit and
+BoardPenalty: this section read neither the records nor the rating, so
+both guesses stand as they were (no kill, the piracy charged once per
+session; the tripped take is a take). Specs: `boarding_plugin_test.ts`
+(the per-item odds against the counts, each take at its own item's odds in
+any order, a tripped take of each item delivered, a derelict trips, a
+non-tripping take leaves the dialog open).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w25/plunder_live/*/`, `plunder_b/*/`, `plunder_c/*/` (`*-sw-<item>-*.png` / `*-dialog-<item>-*.png` after each click; `plunder_sheet.png`); the derelict boards in `20261123-w6/u9/board{,-cheap}/` and `20261123-w7/u9/{hulk-2k,hulk-100k,hulk-500k,crew}/` (`*-dialog-credits-*.png`, `*-dialog-cargo-*.png`).
 
 ### A disabled ship's coast, wave 25: its speed decays EXPONENTIALLY (about 23% a second, tau 3.7 s), not at a constant rate (2026-11-25)

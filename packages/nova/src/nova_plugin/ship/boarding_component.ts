@@ -540,35 +540,56 @@ export function creditBooty(price: number, roll: number): number {
 
 /**
  * ============================================================================
- * The plunder self-destruct (reference "Disabled ships, wave 24")
+ * The plunder self-destruct (reference "Disabled ships, wave 24" and
+ * "Plunder self-destruct, wave 25")
  * ============================================================================
  *
- * MEASURED once: taking the Energy from a trader the player had disabled
- * printed "Oops! You tripped this ship's security self-destruct
- * mechanism." (stock STR# 2002 "misc strings", index 112 0-based), the
- * dialog was gone, the hulk was destroyed and the player was undamaged and
- * still at rest. The Bible has no field for it (no shïp, gövt or oütf
- * entry mentions a plunder self-destruct), so it is the engine's own.
+ * Taking booty can print "Oops! You tripped this ship's security
+ * self-destruct mechanism." (stock STR# 2002 "misc strings", index 112
+ * 0-based): the dialog closes, the hulk is destroyed at once, the player
+ * is unharmed. The Bible has no field for it (no shïp, gövt or oütf entry
+ * mentions a plunder self-destruct), so it is the engine's own.
  *
- * THE CHANCE IS A GUESS: one take tripped in one (wave 24), while waves
- * 6-7 took the Credits and then the Cargo of five derelict hulks (gövt
- * 0x0800) and more boards after them with no self-destruct, ten takes at
- * least and likely twenty-odd. A single per-take chance fits all of it at
- * a few percent (one trip in N + 1 takes is the likeliest p = 1 / (N +
- * 1): 1 / 11 to 1 / 25); PLUNDER_SELF_DESTRUCT_CHANCE is 5%, between
- * them. Whether derelicts are exempt (every clean take was a derelict's)
- * is open; the one rule for every hulk is the simpler reading.
+ * MEASURED (wave 25, 27 boards' takes read shot by shot): every take
+ * (Cargo, Credits, Energy) is its own draw; a take that does not trip
+ * leaves the dialog open for the next; the order does not matter (Cargo
+ * tripped as the first, second and third take); derelicts (Capture Odds
+ * 0%: waves 6-7's hulks tripped 8 times in 15 takes) and a live hull the
+ * player disabled (75%) both trip, so nothing is exempt by govt; and the
+ * take that trips is still DELIVERED (the hold filled after a tripped
+ * Cargo take), see boarding_plugin.ts.
  *
- * One seeded draw per booty take (cargo, credits, energy, ammo), made as
- * the take applies; not for the capture attempt, which has its own roll
- * and its own failure (the line says "plunder").
+ * THE ODDS DIFFER BY ITEM. Counts, all hulls and orders pooled:
+ *
+ *   | item    | trips / takes | rate  | ~95% interval (Wilson) | used |
+ *   |---------|---------------|-------|------------------------|------|
+ *   | Cargo   | 10 / 12       | 0.83  | 0.55 - 0.95            | 0.85 |
+ *   | Credits |  4 / 15       | 0.27  | 0.11 - 0.52            | 0.25 |
+ *   | Energy  |  2 / 4        | 0.50  | 0.15 - 0.85            | 0.50 |
+ *   | Ammo    |  never taken  |   -   |   -                    | 0.50 |
+ *
+ * These are FITS FROM SMALL SAMPLES: each rate is the count's own ratio
+ * rounded to the nearest 0.05 (one rule for all three; the samples
+ * cannot tell, say, 0.80 from 0.85, so no digit past that is meant).
+ * Ammo was "None" on every measured hulk: its 0.5 is a GUESS, Energy's
+ * rate for the other consumable. The hull, govt, the player's crew and
+ * rating were never varied, so whether they matter is open.
  */
-export const PLUNDER_SELF_DESTRUCT_CHANCE = 0.05;
+export type PlunderItem = 'cargo' | 'credits' | 'fuel' | 'ammo';
+export const PLUNDER_SELF_DESTRUCT_CHANCE: Readonly<Record<PlunderItem, number>> = {
+    cargo: 0.85,
+    credits: 0.25,
+    /** The dialog's "Energy" row (fuel). */
+    fuel: 0.5,
+    /** GUESS: never measured (see above). */
+    ammo: 0.5,
+};
 
-/** Whether a booty take trips the hulk's self-destruct, given ONE uniform
- * draw `roll` in [0, 1) from the seeded RandomResource. */
-export function plunderTripsSelfDestruct(roll: number): boolean {
-    return roll < PLUNDER_SELF_DESTRUCT_CHANCE;
+/** Whether taking `item` trips the hulk's self-destruct, given ONE
+ * uniform draw `roll` in [0, 1) from the seeded RandomResource. */
+export function plunderTripsSelfDestruct(item: PlunderItem,
+    roll: number): boolean {
+    return roll < PLUNDER_SELF_DESTRUCT_CHANCE[item];
 }
 
 /** Looks up a government's data by id: the sim's GovtsResource with the
