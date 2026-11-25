@@ -97,8 +97,8 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  *
  * NOT EVERY HAIL OPENS A CHANNEL: with a stellar that is not a PORT selected
  * (Jupiter, a dead hypergate, a wormhole — landable.ts isPort) there is
- * nobody to answer, so no dialog appears at all — nor from a working gate the
- * player may not use (gateRefusesHail). The press gets the original's "No
+ * nobody to answer, so no dialog appears at all — nor from any working gate,
+ * usable or not (gateRefusesHail). The press gets the original's "No
  * response." on the bottom-left status line and the can't-do beep, the same
  * feedback a blocked landing gets. See hailIsUnanswerable / refuseHail.
  *
@@ -178,19 +178,18 @@ function getPlayerShip(world: World) {
  * undefined for exactly this case — so the plugin can tell a refusal apart
  * from "nothing is targeted", which is also undefined and is silent.
  *
- * A THIRD way, a GATE THE PLAYER MAY NOT USE ({@link gateRefusesHail}):
- * MEASURED for a working hypergate that had just denied the pilot
- * ("Hypergate usage denied."), which answered the hail with "No response."
- * and no dialog (reference "Stellar hail graphic, wave 23", HG-V01). Judged
- * only when `gameData` is given (the clearance needs it); without it a gate
- * falls through to computeContext, which applies the same rule.
+ * A THIRD way, any WORKING GATE ({@link gateRefusesHail}), whether or not
+ * the player may use it: MEASURED both ways (reference "Stellar hail
+ * graphic, wave 23", HG-V01 after "Hypergate usage denied."; "Hypergates
+ * and the radar, wave 24", Kit Gate C2 after "Cleared for hypergate
+ * entry"), each answering the hail with "No response." and no dialog. No
+ * clearance is read, so no game data is needed.
  *
  * A targeted SHIP wins over the planet target, the same order computeContext
  * reads them in, so hailing a ship while a dead moon happens to be selected
  * still opens the ship's channel.
  */
-export function hailIsUnanswerable(world: World,
-    gameData?: SimulationGameDataInterface): boolean {
+export function hailIsUnanswerable(world: World): boolean {
     const player = getPlayerShip(world);
     if (!player) {
         return false;
@@ -207,33 +206,27 @@ export function hailIsUnanswerable(world: World,
     if (!planetData) {
         return false;
     }
-    if (!isPort(planetData.flags)) {
-        return true;
-    }
-    const planetId = planetTarget?.components.get(PlanetComponent)?.id;
-    return gameData !== undefined && planetId !== undefined
-        && gateRefusesHail(planetData,
-            playerStellarClearance(world, player.entity, gameData,
-                planetData, planetId));
+    return !isPort(planetData.flags) || gateRefusesHail(planetData);
 }
 
 /**
- * Whether a hailed GATE stays silent: a transit stellar (a hypergate or a
- * wormhole, PlanetData.gate) the player may not use — the same landing
- * clearance (stellar_clearance.ts) that refuses them at the gate.
+ * Whether a hailed GATE stays silent: every working transit stellar (a
+ * hypergate or a wormhole, PlanetData.gate), whether or not the player may
+ * use it. A destroyed gate is unlandable, so not a port, and already silent
+ * through isPort.
  *
- * MEASURED: HG-V01, a working hypergate that had denied the pilot
- * ("Hypergate usage denied."), gave "No response." and no comm (reference
- * "Stellar hail graphic, wave 23").
- * GUESS: a gate the player MAY use keeps NovaJS's comm (the planet comm,
- * cleared to dock) — the original was not hailed with the gate open.
+ * MEASURED for hypergates both ways: HG-V01, which had denied the pilot
+ * ("Hypergate usage denied."; reference "Stellar hail graphic, wave 23"),
+ * and Kit Gate C2 right after "Cleared for hypergate entry" (reference
+ * "Hypergates and the radar, wave 24") each gave "No response." on the
+ * status line and no comm.
  * GUESS: a wormhole follows the hypergate. Every stock wormhole is
  * uninhabited (0x0020), no port, and already silent through isPort; this
  * only decides a plug-in's inhabited one.
  */
-export function gateRefusesHail(planetData: Pick<PlanetData, 'gate'>,
-    clearance: StellarClearance): boolean {
-    return !!planetData.gate && !clearance.cleared;
+export function gateRefusesHail(planetData: Pick<PlanetData, 'gate'>):
+    boolean {
+    return !!planetData.gate;
 }
 
 /**
@@ -1161,7 +1154,11 @@ export async function computeContext(world: World,
         // turns this undefined into the status line's "No response." and a
         // can't-do beep (see hailIsUnanswerable) — rather than opening a
         // comm dialog just to deny a landing that was never on offer.
-        if (planetData && !isPort(planetData.flags)) {
+        // Every working gate answers nothing either, usable or not: "No
+        // response." and no comm (gateRefusesHail; reference waves 23 and
+        // 24).
+        if (planetData
+            && (!isPort(planetData.flags) || gateRefusesHail(planetData))) {
             return undefined;
         }
         // Always true past that gate (a port is landable by definition), but
@@ -1180,13 +1177,6 @@ export async function computeContext(world: World,
                 ? playerStellarClearance(world, player.entity, gameData,
                     planetData, planetId)
                 : { cleared: true as const };
-        // A gate the player may not use answers nothing either: "No
-        // response." and no comm (gateRefusesHail; reference "Stellar hail
-        // graphic, wave 23", HG-V01).
-        if (planetData && gateRefusesHail(planetData, clearance)) {
-            return undefined;
-        }
-
         // A port that is refusing you and whose government bargains (gövt
         // 0x4000 / 0x8000) offers the deal in the middle button slot, the way
         // a hostile ship offers Beg For Mercy. Price and affordability are the
@@ -1491,7 +1481,7 @@ export const HailDialogPlugin: Plugin = {
                 }
                 // Nobody is home on a dead moon, nor on a disabled ship: no
                 // channel opens at all, just "No response." (STR# 2002 #52).
-                if (hailIsUnanswerable(world, simulationData)
+                if (hailIsUnanswerable(world)
                     || hailTargetIsDisabled(world)) {
                     await refuseHail();
                     return;

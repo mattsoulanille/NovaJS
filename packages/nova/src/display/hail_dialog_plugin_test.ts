@@ -1560,34 +1560,32 @@ describe('computeContext: hailing a STELLAR', () => {
                         gate, isStation: true, minStatus: 32767,
                         planetsTakeBribes: true,
                     });
-                    expect(hailIsUnanswerable(world, gameData))
+                    expect(hailIsUnanswerable(world))
                         .withContext(gate).toBeTrue();
                     expect(await computeContext(world, gameData,
                         stellarAssets())).withContext(gate).toBeUndefined();
-                    // Without the game data the clearance can't be judged
-                    // here; computeContext still refuses.
-                    expect(hailIsUnanswerable(world)).toBeFalse();
                 }
             });
 
-        it('lets a gate the player MAY use answer, as before (GUESS)',
-            async () => {
-                const { world, gameData } = planetWorld({
-                    gate: 'hypergate', isStation: true,
-                });
-                expect(hailIsUnanswerable(world, gameData)).toBeFalse();
-                const result = await computeContext(world, gameData,
-                    stellarAssets());
-                expect(result?.context.variant).toBe('planet');
-                expect(result?.context.body)
-                    .toContain('You are cleared to dock.');
+        it('refuses a gate the player MAY use too (Kit Gate C2 after "Cleared '
+            + 'for hypergate entry", reference "Hypergates and the radar, '
+            + 'wave 24"; the wormhole a GUESS)', async () => {
+                for (const gate of ['hypergate', 'wormhole'] as const) {
+                    const { world, gameData } = planetWorld({
+                        gate, isStation: true,
+                    });
+                    expect(hailIsUnanswerable(world))
+                        .withContext(gate).toBeTrue();
+                    expect(await computeContext(world, gameData,
+                        stellarAssets())).withContext(gate).toBeUndefined();
+                }
             });
 
         it('still opens a refusing NON-gate port, to bargain', async () => {
             const { world, gameData } = planetWorld({
                 minStatus: 32767, planetsTakeBribes: true,
             });
-            expect(hailIsUnanswerable(world, gameData)).toBeFalse();
+            expect(hailIsUnanswerable(world)).toBeFalse();
             const result = await computeContext(world, gameData,
                 stellarAssets());
             expect(result?.context.variant).toBe('planet');
