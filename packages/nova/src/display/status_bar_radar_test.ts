@@ -234,6 +234,33 @@ describe('stellar radar shape', () => {
         expect(shape([40, 48], false)).toBe('dot');
     });
 
+    it('dots a WORMHOLE whatever its size (K8 wormhole, wave 23)', () => {
+        // Enlightenment's wormhole, spöb 470: flags 0x21 (land +
+        // uninhabited, no station bit), 104 x 104 — over the ring
+        // threshold — was a 2 x 2 dot on the original's radar.
+        expect(stellarRadarShape(104, false, true)).toBe('dot');
+        expect(stellarRadarShape(undefined, false, true)).toBe('dot');
+        const wormhole = (frame: [number, number]) => planetRadarShape({
+            spriteFrameSize: frame,
+            flags: { isStation: false, uninhabited: true } as
+                PlanetData['flags'],
+            gate: { kind: 'wormhole', destinations: [],
+                emergenceAngle: null },
+        });
+        expect(wormhole([104, 104])).toBe('dot');
+    });
+
+    it('keeps an uninhabited non-wormhole planet on the size rule: Jupiter '
+        + '(0x0020 set, 325 px) is a ring on in_space.png', () => {
+            // Why the rule is the wormhole flag and not 0x0020 alone.
+            expect(planetRadarShape({
+                spriteFrameSize: [325, 325],
+                flags: { isStation: false, uninhabited: true,
+                    canLand: false } as PlanetData['flags'],
+                gate: null,
+            })).toBe('ring');
+        });
+
     it('is a hollow 5 x 5 ring with its corners cut', () => {
         expect(STELLAR_RING_PIXELS.length).toBe(12);
         const set = new Set(STELLAR_RING_PIXELS.map(key));
@@ -643,7 +670,7 @@ describe('stock stellar radar shapes (Nesre Secundus)', () => {
         ]);
     }, 120_000);
 
-    it('dots an 88 px planet, rings a 96 px one and a wormhole', async () => {
+    it('dots an 88 px planet and a wormhole, rings a 96 px one', async () => {
         const gameData = await getIntegrationGameData();
         const shapes: [string, number[], boolean, string][] = [];
         // Fermia (Arcturus), Georgia (Nesre Primus), Spica's wormhole.
@@ -655,8 +682,27 @@ describe('stock stellar radar shapes (Nesre Secundus)', () => {
         expect(shapes).toEqual([
             ['Fermia', [88, 88], false, 'dot'],
             ['Georgia', [96, 96], false, 'ring'],
-            // UNMEASURED: the reference predicts a ring (not a station).
-            ['Wormhole', [104, 104], false, 'ring'],
+            // K8 wormhole, wave 23: a 2 x 2 dot, not a ring.
+            ['Wormhole', [104, 104], false, 'dot'],
         ]);
+    }, 120_000);
+
+    it('dots all 24 stock wormholes and still rings Jupiter (0x0020, '
+        + '325 px)', async () => {
+        const gameData = await getIntegrationGameData();
+        const ids = (await gameData.ids).Planet
+            .filter(id => id.startsWith('nova:'));
+        const wormholes: string[] = [];
+        for (const id of ids) {
+            const planet = await gameData.data.Planet.get(id);
+            if (planet.gate?.kind === 'wormhole') {
+                wormholes.push(id);
+                expect(planetRadarShape(planet)).withContext(id).toBe('dot');
+            }
+        }
+        expect(wormholes.length).toBe(24);
+        const jupiter = await gameData.data.Planet.get('nova:159');
+        expect(jupiter.flags.uninhabited).toBeTrue();
+        expect(planetRadarShape(jupiter)).toBe('ring');
     }, 120_000);
 });

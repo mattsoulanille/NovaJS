@@ -194,8 +194,9 @@ export function shipBlipSize(mass: number | undefined,
 
 /**
  * How a stellar shows on the radar. The original draws planet-sized
- * planets as a hollow ring, and small planets and EVERY STATION as a
- * filled 2 x 2 dot, both centred on the stellar's radar pixel.
+ * planets as a hollow ring, and small planets, EVERY STATION and every
+ * wormhole as a filled 2 x 2 dot, both centred on the stellar's radar
+ * pixel.
  *
  * MEASURED (reference "K8 stellar radar shape, wave 22", three runs on the
  * original): a stellar flagged a station (spöb Flags 0x0010, "Stellar is a
@@ -215,10 +216,29 @@ export function shipBlipSize(mass: number | undefined,
  * here. No stock stellar has a frame in that gap (the stock sizes jump
  * from 88 to 96), so only a plug-in's art can fall in it.
  *
- * Wormholes (spöb Flags2 0x2000; all 24 stock ones are plain planets,
- * flags 0x21, 104 px) follow the planet rule: rings. UNMEASURED: the
- * reference section predicts a ring (not a station), but no wormhole was
- * shot on the original's radar.
+ * A WORMHOLE (spöb Flags2 0x2000, PlanetData.gate 'wormhole') is a dot
+ * too, whatever its size. MEASURED (reference "K8 wormhole on the radar,
+ * wave 23"): Enlightenment's (spöb 470, flags 0x21 — land + uninhabited, no
+ * station bit — 104 px, over the ring threshold) is a 2 x 2 #808080 dot.
+ * So size alone does not decide.
+ *
+ * WHY THE WORMHOLE FLAG AND NOT 0x0020, which the reference section
+ * proposed ("a dot when the stellar is a station OR uninhabited"): Jupiter
+ * (spöb 159, 325 px) carries 0x0020 too — and 0x0001 clear — yet it is a
+ * RING on the original's in_space.png. So "uninhabited" alone is refuted.
+ * What is left fits two rules that agree on every measured stellar: the
+ * wormhole flag (this one, the narrowest), or "landable AND uninhabited"
+ * (which would also dot Spica, Neo New York, the UHP-1002 copies, Kont and
+ * ten more stock planets of 96 px and up, none measured). GUESS between
+ * the two; an uninhabited LANDABLE planet of 96+ px on the original's radar
+ * (Spica, 120 px) would decide it. Stock effect: the 24 wormholes (23
+ * named "Wormhole" plus "Link", nova:514), all 104 px, ring -> dot.
+ *
+ * The colour of the dot is not decided here: without IFF every stellar the
+ * player may land on is the status bar's dimRadar grey (stock #808080, the
+ * measured colour), as rings are; with IFF a wormhole is 'neutral' (landing
+ * clearance ignores an uninhabited stellar) and draws yellow — unmeasured
+ * for a wormhole (iff_plugin's planetBlipColor).
  *
  * The size is the larger side of the stellar's sprite frame
  * (stellarRadarSize); an unknown size draws a planet as a ring.
@@ -226,19 +246,22 @@ export function shipBlipSize(mass: number | undefined,
 export const STELLAR_RING_MIN_SIZE = 96;
 export type StellarRadarShape = 'ring' | 'dot';
 export function stellarRadarShape(size: number | undefined,
-    isStation: boolean): StellarRadarShape {
-    if (isStation) {
+    isStation: boolean, isWormhole = false): StellarRadarShape {
+    if (isStation || isWormhole) {
         return 'dot';
     }
     return size !== undefined && size < STELLAR_RING_MIN_SIZE ? 'dot' : 'ring';
 }
 
-/** {@link stellarRadarShape} of a stellar's data: its station flag and frame. */
+/** {@link stellarRadarShape} of a stellar's data: its station flag, whether
+ * it is a wormhole, and its frame. */
 export function planetRadarShape(
-    planetData: Pick<PlanetData, 'spriteFrameSize' | 'flags'>):
+    planetData: Pick<PlanetData, 'spriteFrameSize' | 'flags'>
+        & { gate?: PlanetData['gate'] }):
     StellarRadarShape {
     return stellarRadarShape(stellarRadarSize(planetData.spriteFrameSize),
-        planetData.flags?.isStation ?? false);
+        planetData.flags?.isStation ?? false,
+        planetData.gate?.kind === 'wormhole');
 }
 
 /**
@@ -720,10 +743,10 @@ export const DrawRadar = new System({
                         shipBlipSize(shipData.physics.mass, true));
                 }
             }
-            // Planet-sized planets are rings; small planets and every
-            // station 2 x 2 dots (planetRadarShape: the spöb's station flag
-            // and its sprite frame size, staged with its PlanetData, so
-            // known from the first refresh).
+            // Planet-sized planets are rings; small planets, every station
+            // and every wormhole 2 x 2 dots (planetRadarShape: the spöb's
+            // station flag, its gate kind and its sprite frame size, staged
+            // with its PlanetData, so known from the first refresh).
             const planetShapes = new Map<string, StellarRadarShape>();
             for (const [uuid, , planetData] of planets) {
                 planetShapes.set(uuid, planetRadarShape(planetData));
