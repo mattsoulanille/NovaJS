@@ -40,7 +40,7 @@ describe('the binary wire', () => {
             server: httpServer, buildVersion: BUILD,
             warn: m => warnings.push(m),
         });
-        await new Promise<void>(resolve => httpServer.listen(0, () => resolve()));
+        await new Promise<void>(resolve => httpServer.listen(0, '127.0.0.1', () => resolve()));
         const port = (httpServer.address() as AddressInfo).port;
         baseUrl = `ws://127.0.0.1:${port}`;
     });

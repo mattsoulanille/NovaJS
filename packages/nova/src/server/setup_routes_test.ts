@@ -241,7 +241,7 @@ describe('GameDataServer request routes', () => {
             { wireSendPolicy: 'strict' });
 
         server = await new Promise<http.Server>(resolve => {
-            const s = app.listen(0, () => resolve(s));
+            const s = app.listen(0, '127.0.0.1', () => resolve(s));
         });
         const address = server.address() as AddressInfo;
         baseUrl = `http://127.0.0.1:${address.port}`;
@@ -373,7 +373,7 @@ describe('GameDataServer index route', () => {
             '/nonexistent/worker.map', '/nonexistent/settings',
             { wireSendPolicy: 'recover' });
         server = await new Promise<http.Server>(resolve => {
-            const s = app.listen(0, () => resolve(s));
+            const s = app.listen(0, '127.0.0.1', () => resolve(s));
         });
         baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     });

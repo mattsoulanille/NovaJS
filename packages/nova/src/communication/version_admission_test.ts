@@ -37,7 +37,7 @@ describe('websocket version admission', () => {
         channel.clientConnect.subscribe(uuid => connects.push(uuid));
 
         await new Promise<void>(resolve =>
-            httpServer.listen(0, () => resolve()));
+            httpServer.listen(0, '127.0.0.1', () => resolve()));
         const port = (httpServer.address() as AddressInfo).port;
         baseUrl = `ws://127.0.0.1:${port}`;
     });
@@ -154,7 +154,7 @@ describe('websocket version admission with an awkward stamp', () => {
             server: httpServer, buildVersion: awkward, warn: () => { },
         });
         await new Promise<void>(resolve =>
-            httpServer.listen(0, () => resolve()));
+            httpServer.listen(0, '127.0.0.1', () => resolve()));
         baseUrl = `ws://127.0.0.1:`
             + `${(httpServer.address() as AddressInfo).port}`;
     });
@@ -191,7 +191,7 @@ describe('websocket version admission when unarmed', () => {
         // tests and tools use, and it must stay backwards compatible.
         channel = new SocketChannelServer({ server: httpServer });
         await new Promise<void>(resolve =>
-            httpServer.listen(0, () => resolve()));
+            httpServer.listen(0, '127.0.0.1', () => resolve()));
         baseUrl = `ws://127.0.0.1:`
             + `${(httpServer.address() as AddressInfo).port}`;
     });

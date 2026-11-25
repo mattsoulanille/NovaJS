@@ -48,7 +48,7 @@ describe('the local input gate', () => {
         channel = new SocketChannelServer({
             server: httpServer, buildVersion: BUILD, warn: () => undefined,
         });
-        await new Promise<void>(resolve => httpServer.listen(0, () => resolve()));
+        await new Promise<void>(resolve => httpServer.listen(0, '127.0.0.1', () => resolve()));
     });
 
     afterEach(async () => {
