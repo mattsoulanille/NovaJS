@@ -36,10 +36,13 @@ import { presentVenueOffersIn } from './venue_offers.js';
  * ============================================================================
  *
  * The original, measured (reference "#324 mission BBS after an accept,
- * wave 21"): an accept withdraws the listings that no longer qualify AT
- * ONCE, but adds nothing in the visit — a job, a bar offer and a
- * trade-center offer that the accept made available are offered from the
- * next landing on — and an accept that leaves the BBS empty closes it.
+ * wave 21" and "#324 wave 22"): an accept withdraws the listings that no
+ * longer qualify AT ONCE, wherever it was made, but adds nothing in the
+ * system visit — a job, a bar offer and a venue offer that the accept made
+ * available are not offered on a reopen, on a venue's FIRST open, or on a
+ * second landing in the same system; every location's set is fixed by the
+ * touch-down and kept until the next system entry — and an accept that
+ * leaves the BBS empty closes it.
  *
  * Coldharbour's BBS (synthetic scenario): the Refuge Run charter and the
  * Retainer, mutually exclusive on b107; the Harbour Tally, which b107
@@ -96,10 +99,20 @@ describe('a landing\'s offers (#324)', () => {
     }
     type Setup = Awaited<ReturnType<typeof setup>>;
 
-    /** A landing at Coldharbour over `hull` (the Spaceport's transaction). */
-    function land(env: Setup, hull: Entity = env.hull) {
-        return LandedTransaction.open(hull, env.gameData, env.universe,
-            COLDHARBOUR);
+    /**
+     * A landing at Coldharbour over `hull`, as the Spaceport makes it: the
+     * transaction, then the touch-down's offer roll.
+     */
+    async function land(env: Setup, hull: Entity = env.hull) {
+        const transaction = await LandedTransaction.open(hull, env.gameData,
+            env.universe, COLDHARBOUR);
+        transaction.rollOfferSets();
+        return transaction;
+    }
+
+    /** A jump out and back: a new system visit (client/system_entry.ts). */
+    function enterSystem() {
+        resetOfferRolls();
     }
 
     async function openBoard(env: Setup, transaction: LandedTransaction) {
@@ -178,17 +191,24 @@ describe('a landing\'s offers (#324)', () => {
             await again.closed;
         });
 
-    it('lists the job an accept made available from the next landing on',
-        async () => {
+    it('lists the job an accept made available only after the next system '
+        + 'entry, not on a re-landing in the same system', async () => {
             const env = await setup();
             const first = await land(env);
             const { board, closed } = await openBoard(env, first);
             acceptListing(board, CHARTER);
             board.dismiss();
             await closed;
-            const lifted = first.commit();
 
-            const second = await land(env, lifted);
+            // Landed again in the same visit (a new day): nothing added.
+            const again = await land(env, first.commit());
+            const relanded = await openBoard(env, again);
+            expect(listed(relanded.board)).toEqual([TALLY]);
+            relanded.board.dismiss();
+            await relanded.closed;
+
+            enterSystem();
+            const second = await land(env, again.commit());
             const next = await openBoard(env, second);
             // The charter is active and its twin still disqualified.
             expect(listed(next.board)).toEqual([TALLY, POST_BAG]);
@@ -248,23 +268,28 @@ describe('a landing\'s offers (#324)', () => {
 
     // ── The bar and the venues ──────────────────────────────────────────
 
-    it('adds no bar offer after an accept until the next landing',
+    it('adds no bar offer after an accept until the next system entry',
         async () => {
             const env = await setup();
             const first = await land(env);
-            const bar = () => ids(landingOffers(first.offerSets,
-                first.session, env.universe, LOCATION_BAR));
-            expect(bar()).not.toContain(TOAST);
+            const bar = (landing: LandedTransaction) => ids(landingOffers(
+                landing.offerSets, landing.session, env.universe,
+                LOCATION_BAR, landing.offerRolls));
+            expect(bar(first)).not.toContain(TOAST);
             acceptElsewhere(first, CHARTER);
-            expect(bar()).withContext('same landing').not.toContain(TOAST);
+            expect(bar(first)).withContext('same landing').not.toContain(TOAST);
 
-            const second = await land(env, first.commit());
-            expect(ids(landingOffers(second.offerSets, second.session,
-                env.universe, LOCATION_BAR))).toContain(TOAST);
+            const again = await land(env, first.commit());
+            expect(bar(again)).withContext('re-landed in the system')
+                .not.toContain(TOAST);
+
+            enterSystem();
+            const second = await land(env, again.commit());
+            expect(bar(second)).toContain(TOAST);
         });
 
     it('puts no trade-center offer to the player after an accept until the '
-        + 'next landing', async () => {
+        + 'next system entry, even at the venue\'s first open', async () => {
             const env = await setup();
             const shown: string[] = [];
             const popup = {
@@ -274,13 +299,21 @@ describe('a landing\'s offers (#324)', () => {
                 },
             } as unknown as OfferPopup;
             const first = await land(env);
-            await presentVenueOffersIn(first, popup, LOCATION_TRADING);
-            expect(shown).toEqual([]);
+            // The trade center is first opened AFTER the accept: its set
+            // was fixed by the touch-down (reference "#324 wave 22",
+            // finding 3, measured at the shipyard and the outfitter).
             acceptElsewhere(first, CHARTER);
+            await presentVenueOffersIn(first, popup, LOCATION_TRADING);
+            expect(shown).withContext('first open').toEqual([]);
             await presentVenueOffersIn(first, popup, LOCATION_TRADING);
             expect(shown).withContext('walked in again').toEqual([]);
 
-            const second = await land(env, first.commit());
+            const again = await land(env, first.commit());
+            await presentVenueOffersIn(again, popup, LOCATION_TRADING);
+            expect(shown).withContext('re-landed in the system').toEqual([]);
+
+            enterSystem();
+            const second = await land(env, again.commit());
             await presentVenueOffersIn(second, popup, LOCATION_TRADING);
             expect(shown.length).toBe(1);
             expect(shown[0]).toContain('manifest');
@@ -288,7 +321,43 @@ describe('a landing\'s offers (#324)', () => {
                 env.universe, LOCATION_TRADING))).toEqual([MANIFEST]);
         });
 
-    // ── The frozen sets belong to the landing ───────────────────────────
+    // ── The frozen sets belong to the system visit ──────────────────────
+
+    it('rolls every location at the touch-down, after the landing pass',
+        async () => {
+            const env = await setup();
+            const transaction = await LandedTransaction.open(env.hull,
+                env.gameData, env.universe, COLDHARBOUR);
+            expect(transaction.offerSets.size).toBe(0);
+            transaction.rollOfferSets();
+            expect([...transaction.offerSets.keys()].sort())
+                .toEqual([0, 1, 3, 4, 5, 6]);
+        });
+
+    it('hands a re-landing in the same visit the same frozen offers, and a '
+        + 'new visit new ones', async () => {
+            const env = await setup();
+            const first = await land(env);
+            const board = () => landingOffers(first.offerSets,
+                first.session, env.universe, LOCATION_MISSION_COMPUTER,
+                first.offerRolls);
+            const tally = board().find(offer => offer.data.id === TALLY)!;
+
+            const again = await land(env, first.commit());
+            expect(again.offerSets).toBe(first.offerSets);
+            expect(again.offerRolls).toBe(first.offerRolls);
+            const kept = landingOffers(again.offerSets, again.session,
+                env.universe, LOCATION_MISSION_COMPUTER, again.offerRolls)
+                .find(offer => offer.data.id === TALLY)!;
+            // The same frozen choice (the destination drawn once).
+            expect(kept.travelPlanet).toBe(tally.travelPlanet);
+
+            enterSystem();
+            const next = await land(env, again.commit());
+            expect(next.offerSets).not.toBe(first.offerSets);
+            expect(next.offerRolls).not.toBe(first.offerRolls);
+        });
+
 
     it('keeps the frozen sets across a rollback and a hull swap', async () => {
         const env = await setup();

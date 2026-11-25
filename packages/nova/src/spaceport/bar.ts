@@ -17,7 +17,7 @@ import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
-import { landingOffers, offerRollsForSystem } from './mission_offers.js';
+import { landingOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { NewsDialog } from './news_dialog.js';
@@ -276,11 +276,10 @@ export class Bar extends Menu<Entity> {
         const session = transaction.session;
         // The system visit's rolls (mission_offers.ts OfferRolls): walking
         // out and back in does not reroll a 40% mission. The offers are the
-        // landing's, rolled at the first walk-in (landingOffers, #324): an
-        // accept in this landing withdraws a bar offer at once but adds
-        // none until the next landing.
-        const rolls = offerRollsForSystem(this.universe.systemIdOfPlanet(
-            this.planetId, session.state.bits));
+        // visit's, rolled at the touch-down (landingOffers, #324): an
+        // accept withdraws a bar offer at once but adds none until the
+        // next system entry.
+        const rolls = transaction.offerRolls;
         const offers = landingOffers(transaction.offerSets, session,
             this.universe, LOCATION_BAR, rolls)
             .filter(offer => offer.acceptable);

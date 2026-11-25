@@ -1,7 +1,7 @@
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { LandedTransaction } from './landed_transaction.js';
-import { landingOffers, OfferRolls, offerRollsForSystem } from './mission_offers.js';
+import { landingOffers, OfferRolls } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
 
@@ -29,15 +29,15 @@ import { OfferPopup, presentOffers } from './offer_popup.js';
  *
  * `rolls` are the system visit's (OfferRolls), so walking in and out of
  * the outfitter does not reroll a 50% mission; the SET of offers is the
- * landing's, rolled at the first walk-in (landingOffers, #324), so an
- * accept elsewhere in the landing can withdraw a venue offer but never
- * add one before the next landing.
+ * system visit's, rolled at the touch-down (landingOffers, #324), so an
+ * accept anywhere in the visit can withdraw a venue offer but never add
+ * one before the next system entry: a shipyard or outfitter first opened
+ * after such an accept offers nothing (reference "#324 wave 22").
  */
 export async function presentVenueOffersIn(transaction: LandedTransaction,
     popup: OfferPopup, location: number, rolls?: OfferRolls): Promise<void> {
     const { session, universe } = transaction;
-    const visitRolls = rolls ?? offerRollsForSystem(
-        universe.systemIdOfPlanet(transaction.planetId, session.state.bits));
+    const visitRolls = rolls ?? transaction.offerRolls;
     const offers = landingOffers(transaction.offerSets, session, universe,
         location, visitRolls).filter(offer => offer.acceptable);
     if (offers.length === 0) {

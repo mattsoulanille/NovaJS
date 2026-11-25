@@ -3,6 +3,12 @@ import {
     acceptOffer,
     AcceptResult,
     checkAcceptable,
+    LOCATION_BAR,
+    LOCATION_MAIN_SPACEPORT,
+    LOCATION_MISSION_COMPUTER,
+    LOCATION_OUTFIT,
+    LOCATION_SHIPYARD,
+    LOCATION_TRADING,
     missionCargoName,
     makeMissionOffer,
     MissionOffer,
@@ -191,41 +197,115 @@ export function rollOffers(session: MissionSession,
 }
 
 /**
- * One LANDING's offers, frozen per location (mïsn AvailLoc -> the offers
- * rolled for it). Kept on the landing's transaction
- * (LandedTransaction.offerSets), so it lives exactly as long as the
- * landing: no venue savepoint snapshots it (a rollback does not unroll
- * it) and a hull swap keeps it.
+ * One stellar's offers for a SYSTEM VISIT, frozen per location (mïsn
+ * AvailLoc -> the offers rolled for it). Kept with the visit's
+ * {@link OfferRolls} (visitOfferSets) and handed to each landing's
+ * transaction (LandedTransaction.offerSets), so a re-landing on the same
+ * stellar in the same visit gets the same sets back; no venue savepoint
+ * snapshots it (a rollback does not unroll it) and a hull swap keeps it.
  */
 export type LandingOffers = Map<number, MissionOffer[]>;
 
 /**
+ * The frozen offer sets of one system visit, by stellar id. Keyed by the
+ * visit's {@link OfferRolls} like autoAcceptedByVisit, so they share its
+ * lifetime: a system entry (resetOfferRolls, client/system_entry.ts: a
+ * jump, a gate or wormhole transit, a mission move, a game start or load)
+ * or a landing in another system (offerRollsForSystem) starts a new rolls
+ * map and so drops every set. A new day does not.
+ */
+const offerSetsByVisit = new WeakMap<OfferRolls, Map<string, LandingOffers>>();
+
+/**
+ * `planetId`'s frozen offer sets for the `rolls` visit (see
+ * offerSetsByVisit), empty until its first touch-down rolls them
+ * (rollLandingOffers).
+ */
+export function visitOfferSets(rolls: OfferRolls,
+    planetId: string): LandingOffers {
+    let byPlanet = offerSetsByVisit.get(rolls);
+    if (!byPlanet) {
+        byPlanet = new Map();
+        offerSetsByVisit.set(rolls, byPlanet);
+    }
+    let sets = byPlanet.get(planetId);
+    if (!sets) {
+        sets = new Map();
+        byPlanet.set(planetId, sets);
+    }
+    return sets;
+}
+
+/**
+ * Every mïsn AvailLoc a landing offers at: the BBS, the bar, the main
+ * spaceport, the trade center, the shipyard and the outfitter (AvailLoc 2,
+ * the in-flight përs offer, is not a landing's).
+ */
+export const LANDING_OFFER_LOCATIONS: readonly number[] = [
+    LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_BAR,
+    LOCATION_TRADING, LOCATION_SHIPYARD, LOCATION_OUTFIT,
+];
+
+/**
+ * Rolls every location's offer set at the TOUCH-DOWN (#324), against the
+ * working copy as the landing pass left it (completions, failures and
+ * their set strings applied), before the main spaceport's AvailLoc 3
+ * popups. A location the visit already rolled at this stellar is kept: a
+ * re-landing adds nothing.
+ *
+ * MEASURED (reference "#324 wave 22", finding 3): the shipyard and the
+ * outfitter, opened for the FIRST time after an accept that made their
+ * offers qualify, offered nothing, so the sets are not rolled at a
+ * location's first open (main's earlier guess). And finding 4 (one run):
+ * a second landing in the same system, on a new day, added nothing either
+ * and kept the AvailRandom draw, which points at the Bible's "recalculated
+ * each time you warp into a system" for the whole offer set.
+ *
+ * GUESS: the moment within the visit. The original's set may be fixed at
+ * the system entry itself; here it is the stellar's first touch-down in
+ * the visit, after the landing pass. The two differ only for what changes
+ * between the entry and that touch-down: an in-flight accept (a përs
+ * offer), a completion this landing processes (the next job of a string
+ * is offered at once here), or an accept at ANOTHER stellar of the same
+ * system before landing at this one. None of those was measured.
+ */
+export function rollLandingOffers(landing: LandingOffers,
+    session: MissionSession, universe: MissionUniverse,
+    rolls?: OfferRolls): void {
+    for (const location of LANDING_OFFER_LOCATIONS) {
+        if (!landing.has(location)) {
+            landing.set(location,
+                rollOffers(session, universe, location, rolls));
+        }
+    }
+}
+
+/**
  * The offers at `location` for this landing (#324).
  *
- * THE SET IS ROLLED ONCE PER LANDING, PER LOCATION, and never grows in the
- * landing. The original adds nothing in the visit (reference "#324 mission
- * BBS after an accept, wave 21", finding 2): a BBS job, a bar offer and a
- * trade-center offer that an accept made available were not offered on
- * reopening the BBS or walking back into the bar or the trade center —
- * only from the next landing on. They used to be rolled afresh on every
- * open, so a reopened board listed what the last accept unlocked.
- *
- * Rolled at the FIRST open of the location in the landing, not at the
- * touch-down. GUESS: the reference run entered the bar and the trade
- * center before the accept, so either rule fits it; a first open after an
- * in-visit accept was not measured. The lazy rule never hides an offer
- * that a landing popup's accept unlocked from a venue the player had not
- * opened yet.
+ * THE SET IS ROLLED ONCE PER SYSTEM VISIT, PER STELLAR AND LOCATION, at the
+ * stellar's first touch-down in the visit (rollLandingOffers), and never
+ * grows until the next system entry. The original adds nothing in the
+ * visit (reference "#324 mission BBS after an accept, wave 21", finding 2;
+ * "#324 wave 22", findings 3 and 4): a BBS job, a bar offer and a venue
+ * offer that an accept made available were not offered on reopening the
+ * BBS, walking back into the bar or the trade center, opening the shipyard
+ * or the outfitter for the first time, or landing again in the same
+ * system. They used to be rolled afresh on every open, so a reopened board
+ * listed what the last accept unlocked. A location nothing rolled yet (a
+ * standalone venue's transaction in a spec) is rolled here, on its first
+ * read.
  *
  * WITHDRAWALS STAY LIVE: every read re-filters the frozen set against the
- * working copy (stillOffered), so an accept anywhere in the landing — the
- * BBS, the bar, a popup — withdraws what no longer qualifies (finding 1).
- * GUESS for a plain reopen: the original was seen to re-check only on an
- * ACCEPT (a reopened board after an `i` abort still listed a job the
- * abort's record change had disqualified, until the next accept withdrew
- * it). Re-filtering on every read is the one consistent rule here, and it
- * also keeps a job at the BBS from staying takeable after a bar accept
- * falsified its gate (the mutually exclusive pair across two locations).
+ * working copy (stillOffered), so an accept anywhere in the visit — the
+ * BBS, the bar, a popup — withdraws what no longer qualifies. MEASURED
+ * (reference "#324 wave 22", finding 1): a job whose bits a BAR accept
+ * falsified was gone when the BBS was reopened, with no BBS accept in
+ * between. (Wave 21's reopen after an `i` ABORT's record change still
+ * listed the record-gated job until the next accept: either every accept
+ * re-checks every location, or a reopen re-checks bits but not records.
+ * Re-filtering every read gives the measured bar case; the abort case is
+ * the known difference.)
  *
  * An offer this visit auto-accepted (autoAcceptedThisVisit) is dropped
  * too, so the #319 loop guard holds over the frozen set, and every offer

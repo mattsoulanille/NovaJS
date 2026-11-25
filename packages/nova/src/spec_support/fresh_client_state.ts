@@ -1,6 +1,7 @@
 import 'jasmine';
 import { resetDiscovery } from '../nova_plugin/player/index.js';
 import { SAVE_KEY, setActiveSaveKey } from '../nova_plugin/pilot/index.js';
+import { resetOfferRolls } from '../spaceport/mission_offers.js';
 
 /**
  * Every spec starts as a fresh client. Jasmine helper (jasmine.json), run
@@ -21,8 +22,14 @@ import { SAVE_KEY, setActiveSaveKey } from '../nova_plugin/pilot/index.js';
  * spec's whole-object save comparison depending purely on the shuffle seed
  * (seeds 22715, 35823 and 11111 each found a different pair). Every spec
  * file touching discovery used to guard itself; this is that guard once.
+ *
+ * The same holds for the system visit's mission-offer rolls and frozen
+ * offer sets (spaceport/mission_offers.ts: one visit per client, dropped
+ * at every system entry): a spec's landing is a new game, so it starts a
+ * new visit, as a game start or load does.
  */
 beforeEach(() => {
     setActiveSaveKey(SAVE_KEY);
     resetDiscovery();
+    resetOfferRolls();
 });

@@ -25,7 +25,10 @@ import {
     advanceEntityDate, drainPendingMissionNotices, MissionSession,
     processLandingOn, replaceMap, replaceSet,
 } from './mission_session.js';
-import type { LandingOffers } from './mission_offers.js';
+import {
+    LandingOffers, OfferRolls, offerRollsForSystem, rollLandingOffers,
+    visitOfferSets,
+} from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { commitPendingEscorts } from './pending_escorts.js';
 import { buildChangedShip } from './shipyard_rules.js';
@@ -234,15 +237,25 @@ export class LandedTransaction {
      */
     landingEvents: MissionEvent[] = [];
     /**
-     * The landing's mission offers, frozen per location as each is first
-     * opened (mission_offers.ts landingOffers, #324): the BBS, the bar and
-     * the venues roll their offers ONCE per landing. Deliberately outside
-     * the savepoints' snapshots — it belongs to the landing, not to a
-     * venue visit, so a rollback does not unroll it — and untouched by a
-     * hull swap (changeShip / adoptPurchasedShip). Player-local UI state,
-     * never in the sim or the save.
+     * The system visit's AvailRandom rolls (mission_offers.ts OfferRolls),
+     * fixed at the touch-down: every location of this landing reads the
+     * same visit, even if an accept's bits switch which copy of a stacked
+     * system the stellar is in.
      */
-    readonly offerSets: LandingOffers = new Map();
+    readonly offerRolls: OfferRolls;
+    /**
+     * This stellar's mission offers for the SYSTEM VISIT, frozen per
+     * location (mission_offers.ts visitOfferSets / landingOffers, #324):
+     * rolled at the stellar's first touch-down in the visit
+     * ({@link rollOfferSets}), shared by every later landing on it until
+     * the next system entry. Deliberately outside the savepoints'
+     * snapshots — it belongs to the visit, not to a venue visit, so a
+     * rollback does not unroll it — and untouched by a hull swap
+     * (changeShip / adoptPurchasedShip). Player-local UI state held by the
+     * client module, never in the sim or the save: a game load is a system
+     * entry, and rolls afresh.
+     */
+    readonly offerSets: LandingOffers;
 
     private hull: Entity;
     /** The entity balance at the last sync (credit_commit.ts's baseline). */
@@ -279,6 +292,9 @@ export class LandedTransaction {
         readonly universe: MissionUniverse,
         readonly planetId: string) {
         this.session = session;
+        this.offerRolls = offerRollsForSystem(
+            universe.systemIdOfPlanet(planetId, session.state.bits));
+        this.offerSets = visitOfferSets(this.offerRolls, planetId);
         this.hull = session.target;
         this.creditsBaseline = creditBalance(this.hull);
         this.jumpRoute = {
@@ -419,6 +435,18 @@ export class LandedTransaction {
     }
 
     // ── The landing ─────────────────────────────────────────────────────
+
+    /**
+     * The touch-down's offer roll (#324): every location's set this
+     * stellar has not had yet in the system visit is rolled now, against
+     * the working copy as it stands (mission_offers.ts rollLandingOffers).
+     * The spaceport calls it right after {@link processLanding}, before
+     * the AvailLoc 3 popups.
+     */
+    rollOfferSets(): void {
+        rollLandingOffers(this.offerSets, this.session, this.universe,
+            this.offerRolls);
+    }
 
     /**
      * Landing bookkeeping, before the spaceport is shown: the calendar

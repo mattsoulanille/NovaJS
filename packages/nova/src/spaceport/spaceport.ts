@@ -39,7 +39,7 @@ import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
-import { landingOffers, offerRollsForSystem } from './mission_offers.js';
+import { landingOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
 import { presentVenueOffersIn } from './venue_offers.js';
 import { Outfitter } from './outfitter.js';
@@ -578,6 +578,14 @@ export class Spaceport extends Menu<Entity> {
             } catch (e) {
                 console.warn('Mission landing processing failed:', e);
             }
+            // Every location's offers are fixed by the touch-down, after
+            // the landing pass (#324): a venue opened later in the visit
+            // offers nothing an accept made available meanwhile.
+            try {
+                this.transaction.rollOfferSets();
+            } catch (e) {
+                console.warn('Landing offer roll failed:', e);
+            }
         }
         // The hull the landing pass left the player in (a completion's
         // set string can have changed it).
@@ -764,9 +772,8 @@ export class Spaceport extends Menu<Entity> {
         const session = transaction.session;
         // The system visit's rolls (mission_offers.ts OfferRolls): a
         // second landing in this system sees the same AvailRandom answers.
-        const rolls = offerRollsForSystem(
-            this.universe.systemIdOfPlanet(this.id, session.state.bits));
-        // The landing's set (landingOffers, #324), like every location's.
+        const rolls = transaction.offerRolls;
+        // The visit's set (landingOffers, #324), like every location's.
         const offers = landingOffers(transaction.offerSets, session,
             this.universe, LOCATION_MAIN_SPACEPORT, rolls)
             .filter(offer => offer.acceptable);

@@ -17,7 +17,7 @@ import { Button } from './button.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import {
-    activeAsOffer, autoAcceptOffers, landingOffers, offerRollsForSystem,
+    activeAsOffer, autoAcceptOffers, landingOffers,
     offerSubstitutions, stillOffered,
 } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
@@ -312,12 +312,12 @@ export class MissionBoard extends Menu<Entity> {
         this.closingBriefing = undefined;
         // The system visit's rolls (mission_offers.ts OfferRolls): closing
         // and reopening the board does not reroll a 10% mission. The
-        // listings are the LANDING's, rolled at the first open
-        // (landingOffers, #324): a reopen lists what is left of them and
-        // never a job an accept in this landing made available — that one
-        // is listed from the next landing on, as in the original.
-        const rolls = offerRollsForSystem(this.universe.systemIdOfPlanet(
-            this.planetId, session.state.bits));
+        // listings are the system VISIT's, rolled at the touch-down
+        // (landingOffers, #324): a reopen or a re-landing lists what is
+        // left of them and never a job an accept in this visit made
+        // available — that one is listed after the next system entry, as
+        // in the original.
+        const rolls = this.transaction.offerRolls;
         // A listing with no offer text has nothing to list it WITH: it is
         // taken on as the board opens, through the same accept a click
         // runs (#319, offerAutoAccepts), and never becomes a row.
