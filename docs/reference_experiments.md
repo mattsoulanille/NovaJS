@@ -13797,6 +13797,38 @@ medium for the size rule (two masses, brackets of 5 and 44 px).
 `death_far100/seq.png`, each run's `recording.mp4` (`tools/killdist.sh`
 reproduces every row).
 
+**Applied (wave-28 fixes, 2026-11-25, e4f3f6c2).**
+`N/nova_plugin/ship/ship_explosion.ts` `shipExplosionReach` is the
+square's half-side, `SHIP_EXPLOSION_REACH_PER_DAMAGE` (2) x (25.5 + 0.037
+x mass): 58.4 px at 100 t, 125 px at 1,000 t, inside both brackets
+(GUESS on the form). **No cap** (unmeasured; a heavy-hull reach is queued):
+a 10,000 t Leviathan's blast reaches **791 px** each way, a 1,582 px
+square. It replaces the 0.02 px/ton circle and its 20 / 200 px floor / cap.
+`N/nova_plugin/combat/ship_explosion_plugin.ts` gives the blast an
+axis-aligned square hurtbox (never rotated), and
+`N/nova_plugin/combat/blast_plugin.ts` keeps a ship explosion's hit only
+when the victim's CENTRE is inside it (`insideShipExplosion`:
+max(|dx|, |dy|) <= the half-side), since the brackets are centre to
+centre; a hull that only pokes into the square is not hit. Below 100 t the
+square keeps the formula (51-58 px) and carries only the knockback, which
+is unchanged (0.05 a ton, radial). The damage, the 100 t cut-off (its
+comment now MEASURED by this section), the non-lethal floor and the
+ordinary death (already the same DeathEvent blast) are unchanged. The
+fireball GRAPHIC keeps its old 0.02 px/ton size with the 200 px cap
+(`finalFireballRadius`, display only): it was derived from the old radius,
+and a 1,600 px fireball has not been seen on the original. Specs: every
+row of the table by max(|dx|, |dy|), the two brackets, a 10,000 t wreck
+hitting a ship at the CORNER (700, 700), 990 px away, and missing one on
+the AXIS at 850 px, and a ship 4 px outside by its centre untouched.
+Browser-checked (a player Leviathan self-destructing beside six held
+Shuttle escorts): escorts about 300 px off, on the diagonal (-214, -230)
+and nearer the axis (-368, -121), both took the blast (armor 30 -> 10, the
+non-lethal floor; the old 200 px circle missed both); in a second run
+escorts at max(|dx|, |dy|) 695-762 were hit and two at 814 / 819 were not,
+and a passing Fed Anaconda at (-782, 641), 1,011 px away, was hit (the
+square's corner). A consequence worth knowing: a Leviathan's death now
+reaches (and shatters asteroids, kills missiles) 791 px each way.
+
 ### Hypergate clearance lines, wave 28: #91 / #92 / #93 are the cleared answer to the `l` that targets the gate (random form); a refusing gate says "Hypergate usage denied." from the first `l`; far out, `l` targets nothing, and a later `l` can say "Hypergate is online. Begin initial approach." (2026-11-25)
 
 **Question** (brief): when are STR# 2002 #91 "Cleared for hypergate
@@ -13868,6 +13900,14 @@ Confidence: high for 1-2 (fourteen presses), medium for 3 (one run each).
 `gate_deny/seq.png` (the first try died "no EV Nova window within 30 s";
 `*-retry1/` is the run).
 
+**Applied (wave-28 fixes, 2026-11-25, afcbfb76).** Comments only: 1-2
+match (`N/display/status_bar_content.ts` `hypergateClearedMessage` and
+`N/display/status_message_plugin.ts` cite the 1 / 6 / 3 in ten). 3 is
+NOT changed, as proposed: the far-out selection waits on the
+selection-range measurement, and the request lines (#74 / #75 + #80,
+#77-80) are not added; `N/nova_plugin/travel/planet_plugin.ts`'s
+hypergate `l` comment names both differences.
+
 ### Map dot colours, wave 28: a ränk 0x0200 of the owner turns a MinStatus refusal's ORANGE dot BLUE, and the port then takes the player (2026-11-25)
 
 **Question** (wave-27 leftover): does a ränk 0x0200 ("All planets of the
@@ -13906,6 +13946,12 @@ hail agree).
 `20-pk-hail.png`; `seq.png`-`seq3.png`; the first two jumps failed: too
 near the planet, then the landing had cleared the destination).
 
+**Applied (wave-28 fixes, 2026-11-25, afcbfb76).** Comments only:
+`N/spaceport/starmap.ts` `refusingSystems` and
+`N/spaceport/starmap_draw.ts` call the ränk 0x0200 override MEASURED,
+citing this section; the bribe and mission-destination overrides stay
+GUESSES.
+
 ### R7 planet bribe, wave 28: after a withdrawn ask ("No deal, cheapskate."), the planet refused all eleven later offers that day (2026-11-25)
 
 **Question** (wave-27 leftover): the plain planet's outright refusal odds
@@ -13941,6 +13987,44 @@ Confidence: medium (one run, eleven in a row).
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w28/prefuse_2m/sheet.png`
 (the twelve offers), `prefuse_2m/lower1.png` (the withdrawal).
 
+**Applied (wave-28 fixes, 2026-11-25, 6ef78f21).** The planet's haggle is
+modelled (`N/nova_plugin/reputation/hail.ts`, "A planet's bribe haggle").
+"A withdrawn ask" is a Lower Price that withdraws: with wave 22's rows, a
+planet's Lower Price either COUNTERS with 3/4 rounded down to 100
+(`planetBribeAsk` = `fuelCounterPrice`: 3,000 -> 2,200, 10,000 -> 7,500)
+or WITHDRAWS ("No deal, cheapskate." / "Your greed has been noted. Go
+away.", STR# 3002 30-34). `lowerPlanetBribe`: the first press counters one
+time in four (`planetLowerPriceCounters`, a hash of the planet, the pilot
+and the day; GUESS: the fuel sale's rate, planets 2 of 4 so far), a second
+press on a counter withdraws (GUESS, as for fuel), and Accept Price pays
+the counter. After a withdrawal `planetBribeRefused` turns down every
+Offer Bribe **for the rest of the game day** (the scope chosen for "the
+flight": the date the fresh refusal is already seeded by; a jump moves it,
+so leaving the system and coming back starts afresh, while landing
+elsewhere in the system and taking off does not; GUESS), a 0x8000 govt's
+planet included (GUESS: only plain planets were measured). The fresh first
+offer's refusal stays one in eight (now quoted as 2 in 16). Both
+refusals answer from STR# 3002 45-49 ("Yeah, right." / "You wish." / "Are
+you trying to insult us?" / "We don't take kindly to insults." / "Stop
+being an insulting little ferret.", every line this run read): the wave-27
+fix had used STR# 3000 95-99 ("Yeah, right!" with a "!"), corrected. The
+popup is Lower Price / Accept Price when the pilot can pay; an
+unaffordable planet price keeps NovaJS's own page ("You cannot afford
+it.", Never Mind: unmeasured). State: a new synced player component,
+`StellarHaggle` (`N/nova_plugin/travel/planet_plugin.ts`: NOVA id ->
+{day, countered, withdrawn}, an entry from another day counting as none),
+written by `applyHail` (`N/nova_plugin/encounters/hail_plugin.ts`, which
+now accepts the existing `lowerPrice` input on a stellar); schema-only
+under protocol 8, fingerprint a94a3bd8ec90e8fc -> 4a0fcd76ceddd9b4. NOT
+modelled: a ship's Lower Price on a bribe, and an insult to a second Offer
+Bribe in the same channel after a COUNTER (wave 22). Browser-checked at
+Spacedock II (gövt 128, 0x8000, MinStatus 2; a clean pilot with 25,000):
+"Pay us 4,000 credits.", Lower Price -> "Pay us 3,000 credits." (the
+counter), Lower Price again -> "Apparently you don't want to port here
+after all." (withdrawn); Offer Bribe in the same channel -> "Stop being an
+insulting little ferret."; a fresh hail's Offer Bribe -> "Are you trying to
+insult us?"; nothing charged.
+
 ### Stellar hail pane, wave 28: a second odd overflow (325 x 325) sits where a 311 px pane puts it; NovaJS's halved-separately rule gives the same pixel (2026-11-25)
 
 **Question** (waves 23-27 carry-over): the 1 px pane-width question on
@@ -13962,6 +14046,10 @@ give 214) and y = -16 = 5 + floor((283 - 325) / 2).
 222 + 155 - 162 = 215, 5 + 141 - 162 = -16: **matches**. Closed.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w28/hail_jup/*/03-hail.png`, `04-hail2.png`.
+
+**Applied (wave-28 fixes, 2026-11-25, afcbfb76).** Comment only:
+`N/spaceport/hail_layout.ts` `stellarSpriteOrigin` cites this section; the
+311 px question is closed.
 
 ### Reliability notes (for anyone running the reference)
 
@@ -14603,7 +14691,7 @@ cosmetic or rare.
 | U7 | spöb Gravity unit and falloff | not implemented | CPg stellar Gravity 100/500, VID drift | L |
 | U8 | Hyperspace timings: spin-up, departure, arrival, when fuel is deducted | `N/nova_plugin/travel/jump_plugin.ts:36-60` | Test kit with two linked systems; VID | M |
 | U9 | Landing gate: distance and speed | `N/nova_plugin/travel/planet_plugin.ts:187-190,308-316` | **answered (waves 4, 6)**: a square zone, max(\|dx\|, \|dy\|) <= about 1.7 x frame width (cap about 212), speed gate about 20 px/s. Applied in bd344b9f (was a circle of 2 x max(w, h)) | L |
-| U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship | L |
+| U10 | Ship explosion damage/radius scaling | `N/nova_plugin/ship/ship_explosion.ts:85-124` | CPg heavy düde next to a known-shield ship. **Measured (waves 26-28), applied 2026-11-25**: 25.5 + 0.037 x mass from 100 t (wave 27); the reach a SQUARE of half-side about twice that, by the centres, no cap (wave 28, e4f3f6c2) | L |
 
 ### NPC AI and state transitions (Matthew's category)
 
@@ -14634,7 +14722,7 @@ cosmetic or rare.
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
 | R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-48` | CPl with escorts (pilot-make `escorts`), PD | M |
-| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate) | CPl with exact cash at 2-3 levels, SS | H |
+| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate). **Wave 28 (R "R7 planet bribe, wave 28"), applied 2026-11-25 (6ef78f21)**: a planet's Lower Price counters (3/4) or withdraws; a withdrawal refuses every later offer that game day (GUESS scope); refusals answer from STR# 3002 45-49 | CPl with exact cash at 2-3 levels, SS | H |
 | R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |
