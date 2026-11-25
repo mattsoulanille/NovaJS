@@ -33,8 +33,8 @@ import {
 } from '../player/index.js';
 import { alliedEitherWay, effectiveStrength } from '../reputation/index.js';
 import {
-    DamagedEvent, DisabledComponent, KnockbackSystem, OutfitsStateComponent,
-    ShieldComponent, ShipDataComponent,
+    DamagedEvent, DisabledComponent, ExplodingComponent, KnockbackSystem,
+    OutfitsStateComponent, ShieldComponent, ShipDataComponent,
 } from '../ship/index.js';
 import { AsteroidDamageSystem } from '../combat/index.js';
 import {
@@ -59,42 +59,55 @@ import {
  * ModType 44 is a "reinforcement inhibitor".
  *
  * Measured on the original (docs/reference_experiments.md, "R19
- * reinforcement fleets, wave 19"):
+ * reinforcement fleets, wave 19" and "..., wave 20"):
  *  - the PLAYER's first hit on a Strength-50 trader of the fleet's govt
  *    (MaxOdds 100) called it for a Strength-100 player and not for a
  *    Strength-1 one: 100 against the two 50s, the hit one counting a
  *    little less with its shield down (93% of 50 at 90% shield), passes;
  *  - "Sensors detect <MediumName> reinforcement fleet approaching." is said
- *    when the fleet ARRIVES, ReinfTime after the call: 10 s for 300, 23-25 s
- *    (twice) for 900; the whole flët comes in about 1,800 px out;
+ *    when the fleet ARRIVES, ReinfTime / 39 s after the hit, linear and with
+ *    no cap (wave 20: 300 -> 7.7 s mean of seven, 600 -> 15.2, 900 ->
+ *    23-25, 1800 -> 45.7-46.8); the whole flët comes in about 1,800-1,960
+ *    px out on a random bearing;
+ *  - the fleet does NOT come to the player: with him 600+ px from the
+ *    victim and the port none came within his radar; with him at the port
+ *    it came in 1,840-1,960 px out (wave 20);
+ *  - an ANCHORED victim (hull Speed 0) never calls, its AI does not run;
+ *    a victim that jumped out before the arrival got no fleet (wave 20,
+ *    one run);
  *  - once a day: no second call in 8 more minutes of the same visit, and
  *    one on each of two following days (ReinfIntrval 1);
  *  - an NPC wearing a warship of the govt down to 27% shield did not call
  *    it, nor did 311's warships call it for a pilot holding a ränk 0x0400
  *    of their govt under attack;
- *  - the fleet stayed 2.5+ minutes, until the player left; it fired on the
- *    player in a long fight (1506) and stayed neutral after two hits whose
- *    trader had left (1507); a new trader came in while it was there.
+ *  - the fleet stayed 2.5+ minutes, until the player left; it was hostile
+ *    every time the victim still held the player as its attacker (every
+ *    wave-20 run) and neutral once after two hits whose trader had left
+ *    (wave 19, 1507: still unexplained); a new trader came in while it was
+ *    there.
  *
  * So (GUESSES marked; docs/npc_behavior_gaps.md "Reinforcement fleets"):
  *
  * THE CALL (ReinforcementCallSystem, off DamagedEvent after the damage is
  * applied): a hit whose responsible ship is a PLAYER's ship, or a ship of
  * a player's flock (GUESS: an escort's hit counts as its player's), on an
- * NPC that is not disabled (GUESS: a hulk is out of the fight) and not in
- * a player's flock, of the fleet's govt or one allied with it either way
- * (GUESS for allies: the Bible's "ships allied with"), calls the fleet when
+ * NPC that is not disabled (GUESS: a hulk is out of the fight), not
+ * anchored (hull Speed 0: MEASURED, wave 20, it never calls) and not in a
+ * player's flock, of the fleet's govt or one allied with it either way
+ * (MEASURED for an ally's ship, wave 20: it calls the fleet govt's
+ * fleet, with that govt's MediumName), calls the fleet when
  *  - no call is pending in this system;
  *  - the caller's own cooldown allows it (reinforcementAvailable);
  *  - no player in the system carries an inhibitor for the fleet's govt
- *    (inhibitsReinforcements; GUESS, unmeasured: the Bible's "while the
- *    player is in the system and has this outfit", read for any player in
- *    a room);
+ *    (inhibitsReinforcements; MEASURED for the class and -1, wave 20; a
+ *    GUESS in a room: read for any player in the system);
  *  - the odds exceed MaxOdds (reinforcementOddsCall): the enemies are the
  *    caller's ship and its flock, the friends every NPC of the fleet's
  *    govt or an ally in the system, neither disabled, each at
- *    effectiveStrength (GUESSES: the whole system, no range; "exceed" as
- *    strictly greater; the shield after the hit).
+ *    effectiveStrength (MEASURED, wave 20: ten of eleven odds points fit,
+ *    the player's own Strength counting; one S150 call at ratio 0.72
+ *    is not modelled. GUESSES: the whole system, no range; "exceed" as
+ *    strictly greater).
  * An NPC's hit never calls it, and nothing calls it ON a player's behalf
  * (the ränk 0x0400 "call in reinforcements on the player's behalf" did
  * not happen on the original).
@@ -119,40 +132,54 @@ import {
  * THE ARRIVAL (ReinforcementArrivalSystem): reinforcementDelayMs after the
  * call the whole flët (spawnFleet: the lead and every escort, counts drawn
  * as the traffic's are) comes in REINFORCEMENT_ARRIVAL_DISTANCE from the
- * caller on a random bearing, heading for him at the lead's top speed
- * (GUESS: the bearing and the kinematics; around the system's centre when
- * the caller has left), and every player in the system is told
- * (ReinforcementArrivalEvent; the display's status line). Each ship is
- * held in the system ('reinforcement', npc/system_hold.ts: GUESS, it
- * stays for the visit) and is NOT traffic (npc_spawn_plugin's
- * trafficCount; the new trader that came in beside it). Each takes the
- * caller as its aggressor when the caller is still fighting the govt's
- * side, i.e. some NPC of the fleet's govt or an ally holds the caller or
- * his flock as ITS aggressor (GUESS, explaining 1506 against 1507);
+ * VICTIM's position at the call (the call's `center`) on a random
+ * bearing, heading for that centre at the lead's top speed, and every
+ * player in the system is told (ReinforcementArrivalEvent; the display's
+ * status line). The centre is a GUESS between the victim and the
+ * system's centre: in every measured arrival the two were together (AI 4
+ * victims hold their station by the port), and either way not the
+ * player; the victim is the Bible's caller ("ships ... under attack").
+ * The distance and the random bearing are measured (1,770-1,960 px, two
+ * bearings); the kinematics are a GUESS.
+ *
+ * THE VICTIM LEAVING: a pending call is CANCELLED when the victim (the
+ * call's `victim`) is no longer in the system at the arrival: it jumped
+ * out or landed (MEASURED once, wave 20: an AI 1 victim jumped 10.4 s
+ * after the hit and no fleet came), or it was destroyed (a GUESS, not
+ * measured: the call is read as the victim's own, so any way of leaving
+ * the system takes it along, a ship in its death sequence included; the
+ * reference doc's proposal reads it the same way). The caller's day stamp
+ * stays spent either way (the call was made).
+ *
+ * Each ship is held in the system ('reinforcement', npc/system_hold.ts:
+ * MEASURED, it stays 2+ minutes while hostile; GUESS, for the whole
+ * visit) and is NOT traffic (npc_spawn_plugin's trafficCount; the new
+ * trader that came in beside it). Each takes the caller as its aggressor
+ * when the caller is still fighting the govt's side, i.e. some NPC of the
+ * fleet's govt or an ally holds the caller or his flock as ITS aggressor
+ * (MEASURED, wave 20: hostile every time the victim still held the player
+ * as its attacker; OPEN: wave 19's neutral fleet in 1507 is still
+ * unexplained, and a fleet whose side has calmed down is unmeasured);
  * otherwise its govt's politics decide, as for any ship of it.
  *
  * Determinism: synced components, staged caches (the flët's ships, its
  * govt, every gövt and ränk: makeSystem), the seeded Random (one draw for
- * the bearing, then the escort counts), sums in uuid order.
+ * the bearing, then the escort counts), sums in uuid order; the victim's
+ * presence is read from the synced entity map.
  */
-
-/** ReinfTime's unit: "A value of 30 = one second". */
-export const REINFORCEMENT_FRAMES_PER_SECOND = 30;
 
 /**
- * The longest delay, ms. GUESS, fitted: ReinfTime 300 came in 10 s, the
- * Bible's scale exactly, but 900 in 23-25 s (twice), not 30. A cap at 24 s
- * fits both and keeps the Bible's scale for every ReinfTime up to 720; a
- * line through the two points (3 s + ReinfTime / 43) fits them as well
- * and differs from 600 up (cap: 600 -> 20 s, 1800 -> 24 s; line: 17 s,
- * 45 s), which is the measurement that would tell them apart. The cap is
- * the brief's reading. 109 of the 344 stock systems with a fleet set
- * ReinfTime over 720.
+ * ReinfTime's unit, per second. MEASURED (reference "R19 reinforcement
+ * fleets, wave 20", finding 3): the delay is ReinfTime / 39 s, linear and
+ * with NO cap, at every measured point (300 -> 7.7 s, the mean of seven
+ * one-hit runs; 600 -> 15.2; 900 -> 23-25, wave 19; 1800 -> 45.7-46.8).
+ * That is NOT the Bible's "A value of 30 = one second" (about 0.77 of it).
  */
-export const REINFORCEMENT_MAX_DELAY_MS = 24_000;
+export const REINFORCEMENT_FRAMES_PER_SECOND = 39;
 
-/** How far from the caller the fleet comes in, px ("R19": a blip 1,770
- * px south of the player, flying in). */
+/** How far from the centre (the victim at the call) the fleet comes in,
+ * px. MEASURED: a blip 1,770 px out (wave 19), 1,840 and 1,960 px (wave
+ * 20), on random bearings. */
 export const REINFORCEMENT_ARRIVAL_DISTANCE = 1_800;
 
 /**
@@ -169,10 +196,10 @@ export const REINFORCEMENT_LINE_SUFFIX_INDEX = 306;
 export const REINFORCEMENTS_UUID = 'reinforcements';
 
 /** The delay between the call and the fleet's arrival, ms, for a sÿst
- * ReinfTime of `delayFrames` (see REINFORCEMENT_MAX_DELAY_MS). */
+ * ReinfTime of `delayFrames`: ReinfTime / 39 s, no cap (see
+ * REINFORCEMENT_FRAMES_PER_SECOND). */
 export function reinforcementDelayMs(delayFrames: number): number {
-    return Math.min(REINFORCEMENT_MAX_DELAY_MS,
-        Math.max(0, delayFrames) * 1000 / REINFORCEMENT_FRAMES_PER_SECOND);
+    return Math.max(0, delayFrames) * 1000 / REINFORCEMENT_FRAMES_PER_SECOND;
 }
 
 /**
@@ -180,7 +207,8 @@ export function reinforcementDelayMs(delayFrames: number): number {
  * (undefined: never) may call it on day `today`, with sÿst ReinfIntrval
  * `intervalDays`. 0 is "available every day" and N "that number of days"
  * after the call (Bible), so 0 and 1 both mean the next day (measured for
- * 1: a call on each of two following days; GUESS for N over 1, unmeasured).
+ * 1: a call on each of two following days; MEASURED for 2, wave 20: a call
+ * on day d and d + 2, none on d + 1; GUESS for N over 2).
  * A date earlier than the call (a pilot restored from an older save) does
  * not hold the fleet back.
  */
@@ -262,13 +290,19 @@ export const ReinforcementFleetResource =
 
 /**
  * A system's pending call (synced; on the REINFORCEMENTS_UUID entity).
- * Both fields absent: nothing called.
+ * Every field absent: nothing called.
  */
 export const ReinforcementCallType = t.partial({
     /** Sim time (ms) the called fleet arrives. */
     arriveAt: t.number,
     /** The player ship whose hit called it. */
     caller: t.string,
+    /** The NPC whose hit called it: the call is cancelled when it has
+     * left the system before the arrival. */
+    victim: t.string,
+    /** Where the fleet comes in around: the victim's position at the
+     * call. */
+    center: t.type({ x: t.number, y: t.number }),
 });
 export type ReinforcementCall = t.TypeOf<typeof ReinforcementCallType>;
 export const ReinforcementCallComponent =
@@ -382,13 +416,21 @@ export const ReinforcementCallSystem = new System({
     name: 'ReinforcementCallSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, NpcComponent, UUID, Entities,
-        Optional(GovtComponent), Optional(DisabledComponent), TimeResource,
-        SimulationGameDataResource, Optional(ReinforcementFleetResource),
-        Optional(SystemIdResource), OddsShipsQuery, PlayersQuery] as const,
-    step({ damager }, _npc, uuid, entities, govt, disabled, time, gameData,
-        reinforcements, systemId, ships, players) {
+        Optional(GovtComponent), Optional(DisabledComponent),
+        Optional(ShipDataComponent), Optional(MovementStateComponent),
+        TimeResource, SimulationGameDataResource,
+        Optional(ReinforcementFleetResource), Optional(SystemIdResource),
+        OddsShipsQuery, PlayersQuery] as const,
+    step({ damager }, _npc, uuid, entities, govt, disabled, victimData,
+        victimMovement, time, gameData, reinforcements, systemId, ships,
+        players) {
         if (!reinforcements || systemId === undefined || disabled
             || govt === undefined) {
+            return;
+        }
+        // An anchored hull (Speed 0) never calls: its AI does not run on
+        // the original (reference "R19 ..., wave 20", finding 1).
+        if (!victimData || victimData.physics.speed <= 0) {
             return;
         }
         const call = entities.get(REINFORCEMENTS_UUID)
@@ -448,6 +490,9 @@ export const ReinforcementCallSystem = new System({
         }
         call.arriveAt = time.time + reinforcements.delayMs;
         call.caller = caller;
+        call.victim = uuid;
+        const at = victimMovement?.position;
+        call.center = { x: at?.x ?? 0, y: at?.y ?? 0 };
         // Only the caller is stamped, with his own day: the cooldown is
         // private to each pilot (Matthew's ruling, 2026-11-24). Replaced,
         // never mutated (the value may be shared with a traded-in hull,
@@ -473,8 +518,9 @@ const AggressorsQuery = new Query([UUID, NpcComponent,
 /**
  * The kinematics of a reinforcement fleet's lead coming in around
  * `center`: REINFORCEMENT_ARRIVAL_DISTANCE out on a bearing drawn from
- * `random` (one draw), heading for `center` at `speed`. GUESS: the
- * original's blip came 1,770 px south of the player, flying in.
+ * `random` (one draw), heading for `center` at `speed`. Measured: the
+ * original's blips came 1,770-1,960 px out on random bearings, flying in;
+ * the heading and speed are a GUESS.
  */
 export function reinforcementArrivalState(center: { x: number, y: number },
     speed: number, random: { next(): number }) {
@@ -491,9 +537,24 @@ export function reinforcementArrivalState(center: { x: number, y: number },
 }
 
 /**
+ * Whether the ship that called the fleet has left the system: gone from
+ * the world (jumped out, landed, destroyed, boarded and taken) or in its
+ * death sequence. A call without a victim counts as still there.
+ */
+function victimHasLeft(victim: string | undefined,
+    getEntity: (id: string) => Entity | undefined): boolean {
+    if (victim === undefined) {
+        return false;
+    }
+    const entity = getEntity(victim);
+    return !entity || entity.components.has(ExplodingComponent);
+}
+
+/**
  * Brings a called fleet in when its time comes (see the module comment):
- * spawns it, holds it in the system, sets it on the caller when he is
- * still fighting the govt's side, and tells the players.
+ * cancels it when the victim has left, else spawns it around the victim's
+ * position at the call, holds it in the system, sets it on the caller
+ * when he is still fighting the govt's side, and tells the players.
  */
 export const ReinforcementArrivalSystem = new System({
     name: 'ReinforcementArrivalSystem',
@@ -506,10 +567,18 @@ export const ReinforcementArrivalSystem = new System({
         if (call.arriveAt === undefined || time.time < call.arriveAt) {
             return;
         }
-        const caller = call.caller;
+        const { caller, victim, center } = call;
         delete call.arriveAt;
         delete call.caller;
+        delete call.victim;
+        delete call.center;
         if (!reinforcements) {
+            return;
+        }
+        const getEntity = (id: string) => entities.get(id);
+        // The victim left before the arrival: no fleet (the caller's day
+        // stays spent).
+        if (victimHasLeft(victim, getEntity)) {
             return;
         }
         const fleetGovt = gameData.data.Govt.getCached(reinforcements.govt);
@@ -519,12 +588,9 @@ export const ReinforcementArrivalSystem = new System({
             // Staged at genesis, so a miss is the same on every world.
             return;
         }
-        const getEntity = (id: string) => entities.get(id);
         const getGovt = (id: string) => gameData.data.Govt.getCached(id);
         const callerEntity = caller !== undefined
             ? getEntity(caller) : undefined;
-        const center = callerEntity?.components.get(MovementStateComponent)
-            ?.position ?? { x: 0, y: 0 };
         // Whether the caller is still fighting the govt's side: some NPC of
         // it holds him, or a ship of his flock, as its aggressor.
         const fighting = caller !== undefined && callerEntity !== undefined
@@ -535,7 +601,8 @@ export const ReinforcementArrivalSystem = new System({
                     || flockPlayer(npc.aggressor, getEntity) === caller));
         const fleet = spawnFleet(world, gameData, ids, random,
             reinforcements.fleet, leadData,
-            reinforcementArrivalState(center, leadData.physics.speed, random));
+            reinforcementArrivalState(center ?? { x: 0, y: 0 },
+                leadData.physics.speed, random));
         for (const ship of fleet) {
             const entity = getEntity(ship);
             entity?.components.set(SystemHoldComponent,
