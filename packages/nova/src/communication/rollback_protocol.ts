@@ -817,7 +817,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    changes. Sim-rule changes alongside: the table's low end is refitted
 //    (ratio 0.2 / 0.25 / 0.5 -> 12 / 12 / 16.5%), and the Ammo take's
 //    self-destruct odds are 0.85 (was 0.5). The derived wire schema
-//    fingerprint changes (9421bc2da0516e30 -> FPNEW), and the
+//    fingerprint changes (9421bc2da0516e30 -> 46582f94c5a30caa), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
