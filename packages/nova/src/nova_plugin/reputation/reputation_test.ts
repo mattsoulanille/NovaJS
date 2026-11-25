@@ -19,6 +19,7 @@ import {
     LEGAL_STATUS_NO_RECORD,
     legalStatusInSystem,
     legalStatusName,
+    LEGAL_STATUS_NOT_APPLICABLE,
     LegalRecords,
     recordHostile,
     recordIn,
@@ -480,4 +481,24 @@ describe('legalStatusInSystem (one reading for the map and the dialog)', () => {
         expect(legalStatusInSystem(new Map(), 'sys:x', null, () => undefined))
             .toBeUndefined();
     });
+
+    it('reads "N/A" under a XENOPHOBIC owner, whatever the record '
+        + '(reference "Map dot colours, wave 23", Kit Map Xeno)', () => {
+            const xeno = makeGovt('kit:344', { crimeTol: 10 });
+            xeno.flags = { ...xeno.flags, xenophobic: true };
+            // 0x0004 "always attacks the player" is NOT 0x0001: Kit Map
+            // Attacks read "No Record".
+            const attacks = makeGovt('kit:362', { crimeTol: 10 });
+            attacks.flags = { ...attacks.flags, alwaysAttacksPlayer: true };
+            const lookup = (id: string) =>
+                ({ 'kit:344': xeno, 'kit:362': attacks })[id];
+            for (const record of [0, -500, 500]) {
+                expect(legalStatusInSystem(new Map([['sys:xeno', record]]),
+                    'sys:xeno', 'kit:344', lookup))
+                    .toBe(LEGAL_STATUS_NOT_APPLICABLE);
+            }
+            expect(LEGAL_STATUS_NOT_APPLICABLE).toBe('N/A');
+            expect(legalStatusInSystem(new Map(), 'sys:attacks', 'kit:362',
+                lookup)).toBe(LEGAL_STATUS_NO_RECORD);
+        });
 });

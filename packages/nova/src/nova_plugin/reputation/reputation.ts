@@ -231,6 +231,13 @@ export function statusGovtOf(systemGovt: string | null | undefined): string {
  * -5) system is not "No Record" on one screen and an offender on the
  * other. Undefined when the status govt is unknown to `getGovt`, which is
  * the caller's "no line" case.
+ *
+ * A XENOPHOBIC status govt (gövt Flags 0x0001, "Xenophobic (attacks
+ * everybody, including the player)") reads {@link LEGAL_STATUS_NOT_APPLICABLE}
+ * whatever the record: MEASURED on the map (reference "Map dot colours,
+ * wave 23": Kit Map Xeno, gövt 344, "Legal Status: N/A" as a neighbour and
+ * as the current system). The 'p' dialog shares this reading, so it says
+ * "N/A" there too (unmeasured on that screen).
  */
 export function legalStatusInSystem(records: ReadonlyMap<string, number>,
     systemId: string, systemGovt: string | null | undefined,
@@ -239,8 +246,15 @@ export function legalStatusInSystem(records: ReadonlyMap<string, number>,
     if (!govt) {
         return undefined;
     }
+    if (govt.flags.xenophobic) {
+        return LEGAL_STATUS_NOT_APPLICABLE;
+    }
     return legalStatusName(recordIn(records, systemId, govt), govt.crimeTol);
 }
+
+/** The Legal Status under a xenophobic government (see
+ * {@link legalStatusInSystem}), as the original's map prints it. */
+export const LEGAL_STATUS_NOT_APPLICABLE = 'N/A';
 
 /**
  * Appendix II's legal-status ladder, in units of the government's

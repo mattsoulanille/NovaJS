@@ -13,7 +13,7 @@ import { BASE_SCALE, scalePos, SYSTEM_RADIUS } from "./starmap_viewport.js";
 const GREY = 0x666666;
 // System-dot colors, sampled off the original at 1:1 in
 // ui_screenshots/original_macos_screenshots/map/govt_borders.png (see
-// drawSystem for the rule each one encodes). All three share one black
+// drawSystem for the rule each one encodes). All four share one black
 // interior.
 /** An EXPLORED system that has at least one port. */
 export const SYSTEM_INHABITED_COLOR = 0x0000ff;
@@ -21,6 +21,9 @@ export const SYSTEM_INHABITED_COLOR = 0x0000ff;
 export const SYSTEM_UNINHABITED_COLOR = 0xc6c6c6;
 /** A system the player has never entered — nothing is known about it. */
 export const SYSTEM_UNEXPLORED_COLOR = 0x424242;
+/** An EXPLORED system whose every port would refuse the player's landing
+ * (reference "Map dot colours, wave 23", Kit Map Wanted, 1:1 ring pixels). */
+export const SYSTEM_REFUSING_COLOR = 0xff0000;
 export const SYSTEM_INTERIOR_COLOR = 0x000000;
 // Hypergate network links, drawn in a distinct cyan so the instant-travel
 // hypergate routes read apart from the grey normal-jump hyperspace links.
@@ -112,8 +115,8 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
 }
 
 /**
- * The color of a system's dot on the map. TWO independent questions, in this
- * order — both measured on the original at 1:1 in
+ * The color of a system's dot on the map. THREE questions, in this order —
+ * the first two measured on the original at 1:1 in
  * ui_screenshots/original_macos_screenshots/map/govt_borders.png, whose 40
  * dots were matched back to sÿst ids through the map's own layout:
  *
@@ -133,20 +136,35 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     enough: HJG-1034's UHP-0474 and Procyon's UHP-1002 are both landable
  *     but flagged uninhabited, and both systems draw light grey.
  *
- * NOT A QUESTION: THE PLAYER'S STANDING (Matthew's playtest, 2026-11-24:
- * "the system does not like me, but it's still blue instead of orange or
- * red", South Manchester at "Criminal"). The original's dot ignores the
- * player's legal record, measured twice on the reference Mac:
+ *     A WORKING HYPERGATE IS NOT A SETTLEMENT (reference "Map dot colours,
+ *     wave 23"): VNP-001 and VNP-002, whose only stellar is a working gate,
+ *     and Vellos (gate + an uninhabited planet) are #c6c6c6, although the
+ *     gate is a port in the Ports line. landable.ts systemIsInhabited.
+ *
+ *  3. DOES IT LET THE PLAYER LAND? An inhabited system whose every port
+ *     would refuse the player's landing (the landing-clearance rule of
+ *     stellar_clearance.ts: MinStatus, a travel permit, a ränk 0x0200
+ *     override, a bribe, a mission destination) is RED, #ff0000. Measured
+ *     on one system, Kit Map Wanted (record -500, its only port MinStatus
+ *     0, "Docking request denied."), red from a neighbour and as the current
+ *     system. GUESS: a mixed system (one port open) stays blue; see
+ *     landable.ts systemRefusesLanding.
+ *
+ * NOT THE LEGAL STATUS WORD, NOR THE GOVERNMENT'S FLAGS (Matthew's playtest,
+ * 2026-11-24: "the system does not like me, but it's still blue instead of
+ * orange or red", South Manchester at "Criminal"). A bad record alone does
+ * not redden a dot whose ports still let the player land, measured twice:
  *  - CURRENT system, hostile: reference "A14" cell c1 (A14 Own, record -500
  *    against CrimeTol 10, the map reads "Legal Status: Criminal" and the
- *    owner's warships open fire): the ring is #0000ff, the centre #00adef
+ *    owner's warships open fire, but its port is MinStatus -32767): the
+ *    ring is #0000ff, the centre #00adef
  *    (evidence 20261123-a14/c1/.../01-map.png);
  *  - a NON-current system past tolerance: "A14 wave 15" unowned run, Kit
  *    Spread Unowned selected at "Minor Offender" (record below -CrimeTol):
  *    #0000ff (evidence 20261124-w15/unowned/.../06-map2.png).
- * Unmeasured: a system owned by a govt hostile to the player by its flags
- * (gövt 0x0004 always-attacks, 0x0001 xenophobic) rather than by record;
- * no NovaJS colour is guessed for it.
+ * And a govt hostile by its FLAGS (gövt 0x0004 always-attacks, 0x0001
+ * xenophobic) leaves its systems blue (wave 23, Kit Map Attacks / Kit Map
+ * Xeno, as neighbours and as the current system).
  *
  * Rule 2's corner — a stellar that is inhabited but NOT landable, as in the
  * four stock Wraith systems (sÿst 510/521/582/593) — was measured on the
@@ -190,16 +208,20 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  * missions on it is therefore no evidence of habitation.
  */
 export function systemDotColor(explored: boolean,
-    inhabited: boolean): number {
+    inhabited: boolean, refusesLanding = false): number {
     if (!explored) {
         return SYSTEM_UNEXPLORED_COLOR;
     }
-    return inhabited ? SYSTEM_INHABITED_COLOR : SYSTEM_UNINHABITED_COLOR;
+    if (!inhabited) {
+        return SYSTEM_UNINHABITED_COLOR;
+    }
+    return refusesLanding ? SYSTEM_REFUSING_COLOR : SYSTEM_INHABITED_COLOR;
 }
 
 export function drawSystem(graphics: PIXI.Graphics,
-    x: number, y: number, explored: boolean, inhabited: boolean) {
-    const outColor = systemDotColor(explored, inhabited);
+    x: number, y: number, explored: boolean, inhabited: boolean,
+    refusesLanding = false) {
+    const outColor = systemDotColor(explored, inhabited, refusesLanding);
     graphics.lineStyle(1, outColor);
     graphics.beginFill(outColor);
     graphics.drawCircle(x, y, SYSTEM_RADIUS);

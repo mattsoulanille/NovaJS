@@ -8,7 +8,9 @@
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
 import { DiscoveryLevel, knownSystemProperties } from "../nova_plugin/player/index.js";
-import { displayName, isPort } from '../nova_plugin/core/index.js';
+import {
+    displayName, isPort, systemIsInhabited,
+} from '../nova_plugin/core/index.js';
 import { STANDARD_CARGO_NAMES } from "../nova_plugin/missions/index.js";
 import { legalStatusInSystem } from "../nova_plugin/reputation/index.js";
 import { MissionUniverse } from "./mission_universe.js";
@@ -80,12 +82,15 @@ export interface PropertyLine {
 }
 
 /**
- * What a system with NO STELLARS shows in place of its Government, Legal
- * Status, Goods Traded and Services groups: the stock STR# 2002 "misc
- * strings" index 333 (0-based), "Uninhabited System", standing alone at
- * the Government group's caption, in white. Reference "A14 wave 18" (the
- * map in Kit Disab Unowned, Kit Disab One clicked: "Selected System: / Kit
- * Disab One / Uninhabited System", nothing below it; Ports: None).
+ * What an UNINHABITED system (landable.ts systemIsInhabited, the grey dot)
+ * shows in place of its Government, Legal Status, Goods Traded and
+ * Services groups: the stock STR# 2002 "misc strings" index 333 (0-based),
+ * "Uninhabited System", standing alone at the Government group's caption,
+ * in white. Reference "A14 wave 18" (the map in Kit Disab Unowned, Kit
+ * Disab One, no stellars, clicked: "Selected System: / Kit Disab One /
+ * Uninhabited System", nothing below it; Ports: None) and "Map dot colours,
+ * wave 23" (VNP-001 current and VNP-002 selected, a working gate their only
+ * stellar: "Uninhabited System" and nothing else; Ports: HG-V01 / HG-V02).
  */
 export const UNINHABITED_SYSTEM_INDEX = 333;
 export const UNINHABITED_SYSTEM_TEXT = 'Uninhabited System';
@@ -132,20 +137,36 @@ export function systemProperties(system: SystemData | undefined,
 
     addLine(PropSlot.System, title, [displayName(system.name)]);
 
-    // A system with NO STELLARS is "Uninhabited System", and nothing else
-    // in the column: no Government (whoever owns it: Kit Disab One belongs
-    // to gövt 312), no Legal Status, no Goods Traded / Services. Measured
-    // for a stellar-less system only; GUESS that a system whose stellars
-    // are all uninhabited still shows its groups (unmeasured). The title
-    // keeps NovaJS's "Destination System:" (the reference's "Selected
-    // System:" for that click is one sample, not followed up).
-    if (system.planets.length === 0) {
+    // Ports: the landable, INHABITED stellars (landable.ts isPort). Goods/
+    // services aggregate over them. Sol's readout in the original is
+    // "Earth, Mars, Europa": its landable-but-uninhabited Wormhole is not a
+    // port. A working hypergate IS one here (Kania: "Port Kane, HG-Kania";
+    // VNP-001: "HG-V01"), though it settles nobody (below).
+    const planets = system.planets
+        .map(id => universe.getPlanet(id))
+        .filter(<T>(p: T): p is NonNullable<T> => p != null);
+    const ports = planets.filter(p => isPort(p.flags));
+    const portsLine = ports.length > 0
+        ? ports.map(p => displayName(p.name)).join(', ') : 'None';
+
+    // An UNINHABITED system — the grey dot's rule, systemIsInhabited: no
+    // port but gates — is "Uninhabited System", and nothing else in the
+    // column: no Government (whoever owns it: Kit Disab One belongs to gövt
+    // 312, VNP-002 to gövt 140), no Legal Status, no Goods Traded /
+    // Services. The Ports line still names any gate. Measured for a
+    // stellar-less system (Kit Disab One) and a gate-only one (VNP-001,
+    // VNP-002); GUESS for a system whose stellars are all uninhabited or
+    // unlandable (e.g. Pollux-like rocks, the Wraith systems), which follows
+    // its grey dot. The title keeps NovaJS's "Destination System:" (the
+    // reference's "Selected System:" for one click is one sample, not
+    // followed up).
+    if (!systemIsInhabited(system.planets, id => universe.getPlanet(id))) {
         lines.push({
             slot: PropSlot.Government, label: UNINHABITED_SYSTEM_TEXT,
             values: [], bright: true,
         });
         return {
-            lines, ports: 'None',
+            lines, ports: portsLine,
             hazards: hazardDescription(system.asteroids, system.interference),
         };
     }
@@ -172,15 +193,6 @@ export function systemProperties(system: SystemData | undefined,
     if (legalStatus !== undefined) {
         addLine(PropSlot.LegalStatus, 'Legal Status:', [legalStatus]);
     }
-
-    // Ports: the landable, INHABITED stellars (landable.ts isPort — the
-    // same predicate that colors the dot). Goods/services aggregate over
-    // them. Sol's readout in the original is "Earth, Mars, Europa": its
-    // landable-but-uninhabited Wormhole is not a port.
-    const planets = system.planets
-        .map(id => universe.getPlanet(id))
-        .filter(<T>(p: T): p is NonNullable<T> => p != null);
-    const ports = planets.filter(p => isPort(p.flags));
 
     // WHAT A FLY-THROUGH DOES NOT TELL YOU. Flying into a system shows
     // you which of its stellars are inhabited ports, what government
@@ -221,8 +233,7 @@ export function systemProperties(system: SystemData | undefined,
 
     return {
         lines,
-        ports: ports.length > 0
-            ? ports.map(p => displayName(p.name)).join(', ') : 'None',
+        ports: portsLine,
         hazards: hazardDescription(system.asteroids, system.interference),
     };
 }

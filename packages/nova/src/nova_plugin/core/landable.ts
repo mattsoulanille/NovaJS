@@ -82,19 +82,20 @@ export function isInhabited(flags: { uninhabited: boolean }): boolean {
  *    are in the rule. (Kania's readout, "Port Kane, HG-Kania", pins that a
  *    MinStatus 32767 "player can never land" hypergate still counts: only
  *    the two static flags matter.)
- *  - the star map's BLUE system dots — see starmap.ts drawSystem.
+ *  - the star map's BLUE system dots — see starmap.ts drawSystem — with
+ *    ONE exception, the working hypergate (below; {@link
+ *    systemIsInhabited}).
  *
  *    A WORKING HYPERGATE IS A PORT. Every stock one (HG-V01 nova:1400 to
  *    HG-Koria nova:1418) is Flags 0x0011, landable station with 0x0020
  *    clear, and the original's Kania readout lists HG-Kania among the
- *    ports, so the readout question is measured. The DOT of a system whose
- *    only port is a gate is not: no reference capture shows one. In stock
- *    data that is VNP-001 (nova:427 / 621), VNP-002 (425 / 619), Korell
- *    (414 / 611) and Vellos (424 / 618), which draw blue today (Matthew's
- *    playtest, 2026-11-24, reads VNP-001/002 as uninhabited). Kept as is
- *    pending a reference measurement, because the only evidence there is
- *    (the readout) points the other way. Wormholes are not affected: every
- *    stock one sets 0x0020.
+ *    ports, so the readout question is measured — and the wave-23 map of
+ *    VNP-001 reads "Ports: HG-V01" (docs/reference_experiments.md, "Map dot
+ *    colours, wave 23"). But a gate does NOT make its system inhabited:
+ *    that same map draws VNP-001, VNP-002 and Vellos grey (#c6c6c6) and
+ *    reads "Uninhabited System". So this predicate keeps the gate (the
+ *    Ports line, mission destinations, the hail gate) and
+ *    systemIsInhabited drops it.
  *  - mïsn TravelStel/ReturnStel -2, "random inhabited stellar"
  *    (mission_logic), which must never pick somewhere unlandable.
  *
@@ -111,18 +112,88 @@ export function isPort(flags: {
 }
 
 /**
- * Whether a SYSTEM counts as inhabited: does it contain at least one port?
+ * Whether a stellar makes its SYSTEM inhabited on the star map: a {@link
+ * isPort port} that is not a transit point (a hypergate or wormhole,
+ * PlanetData.gate).
  *
- * This is the star map's blue-vs-grey rule (starmap.ts drawSystem). Stellars
- * that fail to resolve are skipped rather than treated as ports.
+ * MEASURED for hypergates (docs/reference_experiments.md, "Map dot colours,
+ * wave 23"): VNP-001 and VNP-002, whose only stellar is a working gate, and
+ * Vellos, whose other stellar is uninhabited, draw the uninhabited grey and
+ * read "Uninhabited System", while their Ports line still names the gate.
+ * GUESS for wormholes: every stock one sets 0x0020 and is no port anyway,
+ * so only a plug-in's inhabited wormhole reaches this test; it is treated
+ * as the gate it transits like.
+ */
+export function isSettledPort(planet: {
+    flags: LandableFlags & { uninhabited: boolean },
+    gate?: { kind: string } | null,
+}): boolean {
+    return isPort(planet.flags) && !planet.gate;
+}
+
+/**
+ * Whether a SYSTEM counts as inhabited: does it contain at least one port
+ * that is not a gate ({@link isSettledPort})?
+ *
+ * This is the star map's blue-vs-grey rule (starmap.ts drawSystem) and its
+ * "Uninhabited System" caption (starmap_properties.ts), and what a ModVal -1
+ * map outfit calls inhabited (discovery.ts mapOutfitSystems; no stock map
+ * uses -1). Stellars that fail to resolve are skipped rather than treated as
+ * ports.
+ *
+ * In the stock data the gate rule turns eight sÿst grey — the two NCB
+ * copies each of VNP-001 (nova:427 / 621), VNP-002 (425 / 619), Korell
+ * (414 / 611) and Vellos (424 / 618) — whose only ports are HG-V01, HG-V02,
+ * HG-V0b and HG-V0a.
  */
 export function systemIsInhabited(planetIds: readonly string[],
-    getPlanet: (id: string) => { flags: LandableFlags & { uninhabited: boolean } }
-        | undefined): boolean {
+    getPlanet: (id: string) => {
+        flags: LandableFlags & { uninhabited: boolean },
+        gate?: { kind: string } | null,
+    } | undefined): boolean {
     return planetIds.some(id => {
         const planet = getPlanet(id);
-        return planet !== undefined && isPort(planet.flags);
+        return planet !== undefined && isSettledPort(planet);
     });
+}
+
+/**
+ * Whether an inhabited system ({@link systemIsInhabited}) REFUSES THE PLAYER
+ * everywhere: it has at least one settled port and every one of them would
+ * deny the player landing (`refuses`, the caller's landing-clearance
+ * verdict — stellar_clearance.ts through stellarClearanceWith). The star
+ * map draws such a system RED.
+ *
+ * MEASURED for one system (docs/reference_experiments.md, "Map dot colours,
+ * wave 23"): Kit Map Wanted, whose only port (MinStatus 0) refused a pilot
+ * at record -500 ("Docking request denied."), is #ff0000 as a neighbour and
+ * as the current system, while systems at "Criminal" whose ports still let
+ * the player land stayed blue.
+ *
+ * GUESS, the MIXED system: one refusing port and one open port is blue
+ * (red only when EVERY settled port refuses) — the reading "red = you can
+ * land nowhere here". Gates never vote (they are not settled ports), so a
+ * gate's MinStatus 32767 does not redden a system. Stellars that fail to
+ * resolve are skipped.
+ */
+export function systemRefusesLanding(planetIds: readonly string[],
+    getPlanet: (id: string) => {
+        flags: LandableFlags & { uninhabited: boolean },
+        gate?: { kind: string } | null,
+    } | undefined,
+    refuses: (planetId: string) => boolean): boolean {
+    let settled = 0;
+    for (const id of planetIds) {
+        const planet = getPlanet(id);
+        if (planet === undefined || !isSettledPort(planet)) {
+            continue;
+        }
+        settled++;
+        if (!refuses(id)) {
+            return false;
+        }
+    }
+    return settled > 0;
 }
 
 /**

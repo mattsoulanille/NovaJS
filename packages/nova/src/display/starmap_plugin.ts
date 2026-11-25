@@ -14,11 +14,17 @@ import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, DiscoveryStoreResource,
     PlayerShipSelector, GameDateComponent, MissionsComponent,
 } from '../nova_plugin/player/index.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
+import {
+    OutfitsStateComponent, ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
 import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
-import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
+import {
+    JumpComponent, JumpRouteComponent, StellarBribesComponent,
+} from '../nova_plugin/travel/index.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent,
+} from '../nova_plugin/ncb/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -29,6 +35,7 @@ import {
 } from '../spaceport/mini_map.js';
 import type { SystemGraph } from '../spaceport/system_graph.js';
 import { DockedShipResource } from './docked_ship.js';
+import { SimulationTimeResource } from './simulation_time.js';
 import {
     keepCentred, ScreenSize, stopCentring,
 } from './screen_size_plugin.js';
@@ -252,7 +259,20 @@ export const StarmapPlugin: Plugin = {
             controls, getPlayerBits, getMissionMarks, persistentRouteStore,
             id => discovery.level(id),
             () => playerComponent(world, GameDateComponent),
-            () => playerComponent(world, LegalRecordsComponent));
+            () => playerComponent(world, LegalRecordsComponent),
+            // The red dot's landing-clearance inputs: the components the
+            // landing gate reads, through the same docked-aware lookup.
+            // Bribe expiries are SIM-clock stamps, so the clock is the
+            // simulation's, not this world's wall-clock TimeResource.
+            () => ({
+                records: playerComponent(world, LegalRecordsComponent),
+                shipData: playerComponent(world, ShipDataComponent),
+                outfits: playerComponent(world, OutfitsStateComponent),
+                bribes: playerComponent(world, StellarBribesComponent),
+                ranks: playerComponent(world, ActiveRanksComponent),
+                missions: playerComponent(world, MissionsComponent),
+                now: world.resources.get(SimulationTimeResource)?.time ?? 0,
+            }));
         let opening = false;
         // Set by remove(): a map dismissed because its world is being torn
         // down (jump/gate transit with the map open) must not write its

@@ -215,7 +215,8 @@ export interface MapOutfitSystem {
     id: string;
     /** The system's gövt id, or null/undefined for an independent system. */
     govt?: string | null;
-    /** Whether the system holds at least one port (landable + inhabited). */
+    /** Whether the system holds at least one port (landable + inhabited)
+     * that is not a gate: landable.ts systemIsInhabited, the map's dot. */
     inhabited: boolean;
 }
 

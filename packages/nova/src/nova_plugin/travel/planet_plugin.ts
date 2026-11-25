@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { GovtData } from "novadatainterface/govt_data";
 import { PlanetData } from "novadatainterface/planet_data";
+import { RankData } from "novadatainterface/rank_data";
 import { ShipData } from "novadatainterface/ship_data";
 import { Emit, Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
@@ -275,32 +276,76 @@ export function stellarClearanceFor(opts: {
     systemId: string | undefined,
     now: number,
 }): StellarClearance {
-    const govtId = opts.planetData.govt ?? undefined;
     const lookupGovt = (id: string) =>
         opts.govts?.get(id) ?? opts.gameData.data.Govt.getCached(id);
-    const systemStatusGovt = lookupGovt(statusGovtOf(opts.systemId
-        ? opts.gameData.data.System.getCached(opts.systemId)?.govt
-        : undefined));
-    const planetGovt = govtId
-        ? (opts.govts?.get(govtId)
-            ?? opts.gameData.data.Govt.getCached(govtId))
-        : undefined;
+    // Rank data comes from the same cached simulation game data the govts
+    // and outfits do, so the sim reads it without awaiting: a rank whose
+    // data has not loaded yet simply grants nothing this tick, exactly as an
+    // unloaded outfit contributes nothing.
+    return stellarClearanceWith({
+        ...opts,
+        lookups: {
+            govt: lookupGovt,
+            systemGovt: id => opts.gameData.data.System.getCached(id)?.govt,
+            outfitContribute: id =>
+                opts.gameData.data.Outfit.getCached(id)?.contribute,
+            rank: id => opts.gameData.data.Rank.getCached(id),
+        },
+    });
+}
+
+/**
+ * The data {@link stellarClearanceWith} resolves ids through: the sim's
+ * cached game data in {@link stellarClearanceFor}, a loaded MissionUniverse
+ * on the star map (starmap.ts systemRefusesLanding).
+ */
+export interface ClearanceLookups {
+    govt(id: string): GovtData | undefined;
+    /** A sÿst's owning gövt id (null / undefined when independent). */
+    systemGovt(id: string): string | null | undefined;
+    /** An oütf's Contribute (hex string), undefined when unknown. */
+    outfitContribute(id: string): string | undefined;
+    rank(id: string): RankData | undefined;
+}
+
+/**
+ * {@link stellarClearanceFor} with its id lookups injected: the ONE
+ * assembly of a clearance decision (records, status govt, Contribute bits,
+ * ränk 0x0200, mission destination, bribe) from the player's components,
+ * so the landing gate, the hail dialog, the radar blip and the star map's
+ * red dot all read the player the same way.
+ */
+export function stellarClearanceWith(opts: {
+    planetData: PlanetData,
+    lookups: ClearanceLookups,
+    records?: LegalRecords,
+    shipData?: { contribute?: string },
+    outfits?: OutfitsState,
+    bribes?: StellarBribes,
+    ranks?: ActiveRanks,
+    missions?: Missions,
+    sameStellar?: (a: string, b: string) => boolean,
+    planetId: string,
+    systemId: string | undefined,
+    now: number,
+}): StellarClearance {
+    const { lookups } = opts;
+    const govtId = opts.planetData.govt ?? undefined;
+    const systemStatusGovt = lookups.govt(statusGovtOf(opts.systemId
+        ? lookups.systemGovt(opts.systemId) : undefined));
+    const planetGovt = govtId ? lookups.govt(govtId) : undefined;
     const outfitContributes: string[] = [];
     for (const [id, state] of opts.outfits ?? []) {
         if (state.count <= 0) {
             continue;
         }
-        outfitContributes.push(
-            opts.gameData.data.Outfit.getCached(id)?.contribute ?? '0x0');
+        outfitContributes.push(lookups.outfitContribute(id) ?? '0x0');
     }
     // ränk 0x0200: a rank affiliated with this stellar's govt that lets the
     // player land "regardless of their MinStatus field" — the stock hypergate
-    // network's key (rank_logic.ts). Rank data comes from the same cached
-    // simulation game data the govts and outfits above do, so the sim reads it
-    // without awaiting: a rank whose data has not loaded yet simply grants
-    // nothing this tick, exactly as an unloaded outfit contributes nothing.
+    // network's key (rank_logic.ts).
     const rankLandingOverride = ranksAllowLanding(opts.ranks,
-        id => opts.gameData.data.Rank.getCached(id), govtId ?? null);
+        id => lookups.rank(id), govtId ?? null);
     return planetClearance({
         planet: opts.planetData,
         planetGovt,

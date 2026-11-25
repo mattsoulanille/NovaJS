@@ -3,8 +3,8 @@ import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data'
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data_gate.js';
 import {
-    isInhabited, isPort, landable, systemHasInhabitedStellar,
-    systemIsInhabited,
+    isInhabited, isPort, isSettledPort, landable, systemHasInhabitedStellar,
+    systemIsInhabited, systemRefusesLanding,
 } from './landable.js';
 
 function planet(flags: Partial<PlanetData['flags']>): PlanetData {
@@ -98,6 +98,74 @@ describe('systemIsInhabited', () => {
     it('skips stellars that do not resolve rather than counting them', () => {
         expect(systemIsInhabited(['missing'], lookup({}))).toBeFalse();
     });
+
+    // Reference "Map dot colours, wave 23": VNP-001 (a working gate its
+    // only stellar) and Vellos (gate + uninhabited planet) draw grey.
+    const gate: PlanetData = {
+        ...planet({ canLand: true, uninhabited: false, isStation: true }),
+        gate: { kind: 'hypergate', destinations: ['x'], emergenceAngle: null },
+    };
+    const inhabitedWormhole: PlanetData = {
+        ...planet({ canLand: true, uninhabited: false }),
+        gate: { kind: 'wormhole', destinations: [], emergenceAngle: null },
+    };
+
+    it('does NOT count a working hypergate, which is still a port '
+        + '(VNP-001, Vellos)', () => {
+            expect(isPort(gate.flags)).toBeTrue();
+            expect(isSettledPort(gate)).toBeFalse();
+            expect(systemIsInhabited(['g'], lookup({ g: gate }))).toBeFalse();
+            expect(systemIsInhabited(['g', 'r'],
+                lookup({ g: gate, r: rock }))).toBeFalse();
+        });
+
+    it('a gate beside a settled port leaves the system inhabited (Kania)',
+        () => {
+            expect(systemIsInhabited(['g', 'p'],
+                lookup({ g: gate, p: port }))).toBeTrue();
+        });
+
+    it('treats an inhabited wormhole like the gate (GUESS; no stock one)',
+        () => {
+            expect(isSettledPort(inhabitedWormhole)).toBeFalse();
+        });
+});
+
+describe('systemRefusesLanding (the red dot)', () => {
+    const port = planet({ canLand: true, uninhabited: false });
+    const rock = planet({ canLand: true, uninhabited: true });
+    const gate: PlanetData = {
+        ...planet({ canLand: true, uninhabited: false, isStation: true }),
+        gate: { kind: 'hypergate', destinations: ['x'], emergenceAngle: null },
+    };
+    const lookup = (map: Record<string, PlanetData>) =>
+        (id: string) => map[id];
+    const refusing = (ids: string[]) => (id: string) => ids.includes(id);
+
+    it('is true when the only port refuses (Kit Map Wanted, measured)', () => {
+        expect(systemRefusesLanding(['a'], lookup({ a: port }),
+            refusing(['a']))).toBeTrue();
+    });
+
+    it('is false when any settled port lets the player land (GUESS: mixed)',
+        () => {
+            expect(systemRefusesLanding(['a', 'b'],
+                lookup({ a: port, b: port }), refusing(['a']))).toBeFalse();
+        });
+
+    it('never asks a gate or an uninhabited stellar, and is false with no '
+        + 'settled port to refuse', () => {
+            const asked: string[] = [];
+            const refuses = (id: string) => { asked.push(id); return true; };
+            expect(systemRefusesLanding(['g', 'r'],
+                lookup({ g: gate, r: rock }), refuses)).toBeFalse();
+            expect(asked).toEqual([]);
+            // A refusing port beside a (refusing) gate: red, the gate not asked.
+            expect(systemRefusesLanding(['g', 'a'],
+                lookup({ g: gate, a: port }), refuses)).toBeTrue();
+            expect(asked).toEqual(['a']);
+            expect(systemRefusesLanding([], lookup({}), refuses)).toBeFalse();
+        });
 });
 
 describe('systemHasInhabitedStellar (the Show Borders rule)', () => {
@@ -183,7 +251,8 @@ describe('landable against real Nova data', () => {
             expect(hgKania.gate?.kind).toBe('hypergate');
             expect(isPort(hgKania.flags)).toBeTrue();
             // Every working gate carries the same flags, so the readout
-            // and the dot treat them alike (landable.ts isPort).
+            // lists them all (landable.ts isPort) — though none of them
+            // makes its system inhabited (isSettledPort, wave 23).
             // (Stock ids only: the fixture may carry plug-ins.)
             const stock = planets.filter(p => p.id.startsWith('nova:'));
             const working = stock.filter(p =>
@@ -192,6 +261,8 @@ describe('landable against real Nova data', () => {
             for (const gate of working) {
                 expect(isPort(gate.flags))
                     .withContext(`${gate.id} ${gate.name}`).toBeTrue();
+                expect(isSettledPort(gate))
+                    .withContext(`${gate.id} ${gate.name}`).toBeFalse();
             }
             // And no stock wormhole is a port: each sets 0x0020.
             for (const worm of stock.filter(p =>

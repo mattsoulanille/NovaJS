@@ -10,10 +10,18 @@ import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import {
     ControlEvent, systemHasInhabitedStellar, systemIsInhabited,
+    systemRefusesLanding,
 } from '../nova_plugin/core/index.js';
-import { DISCOVERY_LANDED, DiscoveryLevel } from "../nova_plugin/player/index.js";
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, Missions,
+} from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
+import { ActiveRanks } from "../nova_plugin/ncb/index.js";
 import { LegalRecordsState } from "../nova_plugin/reputation/index.js";
+import { OutfitsState } from "../nova_plugin/ship/index.js";
+import {
+    StellarBribes, stellarClearanceWith,
+} from "../nova_plugin/travel/index.js";
 import { Button } from "./button.js";
 import { FindDialog } from "./find_dialog.js";
 import { Menu } from "./menu.js";
@@ -46,6 +54,65 @@ import { loadEachOrSkip } from "./skip_failed_loads.js";
  */
 export interface RouteStateStore {
     state: RouteState;
+}
+
+/**
+ * The player-side inputs of the landing-clearance rule (stellar_clearance.ts,
+ * assembled by stellarClearanceWith) that the map's RED dot reads: the same
+ * components the landing gate and the hail dialog read, taken from the
+ * landing's working copy while docked (starmap_plugin's playerComponent).
+ */
+export interface MapClearancePlayer {
+    records?: LegalRecordsState;
+    shipData?: { contribute?: string };
+    outfits?: OutfitsState;
+    bribes?: StellarBribes;
+    ranks?: ActiveRanks;
+    missions?: Missions;
+    /** The simulation clock, which bribe expiries are stamped on. */
+    now: number;
+}
+
+/**
+ * The systems the star map draws RED: the explored ones whose every settled
+ * port would refuse `player` landing (landable.ts systemRefusesLanding),
+ * judged by the SAME clearance assembly the landing gate uses
+ * (stellarClearanceWith), each port against the player's record in ITS
+ * system — so a neighbour is red from afar, as Kit Map Wanted was
+ * (reference "Map dot colours, wave 23").
+ */
+export function refusingSystems(systems: readonly SystemData[],
+    universe: Pick<MissionUniverse, 'getPlanet' | 'getGovt'
+        | 'getSystemInfo' | 'getRank' | 'sameStellar'>,
+    player: MapClearancePlayer, explored: (systemId: string) => boolean,
+    outfitContribute: (outfitId: string) => string | undefined):
+    Set<string> {
+    const lookups = {
+        govt: (id: string) => universe.getGovt(id),
+        systemGovt: (id: string) => universe.getSystemInfo(id)?.govt,
+        outfitContribute,
+        rank: (id: string) => universe.getRank(id),
+    };
+    const refusing = new Set<string>();
+    for (const system of systems) {
+        if (!explored(system.id)) {
+            continue;
+        }
+        const refuses = systemRefusesLanding(system.planets,
+            id => universe.getPlanet(id),
+            planetId => !stellarClearanceWith({
+                planetData: universe.getPlanet(planetId)!,
+                lookups, records: player.records, shipData: player.shipData,
+                outfits: player.outfits, bribes: player.bribes,
+                ranks: player.ranks, missions: player.missions,
+                sameStellar: (a, b) => universe.sameStellar(a, b),
+                planetId, systemId: system.id, now: player.now,
+            }).cleared);
+        if (refuses) {
+            refusing.add(system.id);
+        }
+    }
+    return refusing;
 }
 
 /** Extra per-open context for the starmap (see OpenStarmapResource). */
@@ -162,6 +229,10 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         private getDate: () => GameDate | undefined = () => undefined,
         /** The player's legal records, for the Legal Status line. */
         private getLegalRecords: () => LegalRecordsState | undefined =
+            () => undefined,
+        /** The player's landing-clearance inputs, for the red dot.
+         * Omitted (undefined), no system is drawn red. */
+        private getClearancePlayer: () => MapClearancePlayer | undefined =
             () => undefined) {
         super(displayAssets, simulationData, "nova:8509", controlEvents);
         this.container.name = "StarMap";
@@ -267,7 +338,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
      * NCB visibility, mission marks, discovery, ports and territory.
      */
     private graphOptions(bits: ReadonlySet<number>,
-        missionMarks: MissionMapMark[], viewedMarks: MissionMapMark[])
+        missionMarks: MissionMapMark[], viewedMarks: MissionMapMark[],
+        refusing: ReadonlySet<string> = this.refusingSystems())
         : SystemGraphOptions {
         return {
             playerBits: bits,
@@ -279,8 +351,24 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
                 id => this.universe.getPlanet(id)),
             hasInhabitedStellar: system => systemHasInhabitedStellar(
                 system.planets, id => this.universe.getPlanet(id)),
+            systemRefusesLanding: system => refusing.has(system.id),
             discoveryOf: id => this.discoveryOf(id),
         };
+    }
+
+    /** {@link refusingSystems} for this map's player, right now. */
+    private refusingSystems(): Set<string> {
+        const player = this.getClearancePlayer();
+        if (!player || !this.allSystems) {
+            return new Set();
+        }
+        return refusingSystems(this.allSystems, this.universe, {
+            ...player,
+            // A landed caller's records win over the plugin's, as for the
+            // Legal Status line.
+            records: this.openOptions.legalRecords ?? player.records,
+        }, id => this.discoveryOf(id) >= DISCOVERY_ENTERED,
+            id => this.simulationData.data.Outfit.getCached(id)?.contribute);
     }
 
     /**
@@ -336,8 +424,13 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // digit per system: cheap to build, exactly precise.
         const discoveryKey = this.allSystems
             .map(s => this.discoveryOf(s.id)).join('');
+        // Which systems refuse the player moves with their records, ranks,
+        // missions and outfits — all while the map is closed — so the red
+        // set is part of the key too.
+        const refusing = this.refusingSystems();
         const key = [...bits].sort((a, b) => a - b).join(',')
-            + '#' + marksKey + '#' + discoveryKey;
+            + '#' + marksKey + '#' + discoveryKey
+            + '#' + [...refusing].sort().join(',');
         if (this.systemGraph && key === this.graphBitsKey) {
             return;
         }
@@ -350,7 +443,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // (GateMap), which is where the lanes are drawn (via
         // SystemGraphOptions.gateLinks).
         this.systemGraph = new SystemGraph(this.allSystems, this.systemId,
-            this.graphOptions(bits, missionMarks, viewedMarks));
+            this.graphOptions(bits, missionMarks, viewedMarks, refusing));
         // The original's opening scale (starmap_viewport.ts).
         this.systemGraph.zoomBy(DEFAULT_ZOOM);
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);

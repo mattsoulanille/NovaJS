@@ -74,3 +74,68 @@ describe('the map\'s properties column: an uninhabited system', () => {
     // renderPropertyLines draws a `bright` label in PROP_VALUE_FONT; PIXI.Text
     // needs a canvas, so that is checked in the browser, not here.
 });
+
+/**
+ * Reference "Map dot colours, wave 23": VNP-001 (current) and VNP-002
+ * (selected), whose only stellar is a working hypergate, read "Uninhabited
+ * System" and nothing else — while the Ports line still names the gate.
+ * Kit Map Xeno (a gövt 0x0001 owner) reads "Legal Status: N/A".
+ */
+describe('the map\'s properties column: gate-only and xenophobic systems', () => {
+    const vnpGovt = { ...getDefaultGovtData(), id: 'test:vnp', name: 'VNP' };
+    const xeno = { ...getDefaultGovtData(), id: 'test:xeno', name: 'Xeno' };
+    xeno.flags = { ...xeno.flags, xenophobic: true };
+    const gate: PlanetData = {
+        ...getDefaultPlanetData(), id: 'test:gate', name: 'HG-V01',
+        flags: { ...getDefaultPlanetData().flags, canLand: true,
+            uninhabited: false, isStation: true },
+        gate: { kind: 'hypergate', destinations: ['test:other'],
+            emergenceAngle: null },
+    };
+    const port: PlanetData = {
+        ...getDefaultPlanetData(), id: 'test:port', name: 'Port',
+        flags: { ...getDefaultPlanetData().flags, canLand: true,
+            uninhabited: false },
+    };
+    const govts = new Map([[vnpGovt.id, vnpGovt], [xeno.id, xeno]]);
+    const planets = new Map([[gate.id, gate], [port.id, port]]);
+    const universe = {
+        getGovt: (id: string) => govts.get(id),
+        getPlanet: (id: string) => planets.get(id),
+    } as Parameters<typeof systemProperties>[3];
+    const system = (govt: string | null, ids: string[]): SystemData => ({
+        ...getDefaultSystemData(), id: 'test:system', name: 'VNP-001',
+        govt, planets: ids,
+    });
+
+    it('a working hypergate alone: "Uninhabited System", Ports: the gate',
+        () => {
+            for (const isCurrent of [true, false]) {
+                const props = systemProperties(system(vnpGovt.id, [gate.id]),
+                    isCurrent, DISCOVERY_LANDED, universe, new Map());
+                expect(props.lines.map(l => l.label)).toEqual([
+                    isCurrent ? 'Current System:' : 'Destination System:',
+                    UNINHABITED_SYSTEM_TEXT,
+                ]);
+                expect(props.lines[1].bright).toBeTrue();
+                expect(props.ports).toBe('HG-V01');
+            }
+        });
+
+    it('a gate beside a settled port keeps every group (Kania)', () => {
+        const props = systemProperties(system(vnpGovt.id, [port.id, gate.id]),
+            true, DISCOVERY_LANDED, universe, new Map());
+        expect(props.lines.map(l => l.label)).toEqual([
+            'Current System:', 'Government:', 'Legal Status:',
+            'Goods Traded:', 'Services:',
+        ]);
+        expect(props.ports).toBe('Port, HG-V01');
+    });
+
+    it('reads "Legal Status: N/A" under a xenophobic owner', () => {
+        const props = systemProperties(system(xeno.id, [port.id]), false,
+            DISCOVERY_ENTERED, universe, new Map([['test:system', -500]]));
+        expect(props.lines.find(l => l.slot === PropSlot.LegalStatus)
+            ?.values).toEqual(['N/A']);
+    });
+});

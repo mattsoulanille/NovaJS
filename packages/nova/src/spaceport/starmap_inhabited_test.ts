@@ -187,15 +187,23 @@ describe('star map inhabited coloring (stock data)', () => {
      * there?", not "is there a port?" (reference_experiments.md, "M5
      * leftover: which systems radiate borders" — an inhabited, unlandable
      * test stellar drew a grey dot and a full territory disc). In the stock
-     * data the two rules part only at the four Wraith systems, each of
-     * whose one inhabited stellar has 0x0001 clear.
+     * data the two rules part at the four Wraith systems, each of whose one
+     * inhabited stellar has 0x0001 clear, and at the eight gate-only sÿst
+     * (VNP-001, VNP-002, Korell, Vellos, two NCB copies each), whose only
+     * inhabited stellar is a working hypergate: grey dot (measured, wave
+     * 23), territory still radiated (UNMEASURED for a gate: the border's
+     * "is anybody there?" is the 0x0020 bit, which a gate clears).
      */
     it('radiates territory from exactly the port systems plus the four '
-        + 'Wraith systems, whose inhabited stellar is unlandable', () => {
+        + 'Wraith systems and the eight gate-only systems', () => {
             const parted = universe.systems
                 .filter(s => universe.radiates(s) !== universe.inhabited(s));
-            expect(parted.map(s => s.id).sort())
-                .toEqual(['nova:510', 'nova:521', 'nova:582', 'nova:593']);
+            const wraith = ['nova:510', 'nova:521', 'nova:582', 'nova:593'];
+            expect(parted.map(s => s.id).sort()).toEqual([
+                'nova:414', 'nova:424', 'nova:425', 'nova:427',
+                ...wraith,
+                'nova:611', 'nova:618', 'nova:619', 'nova:621',
+            ]);
             for (const system of parted) {
                 // Grey dot, territory all the same.
                 expect(universe.inhabited(system)).withContext(system.id)
@@ -208,10 +216,64 @@ describe('star map inhabited coloring (stock data)', () => {
                 expect(inhabited.length).withContext(system.id)
                     .toBeGreaterThan(0);
                 for (const stellar of inhabited) {
-                    expect(stellar.flags.canLand).withContext(stellar.id)
-                        .toBeFalse();
+                    if (wraith.includes(system.id)) {
+                        expect(stellar.flags.canLand)
+                            .withContext(stellar.id).toBeFalse();
+                    } else {
+                        expect(stellar.gate?.kind)
+                            .withContext(stellar.id).toBe('hypergate');
+                    }
                 }
             }
+        });
+
+    /**
+     * Reference "Map dot colours, wave 23": VNP-001 (current), VNP-002
+     * (selected) and Vellos drew the uninhabited grey #c6c6c6 though each
+     * holds a working hypergate, which the Ports line still names.
+     */
+    it('draws the gate-only systems grey: a working hypergate settles '
+        + 'nobody (VNP-001, VNP-002, Korell, Vellos)', () => {
+            const gateOnly = [
+                ['nova:427', 'VNP-001'], ['nova:621', 'VNP-001'],
+                ['nova:425', 'VNP-002'], ['nova:619', 'VNP-002'],
+                ['nova:414', 'Korell'], ['nova:611', 'Korell'],
+                ['nova:424', 'Vellos'], ['nova:618', 'Vellos'],
+            ];
+            for (const [id, name] of gateOnly) {
+                const system = universe.system(id);
+                expect(system.name).toBe(name);
+                expect(universe.inhabited(system)).withContext(id).toBeFalse();
+                expect(systemDotColor(true, universe.inhabited(system)))
+                    .withContext(id).toBe(SYSTEM_UNINHABITED_COLOR);
+                // The gate is still a port (the Ports line).
+                const gates = system.planets
+                    .map(p => universe.planets.get(p)!)
+                    .filter(p => isPort(p.flags));
+                expect(gates.length).withContext(id).toBeGreaterThan(0);
+                for (const gate of gates) {
+                    expect(gate.gate?.kind).withContext(gate.id)
+                        .toBe('hypergate');
+                }
+            }
+            // And no other stock system changed: a system with a working
+            // gate AND a settled port stays blue (Kania: Port Kane +
+            // HG-Kania, spöb 1404).
+            const kanias = universe.systems
+                .filter(s => s.planets.includes('nova:1404'));
+            expect(kanias.length).toBeGreaterThan(0);
+            for (const kania of kanias) {
+                expect(kania.name).toBe('Kania');
+                expect(universe.inhabited(kania)).withContext(kania.id)
+                    .toBeTrue();
+            }
+            const changed = universe.systems.filter(s => !universe.inhabited(s)
+                && s.planets.some(p => {
+                    const planet = universe.planets.get(p);
+                    return planet !== undefined && isPort(planet.flags);
+                }));
+            expect(changed.map(s => s.id).sort())
+                .toEqual(gateOnly.map(([id]) => id).sort());
         });
 
     it('radiates nothing from a system with no stellars (Pollux)', () => {
