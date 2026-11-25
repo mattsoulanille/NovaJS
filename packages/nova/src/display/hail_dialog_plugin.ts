@@ -41,7 +41,7 @@ import {
     HailAction, hailTargetBelongsToAnotherPlayer, isSomeoneElsesEscort,
     PlayerHailMessage,
 } from '../nova_plugin/encounters/index.js';
-import { SimulationTimeResource } from './simulation_time.js';
+import { afterSimulationFrames, SimulationTimeResource } from './simulation_time.js';
 import { isIffHostile } from '../nova_plugin/combat/index.js';
 import {
     contrabandDetectedBy, FuelHaggleComponent, isAttackingPlayer, NpcComponent,
@@ -1478,15 +1478,24 @@ export const HailDialogPlugin: Plugin = {
             if (dialog.container.visible || opening) {
                 return;
             }
-            // Nobody is home on a dead moon, nor on a disabled ship: no
-            // channel opens at all, just "No response." (STR# 2002 #52).
-            if (hailIsUnanswerable(world, simulationData)
-                || hailTargetIsDisabled(world)) {
-                await refuseHail();
-                return;
-            }
             opening = true;
             try {
+                // Hail whatever the keys pressed before 'y' selected: a
+                // number key or 'r' just ahead of it has not reached this
+                // world yet, and the dialog would name the previous
+                // target while the status bar, a frame later, named the
+                // new one (afterSimulationFrames).
+                await afterSimulationFrames(world);
+                if (dialog.container.visible || MenuControls.focused) {
+                    return;
+                }
+                // Nobody is home on a dead moon, nor on a disabled ship: no
+                // channel opens at all, just "No response." (STR# 2002 #52).
+                if (hailIsUnanswerable(world, simulationData)
+                    || hailTargetIsDisabled(world)) {
+                    await refuseHail();
+                    return;
+                }
                 // A përs with a mission for you answers with the MISSION
                 // rather than with small talk — Matthew: "accepted by
                 // hailing the ship, which pops up a mission dialog box
