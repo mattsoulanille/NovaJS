@@ -10,7 +10,8 @@ remembered the class of ship you sold).
 ## Where the stored ships live
 
 `StoredShipsComponent` (`nova_plugin/player/stored_ships.ts`) on the pilot's
-own entity: a list of records `{ship, name, outfits, cargo, fuel, storedAt}`.
+own entity: a list of records `{ship, name, shipName?, outfits, cargo, fuel,
+storedAt}`.
 
 - It is **player state**, like the credits. It is in
   `PLAYER_STATE_COMPONENTS`, so every change of hull carries it (shipyard
@@ -37,7 +38,7 @@ own entity: a list of records `{ship, name, outfits, cargo, fuel, storedAt}`.
 
 | Kept | Not kept |
 |---|---|
-| hull class, its name (the class name: hulls have no names of their own) | shield, armor, ionization: a stored ship comes back fully repaired, like a hull from the shipyard (the player's hull is repaired at lift-off anyway, and escorts at the port) |
+| hull class, its class name (`name`, so the hangar can list a ship whose class no longer loads), and the ship's own name (`shipName`, see Names below) | shield, armor, ionization: a stored ship comes back fully repaired, like a hull from the shipyard (the player's hull is repaired at lift-off anyway, and escorts at the port) |
 | every outfit aboard at its count, ammunition and mass-scaled outfits included | the pilot's **persistent** outfits (oütf 0x0004): they follow the pilot |
 | the hold | an escort's queued upgrade or sale (dropped when the escort is stored or swapped) |
 | fuel | an escort's damage, AI memory, formation slot |
@@ -54,13 +55,41 @@ pilot's hold and the incoming hull's hold are pooled. The incoming hold takes
 all mission cargo (it never leaves the pilot, even over capacity, as in a
 trade-in) and as many commodities as fit. Commodities are dropped in
 descending key order, the same order `cargoForNewShip` uses. Whatever does not
-fit stays aboard the hull being put away. That always fits, because it is at
-most what that hull was already carrying. So swapping into a smaller ship
+fit stays aboard the hull being put away. So swapping into a smaller ship
 leaves the overflow in the bigger one instead of jettisoning it.
 
+Usually that overflow is at most what the outgoing hull was already carrying,
+but mission cargo can break that: a 10 t Shuttle carrying 20 t of mission
+cargo, swapped for a Freighter full of 100 t of commodities, would leave 20 t
+of commodities in a 10 t hold. Each hull keeps its own capacity, so the hangar
+**refuses** such a swap ("Your old ship has no room for the cargo that would be
+left aboard it", `swapHoldRefusal`); the pilot sells some first. (Review
+finding 6. Buy and keep cannot hit it: the new hull brings no cargo.)
+
 **Fuel** stays with its hull: a stored ship comes out with the fuel it went in
-with (the pilot pays for their own refuel). Escorts are refuelled free at
-lift-off anyway (`escort_restock.ts`).
+with (the pilot pays for their own refuel). Its fuel stat's maximum is the
+real tank, the class's energy plus its outfits' (`fuelCapacity`), not the
+fuel aboard. That matters for escorts, which are refuelled free at lift-off
+(`escort_restock.ts`) to their stat's maximum before any provider has run on
+them: a ship stored dry and sent out as an escort lifts off full (review
+finding 2).
+
+**Names** (`player/player_names.ts`). The ship being flown has the name the
+player gave it at the shipyard's "Please name your new <ship>:" prompt.
+
+- Putting it away keeps that name with it (`shipName`). Taking a stored ship
+  out makes its name the ship's name again, and the outgoing hull goes into
+  storage under its own.
+- A ship that never had a name (a captured escort put away) comes out with
+  none, so the `p` screen shows the derived "<class> <number>" until the
+  player buys and names another ship.
+- **Escorts carry no names**, as in the original. A hull that becomes an
+  escort (a swap with an escort, or a stored ship sent along) loses its name.
+  Keeping it would mean a name component on escort entities, which the
+  escort save blobs and the wire would then have to carry.
+- The hangar lists a ship by its own name: on the tile's first line when it
+  fits (`HANGAR_CAPTION_NAME_CHARS`, 14 characters), otherwise the class's
+  short name; the description pane always shows the name and the class.
 
 **No `OnPurchase` / `OnRetire`.** The Bible ties those to buying, selling and
 capturing. Storing or swapping a hull is none of these: the pilot still owns
@@ -90,12 +119,15 @@ Ship calls the fifth.
 
 5. **Buy and keep** (Option-click *Buy Ship*, only while ship storage is
    on). Without this the pilot could only get a second ship by capturing
-   one. The new hull costs its full asking price, with no trade-in, and the
-   hull being flown goes to the end of the stored list. The shipyard's status
-   line says how to do it whenever a buyable ship is selected. The bought
-   class's `OnPurchase` runs as in any purchase; the kept class's `OnRetire`
-   does not, because it was not sold. The keyboard's buy is always the
-   ordinary trade-in.
+   one. It goes through the same "Please name your new <ship>:" prompt as
+   any purchase (`ship_name_prompt.ts`): OK buys it under the typed name, and
+   Cancel buys and stores nothing. The new hull costs its full asking price,
+   with no trade-in, and the hull being flown goes to the end of the stored
+   list under its own name. The shipyard's hint line says how to do it
+   whenever a buyable ship is selected. The bought class's `OnPurchase` runs
+   as in any purchase; the kept class's `OnRetire` does not, because it was
+   not sold. The keyboard's buy is always the ordinary trade-in. Matthew
+   (2026-11-24): buy-and-keep stays for now.
 
 **Which escorts.** Only captured escorts that have landed with the player (on
 the landed roster). A hired escort was never the pilot's ship. Bay fighters
@@ -116,6 +148,23 @@ any landed escort.
 - A carrier escort's own wing is out: that escort cannot be swapped or
   stored.
 - The escort cap is full: a stored ship cannot become an escort.
+- The ship's class or **any outfit aboard it** is not loaded (a plug-in was
+  removed): it cannot be taken out or sent along. Taking it out would leave a
+  hull whose physics and weapons are never derived, and a save that
+  quarantines (review finding 1). It stays listed, by its stored names.
+- The outgoing hull's hold could not take what the swap leaves aboard it
+  (see Cargo above).
+
+**The dialog.** Return presses Done, as in the shipyard under it. While the
+hangar (or the shipyard's ship info or name prompt) is open, the shop
+search's Cmd/Ctrl+F stands down, so it cannot take the dialog's keys. Before
+the first grid is drawn the hangar loads every class and outfit it may need,
+the flown hull's own outfits included: a swap decides by their oütf flags
+which are the pilot's persistent outfits, and an uncached one would be put
+away with the hull (review finding 3). A teardown while it is open or still
+loading releases its keys for good and redraws nothing (review finding 4).
+Closing it repopulates the shipyard's grid, since a swap can change what the
+shipyard stocks (the hull's Contribute bits).
 
 ## Gates and scope
 
@@ -147,6 +196,16 @@ purchase:
   real insertion sequence) and
   `communication/ship_storage_rollback_test.ts` (a rollback replay and a late
   joiner).
+
+**Bay fighters and escorts.** A swap and a buy-and-keep are refused while
+the player's own fighters are out, using the same deployed-fighter count as
+the outfitter's bay caps (`deployedUnitCount` over the shipyard's
+`deployedOutfitCounts`), so no fighter is ever left without its carrier and a
+bay can never be refilled past its ceiling through storage. Escorts built
+from storage are ordinary captured escorts on the landed roster, so the
+escort, traffic and fleet code treats them as such: the wave-19 "a fleet
+leaves whole" rule never applies to them (their leader is a player's ship,
+and their own fighters' leader carries an escort command).
 
 ## Settings
 
