@@ -13703,7 +13703,293 @@ Confidence: medium-high (ten good moods at -5 in all).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w27/fuel_m5/sheet.png`, `fuel_m5b/sheet.png`, `fuel_m20/sheet.png` (the hostile -20 run).
 
+### Ship explosion blast, wave 28: nothing below 100 t even point-blank (99 t at 4 px); an ORDINARY death hits exactly like a plunder trip; the reach is a SQUARE growing with the mass, about 58 px at 100 t and 113-157 px at 1,000 t, full damage inside, none outside (2026-11-25)
+
+**Questions** (brief, wave-27 leftovers): the blast cut-off between 50 and
+100 t (the Bible's "1-99 t" mass band or a radius?), and whether an
+ordinary ship death (not a self-destruct) damages a nearby ship by the
+same formula.
+
+**Rig** (`wave28Resources` "P"). Live immobile pointer hulks as wave 27's
+(AI 4 of gövt 363, 300 armor, DeathDelay 10): new shïp 536-541 Kit Hulk
+Pointer 60 / 70 / 80 / 90 / 95 / 99 (sÿst 1214-1219; only 90 and 99 were
+needed), and wave 27's 100 t (sÿst 1213) and 1,000 t (sÿst 1210) hulks.
+The boarder / shooter is always shïp 528 Kit Ring Crawler Tough (100
+shield / 3000 armor, no recharge; the shield bar is 148 px, about 1.48 px
+a point) with the Kit Escort Gun turret (30 a shot).
+- Plunder trips: `w27_plunder_live.json` (Cargo first), pilots
+  `w28_pd_90` / `w28_pd_99`.
+- Ordinary deaths: `w28_death_beside.json` (disable, board, **Abort**: no
+  take, so no self-destruct, then hold fire until the hulk dies beside the
+  boarder) and `w28_death_far.json` / `w28_death_at{60,75,82,95,150,165,300}.json`
+  (no board: the board loop's approach legs stop within `near` px and it
+  fires Space@9000 at its first stop within `fire.atPx`, so the gun
+  disables and then KILLS the hulk from about that far; the loop then
+  sweeps at nothing). `tools/killdist.sh` reads the bars from the first
+  Space and the hulk's centroid (magenta) up to the frame it vanishes; the
+  player sits at the window centre (319, 302) at rest (the Crawler stops
+  dead between legs).
+
+| run | hulk | how it died | hulk at death (dx, dy from the player) | max(\|dx\|,\|dy\|) | distance | shield bar | blast |
+|---|---|---|---|---|---|---|---|
+| pd_90 | 90 t | plunder trip (Cargo) | about 8 px | - | ~8 | 148 -> 148 | **0** |
+| pd_99 | 99 t | plunder trip (Cargo) | about 4 px (overlapping) | - | ~4 | 148 -> 148 | **0** |
+| death_1000 | 1,000 t | **shot dead after an Abort** | about 10 px | - | ~10 | 148 -> **54** (0.93 s after Space) | **63.5** (= the 1,000 t plunder trip, wave 27) |
+| death_far300 | 1,000 t | shot dead | (+53, -76) | 76 | 92 | 148 -> **54** | 63.5 |
+| death_far1000 | 1,000 t | shot dead | (+64, +113) | 113 | 130 | 148 -> **54** | 63.5 |
+| death1000_at150 | 1,000 t | shot dead | (+99.5, -98.3) | 99.5 | 140 | 148 -> **54** | 63.5 |
+| death1000_at165 | 1,000 t | shot dead | (+157, -46) | **157** | 164 | 148 -> 148 | **0** |
+| death1000_at300 | 1,000 t | shot dead | (+98, +161) | **161** | 188 | 148 -> 148 | **0** |
+| death100_at60 | 100 t | shot dead | (+43.5, -33.5) | 43.5 | 55 | 148 -> **106** | 28.4 |
+| death100_at60b | 100 t | shot dead | (+48.3, +28.4) | 48.3 | 56 | 148 -> **106** | 28.4 |
+| death100_at75 | 100 t | shot dead | (+55.3, +46.1) | 55.3 | **72** | 148 -> **106** | 28.4 |
+| death100_at82 | 100 t | shot dead | (-60.2, -17.2) | **60.2** | **62** | 148 -> 148 | **0** |
+| death100_at95 | 100 t | shot dead | (-18.3, -88.6) | 88.6 | 90 | 148 -> 148 | **0** |
+| death_far100 | 100 t | shot dead | (+119, +49) | 119 | 129 | 148 -> 148 | **0** |
+
+**Findings.**
+1. **The cut-off is a mass rule at 100 t, not a reach.** A 99 t hulk's
+   trip did nothing with the boarder overlapping it (about 4 px), a 90 t
+   one nothing at 8 px, while 100 t did the full 28.4 (wave 27, at 5-8 px).
+   One ton cannot change a reach from under 4 px to over 8, so below 100 t
+   the blast does no damage at all (the Bible's smallest Mass band, "1-99").
+2. **An ordinary death is the same blast.** A hulk shot dead beside the
+   boarder took 148 -> 54 px off the shield, exactly the 1,000 t plunder
+   trip's (wave 27 pd_1000 / pd_1000b), and every hit below is the
+   formula's amount to the pixel (25.5 + 0.037 x mass: 63.5 / 28.4).
+3. **Full damage inside, none outside** (no falloff): 1,000 t landed 63.5
+   at 10, 92, 130 and 140 px alike; 100 t 28.4 at 4-8 (wave 27), 55, 56 and
+   72 px.
+4. **The reach is a SQUARE**, max(\|dx\|, \|dy\|), like the landing zone (U9):
+   at 100 t a hit at 72 px but a miss at 62 px rules out any circle; by the
+   larger coordinate every hit is inside and every miss outside:
+   **100 t: hits up to 55.3, misses from 60.2** (half-side 55-60);
+   **1,000 t: hits up to 113, misses from 157** (113-157). Both brackets
+   fit a half-side of about **twice the blast's damage** (2 x 28.4 = 57,
+   2 x 63.5 = 127; i.e. about 51 + 0.074 x mass): GUESS on the form (two
+   masses only; a + b x mass with b between 0.06 and 0.11 fits as well).
+   Distances are centre to centre (both hulls 24 px), read from the
+   recording frame before the hulk vanished.
+
+**NovaJS (main c82c9f03).** `N/nova_plugin/ship/ship_explosion.ts:104-117`
+(25.5 + 0.037 x mass, nothing under `SHIP_EXPLOSION_DAMAGE_MIN_MASS` 100):
+**matches** findings 1-3 (the comment at `:106-115` calls the 100 t
+cut-off a GUESS that might be a reach: now measured, a mass rule). The
+reach: `N/nova_plugin/combat/ship_explosion_plugin.ts:86-93` builds a
+CIRCLE of `shipExplosionRadius` (`ship_explosion.ts:168-175`: 0.02 px a ton,
+floor 20, cap 200, `:119-141`), so 100 t and 1,000 t both reach 20 px:
+**mismatch** (measured squares of half-side 55-60 and 113-157 px; NovaJS
+misses every hit above 20 px in the table, nine of them).
+**Proposed:** make the ship explosion's hurtbox an axis-aligned square
+(a SAT box / 4-point polygon centred on the wreck, not rotated) of
+half-side about 2 x `shipExplosionDamage(mass).shield` (51 + 0.074 x mass:
+58 at 100 t, 125 at 1,000 t, 421 at 5,000 t), replacing the 0.02 px/ton
+circle and its 20 / 200 px floor / cap (whether the original caps it is
+not measured; the largest stock hulls would reach 700+ px: a maintainer's
+call, GUESS); mark the cut-off comment measured (this section).
+
+Confidence: high for 1-3 and for a square over a circle (fourteen runs);
+medium for the size rule (two masses, brackets of 5 and 44 px).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w28/pd_90/`,
+`pd_99/` (`trip.png`, `dlg.png`), `death_1000/kill.png`,
+`death_far1000/kill.png`, `death_far300/kill.png`, `death100_at82/kill.png`,
+`death_far100/seq.png`, each run's `recording.mp4` (`tools/killdist.sh`
+reproduces every row).
+
+### Hypergate clearance lines, wave 28: #91 / #92 / #93 are the cleared answer to the `l` that targets the gate (random form); a refusing gate says "Hypergate usage denied." from the first `l`; far out, `l` targets nothing, and a later `l` can say "Hypergate is online. Begin initial approach." (2026-11-25)
+
+**Question** (brief): when are STR# 2002 #91 "Cleared for hypergate
+entry, <ship>." / #92 "<ship>, you're cleared for hypergate entry." / #93
+"You are cleared for hypergate entry." used (allowed, denied, other)?
+
+**Rig.** Wave 27's Kit Gate N1 (usable kit hypergate, pilot
+`w27_gate_nbr` on the gate) and a new refusing gate (`wave28Resources`
+"G": sÿst 1220 Kit Gate Deny, hypergate spöb 1625 owned by gövt 363 with
+MinStatus 100, the clean pilot `w28_gate_deny` on it).
+`tools/gaterun.sh` on `w28_space_interactive.json`: **near** (6 cycles of
+`l` / `l` for the gate map / Done with no pick), **drift** (a 120 ms push,
+then `l` every ~2 s while coasting away), **far** (1.5 s of full thrust,
+Kit Lancer Speed 800, then `l` every 2.5 s), **deny** (`l` x4, then `y`).
+
+| run | press | the original |
+|---|---|---|
+| near, on N1 at rest | the first `l` of each cycle (the gate map cancelled in between) | **#92** "w27-gate-nbr, you're cleared for hypergate entry." x4, **#93** x2 (order 92 93 92 93 92 92); every cycle's first `l` after Done is a fresh request |
+| near | Done with no pick | "Hypergate jump cancelled." in the 1.2 s shot of cycles 4-6, nothing on the line in cycles 1-3; the gate closes back to its small grey idle sprite |
+| drift, gate about 250 px away, coasting | `l` #1 | **#92** (the gate selected and its opening animation drawn) |
+| drift | `l` #2 | "You're moving too fast to enter this hypergate." |
+| drift | `l` #3-6, #8-10 | "You're too far away to enter this hypergate." |
+| drift | `l` #7 | **"Hypergate is online. Begin initial approach."** (#75 + #80) |
+| far (1.5 s at Speed 800, then coasting) | `l` #1-8 | **nothing**: no target ("Nav System Off"), no status line, eight times |
+| deny, on Kit Gate Deny at rest | `l` #1-4 | **"Hypergate usage denied."** every time, from the first press; the gate never opens |
+| deny | `y` | "No response." (as wave 24) |
+
+With waves 24 (#92 at A1, #91 at C2) and 27 (#93 at N1): **#91 1, #92 6,
+#93 3 in ten clearances**, all on the press that selected the gate, at
+rest on it or coasting 250 px off.
+
+**Findings.**
+1. #91-93 are the **cleared** answer to the `l` that targets a usable
+   gate; the form looks random (ten draws, no pattern with distance or
+   speed; #91 is rare so far, 1 in 10).
+2. A gate that refuses answers **"Hypergate usage denied."** (#81) to every
+   `l`, the first included; no #91-93.
+3. Other: from far out (here > about 1,000 px, moving fast) `l` selected
+   **nothing** at all; with the gate selected and the ship too far, a
+   later `l` once said "Hypergate is online. Begin initial approach." (#75
+   + #80, the gate's form of a planet's "<port> traffic control reads you,
+   <ship>. Begin initial approach." / "Landing request received. Begin
+   initial approach.", both seen at Kit Mixed Open / Kit Map Picky this
+   wave); the other presses gave the window lines.
+
+**NovaJS (main c82c9f03).** `N/nova_plugin/travel/planet_plugin.ts:538-556`:
+the press that targets a hypergate emits `LandingClearedEvent` or the
+denial at once; `N/display/status_message_plugin.ts:228-238` picks the form
+uniformly (`Math.random`), `N/display/status_bar_content.ts:385-393` words it.
+1: **matches** (1 / 6 / 3 in ten fits a uniform pick). 2: **matches**.
+3: **mismatch, small**: NovaJS's first `l` targets the nearest gate from
+any distance ("wherever the ship is", `:539`) and clears it; the original
+selected nothing from far out (not separated from speed: the far run was at
+full speed). "Hypergate is online. Begin initial approach." is not printed
+(no #74 / #75 anywhere in NovaJS), nor are the planets' request lines
+(#77-80) on a first `l` from afar.
+**Proposed:** none for 1-2. For 3, wait for a measurement of the
+selection range (a stopped ship at 500 / 1,000 / 2,000 px) before
+changing `l`; the request lines (#74 / #75 + #80 for a gate, #77 / #78 /
+#79 + #80 for a port) can be added as status lines on a press that selects
+a stellar outside its landing zone (GUESS on the exact condition: seen on
+the first press far from a port, and on a later press far from a gate).
+
+Confidence: high for 1-2 (fourteen presses), medium for 3 (one run each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w28/gate_near/sl.png`
+(the status lines), `gate_near/maps.png`, `gate_drift/sl.png` +
+`gate_drift/seq.png`, `gate_far/seq.png`, `gate_deny/sl.png` +
+`gate_deny/seq.png` (the first try died "no EV Nova window within 30 s";
+`*-retry1/` is the run).
+
+### Map dot colours, wave 28: a ränk 0x0200 of the owner turns a MinStatus refusal's ORANGE dot BLUE, and the port then takes the player (2026-11-25)
+
+**Question** (wave-27 leftover): does a ränk 0x0200 ("All planets of the
+affiliated government will let the player land ... regardless of their
+MinStatus field") un-colour a refusing system on the map?
+
+**Rig** (`wave28Resources` "M"). ränk 204 Kit Land Anywhere Rank (AffilGovt
+363, Flags 0x0200), given by offer 958 (b9244, OnAccept K204) at Kit
+Mixed Open (spöb 1490, wave 24's sÿst 1187); next door is Kit Map Picky
+(sÿst 1188, gövt 363, its only port 1491 at MinStatus 100: a clean pilot
+is refused, wave 24 / 25's orange). Pilot `w28_rank_picky` (Kit Lancer at
+Kit Mixed Open, 1187 / 1188 / 1193 explored).
+
+| step | the original |
+|---|---|
+| map before the rank | Kit Map Picky **#ff6300 orange** (box 489..501 x 258..270: 20 px #ff6300) |
+| land at Kit Mixed Open, offer 958, **Yes** | accepted (the rank is silent) |
+| map after | the same ring **#0000ff blue** (20 px #0000ff), info "Kit Neutral Govt", "No Record" |
+| jump to Kit Map Picky, first `l` far out | "Landing request received. Begin initial approach." (no denial) |
+| `y` on Kit Picky Port | "Communications interlink established with Kit Picky Port.", Greetings / Demand Tribute / Close Channel (no Offer Bribe, no Status line: an open port) |
+
+**NovaJS (main c82c9f03).** `N/spaceport/starmap.ts:95-133`
+`refusingSystems` asks the landing clearance (`stellarClearanceWith`, with
+the ranks) and `N/nova_plugin/reputation/stellar_clearance.ts:279-285`
+reads ränk 0x0200 as MinStatus ignored, so the port is open and the dot
+blue: **matches**. The comments that call this a GUESS
+(`starmap.ts:92-93`, `N/spaceport/starmap_draw.ts:204-206`) can cite this
+section.
+**Proposed:** comments only.
+
+Confidence: high (one run, both colours sampled, the landing reply and the
+hail agree).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w28/rank_picky/*/`
+(`02-map-pre.png`, `04-offer.png`, `06-map-post.png`, `18-pk-l1.png`,
+`20-pk-hail.png`; `seq.png`-`seq3.png`; the first two jumps failed: too
+near the planet, then the landing had cleared the destination).
+
+### R7 planet bribe, wave 28: after a withdrawn ask ("No deal, cheapskate."), the planet refused all eleven later offers that day (2026-11-25)
+
+**Question** (wave-27 leftover): the plain planet's outright refusal odds
+(2 in 15 so far).
+
+**Rig.** Wave 27's `w27_bribe_plain_2m` (Kit Bribe Plain port, record -50,
+2,000,000 credits); `tools/pbribe.sh`: twelve hails in one flight, each
+`y`, Offer Bribe, Lower Price, Close Channel (never Accept).
+
+**Run `prefuse_2m`.** Hail 1 asked 3,000 ("We'll let you defeat spaceport
+security if you pay us."); Lower Price answered **"No deal, cheapskate."**
+(withdrawn). Hails 2-12 were **all refused at Offer Bribe**: "You wish." x2,
+"Yeah, right." x3 (the refusal group), "We don't take kindly to insults." x2,
+"Stop being an insulting little ferret." x3, "Are you trying to insult
+us?" x1 (the second-offer group).
+
+So repeated hails are not independent draws: a withdrawn haggle closes the
+planet to bribes for the rest of the visit (GUESS: the day, like the
+refusal NovaJS now rolls per day), answered from both line groups. The
+refusal odds of a FRESH first offer are still 2 in 16 (waves 22, 27 and
+this run's first hail).
+
+**NovaJS (main c82c9f03).** `N/nova_plugin/reputation/hail.ts:565-568`:
+Lower Price (the counter or the withdrawal) and the second-offer insult
+are NOT MODELLED; `planetRefusesBribe` (`:670-694`) refuses one hail in
+eight per day: **mismatch** after a withdrawal (NovaJS would ask again).
+**Proposed:** when the haggle is modelled, remember a withdrawal per
+planet and pilot for the day and answer later Offer Bribes with a line
+from the refusal or insult groups.
+
+Confidence: medium (one run, eleven in a row).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w28/prefuse_2m/sheet.png`
+(the twelve offers), `prefuse_2m/lower1.png` (the withdrawal).
+
+### Stellar hail pane, wave 28: a second odd overflow (325 x 325) sits where a 311 px pane puts it; NovaJS's halved-separately rule gives the same pixel (2026-11-25)
+
+**Question** (waves 23-27 carry-over): the 1 px pane-width question on
+another odd overflow (rlëD 2039 at 315 px was the only one).
+
+**Rig** (`wave28Resources` "H"). sÿst 1221 Kit Hail Jupiter, spöb 1626: a
+landable clone of stock Jupiter (spöb 159) keeping its rlëD 2005 (325 x
+325); pilot `w28_hail_jupiter` on it, `l` then `y`.
+
+**Run `hail_jup`.** "Hailing frequencies open to Kit Hail Jupiter.",
+class "[Gas Giant]", Greetings / Demand Tribute / Close Channel.
+`analysis/sprite_match.mjs` (frame 0, clip 368,160,678,442): **scale 1,
+RMSE 0 at top-left (361, 139)** in both shots (0.95: 0.11), i.e.
+frame-local x = 215 = 222 + floor((311 - 325) / 2) (a 310 px pane would
+give 214) and y = -16 = 5 + floor((283 - 325) / 2).
+
+**NovaJS (main c82c9f03).** `N/spaceport/hail_layout.ts:408-414`
+`stellarSpriteOrigin` halves the pane (310) and the frame separately:
+222 + 155 - 162 = 215, 5 + 141 - 162 = -16: **matches**. Closed.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261125-w28/hail_jup/*/03-hail.png`, `04-hail2.png`.
+
 ### Reliability notes (for anyone running the reference)
+
+- **A ship explosion's reach is a SQUARE (wave 28):** read a hit or a
+  miss by max(|dx|, |dy|) from the wreck, not by distance (a 100 t wreck hit
+  at 72 px and missed at 62). The `w28_death_at*` scenarios use the board
+  loop's `fire.atPx` as a kill distance, but the loop fires at its FIRST
+  stop inside it (asked 82, fired at 62) and then sweeps 70 presses at
+  nothing (about 4 minutes a run): read the real distance with
+  `tools/killdist.sh`, and lower `sweep.presses` for such runs.
+- **`l` far from a hypergate selects nothing (wave 28 `gate_far`):** start
+  gate-request tests on the gate or within about 250 px of it.
+- **A withdrawn planet bribe poisons the rest of the visit (wave 28
+  `prefuse_2m`):** after "No deal, cheapskate." every later Offer Bribe was
+  refused or insulted, so only the FIRST offer of a flight is a reading of
+  the refusal odds; repeat by runs, not by hails.
+- **`j` right after takeoff, or after a landing, does nothing (wave 28
+  `rank_picky`):** a ship next to the planet cannot jump, and a landing
+  clears the hyperspace destination (re-pick it on the map).
+- **One open_pilot died on "This pilot file appears to reference
+  information that is from a plug-in ... not currently loaded" (wave 28
+  `death_far300`, then fine on the rerun), one launch on "no EV Nova window
+  within 30 s" (`gate_deny`, the retry ran), and one run flaked at Enter
+  Ship (`death_far1000`, retried by `run`):** three flakes in sixteen runs;
+  rerun.
+- **A run's `run-*.json` lands a moment before its `result.json` (wave
+  28):** a waiter that saw the first and not the second timed out once;
+  wait on `result.json` (`tools/waitfile.mjs`).
 
 - **An unexplored gate destination's ring hides under the arrowhead (wave
   27; wave 25 misread it):** it is a small (about 8 px) #424242 ring, darker than the
@@ -14291,7 +14577,8 @@ Confidence: medium-high (ten good moods at -5 in all).
 | Wave 24 leftovers | Gate map: unexplored systems and ordinary hyperspace lanes on it; whether the closing animation plays before an idle gate vanishes. Map: a positive record below MinStatus (+50 against 100: orange predicted), a refusal that is not MinStatus (travel permit, ränk 0x0200). Disabled ships: an UNPROVOKED fleet's escorts beside a disabled lead (hit it while parked on the port, before any stray shot), the coast of a disabled ship (record it: speed over time), the plunder self-destruct's odds (a series of plunders of one cheap hull: Energy / Credits / Cargo each). Boarding velocity after a TAKEN plunder (needs a hulk that survives the plunder). R19: the arrival centre (a victim met far from the centre: give the far-port system an AI 1 trader that flies a fixed lane past the port, or a mission ship placed at the port), a neutral fleet, the 475-700 px trader range, an escort's hit, whether an AI 3 victim's call is withheld or cancelled by its departure (an AI 3 that cannot leave: a system with no exit? anchored AIs do not call). Hails: the 1 px pane width on another odd overflow. Escort cap: a capture past six. F1c: counts above 9, the re-flow offsets, NPC fleets of 5+ (flët 308 exists now). Still open from wave 22: R7 above 1M, the fuel good mood at a negative record, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 25** answered ("... wave 25" sections): a disabled ship's coast decays exponentially (x0.991 a 1/30 s tick, tau 3.7 s; NovaJS brakes at a constant 45 px/s²); the plunder self-destruct is a draw on EVERY take (Cargo 10 trips in 12, Credits 4 in 15, Energy 2 in 4; the take still pays; the dialog stays open between untripped takes); a +50 record below MinStatus 100 is orange; the gate map draws an arrow but no dot to an unexplored destination (not selectable on one click); Done with no pick prints "Hypergate jump cancelled." and the gate plays its closing animation. Hub queue: a SpecialTech match IS offered for hire (wave 23's TechLevel-only reading refuted; NovaJS matches); an empty pool keeps Hire Escort live and shows "There are no ships available for hire." (matches); the gate lines are "... enter this hypergate." / "... enter this wormhole." (NovaJS mismatch; applied in the wave-25 fixes, with the gate map's unexplored destination and "Hypergate jump cancelled."), and a wormhole's first `l` acts at once. Tried, not reached: the UNPROVOKED fleet lead (an escort took the bolt, then two runs without a clear shot), R19's arrival centre (the far-port guard left at once). Not run: ordinary lanes on the gate map, a refusal that is not MinStatus, boarding velocity after a taken plunder, R19's neutral fleet / 475-700 px / escort hit / AI 3 withheld-or-cancelled, the 1 px pane width, the escort-cap capture, F1c's counts above 9 / re-flow offsets / NPC fleets of 5+, R7 above 1M, the fuel good mood, wave 21's carry-overs. Left: see Wave 25 leftovers. |
 | Wave 25 leftovers | Plunder self-destruct: does the per-item chance depend on the hull, its crew or the player's crew / rating (every take so far was against a crew-1 kit hulk or a derelict, with a crew-10 boarder), Ammo's odds, and whether a tripped Credits take pays. Coast: a second hull / start speed (is the 0.991-per-tick drag the same for a 300 px/s hulk?). Disabled fleet lead, UNPROVOKED: needs a rig that separates the lead (a slow lead or trailing escorts) so the first shot cannot hit an escort. R19 arrival centre: a victim held beside a far port. Gate map: ordinary hyperspace lanes; whether an unexplored destination can be selected at all (one click missed). Map: a refusal that is not MinStatus (travel permit, ränk 0x0200). Still open from wave 24: boarding velocity after a TAKEN plunder (pick a take that did not trip, then Abort), R19's neutral fleet / 475-700 px trader range / escort hit / AI 3 withheld-or-cancelled, the 1 px pane width, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, R7 above 1M, the fuel good mood at a negative record, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 26** answered ("... wave 26" sections): a tripped Credits take PAYS (twice, 1,250 from 0), so every tripped take is delivered; per-item counts now Cargo 12 in 17, Credits 6 in 21, Energy 2 in 5. Hub queue: an ARMED AI 3 victim stays, fights and calls the fleet from 86-89 px and about 1,100 px (0319b786's "AI 3 never calls" refuted); the self-destruct's blast damages the boarder by the hulk's mass (none visible from 50 t; 100 shield + 200 armor from 5,000 t; 100 + about 1,155 from 30,000 t) and never below a third of its armor (NovaJS's non-lethal floor matches); a fresh stock pilot's Nil'kemorya systems are red (and hostile: CrimeTol 1) and the others orange (matches). R19's arrival centre: the fleet comes in about 1,500-1,800 px from the SYSTEM'S centre, not around the victim, and an NPC of the fleet's side that attacks the player calls it with no hit. Tried, not reached: the UNPROVOKED fleet lead (an attributes-govt 0x0008 does not let shots pass: the bolt disabled an escort; slow escorts stacked on the lead), a fast coast (the trader slows for its landing before it comes in reach). Not run: the plunder odds' dependence on hull / crew, Ammo, ordinary lanes on the gate map, whether an unexplored gate destination can be picked, a refusal that is not MinStatus, boarding velocity after a taken plunder, R19's neutral fleet / escort hit, the 1 px pane width, the escort-cap capture, F1c's counts above 9 / re-flow offsets / NPC fleets of 5+, R7 above 1M, the fuel good mood, wave 21's carry-overs. Left: see Wave 26 leftovers. |
 | Wave 26 leftovers | Plunder: the blast's mass curve between 50 and 5,000 t (500 / 1,000 / 2,000 t hulks against the Tough boarder, 100 / 3000), whether the floor is exactly the disable threshold (a boarder whose third of armor is easy to read), and whether the odds depend on the hull, its crew or the boarder (Credits 6 in 21 vs Cargo 12 in 17 so far); Ammo's odds. R19: what exactly triggers a call with no hit (the attacker's first shot, or the player merely being its target; an NPC of the side attacking ANOTHER NPC?); the arrival distance from the centre over more runs (farm2 was off the radar). Disabled fleet lead, UNPROVOKED: the fleet's own govt with 0x0008 for the escorts and the lead on an inherent COMBAT govt (InherentGovt 2xxx) without it, or a non-player disabler (anchored wëap 285 Kit Disabler hostile to the fleet). Coast: a second hull / start speed (the fast trader slowed for its landing; disable it in open space, e.g. a system whose port is far from where traffic arrives). Still open from wave 25: ordinary hyperspace lanes on the gate map, whether an unexplored gate destination can be selected at all, a refusal that is not MinStatus (travel permit, ränk 0x0200), boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the 1 px pane width, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, R7 above 1M, the fuel good mood at a negative record, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 27** answered ("... wave 27" sections): the plunder blast is 25.5 + 0.037 x the hulk's mass from 100 t up (100 / 200 / 500 / 1,000 / 2,000 / 5,000 t, every point repeated to the pixel), nothing from 50 t, shield then armor in full, and the floor IS the boarder's disable threshold (a 0x0010 hull went to 29.7%); NovaJS's 0.03 a ton mismatches. The UNPROVOKED fleet lead, reached with a guided shot (wëap 294: it passed the escorts): the four escorts attack the player at once, none stays by the lead, none leaves (as wave 24). R19: an UNARMED attacker calls the fleet at take-off, so the trigger is the attack, not a shot (c0129eaa matches); the fleet again came from the centre's side. Hub queue: an unexplored gate destination (a hyperspace neighbour or not) is a #424242 ring with no label and IS selectable in one click ("Hypergate Destination: <Unknown>"; wave 25's "no dot" / "not selectable" were misreads; 301baa7d mismatches); ordinary hyperspace lanes ARE drawn on the gate map, #080808 (the regular map's are #4a4a4a, NovaJS 0x666666); a hypergate's first `l` says "You are cleared for hypergate entry." (STR# 2002 #91-93; NovaJS prints nothing). A travel-permit refusal leaves the map dot BLUE (NovaJS colours it orange). R7 above 1M: ships never asked more than 20,000 (four at 50M / 200M), planets 12,000 at 50M and 183,000 at 200M, and a plain planet refused outright at 2M. Fuel: five more good moods at record -5, all 1,000 (8 of 10 with wave 22's; NovaJS matches: closed). Not run: Ammo's odds and the odds' dependence on hull / crew, an NPC attacking another NPC, the coast of a second hull, boarding velocity after a taken plunder, R19's neutral fleet / 475-700 px / escort hit, the 1 px pane width, the escort-cap capture, F1c's counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs. Left: see Wave 27 leftovers. |
-| Wave 27 leftovers | Plunder: the blast cut-off between 50 and 100 t (a 75 t hulk; is it the Bible's "1-99 t" mass band or a radius?), whether a DeathDelay-60 "huge explosion" reaches farther than a DeathDelay-10 one (a boarder cannot stand off: an NPC or a second ship nearby), Ammo's odds, the odds against another hull / crew. R19: an NPC of the fleet's side attacking another NPC (no player); the arrival distance with the fleet first seen inside the radar (farmun entered at its edge). R7: a 0x2000 freighter's Beg For Mercy above 20M (is 20,000 every ship's cap?), the planet refusal's odds (2 in 15 so far). Map: a ränk 0x0200 override of a MinStatus refusal (does the dot turn blue?). Still open from wave 26: the coast of a second hull / start speed, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the 1 px pane width, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | open |
+| Wave 27 leftovers | Plunder: the blast cut-off between 50 and 100 t (a 75 t hulk; is it the Bible's "1-99 t" mass band or a radius?), whether a DeathDelay-60 "huge explosion" reaches farther than a DeathDelay-10 one (a boarder cannot stand off: an NPC or a second ship nearby), Ammo's odds, the odds against another hull / crew. R19: an NPC of the fleet's side attacking another NPC (no player); the arrival distance with the fleet first seen inside the radar (farmun entered at its edge). R7: a 0x2000 freighter's Beg For Mercy above 20M (is 20,000 every ship's cap?), the planet refusal's odds (2 in 15 so far). Map: a ränk 0x0200 override of a MinStatus refusal (does the dot turn blue?). Still open from wave 26: the coast of a second hull / start speed, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the 1 px pane width, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | **Wave 28** answered ("... wave 28" sections): the blast cut-off is a MASS rule at 100 t (99 t did nothing at 4 px, 90 t at 8 px); an ORDINARY death (a hulk shot dead) is the same blast (63.5 at 1,000 t, 28.4 at 100 t, to the pixel), full damage inside and none outside, and its reach is a SQUARE, max(|dx|, |dy|) <= about 55-60 px at 100 t and 113-157 px at 1,000 t (GUESS: about twice the damage); NovaJS's damage and cut-off match (c82c9f03), its 20 px circle mismatches. A ränk 0x0200 of the owner turns Kit Map Picky's orange dot blue and opens the port (NovaJS matches). A withdrawn planet bribe makes the planet refuse every later offer that visit (11 of 11). Brief items: the hypergate clearance lines #91-93 are the random cleared answer to the `l` that selects a usable gate (1 / 6 / 3 in ten), a refusing gate says "Hypergate usage denied." from the first `l`, far out `l` selected nothing and a later far `l` said "Hypergate is online. Begin initial approach.". Carry-over: the hail pane is 311 on a second odd overflow (Jupiter's 325 px art; NovaJS's rule gives the same pixel: closed). Not run: DeathDelay 60's reach, Ammo's odds and the odds against another hull / crew, R19's NPC-vs-NPC attack and arrival distance, the 0x2000 freighter above 20M, the wave-26 and older carry-overs. Left: see Wave 28 leftovers. |
+| Wave 28 leftovers | Blast: the reach's size rule at a third mass (200 t: twice-the-damage predicts a half-side of 66 px, 500 t 88), its exact half-side at 100 t (55-60) and 1,000 t (113-157), whether it is measured to the centres or the hulls' edges (a bigger boarder), whether a DeathDelay-60 "huge explosion" or a 5,000+ t wreck is capped. Gates: the range inside which `l` selects an idle gate (a STOPPED ship at 500 / 1,000 / 2,000 px), when "Hypergate is online" / "is energized" (#74 / #75) replace the window lines, why "Hypergate jump cancelled." showed in only 3 of 6 cancels. R7: a fresh planet's refusal odds (one first offer per run), how long a withdrawal lasts (a day? a jump out and back?). Still open from wave 27: Ammo's odds, the odds against another hull / crew, R19 an NPC of the fleet's side attacking another NPC and the arrival distance inside the radar, a 0x2000 freighter's Beg For Mercy above 20M; from wave 26: the coast of a second hull, boarding velocity after a TAKEN plunder, R19's neutral fleet / 475-700 px trader range / escort hit, the escort-cap capture, F1c counts above 9 / re-flow offsets / NPC fleets of 5+, wave 21's carry-overs (the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen). | open |
 
 ## Catalogue
 
