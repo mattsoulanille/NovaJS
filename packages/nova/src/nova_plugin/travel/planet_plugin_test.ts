@@ -15,10 +15,12 @@ import { makeSystem } from '../make_system.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { applyControlEvents } from '../player/index.js';
 import {
-    applySetPlanetTarget, inLandingZone, LAND_RANGE_CAP,
+    applySetPlanetTarget, holdsGateClearance, HYPERGATE_SELECT_RANGE,
+    inLandingZone, LAND_RANGE_CAP, LANDING_REQUEST_FORMS,
     LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
     LandingBlockedEvent, LandingClearedEvent, landingDistance, landingRange,
-    PlanetComponent,
+    LandingRequest, LandingRequestEvent, landingRequestForm,
+    PlanetComponent, selectPlanetTarget,
     PlanetDataComponent, PlanetTargetComponent, StellarBribesComponent, STELLAR_BRIBE_MS, stellarClearanceFor,
     stellarLandingRange, StellarHaggleComponent,
 } from './planet_plugin.js';
@@ -34,6 +36,7 @@ import {
 import { landable } from '../core/index.js';
 import {
     clearanceDeniedMessage, hypergateClearedMessage, landingBlockedMessage,
+    landingRequestMessage,
 } from '../../display/status_bar_content.js';
 
 // Thessaly Reach holds four stellars, in this order: Port Amberline (a
@@ -1098,14 +1101,20 @@ describe('the gate approach lines', () => {
     // Measured: reference "Gate map, wave 27", the first `l` at Kit Gate N1
     // (on the gate, at rest) said "You are cleared for hypergate entry.";
     // the window lines come from the second `l` ("Gate approach lines, wave
-    // 25").
-    it('answers a hypergate\'s first `l` with its clearance, never the '
-        + 'window, and does not go through', async () => {
+    // 25"). The selecting press clears only INSIDE the entry window (by
+    // distance alone: wave 28's coasting ship 250 px off was cleared);
+    // farther out it requests ("Hypergate `l` range and the request lines,
+    // wave 29", below).
+    it('answers a hypergate\'s first `l` inside its entry window with its '
+        + 'clearance, never the window, and does not go through',
+        async () => {
             const { world, ship, gate } = await atGate(
                 SYNTHETIC.systems.kestrel, KESTREL_GATE);
+            const range = stellarLandingRange(world.entities.get(gate.uuid)!
+                .components.get(PlanetDataComponent));
             for (const [position, velocity] of [
                 [gate.position, new Vector(0, 0)],
-                [new Position(gate.position.x, gate.position.y + 2000),
+                [new Position(gate.position.x, gate.position.y + range),
                     new Vector(0, 0)],
                 [gate.position, new Vector(100, 0)],
             ] as const) {
@@ -1125,6 +1134,9 @@ describe('the gate approach lines', () => {
                 expect(blocked).toEqual([]);
                 expect(cleared).toEqual([
                     { gateKind: 'hypergate', entities: [SHIP_UUID] }]);
+                // The clearance is held: it opens the gate.
+                expect(holdsGateClearance(
+                    ship.components.get(PlanetTargetComponent))).toBeTrue();
             }
             // The second `l` is the window's, with no clearance line.
             const cleared: unknown[] = [];
@@ -1148,5 +1160,252 @@ describe('the gate approach lines', () => {
             .toBe('You are cleared for hypergate entry.');
         expect(hypergateClearedMessage(1, ''))
             .toBe('You are cleared for hypergate entry.');
+    });
+});
+
+// Measured: reference "Hypergate `l` range and the request lines, wave 29".
+// A stopped ship's `l` with nothing selected picks a hypergate only inside a
+// CIRCLE of 490-500 px (HYPERGATE_SELECT_RANGE, 500 a GUESS inside the
+// bracket), ports from 1,000 px and more; the selecting press outside the
+// entry window prints the REQUEST line and leaves the gate closed; later
+// presses outside give the window lines; the press inside clears and opens.
+// On the synthetic Kestrel Drift: Kestrel Gate (a hypergate) and Kestrel
+// Rock (an ordinary port about 570 px from it).
+describe('the hypergate `l` range and the request lines', () => {
+    const KESTREL_GATE = `planet ${SYNTHETIC.planets.kestrelGate}`;
+    const KESTREL_ROCK = `planet ${SYNTHETIC.planets.kestrelRock}`;
+
+    async function kestrel() {
+        const { world, ship } = await makeHarness(getSyntheticGameData(),
+            SYNTHETIC.systems.kestrel);
+        const gate = stellars(world).find(p => p.uuid === KESTREL_GATE)!;
+        const rock = stellars(world).find(p => p.uuid === KESTREL_ROCK)!;
+        expect(gate).toBeDefined();
+        expect(rock).toBeDefined();
+        return { world, ship, gate, rock };
+    }
+
+    /** One `l`, recording every answer the sim gives. */
+    function press(world: World) {
+        const cleared: unknown[] = [];
+        const requests: (LandingRequest & { entities?: unknown })[] = [];
+        const subs = [
+            world.events.get(LandingClearedEvent)
+                .subscribe(({ data }) => cleared.push(data)),
+            world.events.get(LandingRequestEvent)
+                .subscribe(({ data, entities }) =>
+                    requests.push({ ...data, entities })),
+        ];
+        const { lands, blocked } = pressLand(world);
+        subs.forEach(s => s.unsubscribe());
+        return { lands, blocked, cleared, requests };
+    }
+
+    function target(ship: Entity) {
+        return ship.components.get(PlanetTargetComponent)!;
+    }
+
+    it('selects the gate at 499 px and not at 501 px (a stopped ship)',
+        async () => {
+            expect(HYPERGATE_SELECT_RANGE).toBe(500);
+            const { world, ship, gate, rock } = await kestrel();
+
+            place(ship, new Position(gate.position.x + 499, gate.position.y));
+            const near = press(world);
+            expect(target(ship).target).toBe(gate.uuid);
+            // Outside the entry window: the request, not the clearance.
+            expect(near.cleared).toEqual([]);
+            expect(near.blocked).toEqual([]);
+            expect(near.requests.map(r => [r.kind, r.entities]))
+                .toEqual([['hypergate', [SHIP_UUID]]]);
+
+            selectPlanetTarget(target(ship), undefined);
+            place(ship, new Position(gate.position.x + 501, gate.position.y));
+            const far = press(world);
+            // The gate is skipped; the port, about 940 px off, is picked.
+            expect(target(ship).target).toBe(rock.uuid);
+            expect(far.requests.map(r => [r.kind, r.stellarName]))
+                .toEqual([['planet', 'Kestrel Rock']]);
+
+            // With no port in the system, `l` selects nothing and says
+            // nothing (the original's "Nav System Off").
+            selectPlanetTarget(target(ship), undefined);
+            world.entities.delete(rock.uuid);
+            const nothing = press(world);
+            expect(target(ship).target).toBeUndefined();
+            expect([nothing.lands, nothing.blocked, nothing.cleared,
+                nothing.requests]).toEqual([[], [], [], []]);
+        }, 30_000);
+
+    it('measures the range as a circle: the 467 px diagonal is selected, '
+        + 'the 594 px one is not', async () => {
+            const { world, ship, gate } = await kestrel();
+            place(ship, new Position(gate.position.x + 330,
+                gate.position.y + 330));
+            press(world);
+            expect(target(ship).target).toBe(gate.uuid);
+
+            selectPlanetTarget(target(ship), undefined);
+            // Each coordinate (420) is inside the 499 px the axis selects.
+            place(ship, new Position(gate.position.x + 420,
+                gate.position.y + 420));
+            press(world);
+            expect(target(ship).target).not.toBe(gate.uuid);
+        }, 30_000);
+
+    it('selects a port from 1,000 px with its request line, and a '
+        + 'station with its own', async () => {
+            const { world, ship, rock } = await kestrel();
+            place(ship, new Position(rock.position.x - 1000, rock.position.y));
+            const port = press(world);
+            expect(target(ship).target).toBe(rock.uuid);
+            expect(port.lands).toEqual([]);
+            expect(port.blocked).toEqual([]);
+            expect(port.requests.length).toBe(1);
+            const request = port.requests[0];
+            expect([request.kind, request.stellarName, request.online])
+                .toEqual(['planet', 'Kestrel Rock', undefined]);
+            expect(request.form).toBeGreaterThanOrEqual(0);
+            expect(request.form).toBeLessThan(LANDING_REQUEST_FORMS);
+            expect(landingRequestMessage(request.kind, request.form,
+                request.stellarName, 'Lancer')).toMatch(
+                /^(Kestrel Rock traffic control reads you|Landing request received)(, Lancer)?\. Begin initial approach\.$/);
+
+            // The same rock as a station.
+            const rockEntity = world.entities.get(rock.uuid)!;
+            const data = rockEntity.components.get(PlanetDataComponent)!;
+            rockEntity.components.set(PlanetDataComponent, {
+                ...data, flags: { ...data.flags, isStation: true },
+            });
+            selectPlanetTarget(target(ship), undefined);
+            const station = press(world);
+            expect(station.requests.map(r => [r.kind, r.stellarName]))
+                .toEqual([['station', 'Kestrel Rock']]);
+        }, 30_000);
+
+    it('keeps the window lines after the request, and the gate closed',
+        async () => {
+            const { world, ship, gate } = await kestrel();
+            place(ship, new Position(gate.position.x + 300, gate.position.y));
+            const first = press(world);
+            expect(first.requests.map(r => r.kind)).toEqual(['hypergate']);
+            expect(holdsGateClearance(target(ship))).toBeFalse();
+
+            for (let i = 0; i < 3; i++) {
+                const later = press(world);
+                expect(later.requests).toEqual([]);
+                expect(later.cleared).toEqual([]);
+                expect(later.blocked.map(b => [b.reason, b.gateKind]))
+                    .toEqual([['tooFar', 'hypergate']]);
+                expect(holdsGateClearance(target(ship))).toBeFalse();
+            }
+            // Moving inside the window: too fast, still no clearance.
+            place(ship, gate.position, new Vector(100, 0));
+            expect(press(world).blocked.map(b => b.reason))
+                .toEqual(['tooFast']);
+            expect(holdsGateClearance(target(ship))).toBeFalse();
+        }, 30_000);
+
+    it('clears and opens on the press inside the entry window after a '
+        + 'request, and the next `l` enters the gate', async () => {
+            const { world, ship, gate } = await kestrel();
+            place(ship, new Position(gate.position.x + 300, gate.position.y));
+            press(world);
+            expect(target(ship).target).toBe(gate.uuid);
+            expect(holdsGateClearance(target(ship))).toBeFalse();
+
+            place(ship, gate.position);
+            const clearance = press(world);
+            expect(clearance.lands).toEqual([]);
+            expect(clearance.blocked).toEqual([]);
+            expect(clearance.cleared).toEqual([{ gateKind: 'hypergate' }]);
+            expect(target(ship).cleared).toBe(gate.uuid);
+            expect(holdsGateClearance(target(ship))).toBeTrue();
+
+            const enter = press(world);
+            expect(enter.cleared).toEqual([]);
+            expect(enter.lands.map(l => l.uuid)).toEqual([gate.uuid]);
+        }, 30_000);
+
+    it('drops the clearance when the selection moves on', async () => {
+        const { world, ship, gate, rock } = await kestrel();
+        place(ship, gate.position);
+        press(world);
+        expect(holdsGateClearance(target(ship))).toBeTrue();
+
+        applySetPlanetTarget(world, undefined, rock.uuid);
+        expect(target(ship).cleared).toBeUndefined();
+        // Selecting the gate again (a click) does not restore it: the
+        // next `l` in the window is a fresh clearance, not the gate map.
+        applySetPlanetTarget(world, undefined, gate.uuid);
+        const again = press(world);
+        expect(again.lands).toEqual([]);
+        expect(again.cleared).toEqual([{ gateKind: 'hypergate' }]);
+    }, 30_000);
+
+    it('says "Hypergate is online" when another ship holds the gate\'s '
+        + 'clearance (GUESS)', async () => {
+            const { world, ship, gate } = await kestrel();
+            const other = new Entity('other');
+            other.components.set(PlanetTargetComponent,
+                { target: gate.uuid, cleared: gate.uuid });
+            world.entities.set('other ship', other);
+            place(ship, new Position(gate.position.x + 300, gate.position.y));
+            const { requests } = press(world);
+            expect(requests.map(r => [r.kind, r.online]))
+                .toEqual([['hypergate', true]]);
+        }, 30_000);
+
+    it('denies a refusing port on the selecting press, far out (GUESS)',
+        async () => {
+            const { world, ship } = await makeHarness();
+            const coldharbour = stellars(world).find(p =>
+                p.uuid === `planet ${SYNTHETIC.planets.coldharbour}`)!;
+            ship.components.set(LegalRecordsComponent,
+                new Map([[SYSTEM, -1]]));
+            place(ship, new Position(coldharbour.position.x,
+                coldharbour.position.y + 600));
+            const { blocked, requests } = press(world);
+            expect(target(ship).target).toBe(coldharbour.uuid);
+            expect(requests).toEqual([]);
+            expect(blocked.map(b => [b.reason, b.gateKind]))
+                .toEqual([['denied', undefined]]);
+        }, 30_000);
+
+    it('picks the request line\'s form by a salted hash', () => {
+        const forms = new Set<number>();
+        for (let now = 0; now < 2000; now += 16) {
+            const form = landingRequestForm('nova:130', SHIP_UUID, now);
+            expect(form).toBe(landingRequestForm('nova:130', SHIP_UUID, now));
+            expect(form).toBeGreaterThanOrEqual(0);
+            expect(form).toBeLessThan(LANDING_REQUEST_FORMS);
+            forms.add(form);
+        }
+        expect(forms.size).toBe(LANDING_REQUEST_FORMS);
+    });
+
+    it('words the request lines as STR# 2002 #74-80', () => {
+        expect(landingRequestMessage('hypergate', 1, 'Kit Gate',
+            'w29-gate-300')).toBe('Hypergate is energized, w29-gate-300. '
+            + 'Begin initial approach.');
+        expect(landingRequestMessage('hypergate', 0, 'Kit Gate', 'Lancer'))
+            .toBe('Hypergate is energized. Begin initial approach.');
+        expect(landingRequestMessage('hypergate', 0, 'Kit Gate', 'Lancer',
+            true)).toBe('Hypergate is online. Begin initial approach.');
+        expect(landingRequestMessage('planet', 0, 'Kit Request Port',
+            'Lancer')).toBe('Kit Request Port traffic control reads you. '
+            + 'Begin initial approach.');
+        expect(landingRequestMessage('planet', 3, 'Kit Map Picky Port',
+            'Lancer')).toBe('Landing request received, Lancer. Begin '
+            + 'initial approach.');
+        expect(landingRequestMessage('station', 3, 'Kit Request Station',
+            'w29-req-station')).toBe('Docking request received, '
+            + 'w29-req-station. Begin initial approach.');
+        expect(landingRequestMessage('station', 1, 'Kit Station', 'Lancer'))
+            .toBe('Kit Station dockmaster reads you, Lancer. Begin initial '
+                + 'approach.');
+        // No ship name: the nameless form.
+        expect(landingRequestMessage('station', 3, 'Kit Station', ''))
+            .toBe('Docking request received. Begin initial approach.');
     });
 });

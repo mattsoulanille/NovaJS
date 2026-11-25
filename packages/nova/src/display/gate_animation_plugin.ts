@@ -10,7 +10,7 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import {
     GATE_EMERGENCE_DISTANCE, PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
-    stellarClearanceFor, StellarBribesComponent,
+    holdsGateClearance, stellarClearanceFor, StellarBribesComponent,
 } from '../nova_plugin/travel/index.js';
 import { Optional } from 'nova_ecs/optional';
 import { SimulationGameDataResource, SystemIdResource } from '../nova_plugin/core/index.js';
@@ -44,8 +44,13 @@ import { TargetShipBeepSystem } from "./ui_sound_triggers_plugin.js";
  *   vanishes, as NovaJS always did: MEASURED at 10 fps (reference
  *   "Wave-24 leftovers, wave 25": after Done with no pick the frames shrink
  *   inward for about 0.4-0.6 s, then the gate is gone).
- * - SELECTED: the opening sequence plays FORWARD; on reaching the last two
- *   frames it ALTERNATES between them (the "working" flicker).
+ * - CLEARED: the opening sequence plays FORWARD; on reaching the last two
+ *   frames it ALTERNATES between them (the "working" flicker). A player
+ *   opens the gate only once traffic control has CLEARED it there
+ *   (PlanetTarget `cleared`, set by the `l` inside the entry window):
+ *   selecting the gate from farther out only REQUESTS, and the gate stays
+ *   a closed idle sprite (MEASURED: reference "Hypergate `l` range and the
+ *   request lines, wave 29", "only the clearance OPENS the gate").
  * - DESELECTED: the sequence plays BACKWARDS from wherever it is, back to
  *   closed. Mid-animation reversals continue from the current frame.
  * - ARRIVAL: the gate also opens when a ship is about to arrive through it.
@@ -240,7 +245,9 @@ const ShipArrivedAtGateSystem = new System({
 /**
  * A ship's landing selection plus everything the clearance rule reads. A
  * PLAYER (the only kind of ship that carries a legal record) opens a gate
- * only if the gate would actually let it through — the same
+ * only once it holds the gate's clearance (holdsGateClearance: its `l`
+ * inside the entry window was answered with #91-93) and only if the gate
+ * would still let it through — the same
  * stellarClearanceFor verdict the landing gate, radar blip and comm dialog
  * quote (ränk 147 unlocks the stock network) — so a pilot without access
  * sees a gate that ignores them. NPC selections open it as before.
@@ -280,6 +287,11 @@ export const GateAnimationSystem = new System({
         for (const [target, records, shipData, outfits, bribes, ranks,
             missions] of runQuery(ShipTargetQuery)) {
             if (target.target !== uuid) {
+                continue;
+            }
+            // A player that has only requested (selected from outside the
+            // entry window) leaves the gate closed.
+            if (records && !holdsGateClearance(target)) {
                 continue;
             }
             // Bribe expiries are sim-clock stamps: judge them against the

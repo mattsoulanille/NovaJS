@@ -19,8 +19,8 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
-import { LandingBlockedEvent, LandingClearedEvent } from "../nova_plugin/travel/index.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
+import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
 import {
@@ -236,6 +236,25 @@ const ShowLandingClearedMessage = new System({
         const form = Math.floor(Math.random() * HYPERGATE_CLEARED_FORMS);
         statusLine.setMessage(hypergateClearedMessage(form,
             playerShipName(names, shipData?.name)), time);
+    },
+});
+
+// The `l` that selects a stellar from outside its entry window: traffic
+// control acknowledges the request ("Hypergate is energized, <ship>. Begin
+// initial approach." etc., status_bar_content.ts landingRequestMessage;
+// reference "Hypergate `l` range and the request lines, wave 29"). The
+// form comes from the sim's salted hash (LandingRequestEvent `form`), so
+// it is the same on every peer. No beep: nothing was refused.
+const ShowLandingRequestMessage = new System({
+    name: 'ShowLandingRequestMessage',
+    events: [LandingRequestEvent],
+    args: [LandingRequestEvent, StatusLineResource, TimeResource,
+        PlayerShipSelector, Optional(PlayerNamesComponent),
+        Optional(ShipDataComponent)] as const,
+    step({ kind, form, stellarName, online }, statusLine, { time }, _player,
+        names, shipData) {
+        statusLine.setMessage(landingRequestMessage(kind, form, stellarName,
+            playerShipName(names, shipData?.name), online), time);
     },
 });
 
@@ -552,6 +571,7 @@ export const StatusMessagePlugin: Plugin = {
         world.addSystem(DrawStatusMessage);
         world.addSystem(ShowLandingBlockedMessage);
         world.addSystem(ShowLandingClearedMessage);
+        world.addSystem(ShowLandingRequestMessage);
         world.addSystem(ShowBoardingBlockedMessage);
         world.addSystem(ShowBoardingRepelledMessage);
         world.addSystem(ShowPlunderSelfDestructMessage);
@@ -570,6 +590,7 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(DrawStatusMessage);
         world.removeSystem(ShowLandingBlockedMessage);
         world.removeSystem(ShowLandingClearedMessage);
+        world.removeSystem(ShowLandingRequestMessage);
         world.removeSystem(ShowBoardingBlockedMessage);
         world.removeSystem(ShowBoardingRepelledMessage);
         world.removeSystem(ShowPlunderSelfDestructMessage);

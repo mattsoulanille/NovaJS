@@ -278,9 +278,10 @@ describe('GateAnimationSystem triggers', () => {
         });
 
         // A player (has a legal record) without the rank: the gate ignores
-        // their selection.
+        // their selection (even a stale clearance).
         const player = new Entity('player');
-        player.components.set(PlanetTargetComponent, { target: GATE_UUID });
+        player.components.set(PlanetTargetComponent,
+            { target: GATE_UUID, cleared: GATE_UUID });
         player.components.set(LegalRecordsComponent, new Map());
         world.entities.set('player uuid', player);
         for (let i = 0; i < 5; i++) {
@@ -304,6 +305,35 @@ describe('GateAnimationSystem triggers', () => {
             step();
         }
         expect(gateState().mode).not.toBe('closed');
+    });
+
+    it('stays closed for a PLAYER that has only requested the gate, and '
+        + 'opens once it holds the clearance (reference "Hypergate `l` '
+        + 'range and the request lines, wave 29")', () => {
+        const player = new Entity('player');
+        player.components.set(PlanetTargetComponent, { target: GATE_UUID });
+        player.components.set(LegalRecordsComponent, new Map());
+        world.entities.set('player uuid', player);
+        for (let i = 0; i < 5; i++) {
+            step();
+        }
+        expect(gateState().mode).toBe('closed');
+        expect(sprite.pixiSprite.visible).toBeFalse();
+
+        // A clearance held at ANOTHER stellar does not count.
+        player.components.set(PlanetTargetComponent,
+            { target: GATE_UUID, cleared: 'planet nova:128' });
+        for (let i = 0; i < 5; i++) {
+            step();
+        }
+        expect(gateState().mode).toBe('closed');
+
+        player.components.set(PlanetTargetComponent,
+            { target: GATE_UUID, cleared: GATE_UUID });
+        step();
+        step();
+        expect(gateState().mode).toBe('opening');
+        expect(sprite.pixiSprite.visible).toBeTrue();
     });
 
     it('opens on an announced arrival (browser anticipation event)', () => {

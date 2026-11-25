@@ -723,6 +723,24 @@ export const STATE_HASH_INTERVAL = 60;
 //    already a polygon on the wire). The derived wire schema fingerprint
 //    changes (a94a3bd8ec90e8fc -> 4a0fcd76ceddd9b4), and the join gate
 //    keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-29 hypergate `l` range and request
+//    lines (reference "Hypergate `l` range and the request lines, wave
+//    29"). PlanetTargetComponent gains one OPTIONAL field, `cleared`
+//    (travel/planet_plugin.ts PlanetTargetType: the uuid of the hypergate
+//    whose clearance the ship holds), present only after a gate cleared
+//    the ship, so ships that never use a gate keep their components and
+//    hash inputs unchanged. One new serializer event, LandingRequestEvent
+//    (`{kind, stellarName, form, online?}`, host -> display only, targeted
+//    at the player like LandingClearedEvent). No input kind or message kind
+//    changes. Sim-rule changes alongside: `l` with nothing selected skips
+//    hypergates 500 px or more away (a circle); the selecting press clears
+//    a gate only inside its entry window and otherwise acknowledges the
+//    request, a refusing port or station denies on that press, and a gate
+//    selected without a clearance is cleared by the next `l` inside the
+//    window before one enters it. The derived wire schema fingerprint
+//    changes (4a0fcd76ceddd9b4 -> b3344196d35e2ebd), and the join gate
+//    keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

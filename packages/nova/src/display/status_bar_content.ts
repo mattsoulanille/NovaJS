@@ -3,7 +3,9 @@
  * ECS so the rules are unit-testable. The rendering systems resolve components
  * and game data, then hand plain values to these helpers.
  */
-import type { GateKind, LandingBlockReason } from '../nova_plugin/travel/index.js';
+import type {
+    GateKind, LandingBlockReason, LandingRequestKind,
+} from '../nova_plugin/travel/index.js';
 import type { PlayerHailMessage } from '../nova_plugin/encounters/index.js';
 import type { MissionCargoName } from '../nova_plugin/missions/index.js';
 
@@ -428,6 +430,52 @@ export function hypergateClearedMessage(form: number,
     return form === 0
         ? `Cleared for hypergate entry, ${shipName}.`
         : `${shipName}, you're cleared for hypergate entry.`;
+}
+
+/** STR# 2002 one-based 80, the tail of every landing request line. */
+export const BEGIN_INITIAL_APPROACH = 'Begin initial approach.';
+
+/**
+ * Traffic control's answer to the `l` that selects a stellar from outside
+ * its entry window: a REQUEST acknowledged, nothing cleared (reference
+ * "Hypergate `l` range and the request lines, wave 29"; the wave-28 runs
+ * at Kit Mixed Open / Kit Map Picky; U9 wave 1). The stock pieces, STR#
+ * 2002 one-based:
+ *
+ *   74 "Hypergate is energized"     75 "Hypergate is online"
+ *   76 "<station> dockmaster reads you"   77 "Docking request received"
+ *   78 "<port> traffic control reads you" 79 "Landing request received"
+ *   80 "Begin initial approach."
+ *
+ * with ", <ship>" after the first piece in some draws ("Hypergate is
+ * energized, w29-gate-300. Begin initial approach.", "Docking request
+ * received, w29-req-station. Begin initial approach.", "Kit Request Port
+ * traffic control reads you. Begin initial approach."). `form` (0..3,
+ * LandingRequestEvent's salted hash): bit 0 adds the ship's name, bit 1
+ * picks a port's or station's second phrase (#77 / #79). A gate's phrase
+ * is #75 when `online` (the gate already open: GUESS), else #74. With no
+ * ship name (or a blank one) the line goes without it.
+ */
+export function landingRequestMessage(kind: LandingRequestKind,
+    form: number, stellarName: string, shipName?: string,
+    online?: boolean): string {
+    let phrase: string;
+    const second = (form & 2) !== 0;
+    switch (kind) {
+        case 'hypergate':
+            phrase = online ? 'Hypergate is online' : 'Hypergate is energized';
+            break;
+        case 'station':
+            phrase = second ? 'Docking request received'
+                : `${stellarName} dockmaster reads you`;
+            break;
+        case 'planet':
+            phrase = second ? 'Landing request received'
+                : `${stellarName} traffic control reads you`;
+            break;
+    }
+    const named = (form & 1) !== 0 && shipName ? `, ${shipName}` : '';
+    return `${phrase}${named}. ${BEGIN_INITIAL_APPROACH}`;
 }
 
 /**

@@ -39,7 +39,8 @@ import { ActiveRanks, ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowLanding } from '../ncb/index.js';
 import { Missions, MissionsComponent } from '../player/index.js';
 import {
-    contributeBits, isMissionDestination, planetClearance, StellarClearance,
+    avalanche, contributeBits, hashString, isMissionDestination,
+    planetClearance, StellarClearance,
 } from '../reputation/index.js';
 import { displayName } from '../core/index.js';
 
@@ -67,13 +68,59 @@ export const PlanetDataProvider = ProvideFromCache({
     before: [ExplodingFinishedSystem],
 });
 
-export const PlanetTargetComponent = new Component<Target>('PlanetTargetComponent');
+/**
+ * A ship's selected stellar (`target`, the stellar entity's uuid) and,
+ * for a hypergate, whether traffic control has CLEARED the ship there:
+ * `cleared` holds the uuid of the gate whose clearance (STR# 2002 #91-93)
+ * the ship holds, and counts only while it equals `target` (see
+ * {@link holdsGateClearance}), so any write that changes the selection
+ * drops the clearance with it. The clearance is what OPENS the gate
+ * (display/gate_animation_plugin.ts) and what lets the next `l` inside
+ * the entry zone enter it (the gate map); a request line outside the zone
+ * leaves the gate closed (reference "Hypergate `l` range and the request
+ * lines, wave 29": only the clearance opens the gate).
+ *
+ * OPTIONAL and absent until a gate clears the ship, so ships that never
+ * use a gate keep their components and hash inputs unchanged. Synced sim
+ * state (delta-registered below), written only by AttemptLandingSystem on
+ * the tick every peer applies the `l` press.
+ */
+export const PlanetTargetType = t.intersection([
+    Target,
+    t.partial({ cleared: t.string }),
+]);
+export type PlanetTarget = t.TypeOf<typeof PlanetTargetType>;
+
+export const PlanetTargetComponent =
+    new Component<PlanetTarget>('PlanetTargetComponent');
+
+/** Whether the ship holds a hypergate clearance at its selected stellar. */
+export function holdsGateClearance(planetTarget: PlanetTarget | undefined):
+    boolean {
+    return planetTarget?.target !== undefined
+        && planetTarget.cleared === planetTarget.target;
+}
+
+/**
+ * Selects `target` (or nothing) on a PlanetTargetComponent, dropping a
+ * gate clearance held at a different stellar. Every in-sim writer of the
+ * selection goes through this, so a stale `cleared` never lingers in the
+ * synced (hashed) state.
+ */
+export function selectPlanetTarget(planetTarget: PlanetTarget,
+    target: string | undefined) {
+    planetTarget.target = target;
+    if (planetTarget.cleared !== undefined
+        && planetTarget.cleared !== target) {
+        delete planetTarget.cleared;
+    }
+}
 
 const PlanetTargetProvider = Provide({
     name: "PlanetTargetProvider",
     provided: PlanetTargetComponent,
     args: [ShipComponent] as const,
-    factory: () => ({ target: undefined }),
+    factory: (): PlanetTarget => ({ target: undefined }),
     // #237 pin: the pair no longer shares state (the providers declare
     // their writes with SetComponent now), but the edge carries the
     // providers' transitive order — PlanetPlugin registers after core's
@@ -130,19 +177,98 @@ export const LandingBlockedEvent =
 
 /**
  * Emitted (targeted at the player's ship) when traffic control CLEARS the
- * player's request: today only a working hypergate's first `l` (the press
- * that targets it), answered by one of the stock clearance lines (STR# 2002
- * one-based 91-93, "You are cleared for hypergate entry." etc.; measured:
- * reference "Gate map, wave 27"). The same press at a gate that refuses
- * the player emits LandingBlockedEvent 'denied' ("Hypergate usage denied.",
- * wave 23's first `l` at HG-V01). Consumed display-side by the status line
- * (status_message_plugin.ts), which picks the form. Never mutates the
- * simulation.
+ * player's request: today only a working hypergate, on the first `l` that
+ * finds the ship inside the gate's entry window (the press that selects
+ * the gate there, or a later one after a request from farther out),
+ * answered by one of the stock clearance lines (STR# 2002 one-based 91-93,
+ * "You are cleared for hypergate entry." etc.; measured: reference "Gate
+ * map, wave 27", "Hypergate `l` range and the request lines, wave 29").
+ * The emitter also records the clearance (PlanetTarget `cleared`), which
+ * opens the gate. A gate that refuses the player emits LandingBlockedEvent
+ * 'denied' ("Hypergate usage denied.", wave 23's first `l` at HG-V01)
+ * instead. Consumed display-side by the status line
+ * (status_message_plugin.ts), which picks the form. The event itself
+ * carries no state.
  */
 export const LandingClearedEventType = t.type({ gateKind: GateKindType });
 export type LandingCleared = t.TypeOf<typeof LandingClearedEventType>;
 export const LandingClearedEvent =
     new EcsEvent<LandingCleared>('LandingClearedEvent');
+
+/** Which kind of stellar a landing request line names. */
+export const LandingRequestKindType = t.keyof({
+    hypergate: null, station: null, planet: null,
+});
+export type LandingRequestKind = t.TypeOf<typeof LandingRequestKindType>;
+export const LandingRequestEventType = t.intersection([
+    t.type({
+        kind: LandingRequestKindType,
+        /** The stellar's display name (a port's or station's own form). */
+        stellarName: t.string,
+        /** Which form of the line, 0..3 ({@link LANDING_REQUEST_FORMS}):
+         * bit 0 adds the ship's name, bit 1 picks a port's or station's
+         * second phrase. A salted hash, never Math.random. */
+        form: t.number,
+    }),
+    t.partial({
+        /** A hypergate that is already open (another ship holds its
+         * clearance): "Hypergate is online" (#75) for "is energized"
+         * (#74). */
+        online: t.boolean,
+    }),
+]);
+export type LandingRequest = t.TypeOf<typeof LandingRequestEventType>;
+/**
+ * Emitted (targeted at the player's ship) when the press that SELECTS a
+ * stellar finds the ship outside its entry window and the stellar would
+ * take it: traffic control acknowledges the request, one of STR# 2002
+ * one-based 74-79 + 80 "Begin initial approach." ("Hypergate is
+ * energized, <ship>. Begin initial approach.", "<port> traffic control
+ * reads you. Begin initial approach.", "Docking request received,
+ * <ship>. Begin initial approach.": reference "Hypergate `l` range and
+ * the request lines, wave 29"). Nothing opens and nothing is cleared:
+ * later presses outside the window give the too-far / too-fast lines,
+ * and the request does not lapse. Consumed display-side by the status
+ * line (status_message_plugin.ts). Never mutates the simulation.
+ */
+export const LandingRequestEvent =
+    new EcsEvent<LandingRequest>('LandingRequestEvent');
+
+/** How many forms a landing request line has (see LandingRequestEvent's
+ * `form`). */
+export const LANDING_REQUEST_FORMS = 4;
+
+/**
+ * The form of the request line for one press: a salted hash of the
+ * stellar, the pilot and the sim time, so every peer and every replay
+ * prints the same line. GUESS on the odds (uniform over the four forms):
+ * the original adds the ship's name in some draws and not others (gates 5
+ * of 8, the station yes, the port no in wave 29; a port both ways in wave
+ * 28), and a port answered both "<port> traffic control reads you" and
+ * "Landing request received", so the pick looks random; nothing measured
+ * its odds.
+ */
+export function landingRequestForm(stellarId: string, pilotUuid: string,
+    now: number): number {
+    return avalanche(hashString(
+        `landingRequest:${stellarId}:${pilotUuid}:${now}`))
+        % LANDING_REQUEST_FORMS;
+}
+
+/**
+ * How far out (px, centre to centre, EUCLIDEAN) `l` with nothing selected
+ * picks a hypergate. Measured at rest (reference "Hypergate `l` range and
+ * the request lines, wave 29"): selected at 490 px on the axis and at the
+ * 467 px diagonal (330, 330); nothing at 500 px on the axis nor at the
+ * 594 px diagonal (420, 420), whose larger coordinate is inside the 475 px
+ * the axis selected, so the range is a CIRCLE, not a square like the
+ * landing zone. GUESS on the exact radius inside the 490-500 bracket: a
+ * gate is skipped at `distance >= 500`. Ports, stations and wormholes are
+ * picked from any distance (a port and a station from 1,000 px, a port
+ * from beyond the radar's edge: same section, and "R7 planet bribe
+ * withdrawal, wave 29").
+ */
+export const HYPERGATE_SELECT_RANGE = 500;
 
 /**
  * Per-player temporary landing clearance bought with a bribe: the stellar's
@@ -203,6 +329,7 @@ export const STELLAR_BRIBE_MS = 120_000;
 
 registerSimulationBridgeEvent({ event: LandingBlockedEvent });
 registerSimulationBridgeEvent({ event: LandingClearedEvent });
+registerSimulationBridgeEvent({ event: LandingRequestEvent });
 
 /**
  * The landing speed gate: a ship lands only below 20 px/s (speed², strict).
@@ -416,10 +543,13 @@ export function stellarClearanceWith(opts: {
 const LandablePlanetsQuery = new Query(
     [UUID, MovementStateComponent, PlanetComponent,
         Optional(PlanetDataComponent)] as const);
+/** Every ship's stellar selection, for "is this gate already open". */
+const GateClearancesQuery = new Query(
+    [UUID, PlanetTargetComponent] as const);
 const AttemptLandingSystem = new System({
     name: 'AttemptLandingSystem',
     events: [ShipControlEvent] as const,
-    args: [LandablePlanetsQuery, UUID,
+    args: [LandablePlanetsQuery, GateClearancesQuery, UUID,
         MovementStateComponent, PlanetTargetComponent,
         ShipControlStateComponent, Emit,
         Optional(LegalRecordsComponent), Optional(ShipDataComponent),
@@ -427,9 +557,9 @@ const AttemptLandingSystem = new System({
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
         Optional(TimeResource), Optional(SystemIdResource)] as const,
-    step(planets, playerUuid, { position, velocity }, planetTarget, controls,
-        emit, records, shipData, outfits, bribes, ranks, missions, gameData,
-        govts, time, systemId) {
+    step(planets, clearances, playerUuid, { position, velocity }, planetTarget,
+        controls, emit, records, shipData, outfits, bribes, ranks, missions,
+        gameData, govts, time, systemId) {
         if (controls.get('land') !== 'start') {
             return;
         }
@@ -441,6 +571,14 @@ const AttemptLandingSystem = new System({
                 bribes, ranks, missions,
                 planetId: id, systemId, now: time?.time ?? 0,
             }).cleared;
+
+        // Traffic control clears the ship at a hypergate: one of the #91-93
+        // lines, and the gate opens (PlanetTarget `cleared`).
+        const clearGate = (uuid: string) => {
+            planetTarget.cleared = uuid;
+            emit(LandingClearedEvent, { gateKind: 'hypergate' },
+                [playerUuid]);
+        };
 
         // The landing window, then is-it-a-port, then clearance, against one
         // stellar: land, or emit the original's refusal.
@@ -503,6 +641,15 @@ const AttemptLandingSystem = new System({
                     stellarName: displayName(planetData.name),
                     ...gateKind,
                 }, [playerUuid]);
+            } else if (planetData?.gate?.kind === 'hypergate'
+                && !holdsGateClearance(planetTarget)) {
+                // A hypergate the ship has only REQUESTED (or selected by
+                // a click or a number key): the press inside the entry
+                // window is the clearance, which opens the gate; the next
+                // `l` enters it (reference "Hypergate `l` range and the
+                // request lines, wave 29": only the clearance opens the
+                // gate, and a cleared gate's second `l` opens the map).
+                clearGate(uuid);
             } else {
                 emit(LandEvent, { id, uuid }, [playerUuid]);
             }
@@ -529,9 +676,11 @@ const AttemptLandingSystem = new System({
         // No stellar selected: target the nearest one that is a PORT at
         // all (landable.ts — Jupiter, scenery worlds and dead gates are
         // skipped, so 'l' never tries to land on Jupiter; a port may still
-        // deny landing, which is the clearance gate above). Unknown planet
-        // data (provider not yet run) counts as landable, as elsewhere.
-        // Ties break on the lexicographically smaller uuid so every peer
+        // deny landing, which is the clearance gate above). A hypergate
+        // counts only inside HYPERGATE_SELECT_RANGE (a circle, wave 29), so
+        // from farther out `l` picks a port or nothing at all. Unknown
+        // planet data (provider not yet run) counts as landable, as
+        // elsewhere. Ties break on the lexicographically smaller uuid so every peer
         // picks the same stellar regardless of entity-map iteration order
         // (see ChooseTargetSystem).
         let closest: [string, Position, string, PlanetData | undefined]
@@ -544,6 +693,12 @@ const AttemptLandingSystem = new System({
             }
             const distanceSquared =
                 planetPosition.subtract(position).lengthSquared;
+            // A hypergate is picked only inside a CIRCLE of
+            // HYPERGATE_SELECT_RANGE (wave 29); ports at any distance.
+            if (data?.gate?.kind === 'hypergate' && distanceSquared
+                >= HYPERGATE_SELECT_RANGE * HYPERGATE_SELECT_RANGE) {
+                continue;
+            }
             if (distanceSquared < minSquared
                 || (distanceSquared === minSquared
                     && closest !== undefined && uuid < closest[0])) {
@@ -551,44 +706,78 @@ const AttemptLandingSystem = new System({
                 minSquared = distanceSquared;
             }
         }
-        planetTarget.target = closest?.[0];
+        selectPlanetTarget(planetTarget, closest?.[0]);
+        if (!closest) {
+            return;
+        }
+        const [closestUuid, closestPosition, closestId, closestData] = closest;
         // A WORMHOLE has no clearance step: the first `l` both targets it
         // and answers at once (too far / too fast / through it), where a
         // planet's or a hypergate's first `l` only selects (measured:
         // reference "Gate approach lines, wave 25", the stock wormhole with
         // Nav System Off).
-        if (closest && closest[3]?.gate?.kind === 'wormhole') {
+        if (closestData?.gate?.kind === 'wormhole') {
             attempt(...closest);
+            return;
         }
-        // A HYPERGATE's first `l` is its clearance step: traffic control
-        // answers at once, wherever the ship is (measured: reference "Gate
-        // map, wave 27", "You are cleared for hypergate entry." on the gate
-        // at rest; wave 23, "Hypergate usage denied." at the stock HG-V01,
-        // MinStatus 32767). The window applies from the second `l`, as
-        // before ("Gate approach lines, wave 25": the too-far / too-fast
-        // lines came after the clearance line). MATCHES "Hypergate
-        // clearance lines, wave 28" (the cleared line, or "Hypergate usage
-        // denied." from the very first `l`). Two small differences that
-        // section found are deliberately NOT changed yet: far out (over
-        // about 1,000 px, moving fast) the original's `l` selected nothing,
-        // where this targets the nearest gate from any distance (waiting
-        // on a selection-range measurement at rest), and the request lines
-        // (STR# 2002 #74 / #75 + #80 "Hypergate is online. Begin initial
-        // approach." for a gate, #77-80 for a port) are not printed.
-        const gateData = closest?.[3];
-        if (closest && gateData?.gate?.kind === 'hypergate') {
-            if (cleared(closest[2], gateData)) {
-                emit(LandingClearedEvent, { gateKind: 'hypergate' },
-                    [playerUuid]);
-            } else {
-                emit(LandingBlockedEvent, {
-                    reason: 'denied',
-                    isStation: gateData.flags.isStation,
-                    stellarName: displayName(gateData.name),
-                    gateKind: 'hypergate',
-                }, [playerUuid]);
+        if (!closestData) {
+            // Unknown data (the provider has not run): select only.
+            return;
+        }
+        // The press that SELECTS a stellar answers at once (reference
+        // "Hypergate `l` range and the request lines, wave 29", finding 2;
+        // "Hypergate clearance lines, wave 28"; "Gate map, wave 27"):
+        //  - a stellar that refuses the player says so ("Hypergate usage
+        //    denied." from the very first `l`, wave 28; a port's or a
+        //    station's denial the same way: GUESS, measured at gates only,
+        //    though wave 28's Kit Map Picky row expected one far out);
+        //  - inside the stellar's entry window (distance only: a coasting
+        //    ship 250 px off was cleared, wave 28) a HYPERGATE clears the
+        //    ship (#91-93) and opens; a planet or station prints nothing
+        //    yet (the original's "you're cleared to land. Commence final
+        //    approach." is not modelled), its next `l` lands;
+        //  - outside it, traffic control acknowledges the REQUEST ("...
+        //    Begin initial approach.", LandingRequestEvent) and nothing
+        //    opens: later presses outside the window give the too-far /
+        //    too-fast lines (`attempt`), and entering the window and
+        //    pressing `l` clears the gate (`attempt`'s clearance step).
+        const isStation = closestData.flags.isStation;
+        const isHypergate = closestData.gate?.kind === 'hypergate';
+        if (!cleared(closestId, closestData)) {
+            emit(LandingBlockedEvent, {
+                reason: 'denied', isStation,
+                stellarName: displayName(closestData.name),
+                ...(isHypergate ? { gateKind: 'hypergate' as const } : {}),
+            }, [playerUuid]);
+            return;
+        }
+        const offset = closestPosition.subtract(position);
+        if (inLandingZone(offset.x, offset.y,
+            stellarLandingRange(closestData))) {
+            if (isHypergate) {
+                clearGate(closestUuid);
+            }
+            return;
+        }
+        // GUESS (the section's guess, one #75 seen): "Hypergate is online"
+        // when the gate is already open, i.e. another ship holds its
+        // clearance; "is energized" otherwise.
+        let online = false;
+        if (isHypergate) {
+            for (const [shipUuid, otherTarget] of clearances) {
+                if (shipUuid !== playerUuid && otherTarget.target === closestUuid
+                    && holdsGateClearance(otherTarget)) {
+                    online = true;
+                    break;
+                }
             }
         }
+        emit(LandingRequestEvent, {
+            kind: isHypergate ? 'hypergate' : isStation ? 'station' : 'planet',
+            stellarName: displayName(closestData.name),
+            form: landingRequestForm(closestId, playerUuid, time?.time ?? 0),
+            ...(online ? { online } : {}),
+        }, [playerUuid]);
     }
 });
 
@@ -612,14 +801,14 @@ export function applySetPlanetTarget(world: World, peerId: string | undefined,
         return;
     }
     if (targetUuid === null) {
-        planetTarget.target = undefined;
+        selectPlanetTarget(planetTarget, undefined);
         return;
     }
     const targetEntity = world.entities.get(targetUuid);
     if (!targetEntity || !targetEntity.components.has(PlanetComponent)) {
         return;
     }
-    planetTarget.target = targetUuid;
+    selectPlanetTarget(planetTarget, targetUuid);
 }
 
 // Stellar-body hotkeys (controls_nits.txt): number keys 1..9 select the
@@ -645,7 +834,7 @@ export const SelectStellarSystem = new System({
     step(controls, planetTarget, systemId, gameData, entities) {
         // Tilde/backquote clears the selected stellar body.
         if (controls.get('resetNav') === 'start') {
-            planetTarget.target = undefined;
+            selectPlanetTarget(planetTarget, undefined);
             return;
         }
         for (let i = 1; i <= NUM_STELLAR_HOTKEYS; i++) {
@@ -671,7 +860,7 @@ export const SelectStellarSystem = new System({
             }
             const uuid = `planet ${planetId}`;
             if (entities.has(uuid)) {
-                planetTarget.target = uuid;
+                selectPlanetTarget(planetTarget, uuid);
             }
             return;
         }
@@ -737,11 +926,13 @@ export const PlanetPlugin: Plugin = {
             LandingBlockedEvent, LandingBlockedEventType);
         world.resources.get(SerializerResource)?.addEvent(
             LandingClearedEvent, LandingClearedEventType);
+        world.resources.get(SerializerResource)?.addEvent(
+            LandingRequestEvent, LandingRequestEventType);
         deltaMaker.addComponent(PlanetComponent, {
             componentType: PlanetType,
         });
         deltaMaker.addComponent(PlanetTargetComponent, {
-            componentType: Target,
+            componentType: PlanetTargetType,
         });
         deltaMaker.addComponent(StellarBribesComponent, {
             componentType: StellarBribesType,
