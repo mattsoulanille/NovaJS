@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w21-far-b",
+  "edits": {
+    "ship": 703,
+    "stellar": 1444,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1154": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w21-far-b",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

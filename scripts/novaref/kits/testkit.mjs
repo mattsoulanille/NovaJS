@@ -292,8 +292,142 @@ export default {
         ...wave18Resources(),
         ...wave19Resources(),
         ...wave20Resources(),
+        ...wave21Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-21 experiments (docs/reference_experiments.md, "... wave 21").
+ * Nothing retired. sÿst 1148-1159, spöb 1439-1450, shïp 497, gövt 306, mïsn
+ * 930-940 (bits 9227-9232; offer text dësc 4802-4812), bar dësc 11311 /
+ * 11314. Map row y = -1260. The next free ids: sÿst 1160+, spöb 1451+,
+ * shïp 498+, düde 445+, mïsn 941+ (the stock gap ends at 959), gövt 305
+ * and below, flët 307+, wëap 291+, oütf 466+, bits 9233+.
+ *
+ *  #324 What the BBS, the venues and the map show after an accept in the
+ *      same visit. sÿst 1148 Kit Live Range (gövt 363), port spöb 1439 Kit
+ *      Live Port (bar, trade center), linked to 1152 Kit Live Next (no
+ *      stellar, for a jump without a landing). BBS jobs at 1439 (DispWeight
+ *      30000 so they list first): 930 Kit L job A (!b9227, OnAccept "b9227
+ *      b9228", destination spöb 1440 in sÿst 1149), 931 Kit L job B
+ *      (!b9227, OnAccept b9227: withdrawn by A's accept if live), 932 Kit L
+ *      job C (b9228: made available by A's accept if live); 933 a trade
+ *      center offer (AvailLoc 4) and 934 a bar offer (AvailLoc 1), both
+ *      b9228. sÿst 1149 Kit Live Shown (Visibility b9228, port 1440) and
+ *      1150 Kit Live Hidden (Visibility !b9228, port 1441).
+ *      A record change in the visit: gövt 306 Kit Live Owner owns sÿst 1151
+ *      Kit Live Record (port spöb 1442); BBS jobs there: 935 Kit L comp
+ *      abort (Flags 0x0040, CompGovt 306, CompReward 100, !b9229, OnAccept
+ *      b9229: aborting it costs -500), 936 Kit L clean only (AvailRecord
+ *      50), 937 Kit L wanted only (AvailRecord -100), 938 Kit L abort D
+ *      (always offered, OnAccept "A935": an NCB abort of 935).
+ *  R19 Where the fleet comes in (wave-20 leftover): sÿst 1153 Kit Reinf Far
+ *      A (gövt 311, flët 305, ReinfTime 150, the AI 4 S50 guard düde 441)
+ *      and 1154 Kit Reinf Far B (the mobile AI 1 S50, düde 437), each with
+ *      its ONLY stellar, port spöb 1443 / 1444, at (6000, 0): far from the
+ *      system's centre. A departed victim: sÿst 1155 Kit Reinf Two (two
+ *      slow AI 1 S50 victims, düde 430, avgShips 2, ReinfTime 600) and 1156
+ *      Kit Reinf Leave One (one, avgShips 1), ports 1445 / 1446 at (0,0).
+ *  H1  ränk 0x0400 and a warship not yet fighting: sÿst 1157 Kit Rank Calm
+ *      (gövt 363, port spöb 1447 (0,0), marker 1448 (3500,0)), AI 4
+ *      warships of 363 (düde 426), avgShips 3; offer 939 (b9231): OnAccept
+ *      K200 and a Kit Raider (düde 602) on the far marker (ShipStart -2;
+ *      it appeared beside the port all the same).
+ *  Added during the wave: shïp 497 Kit Ring Lancer (the Kit Ring Crawler's
+ *      pointer sprite with the Kit Lancer's speed and Strength 100, to fly
+ *      to a far victim by heading); sÿst 1158 Kit Reinf Far M (no traffic,
+ *      port spöb 1449 at (3000, 0), first (6000, 0)) with offer 940 (b9232:
+ *      the AI 4 S50 guard on the port; it NEVER appeared, at either
+ *      distance); sÿst 1159 Kit Reinf Slow 300 (the slow AI 1 S50, ReinfTime
+ *      300, port spöb 1450).
+ *
+ * LESSONS: a port with trade tiers (PORT_FLAGS) also lists stock cargo jobs
+ * ("Delivery to Earth") on its BBS, first despite DispWeight 30000; a 0x43
+ * port has no Trade Center. Traffic in a system whose only stellar is 6,000
+ * px out does not gather at that stellar (the victims stayed thousands of
+ * px off), and the radar there reaches only about 1,600 px.
+ */
+function wave21Resources() {
+    const out = [];
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const Y = -1260;
+    const job = (id, name, bit, set) => misn(id, name, bit, { availLoc: 0, dispWeight: 30000, ...set });
+
+    // --- #324: the BBS, venues and map after an accept in the same visit.
+    const live = system(1148, "Kit Live Range", -520, Y, 363, [1439]);
+    live.set.links = links(1152);
+    const next = system(1152, "Kit Live Next", -560, Y, 363, []);
+    next.set.links = links(1148);
+    // PORT_FLAGS (trade tiers, outfitter, shipyard): a 0x43 port has no Trade Center button.
+    out.push(live, port(1439, "Kit Live Port", 0, 0, { flags: PORT_FLAGS }), next);
+    out.push({ type: "dësc", id: 10000 + 1439 - 128, text: "Kit Live Port bar (novaref test kit)." });
+    const shown = system(1149, "Kit Live Shown", -480, Y, 363, [1440]);
+    shown.set.visibility = "b9228";
+    const hidden = system(1150, "Kit Live Hidden", -440, Y, 363, [1441]);
+    hidden.set.visibility = "!b9228";
+    out.push(shown, port(1440, "Kit Live Shown Port"), hidden, port(1441, "Kit Live Hidden Port"));
+    const at = { availStel: 1439 };
+    out.push(...job(930, "Kit L job A", 9227, { ...at, availBits: "!b9227", onAccept: "b9227 b9228", travelStel: 1440, payVal: 1000 }));
+    out.push(...job(931, "Kit L job B", 9227, { ...at, availBits: "!b9227", onAccept: "b9227", dispWeight: 29999 }));
+    out.push(...job(932, "Kit L job C", 9228, { ...at, dispWeight: 29998 }));
+    out.push(...misn(933, "Kit L trade offer", 9228, { ...at, availLoc: 4 }));
+    out.push(...misn(934, "Kit L bar offer", 9228, { ...at, availLoc: 1 }));
+    // A record change in the visit.
+    out.push(govt(306, "Kit Live Owner", { classes: [306, -1, -1, -1], crimeTol: 30000 }));
+    out.push(system(1151, "Kit Live Record", -400, Y, 306, [1442]), port(1442, "Kit Live Record Port"));
+    out.push({ type: "dësc", id: 10000 + 1442 - 128, text: "Kit Live Record Port bar (novaref test kit)." });
+    const rec = { availStel: 1442 };
+    out.push(...job(935, "Kit L comp abort", 9229, { ...rec, availBits: "!b9229", onAccept: "b9229", flags: 0x0040, compGovt: 306, compReward: 100, canAbort: 1 }));
+    out.push(...job(936, "Kit L clean only", 9229, { ...rec, availBits: "", availRecord: 50, dispWeight: 29999 }));
+    out.push(...job(937, "Kit L wanted only", 9229, { ...rec, availBits: "", availRecord: -100, dispWeight: 29998 }));
+    out.push(...job(938, "Kit L abort D", 9229, { ...rec, availBits: "", onAccept: "A935", dispWeight: 29997 }));
+
+    // --- R19: where the fleet comes in; a victim that leaves.
+    const reinf = (id, name, x, spobId, dudeId, avgShips, reinfTime, portX) => {
+        const s = traffic(system(id, name, x, Y, 311, [spobId]), [[dudeId, 100]], avgShips);
+        s.set = { ...s.set, reinfFleet: 305, reinfTime, reinfInterval: 0 };
+        return [s, port(spobId, `${name} Port`, portX, 0)];
+    };
+    out.push(...reinf(1153, "Kit Reinf Far A", -360, 1443, 441, 1, 150, 6000));
+    out.push(...reinf(1154, "Kit Reinf Far B", -320, 1444, 437, 1, 150, 6000));
+    out.push(...reinf(1155, "Kit Reinf Two", -280, 1445, 430, 2, 600, 0));
+    out.push(...reinf(1156, "Kit Reinf Leave One", -240, 1446, 430, 1, 600, 0));
+    // Added during the wave (the slow AI 1 S50 never called at ReinfTime 600,
+    // though it stayed over a minute): the same victim at ReinfTime 300, sÿst
+    // 1159 Kit Reinf Slow 300, port spöb 1450.
+    out.push(...reinf(1159, "Kit Reinf Slow 300", -120, 1450, 430, 1, 300, 0));
+
+    // Added during the wave: shïp 497 Kit Ring Lancer, the player's hull for
+    // flying to a far victim: the Kit Ring Crawler's pointer sprite (rlëD 1955,
+    // heading readable with analysis/pointer.mjs; Turn 30 = 87.1 deg/s) with
+    // the Kit Lancer's speed and strength (inertialess, Speed 800, Strength 100).
+    out.push({ type: "shïp", id: 497, name: "Kit Ring Lancer", clone: "shïp:128", set: { ...shipBase, shortName: "Kit Ring Lancer", longName: "Kit Ring Lancer", commName: "Kit Ring Lancer", subtitle: "",
+        accel: 2000, speed: 800, turn: 30, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, crew: 10, flags: 0, flags2: 0x00C8 } },
+    { type: "shän", id: 497, name: "Kit Ring Lancer", clone: "shän:128", set: { "@0:i16": 1955, "@2:i16": 1956, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } });
+
+    // Added during the wave (traffic victims spawn far from a far port, and the
+    // radar here reaches only about 1,600 px): sÿst 1158 Kit Reinf Far M (gövt
+    // 311, flët 305, ReinfTime 150, NO traffic), port spöb 1449 at (3000, 0);
+    // offer 940 (b9232) puts the AI 4 S50 guard (düde 441) on the port
+    // (ShipStart -1), beside the player and 3,000 px from the system's centre.
+    // (First built at (6000, 0): the mission ship never appeared there, and the
+    // radar showed the arrow that points back to the centre.)
+    const farM = system(1158, "Kit Reinf Far M", -160, Y, 311, [1449]);
+    farM.set = { ...farM.set, reinfFleet: 305, reinfTime: 150, reinfInterval: 0 };
+    out.push(farM, port(1449, "Kit Reinf Far M Port", 3000, 0));
+    out.push(...misn(940, "Kit R19 victim on a far port", 9232, { availStel: 1449, shipCount: 1, shipDude: 441, shipGoal: -1, shipBehav: -1, shipStart: -1, onAccept: "!b9232" }));
+
+    // --- H1: ränk 0x0400 and a warship not yet fighting.
+    out.push(traffic(system(1157, "Kit Rank Calm", -200, Y, 363, [1447, 1448]), [[426, 100]], 3));
+    out.push(port(1447, "Kit Rank Calm Port"), spob(1448, "Kit Rank Calm Mark", 3500, 0, 264, { flags: 0x20, techLevel: 0, specialTech: [-1, -1, -1] }));
+    out.push(...misn(939, "Kit H rank and a far raider", 9231, { availStel: 1447, shipCount: 1, shipDude: 602, shipGoal: -1, shipBehav: -1, shipStart: -2, onAccept: "!b9231 K200" }));
+    return out;
+}
 
 /**
  * Wave-20 experiments (docs/reference_experiments.md, "... wave 20").

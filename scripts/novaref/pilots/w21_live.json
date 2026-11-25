@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w21-live",
+  "edits": {
+    "ship": 703,
+    "stellar": 1439,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1148": 2,
+      "1149": 2,
+      "1150": 2,
+      "1151": 2,
+      "1152": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w21-live"
+  }
+}
