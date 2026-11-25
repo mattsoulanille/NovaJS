@@ -2,7 +2,7 @@ import "jasmine";
 import { getDefaultMissionData } from "novadatainterface/mission_data";
 import { MockGameData } from "novadatainterface/mock_game_data";
 import { getDefaultPlanetData } from "novadatainterface/planet_data";
-import { getDefaultSystemData } from "novadatainterface/system_data";
+import { getDefaultSystemData, SystemData } from "novadatainterface/system_data";
 import { Entity } from "nova_ecs/entity";
 import * as PIXI from "pixi.js";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
@@ -12,7 +12,8 @@ import { ControlBitsComponent } from "../nova_plugin/ncb/index.js";
 import { ActiveMission, MissionsComponent } from "../nova_plugin/player/index.js";
 import { landable } from "../nova_plugin/core/index.js";
 import {
-    computeGateMapSelection, computeSelectableSystems, gateMapGraphOptions,
+    computeGateMapView, computeSelectableSystems,
+    GateMapIndex, gateMapGraphOptions,
 } from "./gate_map.js";
 import { HypergateNetwork } from "./hypergate_network.js";
 import { MissionUniverse } from "./mission_universe.js";
@@ -74,7 +75,7 @@ describe('what the gate map offers per the transitivity setting', () => {
      * The stock hypergate graph plus the spöb -> systems index, exactly as
      * GateMap.build() assembles them.
      */
-    async function stockGateMapIndex() {
+    async function stockGateMapIndex(): Promise<GateMapIndex> {
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         const systems = await Promise.all(
@@ -100,34 +101,42 @@ describe('what the gate map offers per the transitivity setting', () => {
             }
         }
         const network: HypergateNetwork = { links, unusable };
-        return { systemsOfSpob, network };
+        return {
+            systemById: new Map(systems.map(s => [s.id, s])),
+            systemsOfSpob, network,
+        };
     }
 
     // HG-V0a (nova:1402, in Vellos nova:424) has ONE HyperLink: HG-V02
     // (nova:1401, in VNP-002 nova:425). HG-Moash (nova:1416) sits four lanes
     // away in Moash (nova:366) — same network, not adjacent.
     const LEAF_GATE = 'nova:1402';
+    const LEAF_SYSTEM = 'nova:424';
+
+    /** What the map offers a fresh pilot (no bits) docked at HG-V0a. */
+    async function offered(transitive: boolean) {
+        return computeGateMapView(await stockGateMapIndex(), {
+            gateSpob: LEAF_GATE, systemId: LEAF_SYSTEM, transitive,
+            playerBits: new Set(),
+        }).selectable;
+    }
 
     it('offers only the adjacent system with transitivity OFF', async () => {
-        const { systemsOfSpob, network } = await stockGateMapIndex();
-        const selectable = computeGateMapSelection(
-            systemsOfSpob, network, LEAF_GATE, false);
-        // VNP-002 and its stacked NCB copy, and nothing else.
+        const selectable = await offered(false);
+        // VNP-002 (the copy a fresh pilot sees), and nothing else.
         expect([...new Set(selectable.values())]).toEqual(['nova:1401']);
         expect(selectable.get('nova:425')).toBe('nova:1401');
         expect(selectable.has('nova:366')).toBeFalse();
     }, 60_000);
 
     it('offers the whole network with transitivity ON', async () => {
-        const { systemsOfSpob, network } = await stockGateMapIndex();
-        const selectable = computeGateMapSelection(
-            systemsOfSpob, network, LEAF_GATE, true);
+        const selectable = await offered(true);
         // The adjacent one is still there...
         expect(selectable.get('nova:425')).toBe('nova:1401');
         // ...and so is Moash, four lanes away, mapped to its gate.
         expect(selectable.get('nova:366')).toBe('nova:1416');
-        // All 18 other live gates are reachable, so every system that holds
-        // one is offered (stacked NCB copies included).
+        // All 18 other live gates are reachable, so a system holding each
+        // is offered (the copy the player's bits show).
         expect([...new Set(selectable.values())].sort().length).toBe(18);
         // Never the gate the ship is standing on.
         expect([...selectable.values()]).not.toContain(LEAF_GATE);
@@ -135,13 +144,26 @@ describe('what the gate map offers per the transitivity setting', () => {
     }, 60_000);
 
     it('never offers a destroyed gate\'s system, either way', async () => {
-        const { systemsOfSpob, network } = await stockGateMapIndex();
         for (const transitive of [false, true]) {
-            const selectable = computeGateMapSelection(
-                systemsOfSpob, network, LEAF_GATE, transitive);
+            const selectable = await offered(transitive);
             // nova:130 (HG-Aldebaran) is one of the 16 collapsed gates.
             expect([...selectable.values()]).not.toContain('nova:130');
         }
+    }, 60_000);
+
+    // All 19 working stock gates form one network, so a stock gate's map
+    // keeps every live lane: the component cut drops nothing stock.
+    it('draws every live stock lane, and no destroyed gate', async () => {
+        const v = computeGateMapView(await stockGateMapIndex(), {
+            // HG-Kania (nova:1404) in Kania (nova:128).
+            gateSpob: 'nova:1404', systemId: 'nova:128', transitive: false,
+            playerBits: new Set(),
+        });
+        expect(v.networkGates.length).toBe(19);
+        expect(v.networkGates).not.toContain('nova:130');
+        // The 25 lanes between live gates, once per unordered pair.
+        const pairs = new Set(v.gateLinks.map(l => [...l].sort().join()));
+        expect(pairs.size).toBe(25);
     }, 60_000);
 });
 
@@ -257,5 +279,164 @@ describe('the hypergate map\'s marks under NCB-stacked systems', () => {
             .map(m => m.systemId)).toEqual(['nova:765']);
         expect(gateMapMissionMarks(docked([]), universe)
             .map(m => m.systemId)).toEqual(['nova:308']);
+    });
+});
+
+/**
+ * Matthew's playtest, 2026-11-24: docked at a stock gate, the map also drew
+ * the arpia plug-in's P-153 / P-173 gates and their lane, a network with no
+ * lane to his. The map now shows only the current gate's network.
+ */
+describe('computeGateMapView', () => {
+    /** A system holding `spobs`, visible under `visibility`. */
+    function system(id: string, spobs: string[], visibility = ''): SystemData {
+        return {
+            ...getDefaultSystemData(), id, name: id, planets: spobs,
+            visibility,
+        };
+    }
+
+    /**
+     * Two networks with no lane between them — A: a1 - a2 - a3, B: b1 - b2
+     * — plus whatever `extra` systems and links a spec adds.
+     */
+    function index(extraSystems: SystemData[] = [],
+        extraLinks: [string, string[]][] = [],
+        unusable: string[] = []): GateMapIndex {
+        const systems = [
+            system('A1', ['a1', 'port']), system('A2', ['a2']),
+            system('A3', ['a3']), system('B1', ['b1']), system('B2', ['b2']),
+            ...extraSystems,
+        ];
+        const systemsOfSpob = new Map<string, string[]>();
+        for (const s of systems) {
+            for (const spob of s.planets) {
+                systemsOfSpob.set(spob,
+                    [...systemsOfSpob.get(spob) ?? [], s.id]);
+            }
+        }
+        const links = new Map<string, string[]>([
+            ['a1', ['a2']], ['a2', ['a1', 'a3']], ['a3', ['a2']],
+            ['b1', ['b2']], ['b2', ['b1']],
+        ]);
+        for (const [from, to] of extraLinks) {
+            links.set(from, [...links.get(from) ?? [], ...to]);
+        }
+        return {
+            systemById: new Map(systems.map(s => [s.id, s])),
+            systemsOfSpob,
+            network: { links, unusable: new Set(unusable) },
+        };
+    }
+
+    function view(gateIndex: GateMapIndex, gateSpob: string,
+        systemId: string, transitive: boolean, bits: number[] = []) {
+        return computeGateMapView(gateIndex, {
+            gateSpob, systemId, transitive, playerBits: new Set(bits),
+        });
+    }
+
+    /** The drawn lanes, each pair sorted, the list sorted. */
+    function lanes(links: [string, string][]): string[] {
+        return [...new Set(links.map(l => [...l].sort().join('-')))].sort();
+    }
+
+    it('draws and offers only the current gate\'s network, adjacent-only',
+        () => {
+            const v = view(index(), 'a1', 'A1', false);
+            expect(v.networkGates).toEqual(['a1', 'a2', 'a3']);
+            expect(lanes(v.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+            expect([...v.selectable]).toEqual([['A2', 'a2']]);
+        });
+
+    it('offers the whole network, and nothing past it, under transitivity',
+        () => {
+            const v = view(index(), 'a1', 'A1', true);
+            expect(lanes(v.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+            expect([...v.selectable].sort()).toEqual(
+                [['A2', 'a2'], ['A3', 'a3']]);
+        });
+
+    it('shows the other network from inside it, and only that one', () => {
+        for (const transitive of [false, true]) {
+            const v = view(index(), 'b2', 'B2', transitive);
+            expect(v.networkGates).toEqual(['b1', 'b2']);
+            expect(lanes(v.gateLinks)).toEqual(['B1-B2']);
+            expect([...v.selectable]).toEqual([['B1', 'b1']]);
+        }
+    });
+
+    it('keeps a one-way lane\'s far end in the network (undirected), '
+        + 'selectable only along the link or under transitivity', () => {
+            // c1 -> a1, never a1 -> c1: arpia's finished Scheall gate and
+            // stock HG-Koria have exactly this shape.
+            const gateIndex = index([system('C1', ['c1'])], [['c1', ['a1']]]);
+            const off = view(gateIndex, 'a1', 'A1', false);
+            expect(off.networkGates).toEqual(['a1', 'a2', 'a3', 'c1']);
+            expect(lanes(off.gateLinks)).toEqual(
+                ['A1-A2', 'A1-C1', 'A2-A3']);
+            expect(off.selectable.has('C1')).toBeFalse();
+            expect(view(gateIndex, 'a1', 'A1', true).selectable.get('C1'))
+                .toBe('c1');
+            // From c1 the link is its own, so it is offered either way.
+            expect(view(gateIndex, 'c1', 'C1', false).selectable.get('A1'))
+                .toBe('a1');
+        });
+
+    it('does not walk through a gate the player\'s bits hide', () => {
+        // h joins A and B, but its only system needs bit 5.
+        const gateIndex = index([system('H', ['h'], 'b5')],
+            [['a3', ['h']], ['h', ['a3', 'b1']], ['b1', ['h']]]);
+        const hidden = view(gateIndex, 'a1', 'A1', true);
+        expect(hidden.networkGates).toEqual(['a1', 'a2', 'a3']);
+        expect(lanes(hidden.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+        expect([...hidden.selectable.keys()].sort()).toEqual(['A2', 'A3']);
+
+        const shown = view(gateIndex, 'a1', 'A1', true, [5]);
+        expect(shown.networkGates).toEqual(
+            ['a1', 'a2', 'a3', 'b1', 'b2', 'h']);
+        expect(lanes(shown.gateLinks)).toEqual(
+            ['A1-A2', 'A2-A3', 'A3-H', 'B1-B2', 'B1-H']);
+        expect([...shown.selectable.keys()].sort()).toEqual(
+            ['A2', 'A3', 'B1', 'B2', 'H']);
+    });
+
+    it('does not walk through a destroyed gate', () => {
+        const gateIndex = index([system('H', ['h'])],
+            [['a3', ['h']], ['h', ['a3', 'b1']], ['b1', ['h']]], ['h']);
+        const v = view(gateIndex, 'a1', 'A1', true);
+        expect(v.networkGates).toEqual(['a1', 'a2', 'a3']);
+        expect(lanes(v.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+        expect(v.selectable.has('B1')).toBeFalse();
+    });
+
+    it('draws a lane to, and offers, the visible copy of a stacked system',
+        () => {
+            // a2's system is swapped by bit 7 for a stacked copy.
+            const gateIndex = index([system('A2x', ['a2'], 'b7')]);
+            (gateIndex.systemById.get('A2') as SystemData).visibility = '!b7';
+            const before = view(gateIndex, 'a1', 'A1', false);
+            expect(lanes(before.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+            expect([...before.selectable]).toEqual([['A2', 'a2']]);
+
+            const after = view(gateIndex, 'a1', 'A1', false, [7]);
+            expect(lanes(after.gateLinks)).toEqual(['A1-A2x', 'A2x-A3']);
+            expect([...after.selectable]).toEqual([['A2x', 'a2']]);
+        });
+
+    it('works from a gate in a copy the player\'s bits say is hidden', () => {
+        const gateIndex = index();
+        (gateIndex.systemById.get('A1') as SystemData).visibility = 'b9';
+        const v = view(gateIndex, 'a1', 'A1', true);
+        expect(v.networkGates).toEqual(['a1', 'a2', 'a3']);
+        expect(lanes(v.gateLinks)).toEqual(['A1-A2', 'A2-A3']);
+        expect([...v.selectable.keys()].sort()).toEqual(['A2', 'A3']);
+    });
+
+    it('hands the player\'s bits to the graph', () => {
+        const bits = new Set([7]);
+        expect(gateMapGraphOptions([], new Set(), [], undefined, undefined,
+            undefined, bits).playerBits).toBe(bits);
+        expect(gateMapGraphOptions([], new Set()).playerBits).toBeUndefined();
     });
 });

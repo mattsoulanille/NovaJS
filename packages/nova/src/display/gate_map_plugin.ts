@@ -77,6 +77,10 @@ const OpenGateMapSystem = new System({
         void gateMap.show({
             gateSpob, systemId, destinationSpob: null,
             missionMarks: gateMapMissionMarks(ship, universe),
+            // The docked ship is out of the world, so its bits come off
+            // the entity too: they decide which systems (and gates) exist.
+            playerBits: ship.components.get(ControlBitsComponent)
+                ?? new Set<number>(),
         }).then(({ destinationSpob }) =>
             emit(LeaveGateMapEvent, { ship, destinationSpob }));
     }
