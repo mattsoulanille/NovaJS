@@ -224,9 +224,10 @@ const HOOK_MS = 60_000;
  * server ever speaking on it — a handshake that failed: open another.
  * The browser's keepalive (1.2 s) does that by itself; these specs set it
  * to ten minutes so that it never fires on its own, which made a single
- * failed local handshake on a loaded machine fatal (the socket CLOSED, the
- * server never having seen it, and nothing ever trying again: "a in the
- * room" timing out). Called from the waits for a connection to come up —
+ * failed handshake fatal (the socket CLOSED, the server never having seen
+ * it, and nothing ever trying again: "a in the room" timing out; see
+ * startServer for the cause seen on a busy machine). Called from the
+ * waits for a connection to come up —
  * only there, so a socket a spec closed on purpose stays closed. A
  * half-open socket stays OPEN as far as the client knows, so this never
  * touches one. Always true: it goes first in a wait's condition.
@@ -276,8 +277,17 @@ describe('a socket reconnect mid-game (#354)', () => {
             server: httpServer, buildVersion: BUILD, warn: () => undefined,
             timeout: 600_000,
         });
-        await new Promise<void>(resolve =>
-            httpServer.listen(listenPort, () => resolve()));
+        // On the address the clients dial, not the wildcard: on macOS
+        // another process may bind 127.0.0.1 on the very port a wildcard
+        // listener holds, and from then on every connection to 127.0.0.1
+        // reaches IT (a busy machine's other spec runs and dev tools do
+        // so now and then) — the peer's sockets closing without this
+        // server ever seeing them, retry after retry. Bound to 127.0.0.1
+        // ourselves, such a bind fails instead and this server answers.
+        await new Promise<void>((resolve, reject) => {
+            httpServer.once('error', reject);
+            httpServer.listen(listenPort, '127.0.0.1', () => resolve());
+        });
         port = (httpServer.address() as AddressInfo).port;
         serverRoom = new MultiRoom(new CommunicatorServer(channel))
             .join(SYSTEM);
