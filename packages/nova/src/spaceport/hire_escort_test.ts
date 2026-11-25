@@ -2,13 +2,13 @@ import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import {
-    BayFighterComponent, cappedEscortCount, CarriedEscortEntry,
+    BayFighterComponent, CarriedEscortEntry,
 } from '../nova_plugin/escorts/index.js';
 import {
     MissionShipComponent, EscortPayrollComponent, PlayerEscortComponent, NO_DEAL,
 } from '../nova_plugin/player/index.js';
 import {
-    hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
+    escortsHeld, hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
     NO_SHIPS_FOR_HIRE,
 } from './hire_escort.js';
 import {
@@ -44,17 +44,16 @@ describe('the escort cap', () => {
         }
         return { player, uuid: `escort ${n++}`, entity };
     }
-    /** The bar's count: escortsHeld() without the dialog. */
+    /** The bar's count (escortsHeld, which the bar's button and the hire
+     * dialog both read). */
     function held(player: Entity | undefined,
         world: CarriedEscortEntry[], roster: CarriedEscortEntry[],
         hired: string[] = []): number {
-        return cappedEscortCount(PLAYER, {
+        return escortsHeld({
+            entity: player, playerUuid: PLAYER,
             world: world.map(({ uuid, entity }) => [uuid, entity]),
-            carried: roster,
-            pending:
-                (player?.components.get(PendingEscortsComponent)?.length ?? 0)
-                + hired.length,
-        });
+            landedEscorts: () => roster,
+        }, hired);
     }
 
     it('is six (#161), with the stock refusal', () => {

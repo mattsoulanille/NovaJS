@@ -12,7 +12,9 @@ import { Button } from './button.js';
 import { BAR, LINE_HEIGHT } from './dialog_layout.js';
 import { FleetEscortEntry } from './fleet_cargo.js';
 import { GambleDialog } from './gamble.js';
-import { HireEscortDialog, noShipsForHire } from './hire_escort.js';
+import {
+    escortsHeld, HireEscortDialog, MAX_ESCORTS, noShipsForHire,
+} from './hire_escort.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
@@ -192,6 +194,7 @@ export class Bar extends Menu<Entity> {
             this.setBarPict(null);
         }
 
+        this.refreshHireButton();
         const result = super.show(input);
         // Bar mission offers approach the player on entry, then the
         // bar itself. (The news no longer auto-opens; the Holovid
@@ -298,9 +301,45 @@ export class Bar extends Menu<Entity> {
         this.rebindControls();
     }
 
+    /**
+     * Whether the player is at the escort cap, counted exactly as the hire
+     * dialog counts it (hire_escort.ts escortsHeld: the display world, the
+     * landed roster and this landing's hires; hired and captured escorts,
+     * not bay fighters or mission ships).
+     */
+    private atEscortCap(): boolean {
+        const transaction = this.transaction;
+        if (!transaction) {
+            return false;
+        }
+        return escortsHeld({
+            entity: transaction.ship, world: this.world,
+            landedEscorts: this.landedEscorts, playerUuid: this.playerUuid,
+        }, transaction.hired) >= MAX_ESCORTS;
+    }
+
+    /**
+     * GREYS Hire Escort at the escort cap (reference "Escort cap, wave
+     * 23": the original greys the bar's button after the sixth hire and on
+     * arrival with six hired or captured escorts, with no message; nine bay
+     * fighters leave it enabled). Re-read on every entry and whenever a
+     * sub-dialog closes: only a hire changes the count while the bar is
+     * open (escorts still flying down move from the world to the roster
+     * and are counted in either).
+     */
+    private refreshHireButton() {
+        this.buttons.hireEscort.state =
+            this.atEscortCap() ? 'grey' : 'normal';
+    }
+
     private async showHireEscort() {
         const transaction = this.transaction;
         if (!transaction) {
+            return;
+        }
+        // A greyed button takes no click; the hotkey is dead with it.
+        if (this.atEscortCap()) {
+            this.refreshHireButton();
             return;
         }
         this.controls.unbind();
@@ -319,6 +358,7 @@ export class Bar extends Menu<Entity> {
                     landedEscorts: this.landedEscorts,
                     playerUuid: this.playerUuid,
                 });
+        this.refreshHireButton();
         if (result === 'empty') {
             // No pilots today: the original says so in a plain popup rather
             // than opening an empty shipyard grid (STR# 2002 index 223 —

@@ -11998,6 +11998,26 @@ is at MAX_ESCORTS (keep the dialog's refusal as a fallback); a UI-only
 change. Untested: whether the STR# line appears anywhere (e.g. a capture
 past the cap).
 
+**Applied (wave-23 fixes, 2026-11-24, `N/spaceport/bar.ts`).** The bar's
+Hire Escort is GREYED while `escortsHeld` (hire_escort.ts, now exported:
+the dialog's own count, `cappedEscortCount` over the display world and
+the landed roster plus this landing's hires) is at MAX_ESCORTS; the click
+and the `h` hotkey do nothing, no message. Re-read on every entry and when
+the hire dialog closes, so it greys after the sixth hire. The dialog's
+STR# 2002 #123 refusal stays as the fallback (unreachable from the bar
+now). Specs (`bar_escort_cap_test.ts`): enabled with none, greyed with six
+hired, six captured (some still flying down), five plus one pending hire,
+and after the sixth hire; enabled with nine bay fighters.
+**Not applied: the TechLevel gate.** NovaJS's hire pool takes SpecialTech
+exact matches (`shipStockGatesPass`, e87f6873: Matthew's "I can't hire TAM
+drones at Tektaara Station", Extra Outfits' TechLevel -1 / SpecialTech
+10000 station whose drones are hire-only). Both TL-9000 runs (`cap6`,
+`cap6b`, 01-space.png) carried six escorts, so the cap alone explains
+their greyed button; no run had a TL-9000 hull for hire and room under
+the cap. Control wanted before changing it: a no-escort pilot at Kit Port
+with a TechLevel-9000, HireRandom-100 hull (the kit's SpecialTech 9000)
+and no other hull for hire.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/{cap0,cap6,cap6b,cap6c,capbay}/*/` (cap0 `04-h1.png` .. `16-h7.png`).
 
 ### F1c release of rank 1, wave 23: the other five re-flow into the five-escort layout, everyone moving up a rank (2026-11-24)

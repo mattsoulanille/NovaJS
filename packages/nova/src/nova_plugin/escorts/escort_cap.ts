@@ -19,17 +19,24 @@ import { PlayerEscortComponent } from '../player/index.js';
  *   - fighters LAUNCHED FROM BAYS — the player's own or a carrier
  *     escort's — are outfits flying, not escorts, and are unlimited.
  *
- * The cap is enforced at the two places an escort is acquired: the bar's
- * hire dialog (spaceport/hire_escort.ts) refuses with STR# 2002 index 123,
- * and the plunder dialog's Capture is GREYED — unavailable, no refusal on
- * press — with the same line as its note (ruling #250; the sim's capture
- * gate in boarding_plugin.ts ignores a press off the same predicate).
- * Both count through ONE function, {@link cappedEscortCount}, which
- * counts an escort wherever it happens to be at that moment — see its
- * doc for the places, and for what each caller can and cannot see.
+ * The cap is enforced at the two places an escort is acquired: the BAR
+ * greys its Hire Escort button at the cap, with no message, so the hire
+ * dialog is never reached (spaceport/bar.ts; reference "Escort cap, wave
+ * 23"); the dialog (spaceport/hire_escort.ts) still refuses a hire past
+ * it with STR# 2002 index 123 as a fallback. The plunder dialog's Capture
+ * is GREYED — unavailable, no refusal on press — with the same line as
+ * its note (ruling #250; the sim's capture gate in boarding_plugin.ts
+ * ignores a press off the same predicate). All of them count through ONE
+ * function, {@link cappedEscortCount}, which counts an escort wherever it
+ * happens to be at that moment — see its doc for the places, and for
+ * what each caller can and cannot see.
  *
- * The original refuses a hire past a cap but the Bible never states the
- * number; six is the maintainer's ruling from the original game.
+ * Six is the maintainer's ruling from the original game (the Bible never
+ * states the number), MEASURED in wave 23: the original greys Hire
+ * Escort after the sixth hire, and on arrival with six hired or six
+ * captured escorts; nine bay fighters and no escorts leave it enabled. A
+ * pilot file can carry more (nine flew in F1c): the cap binds only the
+ * hire.
  */
 export const MAX_ESCORTS = 6;
 

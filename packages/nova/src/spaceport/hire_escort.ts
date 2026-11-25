@@ -152,6 +152,32 @@ export interface HirePlayer {
 }
 
 /**
+ * The escorts `player` has right now, as the bar counts them against
+ * MAX_ESCORTS: the shared count over the display world and the landed
+ * roster (see HirePlayer), plus this landing's hires — the entity's
+ * PendingEscortsComponent (earlier commits this landing) and `hired`, the
+ * visit's list the hire dialog appends to and the bar commits at Leave.
+ * That sum is right only while no hire is in both: pending_escorts.ts's
+ * commitPendingEscorts, the one way hires move across, empties `hired` as
+ * it copies (hire_escort_test pins the invariant). The bar greys its Hire
+ * Escort button off this count and the dialog refuses off it, so the two
+ * cannot disagree.
+ */
+export function escortsHeld(player: HirePlayer,
+    hired: readonly string[]): number {
+    const { entity, world, landedEscorts, playerUuid } = player;
+    const pending =
+        (entity?.components.get(PendingEscortsComponent)?.length ?? 0)
+        + hired.length;
+    if (playerUuid === undefined) {
+        return pending;
+    }
+    return cappedEscortCount(playerUuid, {
+        world, carried: landedEscorts?.(), pending,
+    });
+}
+
+/**
  * The bar's hire-escort dialog, on the shipyard frame (PICT 8501):
  * a grid of pilots for hire, the pilot description (dësc 14000+),
  * the ship pict, and the hiring price against the player's credits.
@@ -388,26 +414,11 @@ export class HireEscortDialog {
     }
 
     /**
-     * Escorts the player has right now — the shared count over the
-     * display world and the landed roster (see HirePlayer), plus this
-     * landing's hires: the entity's PendingEscortsComponent (earlier
-     * commits this landing) and `hired`, the list this dialog appends to
-     * and the bar commits at Leave. That sum is right only while no hire
-     * is in both: pending_escorts.ts's commitPendingEscorts, the one way
-     * hires move across, empties `hired` as it copies — hire_escort_test
-     * pins the invariant.
+     * Escorts the player has right now, this dialog's hires included
+     * (the exported {@link escortsHeld}, which the bar's button reads too).
      */
     private escortsHeld(): number {
-        const { entity, world, landedEscorts, playerUuid } = this.player;
-        const pending =
-            (entity?.components.get(PendingEscortsComponent)?.length ?? 0)
-            + this.hired.length;
-        if (playerUuid === undefined) {
-            return pending;
-        }
-        return cappedEscortCount(playerUuid, {
-            world, carried: landedEscorts?.(), pending,
-        });
+        return escortsHeld(this.player, this.hired);
     }
 
     /** Greys each scroll arrow when the page is already at that end. */
