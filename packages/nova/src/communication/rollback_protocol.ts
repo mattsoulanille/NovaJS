@@ -784,7 +784,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    so it holds through re-hails and landings in the system and is drawn
 //    afresh after a crossing, and the refusal rate is one in four (was one
 //    in eight). The derived wire schema fingerprint changes
-//    (0df789d0f4d39d4c -> FPNEW), and the join gate keeps older
+//    (0df789d0f4d39d4c -> d442dd55b4b6c6ec), and the join gate keeps older
 //    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
