@@ -149,9 +149,9 @@ export interface HailContext {
         /**
          * What the ship says when Lower Price withdraws its offer ("If
          * that's the way you feel, then you can sit here forever.", STR#
-         * 3000 155-159; a hostile ship's mercy price, "What? How dare you!
-         * Prepare to die!", 150-154, reference "R7 a provoked freighter's
-         * Beg For Mercy above 20M, wave 31"), or a planet ("No deal,
+         * 3000 155-159; a hostile ship's mercy price, "Ha ha ha! This will
+         * be your last mistake!", 150-154, one per hail, reference "R7 a
+         * provoked freighter's Lower Price, wave 32"), or a planet ("No deal,
          * cheapskate.", STR# 3002 30-34; reference "R7 planet bribe, wave
          * 28"). Fuel offers, a ship's mercy price and a planet's bribe.
          */
@@ -391,12 +391,15 @@ export interface HailCallbacks {
     requestAssistance(): AssistPressAnswer;
     bribe(): void;
     /**
-     * Lower Price on a ship's fuel price (reference H1 wave 17): routes to
-     * the deterministic input path, and returns the ship's COUNTER-offer
-     * (3/4 of the price) when it makes one, or undefined when it withdraws
-     * the offer (its next one then costs 1,000 more).
+     * Lower Price on a ship's fuel price (reference H1 wave 17), a planet's
+     * bribe ("R7 planet bribe, wave 28") or a hostile ship's Beg For Mercy
+     * price ("R7 a provoked freighter's Lower Price, wave 32"): routes to
+     * the deterministic input path, and returns the COUNTER-offer (3/4 of
+     * the price) when one is made, or nothing when the offer is withdrawn;
+     * for a mercy price that is withdrawn, the offer the next plea on this
+     * channel names (`next`, 1,000 more).
      */
-    lowerPrice(): HailContext['bribe'] | undefined;
+    lowerPrice(): LowerPriceAnswer;
     /**
      * A press in a channel to another PLAYER's ship (#332): sends `message`
      * to their screen through the deterministic input path, and returns the
@@ -640,6 +643,14 @@ export function haggleText(bribe: HailContext['bribe']): string {
     return bribe.offer ? `${bribe.offer}\n${demand}` : demand;
 }
 
+/** What a Lower Price press came to (HailCallbacks.lowerPrice). */
+export interface LowerPriceAnswer {
+    /** The counter-offer now on the popup. */
+    counter?: HailContext['bribe'];
+    /** A withdrawn MERCY price: the offer Beg For Mercy names next. */
+    next?: HailContext['bribe'];
+}
+
 /** Which page of the comm dialog is showing, and with what contents. */
 export interface HailPage {
     phase: 'main' | 'haggle';
@@ -667,11 +678,15 @@ export type HailPress =
     /** Back out of the haggle page. */
     | { kind: 'cancel' }
     /**
-     * Lower Price on a fuel offer: the ship COUNTERS (`counter`, the new
-     * offer, the popup stays) or withdraws it and says so in the well of
-     * the main page.
+     * Lower Price on a fuel offer, a planet's bribe or a mercy price: the
+     * party COUNTERS (`counter`, the new offer, the popup stays) or
+     * withdraws it and says so in the well of the main page; a withdrawn
+     * mercy price leaves `next` (1,000 more) for the next plea.
      */
-    | { kind: 'lowerPrice', counter?: HailContext['bribe'] }
+    | {
+        kind: 'lowerPrice', counter?: HailContext['bribe'],
+        next?: HailContext['bribe'],
+    }
     /**
      * Accept Price or Lower Price on a fuel price the pilot cannot pay:
      * the popup closes with "You can't fool me - you can't afford it." in
@@ -771,25 +786,28 @@ export function hailPress(state: HailPage, press: HailPress,
                     && purpose !== 'mercy')) {
                 return state;
             }
-            // A hostile ship's MERCY price WITHDRAWS at once ("What? How
-            // dare you! Prepare to die!", reference "R7 a provoked
-            // freighter's Beg For Mercy above 20M, wave 31"; GUESS from
-            // one press: it never counters). Back to the main page with
-            // the line in the well; Beg For Mercy stays and names the same
-            // price again (GUESS), and nothing reaches the simulation.
-            if (purpose === 'mercy') {
-                return { phase: 'main', context: {
-                    ...context, body: context.bribe.withdrawn ?? context.body,
-                } };
-            }
             // A COUNTER (reference H1 wave 17: 4,000 -> 3,000; a planet's
-            // 10,000 -> 7,500, "R7 bribe price, wave 22"): the popup
-            // stays with the new price on it, the mood line in the well.
-            // GUESS: the well keeps the mood line (the captures read the
-            // popup).
+            // 10,000 -> 7,500, "R7 bribe price, wave 22"; a mercy price's
+            // 22,000 -> 16,500, "R7 a provoked freighter's Lower Price,
+            // wave 32"): the popup stays with the new price on it, the
+            // mood line in the well. GUESS: the well keeps the mood line
+            // (the captures read the popup).
             if (press.counter && press.counter.purpose === purpose) {
                 return { phase: 'haggle',
                     context: { ...context, bribe: press.counter } };
+            }
+            // A hostile ship's MERCY price withdrawn ("Ha ha ha! This will
+            // be your last mistake!", reference "R7 a provoked freighter's
+            // Lower Price, wave 32"): back to the main page with the line
+            // in the well; Beg For Mercy stays, and the next plea on this
+            // channel names 1,000 more (`next`).
+            if (purpose === 'mercy') {
+                const next = press.next?.purpose === 'mercy'
+                    ? press.next : context.bribe;
+                return { phase: 'main', context: {
+                    ...context, bribe: next,
+                    body: context.bribe.withdrawn ?? context.body,
+                } };
             }
             // A PLANET that withdraws ("No deal, cheapskate.", reference
             // "R7 planet bribe, wave 28") refuses every later offer: Offer
@@ -1520,9 +1538,10 @@ export class HailDialog {
             //
             // So does a hostile ship's Beg For Mercy price (beg_mercy.png:
             // "Pay me 20,000 credits." over Lower Price / Accept Price),
-            // when the pilot can pay it; its Lower Price withdraws the
-            // offer with no record to send (reference "R7 a provoked
-            // freighter's Beg For Mercy above 20M, wave 31").
+            // when the pilot can pay it; its Lower Price counters or
+            // withdraws like the others, and a withdrawal's next plea asks
+            // 1,000 more (reference "R7 a provoked freighter's Lower Price,
+            // wave 32").
             const lower =
                 this.placeButton('Lower Price', frame, originX, originY, 0);
             lower.click.subscribe(() => {
@@ -1531,13 +1550,8 @@ export class HailDialog {
                     this.apply({ kind: 'cantAfford' });
                     return;
                 }
-                if (bribe.purpose === 'mercy') {
-                    this.apply({ kind: 'lowerPrice' });
-                    return;
-                }
-                const counter = this.callbacks.lowerPrice();
-                this.apply(counter ? { kind: 'lowerPrice', counter }
-                    : { kind: 'lowerPrice' });
+                this.apply({ kind: 'lowerPrice',
+                    ...this.callbacks.lowerPrice() });
             });
             this.content.addChild(lower.container);
             const accept =

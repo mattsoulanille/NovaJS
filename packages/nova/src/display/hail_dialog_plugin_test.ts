@@ -37,6 +37,7 @@ import {
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
     JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX, fuelSaleTerms,
     planetRefusesBribe, planetLowerPriceCounters, bribeDay,
+    MERCY_LOWERED_FIRST_INDEX, NO_MERCY_HAGGLE,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -66,7 +67,7 @@ import { Stage } from './stage_resource.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import {
-    assistAnswer, computeContext, fuelOffer, HailDialogPlugin,
+    assistAnswer, computeContext, fuelOffer, HailDialogPlugin, mercyOffer,
     HailDialogResource, hailIsUnanswerable,
     hailTargetIsDisabled,
     shipIdentityBlock,
@@ -1040,6 +1041,67 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             expect(result!.context.bribe?.offer).toBeDefined();
             expect(haggleText(result!.context.bribe)).toBe(
                 `${result!.context.bribe?.offer}\nPay me 3,000 credits.`);
+            // The channel's haggle lines, for Lower Price and the next
+            // plea (reference "R7 a provoked freighter's Lower Price, wave
+            // 32"): one more withdrawn ask is 1,000 more, past the cap.
+            const mercy = result!.replies.mercy!;
+            expect(mercy.firstAsk).toBe(3000);
+            expect(mercyOffer(mercy, NO_MERCY_HAGGLE, 10_000))
+                .toEqual(result!.context.bribe!);
+            const second = mercyOffer(mercy,
+                { asks: 1, countered: false }, 10_000);
+            expect(second.amount).toBe(4000);
+            expect(second.demand).toBe('Pay me 4,000 credits.');
+            expect(second.withdrawn).toBe(mercy.withdrawn);
+            // 3/4 of 4,000.
+            expect(mercyOffer(mercy, { asks: 1, countered: true }, 10_000)
+                .amount).toBe(3000);
+            expect(mercyOffer(mercy, { asks: 4, countered: false }, 6_000)
+                .canAfford).toBeFalse();
+        });
+
+    it('draws a hostile ship\'s withdrawal line ONCE PER HAIL (STR# 3000 '
+        + '150-154; reference "R7 a provoked freighter\'s Lower Price, wave '
+        + '32", finding 4)', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(GovtComponent, { id: 'test:pirate' });
+                target.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack' });
+                target.components.set(TargetComponent, { target: PLAYER });
+            });
+            const pirate = {
+                ...gameData.data.Govt.defaultValue!, id: 'test:pirate',
+            };
+            pirate.flags = {
+                ...pirate.flags, largerBribes: true, warshipsTakeBribes: true,
+            };
+            gameData.data.Govt.map.set('test:pirate', pirate);
+            world.entities.get(PLAYER)!.components
+                .set(CreditsComponent, { credits: 200_000_000 });
+            const lines = ['What? How dare you! Prepare to die!',
+                'Die, cheapskate!',
+                'What a cheapskate! This\'ll teach you a lesson!',
+                'No! You die!', 'Ha ha ha! This will be your last mistake!'];
+            const assets = commAssets();
+            const strings = (await assets.data.StringTable
+                .get(HAIL_RESPONSE_TABLE)).strings as string[];
+            lines.forEach((line, i) => {
+                strings[MERCY_LOWERED_FIRST_INDEX + i] = line;
+            });
+            const seen = new Set<string>();
+            for (let channel = 0; channel < 40; channel++) {
+                const result = await computeContext(world, gameData, assets,
+                    undefined, channel);
+                const withdrawn = result!.context.bribe!.withdrawn!;
+                expect(lines).toContain(withdrawn);
+                // The same channel draws the same line.
+                expect((await computeContext(world, gameData, assets,
+                    undefined, channel))!.context.bribe!.withdrawn)
+                    .toBe(withdrawn);
+                seen.add(withdrawn);
+            }
+            // Another hail draws again: every line turns up.
+            expect(seen.size).toBe(lines.length);
         });
 
     it('opens a NON-TALKATIVE govt\'s channel too, with nothing to greet '
@@ -1177,24 +1239,52 @@ describe('the comm dialog\'s button column survives its own presses', () => {
         });
 
     it('Lower Price on a MERCY price withdraws it with the ship\'s line, '
-        + 'and Beg For Mercy stays (reference "R7 a provoked freighter\'s '
-        + 'Beg For Mercy above 20M, wave 31")', () => {
+        + 'Beg For Mercy stays, and the next plea asks 1,000 more '
+        + '(reference "R7 a provoked freighter\'s Lower Price, wave 32")',
+        () => {
             const haggling = pressAll(open(HOSTILE), [{ kind: 'beg' }],
                 HOSTILE);
-            const lowered = pressAll(haggling, [{ kind: 'lowerPrice' }],
-                HOSTILE);
+            const next = { ...HOSTILE.bribe!, amount: 4000,
+                demand: 'Pay me 4,000 credits.' };
+            const lowered = pressAll(haggling,
+                [{ kind: 'lowerPrice', next }], HOSTILE);
             expect(lowered.phase).toBe('main');
             expect(lowered.context.body)
                 .toBe('What? How dare you! Prepare to die!');
             expect(slots(lowered)).toEqual(['greetings', 'beg', 'close']);
-            // GUESS (unmeasured): a second plea names the same price.
             const again = pressAll(lowered, [{ kind: 'beg' }], HOSTILE);
             expect(again.phase).toBe('haggle');
-            expect(again.context.bribe?.amount).toBe(3000);
-            // A counter is never taken on a mercy price.
-            const countered = hailPress(haggling, { kind: 'lowerPrice',
-                counter: { ...HOSTILE.bribe!, amount: 2200 } }, HOSTILE);
-            expect((countered as HailPage).phase).toBe('main');
+            expect(again.context.bribe?.amount).toBe(4000);
+            // With no next offer the plea keeps its price.
+            const bare = pressAll(haggling, [{ kind: 'lowerPrice' },
+                { kind: 'beg' }], HOSTILE);
+            expect(bare.context.bribe?.amount).toBe(3000);
+        });
+
+    it('Lower Price on a MERCY price can COUNTER with 3/4, and Lower Price '
+        + 'on the counter withdraws (reference "R7 a provoked freighter\'s '
+        + 'Lower Price, wave 32": 22,000 -> 16,500)', () => {
+            const haggling = pressAll(open(HOSTILE), [{ kind: 'beg' }],
+                HOSTILE);
+            const counter = { ...HOSTILE.bribe!, amount: 2200,
+                demand: 'Pay me 2,200 credits.' };
+            const countered = hailPress(haggling,
+                { kind: 'lowerPrice', counter }, HOSTILE) as HailPage;
+            expect(countered.phase).toBe('haggle');
+            expect(countered.context.bribe?.amount).toBe(2200);
+            expect(haggleText(countered.context.bribe))
+                .toBe('Pay me 2,200 credits.');
+            const next = { ...HOSTILE.bribe!, amount: 4000 };
+            const withdrawn = hailPress(countered,
+                { kind: 'lowerPrice', next }, HOSTILE) as HailPage;
+            expect(withdrawn.phase).toBe('main');
+            expect(withdrawn.context.body)
+                .toBe('What? How dare you! Prepare to die!');
+            expect(withdrawn.context.bribe?.amount).toBe(4000);
+            // A fuel counter is not a mercy price's.
+            expect((hailPress(haggling, { kind: 'lowerPrice', counter: {
+                ...counter, purpose: 'fuel' } }, HOSTILE) as HailPage).phase)
+                .toBe('main');
         });
 
     it('still CLOSES the channel when a PORT bribe is paid', () => {

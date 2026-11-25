@@ -805,6 +805,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    no 212 px cap (wormholes keep it), and a port's or station's
 //    clearance lapses 20 s after it is given. The derived wire schema
 //    fingerprint changes (d442dd55b4b6c6ec -> 9421bc2da0516e30), and the
+//    join gate keeps older and newer builds apart.
 //    Also under 8, no further bump (maintainer's standing ruling for
 //    schema-only changes): the wave-31 capture odds (reference "Capture
 //    odds, wave 31"). BoardingState (ship/boarding_component.ts) gains a
@@ -819,6 +820,26 @@ export const STATE_HASH_INTERVAL = 60;
 //    self-destruct odds are 0.85 (was 0.5). The derived wire schema
 //    fingerprint changes (9421bc2da0516e30 -> 46582f94c5a30caa), and the
 //    join gate keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-32 Beg For Mercy haggle (reference "R7
+//    a provoked freighter's Lower Price, wave 32"). The hail record's
+//    `lowerPrice` and `bribe` actions gain an OPTIONAL `channel`
+//    (encounters/hail_plugin.ts HailActionType: which opening of the comm
+//    dialog a mercy plea was made on, 0 when absent), and a new
+//    serializer-registered NPC component, MercyHaggle (npc/
+//    hail_component.ts: per pilot, the channel last heard, the asks the
+//    ship withdrew on it and whether its counter is on the table; not
+//    delta-registered). No input kind or message kind changes. Sim-rule
+//    changes alongside: a hostile ship's Lower Price on its Beg For Mercy
+//    price counters with 3/4 one first press in four (was: always
+//    withdraws), each withdrawn ask makes the channel's next plea 1,000
+//    dearer, past the 20,000 cap, and a hostile ship's lowerPrice record
+//    reaches the mercy haggle instead of the fuel sale's; a clearance
+//    lapses 24.55 s after it is given (was 20 s), a hypergate's too (was
+//    never); the capture-odds table gains [5, 0.60] and its ratio-2 point
+//    is 0.32 (was 0.34). The derived wire schema fingerprint changes
+//    (46582f94c5a30caa -> 3c78611777d52ae3), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

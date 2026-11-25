@@ -74,6 +74,8 @@ import {
     shipAnswersHails,
     shipHailResponse,
     shipTakesBribes,
+    lowerMercyPrice, MERCY_ASK_STEP, mercyHaggleOn, mercyLowerPriceCounters,
+    mercyPrice, NO_MERCY_HAGGLE,
 } from './hail.js';
 
 function govt(overrides: Partial<GovtData> = {}): GovtData {
@@ -824,6 +826,79 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
             }
             expect(rankBattleAssistance(false, 3)).toBeFalse();
             expect(rankBattleAssistance(undefined, 3)).toBeFalse();
+        });
+});
+
+describe('a ship\'s Beg For Mercy haggle (reference "R7 a provoked '
+    + 'freighter\'s Lower Price, wave 32")', () => {
+    it('asks 1,000 more for each withdrawn ask on the channel, past the '
+        + '20,000 cap (20,000 / 21,000 / 22,000)', () => {
+            const first = shipBribePrice('freighter', 'p', 200_000_000,
+                true);
+            expect(first).toBe(SHIP_BRIBE_CAP);
+            expect(MERCY_ASK_STEP).toBe(1000);
+            expect([0, 1, 2].map(asks =>
+                mercyPrice(first, { asks, countered: false })))
+                .toEqual([20_000, 21_000, 22_000]);
+            expect(mercyPrice(first, NO_MERCY_HAGGLE)).toBe(20_000);
+        });
+
+    it('counters with 3/4 rounded down to 100 (22,000 -> 16,500)', () => {
+        expect(mercyPrice(20_000, { asks: 2, countered: true }))
+            .toBe(16_500);
+        expect(mercyPrice(3_000, { asks: 0, countered: true })).toBe(2_200);
+    });
+
+    it('Lower Price counters about one first press in four, or withdraws; '
+        + 'on a counter it always withdraws', () => {
+            let counters = 0;
+            const trials = 4000;
+            for (let channel = 0; channel < trials; channel++) {
+                const lowered = lowerMercyPrice(NO_MERCY_HAGGLE, 'ship',
+                    'p', channel);
+                expect(lowered.outcome).toBe(mercyLowerPriceCounters('ship',
+                    'p', channel, 0) ? 'counter' : 'withdraw');
+                if (lowered.outcome === 'counter') {
+                    counters++;
+                    expect(lowered.haggle)
+                        .toEqual({ asks: 0, countered: true });
+                    // A Lower Price on the counter withdraws, and the next
+                    // plea asks 1,000 more.
+                    expect(lowerMercyPrice(lowered.haggle, 'ship', 'p',
+                        channel)).toEqual({
+                        haggle: { asks: 1, countered: false },
+                        outcome: 'withdraw',
+                    });
+                } else {
+                    expect(lowered.haggle)
+                        .toEqual({ asks: 1, countered: false });
+                }
+            }
+            expect(counters / trials).toBeGreaterThan(0.2);
+            expect(counters / trials).toBeLessThan(0.3);
+        });
+
+    it('draws the counter per ship, pilot, channel and ask', () => {
+        const draws = (f: (i: number) => boolean) =>
+            [...Array(64).keys()].map(f).join();
+        const base = draws(i => mercyLowerPriceCounters('ship', 'p', i, 0));
+        expect(draws(i => mercyLowerPriceCounters('ship', 'p', i, 0)))
+            .toBe(base);
+        expect(draws(i => mercyLowerPriceCounters('ship', 'p', i, 1)))
+            .not.toBe(base);
+        expect(draws(i => mercyLowerPriceCounters('ship', 'q', i, 0)))
+            .not.toBe(base);
+        expect(draws(i => mercyLowerPriceCounters('other', 'p', i, 0)))
+            .not.toBe(base);
+    });
+
+    it('keeps the haggle of the channel last heard and starts any other '
+        + 'afresh (a new hail asked 19,000 after 22,000)', () => {
+            const entry = { channel: 7, asks: 2, countered: true };
+            expect(mercyHaggleOn(entry, 7))
+                .toEqual({ asks: 2, countered: true });
+            expect(mercyHaggleOn(entry, 8)).toEqual(NO_MERCY_HAGGLE);
+            expect(mercyHaggleOn(undefined, 7)).toEqual(NO_MERCY_HAGGLE);
         });
 });
 

@@ -37,6 +37,7 @@ import {
     planetBribeRefused, shipBribePrice, StellarClearance, bribeDay,
     laterStellarHaggle, lowerPlanetBribe, planetBribeAsk,
     StellarHaggleState, stellarBribeDeclinedText, stellarHaggleFrom,
+    lowerMercyPrice, MercyHaggleState, mercyPrice, NO_MERCY_HAGGLE,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -388,6 +389,48 @@ export interface AssistReplies {
      * planet's channel that names a price.
      */
     planetBribe?: PlanetBribeLines;
+    /**
+     * A hostile ship's Beg For Mercy price (reference "R7 a provoked
+     * freighter's Lower Price, wave 32"): what Lower Price needs to counter
+     * or withdraw and the next plea to ask 1,000 more. Present only on a
+     * hostile ship's channel that names a price.
+     */
+    mercy?: MercyLines;
+}
+
+/** What a hostile ship naming a Beg For Mercy price needs for the
+ * channel's haggle, resolved when the channel opens (the Lower Price
+ * handler is synchronous). */
+export interface MercyLines {
+    /** The channel's first ask (hail.ts's shipBribePrice). */
+    firstAsk: number;
+    /** The ship's mood line at the head of the popup. */
+    offer: string;
+    /** "Okay, I'll leave you alone." (STR# 3000 135-139), once paid. */
+    accepted: string;
+    /** This hail's withdrawal line (STR# 3000 150-154). */
+    withdrawn: string;
+    /** STR# 2002, for the popup's "Pay me N credits.". */
+    miscStrings: readonly string[] | undefined;
+}
+
+/**
+ * The ship's Beg For Mercy offer for the price on the table: the channel's
+ * first ask plus 1,000 for each ask withdrawn on it, or the 3/4 counter
+ * while one is (hail.ts's mercyPrice), the same figure applyHail charges on
+ * Accept Price.
+ */
+export function mercyOffer(lines: MercyLines, haggle: MercyHaggleState,
+    credits: number): NonNullable<HailContext['bribe']> {
+    const amount = mercyPrice(lines.firstAsk, haggle);
+    return {
+        amount, canAfford: credits >= amount && amount > 0,
+        purpose: 'mercy',
+        offer: lines.offer,
+        demand: payMeText(lines.miscStrings, amount),
+        accepted: lines.accepted,
+        withdrawn: lines.withdrawn,
+    };
 }
 
 /** What a planet naming a bribe needs for its haggle, resolved when the
@@ -721,7 +764,12 @@ export async function computeContext(world: World,
      * The planet haggles as this dialog's own presses left them (by NOVA
      * id), which the simulation may not have mirrored back yet.
      */
-    localStellarHaggle?: ReadonlyMap<string, StellarHaggleState>):
+    localStellarHaggle?: ReadonlyMap<string, StellarHaggleState>,
+    /**
+     * Which opening of the comm dialog this is (see the plugin's
+     * openHail): a hostile ship's withdrawal line is drawn per hail.
+     */
+    channel = 0):
     Promise<{
         context: HailContext, target: string, isEscort: boolean,
         replies: AssistReplies,
@@ -984,30 +1032,37 @@ export async function computeContext(world: World,
             // bribe price, wave 22"), named in the fuel sale's words: the
             // ship's mood line ("I'm in a bad mood today, so it's going to
             // cost extra.") and "Pay me N credits.".
-            const amount = shipBribePrice(shipTargetUuid, player.uuid,
+            // The channel's FIRST ask: each further plea on it asks 1,000
+            // more (mercyOffer; reference "R7 a provoked freighter's Lower
+            // Price, wave 32").
+            const firstAsk = shipBribePrice(shipTargetUuid, player.uuid,
                 credits, !!govt?.flags.largerBribes);
             const priced = response.canBribe && !othersShip;
             const miscStrings = priced
                 ? await loadStrings(displayAssets, MISC_STRING_TABLE)
                 : undefined;
-            const bribe = priced
+            const mercy: MercyLines | undefined = priced
                 ? {
-                    amount, canAfford: credits >= amount && amount > 0,
-                    purpose: 'mercy' as const,
+                    firstAsk,
                     offer: fuelSaleMoodText(shipStrings,
                         fuelSaleTerms(shipTargetUuid).mood, shipSeed),
-                    demand: payMeText(miscStrings, amount),
                     // What they say once the demand is PAID (STR# 3000
                     // 135-139). Resolved here because the Pay handler is
                     // synchronous, exactly like the assistance replies.
                     accepted: mercyAcceptedText(shipStrings, shipSeed),
-                    // Lower Price's withdrawal, "What? How dare you!
-                    // Prepare to die!" (STR# 3000 150-154; reference "R7
-                    // a provoked freighter's Beg For Mercy above 20M, wave
-                    // 31").
-                    withdrawn: mercyLoweredText(shipStrings, shipSeed),
+                    // Lower Price's withdrawal (STR# 3000 150-154: "Ha ha
+                    // ha! This will be your last mistake!", "Die,
+                    // cheapskate!", ...), ONE line per hail (reference "R7
+                    // a provoked freighter's Lower Price, wave 32",
+                    // finding 4: the same line all channel long, another
+                    // on the next): seeded by the ship and the channel.
+                    withdrawn: mercyLoweredText(shipStrings,
+                        hashString(`${shipTargetUuid}:mercy:${channel}`)),
+                    miscStrings,
                 }
                 : undefined;
+            const bribe = mercy
+                ? mercyOffer(mercy, NO_MERCY_HAGGLE, credits) : undefined;
             // BEG FOR MERCY IS OFFERED TO EVERY IFF-HOSTILE SHIP whose govt
             // has not disabled it (Flags2 0x0001): one that will not be
             // bought answers the plea with a flat refusal (STR# 3000 95-99)
@@ -1033,7 +1088,8 @@ export async function computeContext(world: World,
                     bribe, mercyRefused,
                 },
                 target: shipTargetUuid, isEscort: false,
-                replies: ASSIST_REPLIES_FALLBACK,
+                replies: mercy ? { ...ASSIST_REPLIES_FALLBACK, mercy }
+                    : ASSIST_REPLIES_FALLBACK,
             };
         }
         // OPENING THE CHANNEL IS NOT A GREETING. hail/hail.png shows a
@@ -1396,6 +1452,16 @@ export const HailDialogPlugin: Plugin = {
         // withdrawal this dialog has shown before the simulation mirrors
         // it. Display-local; the sim is the authority.
         const localStellarHaggle = new Map<string, StellarHaggleState>();
+        // THE CHANNEL (reference "R7 a provoked freighter's Lower Price,
+        // wave 32"): one opening of this dialog, from the hail to its
+        // close. Named by the mirrored sim clock at the hail, kept
+        // increasing (a hail on a paused clock is still a new channel),
+        // and sent with a mercy plea's records so the simulation starts
+        // each channel's haggle afresh. The open channel's mercy haggle is
+        // this dialog's own (the simulation follows it record by record).
+        let currentChannel = 0;
+        let lastChannel = -1;
+        let mercyHaggle: MercyHaggleState = NO_MERCY_HAGGLE;
         const dialog = new HailDialog(displayAssets, controls, {
             requestAssistance: () => {
                 // ONE call decides and answers: the ship's line comes back
@@ -1449,7 +1515,10 @@ export const HailDialogPlugin: Plugin = {
                     action: currentBribePurpose === 'assist'
                         || currentBribePurpose === 'fuel'
                         ? { kind: 'requestAssistance', target: currentTarget }
-                        : { kind: 'bribe', target: currentTarget },
+                        : currentBribePurpose === 'mercy'
+                            ? { kind: 'bribe', target: currentTarget,
+                                channel: currentChannel }
+                            : { kind: 'bribe', target: currentTarget },
                 });
             },
             // Lower Price on a ship's fuel price (reference H1 wave 17): a
@@ -1460,7 +1529,28 @@ export const HailDialogPlugin: Plugin = {
                 const player = getPlayerShip(world);
                 const sale = currentReplies.fuelSale;
                 if (!target || !player) {
-                    return undefined;
+                    return {};
+                }
+                const credits = () => player.entity.components
+                    .get(CreditsComponent)?.credits ?? 0;
+                // A hostile ship's BEG FOR MERCY price (reference "R7 a
+                // provoked freighter's Lower Price, wave 32"): a 3/4
+                // counter or a withdrawal, whose next plea on this channel
+                // asks 1,000 more — the same pure draw applyHail makes
+                // from the record, which names the channel.
+                const mercy = currentReplies.mercy;
+                if (currentBribePurpose === 'mercy' && mercy) {
+                    const lowered = lowerMercyPrice(mercyHaggle, target,
+                        player.uuid, currentChannel);
+                    mercyHaggle = lowered.haggle;
+                    world.emit(HailRequestEvent, {
+                        action: { kind: 'lowerPrice', target,
+                            channel: currentChannel },
+                    });
+                    const offer = mercyOffer(mercy, lowered.haggle,
+                        credits());
+                    return lowered.outcome === 'counter'
+                        ? { counter: offer } : { next: offer };
                 }
                 // A PLANET's bribe (reference "R7 planet bribe, wave 28"):
                 // a 3/4 counter or a withdrawal, the same pure draw
@@ -1478,10 +1568,9 @@ export const HailDialogPlugin: Plugin = {
                         action: { kind: 'lowerPrice', target },
                     });
                     return lowered.outcome === 'counter'
-                        ? planetBribeOffer(planet, lowered.haggle,
-                            player.entity.components.get(CreditsComponent)
-                                ?.credits ?? 0)
-                        : undefined;
+                        ? { counter: planetBribeOffer(planet, lowered.haggle,
+                            credits()) }
+                        : {};
                 }
                 const lowered = lowerFuelPrice(
                     haggleWith(target, player.uuid), target, player.uuid);
@@ -1490,8 +1579,9 @@ export const HailDialogPlugin: Plugin = {
                     action: { kind: 'lowerPrice', target },
                 });
                 return lowered.outcome === 'counter' && sale
-                    ? fuelOffer(world, target, sale, lowered.haggle)
-                    : undefined;
+                    ? { counter: fuelOffer(world, target, sale,
+                        lowered.haggle) }
+                    : {};
             },
             // A press in a channel to another PLAYER (#332): the button goes
             // to their status line as a record — the sim notes it on OUR
@@ -1636,8 +1726,10 @@ export const HailDialogPlugin: Plugin = {
                     && await presentShipOffer(world, shipTarget, 'hail')) {
                     return;
                 }
+                const channel = Math.max(lastChannel + 1, Math.floor(
+                    world.resources.get(SimulationTimeResource)?.time ?? 0));
                 const computed = await computeContext(world, simulationData,
-                    displayAssets, localStellarHaggle);
+                    displayAssets, localStellarHaggle, channel);
                 if (!computed) {
                     // A targeted ship with no context is one that does not
                     // answer at all (computeContext's cantHail case).
@@ -1648,6 +1740,8 @@ export const HailDialogPlugin: Plugin = {
                 }
                 currentTarget = computed.target;
                 currentReplies = computed.replies;
+                currentChannel = lastChannel = channel;
+                mercyHaggle = NO_MERCY_HAGGLE;
                 currentEscort = computed.context.escort;
                 currentBribePurpose = computed.context.bribe?.purpose;
                 // Re-add to move above later-added containers (spaceport).

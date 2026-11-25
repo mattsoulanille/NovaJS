@@ -569,14 +569,14 @@ export function askingCashCap(credits: number): number {
  * the pilot leaves the system ({@link planetBribeRefused}, reference "R7
  * planet bribe withdrawal, wave 29").
  *
- * A SHIP's Lower Price on its Beg For Mercy price WITHDRAWS the offer at the
- * first press ("What? How dare you! Prepare to die!", STR# 3000 150-154,
- * {@link mercyLoweredText}; reference "R7 a provoked freighter's Beg For
- * Mercy above 20M, wave 31": ONE press, so GUESS that it always withdraws
- * and never counters). Nothing is recorded: the plea was never paid, so
- * the simulation has nothing to apply, and Beg For Mercy stays on the
- * channel and names the same price again (GUESS: a second plea after the
- * withdrawal is unmeasured).
+ * A SHIP's Beg For Mercy price is haggled on the CHANNEL ({@link
+ * lowerMercyPrice}, reference "R7 a provoked freighter's Lower Price, wave
+ * 32"): Lower Price counters with 3/4 or withdraws the offer ("Ha ha ha!
+ * This will be your last mistake!", STR# 3000 150-154, {@link
+ * mercyLoweredText}, one line per hail), a Lower Price on a counter
+ * withdraws, and each further plea on the same channel asks 1,000 MORE,
+ * past the 20,000 cap (which holds for the channel's first ask only). A new
+ * hail starts afresh.
  *
  * NOT MODELLED: a second Offer Bribe in the same channel after a COUNTER
  * answered as an insult (wave 22); a NEW hail's new price (the 0x8000
@@ -603,7 +603,9 @@ export const LARGER_SHIP_BRIBE = 20_000;
  * nothing above it was ever seen, while the asks under it spread as
  * before (4,000 at 50M). It is the 0x8000 ships' flat ask too (GUESS: one
  * cap, which a 0x8000 govt's ship asks at once). Planets have no such cap
- * (183,000 at 200M).
+ * (183,000 at 200M). It caps a channel's FIRST ask only: each further plea
+ * on the channel asks 1,000 more, past it ({@link mercyPrice}; reference
+ * "R7 a provoked freighter's Lower Price, wave 32": 21,000 and 22,000).
  */
 export const SHIP_BRIBE_CAP = LARGER_SHIP_BRIBE;
 
@@ -685,8 +687,9 @@ export function planetBribePrice(planetUuid: string, playerUuid: string,
  * a withdrawn haggle or a refusal holds for the rest of it): waves 22 and
  * 27, 2 refused in 15; wave 28, 0 in 1; wave 29, 0 in 3; wave 30, 4 in 7
  * (r7_days3's priced first offer, r7_first_1-4, r7_fresh_1 and
- * bribe_freight; the section's "4 in 6" leaves out r7_days3): 6 in 26
- * (23%, about 0.11-0.42 at 95%). Wave 30's own seven lean higher, and one
+ * bribe_freight; the section's "4 in 6" leaves out r7_days3); wave 32,
+ * 1 in 1 (fj_1, which stopped at the first refusal): 7 in 27 (26%, about
+ * 0.13-0.45 at 95%). Wave 30's own seven lean higher, and one
  * of them (r7_fresh_1) came from runs hunting a refusal. Also a GUESS that
  * the draw does not depend on the cash.
  */
@@ -714,10 +717,10 @@ export function bribeDay(
  * MEASURED (reference "R7 planet bribe withdrawal, wave 30", finding 3):
  * a fresh refusal held through two re-hails and a landing at the
  * system's other port a day later, like a withdrawal (one run, four
- * refusals in a row). GUESS: that it ends with the crossing, as the
- * withdrawal does (a fresh refusal followed by a jump out and back is
- * unmeasured), and that a priced first offer is likewise kept for the
- * visit. A pure hash rather than a recorded verdict, because Offer Bribe
+ * refusals in a row); and it ends with the crossing, as the withdrawal
+ * does (reference "R7 a FRESH planet bribe refusal, wave 32": the first
+ * offer after a jump out and back named the planet's 3,000). GUESS: that
+ * a priced first offer is likewise kept for the visit. A pure hash rather than a recorded verdict, because Offer Bribe
  * reaches the simulation only as the Accept / Lower Price that follows
  * it: the dialog's verdict and applyHail's agree on every peer without
  * the PRNG, and neither needs an input of its own. The game day plays no
@@ -985,6 +988,123 @@ export function laterFuelHaggle(a: FuelHaggleState | undefined,
 }
 
 /**
+ * ============================================================================
+ * A ship's Beg For Mercy haggle (reference "R7 a provoked freighter's Lower
+ * Price, wave 32")
+ * ============================================================================
+ *
+ * MEASURED, on one provoked freighter at 200M (six asks over two hails):
+ *
+ *  - Lower Price on the plea's price can COUNTER with 3/4 of it, rounded
+ *    down to 100 (22,000 -> 16,500: the fuel sale's and the planets'
+ *    {@link fuelCounterPrice}), the popup staying up; a Lower Price on the
+ *    counter WITHDRAWS. Otherwise the first press withdraws;
+ *  - a withdrawal does not end the plea: Beg For Mercy on the same channel
+ *    asks again, 1,000 MORE each time (20,000 / 21,000 / 22,000 on one
+ *    channel, 19,000 / 20,000 on the next), so an ask can pass the 20,000
+ *    {@link SHIP_BRIBE_CAP}: the cap holds for the channel's FIRST ask
+ *    (every first ask of waves 22-32 stayed under it), the steps come on
+ *    top (GUESS: on top of the third-of-cash cap too, unmeasured);
+ *  - a NEW hail asks afresh (19,000 after 22,000);
+ *  - one withdrawal line per hail ("Ha ha ha! This will be your last
+ *    mistake!" three times on channel 1, "Die, cheapskate!" twice on
+ *    channel 2): STR# 3000 150-154 drawn per hail (GUESS).
+ *
+ * THE CHANNEL in NovaJS is ONE OPENING OF THE COMM DIALOG on that ship,
+ * from the hail to Close Channel (or anything else that shuts it). The
+ * dialog names it by a number it picks when it opens (the mirrored sim
+ * clock, kept increasing; display/hail_dialog_plugin.ts) and sends it with
+ * the plea's Lower Price and Accept Price records; the simulation keeps
+ * the haggle of the channel it last heard (npc/hail_component.ts's
+ * MercyHaggle) and starts afresh on a record from any other channel. A
+ * client can only ever reset the haggle that way, which re-hailing does
+ * anyway.
+ *
+ * GUESSES: how often the first Lower Price of an ask counters (the fuel
+ * sale's one in four, {@link FUEL_COUNTER_IN_FOUR}: 1 in 6 fresh asks
+ * measured, waves 31-32); that only a WITHDRAWAL moves the next plea's ask
+ * on (every repeated plea measured followed one), like the fuel sale's
+ * {@link lowerFuelPrice}. The first ask is {@link shipBribePrice}, fixed
+ * per ship and pilot for given cash (the original re-draws it per hail:
+ * NOT MODELLED). Nothing is recorded until a price is accepted.
+ */
+export interface MercyHaggleState {
+    /** How many of this channel's asks the ship has withdrawn: each adds
+     * {@link MERCY_ASK_STEP} to the next. */
+    asks: number;
+    /** The ship's 3/4 counter to this ask is on the table. */
+    countered: boolean;
+}
+
+/** A channel whose plea has not been haggled over yet. */
+export const NO_MERCY_HAGGLE: MercyHaggleState =
+    Object.freeze({ asks: 0, countered: false });
+
+/** What each further plea on one channel adds to the ask. MEASURED (20,000
+ * / 21,000 / 22,000; 19,000 / 20,000). */
+export const MERCY_ASK_STEP = FUEL_SALE_PRICE_STEP;
+
+/** Asks are clamped here so the price stays an exact integer. */
+const MAX_MERCY_ASKS = 1_000_000;
+
+/**
+ * The plea's price on the table: the channel's first ask (`firstAsk`,
+ * {@link shipBribePrice}) plus {@link MERCY_ASK_STEP} for every ask already
+ * withdrawn, uncapped, or the 3/4 counter to it while one is on the table.
+ */
+export function mercyPrice(firstAsk: number, haggle: MercyHaggleState):
+    number {
+    const asks = Math.max(0, Math.min(MAX_MERCY_ASKS,
+        Math.floor(haggle.asks) || 0));
+    const asking = Math.floor(firstAsk) + MERCY_ASK_STEP * asks;
+    return haggle.countered ? fuelCounterPrice(asking) : asking;
+}
+
+/**
+ * Whether the first Lower Price on ask number `asks` of `channel` counters
+ * (see {@link lowerMercyPrice}): a pure draw per ship, pilot, channel and
+ * ask, so the dialog that must show it and every peer agree without the
+ * PRNG, and a new hail draws afresh.
+ */
+export function mercyLowerPriceCounters(shipUuid: string, playerUuid: string,
+    channel: number, asks: number): boolean {
+    return avalanche(hashString(
+        `mercy:lower:${shipUuid}:${playerUuid}:${channel}:${asks}`))
+        % 4 < FUEL_COUNTER_IN_FOUR;
+}
+
+/**
+ * WHAT LOWER PRICE DOES to a ship's Beg For Mercy price: on its asking
+ * price, a 3/4 counter ({@link mercyLowerPriceCounters}) or a withdrawal;
+ * on a counter, always a withdrawal. A withdrawal ends that ask: the next
+ * plea on the channel asks {@link MERCY_ASK_STEP} more. Pure.
+ */
+export function lowerMercyPrice(haggle: MercyHaggleState, shipUuid: string,
+    playerUuid: string, channel: number):
+    { haggle: MercyHaggleState, outcome: 'counter' | 'withdraw' } {
+    if (!haggle.countered && mercyLowerPriceCounters(shipUuid, playerUuid,
+        channel, haggle.asks)) {
+        return { haggle: { asks: haggle.asks, countered: true },
+            outcome: 'counter' };
+    }
+    return { haggle: { asks: haggle.asks + 1, countered: false },
+        outcome: 'withdraw' };
+}
+
+/**
+ * Where a pilot stands on `channel` with a ship, from the entry the
+ * simulation keeps (the haggle of the channel it last heard): that
+ * entry's haggle when it is this channel's, else a fresh one.
+ */
+export function mercyHaggleOn(
+    entry: (MercyHaggleState & { channel: number }) | undefined,
+    channel: number): MercyHaggleState {
+    return entry && entry.channel === channel
+        ? { asks: entry.asks, countered: entry.countered }
+        : NO_MERCY_HAGGLE;
+}
+
+/**
  * Whether the hailed ship is ENGAGED IN COMBAT right now, in which case it
  * refuses an assistance request ("I'm busy") and carries on fighting.
  *
@@ -1206,8 +1326,10 @@ export const FUEL_OFFER_WITHDRAWN_FIRST_INDEX = 155;
  * the player answered with Lower Price: it withdraws the offer (reference
  * "R7 a provoked freighter's Beg For Mercy above 20M, wave 31", one press,
  * which read 150). The rest of the group ("Die, cheapskate!" / ... / "Ha
- * ha ha! This will be your last mistake!") is picked by the ship's seed
- * like every other response group.
+ * ha ha! This will be your last mistake!", both read in wave 32) is
+ * picked ONCE PER HAIL (reference "R7 a provoked freighter's Lower Price,
+ * wave 32", finding 4: one line all channel long; the dialog seeds it by
+ * the ship and the channel).
  */
 export const MERCY_LOWERED_FIRST_INDEX = 150;
 export const MERCY_LOWERED_FALLBACK = 'What? How dare you! Prepare to die!';

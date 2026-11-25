@@ -49,3 +49,30 @@ export const FuelHaggleType = map(t.string, FuelHaggleEntryType);
 export type FuelHaggle = t.TypeOf<typeof FuelHaggleType>;
 export const FuelHaggleComponent =
     new Component<FuelHaggle>('FuelHaggle');
+
+/**
+ * Where each player stands with THIS ship's Beg For Mercy price on the
+ * channel he last haggled over it on: player ship uuid -> { channel, asks,
+ * countered } (reputation/hail.ts's MercyHaggleState, reference "R7 a
+ * provoked freighter's Lower Price, wave 32"). `channel` names the comm
+ * dialog's opening the haggle belongs to (the hail record's `channel`);
+ * a record from any other channel starts afresh (hail.ts's
+ * mercyHaggleOn). `asks` is how many of that channel's asks the ship has
+ * withdrawn (each adds 1,000 to the next plea), `countered` is set while
+ * its 3/4 counter is on the table.
+ *
+ * Lives on the NPC and is keyed by player, like FuelHaggle. Written only by
+ * the deterministic input path (hail_plugin's applyHail, on the tick every
+ * peer applies the plea's lowerPrice / bribe record). The dialog keeps its
+ * own copy of the open channel's haggle and never reads this one; it is
+ * serializer-registered so a rollback across a haggle converges.
+ */
+export const MercyHaggleEntryType = t.type({
+    channel: t.number,
+    asks: t.number,
+    countered: t.boolean,
+});
+export const MercyHaggleType = map(t.string, MercyHaggleEntryType);
+export type MercyHaggle = t.TypeOf<typeof MercyHaggleType>;
+export const MercyHaggleComponent =
+    new Component<MercyHaggle>('MercyHaggle');

@@ -20,11 +20,13 @@ import { completeEntity } from '../spawn/index.js';
 import { GovtComponent, SimulationGameDataResource } from '../core/index.js';
 import {
     FUEL_SALE_AMOUNT, fuelSaleTerms,
-    LegalRecordsComponent,
+    LegalRecordsComponent, mercyLowerPriceCounters,
 } from '../reputation/index.js';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { ActiveRanksComponent } from '../ncb/index.js';
-import { AssistingComponent, FuelHaggleComponent } from '../npc/index.js';
+import {
+    AssistingComponent, FuelHaggleComponent, MercyHaggleComponent,
+} from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
     applyHail, BRIBE_PACIFY_MS, isSomeoneElsesEscort, SentHailComponent,
@@ -352,6 +354,134 @@ describe('applyHail: bribe / beg for mercy', () => {
             expect(after.pacifiedFrom).toBeUndefined();
             expect(after.pacifiedUntil).toBeUndefined();
         });
+});
+
+describe('applyHail: a ship\'s Beg For Mercy haggle (reference "R7 a '
+    + 'provoked freighter\'s Lower Price, wave 32")', () => {
+    /** A hostile 0x8000 pirate (a flat 20,000 first ask) and a 200M pilot. */
+    async function pirateAt200M() {
+        const made = await makeWorld();
+        player(made.world).components.set(CreditsComponent,
+            { credits: 200_000_000 });
+        await made.addShip('target', 500, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:pirate' });
+            ship.components.set(NpcComponent,
+                { aiType: 3, mode: 'attack', aggressor: 'player' });
+            ship.components.set(TargetComponent, { target: 'player' });
+        });
+        return made.world;
+    }
+    const credits = (world: World) =>
+        player(world).components.get(CreditsComponent)!.credits;
+    /** The first channel at or after `from` whose first `n` Lower Price
+     * presses (each on a fresh ask) all withdraw. */
+    function withdrawingChannel(n: number, from = 0): number {
+        for (let channel = from; ; channel++) {
+            if ([...Array(n).keys()].every(asks =>
+                !mercyLowerPriceCounters('target', 'player', channel,
+                    asks))) {
+                return channel;
+            }
+        }
+    }
+
+    it('each withdrawn ask makes the next plea on the channel 1,000 '
+        + 'dearer, past the 20,000 cap, and Accept Price pays that',
+        async () => {
+            const world = await pirateAt200M();
+            const channel = withdrawingChannel(2);
+            const lower = {
+                kind: 'lowerPrice' as const, target: 'target', channel,
+            };
+            applyHail(world, PEER, lower);
+            applyHail(world, PEER, lower);
+            // Lower Price neither charges nor pacifies.
+            expect(credits(world)).toBe(200_000_000);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBeUndefined();
+            expect(target(world).components.get(MercyHaggleComponent)!
+                .get('player')).toEqual({ channel, asks: 2, countered: false });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target',
+                channel });
+            expect(credits(world)).toBe(200_000_000 - 22_000);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBe('player');
+            // The haggle is over.
+            expect(target(world).components.get(MercyHaggleComponent)!
+                .has('player')).toBeFalse();
+        });
+
+    it('a COUNTER is 3/4 of the ask, and Accept Price pays it', async () => {
+        const world = await pirateAt200M();
+        let channel = 0;
+        while (!mercyLowerPriceCounters('target', 'player', channel, 0)) {
+            channel++;
+        }
+        applyHail(world, PEER, { kind: 'lowerPrice', target: 'target',
+            channel });
+        expect(target(world).components.get(MercyHaggleComponent)!
+            .get('player')).toEqual({ channel, asks: 0, countered: true });
+        applyHail(world, PEER, { kind: 'bribe', target: 'target', channel });
+        expect(credits(world)).toBe(200_000_000 - 15_000);
+    });
+
+    it('Lower Price on a counter withdraws: the next ask is 1,000 more',
+        async () => {
+            const world = await pirateAt200M();
+            let channel = 0;
+            while (!mercyLowerPriceCounters('target', 'player', channel, 0)) {
+                channel++;
+            }
+            const lower = {
+                kind: 'lowerPrice' as const, target: 'target', channel,
+            };
+            applyHail(world, PEER, lower);
+            applyHail(world, PEER, lower);
+            expect(target(world).components.get(MercyHaggleComponent)!
+                .get('player')).toEqual({ channel, asks: 1, countered: false });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target',
+                channel });
+            expect(credits(world)).toBe(200_000_000 - 21_000);
+        });
+
+    it('a NEW channel asks afresh (19,000 after 22,000 on the reference)',
+        async () => {
+            const world = await pirateAt200M();
+            const channel = withdrawingChannel(2);
+            const lower = {
+                kind: 'lowerPrice' as const, target: 'target', channel,
+            };
+            applyHail(world, PEER, lower);
+            applyHail(world, PEER, lower);
+            applyHail(world, PEER, { kind: 'bribe', target: 'target',
+                channel: channel + 1 });
+            expect(credits(world)).toBe(200_000_000 - 20_000);
+        });
+
+    it('a pilot who cannot pay the ask haggles nothing', async () => {
+        const world = await pirateAt200M();
+        player(world).components.set(CreditsComponent, { credits: 500 });
+        applyHail(world, PEER, { kind: 'lowerPrice', target: 'target',
+            channel: 3 });
+        expect(target(world).components.has(MercyHaggleComponent))
+            .toBeFalse();
+    });
+
+    it('a record with no channel is channel 0', async () => {
+        const world = await pirateAt200M();
+        const channel = withdrawingChannel(1);
+        expect(channel).toBe(withdrawingChannel(1));
+        if (channel === 0) {
+            applyHail(world, PEER, { kind: 'lowerPrice', target: 'target' });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(credits(world)).toBe(200_000_000 - 21_000);
+        } else {
+            applyHail(world, PEER, { kind: 'lowerPrice', target: 'target',
+                channel });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(credits(world)).toBe(200_000_000 - 20_000);
+        }
+    });
 });
 
 describe('applyHail: request assistance', () => {

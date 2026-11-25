@@ -19,7 +19,7 @@ import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
     AssistingComponent, AssistingType, FuelHaggleComponent, FuelHaggleType,
-    isInFlock, NpcFireControlSystem,
+    isInFlock, MercyHaggleComponent, MercyHaggleType, NpcFireControlSystem,
 } from '../npc/index.js';
 import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
@@ -36,6 +36,10 @@ import {
     FuelHaggleState,
     fuelSalePrice,
     lowerFuelPrice,
+    lowerMercyPrice,
+    mercyHaggleOn,
+    MercyHaggleState,
+    mercyPrice,
     NO_FUEL_HAGGLE,
     bribeDay,
     lowerPlanetBribe,
@@ -113,10 +117,16 @@ export type HailAction =
      * withdraws a counter (hail.ts's lowerFuelPrice); a withdrawn offer's
      * next one from that ship costs 1,000 more. Accept Price is the
      * `requestAssistance` record itself, as Pay is for an unfriendly ship's
-     * price.
+     * price. Also Lower Price on a stellar's bribe (applyPlanetLowerPrice)
+     * and on a hostile ship's Beg For Mercy price (applyMercyLowerPrice).
+     *
+     * `channel`, on a Beg For Mercy price's Lower Price and Accept Price
+     * only: which opening of the comm dialog the plea was made on
+     * (reputation/hail.ts's mercy haggle section: each further plea on one
+     * channel asks 1,000 more, a new hail starts afresh). 0 when absent.
      */
-    | { kind: 'lowerPrice', target: string }
-    | { kind: 'bribe', target: string }
+    | { kind: 'lowerPrice', target: string, channel?: number }
+    | { kind: 'bribe', target: string, channel?: number }
     /** A button pressed in a channel to ANOTHER PLAYER's ship (#332). */
     | { kind: 'message', target: string, message: PlayerHailMessage };
 
@@ -141,8 +151,14 @@ export const PlayerHailMessageType: t.Type<PlayerHailMessage> = t.union([
 
 export const HailActionType: t.Type<HailAction> = t.union([
     t.type({ kind: t.literal('requestAssistance'), target: t.string }),
-    t.type({ kind: t.literal('lowerPrice'), target: t.string }),
-    t.type({ kind: t.literal('bribe'), target: t.string }),
+    t.intersection([
+        t.type({ kind: t.literal('lowerPrice'), target: t.string }),
+        t.partial({ channel: t.number }),
+    ]),
+    t.intersection([
+        t.type({ kind: t.literal('bribe'), target: t.string }),
+        t.partial({ channel: t.number }),
+    ]),
     t.type({
         kind: t.literal('message'), target: t.string,
         message: PlayerHailMessageType,
@@ -513,7 +529,10 @@ export function applyHail(world: World, peerId: string | undefined,
         player, gameData, uuid => world.entities.get(uuid), now, systemId);
     const targetNpcMode = target.components.get(NpcComponent)?.mode;
 
-    if (action.kind === 'requestAssistance' || action.kind === 'lowerPrice') {
+    // A non-hostile ship's Lower Price is on its fuel price; a hostile
+    // ship's is on its Beg For Mercy price (below).
+    if (action.kind === 'requestAssistance'
+        || (action.kind === 'lowerPrice' && !iffHostile)) {
         // ränk 0x0400: "Player can always request battle assistance from
         // ships of the affiliated government" (rank_logic.ts).
         const getRank = (id: string) => world.resources
@@ -706,16 +725,35 @@ export function applyHail(world: World, peerId: string | undefined,
     if (!credits) {
         return;
     }
-    // The ship's price (hail.ts's shipBribePrice, reference "R7 bribe
-    // price, wave 22"): its fuel-sale ask grown with the cash, or 20,000
-    // flat for a 0x8000 govt, capped by a third of the cash, floor 1,000.
-    // A pilot who cannot pay it pays nothing and stays unpacified.
-    const amount = shipBribePrice(action.target, found.uuid, credits.credits,
-        !!targetGovt?.flags.largerBribes);
+    // The ship's price on the plea's channel (hail.ts's mercy haggle,
+    // reference "R7 a provoked freighter's Lower Price, wave 32"): the
+    // channel's first ask is shipBribePrice (reference "R7 bribe price,
+    // wave 22": its fuel-sale ask grown with the cash, or 20,000 flat for
+    // a 0x8000 govt, capped by a third of the cash, floor 1,000), each ask
+    // the ship withdrew on this channel adds 1,000, and its 3/4 counter
+    // replaces the ask while on the table. A pilot who cannot pay it pays
+    // nothing, haggles nothing and stays unpacified (the dialog offers no
+    // Lower Price then).
+    const channel = action.channel ?? 0;
+    const haggle = mercyHaggleOn(
+        target.components.get(MercyHaggleComponent)?.get(found.uuid),
+        channel);
+    const amount = mercyPrice(shipBribePrice(action.target, found.uuid,
+        credits.credits, !!targetGovt?.flags.largerBribes), haggle);
     if (amount <= 0 || credits.credits < amount) {
         return;
     }
+    if (action.kind === 'lowerPrice') {
+        // LOWER PRICE: a 3/4 counter or a withdrawal, always a withdrawal
+        // on a counter (hail.ts's lowerMercyPrice, the same pure draw the
+        // dialog shows). Nothing else changes: the ship keeps fighting.
+        setMercyHaggle(target, found.uuid, channel, lowerMercyPrice(
+            haggle, action.target, found.uuid, channel).haggle);
+        return;
+    }
     credits.credits -= amount;
+    // ACCEPT PRICE: the haggle is over.
+    target.components.get(MercyHaggleComponent)?.delete(found.uuid);
     // Pacify the ship: forget the player as an aggressor and ignore them as a
     // hostile until the reprieve lapses (NpcDecisionSystem honors this).
     const npc = target.components.get(NpcComponent);
@@ -817,6 +855,24 @@ function setFuelHaggle(target: Entity, playerUuid: string,
         haggle.set(playerUuid, entry);
     } else {
         target.components.set(FuelHaggleComponent,
+            new Map([[playerUuid, entry]]));
+    }
+}
+
+/**
+ * Records where `playerUuid` now stands with `target`'s Beg For Mercy price
+ * on `channel` (MercyHaggleComponent: one entry per pilot, the channel he
+ * last haggled on). Mutates the existing map when there is one, as
+ * setFuelHaggle does.
+ */
+function setMercyHaggle(target: Entity, playerUuid: string, channel: number,
+    state: MercyHaggleState) {
+    const entry = { channel, asks: state.asks, countered: state.countered };
+    const haggle = target.components.get(MercyHaggleComponent);
+    if (haggle) {
+        haggle.set(playerUuid, entry);
+    } else {
+        target.components.set(MercyHaggleComponent,
             new Map([[playerUuid, entry]]));
     }
 }
@@ -928,6 +984,13 @@ export const HailPlugin: Plugin = {
         world.resources.get(DeltaResource)?.addComponent(FuelHaggleComponent, {
             componentType: FuelHaggleType,
         });
+        // A ship's Beg For Mercy haggle on the channel last heard
+        // (reference "R7 a provoked freighter's Lower Price, wave 32"):
+        // synced so a rollback across a haggle converges. Not
+        // delta-registered: the dialog keeps its own copy of the open
+        // channel's haggle and never reads this one.
+        world.addComponent(MercyHaggleComponent);
+        serializer?.addComponent(MercyHaggleComponent, MercyHaggleType);
         // A player-to-player hail (#332) is synced player state: it must
         // reach the RECIPIENT's display through the delta stream, and ride
         // snapshots so a rollback across it converges (see SentHail).
