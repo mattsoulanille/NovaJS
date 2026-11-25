@@ -293,14 +293,17 @@ export const StellarBribesComponent =
     new Component<StellarBribes>('StellarBribes');
 
 /**
- * Where the pilot stands with each planet's bribe haggle today: the
- * stellar's NOVA id (as StellarBribes) -> { day, countered, withdrawn }
- * (reputation/hail.ts's StellarHaggleState; reference "R7 planet bribe,
- * wave 28"). `countered` while the planet's 3/4 counter to a Lower Price
- * is on the table (Accept Price then pays it); `withdrawn` once a Lower
- * Price made it withdraw its offer, after which it refuses every offer
- * for the rest of that game day. An entry for another day counts as none
- * (hail.ts's stellarHaggleOn), so nothing prunes the map.
+ * Where the pilot stands with each planet's bribe haggle in this system
+ * visit: the stellar's NOVA id (as StellarBribes) -> { countered,
+ * withdrawn } (reputation/hail.ts's StellarHaggleState; reference "R7
+ * planet bribe, wave 28" and "R7 planet bribe withdrawal, wave 29").
+ * `countered` while the planet's 3/4 counter to a Lower Price is on the
+ * table (Accept Price then pays it); `withdrawn` once a Lower Price made it
+ * withdraw its offer, after which it refuses every offer until the pilot
+ * leaves the system. Landings and take-offs keep it (the ship carries it
+ * down and back up); the crossing into another system drops the whole
+ * component (pilot/transition_prep.ts's
+ * prepareCarriedEntitiesForFreshWorld), which is the only pruning.
  *
  * Player state like StellarBribes: written only by applyHail on the tick
  * every peer applies the lowerPrice / bribe record, serialized and
@@ -308,7 +311,6 @@ export const StellarBribesComponent =
  * will.
  */
 export const StellarHaggleEntryType = t.type({
-    day: t.string,
     countered: t.boolean,
     withdrawn: t.boolean,
 });

@@ -2,7 +2,7 @@ import { Entity } from 'nova_ecs/entity';
 import { clearCarriedAggressionForTransition } from '../combat/index.js';
 import { clearPlunderRecord } from '../ship/index.js';
 import { clearContrabandScan, NpcComponent } from '../npc/index.js';
-import { PlanetTargetComponent } from '../travel/index.js';
+import { PlanetTargetComponent, StellarHaggleComponent } from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 
 /**
@@ -96,8 +96,9 @@ export function clearPlayerTargetsForTransition(player: Entity): void {
 /**
  * THE GATE for everything crossing into a fresh world: the aggression
  * tables (aggression.ts), the player's reticles, the player's
- * scanned-this-visit marker (npc/contraband_target.ts), and every
- * escort's out-of-batch references.
+ * scanned-this-visit marker (npc/contraband_target.ts), the player's
+ * planet bribe haggles (travel/planet_plugin.ts's StellarHaggle), and
+ * every escort's out-of-batch references.
  */
 export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     playerUuid: string,
@@ -108,6 +109,11 @@ export function prepareCarriedEntitiesForFreshWorld(player: Entity,
     // A new system is a new visit: the pilot may be scanned for
     // contraband again (npc/contraband_target.ts's marker).
     clearContrabandScan(player);
+    // ...and every planet's bribe haggle starts afresh: a withdrawal (or a
+    // counter) lasts the system visit, landings included, and ends with the
+    // crossing (reference "R7 planet bribe withdrawal, wave 29": a jump out
+    // and back ended it; travel/planet_plugin.ts's StellarHaggleComponent).
+    player.components.delete(StellarHaggleComponent);
     const live = new Set<string>([playerUuid, ...batch.map(e => e.uuid)]);
     for (const escort of batch) {
         clearStaleReferences(escort.entity, live);

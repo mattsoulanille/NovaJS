@@ -564,8 +564,9 @@ export function askingCashCap(credits: number): number {
  *
  * A PLANET's haggle is modelled ({@link lowerPlanetBribe}, reference "R7
  * planet bribe, wave 28"): Lower Price counters with 3/4 or withdraws the
- * offer, and after a withdrawal the planet refuses every later offer that
- * day ({@link planetBribeRefused}).
+ * offer, and after a withdrawal the planet refuses every later offer until
+ * the pilot leaves the system ({@link planetBribeRefused}, reference "R7
+ * planet bribe withdrawal, wave 29").
  *
  * NOT MODELLED: a SHIP's Lower Price on a bribe (3/4 or a withdrawal, as
  * for fuel); a second Offer Bribe in the same channel after a COUNTER
@@ -716,7 +717,8 @@ export function planetRefusesBribe(planetUuid: string, playerUuid: string,
 
 /**
  * ============================================================================
- * A planet's bribe haggle (reference "R7 planet bribe, wave 28")
+ * A planet's bribe haggle (reference "R7 planet bribe, wave 28" and "R7
+ * planet bribe withdrawal, wave 29")
  * ============================================================================
  *
  * The planet's "Pay us N credits." popup has Lower Price / Accept Price
@@ -727,46 +729,55 @@ export function planetRefusesBribe(planetUuid: string, playerUuid: string,
  *    {@link fuelCounterPrice}), the popup staying up with the new price, or
  *    WITHDRAWS the offer ("No deal, cheapskate." / "Your greed has been
  *    noted. Go away.", STR# 3002 30-34);
+ *  - a second Lower Price on a counter WITHDRAWS ("Yeah, you wish.", wave
+ *    29), as for fuel;
  *  - after a withdrawal the planet REFUSED ALL ELEVEN later offers in that
  *    flight (twelve hails, no jump, no landing), each answered at Offer
  *    Bribe with a line from STR# 3002 45-49 ("You wish." / "Yeah, right."
  *    / "Are you trying to insult us?" / "We don't take kindly to insults."
- *    / "Stop being an insulting little ferret.").
+ *    / "Stop being an insulting little ferret.");
+ *  - the withdrawal OUTLASTS THE GAME DAY (wave 29): a landing elsewhere in
+ *    the same system and a take-off a day later still met a refusal, and a
+ *    jump out to a neighbour and back ended it (the next offer named a
+ *    fresh price).
+ *
+ * So the haggle's SCOPE is the SYSTEM VISIT: it lasts while the pilot stays
+ * in the system, landings and take-offs included, and ends when the pilot
+ * crosses into another system (a jump, a hypergate or wormhole transit, a
+ * mission's system move: pilot/transition_prep.ts drops the whole
+ * StellarHaggle component at that crossing, as it drops the contraband
+ * scan marker, the other per-visit fact). GUESS on the exact end: one jump
+ * out and back ended it; whether waiting several days in the system does
+ * is unmeasured, and a counter on the table is taken to share the
+ * withdrawal's scope.
  *
  * GUESSES: how often the first Lower Price counters (the fuel sale's one
- * in four, {@link FUEL_COUNTER_IN_FOUR}; planets countered 2 of 4 first
- * presses, too few to tell); that a second Lower Price on a counter
- * withdraws (as for fuel); that a 0x8000 govt's planet haggles the same
- * (only plain planets were measured); and the SCOPE of the refusal: here
- * the rest of the game DAY, the seed {@link planetRefusesBribe} already
- * uses. A jump moves the date (so leaving the system and coming back
- * starts afresh); landing elsewhere in the system and taking off again
- * does not. The original's "flight" is unmeasured past one flight.
+ * in four, {@link FUEL_COUNTER_IN_FOUR}; planets countered 3 of 7 first
+ * presses over waves 28-29, too few to tell), and that a 0x8000 govt's
+ * planet haggles the same (only plain planets were measured).
  *
  * The state is one entry per planet on the pilot (travel/planet_plugin's
- * StellarHaggleComponent), written only by applyHail; an entry from
- * another day counts as no haggle at all, so nothing has to prune it.
+ * StellarHaggleComponent), written only by applyHail; the crossing into a
+ * new system is what prunes it.
  */
 export interface StellarHaggleState {
-    /** The game day the entry belongs to ({@link bribeDay}). */
-    day: string;
     /** The planet's 3/4 counter is on the table. */
     countered: boolean;
-    /** The planet withdrew its offer: it refuses every offer that day. */
+    /** The planet withdrew its offer: it refuses every offer until the
+     * pilot leaves the system. */
     withdrawn: boolean;
 }
 
-/** Where a pilot stands with a planet on `day`: an entry from another
- * day is no haggle at all. */
-export function stellarHaggleOn(entry: StellarHaggleState | undefined,
-    day: string): StellarHaggleState {
-    return entry && entry.day === day
-        ? { day, countered: !!entry.countered, withdrawn: !!entry.withdrawn }
-        : { day, countered: false, withdrawn: false };
+/** Where a pilot stands with a planet, from its StellarHaggle entry: no
+ * entry is no haggle at all. */
+export function stellarHaggleFrom(entry: StellarHaggleState | undefined):
+    StellarHaggleState {
+    return { countered: !!entry?.countered, withdrawn: !!entry?.withdrawn };
 }
 
 /** Whether the first Lower Price on a planet's bribe counters (see
- * {@link lowerPlanetBribe}): a pure draw per planet, pilot and day. */
+ * {@link lowerPlanetBribe}): a pure draw per planet, pilot and game day
+ * ({@link bribeDay}; GUESS: the seed). */
 export function planetLowerPriceCounters(planetUuid: string,
     playerUuid: string, day: string): boolean {
     return avalanche(hashString(
@@ -776,18 +787,19 @@ export function planetLowerPriceCounters(planetUuid: string,
 
 /**
  * WHAT LOWER PRICE DOES to a planet's bribe: on its asking price, a 3/4
- * counter ({@link planetLowerPriceCounters}) or a withdrawal; on a
- * counter, always a withdrawal. See the section comment. Pure.
+ * counter ({@link planetLowerPriceCounters}, drawn on `day`) or a
+ * withdrawal; on a counter, always a withdrawal (MEASURED, wave 29). See
+ * the section comment. Pure.
  */
 export function lowerPlanetBribe(haggle: StellarHaggleState,
-    planetUuid: string, playerUuid: string):
+    planetUuid: string, playerUuid: string, day: string):
     { haggle: StellarHaggleState, outcome: 'counter' | 'withdraw' } {
     if (!haggle.countered && !haggle.withdrawn
-        && planetLowerPriceCounters(planetUuid, playerUuid, haggle.day)) {
-        return { haggle: { day: haggle.day, countered: true,
-            withdrawn: false }, outcome: 'counter' };
+        && planetLowerPriceCounters(planetUuid, playerUuid, day)) {
+        return { haggle: { countered: true, withdrawn: false },
+            outcome: 'counter' };
     }
-    return { haggle: { day: haggle.day, countered: false, withdrawn: true },
+    return { haggle: { countered: false, withdrawn: true },
         outcome: 'withdraw' };
 }
 
@@ -799,9 +811,9 @@ export function planetBribeAsk(price: number,
 }
 
 /**
- * Whether the planet turns Offer Bribe down today: the fresh refusal
- * ({@link planetRefusesBribe}), or a haggle it withdrew from earlier the
- * same day (reference "R7 planet bribe, wave 28").
+ * Whether the planet turns Offer Bribe down: the fresh refusal of the day
+ * ({@link planetRefusesBribe}), or a haggle it withdrew from earlier in
+ * this system visit (reference "R7 planet bribe withdrawal, wave 29").
  */
 export function planetBribeRefused(planetUuid: string, playerUuid: string,
     largerBribes: boolean, haggle: StellarHaggleState,
@@ -810,18 +822,22 @@ export function planetBribeRefused(planetUuid: string, playerUuid: string,
         || planetRefusesBribe(planetUuid, playerUuid, largerBribes, date);
 }
 
+/** How far along a planet haggle is: a withdrawal (2) beats a counter (1)
+ * beats nothing (0). */
+export function stellarHaggleProgress(haggle: StellarHaggleState): number {
+    return haggle.withdrawn ? 2 : haggle.countered ? 1 : 0;
+}
+
 /**
- * The FURTHER-ALONG of two views of one planet haggle on `day` (the
- * simulation's mirrored entry and the dialog's own presses it has not
- * mirrored back yet): a withdrawal beats a counter beats nothing.
+ * The FURTHER-ALONG of two views of one planet haggle (the simulation's
+ * mirrored entry and the dialog's own presses it has not mirrored back
+ * yet): a withdrawal beats a counter beats nothing.
  */
 export function laterStellarHaggle(a: StellarHaggleState | undefined,
-    b: StellarHaggleState | undefined, day: string): StellarHaggleState {
-    const progress = (h: StellarHaggleState) =>
-        h.withdrawn ? 2 : h.countered ? 1 : 0;
-    const x = stellarHaggleOn(a, day);
-    const y = stellarHaggleOn(b, day);
-    return progress(y) > progress(x) ? y : x;
+    b: StellarHaggleState | undefined): StellarHaggleState {
+    const x = stellarHaggleFrom(a);
+    const y = stellarHaggleFrom(b);
+    return stellarHaggleProgress(y) > stellarHaggleProgress(x) ? y : x;
 }
 
 /**

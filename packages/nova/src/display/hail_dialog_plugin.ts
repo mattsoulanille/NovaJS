@@ -36,7 +36,7 @@ import {
     NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText, planetBribePrice,
     planetBribeRefused, shipBribePrice, StellarClearance, bribeDay,
     laterStellarHaggle, lowerPlanetBribe, planetBribeAsk,
-    StellarHaggleState, stellarBribeDeclinedText,
+    StellarHaggleState, stellarBribeDeclinedText, stellarHaggleFrom,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -398,7 +398,7 @@ export interface PlanetBribeLines {
     price: number;
     /** "No deal, cheapskate." (STR# 3002 30-34), on a withdrawal. */
     withdrawn: string;
-    /** "You wish." / ... (STR# 3002 45-49), every later offer that day. */
+    /** "You wish." / ... (STR# 3002 45-49), every later offer that visit. */
     refused: string;
     /** STR# 2002, for the popup's "Pay us N credits.". */
     miscStrings: readonly string[] | undefined;
@@ -423,13 +423,14 @@ export function planetBribeOffer(lines: PlanetBribeLines,
 }
 
 /**
- * Where this player stands with the planet's bribe today, as the
- * simulation last mirrored it (StellarHaggleComponent on the player).
+ * Where this player stands with the planet's bribe in this system visit,
+ * as the simulation last mirrored it (StellarHaggleComponent on the
+ * player).
  */
-export function stellarHaggleOf(player: Entity, planetId: string,
-    day: string): StellarHaggleState {
-    return laterStellarHaggle(undefined,
-        player.components.get(StellarHaggleComponent)?.get(planetId), day);
+export function stellarHaggleOf(player: Entity, planetId: string):
+    StellarHaggleState {
+    return stellarHaggleFrom(
+        player.components.get(StellarHaggleComponent)?.get(planetId));
 }
 
 /** What a ship selling fuel says, resolved when the channel opens. */
@@ -1247,18 +1248,17 @@ export async function computeContext(world: World,
         // An ordinary planet sometimes turns Offer Bribe down flat (hail.ts's
         // planetRefusesBribe; reference "R7 bribe price above 1M, wave 27":
         // "Yeah, right." at 2M, "You wish." at 100M), and every planet
-        // refuses for the rest of the day once a Lower Price has made it
-        // withdraw (reference "R7 planet bribe, wave 28"), both answered
-        // from STR# 3002 45-49. The button is offered all the same and
-        // answers the refusal in the well, as a ship's Beg For Mercy that
-        // will not be bought does; applyHail draws the same verdict and
-        // charges nothing.
+        // refuses until the pilot leaves the system once a Lower Price has
+        // made it withdraw (reference "R7 planet bribe withdrawal, wave
+        // 29"), both answered from STR# 3002 45-49. The button is offered
+        // all the same and answers the refusal in the well, as a ship's Beg
+        // For Mercy that will not be bought does; applyHail draws the same
+        // verdict and charges nothing.
         const date = player.entity.components.get(GameDateComponent);
-        const day = bribeDay(date);
         const haggle = planetId !== undefined
             ? laterStellarHaggle(localStellarHaggle?.get(planetId),
-                stellarHaggleOf(player.entity, planetId, day), day)
-            : laterStellarHaggle(undefined, undefined, day);
+                stellarHaggleOf(player.entity, planetId))
+            : laterStellarHaggle(undefined, undefined);
         const refuses = bargains && planetBribeRefused(planetTargetUuid,
             player.uuid, !!govt?.flags.largerBribes, haggle, date);
         const canBribe = bargains && !refuses;
@@ -1422,6 +1422,20 @@ export const HailDialogPlugin: Plugin = {
                 // (The haggle that payment ends is left to the simulation
                 // to mirror back: a payment it refuses must not move the
                 // dialog's quote ahead of what it will charge.)
+                //
+                // A planet's haggle lasts the system visit (reference "R7
+                // planet bribe withdrawal, wave 29"), landings included, and
+                // so does this display world's local copy of it: our own
+                // counter must not outlive the payment that ends it, or a
+                // later offer, once the bought clearance lapses, would quote
+                // a counter the simulation has dropped. Without it the
+                // quote is the mirrored entry: none after the payment, or
+                // still the counter if the payment was refused (its record
+                // lands after the Lower Price's).
+                const paidPlanet = currentReplies.planetBribe;
+                if (currentBribePurpose === 'landing' && paidPlanet) {
+                    localStellarHaggle.delete(paidPlanet.planetId);
+                }
                 world.emit(HailRequestEvent, {
                     action: currentBribePurpose === 'assist'
                         || currentBribePurpose === 'fuel'
@@ -1448,8 +1462,8 @@ export const HailDialogPlugin: Plugin = {
                         .get(GameDateComponent));
                     const lowered = lowerPlanetBribe(laterStellarHaggle(
                         localStellarHaggle.get(planet.planetId),
-                        stellarHaggleOf(player.entity, planet.planetId, day),
-                        day), target, player.uuid);
+                        stellarHaggleOf(player.entity, planet.planetId)),
+                        target, player.uuid, day);
                     localStellarHaggle.set(planet.planetId, lowered.haggle);
                     world.emit(HailRequestEvent, {
                         action: { kind: 'lowerPrice', target },

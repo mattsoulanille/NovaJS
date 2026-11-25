@@ -3,7 +3,7 @@ import { Entity } from 'nova_ecs/entity';
 import { AggressionComponent } from '../combat/index.js';
 import { BoardedComponent } from '../ship/index.js';
 import { NpcComponent } from '../npc/index.js';
-import { PlanetTargetComponent } from '../travel/index.js';
+import { PlanetTargetComponent, StellarHaggleComponent } from '../travel/index.js';
 import { TargetComponent } from '../ship/index.js';
 import {
     clearPlayerTargetsForTransition, clearStaleReferences,
@@ -124,6 +124,25 @@ describe('carried-entity preparation for a fresh world', () => {
                 // both of them (and is remapped later).
                 expect(fighter.components.get(NpcComponent)?.aggressor)
                     .toBe('carrier-uuid');
+            });
+
+        it('ends the system visit\'s planet bribe haggles: a withdrawal '
+            + 'lasts until the pilot leaves the system (reference "R7 '
+            + 'planet bribe withdrawal, wave 29")', () => {
+                const player = new Entity('player');
+                player.components.set(StellarHaggleComponent, new Map([
+                    ['nova:128', { countered: false, withdrawn: true }],
+                    ['nova:133', { countered: true, withdrawn: false }],
+                ]));
+                prepareCarriedEntitiesForFreshWorld(player, 'player-uuid',
+                    []);
+                expect(player.components.has(StellarHaggleComponent))
+                    .toBeFalse();
+                // A pilot who never haggled is left as he was.
+                const clean = new Entity('clean');
+                prepareCarriedEntitiesForFreshWorld(clean, 'clean-uuid', []);
+                expect(clean.components.has(StellarHaggleComponent))
+                    .toBeFalse();
             });
     });
 });

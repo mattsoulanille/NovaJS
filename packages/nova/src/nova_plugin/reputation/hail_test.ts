@@ -45,7 +45,8 @@ import {
     planetLowerPriceCounters,
     stellarBribeDeclinedText,
     STELLAR_BRIBE_DECLINED_FALLBACK,
-    stellarHaggleOn,
+    stellarHaggleFrom,
+    stellarHaggleProgress,
     SHIP_BRIBE_CAP,
     planetBribePrice,
     PLANET_BRIBE_BASE,
@@ -309,7 +310,8 @@ describe('the bribe price', () => {
                 .toBe('boolean');
         });
 
-    describe('a planet\'s haggle (reference "R7 planet bribe, wave 28")',
+    describe('a planet\'s haggle (reference "R7 planet bribe, wave 28" '
+        + 'and "R7 planet bribe withdrawal, wave 29")',
         () => {
             const day = bribeDay({ day: 1, month: 1, year: 1177 });
 
@@ -318,23 +320,30 @@ describe('the bribe price', () => {
                 expect(bribeDay()).toBe('');
             });
 
-            it('an entry from another day is no haggle at all', () => {
-                const old = { day: '1177-1-0', countered: true,
-                    withdrawn: true };
-                expect(stellarHaggleOn(old, day)).toEqual(
-                    { day, countered: false, withdrawn: false });
-                expect(stellarHaggleOn(undefined, day)).toEqual(
-                    { day, countered: false, withdrawn: false });
-                expect(stellarHaggleOn({ ...old, day }, day)).toEqual(
-                    { day, countered: true, withdrawn: true });
-            });
+            it('an entry is the haggle whatever its day; none is no '
+                + 'haggle (reference "R7 planet bribe withdrawal, wave 29": '
+                + 'the scope is the system visit, not the day)', () => {
+                    expect(stellarHaggleFrom(undefined)).toEqual(
+                        { countered: false, withdrawn: false });
+                    expect(stellarHaggleFrom(
+                        { countered: true, withdrawn: false })).toEqual(
+                        { countered: true, withdrawn: false });
+                    expect(stellarHaggleFrom(
+                        { countered: false, withdrawn: true })).toEqual(
+                        { countered: false, withdrawn: true });
+                    // A pre-wave-29 entry still carrying its day reads the
+                    // same (the field is ignored, not compared).
+                    expect(stellarHaggleFrom({ day: '1177-1-0',
+                        countered: false, withdrawn: true } as never))
+                        .toEqual({ countered: false, withdrawn: true });
+                });
 
             it('the first Lower Price counters about one press in four, '
-                + 'a second always withdraws, and a withdrawal sticks',
-                () => {
-                    const fresh = stellarHaggleOn(undefined, day);
+                + 'a second always withdraws (wave 29: "Yeah, you wish."), '
+                + 'and a withdrawal sticks', () => {
+                    const fresh = stellarHaggleFrom(undefined);
                     const outcomes = ships.map(id =>
-                        lowerPlanetBribe(fresh, id, 'player'));
+                        lowerPlanetBribe(fresh, id, 'player', day));
                     const counters = outcomes.filter(o =>
                         o.outcome === 'counter').length;
                     // 400 planets: 100 expected.
@@ -344,57 +353,87 @@ describe('the bribe price', () => {
                         expect(o.outcome === 'counter').toBe(
                             planetLowerPriceCounters(ships[i], 'player',
                                 day));
-                        expect(o.haggle.day).toBe(day);
                         const again = lowerPlanetBribe(o.haggle, ships[i],
-                            'player');
+                            'player', day);
                         expect(again.outcome).toBe('withdraw');
                         expect(again.haggle).toEqual(
-                            { day, countered: false, withdrawn: true });
+                            { countered: false, withdrawn: true });
                         expect(lowerPlanetBribe(again.haggle, ships[i],
-                            'player').outcome).toBe('withdraw');
+                            'player', day).outcome).toBe('withdraw');
                     }
                 });
 
+            it('a second Lower Price on a counter withdraws on ANY day '
+                + '(the counter\'s draw is not repeated)', () => {
+                    const countered = { countered: true, withdrawn: false };
+                    for (const id of ships.slice(0, 50)) {
+                        for (const d of [day, '1177-1-2', '']) {
+                            expect(lowerPlanetBribe(countered, id, 'player',
+                                d)).toEqual({
+                                haggle: { countered: false,
+                                    withdrawn: true },
+                                outcome: 'withdraw',
+                            });
+                        }
+                    }
+                });
+
+            it('the first Lower Price draws on the day it is pressed', () => {
+                const fresh = stellarHaggleFrom(undefined);
+                const nextDay = bribeDay({ day: 2, month: 1, year: 1177 });
+                const differs = ships.filter(id =>
+                    lowerPlanetBribe(fresh, id, 'p', day).outcome
+                    !== lowerPlanetBribe(fresh, id, 'p', nextDay).outcome);
+                expect(differs.length).toBeGreaterThan(0);
+            });
+
             it('asks the 3/4 counter while it is on the table (wave 22: '
                 + '3,000 -> 2,200, 10,000 -> 7,500)', () => {
-                    const countered = { day, countered: true,
-                        withdrawn: false };
+                    const countered = { countered: true, withdrawn: false };
                     expect(planetBribeAsk(3000, countered)).toBe(2200);
                     expect(planetBribeAsk(10_000, countered)).toBe(7500);
                     expect(planetBribeAsk(3000,
-                        stellarHaggleOn(undefined, day))).toBe(3000);
+                        stellarHaggleFrom(undefined))).toBe(3000);
                 });
 
-            it('refuses after a withdrawal, a 0x8000 planet included, and '
-                + 'otherwise only on the fresh draw', () => {
-                    const date = { day: 1, month: 1, year: 1177 };
-                    const withdrawn = { day, countered: false,
-                        withdrawn: true };
+            it('refuses after a withdrawal on every later day of the visit, '
+                + 'a 0x8000 planet included, and otherwise only on the '
+                + 'fresh draw', () => {
+                    const withdrawn = { countered: false, withdrawn: true };
                     for (const id of ships.slice(0, 50)) {
-                        expect(planetBribeRefused(id, 'p', false, withdrawn,
-                            date)).toBeTrue();
-                        expect(planetBribeRefused(id, 'p', true, withdrawn,
-                            date)).toBeTrue();
-                        expect(planetBribeRefused(id, 'p', false,
-                            stellarHaggleOn(undefined, day), date))
-                            .toBe(planetRefusesBribe(id, 'p', false, date));
+                        for (const date of [{ day: 1, month: 1, year: 1177 },
+                            { day: 2, month: 1, year: 1177 },
+                            { day: 9, month: 3, year: 1178 }]) {
+                            expect(planetBribeRefused(id, 'p', false,
+                                withdrawn, date)).toBeTrue();
+                            expect(planetBribeRefused(id, 'p', true,
+                                withdrawn, date)).toBeTrue();
+                            expect(planetBribeRefused(id, 'p', false,
+                                stellarHaggleFrom(undefined), date))
+                                .toBe(planetRefusesBribe(id, 'p', false,
+                                    date));
+                        }
                     }
                 });
 
             it('the dialog\'s view and the mirror merge to the further '
-                + 'along, today only', () => {
-                    const none = stellarHaggleOn(undefined, day);
-                    const countered = { day, countered: true,
-                        withdrawn: false };
-                    const withdrawn = { day, countered: false,
-                        withdrawn: true };
-                    expect(laterStellarHaggle(countered, none, day))
+                + 'along', () => {
+                    const none = stellarHaggleFrom(undefined);
+                    const countered = { countered: true, withdrawn: false };
+                    const withdrawn = { countered: false, withdrawn: true };
+                    expect(laterStellarHaggle(countered, none))
                         .toEqual(countered);
-                    expect(laterStellarHaggle(countered, withdrawn, day))
+                    expect(laterStellarHaggle(none, countered))
+                        .toEqual(countered);
+                    expect(laterStellarHaggle(countered, withdrawn))
                         .toEqual(withdrawn);
-                    expect(laterStellarHaggle(
-                        { ...withdrawn, day: 'old' }, countered, day))
-                        .toEqual(countered);
+                    expect(laterStellarHaggle(withdrawn, countered))
+                        .toEqual(withdrawn);
+                    expect(laterStellarHaggle(undefined, undefined))
+                        .toEqual(none);
+                    expect(stellarHaggleProgress(none)).toBe(0);
+                    expect(stellarHaggleProgress(countered)).toBe(1);
+                    expect(stellarHaggleProgress(withdrawn)).toBe(2);
                 });
 
             it('answers from STR# 3002 45-49', () => {

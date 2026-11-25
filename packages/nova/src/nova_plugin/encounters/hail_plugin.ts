@@ -44,7 +44,7 @@ import {
     planetBribeRefused,
     planetTakesBribes,
     StellarHaggleState,
-    stellarHaggleOn,
+    stellarHaggleFrom,
     shipBribePrice,
     shipHailResponse,
     shipIsFighting,
@@ -302,11 +302,11 @@ function playerNeed(player: Entity) {
  *    this govt will take bribes", or 0x8000 whose Bible text ends "...and
  *    their planets will always take bribes" (hail.ts's planetTakesBribes).
  *    An INDEPENDENT stellar has no government and so never bargains.
- *  3. The planet must not be turning offers down today: an ordinary
- *    planet's fresh refusal (about one in eight, reference "R7 bribe price
- *    above 1M, wave 27") or a haggle it withdrew from earlier the same day
- *    (reference "R7 planet bribe, wave 28"); hail.ts's planetBribeRefused,
- *    the same verdict the dialog draws.
+ *  3. The planet must not be turning offers down: an ordinary planet's
+ *    fresh refusal of the day (about one in eight, reference "R7 bribe
+ *    price above 1M, wave 27") or a haggle it withdrew from earlier in this
+ *    system visit (reference "R7 planet bribe withdrawal, wave 29");
+ *    hail.ts's planetBribeRefused, the same verdict the dialog draws.
  *
  * The price is hail.ts's planetBribePrice (reference "R7 bribe price, wave
  * 22": 3,000, or 4,000 for a 0x8000 govt, growing with the cash above about
@@ -349,9 +349,8 @@ function planetBribeTerms(world: World, player: Entity, playerUuid: string,
         return undefined;
     }
     const date = player.components.get(GameDateComponent);
-    const haggle = stellarHaggleOn(
-        player.components.get(StellarHaggleComponent)?.get(planetId),
-        bribeDay(date));
+    const haggle = stellarHaggleFrom(
+        player.components.get(StellarHaggleComponent)?.get(planetId));
     const largerBribes = !!govt?.flags.largerBribes;
     if (planetBribeRefused(targetUuid, playerUuid, largerBribes, haggle,
         date)) {
@@ -368,8 +367,7 @@ function planetBribeTerms(world: World, player: Entity, playerUuid: string,
 function setStellarHaggle(player: Entity, planetId: string,
     haggle: StellarHaggleState) {
     const entry = {
-        day: haggle.day, countered: haggle.countered,
-        withdrawn: haggle.withdrawn,
+        countered: haggle.countered, withdrawn: haggle.withdrawn,
     };
     const haggles = player.components.get(StellarHaggleComponent);
     if (haggles) {
@@ -423,8 +421,8 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
  * a counter (hail.ts's lowerPlanetBribe, the same pure draw the dialog
  * shows). Only a planet naming a price right now can be haggled with, and
  * not over a price the pilot cannot pay (the dialog offers no Lower Price
- * then). A withdrawal makes the planet refuse every offer for the rest of
- * the game day.
+ * then). A withdrawal makes the planet refuse every offer until the pilot
+ * leaves the system (reference "R7 planet bribe withdrawal, wave 29").
  */
 function applyPlanetLowerPrice(world: World, player: Entity,
     playerUuid: string, target: Entity, targetUuid: string) {
@@ -435,7 +433,8 @@ function applyPlanetLowerPrice(world: World, player: Entity,
         return;
     }
     setStellarHaggle(player, terms.planetId,
-        lowerPlanetBribe(terms.haggle, targetUuid, playerUuid).haggle);
+        lowerPlanetBribe(terms.haggle, targetUuid, playerUuid,
+            bribeDay(player.components.get(GameDateComponent))).haggle);
 }
 
 /**

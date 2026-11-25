@@ -177,8 +177,8 @@ export interface HailContext {
      * Offer Bribe uses it the same way when the port turns the bribe down
      * flat (hail.ts's planetBribeRefused: "Yeah, right.", STR# 3002 45-49,
      * reference "R7 bribe price above 1M, wave 27"), and for the rest of
-     * the day once Lower Price has made it withdraw (reference "R7 planet
-     * bribe, wave 28").
+     * the system visit once Lower Price has made it withdraw (reference
+     * "R7 planet bribe withdrawal, wave 29").
      */
     mercyRefused?: string;
     /**

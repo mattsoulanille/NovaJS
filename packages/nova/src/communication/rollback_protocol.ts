@@ -741,6 +741,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    window before one enters it. The derived wire schema fingerprint
 //    changes (4a0fcd76ceddd9b4 -> b3344196d35e2ebd), and the join gate
 //    keeps older and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-29 planet bribe withdrawal scope
+//    (reference "R7 planet bribe withdrawal, wave 29"). A StellarHaggle
+//    entry drops its `day` and is now { countered, withdrawn }: the haggle
+//    lasts the SYSTEM VISIT, not the game day, so nothing reads a day off
+//    it (the first Lower Price's counter draw takes the current date
+//    instead). No input kind or message kind changes. Sim-rule change
+//    alongside: a withdrawal (or a counter) survives landings and
+//    take-offs in the system, and the crossing into another system drops
+//    the whole component (pilot/transition_prep.ts, applied to the carried
+//    player before the destination inserts it). The derived wire schema
+//    fingerprint changes (b3344196d35e2ebd -> FPNEW), and the
+//    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 
