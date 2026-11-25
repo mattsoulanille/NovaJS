@@ -49,7 +49,7 @@ const PLANET_REGIONS = [
     planet('commp_info_well', 'Lower well', 6, 78, 204, 54),
     planet('commp_buttons', 'Button column (3 rows, 30px pitch)',
         27, 184, 146, 85),
-    planet('commp_image_pane', 'Planet picture pane', 218, 3, 314, 285),
+    planet('commp_image_pane', 'Planet starfield pane', 222, 5, 310, 283),
 ];
 
 // ── Escort comm (8513) ──────────────────────────────────────────────────────
@@ -157,8 +157,14 @@ export const hailInfoScenarios = [
         hideDebug: true,
         setup: async (page, driver) => {
             await driver.showHail(page, {
-                variant: 'planet', heading: 'Earth',
-                image: 'nova:10059', body: 'Channel open to Earth.',
+                variant: 'planet', heading: 'Earth\n[Earth/Luna System]',
+                image: null, body: 'Channel open to Earth.',
+                // Earth's own space sprite (rlëD 2000), as the reference
+                // shows it on the frame's starfield.
+                stellarSprite: {
+                    id: 'nova:2000', dataType: 'SpriteSheetImage',
+                    blendMode: 0, frames: { normal: { start: 0, length: 1 } },
+                },
             });
             await driver.sleep(1200);
         },

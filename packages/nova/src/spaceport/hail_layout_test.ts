@@ -11,6 +11,7 @@ import {
     frameOrigin,
     PLUNDER_BUTTONS,
     PLUNDER_FRAME,
+    stellarSpriteOrigin,
 } from './hail_layout.js';
 import { frameFor } from './hail_dialog.js';
 
@@ -204,16 +205,42 @@ describe('fitImage', () => {
     });
 
     it('scales an oversized picture down to fit both axes', () => {
-        // 8512's pane is 314x285: a 628x400 picture is limited by width.
-        const fit = fitImage(COMM_PLANET.imagePane!, 628, 400);
-        expect(fit.scale).toBeCloseTo(314 / 628, 6);
-        expect(628 * fit.scale).toBeLessThanOrEqual(314);
-        expect(400 * fit.scale).toBeLessThanOrEqual(285);
+        // 8512's pane is 310x283: a 620x400 picture is limited by width.
+        const fit = fitImage(COMM_PLANET.imagePane!, 620, 400);
+        expect(fit.scale).toBeCloseTo(310 / 620, 6);
+        expect(620 * fit.scale).toBeLessThanOrEqual(310);
+        expect(400 * fit.scale).toBeLessThanOrEqual(283);
     });
 
     it('survives a zero-sized picture', () => {
         expect(fitImage(COMM_SHIP.imagePane!, 0, 0).scale).toBe(1);
     });
+});
+
+describe('stellarSpriteOrigin', () => {
+    it('is the starfield painted into PICT 8512, inside its bevel', () => {
+        expect(COMM_PLANET.imagePane)
+            .toEqual({ x: 222, y: 5, width: 310, height: 283 });
+    });
+
+    it('puts Earth where hail_planet.png has it, 1:1', () => {
+        // Earth's 150x150 sprite template-matches at frame (302,71).
+        expect(stellarSpriteOrigin(COMM_PLANET.imagePane!, 150, 150))
+            .toEqual({ x: 302, y: 71 });
+    });
+
+    it('rounds an odd margin down, to whole pixels', () => {
+        // A 40x40 moon: margins 135 and 121.5.
+        expect(stellarSpriteOrigin(COMM_PLANET.imagePane!, 40, 40))
+            .toEqual({ x: 222 + 135, y: 5 + 121 });
+    });
+
+    it('centres a frame larger than the pane at 1:1 (the clip trims it)',
+        () => {
+            // rlëD 2062's 300x300 overhangs the 283 px pane by 17 px.
+            expect(stellarSpriteOrigin(COMM_PLANET.imagePane!, 300, 300))
+                .toEqual({ x: 222 + 5, y: 5 - 9 });
+        });
 });
 
 describe('PLUNDER_BUTTONS', () => {

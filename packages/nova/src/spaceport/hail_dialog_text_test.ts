@@ -66,9 +66,21 @@ describe('identityRuns (the comm identity block\'s coloured runs)', () => {
         ]);
     });
 
+    it('greys a stellar\'s class caption whole, under a white name', () => {
+        // hail/hail_planet.png: "Earth" 0xffffff, "[Earth/Luna System]"
+        // 0x808080 — and a caption with a colon is not split on it.
+        expect(identityRuns('Earth\n[Earth/Luna System]\n[Class: odd]'))
+            .toEqual([
+                [{ text: 'Earth', color: COMM_VALUE_COLOR }],
+                [{ text: '[Earth/Luna System]', color: COMM_LABEL_COLOR }],
+                [{ text: '[Class: odd]', color: COMM_LABEL_COLOR }],
+            ]);
+    });
+
     it('never drops or reorders a character of the block', () => {
         for (const block of ['Class: Fed Destroyer\n(Federation)\n'
             + 'Status: Hostile', 'Hired Escort:\n Terrapin', 'Captain Hector',
+            'Rauther\n[Rocky Moon - metallic]\nStatus: Hostile',
             'Class: Unidentified ship', '']) {
             const rebuilt = identityRuns(block)
                 .map(runs => runs.map(run => run.text).join(''))

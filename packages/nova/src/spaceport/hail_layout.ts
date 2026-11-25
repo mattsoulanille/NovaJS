@@ -161,7 +161,13 @@ export const COMM_PLANET: CommFrameLayout = {
     height: 295,
     responseWell: { x: 6, y: 3, width: 204, height: 62 },
     infoWell: { x: 6, y: 78, width: 204, height: 54 },
-    imagePane: { x: 218, y: 3, width: 314, height: 285 },
+    // The pane is the starfield PAINTED INTO the PICT: its black interior,
+    // inside the bevel, is frame x 222-531, y 5-287 (the first and last
+    // pure-black pixels across row 150 and down column 375 of PICT 8512).
+    // The stellar's sprite is centred in exactly this rect
+    // (stellarSpriteOrigin): Earth's 150 px frame lands at frame (302,71)
+    // on hail/hail_planet.png, = 222 + floor(160/2), 5 + floor(133/2).
+    imagePane: { x: 222, y: 5, width: 310, height: 283 },
     // "Channel open to Earth." ink starts at frame (10,11).
     responseText: { x: 10, y: 11 - INK_TO_BOX },
     // "Earth" / "[Earth/Luna System]" ink starts at frame (15,87).
@@ -353,10 +359,11 @@ export function buttonRowY(frame: CommFrameLayout, index: number): number {
 }
 
 /**
- * Fits a target picture inside a frame's image pane: the original's ship and
- * planet pictures fill the pane (hail.png's Terrapin, hail_planet.png's Earth
- * both reach its edges), and anything larger scales down to fit. Returns the
- * scale and the pane's centre, in frame-local coordinates.
+ * Fits a target picture inside a frame's image pane: the original's ship
+ * pictures fill the pane (hail.png's Terrapin reaches its edges), and
+ * anything larger scales down to fit. Returns the scale and the pane's
+ * centre, in frame-local coordinates. (A hailed stellar is not a picture
+ * but its sprite, placed 1:1 by {@link stellarSpriteOrigin}.)
  */
 export function fitImage(pane: Rect, imageWidth: number, imageHeight: number):
     { scale: number, x: number, y: number } {
@@ -367,6 +374,31 @@ export function fitImage(pane: Rect, imageWidth: number, imageHeight: number):
         scale: Math.min(1, scale),
         x: pane.x + pane.width / 2,
         y: pane.y + pane.height / 2,
+    };
+}
+
+/**
+ * Where a hailed STELLAR's sprite goes in the planet comm's pane: the
+ * top-left corner, in frame-local px, of one frame of its sprite drawn
+ * 1:1 and centred, rounded down to whole pixels the way the original's
+ * integer blit is. hail/hail_planet.png shows Earth's own 150 x 150 sprite
+ * (rlëD 2000, ring and all, as it is drawn in space) on the PICT's
+ * starfield, NOT the spöb's landscape PICT: template-matched against the
+ * sprite it sits at frame (302,71) at RMSE 1.9%, i.e. unscaled, and
+ * 222 + floor((310 - 150) / 2) = 302, 5 + floor((283 - 150) / 2) = 71.
+ *
+ * GUESS: a frame larger than the pane (rlëD 2062's 300 x 300, Tre'ar Vano,
+ * Okiia III and four more, 17 px too tall; rlëD 2039's 315 x 200, Gladius
+ * Shipyards and thirteen more stations, 5 px too wide)
+ * keeps its 1:1 scale and is CLIPPED to the pane — a classic QuickDraw
+ * blit into a clipped port — rather than scaled to fit. No capture shows
+ * one; queued for the reference Mac.
+ */
+export function stellarSpriteOrigin(pane: Rect, frameWidth: number,
+    frameHeight: number): { x: number, y: number } {
+    return {
+        x: pane.x + Math.floor((pane.width - frameWidth) / 2),
+        y: pane.y + Math.floor((pane.height - frameHeight) / 2),
     };
 }
 

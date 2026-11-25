@@ -1073,8 +1073,10 @@ export async function computeContext(world: World,
             : undefined;
         // "; comment" resource-name suffixes are authoring notes, hidden.
         const name = displayName(planetData?.name ?? '') || 'Spaceport';
-        const image = planetData?.landingPict
-            ? planetData.landingPict : null;
+        // The well shows the stellar's OWN SPRITE, as it is drawn in space,
+        // on the frame's starfield (hail/hail_planet.png: Earth and its
+        // ring) — not the spöb's landscape PICT, which is the spaceport's.
+        const stellarSprite = planetData?.animation.images.baseImage;
         const isStation = planetData?.flags.isStation ?? false;
         // A stellar that is not a PORT — unlandable (Jupiter, a wrecked
         // gate) or flagged uninhabited, which the Bible glosses as "no
@@ -1152,7 +1154,10 @@ export async function computeContext(world: World,
                         : 'Landing request denied.')} `
                 + `${stellarBribeRefusedText(stellarStrings, seed)}`;
 
-        // The lower well names the stellar, and — when it is refusing you —
+        // The lower well names the stellar, then gives its class in grey
+        // (STR# 1100 by spöb Type: hail/hail_planet.png's "Earth" /
+        // "[Earth/Luna System]" — the stellar's type caption, NOT its
+        // system, which for Earth is Sol), and — when it is refusing you —
         // states WHY in the original's own vocabulary: "Forbidden" (STR# 2002
         // index 172) for a shut port or a missing travel permit, "Hostile"
         // (173) for a legal record below its MinStatus. identityRuns paints a
@@ -1160,17 +1165,27 @@ export async function computeContext(world: World,
         // `isLandable` is always true here (the non-port case returned
         // above); it is still threaded through the SAME planetDisposition the
         // radar blip reads so the two can never drift apart.
+        //
+        // GUESS: the Status line itself. No capture shows a stellar that is
+        // refusing the player (hail_hostile.png is a ship), so whether the
+        // original prints one, and where, is unmeasured (queued for the
+        // reference Mac); it stays under the class caption, where the ship
+        // block puts its own Status line under the class and government.
         const status = planetDisposition(clearance, isLandable);
-        const heading = status === 'neutral' || status === 'unlandable' ? name
-            : `${name}\nStatus: ${miscString(miscStrings,
+        const identity = [name, planetData?.typeDescription ?? '']
+            .filter(line => line !== '');
+        if (status !== 'neutral' && status !== 'unlandable') {
+            identity.push(`Status: ${miscString(miscStrings,
                 status === 'hostile'
                     ? STELLAR_STATUS_HOSTILE_INDEX
                     : STELLAR_STATUS_FORBIDDEN_INDEX,
-                status === 'hostile' ? 'Hostile' : 'Forbidden')}`;
+                status === 'hostile' ? 'Hostile' : 'Forbidden')}`);
+        }
+        const heading = identity.join('\n');
 
         return {
             context: {
-                variant: 'planet', heading, image,
+                variant: 'planet', heading, image: null, stellarSprite,
                 body: `${opening}\n${answer}`, bribe,
             },
             target: planetTargetUuid, isEscort: false,

@@ -1,6 +1,8 @@
+import { AnimationImage } from 'novadatainterface/animation';
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
+import { SpriteSheetSprite } from '../display/sprite_sheet_sprite.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { EscortDeal } from '../nova_plugin/player/index.js';
 import { CANT_AFFORD_FALLBACK } from '../nova_plugin/reputation/index.js';
@@ -10,7 +12,7 @@ import {
     buttonRowY, commButtonSlots, COMM_BUTTON_FONT, COMM_ESCORT, COMM_HAGGLE,
     COMM_LINE_HEIGHT,
     COMM_PLANET, COMM_SHIP, CommFrameLayout, escortButtonSlots, fitImage,
-    frameOrigin,
+    frameOrigin, Rect, stellarSpriteOrigin,
 } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
 
@@ -79,6 +81,13 @@ export interface HailContext {
      * 'nova:4001', or a planet pict), or null for no image. Already prefixed —
      * the caller must NOT add another 'nova:'. */
     image: string | null;
+    /**
+     * A hailed STELLAR's own sprite (its PlanetData animation's base
+     * image), drawn in place of {@link image}: frame 0, 1:1, centred on the
+     * planet comm's starfield (hail_layout's stellarSpriteOrigin) — what
+     * hail/hail_planet.png shows for Earth. Planet variant only.
+     */
+    stellarSprite?: AnimationImage;
     /**
      * Body: what the hailed party says as the channel OPENS — the
      * channel-open line for a ship or planet, the hostile group's line for a
@@ -457,6 +466,14 @@ export const COMM_HOSTILE_COLOR = 0xdd0806;
  */
 export const COMM_DEFERRED_COLOR = 0xc0c0c0;
 
+/**
+ * Whether an identity line is a stellar's class caption: every STR# 1100
+ * entry is one bracketed phrase ("[Earth/Luna System]", "[CC Station]").
+ */
+function isStellarTypeCaption(line: string): boolean {
+    return line.length >= 2 && line.startsWith('[') && line.endsWith(']');
+}
+
 /** A stretch of identity text drawn in one colour. */
 export interface CommTextRun {
     text: string;
@@ -471,6 +488,7 @@ export interface CommTextRun {
  *   "Status: Hostile"      -> grey "Status: " + RED "Hostile"
  *   "(Federation)"         -> white, whole
  *   "Hired Escort:"        -> grey, whole (a label with nothing after it)
+ *   "[Earth/Luna System]"  -> grey, whole (a stellar's class caption)
  *   "Will be upgraded at
  *    next shipyard"        -> 0xc0c0c0, whole (a queued-deal status line)
  *
@@ -486,6 +504,13 @@ export function identityRuns(block: string): CommTextRun[][] {
         // plug-in's wording could in principle contain one.
         if (DIM_READOUT_LINES.has(line)) {
             return [{ text: line, color: COMM_DEFERRED_COLOR }];
+        }
+        // A stellar's bracketed class caption (STR# 1100, PlanetData's
+        // typeDescription) is grey WHOLE, colon or not:
+        // hail/hail_planet.png's "[Earth/Luna System]" is 0x808080 under a
+        // white "Earth".
+        if (isStellarTypeCaption(line)) {
+            return [{ text: line, color: COMM_LABEL_COLOR }];
         }
         const colon = line.indexOf(':');
         if (colon < 0) {
@@ -1126,8 +1151,15 @@ export class HailDialog {
         // (Both texts used to be stacked in the upper area with the lower
         // well left empty.)
 
-        // Target picture on the RIGHT, fitted to the frame's image pane.
-        if (context.image && frame.imagePane) {
+        // Target picture on the RIGHT. A stellar shows its own sprite, 1:1
+        // on the frame's starfield; a ship its picture, fitted to the pane.
+        if (context.stellarSprite && frame.imagePane) {
+            await this.renderStellarSprite(context.stellarSprite,
+                frame.imagePane, originX, originY);
+            if (this.dismissed) {
+                return;
+            }
+        } else if (context.image && frame.imagePane) {
             try {
                 const image = await this.displayAssets
                     .spriteFromPictAsync(context.image);
@@ -1181,6 +1213,42 @@ export class HailDialog {
             return;
         }
         this.renderCommButtons(context, frame, originX, originY, inert);
+    }
+
+    /**
+     * A hailed stellar's sprite in the planet comm's pane: frame 0 (what a
+     * stellar shows in space), unscaled, its top-left at
+     * stellarSpriteOrigin and clipped to the pane (see there for the
+     * measurement and the GUESS about oversized frames). The starfield
+     * behind it is PICT 8512's own art. A sprite that fails to load leaves
+     * the starfield empty and the text intact.
+     */
+    private async renderStellarSprite(image: AnimationImage, pane: Rect,
+        originX: number, originY: number) {
+        let sprite: SpriteSheetSprite;
+        try {
+            sprite = await new SpriteSheetSprite({
+                displayAssets: this.displayAssets, image,
+            }).buildPromise;
+        } catch {
+            return;
+        }
+        if (this.dismissed || sprite.frames <= 0) {
+            return;
+        }
+        sprite.frame = 0;
+        const pixiSprite = sprite.pixiSprite;
+        pixiSprite.anchor.set(0);
+        const at = stellarSpriteOrigin(pane, pixiSprite.texture.width,
+            pixiSprite.texture.height);
+        pixiSprite.position.set(originX + at.x, originY + at.y);
+        const clip = new PIXI.Graphics();
+        clip.beginFill(0xffffff);
+        clip.drawRect(originX + pane.x, originY + pane.y, pane.width,
+            pane.height);
+        clip.endFill();
+        pixiSprite.mask = clip;
+        this.content.addChild(clip, pixiSprite);
     }
 
     /**

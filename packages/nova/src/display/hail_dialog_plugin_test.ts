@@ -1228,6 +1228,8 @@ describe('computeContext: hailing a STELLAR', () => {
         uninhabited?: boolean,
         /** Sim-clock ms until which this port has been bribed. */
         bribedUntil?: number,
+        /** PlanetData.typeDescription (STR# 1100 by spöb Type). */
+        typeDescription?: string,
     } = {}) {
         const gameData = new MockGameData();
         const govt = {
@@ -1239,6 +1241,7 @@ describe('computeContext: hailing a STELLAR', () => {
         const planetData = {
             ...getDefaultPlanetData(), id: 'nova:128', name: 'Earth',
             govt: 'nova:128', minStatus: opts.minStatus ?? -32767,
+            typeDescription: opts.typeDescription ?? '',
             flags: {
                 ...getDefaultPlanetData().flags,
                 isStation: opts.isStation ?? false,
@@ -1307,6 +1310,46 @@ describe('computeContext: hailing a STELLAR', () => {
             // A friendly port names itself and carries no Status line.
             expect(result?.context.heading).toBe('Earth');
             expect(result?.context.bribe).toBeUndefined();
+        });
+
+    it('shows the stellar\'s own sprite, not its landscape PICT',
+        async () => {
+            // hail/hail_planet.png: Earth's space sprite (rlëD 2000) on the
+            // frame's starfield. The landscape is the spaceport's picture.
+            const { world, gameData } = planetWorld();
+            const planet = world.entities.get(PLANET)!;
+            const planetData = planet.components.get(PlanetDataComponent)!;
+            planet.components.set(PlanetDataComponent,
+                { ...planetData, landingPict: 'nova:10000' });
+            const result = await computeContext(world, gameData,
+                stellarAssets());
+
+            expect(result?.context.image).toBeNull();
+            expect(result?.context.stellarSprite)
+                .toEqual(planetData.animation.images.baseImage);
+        });
+
+    it('gives the stellar\'s class caption under its name', async () => {
+        // hail/hail_planet.png: "Earth" / "[Earth/Luna System]" (STR# 1100
+        // entry 0, Earth's spöb Type) — its class, not its system (Sol).
+        const { world, gameData } = planetWorld({
+            typeDescription: '[Earth/Luna System]',
+        });
+        const result = await computeContext(world, gameData,
+            stellarAssets());
+        expect(result?.context.heading).toBe('Earth\n[Earth/Luna System]');
+    });
+
+    it('keeps a refusing port\'s Status line under the class caption',
+        async () => {
+            const { world, gameData } = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true,
+                typeDescription: '[Rocky Moon - metallic]',
+            });
+            const result = await computeContext(world, gameData,
+                stellarAssets());
+            expect(result?.context.heading)
+                .toBe('Earth\n[Rocky Moon - metallic]\nStatus: Hostile');
         });
 
     it('refuses a criminal, states the status as Hostile, and offers the '
