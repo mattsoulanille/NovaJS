@@ -189,11 +189,19 @@ export function jumpArrivalMessage(systemName: string,
  * "You're too far away to land on this planet." — worded "land on this
  * planet" for a planet and "dock at this station" for a station (spöb flag
  * 0x10), matching stock Nova's strings verbatim.
+ *
+ * A gate has its own forms, chosen by its gate kind ahead of the planet /
+ * station ones (stock STR# 2002 one-based 65 / 66 and 69 / 70, measured:
+ * reference "Gate approach lines, wave 25"): "You're too far away to enter
+ * this hypergate." / "... wormhole." and "You're moving too fast to enter
+ * this hypergate." / "... wormhole.".
  */
 export function landingBlockedMessage(
     reason: LandingBlockReason, isStation: boolean,
     stellarName?: string, gateKind?: GateKind): string {
-    const place = isStation ? 'dock at this station' : 'land on this planet';
+    const place = gateKind === 'hypergate' ? 'enter this hypergate'
+        : gateKind === 'wormhole' ? 'enter this wormhole'
+            : isStation ? 'dock at this station' : 'land on this planet';
     switch (reason) {
         case 'unlandable':
             return unlandableMessage(isStation, stellarName, gateKind);

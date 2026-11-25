@@ -795,3 +795,133 @@ describe('applySetPlanetTarget', () => {
         expect(target.target).toBeUndefined();
     }, 30_000);
 });
+
+// Measured: reference "Gate approach lines, wave 25". At a gate the window
+// lines name the gate ("... enter this hypergate." / "... enter this
+// wormhole.", stock STR# 2002 one-based 65 / 66 and 69 / 70), and a
+// wormhole answers the FIRST `l`, where a hypergate's first `l` only
+// selects (its clearance step). On the synthetic Kestrel Gate (a hypergate
+// in Kestrel Drift) and Ossory Rift (a wormhole in Ossory Shoal).
+describe('the gate approach lines', () => {
+    const KESTREL_GATE = `planet ${SYNTHETIC.planets.kestrelGate}`;
+    const OSSORY_RIFT = `planet ${SYNTHETIC.planets.ossoryRift}`;
+
+    async function atGate(systemId: string, gateUuid: string) {
+        const { world, ship } = await makeHarness(getSyntheticGameData(),
+            systemId);
+        const gate = stellars(world).find(p => p.uuid === gateUuid)!;
+        expect(gate).toBeDefined();
+        return { world, ship, gate };
+    }
+
+    function message(blocked: ReturnType<typeof pressLand>['blocked'][0]) {
+        return landingBlockedMessage(blocked.reason as 'tooFar',
+            blocked.isStation, blocked.stellarName, blocked.gateKind);
+    }
+
+    for (const [kind, systemId, gateUuid] of [
+        ['hypergate', SYNTHETIC.systems.kestrel, KESTREL_GATE],
+        ['wormhole', SYNTHETIC.systems.ossory, OSSORY_RIFT],
+    ] as const) {
+        it(`says "You're too far away to enter this ${kind}."`, async () => {
+            const { world, ship, gate } = await atGate(systemId, gateUuid);
+            ship.components.get(PlanetTargetComponent)!.target = gate.uuid;
+            place(ship, new Position(gate.position.x - 2000, gate.position.y));
+
+            const { lands, blocked } = pressLand(world);
+
+            expect(lands).toEqual([]);
+            expect(blocked.length).toBe(1);
+            expect(blocked[0].reason).toEqual('tooFar');
+            expect(blocked[0].gateKind).toEqual(kind);
+            expect(message(blocked[0]))
+                .toEqual(`You're too far away to enter this ${kind}.`);
+        }, 30_000);
+
+        it(`says "You're moving too fast to enter this ${kind}."`,
+            async () => {
+                const { world, ship, gate } = await atGate(systemId, gateUuid);
+                ship.components.get(PlanetTargetComponent)!.target = gate.uuid;
+                place(ship, gate.position, new Vector(100, 0));
+
+                const { lands, blocked } = pressLand(world);
+
+                expect(lands).toEqual([]);
+                expect(blocked.length).toBe(1);
+                expect(blocked[0].reason).toEqual('tooFast');
+                expect(blocked[0].gateKind).toEqual(kind);
+                expect(message(blocked[0]))
+                    .toEqual(`You're moving too fast to enter this ${kind}.`);
+            }, 30_000);
+    }
+
+    it('keeps the planet / station lines at a planet or station', () => {
+        expect(landingBlockedMessage('tooFar', true))
+            .toEqual("You're too far away to dock at this station.");
+        expect(landingBlockedMessage('tooFast', false))
+            .toEqual("You're moving too fast to land on this planet.");
+    });
+
+    it('answers a wormhole\'s FIRST `l` at once: too far', async () => {
+        const { world, ship, gate } = await atGate(SYNTHETIC.systems.ossory,
+            OSSORY_RIFT);
+        // Nothing selected; the rift is the nearest port but far off.
+        place(ship, new Position(gate.position.x - 2000, gate.position.y));
+
+        const { lands, blocked } = pressLand(world);
+
+        expect(ship.components.get(PlanetTargetComponent)!.target)
+            .toEqual(gate.uuid);
+        expect(lands).toEqual([]);
+        expect(blocked.map(b => [b.reason, b.gateKind]))
+            .toEqual([['tooFar', 'wormhole']]);
+        // A second `l` repeats it.
+        expect(pressLand(world).blocked.map(b => b.reason))
+            .toEqual(['tooFar']);
+    }, 30_000);
+
+    it('answers a wormhole\'s FIRST `l` at once: too fast', async () => {
+        const { world, ship, gate } = await atGate(SYNTHETIC.systems.ossory,
+            OSSORY_RIFT);
+        place(ship, gate.position, new Vector(100, 0));
+
+        const { lands, blocked } = pressLand(world);
+
+        expect(lands).toEqual([]);
+        expect(blocked.map(b => [b.reason, b.gateKind]))
+            .toEqual([['tooFast', 'wormhole']]);
+    }, 30_000);
+
+    it('goes through a wormhole on the FIRST `l` in its window', async () => {
+        const { world, ship, gate } = await atGate(SYNTHETIC.systems.ossory,
+            OSSORY_RIFT);
+        place(ship, gate.position);
+
+        const { lands, blocked } = pressLand(world);
+
+        expect(blocked).toEqual([]);
+        expect(lands.map(l => l.uuid)).toEqual([gate.uuid]);
+    }, 30_000);
+
+    it('only selects a hypergate on the first `l` (its clearance step), '
+        + 'even out of the window', async () => {
+            const { world, ship, gate } = await atGate(
+                SYNTHETIC.systems.kestrel, KESTREL_GATE);
+            for (const [position, velocity] of [
+                [gate.position, new Vector(0, 0)],
+                [new Position(gate.position.x, gate.position.y + 2000),
+                    new Vector(0, 0)],
+                [gate.position, new Vector(100, 0)],
+            ] as const) {
+                ship.components.get(PlanetTargetComponent)!.target = undefined;
+                place(ship, position, velocity);
+
+                const { lands, blocked } = pressLand(world);
+
+                expect(ship.components.get(PlanetTargetComponent)!.target)
+                    .toEqual(gate.uuid);
+                expect(lands).toEqual([]);
+                expect(blocked).toEqual([]);
+            }
+        }, 30_000);
+});

@@ -11,6 +11,7 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { Position } from 'nova_ecs/datatypes/position';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
 import { World } from 'nova_ecs/world';
@@ -97,10 +98,12 @@ registerSimulationBridgeEvent({ event: LandEvent });
  * see landable.ts). Consumed display-side by the status line
  * (status_message_plugin.ts). Never mutates the simulation.
  *
- * `stellarName` and `gateKind` are only meaningful for `unlandable`, whose
- * message names the stellar, and `denied`, where a hypergate says "Hypergate
- * usage denied."; both are optional so the window reasons stay exactly the
- * shape they always were.
+ * `stellarName` is only meaningful for `unlandable`, whose message names the
+ * stellar, and `denied`. `gateKind` rides with every reason a gate refuses:
+ * `unlandable`, `denied` (a hypergate says "Hypergate usage denied.") and the
+ * window reasons, whose gate lines read "... enter this hypergate." /
+ * "... enter this wormhole." (reference "Gate approach lines, wave 25").
+ * Both are optional, absent for a planet or station.
  */
 /** Why a land attempt was refused (see LandingBlockedEvent). Closed: the
  * event is sim-to-display within one build, never persisted. */
@@ -108,7 +111,7 @@ export const LandingBlockReasonType = t.keyof({
     tooFar: null, tooFast: null, unlandable: null, denied: null,
 });
 export type LandingBlockReason = t.TypeOf<typeof LandingBlockReasonType>;
-/** Which kind of gate an `unlandable` or `denied` stellar is, when it is one. */
+/** Which kind of gate a refusing stellar is, when it is one. */
 export const GateKindType = t.keyof({ hypergate: null, wormhole: null });
 export type GateKind = t.TypeOf<typeof GateKindType>;
 export const LandingBlockedEventType = t.intersection([
@@ -384,6 +387,76 @@ const AttemptLandingSystem = new System({
             return;
         }
 
+        // The landing window, then is-it-a-port, then clearance, against one
+        // stellar: land, or emit the original's refusal.
+        const attempt = (uuid: string, planetPosition: Position,
+            id: string, planetData: PlanetData | undefined) => {
+            const offset = planetPosition.subtract(position);
+            const isStation = planetData?.flags.isStation ?? false;
+            const range = stellarLandingRange(planetData);
+            // A gate's window lines name the gate ("You're too far away to
+            // enter this hypergate." / "... wormhole.", STR# 2002 one-based
+            // 65 / 66 and 69 / 70, reference "Gate approach lines, wave
+            // 25"), so the gate kind rides with every refusal.
+            const gateKind = planetData?.gate
+                ? { gateKind: planetData.gate.kind } : {};
+            // "Too far" (outside the square zone) before "too fast", as
+            // the original answers.
+            if (!inLandingZone(offset.x, offset.y, range)) {
+                emit(LandingBlockedEvent,
+                    { reason: 'tooFar', isStation, ...gateKind },
+                    [playerUuid]);
+            } else if (velocity.lengthSquared >= LAND_SPEED_SQUARED) {
+                emit(LandingBlockedEvent,
+                    { reason: 'tooFast', isStation, ...gateKind },
+                    [playerUuid]);
+            } else if (planetData && !landable(planetData)) {
+                // Not a port: Jupiter and the other scenery worlds, and
+                // the destroyed hypergates of the collapsed network
+                // (landable.ts). Checked AFTER the window so the
+                // original's approach feedback still comes first — the
+                // engine only answers a landing request the ship is
+                // actually close enough and slow enough to make.
+                // Unknown planet data (the provider has not run) is
+                // treated as landable, exactly as before.
+                emit(LandingBlockedEvent, {
+                    reason: 'unlandable', isStation,
+                    stellarName: displayName(planetData.name),
+                    ...gateKind,
+                }, [playerUuid]);
+            } else if (planetData && !stellarClearanceFor({
+                planetData, gameData, govts, records, shipData, outfits,
+                bribes, ranks, missions,
+                planetId: id, systemId, now: time?.time ?? 0,
+            }).cleared) {
+                // CLEARANCE. A port that is shut to this pilot answers
+                // "Landing request denied." (STR# 2002 index 82; index 81
+                // for a station), which is all the original says — it does
+                // not explain whether you are forbidden, unwelcome or
+                // missing a permit. Checked AFTER the landing window and
+                // after the is-it-a-port test, so the approach feedback
+                // still comes first: traffic control only answers a
+                // request the ship was actually able to make.
+                //
+                // The verdict is the same pure predicate the radar blip
+                // and the planet comm dialog read (stellar_clearance.ts),
+                // over synced state only, so every peer refuses on the
+                // same tick and the player's comm dialog never offers a
+                // bribe for a landing the gate would have allowed.
+                //
+                // A working HYPERGATE refusing the player says "Hypergate
+                // usage denied." instead (STR# 2002 index 80, measured:
+                // reference "Stellar hail graphic, wave 23", HG-V01).
+                emit(LandingBlockedEvent, {
+                    reason: 'denied', isStation,
+                    stellarName: displayName(planetData.name),
+                    ...gateKind,
+                }, [playerUuid]);
+            } else {
+                emit(LandEvent, { id, uuid }, [playerUuid]);
+            }
+        };
+
         // With a stellar ALREADY selected, 'land' acts on THAT target: it
         // never retargets to whatever happens to be nearest. Land if inside
         // the window; otherwise give the original's too-far / too-fast
@@ -393,69 +466,10 @@ const AttemptLandingSystem = new System({
         if (planetTarget.target !== undefined) {
             for (const [uuid, { position: planetPosition }, { id }, planetData]
                 of planets) {
-                if (uuid !== planetTarget.target) {
-                    continue;
+                if (uuid === planetTarget.target) {
+                    attempt(uuid, planetPosition, id, planetData);
+                    return;
                 }
-                const offset = planetPosition.subtract(position);
-                const isStation = planetData?.flags.isStation ?? false;
-                const range = stellarLandingRange(planetData);
-                // "Too far" (outside the square zone) before "too fast", as
-                // the original answers.
-                if (!inLandingZone(offset.x, offset.y, range)) {
-                    emit(LandingBlockedEvent, { reason: 'tooFar', isStation },
-                        [playerUuid]);
-                } else if (velocity.lengthSquared >= LAND_SPEED_SQUARED) {
-                    emit(LandingBlockedEvent, { reason: 'tooFast', isStation },
-                        [playerUuid]);
-                } else if (planetData && !landable(planetData)) {
-                    // Not a port: Jupiter and the other scenery worlds, and
-                    // the destroyed hypergates of the collapsed network
-                    // (landable.ts). Checked AFTER the window so the
-                    // original's approach feedback still comes first — the
-                    // engine only answers a landing request the ship is
-                    // actually close enough and slow enough to make.
-                    // Unknown planet data (the provider has not run) is
-                    // treated as landable, exactly as before.
-                    emit(LandingBlockedEvent, {
-                        reason: 'unlandable', isStation,
-                        stellarName: displayName(planetData.name),
-                        ...(planetData.gate
-                            ? { gateKind: planetData.gate.kind } : {}),
-                    }, [playerUuid]);
-                } else if (planetData && !stellarClearanceFor({
-                    planetData, gameData, govts, records, shipData, outfits,
-                    bribes, ranks, missions,
-                    planetId: id, systemId, now: time?.time ?? 0,
-                }).cleared) {
-                    // CLEARANCE. A port that is shut to this pilot answers
-                    // "Landing request denied." (STR# 2002 index 82; index 81
-                    // for a station), which is all the original says — it does
-                    // not explain whether you are forbidden, unwelcome or
-                    // missing a permit. Checked AFTER the landing window and
-                    // after the is-it-a-port test, so the approach feedback
-                    // still comes first: traffic control only answers a
-                    // request the ship was actually able to make.
-                    //
-                    // The verdict is the same pure predicate the radar blip
-                    // and the planet comm dialog read (stellar_clearance.ts),
-                    // over synced state only, so every peer refuses on the
-                    // same tick and the player's comm dialog never offers a
-                    // bribe for a landing the gate would have allowed.
-                    //
-                    // A working HYPERGATE refusing the player says "Hypergate
-                    // usage denied." instead (STR# 2002 index 80, measured:
-                    // reference "Stellar hail graphic, wave 23", HG-V01), so
-                    // the gate kind rides along as it does for `unlandable`.
-                    emit(LandingBlockedEvent, {
-                        reason: 'denied', isStation,
-                        stellarName: displayName(planetData.name),
-                        ...(planetData.gate
-                            ? { gateKind: planetData.gate.kind } : {}),
-                    }, [playerUuid]);
-                } else {
-                    emit(LandEvent, { id, uuid }, [playerUuid]);
-                }
-                return;
             }
             // The selection is no longer a stellar in this system (jumped
             // away, etc.); fall through and pick the nearest as if unset.
@@ -469,9 +483,11 @@ const AttemptLandingSystem = new System({
         // Ties break on the lexicographically smaller uuid so every peer
         // picks the same stellar regardless of entity-map iteration order
         // (see ChooseTargetSystem).
-        let closestUuid: string | undefined = undefined;
+        let closest: [string, Position, string, PlanetData | undefined]
+            | undefined = undefined;
         let minSquared = Infinity;
-        for (const [uuid, { position: planetPosition }, , data] of planets) {
+        for (const [uuid, { position: planetPosition }, { id }, data]
+            of planets) {
             if (data && !landable(data)) {
                 continue;
             }
@@ -479,12 +495,20 @@ const AttemptLandingSystem = new System({
                 planetPosition.subtract(position).lengthSquared;
             if (distanceSquared < minSquared
                 || (distanceSquared === minSquared
-                    && closestUuid !== undefined && uuid < closestUuid)) {
-                closestUuid = uuid;
+                    && closest !== undefined && uuid < closest[0])) {
+                closest = [uuid, planetPosition, id, data];
                 minSquared = distanceSquared;
             }
         }
-        planetTarget.target = closestUuid;
+        planetTarget.target = closest?.[0];
+        // A WORMHOLE has no clearance step: the first `l` both targets it
+        // and answers at once (too far / too fast / through it), where a
+        // planet's or a hypergate's first `l` only selects (measured:
+        // reference "Gate approach lines, wave 25", the stock wormhole with
+        // Nav System Off).
+        if (closest && closest[3]?.gate?.kind === 'wormhole') {
+            attempt(...closest);
+        }
     }
 });
 
