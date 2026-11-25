@@ -37,6 +37,7 @@ import {
 } from '../nova_plugin/reputation/index.js';
 import {
     getActiveSaveKey, loadSave, missingSaveContent, MissingSaveContentError,
+    normaliseBuiltInAmmo,
     resetSave, restoreClientSaveState, restorePlayerState, savedFleetArmament,
 } from '../nova_plugin/pilot/index.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
@@ -121,6 +122,18 @@ export async function preparePlayerStart(runtime: ClientRuntime,
             save = withoutMissingOutfits(save, missing);
             loadedAnyway = true;
         }
+        // A built-in weapon's stock ammo written as an implicit magazine
+        // when its supply has a real ammo oütf (a parser bug: the Raven
+        // Turret's rounds as nova:139:builtInAmmo rather than oütf 143)
+        // becomes that oütf, on the flown ship and every stored one
+        // (save_built_in_ammo.ts). A no-op for any other save.
+        save = await normaliseBuiltInAmmo(save, {
+            outfitIds: ids.Outfit,
+            getOutfit: id => gameData.data.Outfit.get(id)
+                .catch(() => undefined),
+            getWeapon: id => gameData.data.Weapon.get(id)
+                .catch(() => undefined),
+        });
         // Client-local state the save carries but no component holds:
         // the star-system discovery record (discovery_store.ts).
         restoreClientSaveState(save);

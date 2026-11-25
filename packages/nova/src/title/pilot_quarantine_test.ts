@@ -423,13 +423,15 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
                 data.data.Outfit.map.set(builtInWeaponOutfitId(id),
                     { ...data.data.Outfit.defaultValue!, weapons: { [id]: 1 } });
             }
-            const listed = data.ids;
+            const listed = Object.getOwnPropertyDescriptor(
+                MockGameData.prototype, 'ids')!.get!;
             Object.defineProperty(data, 'ids', {
-                get: () => listed.then(ids => ({
-                    ...ids,
-                    Outfit: ids.Outfit.filter(
-                        id => builtInOutfitWeaponId(id) === undefined),
-                })),
+                get: () => (listed.call(data) as MockGameData['ids'])
+                    .then(ids => ({
+                        ...ids,
+                        Outfit: ids.Outfit.filter(
+                            id => builtInOutfitWeaponId(id) === undefined),
+                    })),
             });
             return data;
         }
@@ -444,6 +446,30 @@ describe('a save naming an uninstalled plug-in (issue #131)', () => {
                 .keys()].sort()).toEqual([STOCK_OUTFIT, GUN, AMMO].sort());
             expect(getActivePilot(store)?.quarantine).toBeUndefined();
         });
+
+        // The Raven Turret (139) draws on the Raven Rocket's supply (138),
+        // which oütf 143 feeds: a magazine written for it by the old
+        // parser enters as that many rockets (save_built_in_ammo.ts).
+        it('enters with a redirected weapon\'s magazine as the real ammo',
+            async () => {
+                const MAGAZINE = builtInAmmoOutfitId('nova:139');
+                pilots({ outfits: [[STOCK_OUTFIT, 1], [MAGAZINE, 60]] });
+                const data = withBuiltIns(['nova:139']);
+                data.data.Weapon.map.set('nova:139', {
+                    ...data.data.Weapon.defaultValue!, id: 'nova:139',
+                    ammoType: ['weapon', 'nova:138'],
+                });
+                data.data.Outfit.map.set('nova:143', {
+                    ...data.data.Outfit.defaultValue!, id: 'nova:143',
+                    ammoFor: 'nova:138', max: 300,
+                });
+                const start = await preparePlayerStart(
+                    runtimeFor(data).runtime, new URLSearchParams(),
+                    () => 'peer-1');
+                const owned = start.ship.components.get(OutfitsStateComponent)!;
+                expect(owned.get('nova:143')?.count).toBe(60);
+                expect(owned.has(MAGAZINE)).toBeFalse();
+            });
 
         it('is refused, naming the outfit, when the weapon is not defined',
             async () => {
