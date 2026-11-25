@@ -12189,6 +12189,46 @@ answered or not).
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/gate_a1/*/` (`03-l2.png` map, `04-zoomout1.png` .. `06-zoomout3.png`, `07-click_b1.png`, `08-click_c1.png`, `09-click_a2.png`);
 `gate_c1/*/` (`03-l2.png`, `04-zoomout1.png`, `05-click_c3.png`, `06-click_c2.png`); `gate_c2/*/` (`03-map.png`, `04-click_c1.png`).
 
+**Applied (wave-24 fixes, 2026-11-25, `N/spaceport/gate_map.ts`,
+`N/spaceport/hypergate_network.ts`, `N/spaceport/starmap_draw.ts`,
+`N/spaceport/system_graph.ts`).**
+- `computeGateMapView` draws ONLY the current gate's own HyperLinks, as
+  directed lanes from the current system (`gateLinks` are now (from, to)
+  pairs), and offers only those; the component walk is gone from the
+  drawing. At C1 no C2 - C3 lane, at C2 no C1 -> C2 lane, at A1 no B1 - B2
+  lane (all spec'd on a copy of this rig).
+- Arrows: #00adef (`HYPERGATE_LINK_COLOR`, was 0x00cccc), a 2 px line
+  from the current system's centre to the destination's, two barbs of
+  9 px at 45 degrees (read off `gate_a1/*/03-l2.png` at 1:1: about 6.5 px
+  back and 6.5 across), drawn OVER the dots as the original's crosses the
+  destination ring. The picked lane is redrawn white with a 3 px pen
+  (`09-click_a2.png` has a 3-row white line). Sizes are screen px at the
+  opening scale; NovaJS zooms by scaling, so they scale with the zoom,
+  unlike the original's fixed pen (09 is zoomed out and its head is the
+  same size).
+- The cyan rings round offered systems are gone (the original has none);
+  the green selection brackets sit on the current system until a pick and
+  then move to the pick (03-l2 vs 09), and the current system keeps its
+  #00adef centre.
+- The map opens at the star map's scale (`DEFAULT_ZOOM`: A1 -> A2, 120
+  units, 212 px), and a gate-only system is grey on it too (`isSettledPort`
+  instead of `isPort`; B1 / B2 were #c6c6c6).
+- Done with no pick already lifted off at the gate (`client/transit.ts`
+  `leaveGateMap`): unchanged, checked in the browser.
+- TRANSITIVITY (`settings/settings.json`, on by default; a NovaJS
+  addition): it now means "a chain of transits", each HyperLink followed
+  in its OWN direction (`reachableGates` / `hypergateReach` were the
+  undirected component), so a one-way lane is never offered from its far
+  end, transitive or not, and other networks never appear. It still
+  draws more than the original: the reached chain's lanes, each pointing
+  away from the current gate (a lane between two gates the same number of
+  hops out keeps whichever heads it has), so every offered gate is
+  visibly connected; a pick whitens the shortest chain to it. Stock links
+  are all mirrored, so at a stock gate the whole 19-gate web is still
+  drawn and offered under transitivity; with it off, only the gate's own
+  links. Not changed: unexplored systems on the gate map (untested here)
+  stay forced onto the map when offered.
+
 ### Hypergates and the radar, wave 24: an idle gate is not drawn; a gate the pilot MAY use also says "No response."; Spica (landable, uninhabited, 120 px) is a radar RING (2026-11-25)
 
 **Usable gate's hail** (wave-23 leftover). At Kit Gate C2 after "Cleared
@@ -12227,6 +12267,26 @@ drop the GUESS there. Spica's own map entry reads "Uninhabited System" with
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/gate_c2/*/` (`01-space.png`, `05-done_nosel.png`, `09-l_after.png`, `10-hail_cleared.png`);
 `spica/*/` (`06-on_spica.png`, `07-away1.png`).
+
+**Applied (wave-24 fixes, 2026-11-25).**
+- Hail: `gateRefusesHail` refuses EVERY working gate, cleared or not
+  (`N/display/hail_dialog_plugin.ts`; it no longer reads the clearance, so
+  `hailIsUnanswerable` lost its game-data parameter). Wormholes follow the
+  hypergate: GUESS (unmeasured; only a plug-in's inhabited wormhole is
+  affected, stock ones are uninhabited and already silent).
+- Idle gate: `N/display/gate_animation_plugin.ts` hides an animated gate's
+  sprites while it is closed (`gateDrawn`); it is drawn while opening,
+  working and closing, then vanishes. The closing sequence still plays
+  first (GUESS, as the section says). Brackets read the frame's base size
+  and the radar mark the planet data, so both stay (browser-checked for the
+  brackets: they frame an empty spot at idle HG-Kania).
+  A single-frame (static) plug-in gate is never hidden (GUESS). The
+  open/working frame split is unchanged (Matthew's 6766a9a2 replaced the
+  Bible's CustPicID halves with the full sequence plus a two-frame
+  flicker; nothing here measures the frames).
+- Radar: `N/display/status_bar_radar.ts`'s GUESS between the wormhole flag
+  and "landable AND uninhabited" is replaced by this measurement; Spica is
+  spec'd a ring (stock data and synthetic).
 
 ### Map dot colours, wave 24: a system that refuses the player at a clean record is ORANGE (#ff6300), RED (#ff0000) once the record there is negative; one open port keeps it blue (2026-11-25)
 
@@ -12287,6 +12347,20 @@ each side).
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/map_picky/*/` (`02-map0.png`, `03-sel_wanted.png`, `04-sel_mixed.png`, `05-l1.png`, `10-map_mixed.png`, `11-l1.png`);
 `map_minus5/*/` (`02-map0.png`, `05-zoom.png`, `06-sel_wanted2.png`); `spica/*/` (`02-map0.png`, `03-zoom.png`, `05-sel_alphara.png`).
+
+**Applied (wave-24 fixes, 2026-11-25, `N/spaceport/starmap_draw.ts`,
+`N/spaceport/starmap.ts`, `N/spaceport/system_graph.ts`).**
+`refusingSystems` now returns each coloured system with the SIGN of the
+player's record there (`recordIn`, an absent record reading as the status
+govt's InitialRec): `SYSTEM_REFUSING_CLEAN_COLOR` #ff6300 at 0 or above,
+`SYSTEM_REFUSING_COLOR` #ff0000 below 0. The mixed rule's GUESS mark is
+dropped (measured). GUESS kept: a positive record below MinStatus is
+orange, and a refusal for another reason (permit, ränk 0x0200) follows
+the same sign rule. A fresh stock pilot's 35 refusing systems
+(`N/spaceport/starmap_refusing_test.ts`): 21 orange (Alphara, Kerella,
+Gateway, Lesten and Rigel among them) and 14 RED, the Nil'kemorya systems
+(gövt 147, InitialRec -5, so a fresh pilot starts at -5 there; predicted
+by the -5 measurement, not seen on the original).
 
 ### Fleet scan controls, wave 24: a LONE AI 4 of the same govt scans and fines within 3 s; the fleet with a CrimeTol-10 govt still never scans (2026-11-25)
 
@@ -12429,6 +12503,10 @@ comment at `N/spaceport/mission_offers.ts:53-60` is stale (the system-entry
 hook it names is wired): **proposed** to replace it with this measurement.
 
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/refilter2/*/` (`03-bbs0.png`, `06-yard1.png`, `20-yard2.png`, `21-outf2.png`, `23-bbs2.png`, `35-bbs3.png`); `refilter/*/` (the Kit Lancer attempt).
+
+**Applied (wave-24 fixes, 2026-11-25).** The stale "KNOWN GAP" comment in
+`N/spaceport/mission_offers.ts` is replaced by this measurement; no code
+change.
 
 ### R19 wave 24: AI 3 victims hit from near leave without calling (two more); the arrival centre is still not reached (2026-11-25, fifth pass)
 
