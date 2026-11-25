@@ -28,7 +28,7 @@ import { applyHail } from '../encounters/index.js';
 import { CreditsComponent } from '../player/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
 import { landable } from '../core/index.js';
-import { clearanceDeniedMessage } from '../../display/status_bar_content.js';
+import { clearanceDeniedMessage, landingBlockedMessage } from '../../display/status_bar_content.js';
 
 // Thessaly Reach holds four stellars, in this order: Port Amberline (a
 // full-service port anyone may land on), the Sallow Moon (landable,
@@ -79,7 +79,8 @@ function place(ship: Entity, position: Position, velocity = new Vector(0, 0)) {
 
 function pressLand(world: World) {
     const lands: { id: string, uuid: string }[] = [];
-    const blocked: { reason: string, isStation: boolean, entities?: unknown }[] = [];
+    const blocked: { reason: string, isStation: boolean, entities?: unknown,
+        stellarName?: string, gateKind?: 'hypergate' | 'wormhole' }[] = [];
     world.events.get(LandEvent).subscribe(({ data }) => lands.push(data));
     world.events.get(LandingBlockedEvent).subscribe(({ data, entities }) =>
         blocked.push({ ...data, entities }));
@@ -576,6 +577,31 @@ describe('AttemptLandingSystem landing clearance', () => {
 
         expect(blocked.length).toBe(1);
         expect(blocked[0].reason).toEqual('tooFar');
+    }, 30_000);
+
+    // REAL data: HG-V01 (nova:1400, VNP-001 nova:427) is a working gate of
+    // MinStatus 32767, shut to a pilot without the hypergate rank. The
+    // original's `l` there said "Hypergate usage denied." (STR# 2002 index
+    // 80; reference "Stellar hail graphic, wave 23"), so the refusal carries
+    // the gate kind for the status line to pick that line.
+    it('refuses a working hypergate as a hypergate', async () => {
+        const { world, ship } = await makeHarness(getIntegrationGameData(),
+            'nova:427');
+        const gate = stellars(world).find(p => world.entities.get(p.uuid)
+            ?.components.get(PlanetComponent)?.id === 'nova:1400')!;
+        expect(gate).toBeDefined();
+        ship.components.get(PlanetTargetComponent)!.target = gate.uuid;
+        place(ship, gate.position);
+
+        const { lands, blocked } = pressLand(world);
+
+        expect(lands).toEqual([]);
+        expect(blocked.length).toBe(1);
+        expect(blocked[0].reason).toEqual('denied');
+        expect(blocked[0].gateKind).toEqual('hypergate');
+        expect(landingBlockedMessage('denied', blocked[0].isStation,
+            blocked[0].stellarName, blocked[0].gateKind))
+            .toEqual('Hypergate usage denied.');
     }, 30_000);
 
     // Stays on REAL data (Sol): the exemption is about the STOCK

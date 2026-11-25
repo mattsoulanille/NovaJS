@@ -98,8 +98,9 @@ registerSimulationBridgeEvent({ event: LandEvent });
  * (status_message_plugin.ts). Never mutates the simulation.
  *
  * `stellarName` and `gateKind` are only meaningful for `unlandable`, whose
- * message names the stellar; both are optional so the window reasons stay
- * exactly the shape they always were.
+ * message names the stellar, and `denied`, where a hypergate says "Hypergate
+ * usage denied."; both are optional so the window reasons stay exactly the
+ * shape they always were.
  */
 /** Why a land attempt was refused (see LandingBlockedEvent). Closed: the
  * event is sim-to-display within one build, never persisted. */
@@ -107,7 +108,7 @@ export const LandingBlockReasonType = t.keyof({
     tooFar: null, tooFast: null, unlandable: null, denied: null,
 });
 export type LandingBlockReason = t.TypeOf<typeof LandingBlockReasonType>;
-/** Which kind of gate an `unlandable` stellar is, when it is one. */
+/** Which kind of gate an `unlandable` or `denied` stellar is, when it is one. */
 export const GateKindType = t.keyof({ hypergate: null, wormhole: null });
 export type GateKind = t.TypeOf<typeof GateKindType>;
 export const LandingBlockedEventType = t.intersection([
@@ -440,9 +441,16 @@ const AttemptLandingSystem = new System({
                     // over synced state only, so every peer refuses on the
                     // same tick and the player's comm dialog never offers a
                     // bribe for a landing the gate would have allowed.
+                    //
+                    // A working HYPERGATE refusing the player says "Hypergate
+                    // usage denied." instead (STR# 2002 index 80, measured:
+                    // reference "Stellar hail graphic, wave 23", HG-V01), so
+                    // the gate kind rides along as it does for `unlandable`.
                     emit(LandingBlockedEvent, {
                         reason: 'denied', isStation,
                         stellarName: displayName(planetData.name),
+                        ...(planetData.gate
+                            ? { gateKind: planetData.gate.kind } : {}),
                     }, [playerUuid]);
                 } else {
                     emit(LandEvent, { id, uuid }, [playerUuid]);

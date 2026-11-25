@@ -11734,6 +11734,22 @@ vnp `04-hail.png` "No response.", `03-l1.png`; map_wanted `03-hail.png` .. `05-h
 - Not changed here: NovaJS's `l` at a refusing working gate still says
   "Docking request denied.", not the original's "Hypergate usage denied.".
 
+**Applied (small-fix backlog, 2026-11-24, `N/display/status_bar_content.ts`,
+`N/nova_plugin/travel/planet_plugin.ts`).** `l` at a working HYPERGATE that
+refuses the player now says "Hypergate usage denied." (STR# 2002 index 80,
+the line the original printed at HG-V01): the clearance refusal carries the
+gate kind, and `clearanceDeniedMessage` picks the gate line for it. Stock
+STR# 2002 has NO wormhole counterpart (80 stands alone, while the
+too-far / too-fast lines come in hypergate / wormhole pairs, 64/65 and
+68/69), so a refusing WORMHOLE is left alone: it keeps "Landing request
+denied." / "Docking request denied." by its station flag (every stock
+wormhole is uninhabited and never refuses; only a plug-in's could). Specs:
+`status_bar_content_test.ts` (gate and wormhole lines) and
+`planet_plugin_test.ts` (HG-V01 on stock data, record untouched: `denied`
+with `gateKind: 'hypergate'`). Untouched: NovaJS's too-far / too-fast lines
+at a gate still say "dock at this station" / "land on this planet", not
+STR# 2002 64/65 / 68/69's "enter this hypergate/wormhole" (unmeasured).
+
 ### Map dot colours, wave 23: a gate-only system is GREY and "Uninhabited System"; a system whose port refuses the player's landing is RED; gövt flags (0x0004, 0x0001) change nothing; a xenophobic owner reads "Legal Status: N/A" (2026-11-24)
 
 **Question** (map agent 48022dd4; Matthew expected South Manchester at

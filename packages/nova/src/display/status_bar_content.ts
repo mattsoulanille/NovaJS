@@ -198,7 +198,7 @@ export function landingBlockedMessage(
         case 'unlandable':
             return unlandableMessage(isStation, stellarName, gateKind);
         case 'denied':
-            return clearanceDeniedMessage(isStation);
+            return clearanceDeniedMessage(isStation, gateKind);
         case 'tooFar':
             return `You're too far away to ${place}.`;
         case 'tooFast':
@@ -224,8 +224,18 @@ export function landingBlockedMessage(
  * planet". Deliberately NOT worded with the reason: the original does not tell
  * you whether you are Forbidden (STR# 2002 index 172), Hostile (173), or just
  * short a travel permit, and the same one line covers all three.
+ *
+ * A working HYPERGATE that refuses the player has its own line, index 80
+ * "Hypergate usage denied." (measured: `l` at HG-V01, reference "Stellar hail
+ * graphic, wave 23"). Stock STR# 2002 has no wormhole counterpart (its gate
+ * lines 64/65 and 68/69 pair hypergate with wormhole, 80 does not), so a
+ * refusing wormhole keeps the planet/station line.
  */
-export function clearanceDeniedMessage(isStation: boolean): string {
+export function clearanceDeniedMessage(isStation: boolean,
+    gateKind?: GateKind): string {
+    if (gateKind === 'hypergate') {
+        return 'Hypergate usage denied.';
+    }
     return isStation
         ? 'Docking request denied.' : 'Landing request denied.';
 }

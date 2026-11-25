@@ -175,6 +175,23 @@ describe('landingBlockedMessage', () => {
         expect(clearanceDeniedMessage(false)).toBe('Landing request denied.');
         expect(clearanceDeniedMessage(true)).toBe('Docking request denied.');
     });
+    // STR# 2002 index 80; measured at HG-V01 (reference "Stellar hail
+    // graphic, wave 23"). The data has no wormhole line, so a wormhole keeps
+    // the planet/station form.
+    it('says "Hypergate usage denied." for a refusing hypergate', () => {
+        expect(landingBlockedMessage('denied', true, 'HG-V01', 'hypergate'))
+            .toBe('Hypergate usage denied.');
+        expect(landingBlockedMessage('denied', false, 'HG-V01', 'hypergate'))
+            .toBe('Hypergate usage denied.');
+        expect(clearanceDeniedMessage(true, 'hypergate'))
+            .toBe('Hypergate usage denied.');
+    });
+    it('keeps the landing line for a refusing wormhole', () => {
+        expect(landingBlockedMessage('denied', false, 'Wormhole', 'wormhole'))
+            .toBe('Landing request denied.');
+        expect(landingBlockedMessage('denied', true, 'Wormhole', 'wormhole'))
+            .toBe('Docking request denied.');
+    });
     it('names no stellar and gives no reason when clearance is refused', () => {
         // A Forbidden port and a Hostile one get the SAME line.
         expect(landingBlockedMessage('denied', false, 'Earth'))
