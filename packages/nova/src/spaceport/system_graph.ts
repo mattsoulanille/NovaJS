@@ -18,7 +18,8 @@ import {
     effectiveRoute, expandRoute, Passable, RouteState, SamePlace,
 } from "./route.js";
 import {
-    drawGatePickOverlay, drawLinks, drawRouteOverlay,
+    drawCurrentSystemCentre, drawGatePickOverlay, drawLinks,
+    drawRouteOverlay,
     drawSystem, installLabelFont, labelFontReady, makeSystemLabel, MapRefusal,
 } from "./starmap_draw.js";
 import { drawTerritory, TerritoryOwner, TerritorySite } from "./starmap_borders.js";
@@ -160,6 +161,9 @@ export class SystemGraph {
     // selecting a route only redraws the route, not the whole galaxy.
     private readonly linkGraphics: PIXI.Graphics;
     private readonly routeGraphics: PIXI.Graphics;
+    /** The current system's #00adef centre in route mode, ABOVE the dots
+     * (starmap_draw.ts drawCurrentSystemCentre). */
+    private readonly centreGraphics: PIXI.Graphics;
     /** The hypergate arrows and picker marks, over the dots
      * (starmap_draw.ts drawGatePickOverlay). */
     private readonly gateGraphics: PIXI.Graphics;
@@ -270,6 +274,7 @@ export class SystemGraph {
 
         this.linkGraphics = new PIXI.Graphics();
         this.routeGraphics = new PIXI.Graphics();
+        this.centreGraphics = new PIXI.Graphics();
         this.gateGraphics = new PIXI.Graphics();
         this.borderGraphics = new PIXI.Graphics();
         this.borderGraphics.visible = false;
@@ -333,6 +338,8 @@ export class SystemGraph {
             }
         }
         mapContainer.addChild(circleGraphics);
+        // Above the dots, or their black interiors hide it.
+        mapContainer.addChild(this.centreGraphics);
         mapContainer.addChild(this.gateGraphics);
         mapContainer.addChild(labelContainer);
         const marks = buildMissionMarks(this.systems, this.missionMarks,
@@ -745,5 +752,10 @@ export class SystemGraph {
                 && this.infoSelected !== this.currentSystem
                 ? this.systems.get(this.infoSelected) : undefined,
         });
+        this.centreGraphics.clear();
+        const current = this.systems.get(this.currentSystem);
+        if (current) {
+            drawCurrentSystemCentre(this.centreGraphics, current);
+        }
     }
 }

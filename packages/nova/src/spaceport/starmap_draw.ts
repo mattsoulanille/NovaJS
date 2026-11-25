@@ -350,9 +350,27 @@ export interface RouteOverlay {
 }
 
 /**
+ * The current system's filled #00adef centre (a 4 px disc inside the dot's
+ * black interior). Drawn on a layer ABOVE the dots: drawn under them, the
+ * interior covers it (the regular star map hid it until wave 25; every
+ * original map shot, e.g. map/borders_off.png at 896..899 x 500..503, has
+ * it).
+ */
+export function drawCurrentSystemCentre(g: PIXI.Graphics,
+    system: SystemData) {
+    const [cx, cy] = scalePos(system.position);
+    g.lineStyle(0);
+    g.beginFill(CURRENT_SYSTEM_CENTER_COLOR);
+    g.drawCircle(cx, cy, 1.1 * BASE_SCALE);
+    g.endFill();
+}
+
+/**
  * Draws the route overlay: the WEAK single-jump line, the STRONG
  * multi-jump line over it, pinned-waypoint boxes, the current system's
- * ring, and the properties-selection brackets.
+ * ring, and the properties-selection brackets. The current system's
+ * centre is NOT here: this layer sits under the dots, so SystemGraph draws
+ * it above them ({@link drawCurrentSystemCentre}).
  */
 export function drawRouteOverlay(g: PIXI.Graphics, route: RouteOverlay) {
     g.clear();
@@ -384,15 +402,8 @@ export function drawRouteOverlay(g: PIXI.Graphics, route: RouteOverlay) {
         g.drawRect(x - r, y - r, 2 * r, 2 * r);
     }
 
-    // The current system: a cyan centre on both maps, and on the full map
-    // a dashed green ring as well (the original's marker).
-    if (route.current) {
-        const [cx, cy] = scalePos(route.current.position);
-        g.lineStyle(0);
-        g.beginFill(CURRENT_SYSTEM_CENTER_COLOR);
-        g.drawCircle(cx, cy, 1.1 * BASE_SCALE);
-        g.endFill();
-    }
+    // The current system: on the full map a dashed green ring (the
+    // original's marker); its cyan centre is drawn above the dots.
     if (route.current && !mini) {
         const [x, y] = scalePos(route.current.position);
         const r = SYSTEM_RADIUS + 2.5;
@@ -457,11 +468,7 @@ export function drawGatePickOverlay(g: PIXI.Graphics,
             HYPERGATE_PICKED_WIDTH_PX);
     }
     if (overlay.current) {
-        const [cx, cy] = scalePos(overlay.current.position);
-        g.lineStyle(0);
-        g.beginFill(CURRENT_SYSTEM_CENTER_COLOR);
-        g.drawCircle(cx, cy, 1.1 * BASE_SCALE);
-        g.endFill();
+        drawCurrentSystemCentre(g, overlay.current);
     }
     const marked = overlay.picked ?? overlay.current;
     if (marked) {
