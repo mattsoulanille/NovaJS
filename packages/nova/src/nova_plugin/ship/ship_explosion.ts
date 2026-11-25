@@ -36,14 +36,18 @@ import { Component } from 'nova_ecs/component';
  * first Matthew's ruling; the amount is now MEASURED on the original
  * (reference "Plunder self-destruct blast, wave 27"): 25.5 + 0.037 x
  * mass to the shield and then the armor, from 100 tons up (see
- * SHIP_EXPLOSION_DAMAGE_PER_TON).
+ * SHIP_EXPLOSION_DAMAGE_PER_TON). Its "radius" is MEASURED to be no
+ * circle at all but an axis-aligned SQUARE growing with the mass (about
+ * twice the damage each way, {@link SHIP_EXPLOSION_REACH_PER_DAMAGE};
+ * reference "Ship explosion blast, wave 28"), and an ORDINARY death is
+ * the same blast as a plunder self-destruct (same wave, finding 2).
  *
  * The Bible's 60-frame distinction (single fireball vs. huge
  * mass-proportional explosion) is NOT a gate on the damage: MEASURED, a
  * 5,000-ton hulk with DeathDelay 10 and one with DeathDelay 60 dealt the
  * same blast (reference "Plunder self-destruct, wave 26"); only its
  * timing differed. (Whether a DeathDelay-60 blast reaches FARTHER is not
- * measured: the radius below is still a tunable.)
+ * measured: the wave-28 reach was read off DeathDelay-10 hulks.)
  *
  * The 60-frame threshold IS a gate on the fireball GRAPHIC, which is
  * the thing the Bible attaches it to — see
@@ -61,15 +65,16 @@ import { Component } from 'nova_ecs/component';
  * DETERMINISM. Every function here is pure and free of randomness,
  * wall-clock and trigonometry: mass comes from static shïp data and the
  * cadence from the simulation clock, so every peer computes the same
- * radius, the same damage, and the same explosion spawn schedule.
+ * reach, the same damage, and the same explosion spawn schedule.
  */
 
 /**
  * Marks a blast entity as a ship's own final explosion rather than a
  * weapon's. Read by BlastCollisionSystem, which flags the DamagedEvent
  * `nonLethal` so DamageSystem clamps armor above the victim's disable
- * threshold; it carries the exploding hull's mass, which is what set the
- * blast's radius and damage.
+ * threshold; it carries the exploding hull's mass, which is what sets the
+ * blast's reach (BlastCollisionSystem's centre-in-square test, {@link
+ * shipExplosionReach}) and damage.
  *
  * It lives in this leaf module (with the tunables, no plugin imports) so
  * blast_plugin.ts can read it without importing ship_explosion_plugin.ts
@@ -107,38 +112,80 @@ export const SHIP_EXPLOSION_DAMAGE_PER_TON = 0.037;
 /**
  * The lightest hull whose final explosion does any damage.
  *
- * GUESS on the exact value: measured only that a 50-ton hulk's blast did
- * nothing visible (the line above predicts 27, about 40 px of the
- * boarder's shield bar) while a 100-ton hulk's did the full 28.4 (wave 26
- * pd_live2, wave 27 pd_100). 100 is the Bible's second shïp Mass band
- * ("1-99" is the smallest); a cut-off by blast reach rather than mass is
- * the other reading the reference leaves open.
+ * MEASURED (reference "Ship explosion blast, wave 28", finding 1): a
+ * 99-ton hulk's blast did nothing to a boarder overlapping it (about
+ * 4 px off), a 90-ton one nothing at 8 px, while 100 tons did the full
+ * 28.4 at 5-8 px (wave 27). One ton cannot move a reach from under 4 px
+ * to over 8, so the cut-off is a MASS rule, not a reach: the Bible's
+ * smallest shïp Mass band, "1-99", does no blast damage at all.
  */
 export const SHIP_EXPLOSION_DAMAGE_MIN_MASS = 100;
 
 /**
- * Blast radius in pixels per ton, the Bible's "the blast radius ... when
- * the ship explodes is proportional to its mass".
+ * THE BLAST'S REACH is an axis-aligned SQUARE centred on the wreck, of
+ * half-side SHIP_EXPLOSION_REACH_PER_DAMAGE x the blast's damage
+ * ({@link shipExplosionReach}); a ship is hit when its CENTRE lies
+ * inside it, i.e. max(|dx|, |dy|) <= the half-side, with the full damage
+ * (no falloff) and nothing outside.
  *
- * TUNABLE only in its constant of proportionality: 0.02 px/ton puts a
- * Leviathan at the 200 px cap — larger than the widest stock weapon
- * blast (the Hellhound Missile's 145) as befits a capital ship coming
- * apart — a Fed Carrier at 40 px, and everything under 1000 tons at the
- * floor below.
+ * MEASURED (reference "Ship explosion blast, wave 28", findings 3-4,
+ * fourteen runs, centre to centre): a 100-ton wreck hit at (55.3, 46.1)
+ * (72 px away) and missed at (-60.2, -17.2) (62 px away), which rules out
+ * any circle; by the larger coordinate every hit is inside and every
+ * miss outside — 100 t hits up to 55.3, misses from 60.2; 1,000 t hits
+ * up to 113, misses from 157.
+ *
+ * GUESS on the FORM (two masses only; a + b x mass with b anywhere in
+ * 0.06-0.11 fits as well): twice the blast's damage, 2 x 28.4 = 57 and
+ * 2 x 63.5 = 127, both inside their brackets — i.e. 51 + 0.074 x mass.
+ * NO CAP: whether the original caps it is unmeasured, so a 10,000-ton
+ * Leviathan reaches 791 px each way (a 1,582 px square).
  */
-export const SHIP_EXPLOSION_RADIUS_PER_TON = 0.02;
+export const SHIP_EXPLOSION_REACH_PER_DAMAGE = 2;
 
 /**
- * Floor and ceiling on that radius, in pixels. The floor keeps a
- * feather-weight hull's blast from being a mathematical point (a 1-ton
- * escape pod would otherwise get 0.02 px); the ceiling stops the
- * heaviest hulls from reaching across a dogfight. Both TUNABLE; the
- * floor matches the small end of the stock weapon blast radii (4-12 px
- * for blasters, 10-20 for missiles) and the ceiling sits just above the
- * largest (145 px).
+ * The final explosion's reach, the HALF-SIDE in pixels of its square
+ * ({@link SHIP_EXPLOSION_REACH_PER_DAMAGE}): 2 x (25.5 + 0.037 x mass),
+ * 58 px at 100 t, 127 px at 1,000 t, 791 px at 10,000 t.
+ *
+ * Below the damage cut-off the square keeps the same formula (51-58 px
+ * for 0-99 t): such a blast hurts nothing, but its knockback still
+ * shoves what is inside (the knockback is unmeasured and unchanged). A
+ * degenerate mass reaches 51 px rather than NaN.
  */
-export const SHIP_EXPLOSION_MIN_RADIUS = 20;
-export const SHIP_EXPLOSION_MAX_RADIUS = 200;
+export function shipExplosionReach(mass: number): number {
+    const tons = mass > 0 ? mass : 0;
+    return SHIP_EXPLOSION_REACH_PER_DAMAGE * (SHIP_EXPLOSION_DAMAGE_BASE
+        + tons * SHIP_EXPLOSION_DAMAGE_PER_TON);
+}
+
+/**
+ * Whether a ship centred at (dx, dy) from the wreck is inside a blast of
+ * this reach: max(|dx|, |dy|) <= reach ({@link
+ * SHIP_EXPLOSION_REACH_PER_DAMAGE}). Pure, no square root.
+ */
+export function insideShipExplosion(dx: number, dy: number,
+    reach: number): boolean {
+    return Math.max(Math.abs(dx), Math.abs(dy)) <= reach;
+}
+
+/**
+ * The FIREBALL's radius in pixels per ton (DISPLAY ONLY: the mass-
+ * proportional "huge explosion" of a DeathDelay >= 60 hull, see
+ * {@link finalExplosionScale}). It used to be the blast's damage radius
+ * too; the reach is now the measured square above, and the picture keeps
+ * its old size (0.02 px/ton puts a Leviathan at the 200 px cap, a Fed
+ * Carrier at 40 px, everything under 1600 tons at the art's own size).
+ * TUNABLE.
+ */
+export const FINAL_FIREBALL_RADIUS_PER_TON = 0.02;
+
+/**
+ * Floor and ceiling on the fireball's radius, in pixels. DISPLAY ONLY
+ * (see {@link FINAL_FIREBALL_RADIUS_PER_TON}). TUNABLE.
+ */
+export const FINAL_FIREBALL_MIN_RADIUS = 20;
+export const FINAL_FIREBALL_MAX_RADIUS = 200;
 
 /**
  * Knockback ("impact strength", per the Bible's Mass entry) per ton.
@@ -164,14 +211,15 @@ export const SHIP_EXPLOSION_KNOCKBACK_PER_TON = 0.05;
  */
 export const SHIP_EXPLOSION_ARMOR_MARGIN_FRACTION = 0.01;
 
-/** The final explosion's blast radius in pixels, from the ship's mass. */
-export function shipExplosionRadius(mass: number): number {
+/** The final fireball's radius in pixels, from the ship's mass (DISPLAY
+ * ONLY; the blast's reach is {@link shipExplosionReach}). */
+export function finalFireballRadius(mass: number): number {
     // `!(mass > 0)` also catches NaN/undefined from a malformed plug-in.
     if (!(mass > 0)) {
-        return SHIP_EXPLOSION_MIN_RADIUS;
+        return FINAL_FIREBALL_MIN_RADIUS;
     }
-    return Math.min(SHIP_EXPLOSION_MAX_RADIUS, Math.max(
-        SHIP_EXPLOSION_MIN_RADIUS, mass * SHIP_EXPLOSION_RADIUS_PER_TON));
+    return Math.min(FINAL_FIREBALL_MAX_RADIUS, Math.max(
+        FINAL_FIREBALL_MIN_RADIUS, mass * FINAL_FIREBALL_RADIUS_PER_TON));
 }
 
 /**
@@ -258,13 +306,15 @@ export const FINAL_EXPLOSION_NATURAL_RADIUS = 32;
  * this only when ShipData.largeExplosion is set; a DeathDelay < 60 ship
  * gets "a single fireball" at scale 1.
  *
- * DERIVED, NOT TUNED. The fireball is drawn to cover exactly the blast
- * that damages: its radius IS {@link shipExplosionRadius}, so the mass
- * proportionality, the floor and the 200 px ceiling are the simulation's
- * and the picture cannot drift from the hitbox. A Leviathan's 10000 tons
- * reach the 200 px cap and so draw at 200/32 = 6.25x — a 400 px fireball
- * over a 400 px blast diameter; a 6000-ton Cambrian 3.75x; a 2000-ton
- * Fed Carrier 1.25x.
+ * Its radius is {@link finalFireballRadius}, mass-proportional with a
+ * 200 px ceiling. It USED to be the blast's damage radius as well; since
+ * the reach was measured to be a square of about twice the damage
+ * (reference "Ship explosion blast, wave 28"; 791 px each way for a
+ * Leviathan), the picture keeps its old size rather than growing to a
+ * 1,600 px fireball nobody has seen on the original (the original's
+ * fireball size is unmeasured). A Leviathan's 10000 tons reach the 200 px
+ * cap and so draw at 200/32 = 6.25x — a 400 px fireball; a 6000-ton
+ * Cambrian 3.75x; a 2000-ton Fed Carrier 1.25x.
  *
  * Clamped at 1 from below: below ~1600 tons the mass-proportional radius
  * is smaller than the art, and the Bible's branch is a fireball that is
@@ -274,7 +324,7 @@ export const FINAL_EXPLOSION_NATURAL_RADIUS = 32;
  */
 export function finalExplosionScale(mass: number): number {
     return Math.max(1,
-        shipExplosionRadius(mass) / FINAL_EXPLOSION_NATURAL_RADIUS);
+        finalFireballRadius(mass) / FINAL_EXPLOSION_NATURAL_RADIUS);
 }
 
 // --- The death sequence's secondary explosions (display) ---

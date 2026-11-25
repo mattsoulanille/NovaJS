@@ -14,6 +14,8 @@ import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiri
 import { GovtComponent } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { ShipCargoProvider, ShipExplosionComponent } from '../ship/index.js';
+import { insideShipExplosion, shipExplosionReach } from '../ship/index.js';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 
 
 export { BlastDamageComponent, BlastIgnoreComponent } from '../ship/index.js';
@@ -24,16 +26,29 @@ export const BlastCollisionSystem = new System({
     args: [CollisionEvent, BlastDamageComponent, Entities,
         Optional(BlastIgnoreComponent), Optional(FiringGroupComponent),
         EmitNow, UUID, Optional(ShipExplosionComponent),
-        Optional(SourceComponent)] as const,
+        Optional(SourceComponent), Optional(MovementStateComponent)] as const,
     step(collision, damage, entities, ignore, firingGroup, emitNow, uuid,
-        shipExplosion, source) {
+        shipExplosion, source, movement) {
         if (ignore?.has(collision.other)) {
             return;
+        }
+        const other = entities.get(collision.other);
+        // A ship's final explosion hits what its square holds by the
+        // victim's CENTRE (ship_explosion.ts's shipExplosionReach,
+        // reference "Ship explosion blast, wave 28"); the square hurtbox
+        // found every hull it merely overlaps.
+        if (shipExplosion && movement) {
+            const at = other?.components.get(MovementStateComponent)
+                ?.position;
+            if (!at || !insideShipExplosion(at.x - movement.position.x,
+                at.y - movement.position.y,
+                shipExplosionReach(shipExplosion.mass))) {
+                return;
+            }
         }
         // Friendly-fire immunity: a blast whose weapon spares its firer
         // (blastHurtsFiringShip unset) carries the firer's group and
         // spares the whole group (see firing_group.ts).
-        const other = entities.get(collision.other);
         // BLAST_FLOCK_RULE 'flockAlwaysSpared' (firing_group.ts): a blast
         // that hurts its firing ship spares the rest of the group only.
         const firerHit = firingGroup?.hurtsFirer === true

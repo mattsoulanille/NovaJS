@@ -26,13 +26,14 @@ import { ControlledByComponent } from '../player/index.js';
 import { ShipDataComponent } from './ship_plugin.js';
 import { Stat } from '../core/index.js';
 import {
-    FINAL_EXPLOSION_NATURAL_RADIUS, finalExplosionScale,
-    MAX_SECONDARY_EXPLOSIONS, MIN_SECONDARY_EXPLOSIONS,
+    FINAL_EXPLOSION_NATURAL_RADIUS, FINAL_FIREBALL_MAX_RADIUS,
+    FINAL_FIREBALL_MIN_RADIUS, finalExplosionScale, finalFireballRadius,
+    insideShipExplosion, MAX_SECONDARY_EXPLOSIONS, MIN_SECONDARY_EXPLOSIONS,
     nonLethalArmor, nonLethalArmorFloor, secondaryExplosionsDue,
     secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_BASE,
     SHIP_EXPLOSION_DAMAGE_MIN_MASS, SHIP_EXPLOSION_DAMAGE_PER_TON,
-    SHIP_EXPLOSION_KNOCKBACK_PER_TON, SHIP_EXPLOSION_MAX_RADIUS,
-    SHIP_EXPLOSION_MIN_RADIUS, shipExplosionDamage, shipExplosionRadius,
+    SHIP_EXPLOSION_KNOCKBACK_PER_TON, shipExplosionDamage,
+    shipExplosionReach,
 } from './ship_explosion.js';
 
 /** Synthetic hulls whose numbers the simulation specs below lean on. */
@@ -47,19 +48,66 @@ const LETHAL = {
 } as never;
 
 describe('ship explosion scaling', () => {
-    it('scales the blast radius with mass, floored and capped', () => {
-        // The Bible (shïp Mass): "the blast radius and impact strength
-        // when the ship explodes is proportional to its mass".
-        expect(shipExplosionRadius(2000)).toEqual(40);
-        expect(shipExplosionRadius(4000)).toEqual(80);
+    it('scales the fireball radius with mass, floored and capped', () => {
+        // DISPLAY ONLY since wave 28 (the reach is the square below).
+        expect(finalFireballRadius(2000)).toEqual(40);
+        expect(finalFireballRadius(4000)).toEqual(80);
         // A Leviathan (10000 tons) reaches the cap.
-        expect(shipExplosionRadius(10000)).toEqual(SHIP_EXPLOSION_MAX_RADIUS);
-        expect(shipExplosionRadius(1e9)).toEqual(SHIP_EXPLOSION_MAX_RADIUS);
+        expect(finalFireballRadius(10000)).toEqual(FINAL_FIREBALL_MAX_RADIUS);
+        expect(finalFireballRadius(1e9)).toEqual(FINAL_FIREBALL_MAX_RADIUS);
         // Light hulls get the floor rather than a mathematical point.
-        expect(shipExplosionRadius(15)).toEqual(SHIP_EXPLOSION_MIN_RADIUS);
-        expect(shipExplosionRadius(0)).toEqual(SHIP_EXPLOSION_MIN_RADIUS);
-        expect(shipExplosionRadius(NaN)).toEqual(SHIP_EXPLOSION_MIN_RADIUS);
+        expect(finalFireballRadius(15)).toEqual(FINAL_FIREBALL_MIN_RADIUS);
+        expect(finalFireballRadius(0)).toEqual(FINAL_FIREBALL_MIN_RADIUS);
+        expect(finalFireballRadius(NaN)).toEqual(FINAL_FIREBALL_MIN_RADIUS);
     });
+
+    it('reaches a square of half-side about twice the damage, inside '
+        + 'every measured bracket (wave 28)', () => {
+            // Reference "Ship explosion blast, wave 28", finding 4:
+            // [mass, farthest hit, nearest miss] by max(|dx|, |dy|).
+            const brackets: [number, number, number][] = [
+                [100, 55.3, 60.2], [1000, 113, 157],
+            ];
+            for (const [mass, hit, miss] of brackets) {
+                const reach = shipExplosionReach(mass);
+                expect(reach).withContext(`${mass} t`)
+                    .toBeGreaterThanOrEqual(hit);
+                expect(reach).withContext(`${mass} t`).toBeLessThan(miss);
+                expect(reach).toBeCloseTo(
+                    2 * shipExplosionDamage(mass).shield, 9);
+            }
+            expect(shipExplosionReach(100)).toBeCloseTo(58.4, 9);
+            expect(shipExplosionReach(1000)).toBeCloseTo(125, 9);
+            // No cap (unmeasured): a 10,000 t Leviathan reaches 791 px
+            // each way.
+            expect(shipExplosionReach(10000)).toBeCloseTo(791, 9);
+            // Below the damage cut-off the square keeps the formula (it
+            // carries the knockback); a degenerate mass is not NaN.
+            expect(shipExplosionReach(99)).toBeCloseTo(51 + 99 * 0.074, 9);
+            expect(shipExplosionReach(NaN)).toEqual(51);
+            expect(shipExplosionReach(-5)).toEqual(51);
+        });
+
+    it('tests the larger coordinate, not the distance (every wave-28 '
+        + 'kill)', () => {
+            // [mass, dx, dy, hit]: each row of the wave-28 table.
+            const kills: [number, number, number, boolean][] = [
+                [1000, 53, -76, true], [1000, 64, 113, true],
+                [1000, 99.5, -98.3, true], [1000, 157, -46, false],
+                [1000, 98, 161, false],
+                [100, 43.5, -33.5, true], [100, 48.3, 28.4, true],
+                // 72 px away, hit; the next row is 62 px away, a miss:
+                // no circle fits both.
+                [100, 55.3, 46.1, true], [100, -60.2, -17.2, false],
+                [100, -18.3, -88.6, false], [100, 119, 49, false],
+            ];
+            for (const [mass, dx, dy, hit] of kills) {
+                expect(insideShipExplosion(dx, dy, shipExplosionReach(mass)))
+                    .withContext(`${mass} t at (${dx}, ${dy})`).toBe(hit);
+            }
+            // The edge is inside.
+            expect(insideShipExplosion(-10, 58.4, 58.4)).toBeTrue();
+        });
 
     it('deals the measured 25.5 + 0.037 x mass from 100 tons up', () => {
         // Reference "Plunder self-destruct blast, wave 27": the blast a
@@ -83,11 +131,12 @@ describe('ship explosion scaling', () => {
             + 10000 * SHIP_EXPLOSION_DAMAGE_PER_TON, 9);
     });
 
-    it('does nothing below the cut-off (a 50-ton hulk: measured none)',
-        () => {
+    it('does nothing below the 100 t cut-off (99 t point-blank: measured '
+        + 'none)', () => {
             // Wave 26 pd_live2: a 50 t hulk's blast left the boarder's
-            // bars untouched; 100 t did the full 28. The cut-off value
-            // itself is a GUESS between the two.
+            // bars untouched; 100 t did the full 28. Wave 28 pd_99 /
+            // pd_90: a 99 t hulk at about 4 px and a 90 t one at 8 px did
+            // nothing, so the cut-off is a mass rule at 100 t.
             expect(shipExplosionDamage(50).shield).toEqual(0);
             expect(shipExplosionDamage(50).armor).toEqual(0);
             expect(shipExplosionDamage(
@@ -118,24 +167,23 @@ describe('ship explosion scaling', () => {
  * mass," versus 0-59's "single fireball".
  */
 describe('final explosion fireball scale', () => {
-    it('draws the fireball at exactly the blast radius', () => {
-        // This is the whole contract: the picture covers the hitbox, so
-        // the two can never drift. Checked across the full stock mass
-        // range, including the ends where the radius clamps.
+    it('draws the fireball at the fireball radius', () => {
+        // Checked across the full stock mass range, including the ends
+        // where the radius clamps.
         for (const mass of [1, 15, 90, 175, 650, 1600, 2000, 6000, 10000,
             1e9]) {
             const drawnRadius = finalExplosionScale(mass)
                 * FINAL_EXPLOSION_NATURAL_RADIUS;
             expect(drawnRadius).withContext(`${mass} tons`)
                 .toEqual(Math.max(FINAL_EXPLOSION_NATURAL_RADIUS,
-                    shipExplosionRadius(mass)));
+                    finalFireballRadius(mass)));
         }
     });
 
     it('scales the heaviest hulls up and never draws one smaller than '
         + 'its art', () => {
             // A Leviathan hits the 200 px radius cap: 200 / 32 = 6.25, a
-            // 400 px fireball over a 400 px blast diameter.
+            // 400 px fireball (its blast reaches 791 px each way).
             expect(finalExplosionScale(10000)).toEqual(6.25);
             expect(finalExplosionScale(6000)).toEqual(3.75);   // Cambrian
             expect(finalExplosionScale(2000)).toEqual(1.25);   // Fed Carrier
@@ -366,22 +414,26 @@ describe('final explosion area damage (simulation)', () => {
      * `distance` pixels away.
      */
     async function battlefield(exploderId: string, distance: number,
-        victimId = VICTIM_HULL, options: { victimIsPlayer?: boolean } = {}) {
+        victimId = VICTIM_HULL, options: {
+            victimIsPlayer?: boolean, victimY?: number,
+        } = {}) {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             'worker', { npcs: false });
 
-        const place = async (id: string, uuid: string, x: number) => {
+        const place = async (id: string, uuid: string, x: number,
+            y = 0) => {
             const shipData = (await gameData.data.Ship.get(id))!;
             const ship = makeShip(shipData);
             await completeEntity(world, ship);
             world.entities.set(uuid, ship);
             ship.components.get(MovementStateComponent)!.position =
-                new Position(x, 0);
+                new Position(x, y);
             return ship;
         };
         const exploder = await place(exploderId, EXPLODER, 0);
-        const victim = await place(victimId, VICTIM, distance);
+        const victim = await place(victimId, VICTIM, distance,
+            options.victimY ?? 0);
         if (options.victimIsPlayer) {
             victim.components.set(ControlledByComponent, { peerId: 'a' });
             victim.components.set(LegalRecordsComponent, new Map());
@@ -448,12 +500,11 @@ describe('final explosion area damage (simulation)', () => {
             expect(victim.components.has(DisabledComponent)).toBeFalse();
         }, 120_000);
 
-    it('does not reach past its radius', async () => {
-        // A Bastion Hulk's blast is SHIP_EXPLOSION_MAX_RADIUS px; a Wren
-        // Skiff sitting well past that is untouched. (Its own hitbox is
-        // tens of px wide, so the margin is generous.)
+    it('does not reach past its square', async () => {
+        // A Bastion Hulk's blast reaches 791 px each way; a Wren Skiff
+        // sitting well past that is untouched.
         const { world, victim } = await battlefield(HEAVY,
-            SHIP_EXPLOSION_MAX_RADIUS * 4);
+            shipExplosionReach(10000) * 2);
         const shield = shieldOf(victim).current;
         const armor = armorOf(victim).current;
         explodeNow(world);
@@ -461,6 +512,41 @@ describe('final explosion area damage (simulation)', () => {
         world.step();
         expect(shieldOf(victim).current).toEqual(shield);
         expect(armorOf(victim).current).toEqual(armor);
+    }, 120_000);
+
+    it('hits by the larger coordinate: a square, not a circle (wave 28)',
+        async () => {
+            // A Bastion Hulk's 791 px reach. Its CORNER at (700, 700),
+            // 990 px away, is hit; a ship on the AXIS at 850 px, nearer,
+            // is not.
+            const shieldLost = async (x: number, y: number) => {
+                const { world, victim } = await battlefield(HEAVY, x,
+                    VICTIM_HULL, { victimY: y });
+                const before = shieldOf(victim).current;
+                explodeNow(world);
+                world.step();
+                return before - shieldOf(victim).current;
+            };
+            expect(await shieldLost(700, 700)).toBeGreaterThan(0);
+            expect(await shieldLost(-700, 700)).toBeGreaterThan(0);
+            expect(await shieldLost(850, 0)).toEqual(0);
+            expect(await shieldLost(0, -850)).toEqual(0);
+        }, 120_000);
+
+    it('judges the victim by its CENTRE, not its hull\'s edge', async () => {
+        // The measured brackets are centre to centre: a Wren Skiff whose
+        // centre sits 4 px outside the square (its hull pokes into it)
+        // is untouched; 4 px inside, it takes the blast.
+        const reach = shipExplosionReach(10000);
+        const shieldLost = async (x: number) => {
+            const { world, victim } = await battlefield(HEAVY, x);
+            const before = shieldOf(victim).current;
+            explodeNow(world);
+            world.step();
+            return before - shieldOf(victim).current;
+        };
+        expect(await shieldLost(reach + 4)).toEqual(0);
+        expect(await shieldLost(reach - 4)).toBeGreaterThan(0);
     }, 120_000);
 
     it('never disables or destroys a nearly-dead victim', async () => {

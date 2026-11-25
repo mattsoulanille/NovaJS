@@ -13,7 +13,7 @@ import { DeathEvent, PlayerDeathSystem } from '../ship/index.js';
 import { IdFactoryResource } from '../core/index.js';
 import { DeathAISystem } from '../npc/index.js';
 import {
-    shipExplosionDamage, ShipExplosionComponent, shipExplosionRadius,
+    shipExplosionDamage, ShipExplosionComponent, shipExplosionReach,
 } from '../ship/index.js';
 import { ShipDataComponent } from '../ship/index.js';
 
@@ -28,11 +28,20 @@ import { ShipDataComponent } from '../ship/index.js';
  * Explode2 fireball — the dying hull drops a BLAST at its own position,
  * reusing the machinery a wëap BlastRadius already uses
  * (blast_plugin.ts): the blast lives for exactly one collision pass,
- * CollisionSystem discovers everything its circle overlaps and emits the
+ * CollisionSystem discovers everything its hurtbox overlaps and emits the
  * collisions in canonical uuid-sorted order, BlastCollisionSystem turns
  * each into a DamagedEvent, and KnockbackSystem shoves each victim
  * radially outward from the blast's center. Nothing here iterates
  * entities itself, so there is no new ordering to get wrong.
+ *
+ * THE REACH IS A SQUARE, measured CENTRE TO CENTRE (reference "Ship
+ * explosion blast, wave 28"): a ship is hit when max(|dx|, |dy|) from the
+ * wreck is within {@link shipExplosionReach} (about twice the damage). The
+ * hurtbox is that axis-aligned square (never rotated: the blast's
+ * rotation is 0), which finds every hull it overlaps; BlastCollisionSystem
+ * then keeps only the victims whose CENTRE is inside it, so a big hull
+ * whose edge pokes into the square is not hit (the measured brackets are
+ * centre distances between two 24 px hulls).
  *
  * WHAT IT HITS. `hitTypes` carries BOTH 'normal' (every ship, and the
  * asteroids that share the tag, which a big enough blast shatters) and
@@ -41,8 +50,9 @@ import { ShipDataComponent } from '../ship/index.js';
  * neighbourhood with it. Missiles die outright — the non-lethal clamp is
  * a ship rule (DamageSystem gates it on ShipDataComponent) — which is
  * the reading Matthew left open ("probably yes for PD-vulnerable
- * things"). Damage does not fall off with distance, matching the wëap
- * BlastRadius machinery it reuses: inside the circle is inside.
+ * things"). Damage does not fall off with distance (MEASURED, wave 28
+ * finding 3: 1,000 t landed 63.5 at 10, 92, 130 and 140 px alike): inside
+ * the square is inside.
  *
  * NO FRIENDLY FIRE EXEMPTION. The blast deliberately carries no
  * FiringGroupComponent, so firing-group immunity (which is a property of
@@ -83,14 +93,21 @@ export const ShipExplosionBlastSystem = new System({
         IdFactoryResource, UUID] as const,
     step(shipData, movement, entities, ids, uuid) {
         const mass = shipData.physics.mass;
-        const radius = shipExplosionRadius(mass);
+        const reach = shipExplosionReach(mass);
         const blast = new Entity(`${shipData.name} Explosion`)
             .addComponent(BlastDamageComponent, shipExplosionDamage(mass))
             .addComponent(ShipExplosionComponent, { mass })
             // The wreck does not damage itself.
             .addComponent(BlastIgnoreComponent, new Set([uuid]))
+            // The axis-aligned square of half-side `reach`, in the order
+            // SAT.Box.toPolygon lists a box's corners.
             .addComponent(HurtboxHullComponent, new CompositeHull(
-                [new SAT.Circle(new SAT.Vector(0, 0), radius)]))
+                [new SAT.Polygon(new SAT.Vector(0, 0), [
+                    new SAT.Vector(-reach, -reach),
+                    new SAT.Vector(reach, -reach),
+                    new SAT.Vector(reach, reach),
+                    new SAT.Vector(-reach, reach),
+                ])]))
             .addComponent(CollisionHitterComponent, {
                 hitTypes: new Set(['normal', 'pointDefense']),
             })
