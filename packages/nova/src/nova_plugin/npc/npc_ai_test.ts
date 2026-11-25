@@ -16,6 +16,9 @@ import {
     RCS_ACCEL_FRACTION, RCS_DISENGAGE_SPEED, RCS_ENGAGE_SPEED,
     steerArrive, steerFormation,
 } from './npc_ai_plugin.js';
+import {
+    FORMATION_COUNT_LAYOUTS, FORMATION_RANK_CELLS, formationFillCell,
+} from './npc_formation.js';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 
 function govt(overrides: Partial<ReturnType<typeof getDefaultGovtData>>) {
@@ -156,7 +159,7 @@ describe('nextFormationSlot', () => {
     });
 });
 
-describe('formation geometry (the original\'s 45° echelon V, '
+describe('formation geometry (the original\'s 45° V, filled as a triangle, '
     + 'reference F1/F1b)', () => {
         it('steps by a = clamp(0.59 x frame width, 23.5, 59.5) px', () => {
             const a = (width: number) =>
@@ -181,17 +184,97 @@ describe('formation geometry (the original\'s 45° echelon V, '
                 }
             });
 
-        it('extrapolates the V linearly: each further pair one row astern '
-            + 'and out', () => {
+        // Ranks 4 and up are a GUESS pending reference F1c: the triangle
+        // inside the measured V, row by row, outer cells first (left then
+        // right), then inward; an even row's centre cell last.
+        /** The first `count` slots in units of `a`: [astern, lateral]. */
+        const layout = (count: number) => {
+            const a = 40;
+            return Array.from({ length: count }, (_, rank) => {
+                const { back, lateral } = formationOffset(rank, a);
+                return [back / a, lateral / a];
+            });
+        };
+
+        it('puts a fifth escort in row 2\'s centre cell, before row 3', () => {
+            expect(layout(5)).toEqual([
+                [1, -1], [1, 1],
+                [2, -2], [2, 2], [2, 0],
+            ]);
+        });
+
+        it('starts row 3 at its outer cells with the sixth and seventh '
+            + 'escorts (Matthew\'s six-escort playtest)', () => {
+                expect(layout(6)).toEqual([
+                    [1, -1], [1, 1],
+                    [2, -2], [2, 2], [2, 0],
+                    [3, -3],
+                ]);
+                expect(layout(7)).toEqual([
+                    [1, -1], [1, 1],
+                    [2, -2], [2, 2], [2, 0],
+                    [3, -3], [3, 3],
+                ]);
+            });
+
+        it('fills rows 1-3 and starts row 4 with ten escorts', () => {
+            expect(layout(10)).toEqual([
+                [1, -1], [1, 1],
+                [2, -2], [2, 2], [2, 0],
+                [3, -3], [3, 3], [3, -1], [3, 1],
+                [4, -4],
+            ]);
+        });
+
+        it('keeps every slot on the 45° lattice inside the V, row r '
+            + 'holding r + 1 distinct cells', () => {
                 const a = 40;
-                expect(formationOffset(4, a)).toEqual({ back: 120, lateral: -120 });
-                expect(formationOffset(5, a)).toEqual({ back: 120, lateral: 120 });
-                expect(formationOffset(9, a)).toEqual({ back: 200, lateral: 200 });
-                for (let rank = 0; rank < 16; rank++) {
+                const cells = new Map<number, Set<number>>();
+                for (let rank = 0; rank < 120; rank++) {
                     const { back, lateral } = formationOffset(rank, a);
-                    // On the 45° arms, never on the leader's axis or ahead.
-                    expect(back).toBeGreaterThan(0);
-                    expect(Math.abs(lateral)).toBe(back);
+                    const row = back / a;
+                    const steps = lateral / a;
+                    expect(Number.isInteger(row)).toBe(true);
+                    expect(row).toBeGreaterThan(0);
+                    // Inside (or on) the V's arms, on the lattice: lateral
+                    // steps have the row's parity.
+                    expect(Math.abs(steps)).toBeLessThanOrEqual(row);
+                    expect((row - steps) % 2).toBe(0);
+                    const rowCells = cells.get(row) ?? new Set<number>();
+                    expect(rowCells.has(steps)).toBe(false);
+                    rowCells.add(steps);
+                    cells.set(row, rowCells);
+                    // Rows fill in order: no rank sits behind an unfilled row.
+                    for (let earlier = 1; earlier < row; earlier++) {
+                        expect(cells.get(earlier)?.size).toBe(earlier + 1);
+                    }
+                }
+                // Rows 1-14 hold 2 + 3 + ... + 15 = 119 ranks.
+                for (let row = 1; row <= 14; row++) {
+                    expect(cells.get(row)?.size).toBe(row + 1);
+                }
+            });
+
+        it('never returns -0 for a centre cell', () => {
+            expect(Object.is(formationOffset(4, 40).lateral, 0)).toBe(true);
+            expect(Object.is(formationOffset(13, 40).lateral, 0)).toBe(true);
+        });
+
+        it('takes the measured rank table first; the interim fill '
+            + 'reproduces it for ranks 0-3', () => {
+                expect(FORMATION_RANK_CELLS.length).toBe(4);
+                expect([0, 1, 2, 3].map(formationFillCell))
+                    .toEqual([...FORMATION_RANK_CELLS]);
+            });
+
+        it('lays out every count by rank until a count-dependent layout '
+            + 'is measured', () => {
+                expect(FORMATION_COUNT_LAYOUTS.size).toBe(0);
+                for (const count of [1, 2, 3, 4, 5, 6, 7, 10]) {
+                    for (let rank = 0; rank < count; rank++) {
+                        expect(formationOffset(rank, 40, count))
+                            .toEqual(formationOffset(rank, 40));
+                    }
                 }
             });
 

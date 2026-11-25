@@ -110,10 +110,14 @@ export const FormationSystem = new System({
         }
         // Base acceleration and turn rate (not the per-tick effective
         // physics): afterburners must not boost the RCS budget.
+        // The follower count goes along for count-dependent layouts
+        // (FORMATION_COUNT_LAYOUTS). Every ship holding a formation on
+        // this leader counts, bay fighters and escorts alike: they share
+        // one set of ranks (split them here if the original doesn't).
         steerFormation(movement, leader, formation,
             physics.acceleration, time.delta_s,
             rank < 0 ? formation.slot : rank, physics.turnRate,
-            formationSpacing(frameWidth));
+            formationSpacing(frameWidth), siblingSlots.length);
     },
     after: [TimeSystem, NpcDecisionSystem],
     before: [MovementSystem],

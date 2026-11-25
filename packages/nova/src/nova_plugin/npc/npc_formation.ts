@@ -174,20 +174,88 @@ export function* formationsIn(entities: EntityMap): Iterable<Formation> {
 }
 
 /**
- * Formation slot geometry: the original EV Nova's 45° echelon V (reference
- * F1/F1b, docs/reference_experiments.md). Escorts alternate sides, LEFT of
- * the leader's heading first, each pair one row further astern and out by
- * the same step `spacing` (formationSpacing — the group's `a`):
+ * One formation cell in units of the group step `a` (formationSpacing):
+ * [rows astern, steps to the leader's RIGHT]. Left of the heading is
+ * negative.
+ */
+export type FormationCell = readonly [number, number];
+
+/**
+ * Measured slots by RANK (reference F1/F1b/F1n, four escorts, ±1 px): a
+ * 45° V trailing the leader, the first escort LEFT of its heading.
  *
- *              L
- *           0     1          rank 0: (-a,  left a)  rank 1: (-a,  right a)
- *        2           3       rank 2: (-2a, left 2a) rank 3: (-2a, right 2a)
- *     4                 5    rank 4: (-3a, left 3a) ... (extrapolated)
+ *                 L
+ *              0     1             row 1
+ *           2           3          row 2
  *
- * Rows 1-2 (ranks 0-3) are measured; rank 4 and up EXTRAPOLATE linearly
- * (row floor(rank / 2) + 1, r x a astern and out), so the V just grows
- * longer arms. Measured on player-led escorts; NPC fleet (flët) escorts use
- * the same table unmeasured.
+ * Add measured ranks here (reference F1c) and they replace the general
+ * rule (formationFillCell) for those ranks.
+ */
+export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
+    [1, -1], [1, 1],
+    [2, -2], [2, 2],
+];
+
+/**
+ * Whole layouts for a formation of exactly `count` followers, keyed by
+ * count, for the case where the original lays out a given count
+ * differently from the rank table (the pre-4a408a45 NovaJS layout,
+ * SMALL_FORMATIONS, was count-dependent; whether the original's is, is
+ * pending reference F1c). A layout here wins over FORMATION_RANK_CELLS and
+ * the general rule for every rank it lists, in a formation of that count.
+ * Empty: no count has been measured to differ (the four-escort case IS the
+ * rank table; counts 1-3 were never measured on their own, so they take
+ * the same ranks).
+ */
+export const FORMATION_COUNT_LAYOUTS:
+    ReadonlyMap<number, ReadonlyArray<FormationCell>> = new Map();
+
+/**
+ * INTERIM GUESS for ranks past FORMATION_RANK_CELLS, pending reference F1c
+ * (Pending table, docs/reference_experiments.md; Matthew 2026-11-24: the
+ * earlier linear extrapolation, a bare V with ever longer arms, is wrong).
+ * Fills the triangle inside the measured V on the same 45° lattice: row r
+ * sits r x a astern with r + 1 cells at lateral -r, -(r-2), ..., +r steps
+ * (Pascal's triangle, the leader at the apex). Rows fill in order; within a
+ * row, outer cells first, left then right as ranks 0-3 go, then inward, an
+ * even row's centre cell last:
+ *
+ *                 L
+ *              0     1             row 1: ranks 0-1   (measured)
+ *           2     4     3          row 2: 2-3 measured, 4 GUESS
+ *        5     7     8     6       row 3: ranks 5-8   (GUESS)
+ *     9    11    13    12    10    row 4: ranks 9-13  (GUESS)
+ *
+ * It reproduces FORMATION_RANK_CELLS for ranks 0-3. It depends on rank
+ * alone, so a new escort never moves the ones already in place.
+ */
+export function formationFillCell(rank: number): FormationCell {
+    // Rows 1..r hold r(r + 3) / 2 ranks (2, 5, 9, 14, ...). Found by
+    // counting rather than with a square root, so boundaries are exact.
+    let row = 1;
+    let firstInRow = 0;
+    while (rank >= firstInRow + row + 1) {
+        firstInRow += row + 1;
+        row++;
+    }
+    const indexInRow = rank - firstInRow;
+    // Outer pair first, then inward: pair p sits (row - 2p) steps out,
+    // its left cell (even index) before its right one.
+    const stepsOut = row - 2 * Math.floor(indexInRow / 2);
+    const lateral = stepsOut === 0 ? 0
+        : indexInRow % 2 === 0 ? -stepsOut : stepsOut;
+    return [row, lateral];
+}
+
+/**
+ * Formation slot geometry, in px: the slot of the follower of RANK `rank`
+ * in a formation of `count` followers (when known) with group step
+ * `spacing` (formationSpacing, F1b: a = clamp(0.59 x S, 23.5, 59.5) with S
+ * the largest sprite frame in the group). Looked up, in order, in
+ * FORMATION_COUNT_LAYOUTS[count], FORMATION_RANK_CELLS (measured), then
+ * formationFillCell (the interim guess). The slots are the SAME at rest
+ * and at full speed (F1). NPC fleet (flët) escorts fly the same geometry
+ * (F1n, ranks 0-3).
  *
  * `back` is px astern of the leader; `lateral` is px to the leader's RIGHT
  * (formationSlotPosition's perpendicular), so left-side slots are negative.
@@ -196,24 +264,28 @@ export function* formationsIn(entities: EntityMap): Iterable<Formation> {
  * ASSIGNMENT (hire order, continuation numbering) is unchanged, but the
  * formation-keeping systems convert a ship's slot to its rank among the
  * live same-leader slots, so when an escort leaves the ones behind it move
- * up and the V never has holes. Deterministic on every peer (ranks come
- * from sorting the synced slot numbers).
+ * up and the formation never has holes. Deterministic on every peer (ranks
+ * and counts come from the synced slot numbers; the tables are constant).
  */
-export function formationOffset(rank: number,
-    spacing: number): { back: number, lateral: number } {
-    const row = Math.floor(rank / 2) + 1;
-    const side = rank % 2 === 0 ? -1 : 1;
-    return { back: row * spacing, lateral: side * row * spacing };
+export function formationOffset(rank: number, spacing: number,
+    count?: number): { back: number, lateral: number } {
+    const countLayout = count === undefined ? undefined
+        : FORMATION_COUNT_LAYOUTS.get(count);
+    const [rows, steps] = countLayout?.[rank] ?? FORMATION_RANK_CELLS[rank]
+        ?? formationFillCell(rank);
+    // `+ 0` folds the -0 of a centre cell times a step to 0.
+    return { back: rows * spacing, lateral: steps * spacing + 0 };
 }
 
 /**
  * The world-space position of a leader's formation station for the
- * escort of the given RANK, in a formation of step `spacing` (see
- * formationOffset, formationSpacing).
+ * escort of the given RANK, in a formation of step `spacing` and, when
+ * known, `count` followers (see formationOffset, formationSpacing).
  */
 export function formationSlotPosition(leaderPosition: Position,
-    leaderRotation: Angle, rank: number, spacing: number): Position {
-    const { back, lateral } = formationOffset(rank, spacing);
+    leaderRotation: Angle, rank: number, spacing: number,
+    count?: number): Position {
+    const { back, lateral } = formationOffset(rank, spacing, count);
     const u = leaderRotation.getUnitVector();
     // Perpendicular (rotate u by +90°).
     const p = new Vector(-u.y, u.x);
@@ -249,10 +321,10 @@ export function formationSlotPosition(leaderPosition: Position,
 export function steerFormation(movement: MovementState, leader: MovementState,
     formation: Formation, acceleration: number, delta_s: number,
     rank = formation.slot, turnRate = Infinity,
-    spacing = FORMATION_MIN_SPACING): void {
+    spacing = FORMATION_MIN_SPACING, count?: number): void {
     const slotPosition = formationSlotPosition(
         Position.fromVectorLike(leader.position),
-        Angle.fromAngleLike(leader.rotation), rank, spacing);
+        Angle.fromAngleLike(leader.rotation), rank, spacing, count);
     const error = slotPosition.subtract(movement.position);
     // Desired velocity: the leader's, plus a closing velocity toward the
     // slot, proportional to the distance but no faster than the follower
