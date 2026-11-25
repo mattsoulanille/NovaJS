@@ -14562,6 +14562,34 @@ four refusals in a row); low for the odds.
 `r7_first_N/*/*-first_offer.png`, `r7_fresh_1/*/` (`02-first_offer.png`
 .. `06-offer_day2.png`, `pilot-after/`), `bribe_freight/sheet.png`.
 
+**Applied (wave-30 fixes, 2026-11-25, 286798ed).** (a) The comments:
+`N/nova_plugin/reputation/hail.ts` ("A planet's bribe haggle") records the
+eight days in place of the "waiting several days ... unmeasured" GUESS.
+(b) The fresh refusal is keyed to the VISIT by a per-visit value, not
+recorded in StellarHaggle: Offer Bribe never reaches the simulation (only
+the Accept / Lower Price after it do), so a recorded verdict would need a
+new input. `planetRefusesBribe` hashes the planet, the pilot and the
+pilot's system-visit ordinal (a new synced player component,
+`SystemVisit` in `N/nova_plugin/travel/planet_plugin.ts`: absent = 0,
+advanced by `N/nova_plugin/pilot/transition_prep.ts`
+`prepareCarriedEntitiesForFreshWorld` at the same crossing that drops
+StellarHaggle, and carried onto a new hull with the pilot's other state);
+the game day no longer enters it, so re-hails and landings in the system
+keep the verdict and a jump out and back draws it afresh (GUESS for the
+fresh refusal, the withdrawal's measured scope). A priced first offer is
+likewise kept for the visit (GUESS). The refusal still answers from STR#
+3002 45-49. The rate is **one in four** (`PLANET_BRIBE_REFUSAL_ONE_IN`;
+GUESS): the pooled fresh first offers of waves 22-30, 2 in 15 (waves 22,
+27) + 0 in 1 (28) + 0 in 3 (29) + 4 in 7 (30, counting r7_days3's priced
+first offer, which finding 2's "4 in 6" leaves out) = **6 in 26** (23%;
+6 in 25 rounds the same way). Specs (`planet_plugin_test.ts`, "a fresh
+refusal lasts the system visit"): refused through three hails, a landing at
+the system's other port and a day's date change; priced again after two
+crossings; a priced visit stays priced on later days. Schema-only under
+protocol 8 (fingerprint 794b422a9a516ea5 -> 2c0331796cf95514,
+`communication/rollback_protocol.ts`). Not browser-checked (the sim and
+dialog specs cover it).
+
 ### Hypergates, wave 30: `l` selects inside 498-500 px whether the ship is still or coasting; the CLEARANCE zone is a square of half-side 248-250 whatever the gate's art, the entry window goes by the art (not the planets' 212 cap); a standing request is CLEARED with no press when the ship enters it; #74 / #75 is a draw; an idle gate IS drawn (its closed sprite) and is a 2 x 2 radar dot (2026-11-25)
 
 **Questions** (brief item 2): the exact `l` selection radius (490-500),
@@ -15583,7 +15611,7 @@ cosmetic or rare.
 | R4 | Engine default when a penalty is 0 (NovaJS 5/2/3) | `reputation.ts:63-67` | CPg govt with zero penalties, PD | M |
 | R5 | Combat-rating multiplier (NovaJS raw Strength sum) | `reputation.ts:46-50`, `reputation_plugin.ts:185-220` | Kill one known-Strength ship, PD rating | M |
 | R6 | Who gets kill credit for an escort or fighter kill (NovaJS: group root) | `N/nova_plugin/reputation/reputation_plugin.ts:44-48` | CPl with escorts (pilot-make `escorts`), PD | M |
-| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate). **Wave 28 (R "R7 planet bribe, wave 28"), applied 2026-11-25 (6ef78f21)**: a planet's Lower Price counters (3/4) or withdraws; a withdrawal refuses every later offer that game day (GUESS scope); refusals answer from STR# 3002 45-49. **Wave 29** (R "R7 planet bribe withdrawal, wave 29"): the withdrawal outlasts the day (a landing in the system and a take-off still refused) and ends with a jump out and back: key it to the system visit (mismatch); a second Lower Price on a counter withdraws (matches); **applied 2026-11-25 (095fa3e1)**: the haggle lasts the system visit, the crossing into another system clears it. **Wave 30** ("R7 planet bribe withdrawal, wave 30"): the withdrawal holds through eight days of landings in the system (matches); a FRESH refusal holds through re-hails and a landing a day later (main re-draws it by day: mismatch); fresh refusals 6 in 25 | CPl with exact cash at 2-3 levels, SS | H |
+| R7 | Bribe price (NovaJS 10%/30% of cash, minimum 500) | **measured (R "R7 bribe price, wave 22"), applied 2026-11-24**: thousands, the ship's fuel-sale ask (0x8000: a flat 20,000), a planet 3,000 / 4,000, growth above 1M (GUESS shape), a third-of-cash cap with a 1,000 floor; 0x8000 alone takes no bribe (`N/nova_plugin/reputation/hail.ts` `shipBribePrice` / `planetBribePrice` / `shipTakesBribes`). Open: the growth's shape, the plain planet's 100M refusal, a bribe's Lower Price. **Wave 27 (R "R7 bribe price above 1M, wave 27"), applied 2026-11-25 (9e0d68ee)**: a ship's ask capped at 20,000; a plain planet refuses outright one time in eight (GUESS rate). **Wave 28 (R "R7 planet bribe, wave 28"), applied 2026-11-25 (6ef78f21)**: a planet's Lower Price counters (3/4) or withdraws; a withdrawal refuses every later offer that game day (GUESS scope); refusals answer from STR# 3002 45-49. **Wave 29** (R "R7 planet bribe withdrawal, wave 29"): the withdrawal outlasts the day (a landing in the system and a take-off still refused) and ends with a jump out and back: key it to the system visit (mismatch); a second Lower Price on a counter withdraws (matches); **applied 2026-11-25 (095fa3e1)**: the haggle lasts the system visit, the crossing into another system clears it. **Wave 30** ("R7 planet bribe withdrawal, wave 30"): the withdrawal holds through eight days of landings in the system (matches); a FRESH refusal holds through re-hails and a landing a day later (main re-draws it by day: mismatch); fresh refusals 6 in 25; **applied 2026-11-25 (286798ed)**: the fresh refusal is drawn once per system visit (a SystemVisit ordinal the crossing advances), one in four (GUESS, pooled 6 in 26) | CPl with exact cash at 2-3 levels, SS | H |
 | R8 | Planet bribe price, duration and persistence | `N/nova_plugin/travel/planet_plugin.ts:149-156` | CPl, SS | L |
 | R9 | Outfit resale (NovaJS 50%), and same-visit buy+sell refund | `N/spaceport/outfitter_rules.ts:408-416`, `outfitter.ts:206` | CPl at Kit Port, PD credits | H |
 | R10 | Ship trade-in (25%: are stock outfits double-counted? ammo? clamp?) | `N/spaceport/shipyard_rules.ts:88-121` | CPl buy a kit hull, PD | H |
