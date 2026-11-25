@@ -233,11 +233,18 @@ const HOOK_MS = 60_000;
  * touches one. Always true: it goes first in a wait's condition.
  */
 function retryClosed(socket: SocketChannelClient): true {
-    if (!socket.connected.value) {
+    const now = Date.now();
+    if (!socket.connected.value
+        && now - (lastRetry.get(socket) ?? -Infinity) >= RETRY_MS) {
+        lastRetry.set(socket, now);
         socket.reconnectIfClosed();
     }
     return true;
 }
+/** At most one retry per socket this often: a refused dial fails at
+ * once, and the waits poll every 5 ms. */
+const RETRY_MS = 100;
+const lastRetry = new WeakMap<SocketChannelClient, number>();
 
 async function until(condition: () => boolean, what: string, ms = WAIT_MS) {
     const start = Date.now();
@@ -280,9 +287,10 @@ describe('a socket reconnect mid-game (#354)', () => {
         // On the address the clients dial, not the wildcard: on macOS
         // another process may bind 127.0.0.1 on the very port a wildcard
         // listener holds, and from then on every connection to 127.0.0.1
-        // reaches IT (a busy machine's other spec runs and dev tools do
-        // so now and then) — the peer's sockets closing without this
-        // server ever seeing them, retry after retry. Bound to 127.0.0.1
+        // reaches IT (caught under load: an editor's language server and
+        // a desktop app, each listening on 127.0.0.1 on the suite's
+        // port) — the peer's sockets failing at once, retry after retry,
+        // without this server ever seeing one. Bound to 127.0.0.1
         // ourselves, such a bind fails instead and this server answers.
         await new Promise<void>((resolve, reject) => {
             httpServer.once('error', reject);
