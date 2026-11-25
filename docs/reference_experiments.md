@@ -11044,6 +11044,26 @@ centre, below): no hit.
   Equally defensible: leave the player's victims silent as before wave 21
   and note the 3-in-20 line as unmodelled.
 
+**Applied (wave-22 fixes, 2026-11-24, `N/nova_plugin/spawn/reinforcements.ts`).**
+- 1: `ReinforcementCallSystem` calls for an AI 1 / AI 2 victim only when
+  the hit's responsible ship is within `REINFORCEMENT_TRADER_CALL_RANGE`
+  of it (`reinforcementCallInRange`, a squared distance): **600 px, a
+  GUESS** between the measured 475 (calls) and 700 (does not). Measured
+  from the responsible ship (an escort's own distance for its hit:
+  GUESS). AI 3 / AI 4 victims keep no range. A hit from too far calls
+  nothing and spends no day.
+- The slow-hull "KNOWN MISMATCH" comments are gone and
+  docs/npc_behavior_gaps.md guess 18 is closed as explained: speed and day
+  play no part (a slow Speed-20 hull calls from near, spec'd).
+- 3: e7beca08's distress line on every call is withdrawn: the call sends
+  no line, and npc/distress.ts's "the player's own victims never call" is
+  restored (its comment notes the wave-22 3-in-20 chance as NOT
+  modelled, since what decides it is unknown).
+- 5: a Flags2-0x0008 victim (and a mission ship) still calls: NovaJS never
+  read the flag for the call (spec'd).
+- The arrival centre (the victim at the call) and the AI 3 caller stay
+  GUESSES. No schema change (one fewer PRNG draw on a call).
+
 Confidence: high for 1's two sides (seven calls inside 475 px, four
 non-calls from 700+ px, the slow hull both ways); medium for the threshold
 (475 calls, 700 does not; nothing in between); medium for 3 (twenty victims);
@@ -12093,7 +12113,7 @@ cosmetic or rare.
 | R16 | Auto-abort ships, DatePostInc on deferred auto-abort | `N/nova_plugin/missions/mission_ship_spawn.ts:479-492` | CPg, PD date | L |
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | CPl + kit stellar with MinStatus 32767 | L |
 | R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | CPl rating per Appendix I tier, VID | M |
-| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"). **Second pass (R "R19 reinforcement fleets, wave 20"), applied 2026-11-24**: the delay ReinfTime / 39 s (no cap), the odds, ReinfIntrval 2, allies, the inhibitor and the hostile disposition measured; the fleet comes in around the victim (GUESS over the system's centre), an anchored victim never calls, a victim that leaves cancels the call (destroyed: GUESS). Open: the neutral 1507 fleet, the odd S150 call. **Third pass (R "R19 reinforcement fleets, wave 21"), applied 2026-11-24**: an AI 1 victim's call comes with its distress line (applied: a trader caller sends its STR# 5003 line on the call); slow AI 1 hulls never called (a KNOWN MISMATCH, NovaJS still calls for them); the cancel rule has no supporting run (kept as a GUESS); the arrival centre still open | CPg govt + syst ReinfFleet, VID, PD | L |
+| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"). **Second pass (R "R19 reinforcement fleets, wave 20"), applied 2026-11-24**: the delay ReinfTime / 39 s (no cap), the odds, ReinfIntrval 2, allies, the inhibitor and the hostile disposition measured; the fleet comes in around the victim (GUESS over the system's centre), an anchored victim never calls, a victim that leaves cancels the call (destroyed: GUESS). Open: the neutral 1507 fleet, the odd S150 call. **Third pass (R "R19 reinforcement fleets, wave 21"), applied 2026-11-24**: an AI 1 victim's call comes with its distress line (applied: a trader caller sends its STR# 5003 line on the call); slow AI 1 hulls never called (a KNOWN MISMATCH, NovaJS still calls for them); the cancel rule has no supporting run (kept as a GUESS); the arrival centre still open. **Fourth pass (R "R19 reinforcement fleets, wave 22"), applied 2026-11-24**: an AI 1 / AI 2 victim calls only when hit from near (600 px, a GUESS between 475 and 700), whatever its speed (the slow-hull mismatch was the distance); the distress line is a separate chance, so the call no longer sends one (not modelled); a Flags2-0x0008 victim still calls | CPg govt + syst ReinfFleet, VID, PD | L |
 | R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6-8)**: max(1,000, price / 40) up to 100,000 (exactly, 24 boards at 50,000), then a random amount between price / 40 and price / 20 (200,000 to 2,000,000, wave 8); cargo and energy a random share; capture never for a derelict (gövt 0x0800), odds capped at 75% and falling with the defenders' crew for a hulk the player disabled; one board per hulk (matches). **Mismatch** (10%, 150 px circle, 54.8 px/s gate, 15° alignment, crew-share odds, derelicts capturable) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |

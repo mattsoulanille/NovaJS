@@ -37,10 +37,11 @@ import { trafficCount } from './npc_spawn_plugin.js';
 import {
     inhibitsReinforcements, REINFORCEMENT_ARRIVAL_DISTANCE,
     REINFORCEMENT_FRAMES_PER_SECOND, REINFORCEMENT_LINE_PREFIX_INDEX,
-    REINFORCEMENT_LINE_SUFFIX_INDEX, ReinforcementArrivalEvent,
-    ReinforcementArrivalEventData, reinforcementArrivalMessage,
-    reinforcementArrivalState, reinforcementAvailable,
-    ReinforcementCallComponent, reinforcementDelayMs, reinforcementOddsCall,
+    REINFORCEMENT_LINE_SUFFIX_INDEX, REINFORCEMENT_TRADER_CALL_RANGE,
+    ReinforcementArrivalEvent, ReinforcementArrivalEventData,
+    reinforcementArrivalMessage, reinforcementArrivalState,
+    reinforcementAvailable, ReinforcementCallComponent,
+    reinforcementCallInRange, reinforcementDelayMs, reinforcementOddsCall,
     REINFORCEMENTS_UUID,
 } from './reinforcements.js';
 
@@ -56,8 +57,10 @@ import {
  * a Strength-1 player's does not; an NPC's never does. Wave 20: the delay
  * is ReinfTime / 39 s, the fleet comes in around the victim (not the
  * player), an anchored victim never calls, and a victim that leaves before
- * the arrival takes the call with it (a GUESS since wave 21). Wave 21: an
- * AI 1 victim that calls sends its distress line with the call.
+ * the arrival takes the call with it (a GUESS since wave 21). Wave 22: a
+ * trader victim (AI 1 / AI 2) calls only when hit from near (600 px, a
+ * GUESS between 475 that called and 700 that did not), whatever its speed,
+ * and the call sends no distress line.
  */
 
 const SYSTEM = 'test:system';
@@ -70,6 +73,7 @@ const QUIET_ALLY = 'test:quiet-ally';
 
 const TRADER_HULL = 'test:trader';
 const ANCHORED_HULL = 'test:anchored';
+const SLOW_HULL = 'test:slow';
 const PLAYER_HULL = 'test:lancer';
 const WEAK_HULL = 'test:lancer-weak';
 const LEAD_HULL = 'test:lead';
@@ -195,6 +199,28 @@ describe('reinforcement rules', () => {
             expect(inhibitsReinforcements(undefined, owner)).toBeFalse();
         });
 
+    it('a trader calls only from near: 475 px yes, 700 no (MEASURED, wave '
+        + '22), 600 the GUESS between; other AIs from anywhere', () => {
+            expect(REINFORCEMENT_TRADER_CALL_RANGE).toBe(600);
+            const sq = (d: number) => d * d;
+            for (const aiType of [1, 2]) {
+                expect(reinforcementCallInRange(aiType, sq(40))).toBeTrue();
+                expect(reinforcementCallInRange(aiType, sq(475))).toBeTrue();
+                expect(reinforcementCallInRange(aiType, sq(600))).toBeTrue();
+                expect(reinforcementCallInRange(aiType, sq(601))).toBeFalse();
+                expect(reinforcementCallInRange(aiType, sq(700))).toBeFalse();
+                expect(reinforcementCallInRange(aiType, sq(1080)))
+                    .toBeFalse();
+                // A shooter with no position does not block it.
+                expect(reinforcementCallInRange(aiType, undefined))
+                    .toBeTrue();
+            }
+            // Wave 21's AI 4 call came from 1,600+ px.
+            for (const aiType of [3, 4]) {
+                expect(reinforcementCallInRange(aiType, sq(1600))).toBeTrue();
+            }
+        });
+
     it('the line: "Sensors detect <MediumName> reinforcement fleet '
         + 'approaching.", from STR# 2002 306 / 307', () => {
             const misc: string[] = [];
@@ -253,6 +279,11 @@ describe('reinforcement fleets in the sim', () => {
         const anchored = hull(ANCHORED_HULL, 50);
         gameData.data.Ship.map.set(ANCHORED_HULL, {
             ...anchored, physics: { ...anchored.physics, speed: 0 },
+        });
+        // Wave 21's slow S50 (Speed 20), which called from near in wave 22.
+        gameData.data.Ship.map.set(SLOW_HULL, {
+            ...anchored, id: SLOW_HULL,
+            physics: { ...anchored.physics, speed: 20 },
         });
         gameData.data.Fleet.map.set(FLEET, {
             ...getDefaultFleetData(), id: FLEET, name: 'Kit Reinf Fleet',
@@ -436,67 +467,94 @@ describe('reinforcement fleets in the sim', () => {
             expect(call().caller).toBe('player');
         });
 
-    describe('the caller\'s distress line (MEASURED for AI 1, wave 21)',
-        () => {
-            const npcOf = (uuid: string) =>
-                world.entities.get(uuid)!.components.get(NpcComponent)!;
+    describe('who calls: a trader only from near, and without a distress '
+        + 'line (MEASURED, wave 22)', () => {
+            /** The player at the origin, one victim `distance` px north. */
+            async function lone(aiType: number, distance: number,
+                hullId = TRADER_HULL, govtId = OWNER) {
+                await addShip('player', PLAYER_HULL, 0, 0, pilot());
+                await addShip('victim', hullId, 0, -distance,
+                    npcShip(aiType, govtId));
+                world.step();
+            }
 
-            it('an AI 1 victim that calls sends its line on the call, '
-                + 'once', async () => {
+            it('an AI 1 victim hit from 475 px calls; from 700 px it does '
+                + 'not, and the day stays unspent', async () => {
                     await build();
-                    await scene();
-                    hit('trader1', 'player');
-                    expect(call().caller).toBe('player');
-                    expect(distress.length).toBe(1);
-                    expect(distress[0].ship).toBe('trader1');
-                    expect(distress[0].roll).toBeGreaterThanOrEqual(0);
-                    expect(distress[0].roll).toBeLessThan(1);
-                    expect(npcOf('trader1').distressAt).toBeDefined();
-                    // The call is pending: later hits call nothing, and
-                    // send no line of their own (the player's hits never
-                    // did, reference "P1 wave 15").
-                    advance(9_000);
-                    hit('trader1', 'player');
-                    hit('trader2', 'player');
-                    expect(distress.length).toBe(1);
+                    await lone(1, 700);
+                    hit('victim', 'player');
+                    hit('victim', 'player');
+                    expect(call()).toEqual({});
+                    expect(calls()).toBeUndefined();
+
+                    await build();
+                    await lone(1, 475);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+                    expect(calls()?.get(SYSTEM)).toBe(dayNumber(JUNE_23));
                 });
 
-            it('a hit that calls nothing sends no line', async () => {
-                await build();
-                await scene(WEAK_HULL);
-                hit('trader1', 'player');
-                expect(call()).toEqual({});
-                expect(distress).toEqual([]);
-            });
-
-            it('an AI 2 victim says so too (GUESS, distress.ts\'s callers)',
+            it('the same far victim calls once the player closes in',
                 async () => {
                     await build();
-                    await addShip('player', PLAYER_HULL, 0, 0, pilot());
-                    await addShip('brave', TRADER_HULL, 0, -150,
-                        npcShip(2, OWNER));
+                    await lone(1, 1080);
+                    hit('victim', 'player');
+                    expect(call()).toEqual({});
+                    pin(world.entities.get('player')!, 0, -930);
                     world.step();
-                    hit('brave', 'player');
-                    expect(call().victim).toBe('brave');
-                    expect(distress.map(d => d.ship)).toEqual(['brave']);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+                });
+
+            it('an AI 2 victim from near calls, from far does not',
+                async () => {
+                    await build();
+                    await lone(2, 140);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+
+                    await build();
+                    await lone(2, 815);
+                    hit('victim', 'player');
+                    expect(call()).toEqual({});
+                });
+
+            it('a SLOW AI 1 hull (Speed 20) calls from near: speed plays '
+                + 'no part', async () => {
+                    await build();
+                    await lone(1, 150, SLOW_HULL);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
                 });
 
             for (const aiType of [3, 4]) {
-                it(`an AI ${aiType} victim calls silently (wave 21's AI 4 `
-                    + 'guard)', async () => {
+                it(`an AI ${aiType} victim calls from far (wave 21's AI 4 `
+                    + 'from 1,600+ px; AI 3 a GUESS)', async () => {
                         await build();
-                        await addShip('player', PLAYER_HULL, 0, 0, pilot());
-                        await addShip('guard', TRADER_HULL, 0, -150,
-                            npcShip(aiType, OWNER));
-                        world.step();
-                        hit('guard', 'player');
-                        expect(call().victim).toBe('guard');
-                        expect(distress).toEqual([]);
+                        await lone(aiType, 1600);
+                        hit('victim', 'player');
+                        expect(call().victim).toBe('victim');
                     });
             }
 
-            it('a mission ship and a silenced govt\'s trader call silently',
-                async () => {
+            it('the call sends no distress line, AI 1 to AI 4', async () => {
+                for (const aiType of [1, 2, 3, 4]) {
+                    await build();
+                    await lone(aiType, 150);
+                    hit('victim', 'player');
+                    expect(call().victim).withContext(`AI ${aiType}`)
+                        .toBe('victim');
+                    expect(distress).withContext(`AI ${aiType}`).toEqual([]);
+                }
+            });
+
+            it('a Flags2-0x0008 govt\'s victim still calls (finding 5), as '
+                + 'does a mission ship', async () => {
+                    await build();
+                    await lone(1, 150, TRADER_HULL, QUIET_ALLY);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+
                     await build();
                     await addShip('player', PLAYER_HULL, 0, 0, pilot());
                     await addShip('special', TRADER_HULL, 0, -150, ship => {
@@ -511,25 +569,6 @@ describe('reinforcement fleets in the sim', () => {
                     world.step();
                     hit('special', 'player');
                     expect(call().victim).toBe('special');
-                    expect(distress).toEqual([]);
-
-                    await build();
-                    await addShip('player', PLAYER_HULL, 0, 0, pilot());
-                    await addShip('quiet', TRADER_HULL, 0, -150,
-                        npcShip(1, QUIET_ALLY));
-                    world.step();
-                    hit('quiet', 'player');
-                    expect(call().victim).toBe('quiet');
-                    expect(distress).toEqual([]);
-                });
-
-            it('a victim whose last line is still up calls without a '
-                + 'second one', async () => {
-                    await build();
-                    await scene();
-                    npcOf('trader1').distressAt = now();
-                    hit('trader1', 'player');
-                    expect(call().victim).toBe('trader1');
                     expect(distress).toEqual([]);
                 });
         });
@@ -567,8 +606,10 @@ describe('reinforcement fleets in the sim', () => {
         + 'system\'s centre is a GUESS)', async () => {
             await build();
             await scene();
-            // The victim far from the system's centre and the player.
+            // The victim far from the system's centre, the player beside it
+            // (a trader calls only when hit from near, wave 22).
             pin(world.entities.get('trader1')!, 4_000, 3_000);
+            pin(world.entities.get('player')!, 4_000, 3_150);
             world.step();
             hit('trader1', 'player');
             expect(call().center).toEqual({ x: 4_000, y: 3_000 });

@@ -24,11 +24,11 @@ import {
     SimulationGameDataResource, SystemIdResource,
 } from '../core/index.js';
 import {
-    distressCallDue, DistressCallEvent, flockPlayer, NpcAggressionSystem,
-    NpcComponent, responsibleShip, sendsDistressCalls, SystemHoldComponent,
+    flockPlayer, NpcAggressionSystem, NpcComponent, responsibleShip,
+    SystemHoldComponent,
 } from '../npc/index.js';
 import {
-    ControlledByComponent, dayNumber, GameDateComponent, MissionShipComponent,
+    ControlledByComponent, dayNumber, GameDateComponent,
     ReinforcementCallsComponent,
 } from '../player/index.js';
 import { alliedEitherWay, effectiveStrength } from '../reputation/index.js';
@@ -59,7 +59,7 @@ import {
  * ModType 44 is a "reinforcement inhibitor".
  *
  * Measured on the original (docs/reference_experiments.md, "R19
- * reinforcement fleets, wave 19" and "..., wave 20"):
+ * reinforcement fleets, wave 19" through "..., wave 22"):
  *  - the PLAYER's first hit on a Strength-50 trader of the fleet's govt
  *    (MaxOdds 100) called it for a Strength-100 player and not for a
  *    Strength-1 one: 100 against the two 50s, the hit one counting a
@@ -75,11 +75,18 @@ import {
  *  - an ANCHORED victim (hull Speed 0) never calls, its AI does not run;
  *    a victim that jumped out before the arrival got no fleet (wave 20,
  *    one run; wave 21 reread it as no call at all, below);
- *  - an AI 1 victim that calls says so (wave 21): the player's hit drew
- *    its distress line ("<ship>: We're under attack! Someone help us!",
- *    STR# 5003) and the fleet's line followed, twice; no AI 1 hit
- *    WITHOUT the line got a fleet (eight hits). The AI 4 guard called
- *    silently;
+ *  - an AI 1 / AI 2 victim calls only when the player hits it from NEAR
+ *    (wave 22, finding 1: seven calls from 40-475 px, none from about
+ *    700, 815, 925 and 1,080 px, however deep the shield went), whatever
+ *    its speed or the day; an AI 4 victim called from 1,600+ px (wave 21,
+ *    one run);
+ *  - the distress line is NOT the call (wave 22, finding 3): seven near
+ *    calls came with no line, and a far hit drew a line with no fleet
+ *    (3 of 20 trader victims over waves 21-22 sent one: a separate
+ *    chance, not modelled). Wave 21's "no line, no fleet" was the
+ *    distance;
+ *  - a victim whose govt sets Flags2 0x0008 "don't send distress
+ *    messages" still calls (wave 22, finding 5);
  *  - once a day: no second call in 8 more minutes of the same visit, and
  *    one on each of two following days (ReinfIntrval 1);
  *  - an NPC wearing a warship of the govt down to 27% shield did not call
@@ -111,26 +118,18 @@ import {
  *    govt or an ally in the system, neither disabled, each at
  *    effectiveStrength (MEASURED, wave 20: ten of eleven odds points fit,
  *    the player's own Strength counting; one S150 call at ratio 0.72
- *    is not modelled. GUESSES: the whole system, no range; "exceed" as
- *    strictly greater).
- * A trader victim that calls (AI 1, and AI 2 with it: npc/distress.ts's
- * one rule for who sends a line, sendsDistressCalls, so a non-mission
- * trader whose govt and hull do not silence it) sends its DISTRESS LINE on
- * the call, through the path an NPC's attack uses (DistressCallEvent, one
- * PRNG draw for the line, the ship's distressAt stamped; none while its
- * last line is still due, DISTRESS_CALL_INTERVAL_MS). MEASURED for AI 1
- * (wave 21); AI 2 is a GUESS with distress.ts's own. AI 3 / AI 4 victims
- * call silently (wave 21's `far_a`), as do mission ships and silenced
- * govts (no new rule for who calls: the line only goes with a call).
- *
- * KNOWN MISMATCH (wave 21, finding 2): on the original the SLOW AI 1
- * victims (hull Speed 20; S50 in four runs, S150 in two) never called,
- * even when they stayed in the system 60-90 s past the due arrival, while
- * NovaJS calls for them whenever the odds pass. What decides an AI 1
- * caller is not understood (speed is not all of it: wave 19's Speed-300
- * traders called on later days and not on the first; a slow S200 and a
- * slow S150 called once each), so no rule is added for it here; see
- * docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure".
+ *    is not modelled. GUESSES: the whole system, no range, for the
+ *    odds' sums; "exceed" as strictly greater);
+ *  - a TRADER victim (AI 1 / AI 2) is within
+ *    REINFORCEMENT_TRADER_CALL_RANGE of the hit's responsible ship
+ *    (MEASURED: 475 px calls, 700 does not; the 600 px between them is a
+ *    GUESS, and so is measuring from the responsible ship, an escort's
+ *    own distance for its hit). AI 3 / AI 4 victims have no range (AI 4
+ *    MEASURED from 1,600+ px once; AI 3 open).
+ * Wave 21's "slow AI 1 hulls never call" was this range (they were hit
+ * from far), not their speed. The call sends no distress line: the
+ * player's own victims stay silent, as npc/distress.ts has it
+ * (MEASURED, wave 22: the line is a separate chance, not modelled).
  * An NPC's hit never calls it, and nothing calls it ON a player's behalf
  * (the ränk 0x0400 "call in reinforcements on the player's behalf" did
  * not happen on the original).
@@ -172,8 +171,8 @@ import {
  * so any way of leaving the system takes it along. Wave 20's one run (an
  * AI 1 victim jumped 10.4 s after the hit, no fleet came) was reread in
  * wave 21 as NO CALL at all (a slow AI 1 hull, which never called even
- * when it stayed), so no run has a call followed by a departure before
- * the arrival. Kept because it costs nothing while no victim leaves. The
+ * when it stayed; wave 22: because it was hit from far), so no run has a
+ * call followed by a departure before the arrival. Kept because it costs nothing while no victim leaves. The
  * caller's day stamp stays spent either way (the call was made).
  *
  * Each ship is held in the system ('reinforcement', npc/system_hold.ts:
@@ -188,9 +187,9 @@ import {
  * otherwise its govt's politics decide, as for any ship of it.
  *
  * Determinism: synced components, staged caches (the flët's ships, its
- * govt, every gövt and ränk: makeSystem), the seeded Random (one draw for
- * a calling trader's distress line; at the arrival one for the bearing,
- * then the escort counts), sums in uuid order; the victim's presence is
+ * govt, every gövt and ränk: makeSystem), the seeded Random (at the
+ * arrival: one draw for the bearing, then the escort counts), sums in
+ * uuid order, the range as a squared distance; the victim's presence is
  * read from the synced entity map.
  */
 
@@ -202,6 +201,28 @@ import {
  * That is NOT the Bible's "A value of 30 = one second" (about 0.77 of it).
  */
 export const REINFORCEMENT_FRAMES_PER_SECOND = 39;
+
+/**
+ * How near the hit's responsible ship must be to a TRADER victim (AI 1 /
+ * AI 2) for its call, px. MEASURED bounds (reference "R19 reinforcement
+ * fleets, wave 22", finding 1): calls from 40-475 px (seven runs), none
+ * from about 700 px and beyond (four runs, one three hits deep). 600 px
+ * is a GUESS between the two.
+ */
+export const REINFORCEMENT_TRADER_CALL_RANGE = 600;
+
+/** Whether a hit on a victim of this aiType from `distance` px may call
+ * the fleet: a trader (AI 1 / AI 2) only from within
+ * REINFORCEMENT_TRADER_CALL_RANGE, anything else from anywhere. An unknown
+ * distance (a shooter with no position) does not block the call. */
+export function reinforcementCallInRange(aiType: number,
+    distanceSquared: number | undefined): boolean {
+    if (aiType !== 1 && aiType !== 2) {
+        return true;
+    }
+    return distanceSquared === undefined || distanceSquared
+        <= REINFORCEMENT_TRADER_CALL_RANGE * REINFORCEMENT_TRADER_CALL_RANGE;
+}
 
 /** How far from the centre (the victim at the call) the fleet comes in,
  * px. MEASURED: a blip 1,770 px out (wave 19), 1,840 and 1,960 px (wave
@@ -436,8 +457,8 @@ function onFleetSide(govt: string | undefined, fleetGovt: GovtData,
 
 /**
  * Calls the system's reinforcement fleet when a player's hit on an NPC of
- * its govt's side turns the odds, a trader victim sending its distress
- * line with the call (see the module comment).
+ * its govt's side turns the odds, a trader victim only when hit from near
+ * (see the module comment).
  */
 export const ReinforcementCallSystem = new System({
     name: 'ReinforcementCallSystem',
@@ -447,19 +468,17 @@ export const ReinforcementCallSystem = new System({
         Optional(ShipDataComponent), Optional(MovementStateComponent),
         TimeResource, SimulationGameDataResource,
         Optional(ReinforcementFleetResource), Optional(SystemIdResource),
-        OddsShipsQuery, PlayersQuery, RandomResource, Emit] as const,
+        OddsShipsQuery, PlayersQuery] as const,
     step({ damager }, npc, uuid, entities, govt, disabled, victimData,
         victimMovement, time, gameData, reinforcements, systemId, ships,
-        players, random, emit) {
+        players) {
         if (!reinforcements || systemId === undefined || disabled
             || govt === undefined) {
             return;
         }
         // An anchored hull (Speed 0) never calls: its AI does not run on
-        // the original (reference "R19 ..., wave 20", finding 1). KNOWN
-        // MISMATCH: slow AI 1 hulls (Speed 20) never called either (wave
-        // 21, finding 2) and call here; the rule is not understood, so
-        // none is added (see the module comment).
+        // the original (reference "R19 ..., wave 20", finding 1). A slow
+        // one does, when hit from near (wave 22, finding 1).
         if (!victimData || victimData.physics.speed <= 0) {
             return;
         }
@@ -476,6 +495,16 @@ export const ReinforcementCallSystem = new System({
         const caller = getEntity(source)?.components.has(ControlledByComponent)
             ? source : flockPlayer(source, getEntity);
         if (caller === undefined || flockPlayer(uuid, getEntity) !== undefined) {
+            return;
+        }
+        // A trader calls only when the shooter is near (reference "R19
+        // ..., wave 22", finding 1), measured from the responsible ship.
+        const at = victimMovement?.position;
+        const from = getEntity(source)?.components
+            .get(MovementStateComponent)?.position;
+        const distanceSquared = at && from
+            ? (from.x - at.x) ** 2 + (from.y - at.y) ** 2 : undefined;
+        if (!reinforcementCallInRange(npc.aiType, distanceSquared)) {
             return;
         }
         // getCached is deterministic here: makeSystem stages every gövt.
@@ -521,18 +550,7 @@ export const ReinforcementCallSystem = new System({
         call.arriveAt = time.time + reinforcements.delayMs;
         call.caller = caller;
         call.victim = uuid;
-        const at = victimMovement?.position;
         call.center = { x: at?.x ?? 0, y: at?.y ?? 0 };
-        // A trader victim says so (reference "R19 ..., wave 21", finding
-        // 1): its distress line, as for an NPC's attack (npc_targeting.ts).
-        const victimGovt = getGovt(govt.id);
-        if (sendsDistressCalls(npc.aiType, victimGovt,
-            victimData.inheritedNoGreetings,
-            entities.get(uuid)?.components.has(MissionShipComponent))
-            && distressCallDue(npc.distressAt, time.time)) {
-            npc.distressAt = time.time;
-            emit(DistressCallEvent, { ship: uuid, roll: random.next() });
-        }
         // Only the caller is stamped, with his own day: the cooldown is
         // private to each pilot (Matthew's ruling, 2026-11-24). Replaced,
         // never mutated (the value may be shared with a traded-in hull,

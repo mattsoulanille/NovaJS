@@ -538,12 +538,11 @@ describe('piracy police and distress calls in the sim', () => {
 
         // Reference "P1 wave 15", finding 1: five runs of the player
         // shooting traders (waves 12-15), never one call, against several
-        // a minute from traders under NPC attack. Those systems had no
-        // reinforcement fleet; where one answers, the calling victim's
-        // line goes with the call ("R19 ..., wave 21";
-        // spawn/reinforcements_test.ts).
-        it('the player\'s own victims NEVER call where no fleet answers, '
-            + 'however long he keeps at it (reference wave 15)', async () => {
+        // a minute from traders under NPC attack. ("R19 ..., wave 22" saw 3
+        // of 20 in systems with a fleet, a separate chance: not modelled;
+        // spawn/reinforcements_test.ts pins that a fleet call sends none.)
+        it('the player\'s own victims NEVER call, however long he keeps at '
+            + 'it (reference wave 15)', async () => {
                 await scene(PLAIN, SHIPPING);
                 for (let i = 0; i < 4; i++) {
                     hit('victim', 'player', { group: 'player', aimed: true });

@@ -21,12 +21,12 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
  *    attacked as well;
  *  - none in five runs where the PLAYER was the attacker (waves 12-13 and
  *    "P1 wave 15", which watched 310 s of a player beaming traders): the
- *    player's own victims never call WHERE NO FLEET ANSWERS (those systems
- *    had no sÿst ReinfFleet). Corrected by "R19 reinforcement fleets, wave
- *    21": in a system with a reinforcement fleet, an AI 1 victim of the
- *    player that calls the fleet sends its line on the call
- *    (spawn/reinforcements.ts's ReinforcementCallSystem emits it through
- *    this module); no AI 1 victim without the line got a fleet.
+ *    player's own victims never call. "R19 reinforcement fleets, wave
+ *    22" (systems WITH a fleet) saw 3 of 20 traders the player hit send
+ *    a line, with or without a fleet call: a separate chance, not tied to
+ *    the call (seven near calls came with no line). NOT MODELLED: the
+ *    player's victims stay silent (wave 21 had read the line as part of
+ *    the fleet's call; wave 22 showed the call is the shooter's distance).
  *
  * "P1 wave 16" settled the rest:
  *  - MISSION SHIPS NEVER CALL: seven mission victims (AI 1, anchored or
@@ -44,9 +44,8 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
  * So: a non-mission trader (AI 1 or 2) whose govt (or hull, ShipData's
  * inheritedNoGreetings: the class's InherentGovt sets 0x0008) does not
  * silence it, hit in an ATTACK (npc_targeting.ts's provoke rule) by an NPC
- * that is not on a player's side, or calling a reinforcement fleet on a
- * player's hit (spawn/reinforcements.ts), sends one call, and no other
- * for DISTRESS_CALL_INTERVAL_MS.
+ * that is not on a player's side, sends one call, and no other for
+ * DISTRESS_CALL_INTERVAL_MS.
  *
  * The simulation draws the line with the seeded PRNG and carries the draw
  * (`roll`) in the event; the display maps it onto the scenario's list, so
