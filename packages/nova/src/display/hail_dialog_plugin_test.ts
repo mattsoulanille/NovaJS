@@ -1243,6 +1243,8 @@ describe('computeContext: hailing a STELLAR', () => {
         bribedUntil?: number,
         /** PlanetData.typeDescription (STR# 1100 by spöb Type). */
         typeDescription?: string,
+        /** A transit stellar (PlanetData.gate). */
+        gate?: 'hypergate' | 'wormhole',
     } = {}) {
         const gameData = new MockGameData();
         const govt = {
@@ -1261,6 +1263,10 @@ describe('computeContext: hailing a STELLAR', () => {
                 canLand: opts.canLand ?? true,
                 uninhabited: opts.uninhabited ?? false,
             },
+            gate: opts.gate
+                ? { kind: opts.gate, destinations: ['nova:1401'],
+                    emergenceAngle: null }
+                : null,
         };
 
         const world = new World();
@@ -1533,6 +1539,49 @@ describe('computeContext: hailing a STELLAR', () => {
                 });
                 expect(hailIsUnanswerable(world)).toBeTrue();
             });
+
+        it('refuses a GATE the player may not use: "No response.", no dialog '
+            + '(HG-V01, reference "Stellar hail graphic, wave 23")',
+            async () => {
+                for (const gate of ['hypergate', 'wormhole'] as const) {
+                    // Every working stock gate is MinStatus 32767, "player
+                    // can never land", until ränk 147 opens the network.
+                    const { world, gameData } = planetWorld({
+                        gate, isStation: true, minStatus: 32767,
+                        planetsTakeBribes: true,
+                    });
+                    expect(hailIsUnanswerable(world, gameData))
+                        .withContext(gate).toBeTrue();
+                    expect(await computeContext(world, gameData,
+                        stellarAssets())).withContext(gate).toBeUndefined();
+                    // Without the game data the clearance can't be judged
+                    // here; computeContext still refuses.
+                    expect(hailIsUnanswerable(world)).toBeFalse();
+                }
+            });
+
+        it('lets a gate the player MAY use answer, as before (GUESS)',
+            async () => {
+                const { world, gameData } = planetWorld({
+                    gate: 'hypergate', isStation: true,
+                });
+                expect(hailIsUnanswerable(world, gameData)).toBeFalse();
+                const result = await computeContext(world, gameData,
+                    stellarAssets());
+                expect(result?.context.variant).toBe('planet');
+                expect(result?.context.body)
+                    .toContain('You are cleared to dock.');
+            });
+
+        it('still opens a refusing NON-gate port, to bargain', async () => {
+            const { world, gameData } = planetWorld({
+                minStatus: 32767, planetsTakeBribes: true,
+            });
+            expect(hailIsUnanswerable(world, gameData)).toBeFalse();
+            const result = await computeContext(world, gameData,
+                stellarAssets());
+            expect(result?.context.variant).toBe('planet');
+        });
 
         it('is silent (not a refusal) when nothing is targeted', () => {
             // computeContext also returns undefined here, but a hail into

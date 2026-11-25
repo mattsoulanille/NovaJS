@@ -1,4 +1,5 @@
 import { GovtData } from 'novadatainterface/govt_data';
+import { PlanetData } from 'novadatainterface/planet_data';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
@@ -33,7 +34,7 @@ import {
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
     NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText, planetBribePrice,
-    shipBribePrice,
+    shipBribePrice, StellarClearance,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -96,9 +97,10 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  *
  * NOT EVERY HAIL OPENS A CHANNEL: with a stellar that is not a PORT selected
  * (Jupiter, a dead hypergate, a wormhole — landable.ts isPort) there is
- * nobody to answer, so no dialog appears at all. The press gets the original's "No response." on the
- * bottom-left status line and the can't-do beep, the same feedback a blocked
- * landing gets. See hailIsUnanswerable / refuseHail.
+ * nobody to answer, so no dialog appears at all — nor from a working gate the
+ * player may not use (gateRefusesHail). The press gets the original's "No
+ * response." on the bottom-left status line and the can't-do beep, the same
+ * feedback a blocked landing gets. See hailIsUnanswerable / refuseHail.
  *
  * ESCORT COMM: the escort variant MANAGES one of the player's own escorts
  * (Upgrade / Sell / Release / Close Channel per hail/hail_escort.png and
@@ -176,11 +178,19 @@ function getPlayerShip(world: World) {
  * undefined for exactly this case — so the plugin can tell a refusal apart
  * from "nothing is targeted", which is also undefined and is silent.
  *
+ * A THIRD way, a GATE THE PLAYER MAY NOT USE ({@link gateRefusesHail}):
+ * MEASURED for a working hypergate that had just denied the pilot
+ * ("Hypergate usage denied."), which answered the hail with "No response."
+ * and no dialog (reference "Stellar hail graphic, wave 23", HG-V01). Judged
+ * only when `gameData` is given (the clearance needs it); without it a gate
+ * falls through to computeContext, which applies the same rule.
+ *
  * A targeted SHIP wins over the planet target, the same order computeContext
  * reads them in, so hailing a ship while a dead moon happens to be selected
  * still opens the ship's channel.
  */
-export function hailIsUnanswerable(world: World): boolean {
+export function hailIsUnanswerable(world: World,
+    gameData?: SimulationGameDataInterface): boolean {
     const player = getPlayerShip(world);
     if (!player) {
         return false;
@@ -191,11 +201,64 @@ export function hailIsUnanswerable(world: World): boolean {
     }
     const planetTargetUuid =
         player.entity.components.get(PlanetTargetComponent)?.target;
-    const planetData = planetTargetUuid
-        ? world.entities.get(planetTargetUuid)
-            ?.components.get(PlanetDataComponent)
-        : undefined;
-    return !!planetData && !isPort(planetData.flags);
+    const planetTarget = planetTargetUuid
+        ? world.entities.get(planetTargetUuid) : undefined;
+    const planetData = planetTarget?.components.get(PlanetDataComponent);
+    if (!planetData) {
+        return false;
+    }
+    if (!isPort(planetData.flags)) {
+        return true;
+    }
+    const planetId = planetTarget?.components.get(PlanetComponent)?.id;
+    return gameData !== undefined && planetId !== undefined
+        && gateRefusesHail(planetData,
+            playerStellarClearance(world, player.entity, gameData,
+                planetData, planetId));
+}
+
+/**
+ * Whether a hailed GATE stays silent: a transit stellar (a hypergate or a
+ * wormhole, PlanetData.gate) the player may not use — the same landing
+ * clearance (stellar_clearance.ts) that refuses them at the gate.
+ *
+ * MEASURED: HG-V01, a working hypergate that had denied the pilot
+ * ("Hypergate usage denied."), gave "No response." and no comm (reference
+ * "Stellar hail graphic, wave 23").
+ * GUESS: a gate the player MAY use keeps NovaJS's comm (the planet comm,
+ * cleared to dock) — the original was not hailed with the gate open.
+ * GUESS: a wormhole follows the hypergate. Every stock wormhole is
+ * uninhabited (0x0020), no port, and already silent through isPort; this
+ * only decides a plug-in's inhabited one.
+ */
+export function gateRefusesHail(planetData: Pick<PlanetData, 'gate'>,
+    clearance: StellarClearance): boolean {
+    return !!planetData.gate && !clearance.cleared;
+}
+
+/**
+ * The player's landing clearance at a stellar in this world: the SAME
+ * verdict the landing gate and the radar blip read (planet_plugin's
+ * stellarClearanceFor), off the player's delta-synced components.
+ */
+function playerStellarClearance(world: World, player: Entity,
+    gameData: SimulationGameDataInterface, planetData: PlanetData,
+    planetId: string): StellarClearance {
+    return stellarClearanceFor({
+        planetData, gameData,
+        records: player.components.get(LegalRecordsComponent),
+        shipData: player.components.get(ShipDataComponent),
+        outfits: player.components.get(OutfitsStateComponent),
+        bribes: player.components.get(StellarBribesComponent),
+        ranks: player.components.get(ActiveRanksComponent),
+        missions: player.components.get(MissionsComponent),
+        // Bribe expiries are SIM-clock stamps; the display world's
+        // own TimeResource is the wall clock and would judge every
+        // paid bribe already expired.
+        planetId,
+        systemId: world.resources.get(SystemIdResource),
+        now: world.resources.get(SimulationTimeResource)?.time ?? 0,
+    });
 }
 
 /**
@@ -1112,22 +1175,17 @@ export async function computeContext(world: World,
         // the simulation reads, so the dialog can never offer a bribe for a
         // landing that was already allowed — or promise clearance the gate
         // will refuse a second later.
-        const clearance = planetData && planetId !== undefined
-            ? stellarClearanceFor({
-                planetData, gameData, records: playerRecords,
-                shipData: player.entity.components.get(ShipDataComponent),
-                outfits: player.entity.components.get(OutfitsStateComponent),
-                bribes: player.entity.components.get(StellarBribesComponent),
-                ranks: player.entity.components.get(ActiveRanksComponent),
-                missions: player.entity.components.get(MissionsComponent),
-                // Bribe expiries are SIM-clock stamps; the display world's
-                // own TimeResource is the wall clock and would judge every
-                // paid bribe already expired.
-                planetId,
-                systemId: world.resources.get(SystemIdResource),
-                now: world.resources.get(SimulationTimeResource)?.time ?? 0,
-            })
-            : { cleared: true as const };
+        const clearance: StellarClearance =
+            planetData && planetId !== undefined
+                ? playerStellarClearance(world, player.entity, gameData,
+                    planetData, planetId)
+                : { cleared: true as const };
+        // A gate the player may not use answers nothing either: "No
+        // response." and no comm (gateRefusesHail; reference "Stellar hail
+        // graphic, wave 23", HG-V01).
+        if (planetData && gateRefusesHail(planetData, clearance)) {
+            return undefined;
+        }
 
         // A port that is refusing you and whose government bargains (gövt
         // 0x4000 / 0x8000) offers the deal in the middle button slot, the way
@@ -1182,11 +1240,10 @@ export async function computeContext(world: World,
         // above); it is still threaded through the SAME planetDisposition the
         // radar blip reads so the two can never drift apart.
         //
-        // GUESS: the Status line itself. No capture shows a stellar that is
-        // refusing the player (hail_hostile.png is a ship), so whether the
-        // original prints one, and where, is unmeasured (queued for the
-        // reference Mac); it stays under the class caption, where the ship
-        // block puts its own Status line under the class and government.
+        // MEASURED (reference "Stellar hail graphic, wave 23"): a refusing
+        // planet and a refusing station both print "Status: Hostile" in red
+        // on a third line, under the class caption, with no "(System)" line.
+        // The 'forbidden' wording is still unmeasured.
         const status = planetDisposition(clearance, isLandable);
         const identity = [name, planetData?.typeDescription ?? '']
             .filter(line => line !== '');
@@ -1423,7 +1480,8 @@ export const HailDialogPlugin: Plugin = {
             }
             // Nobody is home on a dead moon, nor on a disabled ship: no
             // channel opens at all, just "No response." (STR# 2002 #52).
-            if (hailIsUnanswerable(world) || hailTargetIsDisabled(world)) {
+            if (hailIsUnanswerable(world, simulationData)
+                || hailTargetIsDisabled(world)) {
                 await refuseHail();
                 return;
             }
