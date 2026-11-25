@@ -21,7 +21,7 @@ import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import {
     GateAnimationComponent, GateAnimationPlugin, GateAnimationState,
     GateAnticipationResource, GateArrivalAnticipationEvent, GATE_FRAME_MS,
-    gateDrawn, stepGateAnimation,
+    stepGateAnimation,
 } from "./gate_animation_plugin.js";
 
 const FRAMES = 42;
@@ -155,13 +155,6 @@ describe('stepGateAnimation', () => {
         expect(state.frame).toBe(0);
     });
 
-    it('draws the gate only while it is not closed', () => {
-        expect(gateDrawn({ mode: 'closed' })).toBeFalse();
-        for (const mode of ['opening', 'flicker', 'closing'] as const) {
-            expect(gateDrawn({ mode })).withContext(mode).toBeTrue();
-        }
-    });
-
     it('does nothing for single-frame (static) gates', () => {
         const state = makeState();
         stepGateAnimation(state, true, 1, GATE_FRAME_MS);
@@ -215,11 +208,12 @@ describe('GateAnimationSystem triggers', () => {
             .get(GateAnimationComponent)!;
     }
 
-    it('stays closed, and NOT DRAWN, with no selection and no arrival '
-        + '(reference "Hypergates and the radar, wave 24")', () => {
+    it('stays closed, DRAWN as its closed frame 0, with no selection and '
+        + 'no arrival (reference "Hypergates, wave 30", finding 5)', () => {
         for (let i = 0; i < 10; i++) {
             step();
-            expect(sprite.pixiSprite.visible).toBeFalse();
+            expect(sprite.pixiSprite.visible).toBeTrue();
+            expect(sprite.frame).toBe(0);
         }
         expect(gateState().mode).toBe('closed');
         expect(sprite.frame).toBe(0);
@@ -249,8 +243,8 @@ describe('GateAnimationSystem triggers', () => {
         }
         expect(gateState().mode).toBe('closed');
         expect(sprite.frame).toBe(0);
-        // ...and gone again once it is closed.
-        expect(sprite.pixiSprite.visible).toBeFalse();
+        // ...and still drawn, as the closed sprite, once it is closed.
+        expect(sprite.pixiSprite.visible).toBeTrue();
     });
 
     it('ignores a PLAYER without access to a locked gate, opens for one '
@@ -318,7 +312,9 @@ describe('GateAnimationSystem triggers', () => {
             step();
         }
         expect(gateState().mode).toBe('closed');
-        expect(sprite.pixiSprite.visible).toBeFalse();
+        // Closed, but drawn (the idle sprite).
+        expect(sprite.pixiSprite.visible).toBeTrue();
+        expect(sprite.frame).toBe(0);
 
         // A clearance held at ANOTHER stellar does not count.
         player.components.set(PlanetTargetComponent,

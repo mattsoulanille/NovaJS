@@ -33,21 +33,20 @@ import { TargetShipBeepSystem } from "./ui_sound_triggers_plugin.js";
  * the gate stands open.
  *
  * Behavior (matching the original game):
- * - IDLE: closed and NOT DRAWN while no ship has the gate selected as its
- *   landing target and no arrival is due. MEASURED (reference "Hypergates
- *   and the radar, wave 24"): at the start of every gate run, and on stock
- *   HG-V01, the gate was not drawn (the target brackets framed nothing); it
- *   appeared, opening and then working, after the `l` that cleared the
- *   ship, and after the gate map's Done with no pick it closed and vanished
- *   again. The brackets (baseSize) and the radar mark (planet data) do not
- *   read the sprite, so both stay. The closing sequence plays before it
- *   vanishes, as NovaJS always did: MEASURED at 10 fps (reference
- *   "Wave-24 leftovers, wave 25": after Done with no pick the frames shrink
- *   inward for about 0.4-0.6 s, then the gate is gone).
+ * - IDLE: closed, DRAWN as its small grey closed sprite (frame 0, frozen)
+ *   while no ship has the gate selected as its landing target and no
+ *   arrival is due. MEASURED (reference "Hypergates, wave 30", finding 5):
+ *   wave 29's and wave 30's shots show the idle gate 150-250 px from the
+ *   ship before any press. Wave 24's "not drawn" was a misreading: there
+ *   the player started ON the gate, whose closed sprite showed under the
+ *   ship. The closing sequence plays back down to that sprite (MEASURED
+ *   at 10 fps: reference "Wave-24 leftovers, wave 25", the frames shrink
+ *   inward for about 0.4-0.6 s after the gate map's Done with no pick).
  * - CLEARED: the opening sequence plays FORWARD; on reaching the last two
  *   frames it ALTERNATES between them (the "working" flicker). A player
  *   opens the gate only once traffic control has CLEARED it there
- *   (PlanetTarget `cleared`, set by the `l` inside the entry window):
+ *   (PlanetTarget `cleared`, set inside the gate's clearance zone by
+ *   the selecting `l` or, after a request, with no press):
  *   selecting the gate from farther out only REQUESTS, and the gate stays
  *   a closed idle sprite (MEASURED: reference "Hypergate `l` range and the
  *   request lines, wave 29", "only the clearance OPENS the gate").
@@ -158,16 +157,6 @@ export function stepGateAnimation(state: GateAnimationState, wantOpen: boolean,
     }
 }
 
-/**
- * Whether an animated gate is drawn at all: not while it is IDLE (closed),
- * only while it opens, works or closes (see the module comment). A
- * single-frame gate never reaches GateAnimationSystem's sprite pass, so a
- * plug-in's static gate art stays drawn (GUESS: nothing measured one).
- */
-export function gateDrawn(state: Pick<GateAnimationState, 'mode'>): boolean {
-    return state.mode !== 'closed';
-}
-
 export const GateAnimationComponent =
     new Component<GateAnimationState>('GateAnimation');
 
@@ -246,7 +235,7 @@ const ShipArrivedAtGateSystem = new System({
  * A ship's landing selection plus everything the clearance rule reads. A
  * PLAYER (the only kind of ship that carries a legal record) opens a gate
  * only once it holds the gate's clearance (holdsGateClearance: its `l`
- * inside the entry window was answered with #91-93) and only if the gate
+ * inside the clearance zone was answered with #91-93) and only if the gate
  * would still let it through — the same
  * stellarClearanceFor verdict the landing gate, radar blip and comm dialog
  * quote (ränk 147 unlocks the stock network) — so a pilot without access
@@ -290,7 +279,7 @@ export const GateAnimationSystem = new System({
                 continue;
             }
             // A player that has only requested (selected from outside the
-            // entry window) leaves the gate closed.
+            // clearance zone) leaves the gate closed.
             if (records && !holdsGateClearance(target)) {
                 continue;
             }
@@ -321,12 +310,10 @@ export const GateAnimationSystem = new System({
         stepGateAnimation(state, wantOpen, frames, time.time);
 
         // Override the frame ObjectDrawSystem's rotation pass picked (planets
-        // have a 1-frame 'normal' set, which pins frame 0 every tick), and
-        // hide the idle gate (gateDrawn).
-        const drawn = gateDrawn(state);
+        // have a 1-frame 'normal' set, which pins frame 0 every tick). The
+        // idle gate stays drawn at frame 0 (reference "Hypergates, wave 30").
         for (const sprite of sprites) {
             sprite.frame = Math.min(frames - 1, state.frame);
-            sprite.pixiSprite.visible = drawn;
         }
     },
     // GateAnimationProvider is a #156 pin (shared: *).
