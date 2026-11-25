@@ -255,25 +255,66 @@ describe('formation geometry (the original\'s 45° V, filled as a triangle, '
             });
 
         it('moves earlier ranks when the count changes: rank 2 (the third '
-            + 'escort) is row 2\'s left outer cell with 4, 6 or 8 and the '
-            + 'centre with 3, 5, 7 or 9', () => {
-                for (const count of [4, 6, 8]) {
+            + 'escort) is row 2\'s left outer cell with 4, 6, 8, 10 or 12 and '
+            + 'the centre with 3, 5, 7, 9 or 11', () => {
+                for (const count of [4, 6, 8, 10, 12]) {
                     expect(formationCell(2, count)).withContext(`${count}`)
                         .toEqual([2, -2]);
                 }
-                for (const count of [3, 5, 7, 9]) {
+                for (const count of [3, 5, 7, 9, 11]) {
                     expect(formationCell(2, count)).withContext(`${count}`)
                         .toEqual([2, 0]);
                 }
             });
 
-        it('GUESS past nine: the 9-layout for ranks 0-8, then row 4 from the '
-            + 'inside out', () => {
-                expect(layout(12)).toEqual([
-                    ...layout(9),
-                    [4, 0], [4, -2], [4, 2],
+        it('opens row 4 from its centre past nine, ranking by the count\'s '
+            + 'parity (reference "F1c above nine, wave 29")', () => {
+                // 10: rows 1-3 ranked like 8 (centre at rank 6), then row 3's
+                // right outer cell, then row 4's centre.
+                expect(layout(10)).toEqual([
+                    [1, -1], [1, 1],
+                    [2, -2], [2, 2],
+                    [3, -1], [3, 1],
+                    [2, 0], [3, -3], [3, 3],
+                    [4, 0],
                 ]);
-                expect(FORMATION_MEASURED_MAX_COUNT).toBe(9);
+                // 11: the 9-layout cell for cell, then row 4's centre and
+                // left cell.
+                expect(layout(11)).toEqual([
+                    ...layout(9),
+                    [4, 0], [4, -2],
+                ]);
+                // 12: as 10, then row 4's left and right cells.
+                expect(layout(12)).toEqual([
+                    ...layout(10),
+                    [4, -2], [4, 2],
+                ]);
+                expect(layout(10).slice(0, 8)).toEqual(layout(8));
+                for (const count of [10, 12]) {
+                    expect(formationCell(2, count)).withContext(`${count}`)
+                        .toEqual([2, -2]);
+                    expect(formationCell(6, count)).withContext(`${count}`)
+                        .toEqual([2, 0]);
+                }
+                expect(formationCell(2, 11)).toEqual([2, 0]);
+                expect(FORMATION_MEASURED_MAX_COUNT).toBe(12);
+            });
+
+        it('GUESS past twelve: the measured layout of the same parity, then '
+            + 'row 4\'s outer cells and row 5 from the inside out', () => {
+                expect(layout(13)).toEqual([
+                    ...layout(11),
+                    [4, 2], [4, -4],
+                ]);
+                expect(layout(14)).toEqual([
+                    ...layout(12),
+                    [4, -4], [4, 4],
+                ]);
+                expect(layout(15)).toEqual([
+                    ...layout(11),
+                    [4, 2], [4, -4], [4, 4], [5, -1],
+                ]);
+                expect(layout(16).slice(0, 12)).toEqual(layout(12));
             });
 
         it('GUESS with no count: the rank table, row 2\'s centre, then each '
@@ -324,8 +365,8 @@ describe('formation geometry (the original\'s 45° V, filled as a triangle, '
                 .toEqual([...FORMATION_RANK_CELLS]);
         });
 
-        it('has a measured layout for every count 1-9', () => {
-            for (let count = 1; count <= 9; count++) {
+        it('has a measured layout for every count 1-12', () => {
+            for (let count = 1; count <= 12; count++) {
                 expect(FORMATION_COUNT_LAYOUTS.has(count)
                     || count <= 2 || count === 4).withContext(`${count}`)
                     .toBe(true);

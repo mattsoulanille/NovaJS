@@ -223,8 +223,9 @@ export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
 
 /**
  * Measured whole layouts by COUNT (reference F1c, wave 22: hired 24 px
- * escorts, 3-9 of them, ±0.5 px at rest and at cruise), cells in rank
- * order. The slots are the points of the 45° lattice behind the leader
+ * escorts, 3-9 of them, ±0.5 px at rest and at cruise; "F1c above nine,
+ * wave 29": 10-12, every escort on the lattice to about 1 px), cells in
+ * rank order. The slots are the points of the 45° lattice behind the leader
  * (row r holds the r + 1 cells -r, -(r-2), ..., +r steps), but WHICH cells
  * a formation uses, and in which rank order, depends on how many
  * followers it has:
@@ -236,7 +237,12 @@ export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
  *     INNER pair (not its outer, and not the centre: no nearest-first
  *     rule fits 6 and 8 together);
  *   - 8 is the 6-layout plus the centre (rank 6) and row 3's LEFT outer
- *     cell (rank 7); the right outer cell stays empty.
+ *     cell (rank 7); the right outer cell stays empty;
+ *   - past nine a fourth row opens from its CENTRE, then its left and its
+ *     right cell 2 steps out (10: + centre, 11: + left, 12: + right), and
+ *     the rank order keeps the count's PARITY: 11 is the 9-layout plus row
+ *     4 (rank 2 in row 2's centre), while 10 and 12 rank rows 1-3 like 8
+ *     (the pairs first, the centre at rank 6, row 3's outer pair after).
  *
  *                 L                    count 9
  *              0     1
@@ -248,6 +254,12 @@ export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
  *           2     6     3
  *        7     4     5     .
  *
+ *                 L                    count 12 (10: ranks 0-9 of
+ *              0     1                  it; 11: the 9-layout and
+ *           2     6     3               then 9 and 10 as here)
+ *        7     4     5     8
+ *     .    10     9    11     .
+ *
  * So earlier ranks MOVE when the count changes (rank 2 is row 2's left
  * outer cell with 4, 6 or 8 followers and the centre with 3, 5, 7 or 9):
  * FormationSystem passes the live count and the whole group re-flows when
@@ -255,7 +267,7 @@ export const FORMATION_RANK_CELLS: ReadonlyArray<FormationCell> = [
  * launch re-flowed hired escorts and fighters together).
  *
  * Counts 1, 2 and 4 are FORMATION_RANK_CELLS. Counts above
- * FORMATION_MEASURED_MAX_COUNT were not measured (formationCell).
+ * FORMATION_MEASURED_MAX_COUNT were not measured (formationCell's GUESS).
  */
 export const FORMATION_COUNT_LAYOUTS:
     ReadonlyMap<number, ReadonlyArray<FormationCell>> = new Map([
@@ -267,16 +279,23 @@ export const FORMATION_COUNT_LAYOUTS:
             [3, -3]]],
         [9, [[1, -1], [1, 1], [2, 0], [2, -2], [2, 2], [3, -1], [3, 1],
             [3, -3], [3, 3]]],
+        [10, [[1, -1], [1, 1], [2, -2], [2, 2], [3, -1], [3, 1], [2, 0],
+            [3, -3], [3, 3], [4, 0]]],
+        [11, [[1, -1], [1, 1], [2, 0], [2, -2], [2, 2], [3, -1], [3, 1],
+            [3, -3], [3, 3], [4, 0], [4, -2]]],
+        [12, [[1, -1], [1, 1], [2, -2], [2, 2], [3, -1], [3, 1], [2, 0],
+            [3, -3], [3, 3], [4, 0], [4, -2], [4, 2]]],
     ] as Array<[number, ReadonlyArray<FormationCell>]>);
 
-/** The largest formation the reference measured (F1c: nine hired
- * escorts, rows 1-3 full). */
-export const FORMATION_MEASURED_MAX_COUNT = 9;
+/** The largest formation the reference measured (F1c above nine, wave
+ * 29: twelve hired escorts, rows 1-3 full and row 4's middle three). */
+export const FORMATION_MEASURED_MAX_COUNT = 12;
 
 /**
  * GUESS: a slot by RANK alone, on the same lattice, for what F1c did not
- * measure: ranks past rows 1-3 (formations of 10+, where ranks 0-8 take
- * the measured 9-layout and this fills row 4 on) and formations whose
+ * measure: ranks past the measured twelve (formations of 13+, where the
+ * first ranks take the measured 11- or 12-layout and this fills on from
+ * there: see formationCell) and formations whose
  * count the caller does not know (a first placement before
  * FormationSystem has seen the group). Rows fill in order. Rows 1 and 2
  * follow the rank table (the V, left first) and then row 2's centre; from
@@ -289,10 +308,14 @@ export const FORMATION_MEASURED_MAX_COUNT = 9;
  *              0     1             row 1: ranks 0-1   (measured V)
  *           2     4     3          row 2: ranks 2-4
  *        7     5     6     8       row 3: ranks 5-8
- *    12    10     9    11    13    row 4: ranks 9-13  (GUESS)
+ *    12    10     9    11    13    row 4: ranks 9-13  (9-11 as measured
+ *                                                      for 10-12; 12-13
+ *                                                      GUESS)
  *
  * Every rank is a distinct cell, so a count-less placement never stacks
- * two ships, and ranks 9 and up never collide with the 9-layout.
+ * two ships, and ranks 9 and up never collide with rows 1-3; ranks 9-11
+ * are exactly the 12-layout's row 4, in its order, so ranks 11 and up never
+ * collide with the 11-layout nor ranks 12 and up with the 12-layout.
  */
 export function formationFillCell(rank: number): FormationCell {
     // Rows 1..r hold r(r + 3) / 2 ranks (2, 5, 9, 14, ...). Found by
@@ -323,15 +346,20 @@ export function formationFillCell(rank: number): FormationCell {
  * The formation cell [rows astern, steps right] of the follower of RANK
  * `rank` in a formation of `count` followers: the measured layout for that
  * count (FORMATION_COUNT_LAYOUTS, or FORMATION_RANK_CELLS for 1, 2 and 4);
- * for a count above the measured nine (GUESS), the 9-layout for ranks 0-8
- * and formationFillCell from row 4 on; with no count, FORMATION_RANK_CELLS
- * then formationFillCell.
+ * for a count above the measured twelve (GUESS), the measured layout of
+ * the same PARITY (the 12-layout for an even count, the 11-layout for an
+ * odd one, as the measured counts rank by parity) for its ranks and
+ * formationFillCell after it; with no count, FORMATION_RANK_CELLS then
+ * formationFillCell.
  */
 export function formationCell(rank: number, count?: number): FormationCell {
     if (count !== undefined) {
         const layout = FORMATION_COUNT_LAYOUTS.get(count)
             ?? (count > FORMATION_MEASURED_MAX_COUNT
-                ? FORMATION_COUNT_LAYOUTS.get(FORMATION_MEASURED_MAX_COUNT)
+                ? FORMATION_COUNT_LAYOUTS.get(
+                    (count - FORMATION_MEASURED_MAX_COUNT) % 2 === 0
+                        ? FORMATION_MEASURED_MAX_COUNT
+                        : FORMATION_MEASURED_MAX_COUNT - 1)
                 : undefined);
         const cell = layout?.[rank];
         if (cell) {
@@ -348,7 +376,8 @@ export function formationCell(rank: number, count?: number): FormationCell {
  * the largest sprite frame in the group); the cell comes from
  * formationCell (the measured per-count layouts, reference F1c). The slots
  * are the SAME at rest and at full speed (F1). NPC fleet (flët) escorts fly
- * the same geometry (F1n, ranks 0-3; fleets of 5+ were not measured).
+ * the same geometry (F1n, ranks 0-3; "F1c above nine, wave 29": fleets of
+ * 6 and 9 fly the hired 6- and 9-layouts, ranks in field order).
  *
  * `back` is px astern of the leader; `lateral` is px to the leader's RIGHT
  * (formationSlotPosition's perpendicular), so left-side slots are negative.
