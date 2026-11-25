@@ -362,21 +362,18 @@ function planetBribeTerms(world: World, player: Entity, playerUuid: string,
     return { planetId, price, haggle, now };
 }
 
-/** Records `haggle` as the player's standing with `planetId`, mutating
- * the existing map when there is one (so the delta/serializer sees the
- * component it already knows) and materializing it otherwise. */
+/** Records `haggle` as the player's standing with `planetId`. Writes a
+ * NEW map, never edits the one there: the pilot carries StellarHaggle onto
+ * a new hull by reference (missions/mission_ship_change.ts's
+ * PLAYER_STATE_COMPONENTS), and the hull a trade leaves behind must keep
+ * the map it had. */
 function setStellarHaggle(player: Entity, planetId: string,
     haggle: StellarHaggleState) {
-    const entry = {
+    const haggles = new Map(player.components.get(StellarHaggleComponent));
+    haggles.set(planetId, {
         countered: haggle.countered, withdrawn: haggle.withdrawn,
-    };
-    const haggles = player.components.get(StellarHaggleComponent);
-    if (haggles) {
-        haggles.set(planetId, entry);
-    } else {
-        player.components.set(StellarHaggleComponent,
-            new Map([[planetId, entry]]));
-    }
+    });
+    player.components.set(StellarHaggleComponent, haggles);
 }
 
 /**
@@ -403,17 +400,19 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
         return;
     }
     credits.credits -= amount;
-    player.components.get(StellarHaggleComponent)?.delete(planetId);
-    // Mutate the existing map when there is one so the delta/serializer sees
-    // the component it already knows about, and materialize it otherwise.
-    const bribes = player.components.get(StellarBribesComponent);
-    const until = now + STELLAR_BRIBE_MS;
-    if (bribes) {
-        bribes.set(planetId, until);
-    } else {
-        player.components.set(StellarBribesComponent,
-            new Map([[planetId, until]]));
+    // Both maps are written as NEW maps, never edited in place: the pilot
+    // carries them onto a new hull by reference (missions/
+    // mission_ship_change.ts's PLAYER_STATE_COMPONENTS), and the hull a
+    // trade leaves behind must keep the maps it had.
+    const haggles = player.components.get(StellarHaggleComponent);
+    if (haggles?.has(planetId)) {
+        const rest = new Map(haggles);
+        rest.delete(planetId);
+        player.components.set(StellarHaggleComponent, rest);
     }
+    const bribes = new Map(player.components.get(StellarBribesComponent));
+    bribes.set(planetId, now + STELLAR_BRIBE_MS);
+    player.components.set(StellarBribesComponent, bribes);
 }
 
 /**

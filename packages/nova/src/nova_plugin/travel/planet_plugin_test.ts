@@ -38,7 +38,12 @@ import {
     bribeDay, GovtsResource, LegalRecordsComponent, planetLowerPriceCounters,
     planetRefusesBribe,
 } from '../reputation/index.js';
-import { landable } from '../core/index.js';
+import { landable, SimulationGameDataResource } from '../core/index.js';
+import { applyShipChange } from '../missions/index.js';
+import { StoredShipsComponent } from '../player/index.js';
+import { ShipComponent } from '../ship/index.js';
+import { buildPurchasedShip } from '../../spaceport/shipyard_rules.js';
+import { swapWithStored } from '../../spaceport/ship_storage.js';
 import {
     clearanceDeniedMessage, hypergateClearedMessage, landingBlockedMessage,
     landingRequestMessage,
@@ -726,16 +731,16 @@ describe('planet bribes', () => {
         async () => {
             const { world, ship } = await shutOutHarness();
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
-            const bribes = ship.components.get(StellarBribesComponent)!;
             // Wind the clearance back into the past rather than the clock
             // forward: expiry is a pure comparison against TimeResource.
-            bribes.set(PORT_ID, -1);
+            ship.components.set(StellarBribesComponent,
+                new Map([[PORT_ID, -1]]));
 
             expect(pressLand(world).blocked[0].reason).toEqual('denied');
             // ...and the reprieve really was STELLAR_BRIBE_MS long.
             applyHail(world, undefined, { kind: 'bribe', target: PORT });
-            expect(bribes.get(PORT_ID)).toBeGreaterThanOrEqual(
-                STELLAR_BRIBE_MS);
+            expect(ship.components.get(StellarBribesComponent)!.get(PORT_ID))
+                .toBeGreaterThanOrEqual(STELLAR_BRIBE_MS);
         }, 30_000);
 
     it('will not sell clearance the player already has', async () => {
@@ -958,6 +963,165 @@ describe('planet bribes', () => {
             expect(pressLand(a.world).lands.length)
                 .toEqual(pressLand(b.world).lands.length);
         }, 30_000);
+
+    describe('across a change of hull in the same system visit', () => {
+        /** The class the pilot trades the harness's skiff for. */
+        const CORSAIR = SYNTHETIC.ships.corsair;
+
+        /**
+         * Every way the player's hull is replaced: the shipyard's Buy Ship
+         * (buildPurchasedShip), the hangar's swap with a stored ship
+         * (swapWithStored) — both build through shipyard_rules'
+         * buildShipEntity and its CARRIED_COMPONENTS — and a set string's
+         * Cxxx in flight (applyShipChange -> rehullShip, on
+         * PLAYER_STATE_COMPONENTS). The new hull is put in the world at the
+         * player's uuid.
+         */
+        const PATHS = {
+            async purchase(world: World, old: Entity) {
+                const data = world.resources.get(SimulationGameDataResource)!
+                    .data;
+                const skiff = await data.Ship.get(SYNTHETIC.ships.skiff);
+                const corsair = await data.Ship.get(CORSAIR);
+                const hull = buildPurchasedShip(old, corsair, {
+                    currentShip: skiff, outfits: new Map(),
+                    getOutfit: () => undefined,
+                    credits: old.components.get(CreditsComponent)!.credits,
+                });
+                await completeEntity(world, hull);
+                world.entities.set(SHIP_UUID, hull);
+                return hull;
+            },
+            async storage(world: World, old: Entity) {
+                const data = world.resources.get(SimulationGameDataResource)!
+                    .data;
+                const corsair = await data.Ship.get(CORSAIR);
+                old.components.set(StoredShipsComponent, [{
+                    ship: CORSAIR, name: corsair.name, outfits: [],
+                    cargo: [], fuel: 100, storedAt: PORT_ID,
+                }]);
+                const hull = swapWithStored(old, 0, PORT_ID, {
+                    getShip: id => data.Ship.getCached(id),
+                    getOutfit: id => data.Outfit.getCached(id),
+                });
+                await completeEntity(world, hull);
+                world.entities.set(SHIP_UUID, hull);
+                return hull;
+            },
+            async 'set string in flight'(world: World, old: Entity) {
+                // Staged before the record applies, as simulation_input.ts
+                // does (mission_ship_change.ts's module note).
+                await world.resources.get(SimulationGameDataResource)!
+                    .data.Ship.get(CORSAIR);
+                return applyShipChange(world, SHIP_UUID, old,
+                    { shipId: CORSAIR });
+            },
+        };
+
+        /** Replaces the player's hull by `path`, then brings the new hull
+         * back over the port with it targeted. */
+        async function changeHull(path: keyof typeof PATHS, world: World,
+            old: Entity) {
+            const hull = await PATHS[path](world, old);
+            expect(hull).not.toBe(old);
+            expect(hull.components.get(ShipComponent)!.id).toBe(CORSAIR);
+            // One step so the providers rebuild the hull (and attach
+            // PlanetTargetComponent to a docked-built one).
+            world.step();
+            const stellar = stellars(world).find(p => p.uuid === PORT)!;
+            hull.components.get(PlanetTargetComponent)!.target = stellar.uuid;
+            place(hull, stellar.position);
+            return hull;
+        }
+
+        for (const path of Object.keys(PATHS) as (keyof typeof PATHS)[]) {
+            describe(`(${path})`, () => {
+                it('a planet that withdrew its offer keeps refusing',
+                    async () => {
+                        const { world, ship } = await shutOutHarness();
+                        ship.components.set(GameDateComponent,
+                            dayWhere(false));
+                        applyHail(world, undefined,
+                            { kind: 'lowerPrice', target: PORT });
+                        expect(ship.components.get(StellarHaggleComponent)!
+                            .get(PORT_ID))
+                            .toEqual({ countered: false, withdrawn: true });
+
+                        const hull = await changeHull(path, world, ship);
+                        const credits = hull.components
+                            .get(CreditsComponent)!.credits;
+                        expect(hull.components.get(StellarHaggleComponent)!
+                            .get(PORT_ID))
+                            .toEqual({ countered: false, withdrawn: true });
+
+                        // Re-offered: still refused, nothing charged.
+                        applyHail(world, undefined,
+                            { kind: 'bribe', target: PORT });
+                        applyHail(world, undefined,
+                            { kind: 'lowerPrice', target: PORT });
+                        expect(hull.components.get(CreditsComponent)!.credits)
+                            .toEqual(credits);
+                        expect(hull.components.has(StellarBribesComponent))
+                            .toBeFalse();
+                        expect(pressLand(world).blocked[0].reason)
+                            .toEqual('denied');
+                    }, 30_000);
+
+                it('a bought clearance still opens the port', async () => {
+                    const { world, ship } = await shutOutHarness();
+                    applyHail(world, undefined,
+                        { kind: 'bribe', target: PORT });
+                    const until = ship.components.get(StellarBribesComponent)!
+                        .get(PORT_ID);
+                    expect(until).toBeDefined();
+
+                    const hull = await changeHull(path, world, ship);
+                    expect(hull.components.get(StellarBribesComponent)!
+                        .get(PORT_ID)).toBe(until);
+                    const { lands, blocked } = pressLand(world);
+                    expect(blocked).toEqual([]);
+                    expect(lands.length).toBe(1);
+                }, 30_000);
+
+                it('a counter stays on the table, and paying it on the new '
+                    + 'hull leaves the traded-in hull\'s maps as they were',
+                    async () => {
+                        const { world, ship } = await shutOutHarness();
+                        ship.components.set(GameDateComponent,
+                            dayWhere(true));
+                        applyHail(world, undefined,
+                            { kind: 'lowerPrice', target: PORT });
+                        const oldHaggle =
+                            ship.components.get(StellarHaggleComponent)!;
+                        expect(oldHaggle.get(PORT_ID))
+                            .toEqual({ countered: true, withdrawn: false });
+
+                        const hull = await changeHull(path, world, ship);
+                        const credits = hull.components
+                            .get(CreditsComponent)!.credits;
+                        // Accept Price pays the 0x8000 port's counter:
+                        // 4,000 -> 3,000.
+                        applyHail(world, undefined,
+                            { kind: 'bribe', target: PORT });
+                        expect(hull.components.get(CreditsComponent)!.credits)
+                            .toEqual(credits - 3_000);
+                        expect(hull.components.get(StellarHaggleComponent)!
+                            .has(PORT_ID)).toBeFalse();
+                        expect(pressLand(world).blocked).toEqual([]);
+
+                        // The hull left behind shares no map with the one
+                        // flown away: its haggle and (lack of) clearance
+                        // are as they were at the trade.
+                        expect(ship.components.get(StellarHaggleComponent))
+                            .toBe(oldHaggle);
+                        expect([...oldHaggle]).toEqual([[PORT_ID,
+                            { countered: true, withdrawn: false }]]);
+                        expect(ship.components.has(StellarBribesComponent))
+                            .toBeFalse();
+                    }, 30_000);
+            });
+        }
+    });
 });
 
 describe('planet bribes: a fresh refusal lasts the system visit (reference '

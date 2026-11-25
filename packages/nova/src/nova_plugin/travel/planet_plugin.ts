@@ -357,6 +357,10 @@ export function hypergateRequestOnline(stellarId: string, pilotUuid: string,
  * Expiry is compared against TimeResource, never Date.now, and lapsed entries
  * are simply not honoured rather than pruned, so no system has to run to keep
  * the map correct and two peers cannot prune on different ticks.
+ *
+ * The pilot's, not the hull's: it follows the pilot onto a new hull
+ * (missions/mission_ship_change.ts's PLAYER_STATE_COMPONENTS), by
+ * reference, so every write replaces the map rather than editing it.
  */
 export const StellarBribesType = map(t.string, t.number);
 export type StellarBribes = t.TypeOf<typeof StellarBribesType>;
@@ -379,7 +383,8 @@ export const StellarBribesComponent =
  * Player state like StellarBribes: written only by applyHail on the tick
  * every peer applies the lowerPrice / bribe record, serialized and
  * delta-synced so the comm dialog quotes and refuses what the simulation
- * will.
+ * will. Like StellarBribes it follows the pilot onto a new hull by
+ * reference within the visit, so every write replaces the map.
  */
 export const StellarHaggleEntryType = t.type({
     countered: t.boolean,

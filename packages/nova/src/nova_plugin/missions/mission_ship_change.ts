@@ -32,7 +32,8 @@ import {
 } from '../ship/index.js';
 import {
     GateArrivalComponent, JumpComponent, JumpRouteComponent,
-    MultiJumpContinueComponent, PlanetTargetComponent, SystemVisitComponent,
+    MultiJumpContinueComponent, PlanetTargetComponent, StellarBribesComponent,
+    StellarHaggleComponent, SystemVisitComponent,
 } from '../travel/index.js';
 import { sweepableEscorts, sweepJumpingEscort } from '../escorts/index.js';
 import { ContrabandScannedComponent } from '../npc/index.js';
@@ -182,6 +183,23 @@ export const PLAYER_STATE_COMPONENTS: readonly Component<any>[] = [
     // takeoff. Unmeasured for a ship purchase. A number, set (never
     // mutated) at each crossing, so safe to share.
     SystemVisitComponent,
+    // ... and the pilot's haggles with this system's planets
+    // (travel/planet_plugin.ts's StellarHaggle: a counter on the table, a
+    // withdrawal that refuses every later offer this visit), which the
+    // crossing into another system is the only thing to end (pilot/
+    // transition_prep.ts). A hull bought at the port, swapped from storage
+    // or changed by a set string is still the same visit, so a planet that
+    // withdrew keeps refusing. Unmeasured for a ship purchase, like the
+    // visit itself. Replaced, never mutated (encounters/hail_plugin.ts's
+    // setStellarHaggle and applyPlanetBribe write a new map), so safe to
+    // share.
+    StellarHaggleComponent,
+    // The landing clearance the pilot BOUGHT (travel/planet_plugin.ts's
+    // StellarBribes: a stellar's NOVA id -> when the reprieve lapses). The
+    // pilot paid the planet, not the hull: a ship bought on the pad
+    // before lift-off still lands on the bribed port. Replaced, never
+    // mutated (applyPlanetBribe writes a new map), so safe to share.
+    StellarBribesComponent,
     // The days this pilot last saw each system's reinforcement fleet
     // called (player/reinforcement_calls.ts): the pilot's cooldown, not
     // the hull's. Replaced, never mutated (spawn/reinforcements.ts), so
