@@ -51,11 +51,13 @@ import { Starmap, OpenStarmapOptions } from './starmap.js';
  * apply immediately. Let's fix this generally for anything that reads
  * player data when docked."
  *
- * The synthetic scenario's Coldharbour mission computer lists exactly two
- * jobs, mutually exclusive on b107 (each `!b107` in its AvailBits, `b107`
- * in its OnAccept): the Refuge Run charter (an active mission bound for
- * Halden Refuge, in Ossory Shoal) and the Retainer (a one-shot that
- * auto-aborts at accept and pays 1,500 credits there).
+ * The synthetic scenario's Coldharbour mission computer lists two jobs
+ * mutually exclusive on b107 (each `!b107` in its AvailBits, `b107` in its
+ * OnAccept): the Refuge Run charter (an active mission bound for Halden
+ * Refuge, in Ossory Shoal) and the Retainer (a one-shot that auto-aborts
+ * at accept and pays 1,500 credits there) — and a third, the Harbour
+ * Tally, which b107 leaves alone, so the board stays open after either
+ * charter accept (an accept that empties it closes it, #324).
  */
 describe('docked readers of the player\'s data, mid-visit', () => {
     beforeAll(() => installHeadlessPixi());
@@ -63,6 +65,7 @@ describe('docked readers of the player\'s data, mid-visit', () => {
     const COLDHARBOUR = SYNTHETIC.planets.coldharbour;
     const CHARTER = SYNTHETIC.missions.refugeCharter;
     const RETAINER = SYNTHETIC.missions.charterRetainer;
+    const TALLY = SYNTHETIC.missions.harbourTally;
     const CREDITS = 20_000;
 
     afterEach(() => {
@@ -167,14 +170,14 @@ describe('docked readers of the player\'s data, mid-visit', () => {
         + 'is accepted, in the same BBS visit', async () => {
             const landed = await landedAtColdharbour();
             const { board, closed } = await openBoard(landed);
-            expect(listed(board)).toEqual([CHARTER, RETAINER]);
+            expect(listed(board)).toEqual([CHARTER, RETAINER, TALLY]);
 
             acceptListing(board, CHARTER);
 
             expect(landed.transaction.state.missions.has(CHARTER)).toBeTrue();
             // b107 is set in the working copy, so the Retainer's `!b107`
             // fails NOW — not only after the visit is released.
-            expect(listed(board)).toEqual([]);
+            expect(listed(board)).toEqual([TALLY]);
             // ...and it cannot be taken by a stale selection either.
             expect(landed.transaction.state.credits.credits).toBe(CREDITS);
             await leave(board, closed);
@@ -187,7 +190,7 @@ describe('docked readers of the player\'s data, mid-visit', () => {
             const landed = await landedAtColdharbour();
             const { board, closed } = await openBoard(landed);
             acceptListing(board, RETAINER);
-            expect(listed(board)).toEqual([]);
+            expect(listed(board)).toEqual([TALLY]);
             await leave(board, closed);
         });
 
@@ -201,7 +204,7 @@ describe('docked readers of the player\'s data, mid-visit', () => {
             const offers = rollOffers(session, landed.universe,
                 LOCATION_MISSION_COMPUTER);
             expect(offers.map(offer => offer.data.id))
-                .toEqual([CHARTER, RETAINER]);
+                .toEqual([CHARTER, RETAINER, TALLY]);
             const shown: string[] = [];
             const popup = {
                 show: async (text: string) => {

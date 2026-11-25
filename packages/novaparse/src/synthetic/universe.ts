@@ -59,6 +59,8 @@ export const MISN = {
     refugeCharter: 137, charterRetainer: 138,
     silentSummons: 139, dockWindfall: 140,
     musterCall: 141, musterReport: 142,
+    harbourTally: 143, charterPostBag: 144, charterToast: 145,
+    charterManifest: 146,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132, muster: 133 } as const;
@@ -1686,6 +1688,83 @@ export const MISNS: MisnDef[] = [
         briefText: "Report to Halden Refuge in your new Warden.",
         compText: "The muster clerk logs your arrival.",
         quickBrief: "Report to Halden Refuge.",
+    },    // --- #324: what an accept may change about the rest of a landing's
+    // offers. A third Coldharbour BBS listing the charter bit leaves
+    // alone (so a charter accept withdraws its twin and the board stays
+    // open on the tally), and three offers that only qualify once b107
+    // is set: a BBS job, a bar offer and a trade-center offer. The
+    // original adds none of them in the visit whose accept set the bit;
+    // they are offered from the next landing on (reference "#324 mission
+    // BBS after an accept, wave 21").
+    {
+        id: MISN.harbourTally, name: "Harbour Tally",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.missionComputer,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: SPOB.port, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 500, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: "",
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "The harbourmaster wants the day's catch tally carried "
+            + "to Port Amberline.",
+        briefText: "",
+        compText: "The tally is logged at Port Amberline.",
+        quickBrief: "Carry the catch tally to Port Amberline.",
+    },
+    {
+        id: MISN.charterPostBag, name: "Charter Post Bag",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.missionComputer,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: SPOB.port, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 800, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: 0,
+        availBits: `b${BITS.charterSigned}`,
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "Chartered captains may carry the Compact's second post "
+            + "bag to Port Amberline.",
+        briefText: "",
+        compText: "The post bag is delivered.",
+        quickBrief: "Carry the second post bag to Port Amberline.",
+    },
+    {
+        id: MISN.charterToast, name: "Charter Toast",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.bar,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 0, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: MISN_FLAGS.autoAbortOnBoard,
+        availBits: `b${BITS.charterSigned}`,
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "The fishermen raise a glass to the new charter captain. "
+            + "Join them?",
+        briefText: "",
+        compText: "", quickBrief: "",
+    },
+    {
+        id: MISN.charterManifest, name: "Charter Manifest",
+        availStel: SPOB.coldharbour, availLoc: AVAIL_LOC.tradeCenter,
+        availRecord: 0, availRating: -1, availRandom: 100,
+        travelStel: -1, returnStel: -1,
+        cargoType: -1, cargoQty: -1, pickupMode: -1, dropoffMode: -1,
+        payVal: 0, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
+        shipBehav: -1, shipStart: 0, compGovt: -1, compReward: 0,
+        timeLimit: -1, canAbort: 1, flags: MISN_FLAGS.autoAbortOnBoard,
+        availBits: `b${BITS.charterSigned}`,
+        onAccept: "", onSuccess: "", onFailure: "", onAbort: "",
+        dispWeight: 0,
+        offerText: "The exchange clerk asks the charter captain to sign "
+            + "the season's manifest.",
+        briefText: "",
+        compText: "", quickBrief: "",
     },
 ];
 
