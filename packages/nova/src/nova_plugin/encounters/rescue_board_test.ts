@@ -19,7 +19,9 @@ import { novaDataInstalled, requireNovaData } from '../../test_support/nova_data
 import { deriveEntityComponents, GovtComponent } from '../core/index.js';
 import { missionCargoName } from '../missions/index.js';
 import { makeSystem } from '../make_system.js';
-import { SystemHoldComponent } from '../npc/index.js';
+import {
+    NpcComponent, SystemHoldComponent, waitingForRescue,
+} from '../npc/index.js';
 import {
     ActiveMission, CreditsComponent, GOAL_BOARD, GOAL_RESCUE,
     missionCargoKey, MissionsComponent, MissionShipComponent, ShipControlEvent,
@@ -89,7 +91,7 @@ describe('boarding a rescue ship', () => {
      * board square apart, everyone aligned.
      */
     async function rescueWorld(mission: ActiveMission = rescueMission(),
-        { untethered = false } = {}) {
+        { untethered = false, waiting = false } = {}) {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
             'worker', { npcs: false });
@@ -113,6 +115,11 @@ describe('boarding a rescue ship', () => {
             ...(untethered ? { untethered: true } : {}),
         });
         hulk.components.set(SystemHoldComponent, { reason: 'rescue' });
+        if (waiting) {
+            // A ShipStart-2 rescue ship: live, with a brain to decide
+            // nothing with until it is released.
+            hulk.components.set(NpcComponent, { aiType: 3 });
+        }
 
         for (const [uuid, ship] of [[OWNER, owner], [RIVAL, rival],
             [HULK, hulk]] as const) {
@@ -122,10 +129,14 @@ describe('boarding a rescue ship', () => {
         world.step();
         owner.components.get(TargetComponent)!.target = HULK;
         rival.components.get(TargetComponent)!.target = HULK;
-        // A hulk, as mission_ship_spawn makes a rescue target.
-        hulk.components.get(ArmorComponent)!.current = 1;
-        hulk.components.get(ShieldComponent)!.current = 0;
-        hulk.components.set(DisabledComponent, { repairAt: null, hulk: true });
+        // A hulk, as mission_ship_spawn makes a rescue target (unless it
+        // is WAITING: ShipStart 2).
+        if (!waiting) {
+            hulk.components.get(ArmorComponent)!.current = 1;
+            hulk.components.get(ShieldComponent)!.current = 0;
+            hulk.components.set(DisabledComponent,
+                { repairAt: null, hulk: true });
+        }
         world.step();
 
         const blocked: string[] = [];
@@ -185,6 +196,53 @@ describe('boarding a rescue ship', () => {
             expect(hulk.components.get(SystemHoldComponent)?.reason)
                 .toBe('rescue');
         });
+
+        it('a WAITING (ShipStart 2) rescue ship sits still, is boarded where '
+            + 'it sits, and flies off once the cargo is out (reference '
+            + 'Contraband / rescue / A14, wave 19, finding 4)', async () => {
+                const { world, owner, hulk, blocked, retrieved } =
+                    await rescueWorld(rescueMission(), { waiting: true });
+                expect(waitingForRescue(hulk)).toBeTrue();
+                const at = () => hulk.components
+                    .get(MovementStateComponent)!.position;
+                const before = at();
+                for (let i = 0; i < 120; i++) {
+                    world.step();
+                }
+                // Waiting: still where it was, deciding nothing.
+                expect(at().subtract(before).length).toBeLessThan(1);
+                expect(hulk.components.get(NpcComponent)!.mode)
+                    .toBeUndefined();
+                expect(hulk.components.get(ShieldComponent)!.percent)
+                    .toBe(100);
+
+                press(world, OWNER);
+                expect(retrieved).toEqual([CARGO_TYPE]);
+                expect(blocked).toEqual([]);
+                expect(active(owner).cargoLoaded).toBeTrue();
+                expect(active(owner).shipObjective!.complete).toBeTrue();
+                // Released: no hold, never disabled, on its way out.
+                expect(hulk.components.has(SystemHoldComponent)).toBeFalse();
+                expect(hulk.components.has(DisabledComponent)).toBeFalse();
+                expect(hulk.components.get(NpcComponent)!.mode)
+                    .toBe('depart');
+                for (let i = 0; i < 90; i++) {
+                    world.step();
+                }
+                expect(!world.entities.has(HULK)
+                    || at().subtract(before).length > 20).toBeTrue();
+            });
+
+        it('a waiting rescue ship refuses a rival, and nobody plunders it',
+            async () => {
+                const { world, hulk, blocked, retrieved } = await rescueWorld(
+                    rescueMission(), { waiting: true });
+                press(world, RIVAL);
+                expect(retrieved).toEqual([]);
+                expect(blocked).toEqual(["You can't board this ship."]);
+                expect(hulk.components.has(BoardedComponent)).toBeFalse();
+                expect(waitingForRescue(hulk)).toBeTrue();
+            });
 
         it('refuses every later press with the catch-all line', async () => {
             const { world, owner, blocked, retrieved } = await rescueWorld();

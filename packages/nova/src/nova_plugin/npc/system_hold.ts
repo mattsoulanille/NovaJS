@@ -2,6 +2,7 @@ import * as t from 'io-ts';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { openEnum } from '../../common/open_enum.js';
+import { DisabledComponent } from '../ship/disabled_component.js';
 
 /**
  * ============================================================================
@@ -155,4 +156,21 @@ export const SystemHoldComponent =
  * its delete-at-the-edge fallback, and the specs. */
 export function heldInSystem(entity: Entity): boolean {
     return entity.components.has(SystemHoldComponent);
+}
+
+/**
+ * Whether this ship is a rescue target WAITING for the player: held for
+ * its rescue ('rescue') but NOT disabled. That is how a mïsn ShipStart 2
+ * rescue ship starts (missions/mission_ship_spawn.ts): reference
+ * "Contraband / rescue / A14, wave 19", finding 4 — the target panel read
+ * "<name>, Waiting", the ship sat still about 900 px from the port with
+ * full shields, and was boarded where it sat; the stock "Rescue Raczak"
+ * (nova:394, ShipStart 2) read "Waiting" too (wave 13). A waiting ship
+ * holds still and does nothing else (NpcDecisionSystem, NpcSteeringSystem)
+ * until the retrieval releases it (encounters/rescue_board.ts). Derived
+ * from synced components only, so no field of its own.
+ */
+export function waitingForRescue(entity: Entity): boolean {
+    return entity.components.get(SystemHoldComponent)?.reason === 'rescue'
+        && !entity.components.has(DisabledComponent);
 }

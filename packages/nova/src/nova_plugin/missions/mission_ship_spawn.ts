@@ -47,7 +47,9 @@ import { TargetComponent } from '../ship/index.js';
  *    time from the edge (a ships-jumping-in feel without a timer).
  *  - 0 (randomly in the system): scattered in the gameplay box.
  *  - 2 (randomly, cloaked): scattered; spawning pre-cloaked is a
- *    documented gap (NPCs don't manage cloaks yet).
+ *    documented gap (NPCs don't manage cloaks yet). A RESCUE ship
+ *    (ShipGoal 5) with it starts live and WAITING rather than adrift
+ *    (reference "Contraband / rescue / A14, wave 19"; buildShip).
  *  - -1..-16 (on a nav default): nav defaults aren't modeled;
  *    scattered (documented gap).
  *
@@ -112,6 +114,10 @@ import { TargetComponent } from '../ship/index.js';
  * objective is complete or failed, so a boarded sample-carrier or a
  * chased-down bounty is free to go about its business again.
  */
+
+/** mïsn ShipStart 2: "Appear randomly, cloaked" (Bible). A rescue ship
+ * with it starts WAITING, not adrift (see buildShip). */
+export const SHIP_START_RANDOM_CLOAKED = 2;
 
 /** Sim time (ms) that never arrives: suppresses NPC auto-departure.
  * A large finite number (not Infinity) so it survives JSON codecs. */
@@ -367,13 +373,27 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     // applied unconditionally — a rescue target of an ordinary trading
     // govt is still found adrift. Idempotent with the derelict-govt path
     // above, which writes the identical components.
+    //
+    // EXCEPT A ShipStart 2 ship ("appear randomly, cloaked"), which is
+    // LIVE: reference "Contraband / rescue / A14, wave 19", finding 4 —
+    // the target panel read "UFS Enterprise, Waiting", the ship sat still
+    // about 900 px from the port, undisabled, and after the retrieval
+    // showed Shield 100% and flew off; the stock "Rescue Raczak" (nova:394,
+    // ShipStart 2) read "Waiting" too (wave 13). So it keeps its full
+    // shields and only the hold below, which makes it WAIT (system_hold.ts
+    // waitingForRescue: it holds still and decides nothing) until the
+    // retrieval releases it (encounters/rescue_board.ts). It spawns
+    // scattered like ShipStart 0, uncloaked (the kit ship had no cloaking
+    // device; whether one WITH a cloak starts cloaked is open).
     if (options.goal === GOAL_RESCUE) {
-        makeHulk(ship, {
-            armor: shipData.physics.armor,
-            armorRecharge: shipData.physics.armorRecharge,
-            shield: shipData.physics.shield,
-            shieldRecharge: shipData.physics.shieldRecharge,
-        });
+        if (options.shipStart !== SHIP_START_RANDOM_CLOAKED) {
+            makeHulk(ship, {
+                armor: shipData.physics.armor,
+                armorRecharge: shipData.physics.armorRecharge,
+                shield: shipData.physics.shield,
+                shieldRecharge: shipData.physics.shieldRecharge,
+            });
+        }
         // ...and it STAYS here until it has been rescued (Matthew's
         // ruling: a ship that needs refuelling must not leave before it
         // is refuelled). Belt and braces over the hulk state and the

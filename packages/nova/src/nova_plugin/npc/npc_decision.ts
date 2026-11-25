@@ -54,7 +54,7 @@ import {
     CargoComponent, cargoUsed, OutfitsStateComponent, ShipComponent,
     ShipDataComponent, ShipPhysicsComponent,
 } from '../ship/index.js';
-import { SystemHoldComponent } from './system_hold.js';
+import { SystemHoldComponent, waitingForRescue } from './system_hold.js';
 import {
     chooseMiningJob, isMinerHull, miningReach, scoopsDebris,
 } from './npc_mining.js';
@@ -309,6 +309,17 @@ export const NpcDecisionSystem = new System({
             // happened for any ship that is jumping: 'flee' and 'depart'
             // are only ever set further down this same step, past that
             // line. So no other NPC's roll shifts.
+            return;
+        }
+        if (waitingForRescue(entity)) {
+            // A ShipStart-2 rescue ship WAITING for the player (reference
+            // "Contraband / rescue / A14, wave 19": "Waiting", sitting
+            // still with full shields until boarded). It decides nothing
+            // until the retrieval releases it (rescue_board.ts), and holds
+            // still (NpcSteeringSystem). GUESS: it does not fight back
+            // either (unmeasured). Ahead of every PRNG draw, the same way
+            // on every peer.
+            npc.mode = undefined;
             return;
         }
         const govtData = lookupGovt(gameData, govt);

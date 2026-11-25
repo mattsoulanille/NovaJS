@@ -68,7 +68,7 @@ import {
 import { PlayerSoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { PersComponent } from '../spawn/index.js';
-import { SystemHoldComponent } from '../npc/index.js';
+import { SystemHoldComponent, waitingForRescue } from '../npc/index.js';
 
 /** Interface beep when a plunder session opens (snd nova:390), heard only
  * by the boarding player (emitted targeted at the boarder). */
@@ -523,9 +523,18 @@ const BoardingGateSystem = new System({
         const aligned = !!targetMovement
             && axesAligned(movement.rotation, targetMovement.rotation);
 
+        // A rescue ship WAITING for its pilot (mïsn ShipStart 2: live, not
+        // adrift; npc/system_hold.ts's waitingForRescue) is boarded where
+        // it sits, as a hulk is (reference "Contraband / rescue / A14,
+        // wave 19": one `b` at 8 px retrieved the cargo). Only as a live
+        // rescue ship (rescueBoard below), never for a plunder.
+        const waitingRescue = !!targetEntity && waitingForRescue(targetEntity)
+            && rescueBoard(targetEntity, targetUuid!, uuid, entities).kind
+            !== 'none';
         const reason = boardingBlockedReason({
             hasTarget: !!targetEntity && !!targetShipData && !!targetMovement,
-            targetDisabled: !!targetEntity?.components.has(DisabledComponent),
+            targetDisabled: !!targetEntity?.components.has(DisabledComponent)
+                || waitingRescue,
             targetCrew: targetShipData?.crew ?? 0,
             distance,
             range,
@@ -549,7 +558,7 @@ const BoardingGateSystem = new System({
             return;
         }
         if (rescue.kind === 'retrieve') {
-            retrieveRescueCargo(rescue, targetUuid!);
+            retrieveRescueCargo(rescue, targetUuid!, targetEntity!);
             emit(MissionCargoRetrievedEvent,
                 { cargoType: rescue.active.cargoType }, [uuid]);
             return;

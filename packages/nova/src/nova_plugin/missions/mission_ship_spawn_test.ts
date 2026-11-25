@@ -36,7 +36,8 @@ import {
     shipDied,
     ShipObjective,
 } from '../player/index.js';
-import { SystemHoldComponent } from '../npc/index.js';
+import { SystemHoldComponent, waitingForRescue } from '../npc/index.js';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { FormationComponent, NpcComponent } from '../npc/index.js';
 import {
     ActiveMission, MissionsComponent, PendingAutoAbortShipsComponent,
@@ -263,7 +264,32 @@ describe('buildMissionShipSpawns', () => {
             'nova:128', makeGameData(), makeUniverse());
         expect(ship.components.get(SystemHoldComponent))
             .toEqual({ reason: 'rescue' });
+        // ShipStart 0: adrift, a hulk.
+        expect(ship.components.get(DisabledComponent)?.hulk).toBeTrue();
+        expect(waitingForRescue(ship)).toBeFalse();
     });
+
+    it('a ShipStart-2 rescue ship spawns LIVE and WAITING, full shields, '
+        + 'held (reference Contraband / rescue / A14, wave 19, finding 4)',
+        async () => {
+            const player = makePlayer(makeObjective(
+                { goal: GOAL_RESCUE, total: 1, shipStart: 2 }));
+            const [ship] = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse());
+            expect(ship.components.has(DisabledComponent)).toBeFalse();
+            expect(ship.components.get(SystemHoldComponent))
+                .toEqual({ reason: 'rescue' });
+            expect(waitingForRescue(ship)).toBeTrue();
+            const velocity = ship.components.get(MovementStateComponent)!
+                .velocity;
+            expect(velocity.x).toBe(0);
+            expect(velocity.y).toBe(0);
+            // Any other goal with ShipStart 2 is not held as a rescue.
+            const [other] = await buildMissionShipSpawns(
+                makePlayer(makeObjective({ total: 1, shipStart: 2 })), OWNER,
+                'nova:128', makeGameData(), makeUniverse());
+            expect(waitingForRescue(other)).toBeFalse();
+        });
 
     it('spawns in a STACKED DUPLICATE of the frozen objective system '
         + '(mïsn 737 frozen to nova:765 while the player enters nova:308)',

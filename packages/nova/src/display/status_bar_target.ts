@@ -14,6 +14,7 @@ import {
     MissionShipComponent, PlayerEscortComponent, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { PersComponent } from "../nova_plugin/spawn/index.js";
+import { SystemHoldComponent } from "../nova_plugin/npc/index.js";
 import type { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { enhancementEnabled } from "../enhancements.js";
 import { AnimationGraphic } from "./animation_graphic.js";
@@ -25,7 +26,9 @@ import {
 } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 import { targetIdentity } from "./target_identity.js";
-import { targetReadout } from "./target_readout.js";
+import {
+    TARGET_DISABLED_TEXT, TARGET_WAITING_TEXT, targetReadout,
+} from "./target_readout.js";
 import { DrawStatusBarSecondaryWeapon } from "./status_bar_weapon.js";
 
 /**
@@ -148,7 +151,7 @@ export class TargetPane {
 
         // Replaces the whole shield/armor readout while the target is
         // disabled (bright text, per the original game's target pane).
-        const disabled = new PIXI.Text('Disabled', fonts.bright);
+        const disabled = new PIXI.Text(TARGET_DISABLED_TEXT, fonts.bright);
         disabled.anchor.y = 1;
         disabled.position.x = 6;
         disabled.position.y = size[1] - 3;
@@ -235,7 +238,8 @@ export class TargetPane {
     }
 
     drawTarget(name: string, shield?: number, armor?: number,
-        shipGraphic?: AnimationGraphic, disabled = false,
+        shipGraphic?: AnimationGraphic,
+        disabled: boolean | 'waiting' = false,
         subtitle = "", government = "", targetPict: string | null = null,
         liveView = true) {
         // Mid-reload (an ïntf swap) the texts are destroyed and `texts`
@@ -258,7 +262,15 @@ export class TargetPane {
         texts.govt.visible = government.length > 0;
 
         const readout = targetReadout(disabled, shield, armor);
-        texts.disabled.visible = readout.kind === 'disabled';
+        // "Disabled" and a waiting rescue ship's "Waiting" share the slot
+        // (target_readout.ts).
+        texts.disabled.visible = readout.kind === 'disabled'
+            || readout.kind === 'waiting';
+        const status = readout.kind === 'waiting'
+            ? TARGET_WAITING_TEXT : TARGET_DISABLED_TEXT;
+        if (texts.disabled.text !== status) {
+            texts.disabled.text = status;
+        }
         texts.shield.visible = readout.kind === 'shield';
         texts.armor.visible = readout.kind === 'armor';
         texts.percent.visible = readout.kind === 'shield'
@@ -343,7 +355,7 @@ const TargetQuery = new Query([ShipDataComponent, Optional(ShieldComponent),
     Optional(ArmorComponent), Optional(AnimationGraphicComponent),
     Optional(PersComponent), Optional(DisabledComponent),
     Optional(GovtComponent), Optional(PlayerEscortComponent),
-    Optional(MissionShipComponent)] as const);
+    Optional(MissionShipComponent), Optional(SystemHoldComponent)] as const);
 export const DrawStatusBarTarget = new System({
     name: 'DrawStatusBarTarget',
     args: [StatusBarResource, TargetComponent, RunQuery,
@@ -356,7 +368,7 @@ export const DrawStatusBarTarget = new System({
         const result = runQuery(TargetQuery, target)[0];
         if (result) {
             const [shipData, shield, armor, shipGraphic, pers, disabled, govt,
-                playerEscort, missionShip] = result;
+                playerEscort, missionShip, hold] = result;
             // The government shown lower-right of the target pane. The original
             // shows the gövt's short Target Code (gövt TMPL offset 68) — "Pyro"
             // for "Pyrogenesis Skymining", " Fed." for "Federation" — rather
@@ -389,7 +401,11 @@ export const DrawStatusBarTarget = new System({
             // (and përs) names — the original never shows it in the target box.
             statusBar.target.drawTarget(displayName(identity.name),
                 shield?.percent, armor?.percent, shipGraphic,
-                disabled !== undefined, identity.subtitle, government,
+                // A rescue ship held for its pilot but not adrift is
+                // WAITING (npc/system_hold.ts's waitingForRescue).
+                disabled !== undefined ? true
+                    : hold?.reason === 'rescue' ? 'waiting' : false,
+                identity.subtitle, government,
                 shipData.targetPict ?? null,
                 enhancementEnabled('enhLiveTargetView'));
         } else {

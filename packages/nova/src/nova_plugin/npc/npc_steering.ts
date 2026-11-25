@@ -26,7 +26,7 @@ import {
 } from './npc_mining.js';
 import { EscortLandingComponent } from '../player/index.js';
 import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
-import { heldInSystem } from './system_hold.js';
+import { heldInSystem, waitingForRescue } from './system_hold.js';
 import {
     SHUTTLE_ARRIVE_RADIUS, SHUTTLE_DWELL_MS, SHUTTLE_ONE_STOP_DWELL_MS,
     SHUTTLE_REST_SPEED, shuttleTurnPoint,
@@ -393,6 +393,13 @@ export const NpcSteeringSystem = new System({
         }
         if (escortCommand) {
             return; // Player-commanded: see escort_command_plugin.
+        }
+        if (waitingForRescue(entity)) {
+            // A ShipStart-2 rescue ship waiting for the player holds still
+            // where it is (system_hold.ts; reference wave 19: "Waiting").
+            steerArrive(movement, physics,
+                Position.fromVectorLike(movement.position), 1, 1);
+            return;
         }
         // Escorts holding formation are steered by FormationSystem —
         // unless they are off doing something of their own, a plunder run

@@ -10,6 +10,9 @@ import {
 import {
     CargoComponent, cargoUsed, ShipPhysicsComponent,
 } from '../ship/index.js';
+import {
+    NpcComponent, SystemHoldComponent, waitingForRescue,
+} from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -103,16 +106,29 @@ export function rescueBoard(target: Entity, targetUuid: string,
 /**
  * The retrieval itself: the mission cargo into the owner's hold under the
  * key the landing's drop-off reads, and the rescue goal credited for this
- * hull. The hulk is left exactly as it is — disabled, held, unboarded.
+ * hull. A HULK is left exactly as it is — disabled, held, unboarded. A
+ * ship that was WAITING (mïsn ShipStart 2, live: npc/system_hold.ts's
+ * waitingForRescue) is RELEASED and flies off: reference "Contraband /
+ * rescue / A14, wave 19", finding 4 — after "You retrieved Admiral Raczak
+ * from this ship." it showed Shield 100% and was 250 px away 1.5 s later.
+ * GUESS: it leaves the system (mode 'depart'; the reference watched only
+ * the first seconds).
  */
 export function retrieveRescueCargo(
     retrieve: Extract<RescueBoard, { kind: 'retrieve' }>,
-    targetUuid: string): void {
+    targetUuid: string, target?: Entity): void {
     const { owner, active, objective } = retrieve;
     owner.components.get(CargoComponent)!
         .set(missionCargoKey(active.id), active.cargoQty);
     active.cargoLoaded = true;
     shipBoarded(objective, targetUuid);
+    if (target && waitingForRescue(target)) {
+        target.components.delete(SystemHoldComponent);
+        const npc = target.components.get(NpcComponent);
+        if (npc) {
+            npc.mode = 'depart';
+        }
+    }
 }
 
 /**

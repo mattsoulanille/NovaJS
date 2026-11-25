@@ -7,6 +7,15 @@ describe('targetReadout (status bar target pane rule)', () => {
             expect(targetReadout(true, 50, 80)).toEqual({ kind: 'disabled' });
             expect(targetReadout(true, 0, 10)).toEqual({ kind: 'disabled' });
             expect(targetReadout(true)).toEqual({ kind: 'disabled' });
+            expect(targetReadout('disabled', 50)).toEqual({ kind: 'disabled' });
+        });
+
+    it("a waiting rescue ship reads 'Waiting' in the same slot (reference "
+        + 'Contraband / rescue / A14, wave 19: "UFS Enterprise, Waiting")',
+        () => {
+            expect(targetReadout('waiting', 100, 100))
+                .toEqual({ kind: 'waiting' });
+            expect(targetReadout('waiting')).toEqual({ kind: 'waiting' });
         });
 
     it('shows shield percent while any shield remains', () => {
