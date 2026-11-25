@@ -54,7 +54,7 @@ import {
     NpcComponent, PlayerPlunderedEvent,
 } from '../npc/index.js';
 import {
-    EscortLandingComponent, NO_DEAL, PlayerEscortComponent,
+    ammoStockOf, EscortLandingComponent, NO_DEAL, PlayerEscortComponent,
 } from '../player/index.js';
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecords } from '../reputation/index.js';
@@ -1168,7 +1168,8 @@ export function reassignCapturedWing(prizeUuid: string,
  */
 function convertToEscort(target: Entity, targetUuid: string,
     leaderUuid: string, leaderOwner: string | undefined,
-    leaderControlled: boolean, entities: EntityMap): void {
+    leaderControlled: boolean, entities: EntityMap,
+    gameData: SimulationGameDataInterface): void {
     const slot = nextFormationSlot(formationsIn(entities), leaderUuid);
     target.components.set(FormationComponent, { leader: leaderUuid, slot });
     target.components.set(EscortCommandComponent, { command: 'formation' });
@@ -1215,9 +1216,23 @@ function convertToEscort(target: Entity, targetUuid: string,
         // is known: this hull was TAKEN, not hired. It is what makes the
         // comm dialog offer "Sell Escort" for it and charge it no daily
         // wage (player_escort.ts's provenance; spaceport/escort_fees.ts).
+        //
+        // AMMO STOCK: the prize is now the player's own ship, so a port
+        // visit rearms it back up to the ammo it carries at THIS moment, not
+        // to capacity (player_escort.ts's OWNED ESCORT AMMO). The hulk is in
+        // the world, so its outfits are staged on every peer (see
+        // captureBayCandidates) and getCached is a deterministic read; an
+        // outfit that somehow is not staged is simply not in the snapshot,
+        // which leaves it alone at every restock.
+        const outfits = target.components.get(OutfitsStateComponent);
         target.components.set(PlayerEscortComponent,
             { player: leaderUuid, parent: leaderUuid,
-                provenance: 'captured', deal: NO_DEAL });
+                provenance: 'captured', deal: NO_DEAL,
+                ammoStock: ammoStockOf(
+                    [...outfits ?? []].map(([id, { count }]): [string, number] =>
+                        [id, count]),
+                    id => Boolean(gameData.data.Outfit.getCached(id)?.ammoFor)),
+            });
     }
     // Clear leftover hostility so a reverted-to-NPC escort (leader lost)
     // isn't still gunning for the ex-owner. The MODE goes with it: a
@@ -1346,7 +1361,8 @@ const BoardingActionSystem = new System({
             // very capture. So a prize whose attempt was allowed is kept.
             const owner = entity.components.get(MultiplayerData)?.owner;
             convertToEscort(target, boarding.target, uuid, owner,
-                entity.components.has(ControlledByComponent), entities);
+                entity.components.has(ControlledByComponent), entities,
+                gameData);
             boarding.capture = 'assigned';
             entity.components.delete(BoardingComponent);
             return;

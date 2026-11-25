@@ -143,6 +143,23 @@ export const PlayerEscort = t.intersection([t.type({
      * fleet the game has no provenance record for. See `escortProvenance`.
      */
     provenance: t.union([t.literal('hired'), t.literal('captured')]),
+    /**
+     * An OWNED escort's RESTOCK TARGET: `[outfit id, count]` for every ammo
+     * outfit (anything with an `ammoFor`, bay fighters included) the hull
+     * had aboard the moment it became an escort, sorted by id, zero counts
+     * left out. Matthew's ruling (2026-11-24): an owned escort that lands
+     * with the player is rearmed back UP to what the player left aboard,
+     * not to capacity (spaceport/escort_restock.ts). See
+     * {@link OWNED ESCORT AMMO} below for who writes it and when it goes.
+     *
+     * Only 'captured' escorts carry one; a hired escort restocks to
+     * capacity and never has it. OPTIONAL, AND MISSING ON A CAPTURED ESCORT
+     * MEANS "NOT YET TAKEN" (a save from before the field): the first
+     * restock writes the escort's current counts as its target and adds
+     * nothing (escort_restock.ts), so such an escort never fills to
+     * capacity. No save-version bump: the field is additive.
+     */
+    ammoStock: t.array(t.tuple([t.string, t.number])),
 })]);
 export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
 
@@ -237,9 +254,11 @@ export function escortSaleQueued(escort: Entity): boolean {
  * rebuild of that marker:
  *
  *   `provenance`   how the escort was acquired (hired / captured);
- *   `deal`         what is queued for the next departure (EscortDeal).
+ *   `deal`         what is queued for the next departure (EscortDeal);
+ *   `ammoStock`    an owned escort's restock target (what the player left
+ *                  aboard when it became an escort).
  *
- * Both are facts about the PLAYER'S RELATIONSHIP with this ship — how
+ * All are facts about the PLAYER'S RELATIONSHIP with this ship — how
  * they got it, and what they have decided to do with it at the next
  * departure — not about which ship it is currently keeping formation on.
  * Every site that rebuilds the marker goes through this or through
@@ -258,8 +277,62 @@ export function durableEscortFields(existing: PlayerEscort | undefined):
     return {
         ...(existing?.provenance !== undefined
             ? { provenance: existing.provenance } : {}),
+        ...(existing?.ammoStock !== undefined
+            ? { ammoStock: existing.ammoStock } : {}),
         deal: escortDeal(existing),
     };
+}
+
+/**
+ * ============================================================================
+ * OWNED ESCORT AMMO
+ * ============================================================================
+ *
+ * An OWNED escort is one whose provenance is 'captured': a prize kept at
+ * boarding ("Keep as Escort", boarding_plugin's convertToEscort), a stored
+ * ship sent along from the hangar (ship_storage's storedToEscort), or the
+ * pilot's own hull left behind as an escort in a hangar swap
+ * (swapWithEscort). It is the player's ship, so when it lands with them it
+ * is rearmed back up to what it had aboard when it BECAME an escort — the
+ * `ammoStock` snapshot — rather than to capacity, as a hired pilot's ship is
+ * (Matthew's ruling, 2026-11-24). The refill happens at the same lift-offs
+ * as a hired escort's (escort_restock.ts), under the same free-mass gate —
+ * min(snapshot, what fits) — and fuel and hull repair are the same for
+ * both.
+ *
+ * THE SNAPSHOT'S LIFETIME. Written where the hull becomes an escort (the
+ * three paths above). It rides the marker, so it is saved with the escort
+ * and survives landings, jumps and the carried rosters, and every re-stamp
+ * of the marker keeps it (durableEscortFields). It goes away with the
+ * escort: putting it into storage or swapping into it keeps only the stored
+ * record (which has no marker), so a later re-escort takes a fresh one. An
+ * escort UPGRADE replaces the whole loadout with the new class's stock
+ * outfits, so the settlement drops it and the next restock takes the new
+ * hull's counts (spaceport/escort_deals.ts).
+ */
+
+/** Whether `escort` is the player's own hull (provenance 'captured'). */
+export function isOwnedEscort(escort: Entity): boolean {
+    return escortProvenance(escort) === 'captured';
+}
+
+/**
+ * The ammoStock snapshot of `outfits`: every outfit `isAmmo` accepts with a
+ * count above zero, as `[id, count]` sorted by id. `isAmmo` is the caller's
+ * game-data lookup ("this outfit has an `ammoFor`"), synchronous so the
+ * simulation (boarding) can use its staged cache.
+ */
+export function ammoStockOf(outfits: Iterable<[string, number]>,
+    isAmmo: (id: string) => boolean): [string, number][] {
+    return [...outfits]
+        .filter(([id, count]) => count > 0 && isAmmo(id))
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+}
+
+/** `marker` without its ammoStock snapshot (every other field kept). */
+export function withoutAmmoStock(marker: PlayerEscort): PlayerEscort {
+    const { ammoStock: _dropped, ...rest } = marker;
+    return rest;
 }
 
 /**

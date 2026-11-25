@@ -54,6 +54,7 @@ import {
     carriedBatchMustHold, CarriedEscort, restoreFailedTransitionBatch,
     takeEscortsForTransition,
 } from '../spaceport/landed_escorts.js';
+import { takeMissingAmmoStock } from '../spaceport/escort_restock.js';
 import { resetOfferRolls } from '../spaceport/mission_offers.js';
 import { claimActiveSystem } from './active_system_claim.js';
 import {
@@ -308,6 +309,21 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
         // launched from its own bays comes back pointing at the LIVE
         // player rather than the pre-save uuid. Absent in a save written
         // before the field existed, in which case nothing is remapped.
+        // An OWNED escort saved before ammo snapshots existed gets one
+        // now, from what it was saved with, so it never rearms to capacity
+        // (escort_restock.ts's takeMissingAmmoStock). A failed outfit lookup
+        // writes nothing and leaves it to the first restock's backstop.
+        for (const { uuid: savedUuid, entity: escort } of restored) {
+            try {
+                await scope.race(takeMissingAmmoStock(escort, {
+                    getOutfit: id => gameData.data.Outfit.get(id),
+                }));
+            } catch (e) {
+                scope.check();
+                console.warn(`Saved escort ${savedUuid}: no ammo snapshot `
+                    + 'taken at load:', e);
+            }
+        }
         jumpEscorts.push(...restored.map(escort => ({
             ...escort, player: uuid, priorPlayer,
         })));

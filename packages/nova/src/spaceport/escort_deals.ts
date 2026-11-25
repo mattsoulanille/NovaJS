@@ -3,7 +3,7 @@ import { Entity } from 'nova_ecs/entity';
 import { replaceEscortShipClass } from '../nova_plugin/escorts/index.js';
 import {
     escortDeal, escortProvenance, NO_DEAL, PlayerEscort, PlayerEscortComponent,
-    withEscortDeal,
+    withEscortDeal, withoutAmmoStock,
 } from '../nova_plugin/player/index.js';
 import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
@@ -353,7 +353,15 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         // the ownership marker alone, but reading the marker after the
         // class has moved would invite exactly the confusion the stale
         // check above exists to catch.
-        clearDeals(entry.entity, marker);
+        //
+        // An OWNED escort's ammoStock snapshot goes with the old loadout:
+        // the upgrade replaces every outfit with the new class's stock ones,
+        // so what the player left aboard the old hull says nothing about the
+        // new one. The lift-off's restock, which runs after this settlement,
+        // finds no snapshot and takes the new hull's stock counts as its
+        // target (escort_restock.ts; player_escort.ts's OWNED ESCORT AMMO).
+        entry.entity.components.set(PlayerEscortComponent,
+            withoutAmmoStock(withEscortDeal(marker, NO_DEAL)));
         replaceEscortShipClass(entry.entity, pending, upgraded);
     }
 

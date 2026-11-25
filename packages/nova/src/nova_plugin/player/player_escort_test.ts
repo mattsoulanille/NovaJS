@@ -28,9 +28,10 @@ import { MissionShipComponent } from './mission_ship_component.js';
 import { FormationComponent } from '../npc/index.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import {
-    durableEscortFields, EscortDeal, escortDeal, EscortLandingComponent,
+    ammoStockOf, durableEscortFields, EscortDeal, escortDeal,
+    EscortLandingComponent,
     EscortPayrollComponent, NO_DEAL, PlayerEscort, PlayerEscortComponent,
-    withEscortDeal,
+    withEscortDeal, withoutAmmoStock,
 } from './player_escort.js';
 import {
     escortFollows, EscortJump, EscortJumpEvent, EscortLanded,
@@ -1109,5 +1110,17 @@ describe('EscortDeal on the PlayerEscort marker', () => {
             .toEqual({ deal: NO_DEAL });
         expect(durableEscortFields({ ...base, detached: true, deal: UPGRADE }))
             .toEqual({ provenance: 'captured', deal: UPGRADE });
+        // An owned escort's ammo snapshot is one of the durable facts.
+        expect(durableEscortFields({ ...base, ammoStock: [['a', 3]] }))
+            .toEqual({ provenance: 'captured', deal: NO_DEAL,
+                ammoStock: [['a', 3]] });
+    });
+
+    it('ammoStockOf keeps ammo with a count, sorted; withoutAmmoStock '
+        + 'drops only the snapshot', () => {
+        expect(ammoStockOf([['z', 2], ['gun', 1], ['a', 4], ['b', 0]],
+            id => id !== 'gun')).toEqual([['a', 4], ['z', 2]]);
+        expect(withoutAmmoStock({ ...base, ammoStock: [['a', 1]] }))
+            .toEqual(base);
     });
 });

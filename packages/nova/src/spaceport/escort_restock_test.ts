@@ -17,7 +17,11 @@ import {
 import { SourceComponent } from '../nova_plugin/combat/index.js';
 import { Stat } from '../nova_plugin/core/index.js';
 import {
+    NO_DEAL, PlayerEscort, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
+import {
     RestockGameData, restockCarriedEscorts, restockEscortEntity,
+    takeMissingAmmoStock,
 } from './escort_restock.js';
 
 function outfit(o: Partial<OutfitData> & { id: string }): OutfitData {
@@ -482,6 +486,34 @@ describe('escort restock', () => {
                 expect(samplesOf(entity)).toEqual(4);
             });
 
+        /**
+         * The two rules compose for an OWNED escort: it refills to
+         * min(its ammoStock snapshot, what fits the free mass).
+         */
+        describe('for an owned escort', () => {
+            function owned(samples: number, snapshot: number): Entity {
+                const entity = hyperioidEscort(samples);
+                entity.components.set(PlayerEscortComponent, {
+                    player: 'p', parent: 'p', provenance: 'captured',
+                    deal: NO_DEAL, ammoStock: [[SAMPLE, snapshot]],
+                });
+                return entity;
+            }
+
+            it('refills to the snapshot when it fits', async () => {
+                const entity = owned(1, 3);
+                await restockEscortEntity(entity, data);
+                // 3 tons free: the snapshot of 3, not 4 (all that fits).
+                expect(samplesOf(entity)).toEqual(3);
+            });
+
+            it('stops at the free mass below a larger snapshot', async () => {
+                const entity = owned(1, 10);
+                await restockEscortEntity(entity, data);
+                expect(samplesOf(entity)).toEqual(4);
+            });
+        });
+
         it('never trims a hull that is already over its mass', async () => {
             // A restock only tops up; the gate stops a pile growing.
             const entity = hyperioidEscort(32000);
@@ -544,5 +576,146 @@ describe('escort restock', () => {
             expect(entity.components.get(OutfitsStateComponent)!
                 .get('ir')!.count).toEqual(200);
         });
+    });
+});
+
+/**
+ * Matthew's ruling (2026-11-24): an OWNED escort — provenance 'captured',
+ * the player's own hull — rearms back up to the ammoStock snapshot taken
+ * when it became an escort, never to capacity. Hired escorts are the
+ * capacity specs above.
+ */
+describe('owned escort restock', () => {
+    const missile = outfit({ id: 'missile', ammoFor: 'launcher' });
+    const launcherOutfit = outfit({ id: 'rack', weapons: { launcher: 1 } });
+    const launcher = launcherWeapon({ id: 'launcher', maxAmmo: 20 });
+    const data = () => gameDataOf([missile, launcherOutfit], [launcher]);
+
+    function owned(outfits: OutfitsState,
+        ammoStock?: [string, number][], fuel?: Stat): Entity {
+        const entity = escortEntity(outfits, fuel);
+        const marker: PlayerEscort = {
+            player: 'p', parent: 'p', provenance: 'captured', deal: NO_DEAL,
+            ...(ammoStock ? { ammoStock } : {}),
+        };
+        entity.components.set(PlayerEscortComponent, marker);
+        return entity;
+    }
+
+    it('refills back up to the snapshot, not to capacity', async () => {
+        const outfits: OutfitsState = new Map([
+            ['rack', { count: 1 }], ['missile', { count: 0 }],
+        ]);
+        await restockEscortEntity(owned(outfits, [['missile', 7]]), data());
+        expect(outfits.get('missile')!.count).toEqual(7);
+    });
+
+    it('never trims ammo above the snapshot', async () => {
+        const outfits: OutfitsState = new Map([
+            ['rack', { count: 1 }], ['missile', { count: 12 }],
+        ]);
+        await restockEscortEntity(owned(outfits, [['missile', 7]]), data());
+        expect(outfits.get('missile')!.count).toEqual(12);
+    });
+
+    it('brings back an ammo outfit that was spent out of the map',
+        async () => {
+            const outfits: OutfitsState = new Map([['rack', { count: 1 }]]);
+            await restockEscortEntity(owned(outfits, [['missile', 3]]),
+                data());
+            expect(outfits.get('missile')!.count).toEqual(3);
+        });
+
+    it('leaves an ammo outfit the snapshot does not name alone',
+        async () => {
+            const outfits: OutfitsState = new Map([
+                ['rack', { count: 1 }], ['missile', { count: 2 }],
+            ]);
+            await restockEscortEntity(owned(outfits, []), data());
+            expect(outfits.get('missile')!.count).toEqual(2);
+        });
+
+    it('still refuels and repairs the hull', async () => {
+        const entity = owned(new Map(), [], stat(5, 300));
+        entity.components.set(ArmorComponent, stat(10, 100));
+        await restockEscortEntity(entity, data());
+        expect(entity.components.get(FuelComponent)!.current).toEqual(300);
+        expect(entity.components.get(ArmorComponent)!.current).toEqual(100);
+    });
+
+    it('counts its deployed fighters against the snapshot', async () => {
+        const fighters = outfit({ id: 'fighters', ammoFor: 'bay' });
+        const bayOutfit = outfit({ id: 'bayOutfit', weapons: { bay: 1 } });
+        const bay = launcherWeapon({ id: 'bay', maxAmmo: 8 });
+        const outfits: OutfitsState = new Map([
+            ['bayOutfit', { count: 1 }], ['fighters', { count: 0 }],
+        ]);
+        await restockEscortEntity(owned(outfits, [['fighters', 4]]),
+            gameDataOf([fighters, bayOutfit], [bay]), new Map([['bay', 3]]));
+        // Four in the bay when it became an escort, three still out:
+        // one goes back in, not four (and not the bay's eight).
+        expect(outfits.get('fighters')!.count).toEqual(1);
+    });
+
+    it('fills each of two outfits feeding one bay to its own count',
+        async () => {
+            const a = outfit({ id: 'a', ammoFor: 'bay' });
+            const b = outfit({ id: 'b', ammoFor: 'bay' });
+            const bay = launcherWeapon({ id: 'bay', maxAmmo: 10 });
+            const outfits: OutfitsState = new Map([
+                ['a', { count: 5 }], ['b', { count: 0 }],
+            ]);
+            // 'a' is over its snapshot; that does not stop 'b' refilling.
+            await restockEscortEntity(owned(outfits, [['a', 2], ['b', 3]]),
+                gameDataOf([a, b], [bay]));
+            expect(outfits.get('a')!.count).toEqual(5);
+            expect(outfits.get('b')!.count).toEqual(3);
+        });
+
+    it('takes its current counts as the target when it has no snapshot '
+        + '(a save from before the rule) and adds nothing', async () => {
+        const outfits: OutfitsState = new Map([
+            ['rack', { count: 1 }], ['missile', { count: 4 }],
+        ]);
+        const entity = owned(outfits);
+        await restockEscortEntity(entity, data());
+        expect(outfits.get('missile')!.count).toEqual(4);
+        expect(entity.components.get(PlayerEscortComponent)!.ammoStock)
+            .toEqual([['missile', 4]]);
+        // From then on it refills back up to that.
+        outfits.get('missile')!.count = 1;
+        await restockEscortEntity(entity, data());
+        expect(outfits.get('missile')!.count).toEqual(4);
+    });
+
+    it('takeMissingAmmoStock leaves hired escorts and existing snapshots '
+        + 'alone', async () => {
+        const hired = escortEntity(new Map([['missile', { count: 1 }]]));
+        hired.components.set(PlayerEscortComponent, {
+            player: 'p', deal: NO_DEAL, provenance: 'hired',
+        });
+        expect(await takeMissingAmmoStock(hired, data())).toBeFalse();
+        expect(hired.components.get(PlayerEscortComponent)!.ammoStock)
+            .toBeUndefined();
+
+        const stamped = owned(new Map([['missile', { count: 1 }]]),
+            [['missile', 9]]);
+        expect(await takeMissingAmmoStock(stamped, data())).toBeFalse();
+        expect(stamped.components.get(PlayerEscortComponent)!.ammoStock)
+            .toEqual([['missile', 9]]);
+    });
+
+    it('a hired escort still refills to capacity', async () => {
+        const outfits: OutfitsState = new Map([
+            ['rack', { count: 1 }], ['missile', { count: 0 }],
+        ]);
+        const entity = escortEntity(outfits);
+        entity.components.set(PlayerEscortComponent, {
+            player: 'p', deal: NO_DEAL, provenance: 'hired',
+            // Even a stray snapshot does not make a hire owned.
+            ammoStock: [['missile', 3]],
+        });
+        await restockEscortEntity(entity, data());
+        expect(outfits.get('missile')!.count).toEqual(20);
     });
 });

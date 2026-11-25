@@ -137,9 +137,13 @@ escort still flying down to the pad is not listed until it lands.
 **What an escort built from a record is.** It is built like a hired escort
 (`makeNpcShip`, its class's inherent AI, no government), with the record's
 outfits, hold and fuel, and with `PlayerEscort {provenance: 'captured', deal:
-none}`. Formation, firing group and ownership are stamped when the lift-off
-puts the roster back down (`prepareCarriedEscorts`), and it is restocked like
-any landed escort.
+none, ammoStock}`. Formation, firing group and ownership are stamped when the
+lift-off puts the roster back down (`prepareCarriedEscorts`), and it is
+restocked like any landed escort, except for its ammo: `ammoStock` is the
+record's ammo counts, and an owned escort is rearmed back up to those, never
+to capacity (Matthew 2026-11-24; `player_escort.ts`'s OWNED ESCORT AMMO).
+Storing it again or swapping into it drops the snapshot with the marker; the
+next time it goes out as an escort it takes a new one.
 
 **Refusals.**
 - The player's own bay fighters are out: nothing can take the player's hull

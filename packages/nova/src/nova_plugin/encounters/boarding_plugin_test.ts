@@ -114,6 +114,7 @@ describe('boarding in a live world', () => {
         targetCrew = 4,
         targetFuel = 30,
         cargo = new Map<string, number>([['cargo:0', 2]]),
+        targetOutfits = undefined as [string, number][] | undefined,
     } = {}) {
         const gameData = await getSyntheticGameData();
         const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
@@ -137,6 +138,10 @@ describe('boarding in a live world', () => {
         });
         target.components.set(GovtComponent, { id: MERIDIAN });
 
+        if (targetOutfits) {
+            target.components.set(OutfitsStateComponent, new Map(
+                targetOutfits.map(([id, count]) => [id, { count }])));
+        }
         await completeEntity(world, boarder);
         await completeEntity(world, target);
         world.entities.set(BOARDER, boarder);
@@ -698,6 +703,8 @@ describe('boarding in a live world', () => {
                             player: BOARDER, parent: BOARDER,
                             provenance: 'captured',
                             deal: NO_DEAL,
+                            // The skiff carries no ammunition.
+                            ammoStock: [],
                         });
                 });
 
@@ -928,6 +935,28 @@ describe('boarding in a live world', () => {
                 expect(cappedEscortCount(BOARDER, { world: world.entities }))
                     .toBe(MAX_ESCORTS);
             });
+
+        /**
+         * Matthew's ruling (2026-11-24): a kept prize is the player's own
+         * hull, so it rearms back up to the ammo it had at the capture,
+         * not to capacity (player_escort.ts's OWNED ESCORT AMMO). The
+         * snapshot is ammo outfits only.
+         */
+        it('snapshots the prize\'s ammo at the capture', async () => {
+            const { world, boarder, target } = await boardingWorld({
+                boarderCrew: 500, targetCrew: 1,
+                targetOutfits: [
+                    [SYNTHETIC.outfits.launcher, 1],
+                    [SYNTHETIC.outfits.missileAmmo, 3],
+                    [SYNTHETIC.outfits.blaster, 1],
+                ],
+            });
+            boarder.components.set(ControlledByComponent,
+                { peerId: 'me' } as any);
+            captureAsEscort(world, boarder);
+            expect(target.components.get(PlayerEscortComponent)?.ammoStock)
+                .toEqual([[SYNTHETIC.outfits.missileAmmo, 3]]);
+        });
 
         it('does not count mission escorts or bay fighters', async () => {
             const { world, boarder, target } = await boardingWorld({

@@ -174,6 +174,23 @@ describe('settling a queued UPGRADE', () => {
         expect(markerOf(escort.entity).provenance).toBe('captured');
     });
 
+    it('drops an owned escort\'s ammo snapshot with its old loadout, and '
+        + 'touches nothing on an upgrade that does not settle', () => {
+            const escort = entry('e',
+                { deal: { kind: 'upgrade', toShip: BETTER } });
+            const stocked = { ...markerOf(escort.entity),
+                ammoStock: [['nova:130', 4]] as [string, number][] };
+            escort.entity.components.set(PlayerEscortComponent, stocked);
+            // Can't pay: stays queued, snapshot and all.
+            settleEscortDeals([escort], PLAYER, 0, getShip);
+            expect(markerOf(escort.entity)).toEqual(stocked);
+            settleEscortDeals([escort], PLAYER, 100_000, getShip);
+            expect(markerOf(escort.entity)).toEqual({
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+                deal: NO_DEAL,
+            });
+        });
+
     it('clamps cargo to the new hull\'s hold (replaceEscortShipClass)', () => {
         const escort = entry('e', { deal: { kind: 'upgrade', toShip: BETTER } });
         escort.entity.components.set(CargoComponent,

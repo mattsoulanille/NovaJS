@@ -3,6 +3,9 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { Entity } from 'nova_ecs/entity';
 import {
+    ammoStockOf, isOwnedEscort, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
+import {
     DisabledComponent, ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
     installedOutfitMass, IsIonizedComponent, OutfitsState, OutfitsStateComponent,
     ShipComponent,
@@ -27,8 +30,10 @@ import { deployedFightersByBay } from './landed_escorts.js';
  * the design, not an oversight.
  *
  * WHAT IS RESTOCKED: fuel (FuelComponent.current -> max), ammunition
- * (every owned outfit with an `ammoFor` goes back to capacity, as far as
- * the hull's free mass allows, see massFill), and — since
+ * (every owned outfit with an `ammoFor` goes back to capacity — or, for an
+ * OWNED escort, the player's own hull, back up to what the player left
+ * aboard when it became an escort; see restockOwnedEscortAmmo — in both
+ * cases only as far as the hull's free mass allows, see massFill), and — since
  * Matthew's playtest ("escorts should repair and deionize when landed") —
  * the HULL: armor and shields to full, any lingering ionization cleared,
  * and DisabledComponent dropped if one somehow rode the landing down. Bay
@@ -207,6 +212,21 @@ export async function restockEscortEntity(entity: Entity,
         fuel.current = fuel.max;
     }
 
+    if (isOwnedEscort(entity)) {
+        await restockOwnedEscortAmmo(entity, gameData, deployedByWeapon);
+        return;
+    }
+    await restockHiredEscortAmmo(entity, gameData, deployedByWeapon);
+}
+
+/**
+ * A HIRED escort's rearm: every ammo outfit back to its count ceiling
+ * (ammoCeiling: the launcher-derived pool, or the outfit's own Max), as far
+ * as the hull's free mass allows (massFill).
+ */
+async function restockHiredEscortAmmo(entity: Entity,
+    gameData: RestockGameData,
+    deployedByWeapon?: ReadonlyMap<string, number>): Promise<void> {
     const owned = entity.components.get(OutfitsStateComponent);
     if (!owned || owned.size === 0) {
         return;
@@ -288,6 +308,140 @@ export async function restockEscortEntity(entity: Entity,
             const added = fill(ownedData.get(id)!, free);
             state.count += added;
             free -= added;
+        }
+    }
+}
+
+/** The ammo outfits among `ids`, grouped by the weapon they supply. */
+async function ammoByWeapon(ids: Iterable<string>,
+    gameData: Pick<RestockGameData, 'getOutfit'>):
+    Promise<Map<string, string[]>> {
+    const groups = new Map<string, string[]>();
+    for (const id of ids) {
+        const weaponId = (await gameData.getOutfit(id))?.ammoFor;
+        if (!weaponId) {
+            continue;
+        }
+        const group = groups.get(weaponId);
+        if (group) {
+            group.push(id);
+        } else {
+            groups.set(weaponId, [id]);
+        }
+    }
+    return groups;
+}
+
+/**
+ * The FALLBACK for an OWNED escort with no `ammoStock` snapshot — one from a
+ * save written before the snapshot existed: its CURRENT ammo counts become
+ * the snapshot, so it never refills to capacity. Returns whether it wrote
+ * one; a hired escort, or an owned one that already has a snapshot, is left
+ * as it is.
+ *
+ * Run where such an escort first appears — a loaded save's escorts, before
+ * the startup transit inserts them (client/system_entry.ts) — so the target
+ * is what the pilot saved, and again by every restock as the backstop for
+ * anything that reaches a port without one. Both run on the carried entity
+ * before an insertion, so every peer receives the same marker.
+ */
+export async function takeMissingAmmoStock(entity: Entity,
+    gameData: Pick<RestockGameData, 'getOutfit'>): Promise<boolean> {
+    const marker = entity.components.get(PlayerEscortComponent);
+    if (!marker || marker.ammoStock !== undefined || !isOwnedEscort(entity)) {
+        return false;
+    }
+    const owned = entity.components.get(OutfitsStateComponent);
+    const ammo = new Set([...(await ammoByWeapon(owned?.keys() ?? [],
+        gameData)).values()].flat());
+    entity.components.set(PlayerEscortComponent, {
+        ...marker,
+        ammoStock: ammoStockOf(
+            [...owned ?? []].map(([id, { count }]): [string, number] =>
+                [id, count]),
+            id => ammo.has(id)),
+    });
+    return true;
+}
+
+/**
+ * An OWNED escort's rearm (player_escort.ts's OWNED ESCORT AMMO): every ammo
+ * outfit in its `ammoStock` snapshot goes back UP to the snapshot's count —
+ * what the player left aboard when the hull became an escort — and no
+ * further. Nothing is ever removed, and an ammo outfit the snapshot does not
+ * name is left alone. The COUNT target is the snapshot, not the launcher
+ * capacity: the snapshot is what this very hull carried (a hull's stock
+ * AmmoLoad can sit above the launcher-derived cap the outfitter enforces,
+ * and the player keeps that). The hull's FREE MASS still gates it exactly
+ * as it gates a hired escort's restock (massFill): min(snapshot, what fits).
+ *
+ * DEPLOYED FIGHTERS still occupy their slots, exactly as in the hired rule:
+ * a carrier that lands with k fighters out comes back to its snapshot minus
+ * k, or the k redeploy on top of a full bay. Several outfits can feed one
+ * bay, and a deployed fighter does not say which outfit it was, so for each
+ * weapon the shortfalls of its snapshot outfits are summed, the deployed
+ * count comes off that, and what is left is filled in sorted id order, each
+ * outfit to at most its own snapshot count (the order bay_plugin spends and
+ * refunds in).
+ *
+ * NO SNAPSHOT (a save from before there was one, normally stamped at load):
+ * takeMissingAmmoStock writes its current counts and nothing is added.
+ */
+async function restockOwnedEscortAmmo(entity: Entity,
+    gameData: RestockGameData,
+    deployedByWeapon?: ReadonlyMap<string, number>): Promise<void> {
+    if (await takeMissingAmmoStock(entity, gameData)) {
+        return; // Its target is what it has: nothing to add this visit.
+    }
+    const stock = new Map(
+        entity.components.get(PlayerEscortComponent)?.ammoStock ?? []);
+    const owned = entity.components.get(OutfitsStateComponent);
+    if (!owned || stock.size === 0) {
+        return;
+    }
+
+    // The same free-mass gate as a hired escort's restock (massFill), over
+    // everything aboard. A snapshot is a load this hull carried, so it
+    // normally fits; the gate is what keeps it so if anything else aboard
+    // has grown since.
+    const ownedData = new Map<string, OutfitData>();
+    for (const id of owned.keys()) {
+        const data = await gameData.getOutfit(id);
+        if (data) {
+            ownedData.set(id, data);
+        }
+    }
+    const fill = await massFill(entity, owned, ownedData, gameData);
+
+    const supplying = await ammoByWeapon(stock.keys(), gameData);
+    for (const weaponId of [...supplying.keys()].sort()) {
+        const group = supplying.get(weaponId)!.sort();
+        // Each outfit's shortfall below its own snapshot count (one above
+        // it is never trimmed, and does not offset another's shortfall),
+        // less the rounds still out of this weapon's bays.
+        let free = -(deployedByWeapon?.get(weaponId) ?? 0);
+        for (const id of group) {
+            free += Math.max(0, stock.get(id)! - (owned.get(id)?.count ?? 0));
+        }
+        for (const id of group) {
+            if (free <= 0) {
+                break; // Back at the snapshot.
+            }
+            const have = owned.get(id)?.count ?? 0;
+            const data = ownedData.get(id) ?? await gameData.getOutfit(id);
+            const add = data === undefined ? 0
+                : fill(data, Math.min(free, stock.get(id)! - have));
+            if (add <= 0) {
+                continue;
+            }
+            const state = owned.get(id);
+            if (state) {
+                state.count += add;
+            } else {
+                // Spent to nothing and dropped from the map: it comes back.
+                owned.set(id, { count: add });
+            }
+            free -= add;
         }
     }
 }

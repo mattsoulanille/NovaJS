@@ -51,6 +51,13 @@ import { latestVersion, Migration } from '../../common/migrations.js';
  *                    ship_storage.md): the hulls the pilot owns but is not
  *                    flying. Every older save had none, so the migration
  *                    writes an empty list.
+ *                    Still v7, additive: an owned ('captured') escort's
+ *                    PlayerEscort marker may carry `ammoStock` (2026-11-24,
+ *                    its restock target). An older save's owned escorts have
+ *                    none; the load takes their saved ammo counts as it
+ *                    (client/system_entry.ts, escort_restock.ts's
+ *                    takeMissingAmmoStock), which needs game data, so it is
+ *                    not a migration.
  *
  * FORWARD COMPATIBILITY (a save written by this build, read by the
  * previous one). The previous build's decodeSave refuses any envelope

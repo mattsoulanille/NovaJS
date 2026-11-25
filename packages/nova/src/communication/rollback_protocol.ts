@@ -680,6 +680,20 @@ export const STATE_HASH_INTERVAL = 60;
 //    the arrival. The derived wire schema fingerprint changes
 //    (4da2e0c99f1d652a -> 5046ce9608f031a5), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): owned escorts' ammo (Matthew 2026-11-24). The
+//    PlayerEscort marker gains an OPTIONAL `ammoStock` ([outfit id,
+//    count] pairs: the ammo a 'captured' escort had aboard when it became
+//    an escort), written by boarding's convertToEscort, ship storage's
+//    buildEscortFromRecord and the client before a carried insertion, and
+//    carried by every marker re-stamp (durableEscortFields). A hired
+//    escort carries none. No input kind or message kind changes. Sim-rule
+//    change alongside: an owned escort that lands with the player is
+//    rearmed back up to `ammoStock`, not to capacity (spaceport/
+//    escort_restock.ts, applied to the carried entity before the lift-off
+//    inserts it). The derived wire schema fingerprint changes
+//    (5046ce9608f031a5 -> 0afe73ee3aebe863), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

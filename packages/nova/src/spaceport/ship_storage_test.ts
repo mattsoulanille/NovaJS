@@ -37,6 +37,8 @@ describe('ship storage rules', () => {
     const LICENCE = 'nova:301';
     const POD = 'nova:302';
     const TANK = 'nova:303';
+    const MISSILE = 'nova:304';
+    const RACK = 'nova:305';
 
     function ship(id: string, name: string, freeCargo: number,
         outfits: Record<string, number> = {}): ShipData {
@@ -65,6 +67,9 @@ describe('ship storage rules', () => {
         [POD, outfit(POD, { physics: { freeCargo: 5 } } as Partial<OutfitData>)],
         // A fuel tank: 100 more units of energy.
         [TANK, outfit(TANK, { physics: { energy: 100 } } as Partial<OutfitData>)],
+        // A launcher and its ammunition (the owned-escort ammo specs).
+        [RACK, outfit(RACK, { weapons: { 'nova:900': 1 } })],
+        [MISSILE, outfit(MISSILE, { ammoFor: 'nova:900' })],
     ]);
     const lookups: StorageLookups = {
         getShip: id => SHIPS.get(id),
@@ -266,7 +271,7 @@ describe('ship storage rules', () => {
             expect(escort.components.get(FuelComponent)!.current).toBe(70);
             expect(escort.components.get(PlayerEscortComponent)).toEqual({
                 player: PLAYER, parent: PLAYER, provenance: 'captured',
-                deal: NO_DEAL,
+                deal: NO_DEAL, ammoStock: [],
             });
             expect(storableEscort({ player: PLAYER, uuid: 'e', entity: escort },
                 PLAYER)).toBeTrue();
@@ -404,6 +409,86 @@ describe('ship storage rules', () => {
                 const escort = storedToEscort(hull, 0, 'player-uuid', lookups);
                 escortToStorage(hull, escort, HERE, lookups);
                 expect(storedShipsOf(hull)).toEqual([record]);
+            });
+    });
+
+    /**
+     * Matthew's ruling (2026-11-24): an escort made from the player's own
+     * hull rearms back up to what the player left aboard when it became an
+     * escort (the marker's ammoStock), and the snapshot lives exactly as
+     * long as the escort does.
+     */
+    describe('an owned escort\'s ammo snapshot', () => {
+        const PLAYER = 'player-uuid';
+        const restockData = {
+            getOutfit: async (id: string) => OUTFITS.get(id),
+            getWeapon: async (id: string) => id === 'nova:900'
+                ? { id, maxAmmo: 30 } as never : undefined,
+            getShip: async (id: string) => SHIPS.get(id),
+        };
+        const missiles = (entity: Entity) =>
+            entity.components.get(OutfitsStateComponent)!.get(MISSILE)?.count;
+        const stockOf = (entity: Entity) =>
+            entity.components.get(PlayerEscortComponent)?.ammoStock;
+
+        it('buy and keep, send the old hull along, spend its ammo, land: it '
+            + 'comes back to the partial count it was left with, not full',
+            async () => {
+                const hull = pilot(SHUTTLE, {
+                    outfits: [[RACK, 1], [MISSILE, 6], [BLASTER, 1]],
+                });
+                const bought = buyAndKeep(hull, SHIPS.get(FREIGHTER)!, {
+                    currentShip: SHIPS.get(SHUTTLE)!,
+                    outfits: new Map([[RACK, 1], [MISSILE, 6], [BLASTER, 1]]),
+                    getOutfit: (id: string) => OUTFITS.get(id),
+                    credits: 100000,
+                }, HERE, lookups);
+                const escort = storedToEscort(bought, 0, PLAYER, lookups);
+                // Ammo outfits only: the rack and the blaster are not in it.
+                expect(stockOf(escort)).toEqual([[MISSILE, 6]]);
+
+                escort.components.get(OutfitsStateComponent)!
+                    .get(MISSILE)!.count = 0; // Fired them all.
+                await restockCarriedEscorts([{ uuid: 'e', entity: escort }],
+                    restockData);
+                // 6, not the launcher's 30.
+                expect(missiles(escort)).toBe(6);
+            });
+
+        it('goes away with the marker into storage, and a re-escort takes a '
+            + 'new one', async () => {
+                const hull = pilot(SHUTTLE, {
+                    stored: [stored(FREIGHTER, {
+                        outfits: [[RACK, 1], [MISSILE, 6]],
+                    })],
+                });
+                const escort = storedToEscort(hull, 0, PLAYER, lookups);
+                escort.components.get(OutfitsStateComponent)!
+                    .get(MISSILE)!.count = 2;
+                escortToStorage(hull, escort, HERE, lookups);
+                // The record has no marker, so nothing of the old snapshot.
+                expect(storedShipsOf(hull)[0].outfits)
+                    .toEqual([[MISSILE, 2], [RACK, 1]]);
+                const again = storedToEscort(hull, 0, PLAYER, lookups);
+                expect(stockOf(again)).toEqual([[MISSILE, 2]]);
+                await restockCarriedEscorts([{ uuid: 'e', entity: again }],
+                    restockData);
+                expect(missiles(again)).toBe(2);
+            });
+
+        it('a hangar swap snapshots the hull left behind; the hull taken '
+            + 'over carries no marker', () => {
+                const hull = pilot(FREIGHTER, {
+                    outfits: [[RACK, 1], [MISSILE, 4], [LICENCE, 1]],
+                });
+                const prize = buildEscortFromRecord(stored(SHUTTLE, {
+                    outfits: [[RACK, 1], [MISSILE, 9]],
+                }), PLAYER, lookups);
+                const swapped = swapWithEscort(hull, prize, HERE, PLAYER,
+                    lookups);
+                expect(stockOf(swapped.escort)).toEqual([[MISSILE, 4]]);
+                expect(swapped.hull.components.has(PlayerEscortComponent))
+                    .toBeFalse();
             });
     });
 

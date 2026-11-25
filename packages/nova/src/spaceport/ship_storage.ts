@@ -9,7 +9,8 @@ import {
     CarriedEscortEntry, countsTowardEscortCap, ReturnWhenTargetRemovedComponent,
 } from '../nova_plugin/escorts/index.js';
 import {
-    CreditsComponent, escortProvenance, NO_DEAL, PlayerEscortComponent,
+    ammoStockOf, CreditsComponent, escortProvenance, NO_DEAL,
+    PlayerEscortComponent,
     PlayerNamesComponent, sanitizeShipName, StoredShip, StoredShips,
     StoredShipsComponent,
 } from '../nova_plugin/player/index.js';
@@ -398,7 +399,9 @@ export function escortWingOut(uuid: string,
  * ownership marker of a prize: provenance 'captured', nothing queued.
  * Formation, firing group and owner are stamped by the lift-off that puts it
  * in the world (landed_escorts.ts prepareCarriedEscorts), which also
- * restocks it like any escort that landed with the player.
+ * restocks it like any escort that landed with the player — an OWNED
+ * escort's restock, back up to the record's ammo counts, which the marker
+ * snapshots here (`ammoStock`, player_escort.ts).
  */
 export function buildEscortFromRecord(record: StoredShip, player: string,
     lookups: StorageLookups): Entity {
@@ -413,8 +416,12 @@ export function buildEscortFromRecord(record: StoredShip, player: string,
     escort.components.set(CargoComponent, new Map(record.cargo));
     escort.components.set(FuelComponent, fuelStat(record.fuel,
         fuelCapacity(shipData, record.outfits, lookups)));
+    // The hull is the player's own, so it rearms back up to what it has
+    // aboard NOW, not to capacity (player_escort.ts's OWNED ESCORT AMMO).
     escort.components.set(PlayerEscortComponent, {
         player, parent: player, provenance: 'captured', deal: NO_DEAL,
+        ammoStock: ammoStockOf(record.outfits,
+            id => Boolean(lookups.getOutfit(id)?.ammoFor)),
     });
     return escort;
 }
