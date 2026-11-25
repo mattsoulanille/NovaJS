@@ -234,8 +234,9 @@ const ShipArrivedAtGateSystem = new System({
 /**
  * A ship's landing selection plus everything the clearance rule reads. A
  * PLAYER (the only kind of ship that carries a legal record) opens a gate
- * only once it holds the gate's clearance (holdsGateClearance: its `l`
- * inside the clearance zone was answered with #91-93) and only if the gate
+ * only while it holds the gate's clearance (holdsGateClearance: its `l`
+ * inside the clearance zone was answered with #91-93, and the clearance
+ * has not lapsed) and only if the gate
  * would still let it through — the same
  * stellarClearanceFor verdict the landing gate, radar blip and comm dialog
  * quote (ränk 147 unlocks the stock network) — so a pilot without access
@@ -279,8 +280,11 @@ export const GateAnimationSystem = new System({
                 continue;
             }
             // A player that has only requested (selected from outside the
-            // clearance zone) leaves the gate closed.
-            if (records && !holdsGateClearance(target)) {
+            // clearance zone), or whose clearance has lapsed (reference
+            // "Landing clearance lapse, wave 32", finding 3), leaves the
+            // gate closed: the lapse is a sim-clock stamp, judged against
+            // the mirrored sim clock.
+            if (records && !holdsGateClearance(target, simTime?.time ?? 0)) {
                 continue;
             }
             // Bribe expiries are sim-clock stamps: judge them against the
