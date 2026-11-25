@@ -533,7 +533,7 @@ export async function hideDebugOverlays(page) {
  * the only in-page handle on the synced-component instances.
  */
 export async function openBoarding(page,
-    { capture = 'none', cargo = 9, ammo = 0 } = {}) {
+    { capture = 'none', cargo = 9, ammo = 0, captureOdds = 13 } = {}) {
     // Spawn a shuttle to be the boarded victim (has Cargo + Fuel components
     // the plunder dialog reads).
     await page.evaluate(() => {
@@ -546,7 +546,7 @@ export async function openBoarding(page,
         }
     });
     await sleep(4000);
-    const ok = await page.evaluate((capture, cargo, ammo) => {
+    const ok = await page.evaluate((capture, cargo, ammo, captureOdds) => {
         const dw = window.displayWorld;
         const Boarding = window.novaSimSerializer?.componentsByName?.get('Boarding');
         if (!Boarding) return false;
@@ -569,11 +569,11 @@ export async function openBoarding(page,
         if (Cargo && cargo > 0) target.components.get(Cargo).set('Metal', cargo);
         player.components.set(Boarding, {
             target: targetId, creditsAvailable: 1000, ammoAvailable: ammo,
-            cargoTaken: false, creditsTaken: false, fuelTaken: false,
+            captureOdds, cargoTaken: false, creditsTaken: false, fuelTaken: false,
             ammoTaken: false, capture, crimeApplied: false,
         });
         return true;
-    }, capture, cargo, ammo);
+    }, capture, cargo, ammo, captureOdds);
     if (!ok) throw new Error('openBoarding: could not inject BoardingComponent');
     await waitForContainer(page,
         capture === 'succeeded' ? 'CaptureAssignment' : 'PlunderDialog');
