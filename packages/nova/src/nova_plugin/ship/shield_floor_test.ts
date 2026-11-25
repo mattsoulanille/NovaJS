@@ -98,4 +98,27 @@ describe('shield floor', () => {
             // 2 - 1, plus one tick of recharge.
             expect(shield.current).toBeCloseTo(1, 1);
         }, 60_000);
+
+    it('a big hit that carries on into the armor leaves the shield AT the '
+        + 'floor, not at zero and not below it (wave 29\'s "about -1 after '
+        + 'a blast" is this floor, kept deliberately)', async () => {
+            const { world, ship } = await shipWorld();
+            const shield = shieldOf(ship);
+            const armor = armorOf(ship);
+            const floor = shieldFloor(shield.max);
+            expect(floor).toBeLessThan(0);
+            const BIG = {
+                shield: 1e6, armor: 5, ionization: 0, ionizationColor: 0,
+                knockback: 0, passThroughShield: 0,
+            } as never;
+            world.emit(DamagedEvent, { damage: BIG, damager: 'x' }, [SHIP]);
+            world.step();
+            // The armor took the hit in full in the same hit...
+            expect(armor.current).toBe(armor.max - 5);
+            // ...and the shield sits on its floor (plus at most one tick
+            // of recharge), not at 0 and not 1e6 below.
+            expect(shield.current).toBeLessThan(0);
+            expect(shield.current).toBeGreaterThanOrEqual(floor);
+            expect(shield.current).toBeCloseTo(floor, 0);
+        }, 60_000);
 });

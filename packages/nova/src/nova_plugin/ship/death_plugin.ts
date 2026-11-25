@@ -96,6 +96,15 @@ const DamageSystem = new System({
         // ships, wave 24"): one Kit Disable Gun hit (3000 shield / 2100
         // armor) disabled a 3000 / 3000 hull (30% armor, under 33%) and a
         // second destroyed it.
+        //
+        // The subtraction is deliberately UNCLAMPED here and the shield
+        // may end below zero: the recharge step (health_plugin's
+        // rechargeSystem) clamps it to the Stat's `min`, which is -5% of
+        // capacity (SHIELD_FLOOR_FRACTION, maintainer ruling #313: a
+        // collapsed shield must regenerate that 5% before it absorbs
+        // again). Do not clamp it to 0 here: a 20-point shield showing
+        // about -1 after a blast is that floor, as intended
+        // (shield_floor_test.ts).
         if (shield && !damage.passThroughShield) {
             shield.current -= damage.shield * scale;
             if (shield.current > 0) {
