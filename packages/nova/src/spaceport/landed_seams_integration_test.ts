@@ -525,7 +525,9 @@ describe('the seams between landed venues', () => {
                 expect(transaction.hired).toEqual([ESCORT_SHIP]);
                 expect(transaction.credits.credits).toBe(10_000);
                 expect(bar.hireEscort.escortsHeld()).toBe(1);
-                await bar.press('depart'); // closes the hire dialog
+                // The hire itself closed the dialog back to the bar.
+                await waitFor(() => !bar.hireEscort.container.visible,
+                    'the hire closed the hire dialog');
 
                 // Gamble: bet 5,000 on racer 0 and lose to racer 3.
                 await bar.press('gamble');

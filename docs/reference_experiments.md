@@ -12034,6 +12034,17 @@ the cap. Control wanted before changing it: a no-escort pilot at Kit Port
 with a TechLevel-9000, HireRandom-100 hull (the kit's SpecialTech 9000)
 and no other hull for hire.
 
+**Applied (small-fix backlog, 2026-11-24, `N/spaceport/hire_escort.ts`).**
+A successful hire now CLOSES the hire dialog back to the bar, as hires 1-6
+did in `cap0`; NovaJS used to stay open and print "<ship> hired: the pilot
+will join you in formation when you lift off." (dropped: the original showed
+nothing). The bar already re-reads its Hire Escort button whenever the
+dialog closes, so it greys after the sixth hire. A refused hire (cap or
+fee) still leaves the dialog open with its message. Specs
+(`bar_escort_cap_test.ts`): six hires one at a time, each closing the
+dialog with the bar holding the keyboard again, 1,000 cr each, greyed after
+the sixth; the fifth-plus-one hire closes and greys without Done.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w23/{cap0,cap6,cap6b,cap6c,capbay}/*/` (cap0 `04-h1.png` .. `16-h7.png`).
 
 ### F1c release of rank 1, wave 23: the other five re-flow into the five-escort layout, everyone moving up a rank (2026-11-24)

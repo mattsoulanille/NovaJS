@@ -460,9 +460,11 @@ export class HireEscortDialog {
         }
         this.credits.credits -= price;
         this.hired.push(ship.id);
-        this.text.status.text = `${ship.name} hired: the pilot will `
-            + `join you in formation when you lift off.`;
-        this.refreshButtons();
+        // A hire CLOSES the dialog back to the bar, with no message
+        // (reference "Escort cap, wave 23": each of hires 1-6 did), and the
+        // bar re-reads its Hire Escort button as the dialog closes, so it
+        // greys after the sixth.
+        this.closed.next();
     }
 
     /**

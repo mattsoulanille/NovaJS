@@ -198,29 +198,59 @@ describe('the bar\'s Hire Escort at the escort cap', () => {
             await leave(bar, left, buttons.leave);
         });
 
-    it('greys as the dialog closes after the sixth hire', async () => {
-        const { bar, left, buttons, hireEscort } =
-            await enter({ roster: many(5, 'hired') });
-        expect(buttons.hireEscort.state).toBe('normal');
+    /** Opens the hire dialog from the bar and hires its one pilot, through
+     * the buttons as a click would. */
+    async function hireOne(parts: {
+        buttons: { hireEscort: Button },
+        hireEscort: { container: PIXI.Container, buttons: { hire: Button } },
+    }) {
+        const { buttons, hireEscort } = parts;
         buttons.hireEscort.click.next({ shift: false, option: false });
         await waitFor(() => hireEscort.container.visible);
-        // The grid opens on the only pilot; hire him (the sixth).
-        const grid = (hireEscort as unknown as {
-            itemGrid: { selection?: unknown },
-        }).itemGrid;
-        await waitFor(() => grid !== undefined);
-        if (!grid.selection) {
-            // Select the first tile through the dialog's own keys.
-            (hireEscort as unknown as { controls: MenuControls }).controls
-                .controls.right?.();
+        // The grid opens on the only pilot; select him through the
+        // dialog's own keys if it has not.
+        const dialog = hireEscort as unknown as {
+            itemGrid?: { selection?: unknown }, controls: MenuControls,
+        };
+        await waitFor(() => dialog.itemGrid !== undefined);
+        if (!dialog.itemGrid!.selection) {
+            dialog.controls.controls.right?.();
         }
-        await waitFor(() => grid.selection !== undefined);
+        await waitFor(() => dialog.itemGrid!.selection !== undefined);
         hireEscort.buttons.hire.click.next({ shift: false, option: false });
-        // The dialog's own Hire greys at the cap too.
-        expect(hireEscort.buttons.hire.state).toBe('grey');
-        hireEscort.buttons.done.click.next({ shift: false, option: false });
+    }
+
+    it('greys as the dialog closes after the sixth hire', async () => {
+        const parts = await enter({ roster: many(5, 'hired') });
+        const { bar, left, buttons, hireEscort } = parts;
+        expect(buttons.hireEscort.state).toBe('normal');
+        await hireOne(parts);
+        // The hire itself closes the dialog; no Done needed.
         await waitFor(() => !hireEscort.container.visible);
         await waitFor(() => buttons.hireEscort.state === 'grey');
         await leave(bar, left, buttons.leave);
     });
+
+    // Reference "Escort cap, wave 23", `cap0`: with no escorts, hires 1-6
+    // each closed the dialog back to the bar (1,000 cr each, 10% of the
+    // 10,000 cr hull, as here), and the button greyed after the sixth.
+    it('closes the dialog back to the bar after EACH hire, one at a time, '
+        + 'greying after the sixth', async () => {
+            const parts = await enter();
+            const { bar, left, buttons, hireEscort } = parts;
+            const transaction = (bar as unknown as {
+                transaction: { hired: string[], credits: { credits: number } },
+            }).transaction;
+            for (let hire = 1; hire <= 6; hire++) {
+                expect(buttons.hireEscort.state).toBe('normal');
+                await hireOne(parts);
+                await waitFor(() => !hireEscort.container.visible);
+                expect(transaction.hired.length).toBe(hire);
+                // Back in the bar, which has the keyboard again.
+                await waitFor(() => MenuControls.focused === parts.controls);
+            }
+            expect(transaction.credits.credits).toBe(10_000_000 - 6 * 1_000);
+            await waitFor(() => buttons.hireEscort.state === 'grey');
+            await leave(bar, left, buttons.leave);
+        });
 });
