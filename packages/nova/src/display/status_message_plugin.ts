@@ -19,7 +19,7 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
@@ -131,7 +131,7 @@ export function showStatusMessage(world: World, message: string) {
         world.resources.get(TimeResource)?.time ?? 0);
 }
 /** The scenario's date suffix (e.g. " NC"), fetched once at build. */
-const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffix');
+export const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffix');
 /** The scenario's cargo names (STR# 4000 and the lowercase STR# 4001, from
  * the player start), fetched once at build: what a retrieved mission cargo
  * is called. */
@@ -141,8 +141,25 @@ const CargoNamesResource = new Resource<{ names: string[], lower: string[] }>(
  * until they load (a call before then shows nothing). */
 const DistressLinesResource = new Resource<{ lines: string[] }>(
     'StatusLineDistressLines');
-/** Marks that the arrival message has been shown for this system's world. */
-const ArrivalShownResource = new Resource<{ shown: boolean }>('StatusLineArrivalShown');
+/** Marks that the arrival message has been shown for this system's world,
+ * and how the player came in (which picks the line's lead). */
+export const ArrivalShownResource = new Resource<{
+    shown: boolean, route: ArrivalRoute,
+}>('StatusLineArrivalShown');
+
+/**
+ * Tells a freshly built display world how the player is entering it, so its
+ * arrival line reads "Exiting hypergate in the ..." or "Passing through a
+ * wormhole into the ..." instead of "Jumping into the ...". Called by the
+ * client's system entry (client/system_entry.ts) before the world first
+ * steps; a no-op on a world without the plugin, or once the line is up.
+ */
+export function setArrivalRoute(world: World, route: ArrivalRoute) {
+    const arrival = world.resources.get(ArrivalShownResource);
+    if (arrival && !arrival.shown) {
+        arrival.route = route;
+    }
+}
 
 const StatusLineResize = new System({
     name: 'StatusLineResize',
@@ -154,9 +171,10 @@ const StatusLineResize = new System({
 });
 
 // Composes the "Jumping into ..." arrival line once per system (the display
-// world is rebuilt on each jump), then clears it (statusLineAlpha). Reads the player's synced
+// world is rebuilt on each jump; a gate transit's world gets the hypergate
+// or wormhole lead through setArrivalRoute), then clears it (statusLineAlpha). Reads the player's synced
 // game date; never mutates the simulation.
-const DrawStatusMessage = new System({
+export const DrawStatusMessage = new System({
     name: 'DrawStatusMessage',
     args: [StatusLineResource, ArrivalShownResource, DateSuffixResource,
         GameDateComponent, TimeResource, SimulationGameDataResource,
@@ -167,7 +185,8 @@ const DrawStatusMessage = new System({
             const systemName = gameData.data.System.getCached(systemId)?.name;
             if (systemName) {
                 statusLine.setMessage(
-                    jumpArrivalMessage(systemName, date, dateSuffix.suffix),
+                    jumpArrivalMessage(systemName, date, dateSuffix.suffix,
+                        arrivalShown.route),
                     time);
                 arrivalShown.shown = true;
             }
@@ -503,7 +522,8 @@ export const StatusMessagePlugin: Plugin = {
         world.resources.set(DateSuffixResource, { suffix });
         world.resources.set(CargoNamesResource,
             { names: cargoNames, lower: cargoNamesLower });
-        world.resources.set(ArrivalShownResource, { shown: false });
+        world.resources.set(ArrivalShownResource,
+            { shown: false, route: 'hyperspace' });
         // The distress lines load in the background: a display asset the
         // sim never reads (it carries only the draw).
         const distressLines = { lines: [] as string[] };

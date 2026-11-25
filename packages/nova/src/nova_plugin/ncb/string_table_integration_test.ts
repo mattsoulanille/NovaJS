@@ -4,7 +4,9 @@ import {
     NO_SHIPS_FOR_HIRE, NO_SHIPS_FOR_HIRE_INDEX, NO_SHIPS_FOR_HIRE_TABLE,
 } from '../../spaceport/hire_escort.js';
 import {
-    ALREADY_BOARDED_MESSAGE, boardingBlockedMessage, CAPTURE_REPELLED_MESSAGE,
+    ALREADY_BOARDED_MESSAGE, ARRIVAL_LEAD_INDEX, ARRIVAL_LEAD_TEXT,
+    ARRIVAL_SYSTEM_ON_INDEX, ARRIVAL_SYSTEM_ON_TEXT, boardingBlockedMessage,
+    CAPTURE_REPELLED_MESSAGE,
 } from '../../display/status_bar_content.js';
 import {
     busyResponseText, BUSY_RESPONSE_COUNT, BUSY_RESPONSE_FALLBACK,
@@ -74,6 +76,21 @@ describe('StringTable against real Nova data', () => {
             expect(table.strings[338]).toBe('Destination System:');
             expect(table.strings[TARGET_WAITING_INDEX + 1]).toBe('No Target');
         });
+
+    it('sources the arrival lines (jump / hypergate / wormhole) from '
+        + 'STR# 2002 43-47', async () => {
+        const gameData = await getIntegrationGameData();
+        const table = await gameData.data.StringTable.get('nova:2002');
+        for (const route of ['hyperspace', 'hypergate', 'wormhole'] as const) {
+            expect(table.strings[ARRIVAL_LEAD_INDEX[route]])
+                .toBe(ARRIVAL_LEAD_TEXT[route]);
+        }
+        expect(table.strings[ARRIVAL_SYSTEM_ON_INDEX])
+            .toBe(ARRIVAL_SYSTEM_ON_TEXT);
+        // The unused neighbours, so an off-by-one shows.
+        expect(table.strings[42]).toBe('Entering the');
+        expect(table.strings[44]).toBe('Arriving in the');
+    });
 
     it('sources the hire message from STR# 2002 index 223', async () => {
         const gameData = await getIntegrationGameData();

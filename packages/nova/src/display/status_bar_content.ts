@@ -177,10 +177,46 @@ export function formatLongDate(date: { day: number, month: number, year: number 
     return `${month} ${ordinal(date.day)}, ${date.year}${suffix}`;
 }
 
-/** The bottom-left "Jumping into ..." message shown on entering a system. */
+/**
+ * How the player came into the system, which picks the arrival line's lead:
+ * a hyperspace jump (and every other entry: the session's start, a failed
+ * transit's re-entry, a mission's Mxxx / Nxxx move), a hypergate, or a
+ * wormhole.
+ */
+export type ArrivalRoute = 'hyperspace' | 'hypergate' | 'wormhole';
+
+/**
+ * The arrival line's leads, stock STR# 2002 0-based 43 / 45 / 46 (one-based
+ * 44 / 46 / 47; 44 "Arriving in the" and 42 "Entering the" sit beside them,
+ * unused here). The hypergate form is measured: "Exiting hypergate in the
+ * Kit Gate N3 system on June 23rd, 1177 NC." (reference "Gate map, wave
+ * 27"). The wormhole form is the data's own, not yet seen on the original.
+ */
+export const ARRIVAL_LEAD_INDEX: Readonly<Record<ArrivalRoute, number>> = {
+    hyperspace: 43,
+    hypergate: 45,
+    wormhole: 46,
+};
+export const ARRIVAL_LEAD_TEXT: Readonly<Record<ArrivalRoute, string>> = {
+    hyperspace: 'Jumping into the',
+    hypergate: 'Exiting hypergate in the',
+    wormhole: 'Passing through a wormhole into the',
+};
+/** The words between the system's name and the date (STR# 2002 0-based 47). */
+export const ARRIVAL_SYSTEM_ON_INDEX = 47;
+export const ARRIVAL_SYSTEM_ON_TEXT = 'system on';
+
+/**
+ * The bottom-left arrival line shown on entering a system: "Jumping into
+ * the <system> system on <date>." after a jump, "Exiting hypergate in the
+ * ..." after a hypergate, "Passing through a wormhole into the ..." after a
+ * wormhole.
+ */
 export function jumpArrivalMessage(systemName: string,
-    date: { day: number, month: number, year: number }, suffix = ''): string {
-    return `Jumping into the ${systemName} system on ${formatLongDate(date, suffix)}.`;
+    date: { day: number, month: number, year: number }, suffix = '',
+    route: ArrivalRoute = 'hyperspace'): string {
+    return `${ARRIVAL_LEAD_TEXT[route]} ${systemName} ${ARRIVAL_SYSTEM_ON_TEXT} `
+        + `${formatLongDate(date, suffix)}.`;
 }
 
 /**

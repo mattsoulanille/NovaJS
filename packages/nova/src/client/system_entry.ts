@@ -39,6 +39,7 @@ import {
 } from '../communication/worker_room_communicator.js';
 import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
+import { setArrivalRoute } from '../display/status_message_plugin.js';
 import { PixiAppResource } from '../display/pixi_app_resource.js';
 import { DisplayRoot } from '../display/stage_resource.js';
 import { RoomSpeedResource } from '../display/speed_indicator_plugin.js';
@@ -404,6 +405,12 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
         // destination gate ahead of the ship's appearance.
         displayWorld.emit(GateArrivalAnticipationEvent,
             { spob: plan.arrivalSpob });
+    }
+    if (plan.gateKind !== undefined) {
+        // The arrival line's lead: "Exiting hypergate in the ..." /
+        // "Passing through a wormhole into the ..." (reference "Gate map,
+        // wave 27"). Set before the world's first step composes the line.
+        setArrivalRoute(displayWorld, plan.gateKind);
     }
     window.simulationWorker = worker;
     window.displayWorld = displayWorld;

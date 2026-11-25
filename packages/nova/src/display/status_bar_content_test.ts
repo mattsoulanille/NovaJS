@@ -122,6 +122,20 @@ describe('date formatting', () => {
             { day: 21, month: 11, year: 1177 }, ' NC'))
             .toBe('Jumping into the Sanddown system on November 21st, 1177 NC.');
     });
+    it('composes the hypergate and wormhole arrival lines', () => {
+        // Measured on the original: reference "Gate map, wave 27".
+        expect(jumpArrivalMessage('Kit Gate N3',
+            { day: 23, month: 6, year: 1177 }, ' NC', 'hypergate'))
+            .toBe('Exiting hypergate in the Kit Gate N3 system on '
+                + 'June 23rd, 1177 NC.');
+        expect(jumpArrivalMessage('Sanddown',
+            { day: 21, month: 11, year: 1177 }, ' NC', 'wormhole'))
+            .toBe('Passing through a wormhole into the Sanddown system on '
+                + 'November 21st, 1177 NC.');
+        expect(jumpArrivalMessage('Sanddown',
+            { day: 21, month: 11, year: 1177 }, ' NC', 'hyperspace'))
+            .toBe('Jumping into the Sanddown system on November 21st, 1177 NC.');
+    });
 });
 
 describe('landingBlockedMessage', () => {

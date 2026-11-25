@@ -296,7 +296,7 @@ export function leaveGateMap(runtime: ClientRuntime,
             });
             await jumpTo(runtime, {
                 kind: 'gate', from: origin, to, uuid: docked.uuid, entity: ship,
-                arrivalSpob: destinationSpob,
+                arrivalSpob: destinationSpob, gateKind: 'hypergate',
             }, wire);
         } catch (e) {
             if (isSessionEnded(e)) {
@@ -355,6 +355,10 @@ async function gateTransit(runtime: ClientRuntime, data: DepartingShip & {
     await jumpTo(runtime, {
         kind: 'gate', from: origin, to, uuid: data.uuid, entity: data.entity,
         arrivalSpob: destinationSpob,
+        // GateTransitEvent comes only from GateDepartureSystem, which
+        // handles wormholes alone (a hypergate goes through the map,
+        // leaveGateMap above).
+        gateKind: 'wormhole',
     }, wire);
 }
 

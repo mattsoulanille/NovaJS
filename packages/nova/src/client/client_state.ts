@@ -137,6 +137,14 @@ export interface TransitPlan {
      * unrelated gate (see abortGateTransit).
      */
     readonly arrivalSpob?: string;
+    /**
+     * What a gate transit went through, for the destination's arrival
+     * line ("Exiting hypergate in the ..." / "Passing through a wormhole
+     * into the ..."; display/status_bar_content.ts jumpArrivalMessage).
+     * Unset for every other entry, which prints "Jumping into the ...".
+     * Display only: nothing in the simulation reads it.
+     */
+    readonly gateKind?: 'hypergate' | 'wormhole';
 }
 
 /** The destination room, joined before its world exists. */
