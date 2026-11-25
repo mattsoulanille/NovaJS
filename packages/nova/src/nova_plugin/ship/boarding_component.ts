@@ -94,6 +94,13 @@ export const BoardingState = t.type({
      * (the boarder's launchers and the victim's ammo don't change mid-
      * session): the sum of planAmmoPlunder. 0 hides/greys the Ammo action. */
     ammoAvailable: t.number,
+    /** The CAPTURE ODDS of this board, a whole percent drawn once as the
+     * session opens (boardCaptureOdds: the crew-ratio table plus a per-board
+     * spread, reference "Capture odds, wave 31"). The dialog shows exactly
+     * this number and the capture is rolled against exactly this number, so
+     * the two can never disagree; it is frozen because the original's odds
+     * are drawn per board, not re-derived. */
+    captureOdds: t.number,
     cargoTaken: t.boolean,
     creditsTaken: t.boolean,
     fuelTaken: t.boolean,
@@ -663,23 +670,40 @@ export function capturable(target: Entity,
 
 /**
  * ============================================================================
- * Capture odds (fitted to the original, ruling #378)
+ * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8"
+ * and "Capture odds, wave 31")
  * ============================================================================
  *
- * The odds the original shows against a hulk the player disabled ("U9 wave
- * 8", item 5: a crew-10 boarder against hulks of crew 1-40, and a crew-500
- * one against crew 1), keyed by the crew RATIO boarder / defender:
+ * The odds the original shows against a hulk the player disabled, keyed by
+ * the crew RATIO boarder / defender (a crew-10 boarder throughout, and a
+ * crew-500 one against crew 1):
  *
- *     ratio   10    2     1     0.67   0.5        0.25
- *     odds    75%   34%   20%   18%    17-18%     7%
+ *     ratio   10    2     1     0.67   0.5    0.25   0.2
+ *     odds    75%   34%   20%   18%    16.2%  10%    12.0%
+ *     used    75%   34%   20%   18%    16.5%  12%    12%
  *
- * and 500 against 1 also read 75%: the odds top out at CAPTURE_CHANCE_MAX.
- * No simple formula fits (a crew share would give 67 / 50 / 40 / 33 / 20%)
- * and the doc proposes interpolating the points until one is found, so
- * captureChance interpolates this table linearly in the ratio: down to
- * CAPTURE_CHANCE_MIN near ratio 0, and up to the cap at ratio 10 (between 2 and 10 nothing was
- * measured). The hulk's damage plays no part (7, 8 and 9 shots against
- * crew 20 read 17, 18, 17%), and nothing else enters here either.
+ * 10, 2, 1 and 0.67 are wave 8's single readings; 0.5 (crew 20: 12-18%,
+ * six boards), 0.25 (crew 40: 7-12%, three boards) and 0.2 (crew 50: 7-17%,
+ * thirteen boards) are MEANS over the boards of waves 8, 30 and 31 (0.5
+ * uses the reference's proposed 16.5). 500
+ * against 1 also read 75%: the odds top out at CAPTURE_CHANCE_MAX. No
+ * simple formula fits (a crew share would give 67 / 50 / 40 / 33 / 20%), so
+ * captureChance interpolates the table linearly in the ratio: from 0 at
+ * ratio 0 (floored at CAPTURE_CHANCE_MIN) up to the cap at ratio 10
+ * (between 2 and 10 nothing was measured).
+ *
+ * THE 0.25 POINT IS HELD AT 0.2's 12%, not its own 10% mean: three boards
+ * (7, 11, 12) are too few to say the odds DIP as the boarders gain on the
+ * defenders, a dip would make adding crew lower the odds, and 10% sits well
+ * inside the per-board spread below. (The reference's proposal was 0.11.)
+ *
+ * THE ODDS ARE DRAWN PER BOARD (wave 31, finding 1): the same hulk, the
+ * same boarder and the same seven hits read 11, 17, 13, 10 and 14%. So the
+ * table gives the MEAN, and boardCaptureOdds draws each board's odds as a
+ * whole percent from it, once, as the session opens; the dialog shows that
+ * number and the capture is rolled against it. The hulk's damage plays no
+ * part (7 vs 9 hits against crew 50: 13.0 vs 13.3%; 7, 8 and 9 shots
+ * against crew 20: 17, 18, 17%), and nothing else enters here either.
  */
 export const CAPTURE_CHANCE_MAX = 0.75;
 /**
@@ -693,8 +717,9 @@ export const CAPTURE_CHANCE_MIN = 0.01;
 export const CAPTURE_ODDS_BY_CREW_RATIO:
     ReadonlyArray<readonly [number, number]> = [
         [0, 0],
-        [0.25, 0.07],
-        [0.5, 0.175],
+        [0.2, 0.12],
+        [0.25, 0.12],
+        [0.5, 0.165],
         [2 / 3, 0.18],
         [1, 0.20],
         [2, 0.34],
@@ -702,10 +727,11 @@ export const CAPTURE_ODDS_BY_CREW_RATIO:
     ];
 
 /**
- * Capture probability from crew counts (Bible: odds relate to crew, and
- * marines add to the boarder's effective crew — that additive is a
+ * The MEAN capture probability from crew counts (Bible: odds relate to crew,
+ * and marines add to the boarder's effective crew — that additive is a
  * documented seam: ModType 25 is unparsed, so `attackerCrew` is the raw
- * shïp Crew today). See CAPTURE_ODDS_BY_CREW_RATIO.
+ * shïp Crew today). See CAPTURE_ODDS_BY_CREW_RATIO; a board's own odds are
+ * boardCaptureOdds.
  */
 export function captureChance(attackerCrew: number,
     defenderCrew: number): number {
@@ -726,6 +752,42 @@ export function captureChance(attackerCrew: number,
         }
     }
     return CAPTURE_CHANCE_MAX;
+}
+
+/**
+ * How far, in whole percentage points, one board's odds may fall either side
+ * of the table's mean. GUESS from the spreads: 7-17% around crew 50's 12%,
+ * 12-18% around crew 20's 16.5%.
+ */
+export const CAPTURE_ODDS_SPREAD_POINTS = 5;
+
+/**
+ * ONE BOARD'S CAPTURE ODDS, as a whole percent: the table's mean
+ * (captureChance, rounded to a percent) plus an even draw of whole points
+ * in [-w, +w], w = CAPTURE_ODDS_SPREAD_POINTS.
+ *
+ * GUESS, the shape: the spread is uniform and symmetric so the mean stays
+ * the table's, and it NARROWS so a board never reads above the 75% cap or
+ * below the 1% floor (w is also no more than the gap to either). The
+ * narrowing is what keeps a crew-1 hulk at the cap reading 75% on every
+ * board, as all of the original's did (waves 8, 25 and 30).
+ *
+ * `draw` is an unsigned 32-bit hash the caller salts per board (the
+ * boarder, the victim and the board's own seeded draw: boarding_plugin.ts),
+ * so every peer and the display read the same number. 0 for a crewless
+ * boarder, like captureChance.
+ */
+export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
+    draw: number): number {
+    const mean = Math.round(captureChance(attackerCrew, defenderCrew) * 100);
+    if (mean <= 0) {
+        return 0;
+    }
+    const floor = Math.round(CAPTURE_CHANCE_MIN * 100);
+    const cap = Math.round(CAPTURE_CHANCE_MAX * 100);
+    const w = Math.max(0, Math.min(CAPTURE_ODDS_SPREAD_POINTS,
+        mean - floor, cap - mean));
+    return mean - w + ((draw >>> 0) % (2 * w + 1));
 }
 
 /**

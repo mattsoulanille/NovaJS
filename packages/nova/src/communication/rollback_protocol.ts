@@ -805,6 +805,19 @@ export const STATE_HASH_INTERVAL = 60;
 //    no 212 px cap (wormholes keep it), and a port's or station's
 //    clearance lapses 20 s after it is given. The derived wire schema
 //    fingerprint changes (d442dd55b4b6c6ec -> 9421bc2da0516e30), and the
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-31 capture odds (reference "Capture
+//    odds, wave 31"). BoardingState (ship/boarding_component.ts) gains a
+//    required `captureOdds`, the board's capture odds as a whole percent,
+//    drawn once as the plunder session opens (boardCaptureOdds: the
+//    crew-ratio table's mean +-5 points, from a hash salted with the
+//    boarder, the victim and the board's one seeded money draw, so the
+//    PRNG's draw count per board is unchanged). The dialog shows it and
+//    the capture is rolled against it. No input kind or message kind
+//    changes. Sim-rule changes alongside: the table's low end is refitted
+//    (ratio 0.2 / 0.25 / 0.5 -> 12 / 12 / 16.5%), and the Ammo take's
+//    self-destruct odds are 0.85 (was 0.5). The derived wire schema
+//    fingerprint changes (9421bc2da0516e30 -> FPNEW), and the
 //    join gate keeps older and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;

@@ -177,7 +177,7 @@ describe('boardShipDoneStatus (what a boarding owes the mission text)', () => {
 describe('the boarding dialog while a ship goal settles', () => {
     const boarding: BoardingState = {
         target: 'special', creditsAvailable: 0, ammoAvailable: 0,
-        capture: 'none', cargoTaken: false, creditsTaken: false,
+        captureOdds: 0, capture: 'none', cargoTaken: false, creditsTaken: false,
         fuelTaken: false, ammoTaken: false, crimeApplied: false,
     };
 

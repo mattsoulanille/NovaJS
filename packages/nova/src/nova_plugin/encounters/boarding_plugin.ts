@@ -18,7 +18,7 @@ import {
     AmmoOutfitInfo, axesAligned, BoardBlockReason, BoardedComponent,
     BoardedState, boardingBlockedReason, BoardingComponent,
     boardingDistance, BoardingGovtLookup, boardingRange, BoardingState,
-    capturable, captureChance, CaptureBayCandidate, chooseCaptureBay,
+    boardCaptureOdds, capturable, CaptureBayCandidate, chooseCaptureBay,
     clearPlunderRecord, creditBooty, fuelTransferAmount, matchBoardedVelocity,
     planAmmoPlunder, planCargoPlunder, PlunderItem, plunderSpent,
     plunderTripsSelfDestruct,
@@ -61,6 +61,7 @@ import {
 import { CreditsComponent, MissionsComponent } from '../player/index.js';
 import { LegalRecords } from '../reputation/index.js';
 import { chargeCrime, DamageAttributionComponent, GovtsResource, LegalGeography, LegalGeographyResource, LegalRecordsComponent } from '../reputation/index.js';
+import { avalanche, hashString } from '../reputation/index.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from '../player/index.js';
@@ -762,6 +763,13 @@ const BoardingGateSystem = new System({
             target: targetUuid!,
             creditsAvailable: creditBooty(targetShipData!.price, moneyRoll),
             ammoAvailable,
+            // This board's capture odds (reference "Capture odds, wave
+            // 31": drawn per board), frozen so the dialog's figure and
+            // the capture roll are one number. Computed for every board,
+            // capturable or not; the dialog and the roll gate on that.
+            captureOdds: boardCaptureOdds(shipData.crew,
+                targetShipData!.crew,
+                captureOddsDraw(uuid, targetUuid!, moneyRoll)),
             cargoTaken: priorBoarded?.cargoTaken ?? false,
             creditsTaken: priorBoarded?.creditsTaken ?? false,
             fuelTaken: priorBoarded?.fuelTaken ?? false,
@@ -1529,13 +1537,12 @@ const BoardingActionSystem = new System({
             && boarding.capture === 'none'
             && capturable(target, boardingGovtLookup(govts, gameData))
             && cappedEscortCount(uuid, { world: entities }) < MAX_ESCORTS) {
-            const targetCrew =
-                target.components.get(ShipDataComponent)?.crew ?? 0;
-            // Bible: a 0-crew boarder can't capture. Marines (ModType 25)
-            // would add to the boarder's effective crew here — a
-            // documented seam (unparsed), so the raw shïp Crew is used.
-            const chance = captureChance(shipData.crew, targetCrew);
-            const won = random.next() < chance;
+            // The odds the dialog showed, drawn as the session opened
+            // (boardCaptureOdds; 0 for a crewless boarder — Bible: a
+            // 0-crew boarder can't capture). Marines (ModType 25) would
+            // add to the boarder's effective crew there — a documented
+            // seam (unparsed), so the raw shïp Crew is used.
+            const won = random.next() < boarding.captureOdds / 100;
             boarding.capture = won ? 'succeeded' : 'failed';
             // Piracy is charged for the attempt either way, before the
             // session can end under us.
@@ -1556,6 +1563,23 @@ const BoardingActionSystem = new System({
     // #237 pin (shared: *): BoardingPlugin's registration order.
     after: [BoardingGateSystem],
 });
+
+/**
+ * The per-board draw behind a board's capture odds (boardCaptureOdds): a
+ * hash of the boarder, the victim and the board's own seeded money draw,
+ * so it differs from board to board as the original's odds do (reference
+ * "Capture odds, wave 31"), is the same on every peer, and takes nothing
+ * more from the seeded PRNG (the draw count per board stays one). The salt
+ * keeps it independent of the money it shares the roll with.
+ */
+export function captureOddsDraw(boarderUuid: string, victimUuid: string,
+    boardRoll: number): number {
+    // The roll's top 32 bits: an exact integer, so the key prints the same
+    // on every peer.
+    const bits = Math.floor(boardRoll * 0x100000000) >>> 0;
+    return avalanche(hashString(
+        `capture:odds:${boarderUuid}:${victimUuid}:${bits}`));
+}
 
 /**
  * ============================================================================

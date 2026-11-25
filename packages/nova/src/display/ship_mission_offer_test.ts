@@ -31,7 +31,7 @@ const NOTHING_TAKEN = {
 function boardingState(overrides: Partial<BoardingState> = {}): BoardingState {
     return {
         target: 'victim', creditsAvailable: 0, ammoAvailable: 0,
-        capture: 'none', ...NOTHING_TAKEN, ...overrides,
+        captureOdds: 0, capture: 'none', ...NOTHING_TAKEN, ...overrides,
     };
 }
 

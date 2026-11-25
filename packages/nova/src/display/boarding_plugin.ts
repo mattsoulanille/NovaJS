@@ -15,7 +15,7 @@ import {
 } from '../nova_plugin/core/index.js';
 import {
     BoardingComponent, BoardingGovtLookup, BoardingState, capturable,
-    captureChance, CargoComponent, FuelComponent, isDerelict,
+    CargoComponent, FuelComponent, isDerelict,
     ShipDataComponent,
 } from '../nova_plugin/ship/index.js';
 import {
@@ -209,7 +209,6 @@ export function plunderDialogContent(boarding: BoardingState,
     const cargoTons = cargo
         ? [...cargo.values()].reduce((a, b) => a + b, 0) : 0;
     const fuel = target?.components.get(FuelComponent);
-    const targetCrew = target?.components.get(ShipDataComponent)?.crew ?? 0;
     // No capture is possible against a ship somebody is flying or a
     // derelict (ruling #378), none is possible with nobody to send across
     // (Bible, shïp Crew), and none at the escort cap (ruling #250).
@@ -230,8 +229,10 @@ export function plunderDialogContent(boarding: BoardingState,
             ? `${cargoTons} tons of ${cargoName(cargoKeys[0])}`
             : `${cargoTons} tons`;
     const odds = derelict && boarding.capture !== 'succeeded' ? 0
-        : boarding.capture === 'succeeded' || captureBlocked
-            ? null : Math.round(captureChance(playerCrew, targetCrew) * 100);
+        : boarding.capture === 'succeeded' || captureBlocked ? null
+            // This board's odds, drawn as the session opened: the very
+            // number the simulation rolls the capture against.
+            : boarding.captureOdds;
     // The readout is a two-COLUMN table in the original (space/board_ship.png
     // sets the labels at frame x=11 and their values at x=61, with "Capture
     // Odds:" opening a second pair at x=131/207), not one space-padded string
@@ -549,7 +550,7 @@ class PlunderDialog {
 
     /** Refreshes button enable/label state and the booty summary from
      * the synced boarding + victim state. `playerCrew` is the boarder's
-     * crew, for the capture-odds readout; `atEscortCap` greys Capture. */
+     * crew (none: no capture); `atEscortCap` greys Capture. */
     refresh(boarding: BoardingState, target: Entity | undefined,
         playerCrew: number, atEscortCap: boolean) {
         const { rows, notes, enabledByAction } = plunderDialogContent(

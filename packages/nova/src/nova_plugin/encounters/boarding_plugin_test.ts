@@ -25,14 +25,15 @@ import {
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import {
-    BayCaptureEvent, BoardingBlockedEvent, clearHostilityToward,
+    BayCaptureEvent, BoardingBlockedEvent, captureOddsDraw, clearHostilityToward,
     EscortRepairedEvent, PlunderSelfDestructEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
 import { AggressionComponent } from '../combat/index.js';
 import { MissionShipComponent, NO_DEAL } from '../player/index.js';
 import { SystemHoldComponent } from '../npc/index.js';
 import {
-    BoardedComponent, BoardingComponent, creditBooty, ExplodingComponent,
+    boardCaptureOdds, BoardedComponent, BoardingComponent, captureChance,
+    creditBooty, ExplodingComponent,
     PLUNDER_SELF_DESTRUCT_CHANCE, plunderTripsSelfDestruct,
 } from '../ship/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
@@ -1677,6 +1678,102 @@ describe('boarding in a live world', () => {
     });
 
     /**
+     * Reference "Capture odds, wave 31": the original's odds are DRAWN per
+     * board (one crew-50 hulk read 11, 17, 13, 10, 14%), so a board freezes
+     * its own odds as the session opens, and the dialog's figure is the one
+     * the capture is rolled against.
+     */
+    describe('capture odds drawn per board (reference "Capture odds, wave '
+        + '31")', () => {
+            /** Every draw returns `roll`, counted. */
+            function pin(world: World, roll: number) {
+                const counter = { draws: 0 };
+                const random = new Random();
+                random.next = () => { counter.draws++; return roll; };
+                world.resources.set(RandomResource, random);
+                return counter;
+            }
+
+            it('freezes the board\'s odds from its own draw, and nothing '
+                + 'more from the PRNG', async () => {
+                    const { world, boarder } = await boardingWorld({
+                        boarderCrew: 10, targetCrew: 50,
+                    });
+                    const counter = pin(world, 0.3);
+                    press(world, BOARDER, 'board');
+                    // One draw a board: the money's, which the odds' hash
+                    // is salted with.
+                    expect(counter.draws).toBe(1);
+                    const odds = boarder.components.get(BoardingComponent)
+                        ?.captureOdds;
+                    expect(odds).toEqual(boardCaptureOdds(10, 50,
+                        captureOddsDraw(BOARDER, TARGET, 0.3)));
+                    // Crew 50 against 10: the 12% mean, 5 points each way.
+                    expect(odds).toBeGreaterThanOrEqual(7);
+                    expect(odds).toBeLessThanOrEqual(17);
+                });
+
+            it('differs from board to board, around the table\'s mean',
+                async () => {
+                    const seen = new Set<number>();
+                    let sum = 0;
+                    const boards = 24;
+                    for (let i = 0; i < boards; i++) {
+                        const { world, boarder } = await boardingWorld({
+                            boarderCrew: 10, targetCrew: 50,
+                        });
+                        pin(world, (i + 0.5) / boards);
+                        press(world, BOARDER, 'board');
+                        const odds = boarder.components
+                            .get(BoardingComponent)!.captureOdds;
+                        seen.add(odds);
+                        sum += odds;
+                    }
+                    expect(seen.size).toBeGreaterThan(3);
+                    expect(Math.abs(sum / boards - 12)).toBeLessThan(2.5);
+                });
+
+            it('rolls the capture against exactly the odds shown',
+                async () => {
+                    for (const won of [true, false]) {
+                        const { world, boarder } = await boardingWorld({
+                            boarderCrew: 10, targetCrew: 50,
+                        });
+                        pin(world, 0.5);
+                        press(world, BOARDER, 'board');
+                        const shown = boarder.components
+                            .get(BoardingComponent)!.captureOdds;
+                        // The capture's roll a hair inside or outside the
+                        // shown figure, not the table's mean.
+                        pin(world, won ? (shown - 0.5) / 100
+                            : (shown + 0.001) / 100);
+                        press(world, BOARDER, 'plunderCapture');
+                        const capture = boarder.components
+                            .get(BoardingComponent)?.capture;
+                        if (won) {
+                            expect(capture).toEqual('succeeded');
+                        } else {
+                            // Repelled: the session is over.
+                            expect(capture).toBeUndefined();
+                        }
+                    }
+                });
+
+            it('reads the cap on every board at 75%', async () => {
+                for (const roll of [0, 0.25, 0.5, 0.999]) {
+                    const { world, boarder } = await boardingWorld({
+                        boarderCrew: 10, targetCrew: 1,
+                    });
+                    pin(world, roll);
+                    press(world, BOARDER, 'board');
+                    expect(boarder.components.get(BoardingComponent)
+                        ?.captureOdds).toEqual(75);
+                }
+                expect(captureChance(10, 1)).toEqual(0.75);
+            });
+        });
+
+    /**
      * The plunder self-destruct (reference "Disabled ships, wave 24" and
      * "Plunder self-destruct, wave 25"): one draw a take at that item's
      * odds, made after the take is delivered; nothing exempt by govt.
@@ -2212,6 +2309,7 @@ describe('boarding in a live world', () => {
                 ...boarder.components.get(BoardingComponent)
                 ?? { target: TARGET, creditsAvailable: 0, ammoAvailable: 0 },
                 target: TARGET, creditsAvailable: 0, ammoAvailable: 0,
+                captureOdds: 75,
                 cargoTaken: false, creditsTaken: false, fuelTaken: false,
                 ammoTaken: false, capture: 'failed', crimeApplied: true,
             });

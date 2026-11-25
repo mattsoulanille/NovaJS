@@ -32,7 +32,7 @@ const NOTHING_TAKEN = {
 function boardingState(overrides: Partial<BoardingState> = {}): BoardingState {
     return {
         target: 'victim', creditsAvailable: 1000, ammoAvailable: 4,
-        capture: 'none', ...NOTHING_TAKEN, ...overrides,
+        captureOdds: 13, capture: 'none', ...NOTHING_TAKEN, ...overrides,
     };
 }
 
@@ -62,6 +62,17 @@ describe('plunder dialog content', () => {
         expect(lines.join('\n')).toContain('Capture Odds:');
     });
 
+    it('shows the board\'s own drawn odds, not the table\'s mean', () => {
+        // Reference "Capture odds, wave 31": one crew-50 hulk read 11, 17,
+        // 13, 10, 14% on five boards. The figure is the session's, the
+        // very number the simulation rolls against.
+        for (const captureOdds of [11, 17]) {
+            const { rows } = plunderDialogContent(
+                boardingState({ captureOdds }), victim({ crew: 50 }), 10);
+            expect(rows[3].rightValue).toEqual(`${captureOdds}%`);
+        }
+    });
+
     /**
      * Ruling #378 ("U9 wave 8", item 5): every board of a derelict-govt
      * hulk on the original read "Capture Odds: 0%" with Capture Ship
@@ -89,11 +100,11 @@ describe('plunder dialog content', () => {
             expect(enabledByAction['plunderCargo']).toBeTrue();
         });
 
-        it('a hulk of an ordinary govt shows the original\'s odds', () => {
-            // Crew 10 against crew 1: the 75% cap.
+        it('a hulk of an ordinary govt shows the board\'s odds', () => {
+            // Crew 10 against crew 1: the 75% cap, as the sim drew it.
             const { enabledByAction, rows } = plunderDialogContent(
-                boardingState(), derelict('live govt'), 10, undefined,
-                false, lookupGovt);
+                boardingState({ captureOdds: 75 }), derelict('live govt'),
+                10, undefined, false, lookupGovt);
             expect(enabledByAction['plunderCapture']).toBeTrue();
             expect(rows[3].rightValue).toEqual('75%');
         });

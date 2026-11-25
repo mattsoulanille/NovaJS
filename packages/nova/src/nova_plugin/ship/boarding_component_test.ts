@@ -15,8 +15,9 @@ import {
     boardingDistance,
     BoardingGovtLookup,
     boardingRange,
+    boardCaptureOdds,
     captureChance,
-    CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN,
+    CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN, CAPTURE_ODDS_SPREAD_POINTS,
     creditBooty,
     creditBootyBase,
     creditBootyRandomSteps,
@@ -325,14 +326,24 @@ describe('captureChance (the original\'s odds, ruling #378)', () => {
         Math.round(captureChance(attacker, defender) * 100);
 
     it('reads the measured odds for a crew-10 boarder', () => {
-        // "U9 wave 8", item 5: crew 10 against 1 / 5 / 10 / 15 / 20 / 40.
+        // "U9 wave 8", item 5: crew 10 against 1 / 5 / 10 / 15 (single
+        // readings).
         expect(shown(10, 1)).toEqual(75);
         expect(shown(10, 5)).toEqual(34);
         expect(shown(10, 10)).toEqual(20);
         expect(shown(10, 15)).toEqual(18);
-        expect(shown(10, 20)).toBeGreaterThanOrEqual(17);
-        expect(shown(10, 20)).toBeLessThanOrEqual(18);
-        expect(shown(10, 40)).toEqual(7);
+    });
+
+    it('takes the low end from the per-board means (wave 31)', () => {
+        // Crew 20: 12-18% over six boards, mean 16.2 (0.165 proposed).
+        expect(captureChance(10, 20)).toBeCloseTo(0.165, 10);
+        // Crew 50: 7-17% over thirteen boards, mean 12.0.
+        expect(captureChance(10, 50)).toBeCloseTo(0.12, 10);
+        // Crew 40: 7-12% over three boards (mean 10), held at 0.2's 12%
+        // so the odds never fall as the boarders gain.
+        expect(captureChance(10, 40)).toBeCloseTo(0.12, 10);
+        // Ratio 0 stays 0, under the 1% floor.
+        expect(captureChance(1, 1e6)).toEqual(CAPTURE_CHANCE_MIN);
     });
 
     it('tops out at 75%', () => {
@@ -368,6 +379,62 @@ describe('captureChance (the original\'s odds, ruling #378)', () => {
 
     it('is deterministic for the same crew counts', () => {
         expect(captureChance(7, 3)).toEqual(captureChance(7, 3));
+    });
+});
+
+describe('boardCaptureOdds (drawn per board, reference "Capture odds, '
+    + 'wave 31")', () => {
+    /** Every figure a board can read, over one full cycle of draws. */
+    function cycle(attacker: number, defender: number): number[] {
+        return [...Array(2 * CAPTURE_ODDS_SPREAD_POINTS + 1).keys()]
+            .map(draw => boardCaptureOdds(attacker, defender, draw));
+    }
+
+    it('spreads 5 points either side of the mean, evenly', () => {
+        // Crew 50 against 10 read 7-17% on the original.
+        expect(cycle(10, 50)).toEqual(
+            [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+        // Crew 20: the 17% mean (16.5 rounded), 12-22.
+        expect(Math.min(...cycle(10, 20))).toEqual(12);
+        expect(Math.max(...cycle(10, 20))).toEqual(22);
+    });
+
+    it('keeps the table\'s mean', () => {
+        // Over a whole number of cycles of every narrowed width (2w + 1 is
+        // 1 to 11 points: their least common multiple).
+        const draws = [...Array(27_720).keys()];
+        for (const defender of [1, 3, 5, 10, 20, 40, 50, 200, 900]) {
+            const odds = draws.map(draw =>
+                boardCaptureOdds(10, defender, draw));
+            const mean = odds.reduce((a, b) => a + b, 0) / odds.length;
+            expect(mean).withContext(`crew ${defender}`)
+                .toBeCloseTo(Math.round(captureChance(10, defender) * 100),
+                    10);
+        }
+    });
+
+    it('narrows at the cap and the floor', () => {
+        // Every crew-1 board on the original read 75%.
+        expect(new Set(cycle(10, 1))).toEqual(new Set([75]));
+        expect(new Set(cycle(500, 1))).toEqual(new Set([75]));
+        // Two points under the cap: 73-75 only.
+        const nearCap = cycle(10, 1.5);
+        expect(Math.max(...nearCap)).toBeLessThanOrEqual(75);
+        // The 1% floor holds on every board.
+        expect(new Set(cycle(1, 1e6))).toEqual(new Set([1]));
+        expect(Math.min(...cycle(1, 100))).toBeGreaterThanOrEqual(1);
+    });
+
+    it('is 0 for a crewless boarder', () => {
+        expect(boardCaptureOdds(0, 5, 12345)).toEqual(0);
+    });
+
+    it('takes any unsigned 32-bit draw', () => {
+        for (const draw of [0, 1, 0x7fffffff, 0xffffffff]) {
+            const odds = boardCaptureOdds(10, 50, draw);
+            expect(odds).toBeGreaterThanOrEqual(7);
+            expect(odds).toBeLessThanOrEqual(17);
+        }
     });
 });
 
