@@ -199,7 +199,46 @@ class HalfOpenProxy {
     }
 }
 
-async function until(condition: () => boolean, what: string, ms = 10_000) {
+/**
+ * How long a wait on the sockets may take before it fails, naming what it
+ * waited for. Everything these specs wait on is real — sockets, the
+ * server's handling of them, all in this one process — and a busy machine
+ * (a full turbo run beside other work) stretches a handshake that takes
+ * milliseconds alone by orders of magnitude, so the bound is a backstop
+ * against a hang, not a check: no spec here rides on how FAST a wait
+ * returns. Where speed is the point (a token retires the old connection
+ * "at once"), the specs check the cause instead — the retirement done by
+ * the time the server has handled the token frame — and that the wait
+ * stayed inside the server keepalive that would otherwise have done it.
+ */
+const WAIT_MS = 120_000;
+/** Each spec's jasmine timeout: room for a few backstopped waits on a
+ * loaded machine. (The suite takes ~25 s in all on an idle one.) */
+const SPEC_MS = 300_000;
+/** beforeEach/afterEach: a server start or stop, under the same load
+ * (the default 5 s jasmine interval is not). */
+const HOOK_MS = 60_000;
+
+/**
+ * What the client's keepalive does for a socket that closed without the
+ * server ever speaking on it — a handshake that failed: open another.
+ * The browser's keepalive (1.2 s) does that by itself; these specs set it
+ * to ten minutes so that it never fires on its own, which made a single
+ * failed local handshake on a loaded machine fatal (the socket CLOSED, the
+ * server never having seen it, and nothing ever trying again: "a in the
+ * room" timing out). Called from the waits for a connection to come up —
+ * only there, so a socket a spec closed on purpose stays closed. A
+ * half-open socket stays OPEN as far as the client knows, so this never
+ * touches one. Always true: it goes first in a wait's condition.
+ */
+function retryClosed(socket: SocketChannelClient): true {
+    if (!socket.connected.value) {
+        socket.reconnectIfClosed();
+    }
+    return true;
+}
+
+async function until(condition: () => boolean, what: string, ms = WAIT_MS) {
     const start = Date.now();
     while (!condition()) {
         if (Date.now() - start > ms) {
@@ -279,7 +318,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         peers = [];
         pumps = [];
         await startServer();
-    });
+    }, HOOK_MS);
 
     afterEach(async () => {
         for (const socket of sockets) {
@@ -288,7 +327,7 @@ describe('a socket reconnect mid-game (#354)', () => {
                 keepaliveTimeout?: NodeJS.Timeout }).keepaliveTimeout);
         }
         await stopServer();
-    });
+    }, HOOK_MS);
 
     interface Peer {
         name: string;
@@ -320,14 +359,11 @@ describe('a socket reconnect mid-game (#354)', () => {
     }
 
     async function makePeer(name: string, x: number,
-        { forwardIdentity = true, hostOptions = {}, via, keepalive = 600_000,
-            onSocket }: {
+        { forwardIdentity = true, hostOptions = {}, via, onSocket }: {
             forwardIdentity?: boolean | IdentityGate,
             hostOptions?: ConstructorParameters<typeof SimulationBridgeHost>[2],
             /** Connect through this proxy instead of straight to the server. */
             via?: HalfOpenProxy,
-            /** The client's keepalive timeout (ms). */
-            keepalive?: number,
             /** Sees every WebSocket the client creates, as it is created. */
             onSocket?: (webSocket: WebSocket) => void,
         } = {}): Promise<Peer> {
@@ -340,12 +376,14 @@ describe('a socket reconnect mid-game (#354)', () => {
                 return webSocket;
             },
             warn: () => undefined,
-            timeout: keepalive,
+            // Ten minutes: never fires on its own in a spec (setKeepalive
+            // shortens it where a spec needs it to).
+            timeout: 600_000,
         });
         sockets.push(socket);
         const communicator = new CommunicatorClient(socket);
         const room = new MultiRoom(communicator).join(SYSTEM);
-        await until(() => communicator.uuid !== undefined
+        await until(() => retryClosed(socket) && communicator.uuid !== undefined
             && room.peers.current.value.has('server')
             && room.peers.current.value.has(communicator.uuid),
             `${name} in the room`);
@@ -387,7 +425,8 @@ describe('a socket reconnect mid-game (#354)', () => {
     async function reconnect(peer: Peer): Promise<{ before: string, after: string }> {
         const before = peer.communicator.uuid!;
         peer.socket.reconnect();
-        await until(() => peer.communicator.uuid !== undefined
+        await until(() => retryClosed(peer.socket)
+            && peer.communicator.uuid !== undefined
             && peer.communicator.uuid !== before
             && peer.room.peers.current.value.has(peer.communicator.uuid),
             `${peer.name} back in the room under a new uuid`);
@@ -481,6 +520,31 @@ describe('a socket reconnect mid-game (#354)', () => {
         return close;
     }
 
+    /**
+     * For each connection the server hears from from now on: whether
+     * `old` was still in the room once the server had handled that
+     * connection's FIRST communicator frame. The communicator server
+     * subscribed to the channel before this does, and a token's
+     * retirement is synchronous (communicator_server.ts redeemToken), so
+     * `false` for a reconnect is the retirement done on the token itself
+     * — whatever the wall clock says.
+     */
+    function oldConnectionAtFirstFrame(old: string): Map<string, boolean> {
+        const atFirst = new Map<string, boolean>();
+        channel.message.subscribe(({ source }) => {
+            if (!atFirst.has(source)) {
+                atFirst.set(source, relay['roomPeers']().has(old));
+            }
+        });
+        return atFirst;
+    }
+
+    /** Sets a client's keepalive (ms), re-armed from now. */
+    function setKeepalive(socket: SocketChannelClient, ms: number) {
+        (socket as unknown as { timeout: number }).timeout = ms;
+        socket.resetTimeout();
+    }
+
     /** The client's display world and fleet ledger, fed by the peer's
      * frames exactly as client/frame_pump.ts feeds them (game_session.ts
      * notes deaths and dockings from the frame's events first). */
@@ -554,7 +618,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         // b's own ship never moved owners.
         expect(stamps(archive.archiveWorld, b.shipUuid)).toEqual(
             { owner: b.communicator.uuid, controller: b.communicator.uuid });
-    }, 120_000);
+    }, SPEC_MS);
 
     it('re-enters a RESTARTED server, which has no memory of either peer', async () => {
         const a = await makePeer('a', 100);
@@ -591,7 +655,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         // nothing was disowned: the rest of what a owns comes back too.
         expect(stamps(archive.archiveWorld, 'npc a')).toEqual(owned);
         expect(stamps(b.world, 'npc a')).toEqual(owned);
-    }, 120_000);
+    }, SPEC_MS);
 
     it('keeps the ship it was docked with: a reconnect while landed, then the lift-off', async () => {
         const a = await makePeer('a', 100);
@@ -645,7 +709,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         expect(stamps(archive.archiveWorld, a.shipUuid)).toEqual(expected);
         expect(stamps(a.world, a.shipUuid)).toEqual(expected);
         expect(stamps(b.world, a.shipUuid)).toEqual(expected);
-    }, 120_000);
+    }, SPEC_MS);
 
     it('without a token, waits for the old copy to leave a room whose server has not noticed the old socket died', async () => {
         const a = await makePeer('a', 100);
@@ -690,7 +754,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         const owned = { owner: after, controller: undefined };
         expect(stamps(archive.archiveWorld, 'escort a')).toEqual(owned);
         expect(stamps(b.world, 'escort a')).toEqual(owned);
-    }, 120_000);
+    }, SPEC_MS);
 
     it('with its token, retires the half-open old connection at once: no wait, zero desyncs, a second peer converging', async () => {
         const a = await makePeer('a', 100);
@@ -700,17 +764,25 @@ describe('a socket reconnect mid-game (#354)', () => {
         await step(240);
 
         const firstFrames = new Map<string, unknown>();
+        const inRoom = oldConnectionAtFirstFrame(a.communicator.uuid!);
         channel.message.subscribe(({ source, message }) => {
             if (!firstFrames.has(source)) {
                 firstFrames.set(source, message);
             }
         });
         halfOpen(a);
+        const droppedAt = Date.now();
         const { before, after } = await reconnect(a);
         // The old peer left the room on the token alone — the socket is
-        // still open as far as the server's keepalive knows.
+        // still open as far as the server's keepalive knows: gone by the
+        // time the server had handled the new connection's first frame,
+        // and long before that keepalive could have noticed.
         await until(() => !relay['roomPeers']().has(before),
-            'the old connection retired', 2_000);
+            'the old connection retired');
+        expect(inRoom.get(after))
+            .withContext('the old connection in the room once the token was handled')
+            .toBeFalse();
+        expect(Date.now() - droppedAt).toBeLessThan(channel.timeout);
         expect(channel.clients.has(before)).toBeFalse();
         // On the token, as the new connection's first frame (#366).
         expect(firstFrames.get(after)).toEqual(CommunicatorMessage.encode({
@@ -737,7 +809,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         const removals = relay.inputLog.filter(record => record.inputs.some(
             input => input.kind === 'removePeer' && input.peerId === before));
         expect(removals.length).toBe(1);
-    }, 120_000);
+    }, SPEC_MS);
 
     /**
      * #366, the browser's shape of the same drop: a link that goes
@@ -758,7 +830,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             const written: SocketMessage[][] = [];
             const codec = liveWireCodec();
             const a = await makePeer('a', 100, {
-                via: proxy, keepalive: 150,
+                via: proxy,
                 onSocket: webSocket => {
                     const frames: SocketMessage[] = [];
                     written.push(frames);
@@ -782,6 +854,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             });
             const lateTokens = spyOn(console, 'warn').and.callThrough();
             const before = a.communicator.uuid!;
+            const inRoom = oldConnectionAtFirstFrame(before);
             const { length: socketsBefore } = written;
 
             // The outage: a and b keep playing, and a keeps sending.
@@ -793,12 +866,30 @@ describe('a socket reconnect mid-game (#354)', () => {
                 }
                 sending(message);
             };
+            // A short keepalive for the outage only, so the client gives
+            // up on the silent socket and churns through replacements
+            // quickly (outside it, a keepalive this short would also give
+            // up on a live socket whenever a loaded machine stalls the
+            // server's frames for 4 x 150 ms).
+            setKeepalive(a.socket, 150);
             proxy.stall();
+            // Two seconds of it at least, and until the client has given
+            // up, opened a replacement and sent room traffic into it.
             const outageEnds = Date.now() + 2_000;
-            while (Date.now() < outageEnds) {
+            const outageDone = () => Date.now() >= outageEnds
+                && !a.socket.connected.value
+                && written.length > socketsBefore
+                && sentDuringOutage.length > 0;
+            while (!outageDone() && Date.now() < outageEnds + WAIT_MS) {
                 await step(1);
                 await sleep(10);
             }
+            // The outage is over as far as the keepalive goes: the
+            // replacement now pending must not be replaced again before its
+            // handshake (held by the proxy until resume) and the server's
+            // first frame get through — a 150 ms window a loaded machine
+            // misses, leaving two replacements that connected.
+            setKeepalive(a.socket, 600_000);
             expect(a.socket.connected.value).withContext('a noticed').toBeFalse();
             expect(written.length).withContext('replacement sockets')
                 .toBeGreaterThan(socketsBefore);
@@ -808,15 +899,20 @@ describe('a socket reconnect mid-game (#354)', () => {
 
             proxy.resume();
             const resumedAt = Date.now();
-            await until(() => a.communicator.uuid !== before
+            await until(() => retryClosed(a.socket)
+                && a.communicator.uuid !== before
                 && a.room.peers.current.value.has(a.communicator.uuid!),
                 'a back under a new uuid');
             const after = a.communicator.uuid!;
-            // The old peer leaves on the token alone, within ~2 s.
+            // The old peer leaves on the token alone: gone by the time the
+            // server had handled the new connection's first frame, and long
+            // before the server's keepalive could have noticed.
             await until(() => !relay['roomPeers']().has(before),
-                'the old connection retired', 2_000);
-            const retiredIn = Date.now() - resumedAt;
-            expect(retiredIn).toBeLessThan(2_000);
+                'the old connection retired');
+            expect(inRoom.get(after))
+                .withContext('the old connection in the room once the token was handled')
+                .toBeFalse();
+            expect(Date.now() - resumedAt).toBeLessThan(channel.timeout);
             expect(channel.clients.has(before)).toBeFalse();
 
             // The new connection's FIRST communicator frame was the token...
@@ -856,7 +952,7 @@ describe('a socket reconnect mid-game (#354)', () => {
         } finally {
             await proxy.close();
         }
-    }, 120_000);
+    }, SPEC_MS);
 
     it('removes a departed peer\'s player ship and escorts, and disowns the rest, on every world', async () => {
         const a = await makePeer('a', 100);
@@ -893,7 +989,7 @@ describe('a socket reconnect mid-game (#354)', () => {
                 .get(MissionShipComponent)?.ownerDisconnected)
                 .withContext(where).toBeTrue();
         }
-    }, 120_000);
+    }, SPEC_MS);
 
     it('returns the fleet un-destroyed: ships gone after the disconnect come back, the ledger counts no loss or death, and one gone before it stays gone', async () => {
         const a = await makePeer('a', 100);
@@ -970,7 +1066,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             .recentDeaths;
         expect(deaths.has('escort 1')).toBeFalse();
         expect(deaths.has('escort 2')).toBeFalse();
-    }, 120_000);
+    }, SPEC_MS);
 
     describe('the reconnect token', () => {
         interface Connection {
@@ -994,7 +1090,8 @@ describe('a socket reconnect mid-game (#354)', () => {
             socket.message.subscribe(frame => frames.push(frame));
             const communicator = new CommunicatorClient(socket);
             const room = new MultiRoom(communicator).join(SYSTEM);
-            await until(() => communicator.uuid !== undefined
+            await until(() => retryClosed(socket)
+                && communicator.uuid !== undefined
                 && room.peers.current.value.has(communicator.uuid),
                 `${name} in the room`);
             return { name, socket, communicator, room, frames };
@@ -1014,7 +1111,8 @@ describe('a socket reconnect mid-game (#354)', () => {
                 connection.communicator['reconnectToken'] = token;
             }
             connection.socket.reconnect();
-            await until(() => connection.communicator.uuid !== before
+            await until(() => retryClosed(connection.socket)
+                && connection.communicator.uuid !== before
                 && connection.room.peers.current.value.has(
                     connection.communicator.uuid!),
                 `${connection.name} back under a new uuid`);
@@ -1052,7 +1150,7 @@ describe('a socket reconnect mid-game (#354)', () => {
                 .some(args => args.some(arg => String(arg).includes(first)
                     || String(arg).includes(second))));
             expect(logged).toBeFalse();
-        }, 30_000);
+        }, SPEC_MS);
 
         it('a wrong token retires nobody: the half-open old connection stays until the server notices', async () => {
             const a = await connect('a');
@@ -1064,7 +1162,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(serverPeers().has(after)).toBeTrue();
             expect(serverPeers().has(b.communicator.uuid!)).toBeTrue();
             expect(channel.clients.has(before)).toBeTrue();
-        }, 30_000);
+        }, SPEC_MS);
 
         it('a spent token retires nobody, however often it is replayed', async () => {
             const a = await connect('a');
@@ -1081,7 +1179,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(serverPeers().has(again.before)).toBeTrue();
             expect(serverPeers().has(replayed.before)).toBeTrue();
             expect(serverPeers().has(b.communicator.uuid!)).toBeTrue();
-        }, 30_000);
+        }, SPEC_MS);
 
         it('another client\'s token, from a connection already speaking, retires nobody and is not spent by it', async () => {
             const b = await connect('b');
@@ -1097,7 +1195,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             const { before } = await reconnectWith(b);
             await until(() => !serverPeers().has(before), 'b\'s old connection retired');
             expect(serverPeers().has(mallory.communicator.uuid!)).toBeTrue();
-        }, 30_000);
+        }, SPEC_MS);
 
         it('grants no identity: the presenter gets a NEW uuid, and nothing the old connection owned', async () => {
             const a = await makePeer('a', 100);
@@ -1118,7 +1216,7 @@ describe('a socket reconnect mid-game (#354)', () => {
                 .filter(entity => entity.components.get(MultiplayerData)?.owner === after
                     || entity.components.get(ControlledByComponent)?.peerId === after);
             expect(stampedAfter).toEqual([]);
-        }, 60_000);
+        }, SPEC_MS);
     });
 
     describe('refused insertions are not silent', () => {
@@ -1161,7 +1259,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             // this peer's, so it stays refused and nobody desyncs.
             expect(a.host.status().identityRecoveryFailed).toBeUndefined();
             expect(desyncs).toEqual([]);
-        }, 120_000);
+        }, SPEC_MS);
 
         /** An escort stamped by the worker's identity, as a worker-side
          * spawn is: after a reconnect the worker has not followed, the
@@ -1210,7 +1308,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(stamps(b.world, 'escort a')).toEqual(owned);
             expect(stamps(archive.archiveWorld, a.shipUuid))
                 .toEqual({ owner: after, controller: after });
-        }, 120_000);
+        }, SPEC_MS);
 
         it('reports the failure rather than loop when the worker never learns its identity', async () => {
             // The identity forwarding broken: nothing this worker inserts
@@ -1233,7 +1331,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(atA.length).toBe(1);
             await step(600);
             expect(atA.length).toBe(1);
-        }, 120_000);
+        }, SPEC_MS);
 
         it('ends a never-recoverable identity in #333\'s terminal state, '
             + 'reported exactly once', async () => {
@@ -1295,7 +1393,7 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(later.changed).toEqual([]);
             expect(await a.host.resync(true)).toBeFalse();
             expect(a.host.status().tick).toBe(frozenAt);
-        }, 120_000);
+        }, SPEC_MS);
 
         it('re-enters on a refusal of an entity it holds under a stale id, at most three times', async () => {
             const a = await makePeer('a', 100);
@@ -1333,6 +1431,6 @@ describe('a socket reconnect mid-game (#354)', () => {
             expect(error.calls.allArgs().filter(args =>
                 String(args[0]).includes('giving up after 3 re-entries')).length)
                 .toBe(1);
-        }, 120_000);
+        }, SPEC_MS);
     });
 });
