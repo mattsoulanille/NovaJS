@@ -331,11 +331,13 @@ sensible default, marked GUESS in the code, and wants a reference run:
     each with the escorts 10-60 px from the lead: no escort left the
     formation, the lead did not scan either, no message, no fine. So a
     fleet escort with a live leader NEVER scans (npc_decision.ts case 4
-    skips the scan decision; it stays in formation). GUESSES left: an
-    escort whose lead is gone (destroyed, or left the system) scans as a
-    lone interceptor; the govt scans at all (no lone AI 4 of gövt 301 was
-    run as a control; wave 11's lone cutters scanned at CrimeTol 10, this
-    govt had CrimeTol 30000); a fleet of a CrimeTol-10 govt.
+    skips the scan decision; it stays in formation). Both controls
+    MEASURED since (R: "Fleet scan controls, wave 24"): a LONE AI 4 of
+    gövt 301 scanned and fined the pod pilot within 3 s (so the govt
+    scans; the silence was the formation's), and the same fleet under a
+    CrimeTol-10 govt still never scanned in four visits; NovaJS matches
+    both. GUESS left: an escort whose lead is gone (destroyed, or left the
+    system) scans as a lone interceptor.
 
 ### Legal records per system: guesses to measure
 

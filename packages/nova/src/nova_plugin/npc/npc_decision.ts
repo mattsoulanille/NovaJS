@@ -989,10 +989,15 @@ export const NpcDecisionSystem = new System({
                 // lead beside a pilot carrying a ScanMask pod, three
                 // visits, no scan and no fine; its leader's business comes
                 // first, as it does for a fleet's miner, which does not
-                // mine at all). With its leader gone it is a lone
-                // interceptor again and scans (GUESS: no reference run
-                // lost a lead). docs/npc_behavior_gaps.md
-                // "Contraband scan: guesses to measure" 11.
+                // mine at all). Both controls MEASURED too (reference
+                // "Fleet scan controls, wave 24"): a LONE AI 4 of the same
+                // govt scanned and fined the pod pilot within 3 s, so the
+                // silence was the formation's; and the same fleet under a
+                // CrimeTol-10 govt still never scanned (four visits). With
+                // its leader gone it is a lone interceptor again and scans
+                // (GUESS: no reference run lost a lead).
+                // docs/npc_behavior_gaps.md "Contraband scan: guesses to
+                // measure" 11.
                 const fleetEscort = formation !== undefined
                     && entities.has(formation.leader);
                 if (scans && govtData && !fleetEscort) {

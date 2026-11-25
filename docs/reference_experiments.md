@@ -12305,6 +12305,11 @@ of the scan (`N/nova_plugin/npc/npc_decision.ts:478`, `:903`), lone AI 4s
 scan (case 4, `:925`): **matches** both. Untested: an escort whose leader is
 gone (main's GUESS).
 
+**Applied (wave-24 fixes, 2026-11-25).** No code change: the case-4
+comment in `N/nova_plugin/npc/npc_decision.ts` and
+docs/npc_behavior_gaps.md "Contraband scan: guesses to measure" 11 now
+mark both controls MEASURED; the leaderless escort stays a GUESS.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/lonescan/` (`scanmsg1.png`, `*/02-w-00.png` ..), `strict/*/` (`02-w-00.png` .. `61-w-59.png`).
 
 ### Disabled ships, wave 24: a disabled trader in flight with nobody around boards normally; a plunder can trip the hulk's self-destruct; a fleet's escorts keep fighting after their lead is disabled (2026-11-25, second pass)
