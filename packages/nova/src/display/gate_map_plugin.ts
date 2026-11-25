@@ -138,6 +138,10 @@ export const GateMapPlugin: Plugin = {
             id => discovery.level(id));
         stage.addChild(gateMap.container);
         world.resources.set(GateMapResource, gateMap);
+        // Debug/headless-driving handle, like window.novaStarmap.
+        if (typeof window !== 'undefined') {
+            window.novaGateMap = gateMap;
+        }
         // Idempotent and shared with the starmap / mission board; kicked
         // off here so the stellar->system index is warm by the time the
         // player reaches a gate.

@@ -28,6 +28,7 @@ import type { ScaleLayout } from './display/display_scale.js';
 import type { EscortPanelRow } from './display/escort_panel.js';
 import type { HailDialog } from './spaceport/hail_dialog.js';
 import type { OfferPopup } from './spaceport/offer_popup.js';
+import type { GateMap } from './spaceport/gate_map.js';
 import type { Starmap } from './spaceport/starmap.js';
 import type { DiscoveryHooks, MiniMapHooks } from './display/starmap_plugin.js';
 import type { JumpVisual } from './display/jump_fade_plugin.js';
@@ -133,6 +134,8 @@ declare global {
         novaHailDialog?: HailDialog;
         /** The galaxy map (starmap_plugin). */
         novaStarmap?: Starmap;
+        /** The hypergate map (gate_map_plugin). */
+        novaGateMap?: GateMap;
         /** The discovery record levers (starmap_plugin). */
         novaDiscovery?: DiscoveryHooks;
         /** The `h` hyperspace minimap (starmap_plugin). */
