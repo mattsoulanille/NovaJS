@@ -1,6 +1,9 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import {
+    getDefaultShipData, getDefaultShipPhysics, ShipData,
+} from 'novadatainterface/ship_data';
+import {
     getDefaultProjectileWeaponData, WeaponData,
 } from 'novadatainterface/weapon_data';
 import {
@@ -50,15 +53,29 @@ describe('normaliseBuiltInAmmo', () => {
         ['p:312', outfit('p:312', { ammoFor: 'p:311', max: 0 })],
         ['p:313', outfit('p:313', { weapons: { 'p:311': 1 } })],
         ['nova:128', outfit('nova:128')],
+        // A one-ton round for a launcher-less supply (p:320).
+        ['p:322', outfit('p:322', { ammoFor: 'p:320', max: 32000,
+            physics: { freeMass: 1 } })],
+    ]);
+    weapons.set('p:320', weapon('p:320', { ammoType: ['weapon', 'p:320'] }));
+    weapons.set('p:321', weapon('p:321', { ammoType: ['weapon', 'p:320'] }));
+    // 'p:500' has 10 tons free. The saves below fly nova:249, which is not
+    // in this table, so they are not mass-gated.
+    const ships = new Map<string, ShipData>([
+        ['p:500', {
+            ...getDefaultShipData(), id: 'p:500',
+            physics: { ...getDefaultShipPhysics(), mass: 50, freeMass: 10 },
+        }],
     ]);
     const lookups: BuiltInAmmoLookups = {
         outfitIds: ['nova:128', 'nova:137', 'nova:143', 'nova:144',
-            'nova:327', 'nova:330', 'p:312', 'p:313'],
+            'nova:327', 'nova:330', 'p:312', 'p:313', 'p:322'],
         async getOutfit(id) {
             return outfits.get(id) ?? (id.endsWith(':builtInAmmo')
                 ? outfit(id, { ammoFor: 'x' }) : undefined);
         },
         async getWeapon(id) { return weapons.get(id); },
+        async getShip(id) { return ships.get(id); },
     };
 
     function save(owned: [string, number][],
@@ -106,6 +123,15 @@ describe('normaliseBuiltInAmmo', () => {
             ['p:313', 2], ['p:310:builtInAmmo', 50],
         ]), lookups);
         expect(result.outfits).toEqual([['p:313', 2], ['p:312', 20]]);
+    });
+
+    it('caps by the hull\'s free mass, as a purchase does', async () => {
+        // The implicit magazine weighed nothing; 30 one-ton rounds do not
+        // fit a hull with 10 tons free (Max 32000 would allow them).
+        const result = await normaliseBuiltInAmmo({
+            ...save([['p:321:builtInAmmo', 30]]), ship: 'p:500',
+        } as SaveData, lookups);
+        expect(result.outfits).toEqual([['p:322', 10]]);
     });
 
     it('keeps a magazine whose supply no oütf feeds', async () => {

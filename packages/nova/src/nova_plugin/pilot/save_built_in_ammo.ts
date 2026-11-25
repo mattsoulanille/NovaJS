@@ -14,9 +14,11 @@
  * becomes that many of the oütf novaparse would load today
  * (preferredAmmoOutfit), capped the way buying it is: its Max (times its
  * increase-maximum items, outfitter_rules effectiveMax) and, when the
- * supply weapon sets MaxAmmo, the launchers' room (ammoCapacity). What
- * does not fit is dropped, as the outfitter would never have sold it.
- * The flown ship's outfits and every stored ship's are repaired.
+ * supply weapon sets MaxAmmo, the launchers' room (ammoCapacity), and the
+ * hull's free mass (canBuyOutfit's mass gate: the implicit magazine weighed
+ * nothing, the real oütf may not). What does not fit is dropped, as the
+ * outfitter would never have sold it. The flown ship's outfits and every
+ * stored ship's are repaired.
  *
  * WHY AT LOAD AND NOT A SAVE MIGRATION. Whether a supply has an oütf
  * depends on the installed data (a plug-in can add or remove one), and
@@ -32,7 +34,9 @@
  * Client-only bookkeeping; never runs in the simulation.
  */
 import type { OutfitData } from 'novadatainterface/outfit_data';
+import type { ShipData } from 'novadatainterface/ship_data';
 import type { WeaponData } from 'novadatainterface/weapon_data';
+import { installedOutfitMass } from '../ship/index.js';
 import {
     ammoSupplyWeaponId, builtInOutfitWeaponId, preferredAmmoOutfit,
 } from 'novaparse/built_in_weapon_outfit';
@@ -43,6 +47,8 @@ export interface BuiltInAmmoLookups {
     readonly outfitIds: readonly string[];
     getOutfit(id: string): Promise<OutfitData | undefined>;
     getWeapon(id: string): Promise<WeaponData | undefined>;
+    /** A hull class, for its free mass (unknown: not mass-gated). */
+    getShip(id: string): Promise<ShipData | undefined>;
 }
 
 type Outfits = readonly (readonly [string, number])[];
@@ -71,11 +77,12 @@ export async function normaliseBuiltInAmmo(save: SaveData,
             feeding.set(ammoFor, [...(feeding.get(ammoFor) ?? []), id]);
         }
     }
-    const convert = async (outfits: Outfits) =>
-        convertMagazines(outfits, feeding, lookups);
-    const outfits = await convert(save.outfits);
+    const convert = async (outfits: Outfits, shipId: string) =>
+        convertMagazines(outfits, await lookups.getShip(shipId), feeding,
+            lookups);
+    const outfits = await convert(save.outfits, save.ship);
     const stored = await Promise.all(storedShips.map(async ship => {
-        const converted = await convert(ship.outfits);
+        const converted = await convert(ship.outfits, ship.ship);
         return converted === ship.outfits ? ship
             : { ...ship, outfits: converted };
     }));
@@ -89,7 +96,7 @@ export async function normaliseBuiltInAmmo(save: SaveData,
     } as SaveData;
 }
 
-async function convertMagazines(outfits: Outfits,
+async function convertMagazines(outfits: Outfits, ship: ShipData | undefined,
     feeding: ReadonlyMap<string, readonly string[]>,
     lookups: BuiltInAmmoLookups): Promise<[string, number][]> {
     let list = outfits as [string, number][];
@@ -108,7 +115,7 @@ async function convertMagazines(outfits: Outfits,
             continue;
         }
         const rest = list.filter(([other]) => other !== id);
-        const room = await roomFor(targetData, supply, rest, lookups);
+        const room = await roomFor(targetData, supply, rest, ship, lookups);
         const existing = rest.find(([other]) => other === target)?.[1] ?? 0;
         const total = existing + Math.max(0, Math.min(count, room));
         // The converted rounds take the magazine's place in the list
@@ -124,11 +131,14 @@ async function convertMagazines(outfits: Outfits,
 
 /**
  * How many more of ammo oütf `outfit` (feeding `supply`) a ship owning
- * `owned` may hold: the outfitter's purchase caps (effectiveMax, and
- * ammoCapacity when the supply weapon sets MaxAmmo).
+ * `owned` may hold: the outfitter's purchase caps (effectiveMax,
+ * ammoCapacity when the supply weapon sets MaxAmmo, and the free mass of
+ * hull class `ship` when it is known).
  */
 async function roomFor(outfit: OutfitData, supply: string,
-    owned: Outfits, lookups: BuiltInAmmoLookups): Promise<number> {
+    owned: Outfits, ship: ShipData | undefined,
+    lookups: BuiltInAmmoLookups): Promise<number> {
+    let freeMass = ship?.physics.freeMass ?? Infinity;
     let multiplier = 0;
     let mounted = 0;
     let supplied = 0;
@@ -140,6 +150,9 @@ async function roomFor(outfit: OutfitData, supply: string,
         const data = await lookups.getOutfit(id);
         if (!data) {
             continue;
+        }
+        if (ship) {
+            freeMass -= installedOutfitMass(data, ship.physics.mass) * count;
         }
         if (data.increasesMax === outfit.id) {
             multiplier += count;
@@ -154,6 +167,10 @@ async function roomFor(outfit: OutfitData, supply: string,
     const supplyWeapon = await lookups.getWeapon(supply);
     if (supplyWeapon && supplyWeapon.maxAmmo > 0) {
         room = Math.min(room, supplyWeapon.maxAmmo * mounted - supplied);
+    }
+    const unit = ship ? installedOutfitMass(outfit, ship.physics.mass) : 0;
+    if (unit > 0) {
+        room = Math.min(room, Math.floor(freeMass / unit));
     }
     return Math.max(0, room);
 }

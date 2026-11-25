@@ -555,6 +555,7 @@ describe('ship storage rules', () => {
                 await restockCarriedEscorts([{ uuid: 'e', entity: escort }], {
                     getOutfit: async id => OUTFITS.get(id),
                     getWeapon: async () => undefined,
+                    getShip: async id => SHIPS.get(id),
                 });
                 expect(escort.components.get(FuelComponent)!.current)
                     .toBe(400);

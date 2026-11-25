@@ -438,6 +438,7 @@ export class FleetLedger {
             await restockCarriedEscorts(taken, {
                 getOutfit: id => gameData.data.Outfit.get(id),
                 getWeapon: id => gameData.data.Weapon.get(id),
+                getShip: id => gameData.data.Ship.get(id),
             });
         } catch (e) {
             // The roster was emptied before the (network-bound) restock;

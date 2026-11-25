@@ -739,6 +739,7 @@ describe('the roster drain a system transition performs', () => {
         await restockCarriedEscorts(batch, {
             getOutfit: async id => id === 'ammo' ? ammoOutfit : undefined,
             getWeapon: async () => undefined,
+            getShip: async () => undefined,
         });
         expect(outfits.get('ammo')!.count).toEqual(40);
     });

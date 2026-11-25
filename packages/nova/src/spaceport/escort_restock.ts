@@ -1,9 +1,11 @@
 import { OutfitData } from 'novadatainterface/outfit_data';
+import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { Entity } from 'nova_ecs/entity';
 import {
     DisabledComponent, ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
-    IsIonizedComponent, OutfitsState, OutfitsStateComponent,
+    installedOutfitMass, IsIonizedComponent, OutfitsState, OutfitsStateComponent,
+    ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { deployedFightersByBay } from './landed_escorts.js';
 
@@ -25,7 +27,8 @@ import { deployedFightersByBay } from './landed_escorts.js';
  * the design, not an oversight.
  *
  * WHAT IS RESTOCKED: fuel (FuelComponent.current -> max), ammunition
- * (every owned outfit with an `ammoFor` goes back to capacity), and — since
+ * (every owned outfit with an `ammoFor` goes back to capacity, as far as
+ * the hull's free mass allows, see massFill), and — since
  * Matthew's playtest ("escorts should repair and deionize when landed") —
  * the HULL: armor and shields to full, any lingering ionization cleared,
  * and DisabledComponent dropped if one somehow rode the landing down. Bay
@@ -58,6 +61,8 @@ import { deployedFightersByBay } from './landed_escorts.js';
 export interface RestockGameData {
     getOutfit(id: string): Promise<OutfitData | undefined>;
     getWeapon(id: string): Promise<WeaponData | undefined>;
+    /** The escort's hull class (its ShipComponent id), for its free mass. */
+    getShip(id: string): Promise<ShipData | undefined>;
 }
 
 /**
@@ -96,6 +101,9 @@ type AmmoCeiling =
  *    field, multiplied by any owned "increases max" items pointing at it.
  *  - A Max of <= 0 there means UNLIMITED, which has no ceiling to fill to,
  *    so such an outfit is left at whatever count it already had.
+ *
+ * Both ceilings are COUNT limits only. The purchase's other gate, the
+ * hull's free mass, is applied on top by restockEscortEntity (fillable).
  *
  * Returns undefined only when the outfit is not ammunition at all.
  */
@@ -212,6 +220,7 @@ export async function restockEscortEntity(entity: Entity,
             ownedData.set(id, data);
         }
     }
+    const fill = await massFill(entity, owned, ownedData, gameData);
 
     // Ammo outfits grouped by the weapon they supply. TWO OUTFITS CAN FEED
     // ONE LAUNCHER (the bay data model does exactly this: several fighter
@@ -253,7 +262,8 @@ export async function restockEscortEntity(entity: Entity,
                 if (capacity !== undefined && state
                     && state.count < capacity) {
                     // Never trims an overfull magazine — a restock tops up.
-                    state.count = capacity;
+                    state.count += fill(ownedData.get(id)!,
+                        capacity - state.count);
                 }
             }
             continue;
@@ -273,10 +283,65 @@ export async function restockEscortEntity(entity: Entity,
             if (!state) {
                 continue;
             }
-            state.count += free;
-            free = 0;
+            // The rest of the pool goes to the next supplying outfit when
+            // this one's mass runs out (a lighter round may still fit).
+            const added = fill(ownedData.get(id)!, free);
+            state.count += added;
+            free -= added;
         }
     }
+}
+
+/**
+ * THE HULL'S FREE MASS GATES A RESTOCK THE WAY IT GATES A PURCHASE. The
+ * outfitter refuses a unit whose mass exceeds what the hull has left
+ * (outfitter_rules canBuyOutfit: "You don't have enough free mass."), so a
+ * restock topping up to the count ceiling alone could load an escort far
+ * past anything its pilot could have bought, and the excess then followed
+ * the HULL: swapping into the escort (ship_storage swapWithEscort) handed it
+ * to the player. Playtest 2026-11-24 (Matthew, plug-in "More Blasters
+ * CHEAT"): its Hyperioid (shïp 171 override, and AngryHyperioid 501) ships
+ * with 4 "Hyperioid cell sample" (oütf 520: ammo for its Space Crane wëap
+ * 248, which has MaxAmmo 0, so the oütf Max governs; Max 32000, 1 ton
+ * each), and one landing filled that to 32000 aboard a hull with 19 tons
+ * of free mass and none of it left: Available -31,951 tons after the swap.
+ * Stock data has the same overload on a smaller scale (Manticores and Fed
+ * Destroyers up to 20 four-ton EMP Torpedoes from 8-10, Starbridges and
+ * Rebel ships up to 100 one-ton Gravimetric Missiles).
+ *
+ * Returns the fill function for one escort: given an ammo outfit and how
+ * many units its count ceiling allows, the units that also FIT, spending
+ * the mass as it goes so every later fill sees what is left. Massless
+ * rounds (nearly all ammo, every fighter) are never limited. Never trims:
+ * an escort already over its mass gets nothing more, and keeps what it has.
+ * An escort whose hull class is unknown (no ShipComponent, or data without
+ * it) is not mass-gated; every real escort is built with one.
+ */
+async function massFill(entity: Entity, owned: OutfitsState,
+    ownedData: ReadonlyMap<string, OutfitData>, gameData: RestockGameData):
+    Promise<(outfit: OutfitData, wanted: number) => number> {
+    const shipId = entity.components.get(ShipComponent)?.id;
+    const ship = shipId === undefined ? undefined
+        : await gameData.getShip(shipId);
+    if (!ship) {
+        return (_outfit, wanted) => wanted;
+    }
+    const hullMass = ship.physics.mass;
+    // outfitter_rules freeMass, over this escort's outfits.
+    let freeMass = ship.physics.freeMass;
+    for (const [id, data] of ownedData) {
+        freeMass -= installedOutfitMass(data, hullMass)
+            * (owned.get(id)?.count ?? 0);
+    }
+    return (outfit, wanted) => {
+        const unit = installedOutfitMass(outfit, hullMass);
+        if (unit <= 0 || wanted <= 0) {
+            return Math.max(0, wanted);
+        }
+        const fits = Math.max(0, Math.min(wanted, Math.floor(freeMass / unit)));
+        freeMass -= fits * unit;
+        return fits;
+    };
 }
 
 /**

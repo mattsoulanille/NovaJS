@@ -1,6 +1,9 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import {
+    getDefaultShipData, getDefaultShipPhysics, ShipData,
+} from 'novadatainterface/ship_data';
+import {
     getDefaultProjectileWeaponData, WeaponData,
 } from 'novadatainterface/weapon_data';
 import { Entity } from 'nova_ecs/entity';
@@ -9,7 +12,7 @@ import {
 } from '../nova_plugin/escorts/index.js';
 import {
     DisabledComponent, ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
-    IsIonizedComponent, OutfitsState, OutfitsStateComponent,
+    IsIonizedComponent, OutfitsState, OutfitsStateComponent, ShipComponent,
 } from '../nova_plugin/ship/index.js';
 import { SourceComponent } from '../nova_plugin/combat/index.js';
 import { Stat } from '../nova_plugin/core/index.js';
@@ -25,14 +28,24 @@ function launcherWeapon(w: Partial<WeaponData> & { id: string }): WeaponData {
     return { ...getDefaultProjectileWeaponData(), ...w } as WeaponData;
 }
 
-/** A game data stub over fixed outfit and weapon tables. */
-function gameDataOf(outfits: OutfitData[], weapons: WeaponData[]):
-    RestockGameData {
+/** A game data stub over fixed outfit, weapon and ship tables. */
+function gameDataOf(outfits: OutfitData[], weapons: WeaponData[],
+    ships: ShipData[] = []): RestockGameData {
     const outfitMap = new Map(outfits.map(o => [o.id, o]));
     const weaponMap = new Map(weapons.map(w => [w.id, w]));
+    const shipMap = new Map(ships.map(s => [s.id, s]));
     return {
         getOutfit: async id => outfitMap.get(id),
         getWeapon: async id => weaponMap.get(id),
+        getShip: async id => shipMap.get(id),
+    };
+}
+
+/** A hull class with `freeMass` tons of outfit space and a 100-ton hull. */
+function hull(id: string, freeMass: number): ShipData {
+    return {
+        ...getDefaultShipData(), id,
+        physics: { ...getDefaultShipPhysics(), mass: 100, freeMass },
     };
 }
 
@@ -413,4 +426,123 @@ describe('escort restock', () => {
             // moment those two came back out with it.
             expect(carrierOutfits.get('fighters')!.count).toEqual(2);
         });
+
+    /**
+     * Playtest 2026-11-24 (Matthew, plug-in "More Blasters CHEAT"): after a
+     * swap he owned 32,000 "Hyperioid cell sample" with -31,951 tons free.
+     * Its Hyperioid (shïp 171 override) ships with 4 of them: ammo (oütf
+     * 520) for the hull's Space Crane (wëap 248, MaxAmmo 0, so the oütf Max
+     * of 32000 is the count ceiling), 1 ton each, and the stock loadout
+     * leaves the hull no free mass. A landing topped it to 32000, and
+     * swapping into the escort handed the player the pile. A purchase stops
+     * at the hull's free mass, and so does the restock.
+     */
+    describe('the hull\'s free mass', () => {
+        const SAMPLE = 'More Blasters CHEAT:520';
+        const CRANE = 'More Blasters CHEAT:248';
+        const sample = outfit({
+            id: SAMPLE, ammoFor: CRANE, max: 32000, physics: { freeMass: 1 },
+        });
+        const craneOutfit = outfit({
+            id: 'More Blasters CHEAT:526', weapons: { [CRANE]: 1 },
+        });
+        const crane = launcherWeapon({
+            id: CRANE, maxAmmo: 0, ammoType: ['weapon', CRANE],
+        });
+        // 19 t free; the hull's 15-ton gun (nova:230) and the 4 samples
+        // use all of it, as in the data.
+        const gun = outfit({ id: 'nova:230', physics: { freeMass: 15 } });
+        const data = gameDataOf([sample, craneOutfit, gun], [crane],
+            [hull('nova:171', 19)]);
+
+        function hyperioidEscort(samples: number): Entity {
+            const entity = escortEntity(new Map([
+                ['nova:230', { count: 1 }],
+                ['More Blasters CHEAT:526', { count: 1 }],
+                [SAMPLE, { count: samples }],
+            ]));
+            entity.components.set(ShipComponent, { id: 'nova:171' });
+            return entity;
+        }
+        const samplesOf = (entity: Entity) =>
+            entity.components.get(OutfitsStateComponent)!.get(SAMPLE)!.count;
+
+        it('does not fill a full hull to the oütf Max (the 32000 pile)',
+            async () => {
+                const entity = hyperioidEscort(4);
+                await restockEscortEntity(entity, data);
+                expect(samplesOf(entity)).toEqual(4);
+            });
+
+        it('fills only as many massive rounds as the free mass holds',
+            async () => {
+                // Spent 3 of the 4: 3 tons free again, and 3 refill.
+                const entity = hyperioidEscort(1);
+                await restockEscortEntity(entity, data);
+                expect(samplesOf(entity)).toEqual(4);
+            });
+
+        it('never trims a hull that is already over its mass', async () => {
+            // A restock only tops up; the gate stops a pile growing.
+            const entity = hyperioidEscort(32000);
+            await restockEscortEntity(entity, data);
+            expect(samplesOf(entity)).toEqual(32000);
+        });
+
+        it('applies to a launcher\'s shared pool too', async () => {
+            const torpedo = outfit({
+                id: 'torp', ammoFor: 'tube', physics: { freeMass: 4 },
+            });
+            const tubeOutfit = outfit({
+                id: 'tubeOutfit', weapons: { tube: 2 },
+            });
+            const tube = launcherWeapon({
+                id: 'tube', maxAmmo: 10, ammoType: ['weapon', 'tube'],
+            });
+            const entity = escortEntity(new Map([
+                ['torp', { count: 8 }], ['tubeOutfit', { count: 1 }],
+            ]));
+            entity.components.set(ShipComponent, { id: 'destroyer' });
+            // 50 t free, 32 t of torpedoes aboard: 18 t left, 4 more fit
+            // (the launchers alone would take 12 more).
+            await restockEscortEntity(entity, gameDataOf(
+                [torpedo, tubeOutfit], [tube], [hull('destroyer', 50)]));
+            expect(entity.components.get(OutfitsStateComponent)!
+                .get('torp')!.count).toEqual(12);
+        });
+
+        it('spends the mass across ammo types in fill order', async () => {
+            const heavy = outfit({
+                id: 'a-heavy', ammoFor: 'gunA', max: 100,
+                physics: { freeMass: 2 },
+            });
+            const light = outfit({
+                id: 'b-light', ammoFor: 'gunB', max: 100,
+                physics: { freeMass: 1 },
+            });
+            const entity = escortEntity(new Map([
+                ['a-heavy', { count: 0 }], ['b-light', { count: 0 }],
+            ]));
+            entity.components.set(ShipComponent, { id: 'boat' });
+            await restockEscortEntity(entity, gameDataOf([heavy, light], [
+                launcherWeapon({ id: 'gunA', maxAmmo: 0 }),
+                launcherWeapon({ id: 'gunB', maxAmmo: 0 }),
+            ], [hull('boat', 11)]));
+            const outfits = entity.components.get(OutfitsStateComponent)!;
+            // gunA first (sorted): 5 heavy rounds take 10 t, 1 light fits.
+            expect(outfits.get('a-heavy')!.count).toEqual(5);
+            expect(outfits.get('b-light')!.count).toEqual(1);
+        });
+
+        it('does not limit massless ammo', async () => {
+            const missile = outfit({ id: 'ir', ammoFor: 'irGun', max: 200 });
+            const entity = escortEntity(new Map([['ir', { count: 5 }]]));
+            entity.components.set(ShipComponent, { id: 'lightning' });
+            await restockEscortEntity(entity, gameDataOf([missile],
+                [launcherWeapon({ id: 'irGun', maxAmmo: 0 })],
+                [hull('lightning', 0)]));
+            expect(entity.components.get(OutfitsStateComponent)!
+                .get('ir')!.count).toEqual(200);
+        });
+    });
 });

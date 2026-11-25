@@ -133,6 +133,8 @@ export async function preparePlayerStart(runtime: ClientRuntime,
                 .catch(() => undefined),
             getWeapon: id => gameData.data.Weapon.get(id)
                 .catch(() => undefined),
+            getShip: id => gameData.data.Ship.get(id)
+                .catch(() => undefined),
         });
         // Client-local state the save carries but no component holds:
         // the star-system discovery record (discovery_store.ts).
