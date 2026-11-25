@@ -12575,7 +12575,7 @@ Lancer with no escorts and 1,000,000 credits.
    (wave 23).
 3. Hiring a hull does not take it out of the pool for that visit.
 
-**NovaJS (main 3562c2b8).** `N/spaceport/shipyard_stock_rules.ts:270-275`
+**NovaJS (main 240c4b6f).** `N/spaceport/shipyard_stock_rules.ts:270-275`
 `shipStockGatesPass` (TechLevel or a SpecialTech match) and `:290-296`
 `shipHireable`: **matches** (1). `N/spaceport/bar.ts:361-368` opens the
 same popup (`NO_SHIPS_FOR_HIRE`, `N/spaceport/hire_escort.ts:42`) with the
@@ -12612,7 +12612,7 @@ no clearance step: the first `l` both targets it and applies the window
 through it"); a hypergate's first `l` is the clearance ("cleared for
 hypergate entry") like a planet's.
 
-**NovaJS (main 3562c2b8).** `N/display/status_bar_content.ts:196`
+**NovaJS (main 240c4b6f).** `N/display/status_bar_content.ts:196`
 chooses only between 'dock at this station' and 'land on this planet',
 and `N/nova_plugin/travel/planet_plugin.ts:405` / `:408` emit `tooFar` /
 `tooFast` without the gate kind: **mismatch** at every gate. The first
@@ -12644,7 +12644,7 @@ neutral gövt 363, crew 1, Capture Odds 75%, booty food + money, in sÿst
 fixed order and a shot 1 s after each click: `w25_plunder_live`
 (Credits, Cargo, Energy), `_b` (Cargo, Energy, Credits), `_c` (Energy,
 Credits, Cargo). Eight boards. Re-read with the same tool
-(`tools/takes.mjs`, each shot checked by eye): the eleven derelict-hulk
+(`tools/takes.mjs`, each shot checked by eye): the nine derelict-hulk
 boards of waves 6-7 that clicked Credits then Cargo (Kit Hulk, Kit Hulk
 Cheap, Kit Hulk 2,000 / 100,000 / 500,000 / Crew: derelict gövt, Capture
 Odds 0%) and wave 24's disabled trader (Energy).
@@ -12676,14 +12676,21 @@ whatever the order (Cargo tripped as the first, second and third take).
    a tripped Credits take pays could not be read: the HUD shows 1.00M
    either way.)
 
-**NovaJS (main 3562c2b8).** `N/nova_plugin/encounters/boarding_plugin.ts:1376-1435`
-applies Cargo / Credits / Fuel / Ammo takes with no self-destruct:
-**missing**. **Proposed:** after each take, one seeded draw (the existing
-RandomResource, every peer the same) against a per-item chance (GUESS from
-these counts: Cargo 0.8, Credits 0.25, Energy and Ammo 0.5); on a trip,
-end the session, destroy the hulk without a blast on the boarder, print
-STR# 2002 #113, and keep the goods of the take that tripped. Mark the
-numbers GUESS; the hull / crew dependence is untested.
+**NovaJS (main 240c4b6f, 309728a3 added the self-destruct after wave
+24).** One seeded draw per take (`N/nova_plugin/encounters/boarding_plugin.ts:1394-1410`,
+`tripPlunderSelfDestruct` `:1557-1620`) at `PLUNDER_SELF_DESTRUCT_CHANCE
+= 0.05` (`N/nova_plugin/ship/boarding_component.ts:538-564`), one rate
+for every item: **mismatch** (measured Cargo about 0.83, Credits about
+0.27, Energy 2 in 4). Its comment's premise is wrong: it reads waves 6-7
+as derelict takes with no self-destruct, but those very boards tripped 8
+times in 15 takes (3 Credits, 5 Cargo; the line is on each shot), so
+derelicts are NOT exempt (it does not exempt them either: keep that). Its
+GUESS that the tripping take's booty is LOST is refuted for Cargo (the
+hold filled: "when it trips nothing moves", `:1396-1397`). **Proposed:**
+per-item chances (GUESS from these counts: Cargo 0.8, Credits 0.25,
+Energy and Ammo 0.5), and apply the take before the draw so a trip still
+delivers it (Credits unread: deliver it too, for one rule). Keep the
+exemptions (a player's ship, a mission ship: unmeasured).
 
 Confidence: high that every item can trip and that the dialog survives an
 untripped take; medium for the per-item rates (12 / 15 / 4 takes).
@@ -12718,8 +12725,9 @@ tick** (0.77 a second). The hulk came to rest about 12 s after the hit,
 125 px from where it was hit (the exponential predicts v0 x tau = 129
 px), and stayed there for the remaining 100 s.
 
-**NovaJS (main 3562c2b8).** `N/nova_plugin/ship/disabled_component.ts:62-69`
-`DISABLED_DECELERATION = 45` px/s², constant: **mismatch** (a 34 px/s hulk
+**NovaJS (main 240c4b6f).** `N/nova_plugin/ship/disabled_component.ts:61-76`
+`DISABLED_DECELERATION = 45` px/s², constant (its comment already marks
+it "KNOWN MISMATCH IN KIND, kept until a coast is recorded"): **mismatch** (a 34 px/s hulk
 stops in 0.8 s after 25 px instead of 12 s / 125 px; a 300 px/s hulk would
 stop in 7 s after 1,000 px instead of drifting about 1,100 px with most of
 it in the first 5 s). **Proposed:** replace the constant brake with an
@@ -12742,9 +12750,10 @@ record +50 there (+50 in Kit Map Mixed, -5 in Kit Map Wanted Planet).
 `l`: "Landing request denied."; the map: Kit Map Picky **#ff6300
 ORANGE** (Legal Status "Good Citizen"), Mixed #0000ff, Wanted Planet
 #ff0000. So orange covers every record >= 0 that is still refused, as
-wave 24 predicted. **NovaJS** (main 3562c2b8): still red for every
-refusing system (`N/spaceport/starmap_draw.ts:144-151`, `:210-219`); wave
-24's proposal (orange at a record >= 0) covers this case unchanged.
+wave 24 predicted. **NovaJS** (main 240c4b6f, 55da6a2c):
+`N/spaceport/starmap_draw.ts:170-185` and `systemDotColor` `:246-262`
+draw orange #ff6300 for a refusal at a record >= 0: **matches**; drop the
+GUESS "a positive record still below MinStatus is orange" there.
 
 **Gate map, unexplored destination.** `w25_gate_unexpl`: Kit Gate A1
 with ONLY sÿst 1180 explored. The gate map draws A1 and the **cyan arrow
@@ -12752,9 +12761,9 @@ A1 -> A2 at full length, but no dot and no name at A2**; the other
 networks' systems are not drawn at all (unexplored). A click on the
 arrowhead selected nothing (no "Hypergate Destination", the lane stayed
 cyan; one click, so medium confidence). **NovaJS**
-(`N/spaceport/gate_map.ts:144-212` `computeGateMapView`) filters gates by
-sÿst Visibility only, not by exploration: an unexplored destination is
-drawn and offered. **Proposed:** draw an unexplored destination's lane
+(main 240c4b6f, `N/spaceport/gate_map.ts:157-267` `computeGateMapView`)
+filters gates by sÿst Visibility only, not by exploration: an unexplored
+destination is offered. **Proposed:** draw an unexplored destination's lane
 (arrow) but no dot or label, and do not offer it (GUESS on the click:
 one try). Ordinary hyperspace lanes on the gate map: still untested.
 
@@ -12762,12 +12771,12 @@ one try). Ordinary hyperspace lanes on the gate map: still untested.
 line reads **"Hypergate jump cancelled."** (stock STR# 2002, one-based 50)
 and the gate plays its CLOSING animation for about 0.4-0.6 s (frames
 shrink inward) before it vanishes; the ship is left at rest at the gate.
-**NovaJS:** no line is printed on a no-pick close
+**NovaJS (main 240c4b6f):** no line is printed on a no-pick close
 (`N/nova_plugin/travel/gate_transit_plugin.ts:43` relaunches silently):
-**missing**; the closing animation exists
-(`N/display/gate_animation_plugin.ts:80-83`) and matches, apart from
-wave 24's idle-gate visibility. **Proposed:** print STR# 2002 #50 when the
-gate map closes without a pick.
+**missing**; the closing animation plays before an idle gate stops being
+drawn (de235234, `N/display/gate_animation_plugin.ts:36-45`, `:87-90`):
+**matches**, so its GUESS there can be marked measured. **Proposed:** print
+STR# 2002 #50 when the gate map closes without a pick.
 
 **Disabled fleet lead, UNPROVOKED (not reached).** Three runs at Kit
 Fleet Big (`fleetlead`, `fleetlead2`, `fleetlead3`). Run 1: the one Kit
