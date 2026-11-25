@@ -301,8 +301,136 @@ export default {
         ...wave27Resources(),
         ...wave28Resources(),
         ...wave29Resources(),
+        ...wave30Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-30 experiments (docs/reference_experiments.md, "... wave 30").
+ * Nothing retired (no mïsn needed: the mïsn ids are still used up). sÿst
+ * 1254-1276, spöb 1690-1742, shïp 545-546, düde 475-476, flët 314-316.
+ * Map row y = -2160 (x -800 .. 80). The next free ids: sÿst 1277+, spöb
+ * 1743+ (spares 1495, 1496, 1499), shïp 547+, düde 477+, ränk 205+, mïsn
+ * NONE (retire an old kit mission to add one), gövt 297 and below, flët
+ * 317+, wëap 295+, oütf 467+, bits 9250+.
+ *
+ * LESSONS: a spöb's Type picks its art (spïn 2000 + Type), so a stellar
+ * cloned for its art must keep the clone's Type (Kit Gate Small 140's first
+ * build set Type 1 and drew the hypergate). An idle gate IS drawn (its
+ * closed sprite): start gate rigs beside the gate, not on it.
+ *
+ *  G   The hypergate `l` radius and entry zone from a STOPPED ship (wave 29's
+ *      Kit Gate Far rig: a decoration stellar at (0, 0) where the pilot
+ *      starts, a usable kit hypergate at (d, 0), HyperLinks to N1's gate
+ *      1610): sÿst 1254-1257 Kit Gate Far 492 / 494 / 496 / 498
+ *      (decorations spöb 1690 / 1692 / 1694 / 1696, gates 1691 / 1693 / 1695
+ *      / 1697); sÿst 1258-1264 Kit Gate Far 206 / 212 / 218 / 225 / 231 /
+ *      237 / 243 (decorations 1698 .. 1710 even, gates 1699 .. 1711 odd);
+ *      sÿst 1265 Kit Gate Far Diagonal 180 (the gate at (180, 180): max 180,
+ *      distance 255; a square entry zone of half-side 200+ clears it, a
+ *      circle of radius 250 or less does not; decoration 1712, gate 1713).
+ *  M   A MOVING ship's `l`: sÿst 1266 Kit Gate Toward (decoration 1714 at
+ *      (0, 0), rulers 1715-1720 at (300 .. 800, 60): decorations drawn as
+ *      moons, `l` never selects them; the gate 1721 at (1100, 0)), and sÿst
+ *      1267 Kit Gate Away (decoration 1722 at (0, 0), rulers 1723-1725 at
+ *      (100 / 200 / 300, 60), the gate 1726 at (-300, 0)). The pilot is
+ *      turned to face +x (evidence tools/move.mjs), then coasts. Added during
+ *      the wave: Kit Gate Far 246 / 248 (sÿst 1271 / 1272, decorations spöb
+ *      1733 / 1735, gates 1734 / 1736); Kit Gate Small 140 / 230 (sÿst 1273 /
+ *      1276: the same usable gate with stock spöb 138's 72 x 72 art at (140,
+ *      0) / (230, 0); decorations 1737 / 1741, gates 1738 / 1742).
+ *  P   (added during the wave) Plunder odds: live immobile 50 t hulks (wave
+ *      27's kind, no blast) as the only traffic of their system: shïp 545
+ *      Kit Hulk Ammo (wëap 289 with 5 rounds; düde 475; sÿst 1274 Kit Board
+ *      Ammo, port spöb 1739) and shïp 546 Kit Hulk Crew 50 (crew 50; düde
+ *      476; sÿst 1275 Kit Board Crew, port 1740).
+ *  N   NPC fleets of 10 / 12 / 13 escorts (F1c): flët 314 Kit Disc Fleet 10
+ *      (red x3, green x3, blue x2, yellow x2), 315 Kit Disc Fleet 12 (three
+ *      of each), 316 Kit Disc Fleet 13 (red x4, three of the others), as
+ *      wave 29's flët 312 / 313; the only traffic of sÿst 1268-1270 Kit
+ *      Fleet Ten / Twelve / Thirteen (ports spöb 1727-1729 at (0, 0),
+ *      markets 1730-1732 at (1200, 0)), avgShips 6.
+ */
+function wave30Resources() {
+    const out = [];
+    const Y = -2160;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const gate = (id, name, x, y) => spob(id, name, x, y, 1400, { type: 1, flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767,
+        techLevel: 0, specialTech: [-1, -1, -1], custPic: 37, custSnd: 120, hyperlinks: [1610, ...none8].slice(0, 8) });
+
+    // --- G: the radius (492-498) and the entry zone (206-243, the 180 / 180 diagonal).
+    const farGate = (sid, label, gx, gy, startId, gateId) => out.push(system(sid, `Kit Gate Far ${label}`, nextX(), Y, 363, [startId, gateId]),
+        decoration(startId, `Kit Gate Far ${label} Start`), gate(gateId, `Kit Gate Far ${label}`, gx, gy));
+    [492, 494, 496, 498].forEach((d, i) => farGate(1254 + i, d, d, 0, 1690 + 2 * i, 1691 + 2 * i));
+    [206, 212, 218, 225, 231, 237, 243].forEach((d, i) => farGate(1258 + i, d, d, 0, 1698 + 2 * i, 1699 + 2 * i));
+    farGate(1265, "Diagonal 180", 180, 180, 1712, 1713);
+
+    // --- M: a moving ship's `l` (rulers at y = 60 so the ship's path along y = 0 does not cover them).
+    out.push(system(1266, "Kit Gate Toward", nextX(), Y, 363, [1714, 1715, 1716, 1717, 1718, 1719, 1720, 1721]),
+        decoration(1714, "Kit Gate Toward Start"),
+        ...[300, 400, 500, 600, 700, 800].map((x, i) => decoration(1715 + i, `Kit Gate Toward Ruler ${x}`, x, 60)),
+        gate(1721, "Kit Gate Toward", 1100, 0));
+    out.push(system(1267, "Kit Gate Away", nextX(), Y, 363, [1722, 1723, 1724, 1725, 1726]),
+        decoration(1722, "Kit Gate Away Start"),
+        ...[100, 200, 300].map((x, i) => decoration(1723 + i, `Kit Gate Away Ruler ${x}`, x, 60)),
+        gate(1726, "Kit Gate Away", -300, 0));
+
+    // --- N: NPC fleets of 10 / 12 / 13 (as wave 29's flët 312 / 313).
+    [[314, "Kit Disc Fleet 10", [3, 3, 2, 2], 1268, "Ten"], [315, "Kit Disc Fleet 12", [3, 3, 3, 3], 1269, "Twelve"],
+        [316, "Kit Disc Fleet 13", [4, 3, 3, 3], 1270, "Thirteen"]].forEach(([fid, fname, counts, sid, sname], i) => {
+        out.push({ type: "flët", id: fid, name: fname, clone: "flët:128", set: { "@0:i16": 720, "@2:i16x4": [721, 722, 723, 724],
+            "@10:i16x4": counts, "@18:i16x4": counts, "@26:i16": 363, "@28:i16": sid, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+        const s = system(sid, `Kit Fleet ${sname}`, nextX(), Y, 363, [1727 + i, 1730 + i]);
+        s.set = { ...s.set, avgShips: 6, dudes: [-fid, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)] };
+        out.push(s, port(1727 + i, `Kit Fleet ${sname} Port`), port(1730 + i, `Kit Fleet ${sname} Market`, 1200, 0));
+    });
+
+    // --- Added during the wave (243 cleared, 250 a request): Kit Gate Far 246 / 248, sÿst 1271 / 1272 (decorations
+    // spöb 1733 / 1735, gates 1734 / 1736), on the same row after the fleets.
+    [246, 248].forEach((d, i) => farGate(1271 + i, d, d, 0, 1733 + 2 * i, 1734 + 2 * i));
+    // And (248 cleared: the 150 px gate's zone is about 249, not the planets' 212 cap): is it 1.66 x the frame or a
+    // fixed 250? sÿst 1273 Kit Gate Small 140: the same usable gate with the 72 x 72 New England art (stock spöb 138)
+    // at (140, 0) (decoration spöb 1737, gate 1738). 1.7 x 72 = 122 says a request, a fixed 250 the clearance. The spöb
+    // Type picks the art (spïn 2000 + Type), so it keeps New England's: the first try set Type 1 and drew the gate art.
+    out.push(system(1273, "Kit Gate Small 140", nextX(), Y, 363, [1737, 1738]), decoration(1737, "Kit Gate Small 140 Start"),
+        spob(1738, "Kit Gate Small 140", 140, 0, 138, { flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767,
+            techLevel: 0, specialTech: [-1, -1, -1], hyperlinks: [1610, ...none8].slice(0, 8) }));
+    // And (the 72 px gate at 140 px: the first `l` CLEARED it, the second was "too far": the clearance zone is not the
+    // entry window): the same gate at (230, 0), sÿst 1276 Kit Gate Small 230 (decoration spöb 1741, gate 1742).
+    out.push(system(1276, "Kit Gate Small 230", nextX(), Y, 363, [1741, 1742]), decoration(1741, "Kit Gate Small 230 Start"),
+        spob(1742, "Kit Gate Small 230", 230, 0, 138, { flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767,
+            techLevel: 0, specialTech: [-1, -1, -1], hyperlinks: [1610, ...none8].slice(0, 8) }));
+
+    // --- P (added during the wave): the plunder self-destruct's odds for AMMO and against a big CREW. Live immobile
+    // 50 t hulks as wave 27's (AI 4 of gövt 363, 300 armor, the pointer art; 50 t: no blast), each the only traffic of
+    // its system: shïp 545 Kit Hulk Ammo (carries wëap 289 Kit Ammo Missile with 5 rounds; düde 475; sÿst 1274 Kit
+    // Board Ammo, port spöb 1739) and shïp 546 Kit Hulk Crew 50 (crew 50; düde 476; sÿst 1275 Kit Board Crew, port 1740).
+    const hulk = (id, name, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", armor: 300,
+            shield: 0, accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 50, ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0,
+            cost: 50000, deathDelay: 10, ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": 1959, "@2:i16": 1960, "@4:i16": 1, "@6:i16": 24, "@8:i16": 24 } }];
+    [[545, "Kit Hulk Ammo", { weapons: [289, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [5, 0, 0, 0] }, 475, 1274, "Ammo", 1739],
+        [546, "Kit Hulk Crew 50", { crew: 50 }, 476, 1275, "Crew", 1740]].forEach(([sid, name, set, did, sys, label, portId]) => {
+        out.push(...hulk(sid, name, set));
+        const d = dude(did, name, 4, 363, sid);
+        d.set = { ...d.set, flags: 0x0041 };
+        const s = system(sys, `Kit Board ${label}`, nextX(), Y, 363, [portId]);
+        s.set = { ...s.set, avgShips: 1, dudes: [did, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+        out.push(d, s, port(portId, `Kit Board ${label} Port`));
+    });
+
+    // --- R7 (added during the wave): a 0x2000 FREIGHTER's Beg For Mercy price above 20M. sÿst 1277 Kit Bribe
+    // Freighters (gövt 304 Kit Bribe Plain: 0x4000 | 0x2000 | 0x0200), its port spöb 1743 (gövt 304, MinStatus 0) and
+    // three of wave 22's unused düde 451 Kit Bribe Freighter Plain (AI 1, shïp 504) as its only traffic.
+    const freighters = system(1277, "Kit Bribe Freighters", nextX(), Y, 304, [1743]);
+    freighters.set = { ...freighters.set, avgShips: 3, dudes: [451, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(freighters, port(1743, "Kit Bribe Freighters Port", 0, 0, { govt: 304, minStatus: 0 }));
+    return out;
+}
 
 /**
  * Wave-29 experiments (docs/reference_experiments.md, "... wave 29").

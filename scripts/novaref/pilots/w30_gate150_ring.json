@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w30-gate150-ring",
+  "edits": {
+    "ship": 497,
+    "stellar": 1653,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1235": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-gate150-ring"
+  }
+}

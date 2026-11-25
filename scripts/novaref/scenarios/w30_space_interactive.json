@@ -1,0 +1,44 @@
+{
+ "name": "w30_space_interactive",
+ "_comment": "Wave 30: Enter Ship, recording from the start at 30 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w30.jsonl) until {\"done\":true}; the pilot is pulled at the end. The planet bribe withdrawal's end, the hypergate `l` radius, entry zone, request lines and radar mark, F1c past twelve.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w30.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

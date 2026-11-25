@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w30-bribe-freight-200m",
+  "edits": {
+    "ship": 703,
+    "stellar": 1743,
+    "credits": 200000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1277": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-bribe-freight-200m",
+    "legal": {
+      "1277": -50
+    }
+  }
+}

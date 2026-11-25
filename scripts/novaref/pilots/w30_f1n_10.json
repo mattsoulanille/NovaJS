@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w30-f1n-10",
+  "edits": {
+    "ship": 700,
+    "stellar": 1727,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1268": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-f1n-10",
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1
+    }
+  }
+}

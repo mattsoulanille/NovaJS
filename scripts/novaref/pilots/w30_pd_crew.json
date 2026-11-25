@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w30-pd-crew",
+  "edits": {
+    "ship": 528,
+    "stellar": 1740,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1275": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-pd-crew",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

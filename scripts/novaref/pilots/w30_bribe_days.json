@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w30-bribe-days",
+  "edits": {
+    "ship": 703,
+    "stellar": 1677,
+    "credits": 2000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1246": 2,
+      "1247": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-bribe-days",
+    "legal": {
+      "1246": -50
+    }
+  }
+}

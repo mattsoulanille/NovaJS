@@ -1,0 +1,32 @@
+{
+  "name": "novaref-w30-pd-ammo",
+  "edits": {
+    "ship": 528,
+    "stellar": 1739,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1274": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-pd-ammo",
+    "weapons": {
+      "128": 0,
+      "289": {
+        "count": 1,
+        "ammo": 0
+      },
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "novaref-w30-gate-218",
+  "edits": {
+    "ship": 703,
+    "stellar": 1702,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1260": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w30-gate-218"
+  }
+}
