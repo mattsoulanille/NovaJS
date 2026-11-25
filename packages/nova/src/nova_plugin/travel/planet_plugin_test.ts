@@ -26,8 +26,10 @@ import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data'
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { applyHail } from '../encounters/index.js';
-import { CreditsComponent } from '../player/index.js';
-import { LegalRecordsComponent } from '../reputation/index.js';
+import { CreditsComponent, GameDateComponent } from '../player/index.js';
+import {
+    GovtsResource, LegalRecordsComponent, planetRefusesBribe,
+} from '../reputation/index.js';
 import { landable } from '../core/index.js';
 import {
     clearanceDeniedMessage, hypergateClearedMessage, landingBlockedMessage,
@@ -759,6 +761,49 @@ describe('planet bribes', () => {
             expect(ship.components.get(CreditsComponent)!.credits).toEqual(0);
             expect(ship.components.has(StellarBribesComponent)).toBeFalse();
             expect(pressLand(world).blocked[0].reason).toEqual('denied');
+        }, 30_000);
+
+    it('an ordinary (0x4000) port sometimes refuses outright: nothing is '
+        + 'charged and the port stays shut (reference "R7 bribe price above '
+        + '1M, wave 27")', async () => {
+            // Coldharbour's govt as a PLAIN bargainer (0x4000 without
+            // 0x8000, whose planets always take bribes). A per-world copy:
+            // the cached govt data is shared.
+            const plainPort = async (day: number) => {
+                const harness = await shutOutHarness();
+                const govts = harness.world.resources.get(GovtsResource)!;
+                const id = SYNTHETIC.govts.compact;
+                const govt = govts.get(id)!;
+                govts.set(id, { ...govt, flags: { ...govt.flags,
+                    planetsTakeBribes: true, largerBribes: false } });
+                harness.ship.components.set(GameDateComponent,
+                    { day, month: 1, year: 1177 });
+                return harness;
+            };
+            // The draw is per planet, pilot and day: refused on the 3rd,
+            // priced on the 2nd.
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false,
+                { day: 3, month: 1, year: 1177 })).toBeTrue();
+            expect(planetRefusesBribe(PORT, SHIP_UUID, false,
+                { day: 2, month: 1, year: 1177 })).toBeFalse();
+
+            const refused = await plainPort(3);
+            applyHail(refused.world, undefined,
+                { kind: 'bribe', target: PORT });
+            expect(refused.ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000);
+            expect(refused.ship.components.has(StellarBribesComponent))
+                .toBeFalse();
+            expect(pressLand(refused.world).blocked[0].reason)
+                .toEqual('denied');
+
+            const priced = await plainPort(2);
+            applyHail(priced.world, undefined,
+                { kind: 'bribe', target: PORT });
+            // A plain planet's 3,000 (no growth under 1M).
+            expect(priced.ship.components.get(CreditsComponent)!.credits)
+                .toEqual(100_000 - 3_000);
+            expect(pressLand(priced.world).blocked).toEqual([]);
         }, 30_000);
 
     it('is a deterministic function of synced state: two independent worlds '

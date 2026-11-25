@@ -34,7 +34,7 @@ import {
     fuelOfferWithdrawnText, fuelSalePrice, payMeText, fuelSaleTerms,
     FuelHaggleState, laterFuelHaggle, lowerFuelPrice,
     NO_FUEL_HAGGLE, fuelAskingBase, cantAffordText, planetBribePrice,
-    shipBribePrice, StellarClearance,
+    planetRefusesBribe, shipBribePrice, StellarClearance,
 } from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
@@ -50,7 +50,7 @@ import {
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
-    ControlledByComponent,
+    ControlledByComponent, GameDateComponent,
     escortDealOf, escortProvenance,
 } from '../nova_plugin/player/index.js';
 import { targetIdentity } from './target_identity.js';
@@ -1187,9 +1187,23 @@ export async function computeContext(world: World,
         const stellarStrings = await loadStrings(displayAssets,
             STELLAR_RESPONSE_TABLE);
         const miscStrings = await loadStrings(displayAssets, MISC_STRING_TABLE);
-        const canBribe = !clearance.cleared && planetTakesBribes(govt);
+        const bargains = !clearance.cleared && planetTakesBribes(govt);
+        // An ordinary planet sometimes turns Offer Bribe down flat (hail.ts's
+        // planetRefusesBribe; reference "R7 bribe price above 1M, wave 27":
+        // "Yeah, right." at 2M, "You wish." at 100M, the STR# 3000 95-99
+        // refusals). The button is offered all the same and answers the
+        // refusal in the well, as a ship's Beg For Mercy that will not be
+        // bought does; applyHail draws the same verdict and charges nothing.
+        const refuses = bargains && planetRefusesBribe(planetTargetUuid,
+            player.uuid, !!govt?.flags.largerBribes,
+            player.entity.components.get(GameDateComponent));
+        const canBribe = bargains && !refuses;
         const amount = planetBribePrice(planetTargetUuid, player.uuid, credits,
             !!govt?.flags.largerBribes);
+        const mercyRefused = refuses
+            ? mercyRefusedText(await loadStrings(displayAssets,
+                HAIL_RESPONSE_TABLE), hashString(planetTargetUuid))
+            : undefined;
         const bribe = canBribe
             ? {
                 amount, canAfford: credits >= amount && amount > 0,
@@ -1208,7 +1222,7 @@ export async function computeContext(world: World,
                 isStation ? CLEARED_TO_DOCK_INDEX : CLEARED_TO_LAND_INDEX,
                 isStation ? 'You are cleared to dock.'
                     : 'You are cleared to land.')
-            : canBribe
+            : bargains
                 ? stellarBribeOfferText(stellarStrings, seed)
                 // A shut port that won't be bought says so in its own words
                 // (STR# 3002 30-34) after traffic control's flat refusal.
@@ -1250,6 +1264,7 @@ export async function computeContext(world: World,
             context: {
                 variant: 'planet', heading, image: null, stellarSprite,
                 body: `${opening}\n${answer}`, bribe,
+                ...(mercyRefused !== undefined ? { mercyRefused } : {}),
             },
             target: planetTargetUuid, isEscort: false,
             replies: ASSIST_REPLIES_FALLBACK,

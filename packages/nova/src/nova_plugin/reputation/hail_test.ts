@@ -35,6 +35,9 @@ import {
     bribeGrowth,
     BRIBE_GROWTH_CASH_DIVISOR,
     LARGER_SHIP_BRIBE,
+    PLANET_BRIBE_REFUSAL_ONE_IN,
+    planetRefusesBribe,
+    SHIP_BRIBE_CAP,
     planetBribePrice,
     PLANET_BRIBE_BASE,
     PLANET_LARGER_BRIBE_BASE,
@@ -208,10 +211,11 @@ describe('the bribe price', () => {
             expect(s20.min).toBe(1_000);
             expect(s20.max).toBeGreaterThanOrEqual(18_000);
             expect(s20.max).toBeLessThanOrEqual(4_000 + 19_000);
+            // ... up to the ships' 20,000 cap (wave 27: 100M's 3,000,
+            // 8,000 and 14,000 sit under it).
             const s100 = spread(100e6, id =>
                 shipBribePrice(id, 'player', 100e6, false));
-            expect(s100.max).toBeGreaterThanOrEqual(90_000);
-            expect(s100.max).toBeLessThanOrEqual(4_000 + 99_000);
+            expect(s100.max).toBe(SHIP_BRIBE_CAP);
             // Planets: 5M asked 6,000, 20M 9,000-18,000 (and 4,000 for
             // 0x8000), 100M 25,000 and 99,000 (0x8000).
             const p5 = spread(5e6, id =>
@@ -229,6 +233,71 @@ describe('the bribe price', () => {
                 expect([0, 1_000]).toContain(bribeGrowth(1_999_999, id,
                     'player'));
             }
+        });
+
+    it('a ship never asks more than 20,000, at any cash (reference "R7 '
+        + 'bribe price above 1M, wave 27": four 20,000s at 50M and 200M, '
+        + '4,000 under them)', () => {
+            expect(SHIP_BRIBE_CAP).toBe(20_000);
+            for (const credits of [50e6, 200e6, 1e12]) {
+                const asks = ships.map(id =>
+                    shipBribePrice(id, 'player', credits, false));
+                expect(Math.max(...asks)).toBe(20_000);
+                // Most asks reach the cap.
+                expect(asks.filter(a => a === 20_000).length)
+                    .toBeGreaterThan(ships.length / 2);
+            }
+            // At 50M some stay under it (4,000 was asked).
+            expect(Math.min(...ships.map(id =>
+                shipBribePrice(id, 'player', 50e6, false))))
+                .toBeLessThan(20_000);
+            // At 50M a ship could otherwise ask up to 52,000 (the base
+            // plus 50,000): the cap is what binds.
+            expect(Math.max(...ships.map(id =>
+                fuelSaleTerms(id).base + bribeGrowth(50e6, id, 'player'))))
+                .toBeGreaterThan(20_000);
+            // A 0x8000 govt's ship asks the cap flat.
+            expect(shipBribePrice(GOOD, 'player', 200e6, true)).toBe(20_000);
+        });
+
+    it('a planet has no such cap (wave 27: 183,000 at 200M)', () => {
+        const asks = ships.map(id =>
+            planetBribePrice(id, 'player', 200e6, false));
+        expect(Math.max(...asks)).toBeGreaterThan(183_000);
+        expect(Math.min(...asks)).toBeLessThan(20_000);
+    });
+
+    it('an ordinary planet refuses outright about one time in eight, at '
+        + 'any cash; a 0x8000 planet never (wave 27: 2 in 15)', () => {
+            expect(PLANET_BRIBE_REFUSAL_ONE_IN).toBe(8);
+            const date = { day: 1, month: 1, year: 1177 };
+            for (const pilot of ['player', 'p2', 'p3']) {
+                const refused = ships.filter(id =>
+                    planetRefusesBribe(id, pilot, false, date));
+                // 400 planets: 50 expected; a generous binomial band.
+                expect(refused.length).withContext(pilot)
+                    .toBeGreaterThan(25);
+                expect(refused.length).withContext(pilot)
+                    .toBeLessThan(80);
+                expect(ships.some(id => planetRefusesBribe(id, pilot,
+                    true, date))).toBeFalse();
+            }
+            // A pure hash: the same verdict for the same planet, pilot
+            // and day ...
+            for (const id of ships.slice(0, 50)) {
+                expect(planetRefusesBribe(id, 'p', false, date))
+                    .toBe(planetRefusesBribe(id, 'p', false, date));
+            }
+            // ... re-drawn on another day (a jump moves the date).
+            const refusedToday = ships.filter(id =>
+                planetRefusesBribe(id, 'p', false, date));
+            const nextDay = { ...date, day: 2 };
+            expect(refusedToday.filter(id =>
+                planetRefusesBribe(id, 'p', false, nextDay)).length)
+                .toBeLessThan(refusedToday.length);
+            // A missing date is still a verdict.
+            expect(typeof planetRefusesBribe('x', 'p', false))
+                .toBe('boolean');
         });
 
     it('the growth draw is a fixed hash of the target and the pilot (no '

@@ -552,15 +552,17 @@ export function askingCashCap(credits: number): number {
  *  - A PLANET asks 3,000, or 4,000 for a 0x8000 govt, at every cash level
  *    up to 1M (finding 4: eight asks), with no mood;
  *  - above about 1M the ordinary price GROWS with the cash, very unevenly
- *    ({@link bribeGrowth});
+ *    ({@link bribeGrowth}); a SHIP's stops at 20,000
+ *    ({@link SHIP_BRIBE_CAP}, reference "R7 bribe price above 1M, wave
+ *    27"), a planet's does not;
+ *  - an ordinary (0x4000) planet sometimes refuses outright, whatever the
+ *    cash ({@link planetRefusesBribe}, wave 27);
  *  - a third of the cash caps it and 1,000 is the floor
  *    ({@link askingCashCap});
  *  - the legal record (-50 vs -2000) and the combat rating (0 vs 30000)
  *    play no part (finding 6), so neither is an input.
  *
- * NOT MODELLED: one plain (0x4000) planet refused the bribe outright at
- * 100M ("You wish."), unexplained (chance or cash; a wave-22 leftover);
- * the haggle's Lower Price (3/4 or a withdrawal, as for fuel) and a second
+ * NOT MODELLED: the haggle's Lower Price (3/4 or a withdrawal, as for fuel) and a second
  * offer in the same channel answered as an insult; a NEW hail's new price
  * (the 0x8000 planet asked 25,000, then 99,000): here the price is fixed
  * per ship (or planet) and pilot for given cash.
@@ -577,6 +579,17 @@ export const BRIBE_MINIMUM = FUEL_SALE_PRICE_STEP;
 /** A 0x8000 govt's bribe-taking SHIP asks this, flat, before the cash cap.
  * MEASURED (finding 5: 20,000 at 1M and at 20M, six asks, every mood). */
 export const LARGER_SHIP_BRIBE = 20_000;
+
+/**
+ * The most a bribe-taking SHIP ever asks, before the third-of-cash cap.
+ * MEASURED (reference "R7 bribe price above 1M, wave 27", finding 1): the
+ * four highest ship asks of all, at 50M and 200M, were exactly 20,000 and
+ * nothing above it was ever seen, while the asks under it spread as
+ * before (4,000 at 50M). It is the 0x8000 ships' flat ask too (GUESS: one
+ * cap, which a 0x8000 govt's ship asks at once). Planets have no such cap
+ * (183,000 at 200M).
+ */
+export const SHIP_BRIBE_CAP = LARGER_SHIP_BRIBE;
 
 /** A planet's price before the growth and the cap: an ordinary (0x4000)
  * govt's and a 0x8000 govt's. MEASURED at 10k-1M (finding 4). */
@@ -620,14 +633,15 @@ export function bribeGrowth(credits: number, targetUuid: string,
 /**
  * The price a bribe-taking SHIP names for Beg For Mercy (or for its help,
  * an unfriendly govt's 'forPay', GUESS: priced the same): its fuel-sale
- * base plus the cash's growth, or 20,000 flat for a 0x8000 govt, capped
- * by a third of the cash with a floor of 1,000. See the section comment.
+ * base plus the cash's growth up to {@link SHIP_BRIBE_CAP}, or 20,000
+ * flat for a 0x8000 govt, capped by a third of the cash with a floor of
+ * 1,000. See the section comment.
  */
 export function shipBribePrice(shipUuid: string, playerUuid: string,
     credits: number, largerBribes: boolean): number {
     const ask = largerBribes ? LARGER_SHIP_BRIBE
-        : fuelSaleTerms(shipUuid).base
-        + bribeGrowth(credits, shipUuid, playerUuid);
+        : Math.min(SHIP_BRIBE_CAP, fuelSaleTerms(shipUuid).base
+            + bribeGrowth(credits, shipUuid, playerUuid));
     return Math.min(ask, askingCashCap(credits));
 }
 
@@ -641,6 +655,43 @@ export function planetBribePrice(planetUuid: string, playerUuid: string,
     const ask = (largerBribes ? PLANET_LARGER_BRIBE_BASE : PLANET_BRIBE_BASE)
         + bribeGrowth(credits, planetUuid, playerUuid);
     return Math.min(ask, askingCashCap(credits));
+}
+
+/**
+ * An ordinary planet's outright refusal: one draw in this many refuses.
+ *
+ * MEASURED that it happens (reference "R7 bribe price above 1M, wave 27",
+ * finding 3): a plain (0x4000) planet answered Offer Bribe with a flat
+ * refusal at 2M ("Yeah, right.") and at 100M (wave 22, "You wish."), and
+ * named a price at 300, 10k, 1M, 5M, 20M, 50M and 200M, so it is a chance,
+ * not a cash level. GUESS: the rate, about one in eight (2 refusals in 15
+ * plain-planet offers), and that the draw does not depend on the cash.
+ */
+export const PLANET_BRIBE_REFUSAL_ONE_IN = 8;
+
+/**
+ * Whether a refusing planet turns the bribe down flat instead of naming a
+ * price ({@link PLANET_BRIBE_REFUSAL_ONE_IN}). A 0x8000 govt's planet
+ * never does: the Bible's "their planets will always take bribes", and
+ * none of its ten offers (wave 22, gövts 302 and 303) was refused.
+ *
+ * The original re-draws on a new hail; here the draw is a pure hash of
+ * the planet, the pilot and the game day (GUESS: the seed), so the
+ * dialog's verdict and applyHail's agree on every peer without the PRNG,
+ * and a refused pilot is answered the same until the date changes (a jump
+ * moves it). The cash plays no part (refused at 2M and 100M, priced
+ * between).
+ */
+export function planetRefusesBribe(planetUuid: string, playerUuid: string,
+    largerBribes: boolean,
+    date?: { day: number, month: number, year: number }): boolean {
+    if (largerBribes) {
+        return false;
+    }
+    const day = date ? `${date.year}-${date.month}-${date.day}` : '';
+    const draw = avalanche(hashString(
+        `bribe:refuse:${planetUuid}:${playerUuid}:${day}`)) & 0xffff;
+    return draw * PLANET_BRIBE_REFUSAL_ONE_IN < 0x10000;
 }
 
 /**

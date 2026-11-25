@@ -38,6 +38,7 @@ import {
     lowerFuelPrice,
     NO_FUEL_HAGGLE,
     planetBribePrice,
+    planetRefusesBribe,
     planetTakesBribes,
     shipBribePrice,
     shipHailResponse,
@@ -60,7 +61,8 @@ import {
 import { AggressionComponent, isIffHostile } from '../combat/index.js';
 import { contrabandDetectedBy, ShootAllWeaponsComponent } from '../npc/index.js';
 import {
-    ControlledByComponent, CreditsComponent, MissionsComponent, PlayerEscortComponent,
+    ControlledByComponent, CreditsComponent, GameDateComponent, MissionsComponent,
+    PlayerEscortComponent,
 } from '../player/index.js';
 import { GovtsResource, LegalRecordsComponent } from '../reputation/index.js';
 import { findControlledEntity } from '../player/index.js';
@@ -294,7 +296,10 @@ function playerNeed(player: Entity) {
  *    this govt will take bribes", or 0x8000 whose Bible text ends "...and
  *    their planets will always take bribes" (hail.ts's planetTakesBribes).
  *    An INDEPENDENT stellar has no government and so never bargains.
- *  3. The player must be able to afford the demand: hail.ts's
+ *  3. An ordinary planet must not turn this offer down flat (hail.ts's
+ *    planetRefusesBribe: about one in eight, reference "R7 bribe price
+ *    above 1M, wave 27"; the dialog draws the same verdict).
+ *  4. The player must be able to afford the demand: hail.ts's
  *    planetBribePrice (reference "R7 bribe price, wave 22": 3,000, or
  *    4,000 for a 0x8000 govt, growing with the cash above about 1M,
  *    capped by a third of it, never below 1,000; a pilot with less than
@@ -334,6 +339,10 @@ function applyPlanetBribe(world: World, player: Entity, playerUuid: string,
     }
     const credits = player.components.get(CreditsComponent);
     if (!credits) {
+        return;
+    }
+    if (planetRefusesBribe(targetUuid, playerUuid,
+        !!govt?.flags.largerBribes, player.components.get(GameDateComponent))) {
         return;
     }
     const amount = planetBribePrice(targetUuid, playerUuid, credits.credits,

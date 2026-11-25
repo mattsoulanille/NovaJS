@@ -162,7 +162,10 @@ export interface HailContext {
      * (its govt takes no bribes): the line it answers the plea with (STR#
      * 3000 95-99, "In your dreams, pal."). The plea stays on the main page
      * and dispatches nothing — there is no deal to strike. Never set beside
-     * `bribe`, which is the plea a ship answers with a price.
+     * `bribe`, which is the plea a ship answers with a price. A PLANET's
+     * Offer Bribe uses it the same way when the port turns the bribe down
+     * flat (hail.ts's planetRefusesBribe: "Yeah, right.", reference "R7
+     * bribe price above 1M, wave 27").
      */
     mercyRefused?: string;
     /**

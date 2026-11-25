@@ -20,7 +20,7 @@ import {
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
     MissionShipComponent, PlayerShipSelector, PlayerEscortComponent, CreditsComponent,
-    EscortCommandComponent, ControlledByComponent,
+    EscortCommandComponent, ControlledByComponent, GameDateComponent,
 } from '../nova_plugin/player/index.js';
 import {
     ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
@@ -36,6 +36,7 @@ import {
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
     JUST_AN_ESCORT_FALLBACK, MERCY_REFUSED_FIRST_INDEX, fuelSaleTerms,
+    planetRefusesBribe,
 } from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress, haggleText,
@@ -1255,6 +1256,8 @@ describe('computeContext: hailing a STELLAR', () => {
         typeDescription?: string,
         /** A transit stellar (PlanetData.gate). */
         gate?: 'hypergate' | 'wormhole',
+        /** The pilot's game date (it seeds planetRefusesBribe). */
+        date?: { day: number, month: number, year: number },
     } = {}) {
         const gameData = new MockGameData();
         const govt = {
@@ -1287,6 +1290,9 @@ describe('computeContext: hailing a STELLAR', () => {
         if (opts.bribedUntil !== undefined) {
             player.addComponent(StellarBribesComponent,
                 new Map([['nova:128', opts.bribedUntil]]));
+        }
+        if (opts.date) {
+            player.addComponent(GameDateComponent, opts.date);
         }
         world.entities.set(PLAYER, player
             .addComponent(CreditsComponent, { credits: opts.credits ?? 10_000 })
@@ -1401,6 +1407,43 @@ describe('computeContext: hailing a STELLAR', () => {
                 amount: 3000, canAfford: true, purpose: 'landing',
                 demand: 'Pay us 3,000 credits.',
             });
+        });
+
+    it('an ordinary port that turns the bribe down flat still offers it, '
+        + 'and answers the press with the refusal (reference "R7 bribe '
+        + 'price above 1M, wave 27": "Yeah, right." at 2M)', async () => {
+            // planetRefusesBribe draws per planet, pilot and day: this
+            // pilot is refused by this port on the 15th, not on the 1st.
+            const refusedOn = { day: 15, month: 1, year: 1177 };
+            const pricedOn = { day: 1, month: 1, year: 1177 };
+            expect(planetRefusesBribe(PLANET, PLAYER, false, refusedOn))
+                .toBeTrue();
+            expect(planetRefusesBribe(PLANET, PLAYER, false, pricedOn))
+                .toBeFalse();
+            const refused = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true,
+                credits: 2_000_000, date: refusedOn,
+            });
+            const result = await computeContext(refused.world,
+                refused.gameData, stellarAssets());
+            // The opening is the bargaining port's; the press answers
+            // from STR# 3000 95-99 (empty here: the pinned fallback).
+            expect(result?.context.body).toContain(
+                "We'll let you slip by the security barrier if you pay us.");
+            expect(result?.context.bribe).toBeUndefined();
+            expect(result?.context.mercyRefused)
+                .toBe(MERCY_REFUSED_FALLBACK);
+            expect(commButtonSlots('planet', result!.context))
+                .toEqual(['greetings', 'bribe', 'close']);
+
+            const priced = planetWorld({
+                minStatus: 0, record: -1, planetsTakeBribes: true,
+                credits: 2_000_000, date: pricedOn,
+            });
+            const offer = await computeContext(priced.world,
+                priced.gameData, stellarAssets());
+            expect(offer?.context.bribe?.purpose).toBe('landing');
+            expect(offer?.context.mercyRefused).toBeUndefined();
         });
 
     it('refuses flatly when the port will not be bought', async () => {

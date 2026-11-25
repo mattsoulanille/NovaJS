@@ -251,7 +251,11 @@ export function commButtonSlots(variant: 'ship' | 'planet' | 'escort',
         playerChannel?: { hostile: boolean },
     }): CommButton[] {
     if (variant === 'planet') {
-        return ['greetings', context.bribe ? 'bribe' : 'tribute', 'close'];
+        // A port that turns the bribe down flat (`mercyRefused`) still
+        // offers it, and answers the press with the refusal.
+        return ['greetings',
+            context.bribe || context.mercyRefused !== undefined
+                ? 'bribe' : 'tribute', 'close'];
     }
     // ANOTHER PLAYER's ship (#332): the same three rows a ship comm has,
     // the offer slot chosen by that ship's IFF like any other ship's.
