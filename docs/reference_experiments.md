@@ -12414,6 +12414,15 @@ The arrival centre (`farc_a`, wave 22's Kit Reinf Far C, the port 3,000
 px out): with `GOTO=1` the chase found no blip at all for 200 s (the
 victim stayed beyond the radar's reach) and no hit was made. Still open.
 
+**Applied (wave-24 fixes, 2026-11-25, `N/nova_plugin/spawn/reinforcements.ts`).**
+An AI 3 victim never calls (`reinforcementCallInRange` is false for AI 3 at
+any distance; nothing is stamped, no day spent). MEASURED: three of three
+AI 3 victims hit from 57-90 px gave no call. GUESS: "never" over "the call
+leaves with the victim" (each left within about 2-10 s), and for an armed
+AI 3 that stays and fights. AI 4 keeps no range (wave 21 from 1,600+ px,
+wave 22 from 40 px), traders keep 600 px. docs/npc_behavior_gaps.md
+"Reinforcement fleets: guesses to measure" 18 updated.
+
 **Evidence:** `~/.local/share/novaref/evidence/20261124-w24/ai3_{a,b}/` (`sheet.png`, `lines.png`, `*/10-h-fire0.png`); `farc_a/*/`.
 
 ### Reliability notes (for anyone running the reference)

@@ -200,7 +200,7 @@ describe('reinforcement rules', () => {
         });
 
     it('a trader calls only from near: 475 px yes, 700 no (MEASURED, wave '
-        + '22), 600 the GUESS between; other AIs from anywhere', () => {
+        + '22), 600 the GUESS between; AI 4 from anywhere, AI 3 never', () => {
             expect(REINFORCEMENT_TRADER_CALL_RANGE).toBe(600);
             const sq = (d: number) => d * d;
             for (const aiType of [1, 2]) {
@@ -216,9 +216,14 @@ describe('reinforcement rules', () => {
                     .toBeTrue();
             }
             // Wave 21's AI 4 call came from 1,600+ px.
-            for (const aiType of [3, 4]) {
-                expect(reinforcementCallInRange(aiType, sq(1600))).toBeTrue();
+            expect(reinforcementCallInRange(4, sq(1600))).toBeTrue();
+            expect(reinforcementCallInRange(4, undefined)).toBeTrue();
+            // Wave 24: three of three AI 3 victims hit from 57-90 px never
+            // called (GUESS over "the call left with the victim").
+            for (const distance of [0, 57, 90, 1600]) {
+                expect(reinforcementCallInRange(3, sq(distance))).toBeFalse();
             }
+            expect(reinforcementCallInRange(3, undefined)).toBeFalse();
         });
 
     it('the line: "Sensors detect <MediumName> reinforcement fleet '
@@ -527,18 +532,33 @@ describe('reinforcement fleets in the sim', () => {
                     expect(call().victim).toBe('victim');
                 });
 
-            for (const aiType of [3, 4]) {
-                it(`an AI ${aiType} victim calls from far (wave 21's AI 4 `
-                    + 'from 1,600+ px; AI 3 a GUESS)', async () => {
-                        await build();
-                        await lone(aiType, 1600);
-                        hit('victim', 'player');
-                        expect(call().victim).toBe('victim');
-                    });
-            }
+            it('an AI 4 victim calls from far (wave 21: from 1,600+ px)',
+                async () => {
+                    await build();
+                    await lone(4, 1600);
+                    hit('victim', 'player');
+                    expect(call().victim).toBe('victim');
+                });
 
-            it('the call sends no distress line, AI 1 to AI 4', async () => {
-                for (const aiType of [1, 2, 3, 4]) {
+            it('an AI 3 victim never calls, near or far, and the day stays '
+                + 'unspent (MEASURED, waves 22 and 24: three of three hit '
+                + 'from 57-90 px)', async () => {
+                    for (const distance of [70, 1600]) {
+                        await build();
+                        await lone(3, distance);
+                        hit('victim', 'player');
+                        hit('victim', 'player');
+                        expect(call()).withContext(`${distance} px`)
+                            .toEqual({});
+                        expect(calls()).withContext(`${distance} px`)
+                            .toBeUndefined();
+                        world.step();
+                        expect(distress).toEqual([]);
+                    }
+                });
+
+            it('the call sends no distress line, AI 1, 2 and 4', async () => {
+                for (const aiType of [1, 2, 4]) {
                     await build();
                     await lone(aiType, 150);
                     hit('victim', 'player');

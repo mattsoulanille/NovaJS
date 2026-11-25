@@ -79,7 +79,11 @@ import {
  *    (wave 22, finding 1: seven calls from 40-475 px, none from about
  *    700, 815, 925 and 1,080 px, however deep the shield went), whatever
  *    its speed or the day; an AI 4 victim called from 1,600+ px (wave 21,
- *    one run);
+ *    one run) and from 40 px (wave 22);
+ *  - an AI 3 victim never called: three runs (wave 22's `ai3_near`, wave
+ *    24's two), each hit once from 57-90 px, each gone ("No Target")
+ *    within about 2-10 s, no fleet, no "Sensors detect" and no distress
+ *    line in 40+ s;
  *  - the distress line is NOT the call (wave 22, finding 3): seven near
  *    calls came with no line, and a far hit drew a line with no fleet
  *    (3 of 20 trader victims over waves 21-22 sent one: a separate
@@ -124,8 +128,16 @@ import {
  *    REINFORCEMENT_TRADER_CALL_RANGE of the hit's responsible ship
  *    (MEASURED: 475 px calls, 700 does not; the 600 px between them is a
  *    GUESS, and so is measuring from the responsible ship, an escort's
- *    own distance for its hit). AI 3 / AI 4 victims have no range (AI 4
- *    MEASURED from 1,600+ px once; AI 3 open).
+ *    own distance for its hit). AI 4 victims have no range (MEASURED
+ *    from 1,600+ px once, and from 40 px);
+ *  - the victim is not a WARSHIP (AI 3): an AI 3 victim never calls
+ *    (MEASURED: three of three AI 3 victims hit from near, waves 22 and
+ *    24, gave no call. GUESS in what it means: each of them left the
+ *    system within about 2-10 s, so "an AI 3 never calls" and "its call
+ *    goes with it when it leaves" cannot be told apart from these runs;
+ *    never calling is the simpler rule, and the departure reading would
+ *    need the cancel below, itself unsupported. Also a GUESS: an armed
+ *    AI 3 that stays and fights, which no run has hit).
  * Wave 21's "slow AI 1 hulls never call" was this range (they were hit
  * from far), not their speed. The call sends no distress line: the
  * player's own victims stay silent, as npc/distress.ts has it
@@ -213,10 +225,16 @@ export const REINFORCEMENT_TRADER_CALL_RANGE = 600;
 
 /** Whether a hit on a victim of this aiType from `distance` px may call
  * the fleet: a trader (AI 1 / AI 2) only from within
- * REINFORCEMENT_TRADER_CALL_RANGE, anything else from anywhere. An unknown
+ * REINFORCEMENT_TRADER_CALL_RANGE, an interceptor (AI 4) from anywhere,
+ * a warship (AI 3) never (reference "R19 wave 24": three of three AI 3
+ * victims hit from near gave no call; never calling is a GUESS over "the
+ * call left with the victim", see the module comment). An unknown
  * distance (a shooter with no position) does not block the call. */
 export function reinforcementCallInRange(aiType: number,
     distanceSquared: number | undefined): boolean {
+    if (aiType === 3) {
+        return false;
+    }
     if (aiType !== 1 && aiType !== 2) {
         return true;
     }
@@ -458,7 +476,7 @@ function onFleetSide(govt: string | undefined, fleetGovt: GovtData,
 /**
  * Calls the system's reinforcement fleet when a player's hit on an NPC of
  * its govt's side turns the odds, a trader victim only when hit from near
- * (see the module comment).
+ * and a warship (AI 3) victim never (see the module comment).
  */
 export const ReinforcementCallSystem = new System({
     name: 'ReinforcementCallSystem',
@@ -498,7 +516,8 @@ export const ReinforcementCallSystem = new System({
             return;
         }
         // A trader calls only when the shooter is near (reference "R19
-        // ..., wave 22", finding 1), measured from the responsible ship.
+        // ..., wave 22", finding 1), measured from the responsible ship;
+        // a warship (AI 3) never calls ("R19 wave 24").
         const at = victimMovement?.position;
         const from = getEntity(source)?.components
             .get(MovementStateComponent)?.position;
