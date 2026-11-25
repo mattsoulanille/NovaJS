@@ -10141,6 +10141,16 @@ when it turns hostile); times are video seconds (10 fps, per-frame pts).
 (`N/../novadatainterface/src/system_data.ts:34-45`, "PARSED ONLY" at
 `:42`): **missing**, every row.
 
+**Applied (2026-11-24, `N/nova_plugin/spawn/reinforcements.ts`).** The
+Proposed list below, with: the odds read after the hit (100 against 46.5 +
+50 passes, exactly even does not), the delay min(ReinfTime / 30, 24) s,
+the call day kept per pilot per system and saved with the pilot (a call
+stamps every pilot in the system), the fleet 1,800 px from the caller
+heading for him, held for the visit and left out of the traffic count (the
+new trader of finding 4), set on the caller when an NPC of its side still
+holds him as its aggressor, and the line from STR# 2002 306 / 307.
+Schema-only under protocol 8 (`N/communication/rollback_protocol.ts`).
+
 **Proposed** (not applied; a first implementation, GUESSES marked):
 - Per system, one call per game day (ReinfIntrval 0) or every
   ReinfIntrval days after the last (GUESS: interval 1 measured as "the next
@@ -10572,7 +10582,7 @@ cosmetic or rare.
 | R16 | Auto-abort ships, DatePostInc on deferred auto-abort | `N/nova_plugin/missions/mission_ship_spawn.ts:479-492` | CPg, PD date | L |
 | R17 | Mission destination always lands (bad record, MinStatus 32767)? | `N/nova_plugin/reputation/stellar_clearance.ts:53-75` | CPl + kit stellar with MinStatus 32767 | L |
 | R18 | Tribute: rating threshold, defence-fleet waves, reset on jump-out (#353) | not implemented | CPl rating per Appendix I tier, VID | M |
-| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | not implemented; **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day | CPg govt + syst ReinfFleet, VID, PD | L |
+| R19 | Reinforcements (MaxOdds trigger, delay, cooldown) | **measured, first pass (R "R19 reinforcement fleets, wave 19")**: called at the player's first hit when the odds favour him, the line at the arrival ReinfTime later, once a day. **Implemented 2026-11-24** (N/nova_plugin/spawn/reinforcements.ts; guesses in docs/npc_behavior_gaps.md "Reinforcement fleets: guesses to measure"): the threshold, the delay above 300 (min(ReinfTime / 30, 24 s)), ReinfIntrval above 1, allies, the inhibitor and the fleet's disposition are guesses | CPg govt + syst ReinfFleet, VID, PD | L |
 | R20 | Plunder money (NovaJS 10% of price) and capture odds | `N/nova_plugin/ship/boarding_component.ts:227,243,247` | **mostly (waves 6-8)**: max(1,000, price / 40) up to 100,000 (exactly, 24 boards at 50,000), then a random amount between price / 40 and price / 20 (200,000 to 2,000,000, wave 8); cargo and energy a random share; capture never for a derelict (gövt 0x0800), odds capped at 75% and falling with the defenders' crew for a hulk the player disabled; one board per hulk (matches). **Mismatch** (10%, 150 px circle, 54.8 px/s gate, 15° alignment, crew-share odds, derelicts capturable) | M |
 | R21 | Scanning: what happens with illegal cargo (#308)? | not implemented | CPg illegal jünk + interceptor govt, VID, PD | M |
 | R22 | BuyRandom roll period | `N/spaceport/day_roll.ts:39-62` | CPg BuyRandom 50 outfit, repeat landings | L |

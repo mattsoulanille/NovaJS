@@ -117,7 +117,7 @@ traders, wave 15").
 | **Nosy enforcement** (gövt 0x0002: attacks a criminal player in non-allied systems) | B:1055-1058 | **Done** (13567336, ruling #376; per-system records since ruling #380): N/nova_plugin/reputation/local_law.ts. A govt enforces where it owns the system, is allied with the owner either way, or is nosy; it attacks when the player's record IN THE CURRENT SYSTEM is below its own CrimeTol (R: "A14", "A14 wave 5": all 21 cells, c2 included). | — | (done) |
 | **Legal records per system, the crime spread, the Good Citizen reward** (B: "your legal status in a system", Appendix II; gövt Disab/Board/KillPenalty, InitialRec) | B:977-1004, 3473-3500; chär Status1-4 B:519-524 | **Done (2026-11-24, rulings #380 and #379):** N/nova_plugin/reputation/system_records.ts. The record is kept per sÿst; an absent entry reads as the system's status govt's InitialRec (gövt 128 when independent). A kill (Disab + Kill), disable or boarding in system S changes every system T S reaches over hyperlinks, n jumps out: each penalty field scaled by 0.65^n and truncated; the victim's scaled fields off T's record when the victim is T's owner's or an ally's ship, else half T's OWNER's scaled fields ON (the #379 reward). The walk goes by map position (stacked systems are one place). CompReward is govt-wide (every system of the CompGovt; +R/2 allies', -R/2 enemies' and xenophobes'); failure / abort hits every CompGovt system. Smuggling stays in its system. Saves v6 (old per-govt records seed each system by its status govt); the original-pilot importer maps the file's per-system values straight across. | Guesses below ("Legal records per system: guesses to measure"). An unowned neighbour takes minus a quarter of the victim's scaled fields (R: "A14 / contraband wave 16": -76 / -49 / -20, applied). MEASURED in "A14 wave 18" (NovaJS already matched; comments updated): a disable alone spreads like a kill (-400 / -260 / -65), a crime inside an unowned system is charged there by the quarter rule at 0 jumps (-600), and the map shows a selected destination's own record. | (done) |
 | **Distress calls** (ships "send distress messages" unless gövt Flags2 0x0008) | B:1095-1098; stock STR# 5003 "Ship Help Messages" ("Mayday, Mayday! We're under attack! ...", 20 lines) | **Done (2026-11-24)**, to "P1 waves 14-16" (R): a NON-MISSION trader (AI 1/2) hit in an attack by an NPC that is not on a player's side sends "<ship name>: <random STR# 5003 line>" to the status line of every player in the system, at most once per 8 s per ship (the life of one line), never when its govt sets Flags2 0x0008 or its hull inherits it. Mission ships never call (wave 16: seven silent mission victims). N/nova_plugin/npc/distress.ts (rules, DistressCallEvent), NpcAggressionSystem (the trigger and the PRNG draw), N/display/status_message_plugin.ts `ShowDistressCallMessage` (the line; 8 s, then cleared at once, no fade). **Nobody answers a call** (MEASURED, wave 16): the help comes from the alliance, call or no call: the victim's own govt's warships join against its NPC attacker at once, an allied govt's after 20 s (N/nova_plugin/npc/allied_defenders.ts; unrelated warships and police, nosy or not, ignore it). The player's own victims never call: measured in five runs (R "P1 wave 15", finding 1; pinned in 9e56b637). | Whether AI 4s of the own or an allied govt defend (GUESS: yes); the defenders' range (none) and the ally's delay (one run). Guesses below. | (done) |
-| **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Parsed only:** D/system_data.ts:34-45. 344 of 545 stock systems have one. | R19 in the catalogue: trigger, delay (ReinfTime), cooldown (ReinfIntrval), the "Sensors detect xxx reinforcement fleet approaching." line. | M |
+| **Reinforcement fleets** (sÿst ReinfFleet, called in when allied ships are losing past MaxOdds) | B:3050-3060; gövt MaxOdds B:1005-1018, MediumName B:1130-1132; oütf ModType 44 B:1924-1930; ränk 0x0400 "call in reinforcements on the player's behalf" B:2257-2260 | **Done, first pass (2026-11-24),** to R: "R19 reinforcement fleets, wave 19". N/nova_plugin/spawn/reinforcements.ts. A PLAYER's hit (or his flock's) on a non-disabled NPC of the fleet's govt or an ally calls the fleet when the odds exceed the govt's MaxOdds: the caller's side's Strength sum over every non-disabled NPC of the govt's side in the system, each at 30-100% by shield, read after the hit (`ReinforcementCallSystem`; measured: 100 against two 50s calls it at the first hit, 1 does not). An NPC's hit never does; nothing calls it on a player's behalf (ränk 0x0400 included, measured). Once per system per game day (ReinfIntrval 0 or 1), else every ReinfIntrval days: the day is kept per pilot per system (player/reinforcement_calls.ts, saved with the pilot as `reinforcementCalls`), and a call stamps every pilot in the system. min(ReinfTime / 30, 24) s later the whole flët comes in 1,800 px from the caller heading for him (`ReinforcementArrivalSystem`), and every player hears "Sensors detect <MediumName> reinforcement fleet approaching." (STR# 2002 306 / 307, N/display/status_message_plugin.ts). It stays for the visit (SystemHold 'reinforcement'), is not traffic (`trafficCount`), and goes for the caller when an NPC of its side still holds him as its aggressor. A pilot in the system carrying an oütf ModType 44 for the govt's class (or -1) stops calls. 344 of 545 stock systems have one. | The **guesses** below ("Reinforcement fleets: guesses to measure"). | (done) |
 | **Planet defence fleets and tribute** (spöb DefenseDude/DefCount, in waves) | B:2823-2836 | **Parsed only:** D/planet_data.ts:34-40 (tracker #353). 289 of 411 stock stellars have one; their düdes are mostly AI 3 (16), some AI 4 (4). | R18 in the catalogue. | L |
 
 ### Traffic, trading, landing
@@ -466,6 +466,52 @@ GUESSES:
    NovaJS's AI 3 warships still leave on their roll and AI 2 traders after
    their one stop. To measure: a kit system whose traffic is only AI 2
    traders, and one with only AI 3 warships, watched 20 minutes.
+
+### Reinforcement fleets: guesses to measure
+
+R: "R19 reinforcement fleets, wave 19" measured the trigger at two
+strengths, the delay at two ReinfTimes, the line, the once-a-day rule for
+ReinfIntrval 0 and 1, an NPC attacker and a ränk 0x0400 pilot. Applied in
+N/nova_plugin/spawn/reinforcements.ts; everything below is marked GUESS
+there and wants a reference run:
+
+1. **The threshold:** the odds must EXCEED MaxOdds (the Bible's word),
+   read AFTER the hit lands, over the whole system (no range), with every
+   non-disabled NPC of the fleet govt or an ally as a friend and the
+   caller's ship plus his flock as the enemies. Measured only 100 (calls)
+   and 1 (does not) against two Strength-50 ships at MaxOdds 100.
+2. **The delay:** min(ReinfTime / 30, 24) s. 300 -> 10 s and 900 -> 23-25 s
+   were measured; a line 3 s + ReinfTime / 43 fits both as well. 600 and
+   1800 tell them apart (cap: 20 s and 24 s; line: 17 s and 45 s). 109 of
+   the 344 stock systems set over 720.
+3. **ReinfIntrval above 1:** every N days after the call (2 of 3 days do
+   not, the third does). Only 0 and 1 measured (both "the next day").
+4. **Allies:** a hit on an ALLY's ship calls the fleet (the Bible's "ships
+   allied with"), either direction of the alliance.
+5. **The cooldown in a room:** kept per pilot, per system, saved with the
+   pilot; a call stamps every pilot then in the system with his own day.
+   A pilot who comes in later the same day can call it again.
+6. **Escorts:** a hit by the player's flock counts as his.
+7. **Hulks:** a hit on a disabled ship calls nothing.
+8. **Where it comes in:** 1,800 px from the caller on a random bearing,
+   heading for him at the lead's top speed (the original's blip came
+   1,770 px south, flying in; around the system's centre when the caller
+   has left). Measured once.
+9. **Disposition:** each fleet ship takes the caller as its aggressor
+   when some NPC of the govt's side still holds him (or his flock) as
+   ITS aggressor; else its govt's politics decide. This is the reading of
+   1506 (hostile after a long fight) against 1507 (neutral; the hit
+   trader had gone).
+10. **It stays** for the visit (SystemHold 'reinforcement'); the original's
+    stayed 2.5+ minutes, until the player left.
+11. **Not traffic:** with AvgShips 2 a new trader came in beside the
+    three-ship fleet, so the fleet does not fill the population's slots.
+12. **The oütf ModType 44 inhibitor:** any pilot in the system carrying
+    one whose class is in the fleet govt's Class1-4 (or -1) stops every
+    call. Unmeasured (stock: the Transmission Jammer, oütf 441, -1).
+13. **The line goes to every player in the system,** not only the caller;
+    MediumName empty falls back to the govt's name.
+14. **flët AppearOn is not read** for a reinforcement fleet.
 
 ### Hull AI flags and NPC cloaking: guesses to measure
 
