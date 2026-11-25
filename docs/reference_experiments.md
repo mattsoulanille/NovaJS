@@ -9836,6 +9836,21 @@ after its lead) was not checked in NovaJS.
 population: guesses to measure" 3 can say "fleets leave too (wave 19); the
 staying Arcturus Destroyer is a reinforcement fleet".
 
+**Applied (wave-19 fixes, 2026-11-24).** Checked 2 in NovaJS: it did NOT
+match in how a fleet leaves. Each escort rolled its own 2-5 minute
+departure and, once its lead had jumped, lingered on its own AI until that
+roll, so fleets scattered over minutes where the original's went whole
+inside one 17 s burst. Now an escort in formation on a live NPC leader
+does not leave on its own roll (AI 3) and follows the leader out at its
+next think once the leader is in 'depart' or its jump
+(`fleetLeaderLeaving`, `N/nova_plugin/npc/npc_decision.ts`), which leaves
+an escort behind its lead by a second or two, as at 4.1 / 6.1 / 8.2 /
+18.2. The arrival side (1, 3) matched and is unchanged. GUESS: an escort
+whose leader is DESTROYED keeps its own AI and roll. Specs:
+`N/nova_plugin/npc/npc_traffic_stay_test.ts` ("a FLEET leaves whole",
+"fleetLeaderLeaving"). docs/npc_behavior_gaps.md "Traffic population" 2
+and 3 updated.
+
 Confidence: high for 1 (ten censuses, nine mixes, three empty spells),
 medium for 2 and 3.
 
@@ -9957,6 +9972,38 @@ Kit Ally Assist with AI 4 traffic of both):
 - ränk 0x0800: free fuel from ships of the affiliated govt AND its allies
   (either direction of the alliance, as wave 5's one-way alliances).
 
+**Applied (wave-19 fixes, 2026-11-24).**
+- The fuel price (`N/nova_plugin/reputation/hail.ts`): `fuelSaleTerms`
+  draws the mood (GUESS 1 : 2 : 1) and one of its two steps (good
+  1,000-2,000, neutral 2,000-3,000, bad 3,000-4,000; GUESS an even draw)
+  from one FNV hash of the ship's uuid; `fuelAskingBase` = min(that ask,
+  max(1,000, floor(cash / 3,000) x 1,000)) (`FUEL_SALE_CASH_DIVISOR` 3, a
+  GUESS inside [0.3, 0.4)). `FUEL_SALE_POOR_CASH` and the "+1,000 below
+  record 0" term are gone; the record is no longer read for the price.
+  OPEN, not applied: a bad mood adding 1,000 below about -5. The +1,000 an
+  ask, the 3/4 counter, Lower Price at any record (no record read there
+  either) and the can't-afford line are unchanged.
+- ränk 0x0400: the dialog no longer drops the STR# 3000 95-99 under-fire
+  refusal for a ränk holder (`N/display/hail_dialog_plugin.ts`
+  `resolveAssistReplies`): an affiliated warship refuses a healthy holder
+  under attack. The refusal strings are STR# 3000 "Comm responses",
+  0-based 95-99 ("In your dreams, pal." / "Yeah, right!" / "No way." /
+  "You wish." / "Not a chance."; 96-100 one-based), `MERCY_REFUSED_*`,
+  pinned in `N/nova_plugin/ncb/string_table_integration_test.ts`. Still a
+  GUESS: a ränk 0x0400 warship helps a disabled or fuelless holder.
+- ränk 0x0800: `ranksGiveFreeFuel` (`N/nova_plugin/ncb/rank_logic.ts`,
+  replacing `ranksGiveFreeRepair`): a rank whose affiliated govt IS the
+  hailed ship's or is allied with it either way (`alliedEitherWay`) makes
+  the fuel free; the simulation reads the alliance off GovtsResource, the
+  dialog loads the affiliated gövts. Nobody repairs, as before.
+Specs overturned: `hail_test` "draws a mood and base per ship" and "the
+first ask reads the pilot"; `hail_sim_test` "a POOR pilot is asked the
+lowest base", "a NEGATIVE record here adds 1,000" and the local-law fuel
+line; `hail_dialog_plugin_test` "a WARSHIP ... keeps the no-need line"
+and "quotes the pilot's side of the price". New: the cash cap at 10,000 /
+9,000 / 8,999 / 7,000 / 5,000 / 300, no record term at -1 / -5 / -9,
+the ally's free fuel (sim and dialog), `ranksGiveFreeFuel`.
+
 Confidence: high for 1 (four cash levels, 14 ships), medium for 2 (the
 spread is two steps per mood on 30 ships, but the bad-mood -5 / -9 rows
 leave a small term possible), high for 3, medium for 4 (six refusals, one
@@ -10068,6 +10115,38 @@ see the reliability notes).
   Government / Legal Status lines (and the title "Selected System:" when
   it is not a route destination: GUESS, one sample).
 - A14: comment updates only (guess 6 measured for boarding too).
+
+**Applied (wave-19 fixes, 2026-11-24).**
+- Contraband: an interceptor that has come up to a scanned ship (new
+  OPTIONAL NpcState `scanSatOn`, set by ContrabandScanSystem within
+  CONTRABAND_SCAN_RANGE) moves after it no faster than
+  CONTRABAND_SIT_SPEED and lets go at CONTRABAND_SIT_LEASH (300 px, GUESS);
+  the steering arm brakes it where it is meanwhile, and the decision step
+  returns it to its patrol (`N/nova_plugin/npc/contraband_target.ts`
+  `flownOff`, `npc_steering.ts`). The stay-for-the-visit sit is unchanged;
+  a cutter still closing on a ship another one scanned closes at any
+  distance. Schema-only under protocol 8 (wire fingerprint
+  51a63184211e887b -> da0885a9a4535f1c). Spec replaced:
+  `contraband_scan_test` "follows a scanned clean ship that flies off
+  (GUESS)" -> "does NOT follow ...", plus `flownOff`.
+- Rescue: a ShipGoal-5 ship with ShipStart 2 spawns live with full
+  shields and its 'rescue' hold (`N/nova_plugin/missions/mission_ship_spawn.ts`);
+  `waitingForRescue` (`N/nova_plugin/npc/system_hold.ts`: held for rescue,
+  not disabled) makes it decide nothing and hold still, the target pane
+  reads "Waiting" (STR# 2002 347, beside "Disabled" 346), the owner boards
+  it where it sits, and the retrieval drops the hold and sends it off
+  ('depart', GUESS for where it goes; `N/nova_plugin/encounters/rescue_board.ts`).
+  Stock "Rescue Raczak" (nova:394) is ShipStart 2. Not cloaked (open).
+  GUESS: a waiting ship does not fight back. Specs: `rescue_board_test`
+  (waits, is boarded, flies off; a rival is refused), `mission_ship_spawn_test`,
+  `target_readout_test`.
+- Map: a system with no stellar shows "Uninhabited System" (STR# 2002
+  333, white, in the Government slot) and nothing else, Ports: None
+  (`N/spaceport/starmap_properties.ts`; a UI match, no toggle). Kept: the
+  "Destination System:" title (the "Selected System:" sample is one
+  click). GUESS: a system whose stellars are all uninhabited keeps its
+  groups. Specs: `N/spaceport/starmap_properties_test.ts`, the STR# pins.
+- A14: no code change (guess 6 for boarding is measured; NovaJS matched).
 
 Confidence: medium for 1 (one run; radar only), high for 2 (four hulks
 boarded by hand), high for 3 (one each, matching wave 13), medium
@@ -10514,7 +10593,7 @@ for 3 (same day none, two days two calls), low for 4, medium for 5.
 | Wave 16 leftovers | P1: the self-defence case (a hostile that has FIRED on the player first, beside nosy police); whether the watch range is the whole system (5000+ px); stray hits, boards and one-way alliances (guesses 3, 4, 6, 7) untouched; whether the ally's help is limited to AI 3 (an AI 4 ally). Sol: Arcturus not watched; does the stock Asteroid Miner ever leave (21+ min here, the kit miners 3-4 min); do AI 4 interceptors ever leave (one run). Shuttles: the no-stop case on screen (radar only); the düde's uneven hull odds. A14: (done for the unowned neighbour). Contraband: whether a clean ship is approached on purpose (one cutter); the exact name limit (64 accepted, 80 refused) of the shipyard prompt. Rescue: the ShipStart-2 reveal, boarding 1080 away from planets, a no-cargo goal-5 completion (not run again). W1: confirm the 0x0002 standoff by targeting the ~500 px contacts; when 0x0040 burns. C1: see the 0x4000 cloak itself (an anchored ship); 0x0400 / 0x2000 at a jump / landing. H1: a ränk 0x0400; the fuel-sale price rule and the STR# rows; an ally's or a record-positive pilot's request when disabled. | **Wave 16** (the "... wave 16" sections above) **Wave 17** answered: Arcturus and Tau Ceti froze at exactly AvgShips (full = AvgShips; no arrival while full), AI 4 interceptors and the stock Asteroid Miner never left (an AI 3 Fed Destroyer and a Trader-govt Pegasus stayed too); a hostile that fired first (72 s earlier) is still policed; the watch range is the whole system (5000 and 9000 px reacted); an AI 4 ally defends; the name limit is 64 (65 refused); the 0x0002 contact targeted (the 0x0002 hull, still, about 450 px out); four of four cutters sat on a clean ship; an anchored 0x4000 ship did not cloak (the "No Target" is the target clearing on hostility); the fuel price (mood base 1,000 / 2,000-3,000 / 3,000, +1,000 an ask, Lower Price 3/4 or a withdrawal); a disabled pilot refused at +2000 and as an ally; a 0x0400 ränk trader refused ("... wave 17" sections). |
 | Wave 17 leftovers | P1: self-defence against a hostile firing continuously at that moment (an anchored 0x0004 hull with a 1-damage turret never fired first; use a gun that fires every second); stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). Traffic: why an AI 3 Fed Destroyer and an AI 2 Pegasus stayed in frozen Arcturus (kit systems with only AI 2 traders / only AI 3 warships, 20 min); arrival timing below the census spacing. W1: when 0x0040 burns (two magenta hulls on screen at once; use one 0x0040 hull per system). H1: a 0x0400 ränk WARSHIP's answer (none met); ränk 0x0800; the fuel price at a negative record and with little cash (pilot `w17_fuel_poor`, 5,000 credits, built, not run); the shuttles' no-stop case on screen. C1: 0x0400 / 0x2000 at a jump / landing. Rescue: the ShipStart-2 reveal (mïsn 1122), boarding 1080 / 1121 away from planets (the board loop stalled about 3,000 px from marker 2102: use a nearer marker), a no-cargo goal-5 completion. Contraband: a cutter's station-keeping on a clean ship: how long, and whether it leaves. | **Wave 17** (the "... wave 17" sections above) **Wave 18** answered: AI 2 traders and AI 3 warships keep leaving and nothing freezes (the staying Fed Destroyer was the reinforcement fleet's lead), never above AvgShips; cutters sit on a clean ship the whole visit (8+ min); a lone 0x0040 hull burns at every range (97-100% boosted inside 250 px), slow only at its turnarounds about 350 px out; firing back at a hostile firing at that moment is still policed; the fuel price is lower with little cash (1,000) and about 1,000 higher at a negative record, and a pilot who cannot pay hears "You can't fool me - you can't afford it." (STR# 3000 64); ränk 0x0800 refuels free but does not repair; no 0x0400 / 0x2000 cloak seen on screen. Not done: ränk 0x0400 with a warship (none stayed to be hailed), the rescue board and the ShipStart-2 reveal, a no-cargo goal-5 completion, the shuttles' no-stop case, arrival timing ("... wave 18" sections). |
 | Wave 18 leftovers | Traffic: do FLEET members (a kit flët's lead and escorts, a reinforcement flët) stay in a full system; the Pegasus that stayed in Arcturus; arrival timing below the census spacing (needs a full-system tracker, not the radar). H1: ränk 0x0400 against a warship (put an anchored or AI 4 363 warship at the port as a mission ship); ränk 0x0800 with an ALLY of the affiliated govt; the cash and record terms of the fuel price (more ships per case; a cash threshold; record -5 vs -9); Lower Price at a negative record. P1: stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). A14: a boarding's spread (guess 6), guesses 2-5, 7-10, 12-14; whether NovaJS shows "Uninhabited System" on the map. Rescue: board the 300 px marker hulk by hand (the board loop's sweep answered "not close enough" at 22 px), the ShipStart-2 reveal (mïsn 924 / 1122), a no-cargo goal-5 completion (923). C1: a 0x0400 ship's jump-out on screen (a system whose jump distance is inside the screen, or a radar track to the vanish). Contraband: whether a cutter leaves its clean ship when the player flies off (still in the system). | **Wave 18.** **Wave 19:** fleets leave (no member stays; a fleet arrives whole); the fuel price is capped by cash (about a third, in 1,000s), no record term needed, Lower Price counters at -1 / -9, ränk 0x0400 warships refuse, ränk 0x0800 allies refuel free, nobody repairs; a cutter does not follow; the marker rescue boarded by hand (Tab first), ShipStart 2 is a live waiting ship, a no-cargo rescue never completes; a boarding spreads like a kill; the map's "Uninhabited System" is missing in NovaJS. Left: see Wave 19 leftovers. |
-| Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?). Fleets: escorts outliving their lead in NovaJS. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** |
+| Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?), where a released waiting ship goes. Fleets: escorts outliving their lead in NovaJS (checked: they lingered until their own roll; fixed to follow the lead out). Contraband: the leash distance at which a sitting cutter lets go. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** (fixes applied 2026-11-24: the "Applied (wave-19 fixes)" notes in the three wave-19 sections) |
 
 ## Catalogue
 
