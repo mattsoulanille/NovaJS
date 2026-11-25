@@ -685,12 +685,17 @@ in the code:
    (`fuelSaleTerms`); the good mood asks 1,000 (R: "H1 / rescue leftovers,
    wave 21", finding 1: every good ask since wave 19 was 1,000, at records
    0, -8 and -9; applied 2026-11-24, dropping the even 1,000 / 2,000
-   draw). OPEN: wave 18's one good 2,000 at record -5 is unexplained and
-   not modelled. GUESSES: moods drawn 1 : 2 : 1 (seen 6 : 19 : 9) and the
+   draw). OPEN: a good 2,000 seen only at record -5 (wave 18's one, and
+   one of four in R: "H1 / mission-ship leftovers, wave 22"; 1,000 at 0
+   and at -8 / -9) is unexplained and not modelled: -5 asked both, so no
+   record rule fits every point. GUESSES: moods drawn 1 : 2 : 1 (seen 6 : 19 : 9) and the
    neutral / bad step an even draw, both from one hash of the ship's
    uuid; the original's draw (ship class? fuel needed?) is open.
-2. **Which first Lower Price counters:** about 40% (5 of 13 measured), here
-   a hash of ship, pilot and ask. The original's rule is open.
+2. **Which first Lower Price counters:** MEASURED about one in four (R:
+   "H1 / mission-ship leftovers, wave 22", finding 2: 20 of 79 first
+   presses over waves 17-22; applied 2026-11-24 as `FUEL_COUNTER_IN_FOUR`,
+   replacing two in five), here an avalanched hash of ship, pilot and ask.
+   The original's rule is open.
 3. **An accepted offer counts as an ask** (the next one costs 1,000 more);
    only withdrawn offers were followed by another ask.
 4. **The counter's well:** the mood line stays in the response well while

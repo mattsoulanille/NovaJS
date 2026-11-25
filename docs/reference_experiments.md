@@ -11627,6 +11627,18 @@ count (the shots), high for 3 (three ships), high for 4.
   in Flags but "no distress messages" in Flags2; the first Kit Quiet Attr
   set the wrong word. Read the Bible's flag list header before using a bit.
 - **`j` beside a planet does nothing;** fly a few hundred px off first. A
+**Applied (wave-22 fixes, 2026-11-24, `N/nova_plugin/reputation/hail.ts`).**
+- 2: `FUEL_COUNTER_IN_FIVE = 2` is now `FUEL_COUNTER_IN_FOUR = 1`: a first
+  Lower Price counters one press in four (`% 4 < 1`), drawn from an
+  avalanched hash of ship, pilot and ask (`avalanche`, MurmurHash3's
+  finalizer: the raw FNV-1a's `% 4` repeated every four asks). About 25%
+  at every ask over 4,000 ships (spec'd). Deterministic as before (no
+  PRNG).
+- 1: not applied. No record rule fits every point (record -5 asked both
+  1,000 and 2,000, clean and -8 / -9 only 1,000), so a good mood stays
+  1,000 and `fuelSaleTerms`'s comment now cites both -5 sightings.
+- 3, 4: nothing to change. No schema change.
+
   jump back into a system arrives off the port's radar (no blip, no arrow
   in one shot): landing after a jump needs a steering driver.
 - **A planet's bribe dialog stays up after a Lower Price COUNTER**

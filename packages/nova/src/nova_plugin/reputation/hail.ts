@@ -440,9 +440,11 @@ export const FUEL_SALE_PRICE_STEP = 1000;
  *  - good mood ("You're in luck, I'm in a good mood today.", STR# 3000
  *    115-119): 1,000 (reference "H1 / rescue leftovers, wave 21", finding
  *    1: every good ask since wave 19 was 1,000, two at record 0, two at
- *    -8, two at -9). The only good 2,000 ever seen is wave 18's, at
- *    record -5, and it is unexplained (no record term fits the rest), so
- *    it is not modelled;
+ *    -8, two at -9). A good 2,000 has been seen only at record -5: wave
+ *    18's one, and one of four goods in "H1 / mission-ship leftovers, wave
+ *    22" (the other three asked 1,000 at -5, three goods at record 0 and
+ *    four at -8 / -9 all 1,000), so no record rule fits every point (-5
+ *    gives both prices) and it is not modelled;
  *  - neutral ("All right, I'll give you some help, but it'll cost you.",
  *    140-144): 2,000 or 3,000;
  *  - bad mood ("I'm in a bad mood today, so it's going to cost extra.",
@@ -579,11 +581,12 @@ export function fuelCounterPrice(price: number): number {
 }
 
 /**
- * Of five FIRST Lower Price presses, this many get a counter rather than a
- * withdrawal: reference H1 wave 17 saw 5 counters in 13 first presses
- * (about 40%).
+ * Of four FIRST Lower Price presses, this many get a counter rather than a
+ * withdrawal. MEASURED (reference "H1 / mission-ship leftovers, wave 22",
+ * finding 2): 20 counters in 79 first presses over waves 17-22 (25%;
+ * wave 17's 5 of 13, which set the earlier two in five, was the high end).
  */
-export const FUEL_COUNTER_IN_FIVE = 2;
+export const FUEL_COUNTER_IN_FOUR = 1;
 
 /**
  * WHAT LOWER PRICE DOES (reference H1 wave 17, finding 3): on the ship's
@@ -598,11 +601,11 @@ export const FUEL_COUNTER_IN_FIVE = 2;
  * (counters at both, so the record does not read here either), and every
  * second press on a counter withdrew.
  *
- * Which first press counters is a draw the reference could only count (5
- * of 13, no pattern by ship, mood, price or record): here a hash of the
- * ship, the pilot and the ask, so it is the same on every peer and in the
- * dialog that has to show it before the record is applied, never the
- * PRNG. Pure.
+ * Which first press counters is a draw the reference could only count (20
+ * of 79 over waves 17-22, no pattern by ship, mood, price or record): here
+ * a hash of the ship, the pilot and the ask, so it is the same on every
+ * peer and in the dialog that has to show it before the record is
+ * applied, never the PRNG. Pure.
  */
 export function lowerFuelPrice(haggle: FuelHaggleState, shipUuid: string,
     playerUuid: string):
@@ -620,8 +623,12 @@ export function lowerFuelPrice(haggle: FuelHaggleState, shipUuid: string,
  * {@link lowerFuelPrice}). */
 export function fuelLowerPriceCounters(shipUuid: string, playerUuid: string,
     asks: number): boolean {
-    return hashString(`fuelSale:lower:${shipUuid}:${playerUuid}:${asks}`)
-        % 5 < FUEL_COUNTER_IN_FIVE;
+    // Avalanched first: FNV-1a's low bits depend only on the low bits of
+    // each character (`% 4` of the raw hash repeated every four asks),
+    // and its middle bits barely see the last one (the ask's digit).
+    return avalanche(hashString(
+        `fuelSale:lower:${shipUuid}:${playerUuid}:${asks}`))
+        % 4 < FUEL_COUNTER_IN_FOUR;
 }
 
 /**
@@ -1337,5 +1344,21 @@ export function greetingText(opts: {
         ? opts.govtCommName
         : 'this vessel';
     return `Greetings from ${who}. Fly safe, captain.`;
+}
+
+/**
+ * MurmurHash3's 32-bit finalizer: every output bit depends on every input
+ * bit, so a narrow field of a {@link hashString} (`% 4`) splits evenly
+ * even when the strings differ only in their last character. Pure integer
+ * arithmetic, identical on every peer.
+ */
+export function avalanche(hash: number): number {
+    let h = hash >>> 0;
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    h ^= h >>> 16;
+    return h >>> 0;
 }
 

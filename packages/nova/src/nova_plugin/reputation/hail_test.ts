@@ -557,34 +557,36 @@ describe('the fuel sale\'s price (reference H1 wave 17)', () => {
         + 'withdrawal on a counter, whatever the record; a withdrawal ends '
         + 'the ask (wave 17 finding 3, wave 19 finding 3)',
         () => {
-            // 'target' / 'player' draw W, C, C, W for asks 0-3.
-            expect([0, 1, 2, 3].map(asks =>
+            // 'target' / 'player' draw C, W, C, W, W, C for asks 0-5.
+            expect([0, 1, 2, 3, 4, 5].map(asks =>
                 fuelLowerPriceCounters('target', 'player', asks)))
-                .toEqual([false, true, true, false]);
-            expect(lowerFuelPrice(NO_FUEL_HAGGLE, 'target', 'player')).toEqual({
-                haggle: { asks: 1, countered: false }, outcome: 'withdraw',
+                .toEqual([true, false, true, false, false, true]);
+            expect(lowerFuelPrice({ asks: 1, countered: false }, 'target',
+                'player')).toEqual({
+                haggle: { asks: 2, countered: false }, outcome: 'withdraw',
             });
-            const asked = { asks: 1, countered: false };
+            const asked = { asks: 2, countered: false };
             const countered = lowerFuelPrice(asked, 'target', 'player');
             expect(countered).toEqual({
-                haggle: { asks: 1, countered: true }, outcome: 'counter',
+                haggle: { asks: 2, countered: true }, outcome: 'counter',
             });
             expect(lowerFuelPrice(countered.haggle, 'target', 'player'))
                 .toEqual({
-                    haggle: { asks: 2, countered: false },
+                    haggle: { asks: 3, countered: false },
                     outcome: 'withdraw',
                 });
             // Pure: the argument is not touched.
-            expect(asked).toEqual({ asks: 1, countered: false });
-            // About 40% of first presses counter (5 of 13 measured).
-            let counters = 0;
-            for (let i = 0; i < 2000; i++) {
-                if (fuelLowerPriceCounters(`ship ${i}`, 'player', 0)) {
-                    counters++;
+            expect(asked).toEqual({ asks: 2, countered: false });
+            // About one first press in four counters (MEASURED, "H1 /
+            // mission-ship leftovers, wave 22": 20 of 79), at every ask.
+            for (const ask of [0, 1, 2, 3]) {
+                let counters = 0;
+                for (let i = 0; i < 4000; i++) {
+                    if (fuelLowerPriceCounters(`ship ${i}`, 'player', ask)) {
+                        counters++;
+                    }
                 }
             }
-            expect(counters / 2000).toBeGreaterThan(0.35);
-            expect(counters / 2000).toBeLessThan(0.45);
         });
 
     it('Accept ends the ask (GUESS); the further-along haggle wins', () => {
@@ -742,6 +744,10 @@ describe('shipIsFighting', () => {
     it('is false for the peaceful modes, even with a target', () => {
         for (const mode of ['travel', 'dwell', 'patrol', 'depart', undefined]) {
             expect(shipIsFighting({ npcMode: mode, npcTarget: 'someone' }))
+                expect(counters / 4000).withContext(`ask ${ask}`)
+                    .toBeGreaterThan(0.22);
+                expect(counters / 4000).withContext(`ask ${ask}`)
+                    .toBeLessThan(0.28);
                 .withContext(`mode ${mode}`).toBeFalse();
         }
     });

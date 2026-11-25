@@ -1129,15 +1129,17 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
         + 'counter (reference H1 wave 17, findings 1, 3 and 4)', async () => {
             const { world } = await neutralWorld();
             fuelless(world);
-            // Ask 1, 1,000: withdrawn. Nothing moves but the haggle.
+            // 'target' draws counter, withdraw, counter (hail_test).
+            // Ask 1, 1,000: countered with 700, then withdrawn. Nothing
+            // moves but the haggle.
+            applyHail(world, PEER, lower);
+            expect(haggle(world)).toEqual({ asks: 0, countered: true });
             applyHail(world, PEER, lower);
             expect(credits(world)).toBe(100_000);
             expect(target(world).components.has(AssistingComponent))
                 .toBeFalse();
             expect(haggle(world)).toEqual({ asks: 1, countered: false });
-            // Ask 2, 2,000: countered with 1,500, then withdrawn.
-            applyHail(world, PEER, lower);
-            expect(haggle(world)).toEqual({ asks: 1, countered: true });
+            // Ask 2, 2,000: withdrawn at once.
             applyHail(world, PEER, lower);
             expect(haggle(world)).toEqual({ asks: 2, countered: false });
             expect(credits(world)).toBe(100_000);
@@ -1222,6 +1224,8 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
     it('a pilot who cannot pay: Accept Price and Lower Price change '
         + 'nothing and are not an ask (reference P1 / H1 wave 18: "You '
         + 'can\'t fool me - you can\'t afford it.")', async () => {
+        // Countered, then withdrawn: the second ask, 2,000.
+        applyHail(world, PEER, lower);
             const { world } = await neutralWorld(3);
             fuelless(world);
             player(world).components.set(CreditsComponent, { credits: 300 });
@@ -1299,16 +1303,15 @@ describe('applyHail: a NEUTRAL ship (reference H1 waves 16 and 17)', () => {
                 fuelless(world);
                 player(world).components.set(LegalRecordsComponent,
                     new Map([['test:system', record]]));
-                // 'target' draws withdraw, then counter (hail_test): a
-                // counter at a negative record as at a clean one.
-                applyHail(world, PEER, lower);
+                // 'target' counters its first ask (hail_test): a counter
+                // at a negative record as at a clean one.
                 applyHail(world, PEER, lower);
                 expect(haggle(world)).withContext(`${record}`)
-                    .toEqual({ asks: 1, countered: true });
-                // 2,000 -> 1,500, accepted.
+                    .toEqual({ asks: 0, countered: true });
+                // 1,000 -> 700, accepted.
                 applyHail(world, PEER, assist);
                 expect(credits(world)).withContext(`${record}`)
-                    .toBe(100_000 - 1500);
+                    .toBe(100_000 - 700);
             }
         });
 
