@@ -524,6 +524,12 @@ Wave 32 used sÿst 1301, spöb 1801, shïp 548-551, düde 478-479, gövt
 296-297 and flët 317 (no mïsn); next free: sÿst 1302, spöb 1802 (spares
 1495 / 1496 / 1499), shïp 552, düde 480, ränk 205, mïsn **none**, wëap 295,
 oütf 468, gövt 295 and below, flët 318, bits 9250.
+Wave 33 used sÿst 1302-1303, spöb 1802-1803, shïp 552-556, düde 480-482
+and oütf 468-469 (no mïsn); next free: sÿst 1304, spöb 1804 (spares 1495 /
+1496 / 1499), shïp 557, düde 483, ränk 205, mïsn **none**, wëap 295, oütf
+470, gövt 295 and below, flët 318, bits 9250. gövt MaxOdds also gates
+NPC-vs-NPC fights: a side whose Strength sum is far below its enemies'
+never starts one (wave 32's hunters).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

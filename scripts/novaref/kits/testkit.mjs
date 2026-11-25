@@ -304,8 +304,81 @@ export default {
         ...wave30Resources(),
         ...wave31Resources(),
         ...wave32Resources(),
+        ...wave33Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-33 experiments (docs/reference_experiments.md, "... wave 33").
+ * Nothing retired (no mïsn needed). shïp 552-556, düde 480-482, oütf
+ * 468-469, sÿst 1302-1303, spöb 1802-1803. Map row y = -2280 (x -760,
+ * -720). The next free ids: sÿst 1304+, spöb 1804+ (spares 1495, 1496,
+ * 1499), shïp 557+, düde 483+, ränk 205+, mïsn NONE (retire an old kit
+ * mission to add one), gövt 295 and below, flët 318+, wëap 295+, oütf
+ * 470+, bits 9250+.
+ *
+ * LESSON (wave 32's R19 rig, read again): its hunters never attacked
+ * because of gövt MaxOdds, not because gövt Enemies fail: Strength-10
+ * hunters with MaxOdds 100 faced Strength-500 preys (odds 50 to 1 against
+ * them), so the Bible's "will not attack unless it is as strong" held them
+ * back, and the preys were unarmed.
+ *
+ *  R19 An NPC of the reinforcement fleet's side in a fight with ANOTHER NPC,
+ *      the player watching at the system's centre (gövt 297 / 296 and flët
+ *      317 from wave 32). sÿst 1302 Kit Reinf Hunt A (gövt 297, ReinfFleet
+ *      317, ReinfTime 150; port spöb 1802 at the centre): the fleet's side
+ *      ATTACKS with the odds in its favour: düde 480 Kit RH Hunter S100 (shïp
+ *      552: wave 32's red hunter with Strength 100) and düde 481 Kit RH Prey
+ *      S1 (shïp 553: the green prey, unarmed, Strength 1, AI 4 so it stays).
+ *      sÿst 1303 Kit Reinf Hunt B (the same owner and fleet; port spöb
+ *      1803): the fleet's side is ATTACKED with the odds against it: wave
+ *      32's Strength-10 hunter (düde 478) and düde 482 Kit RH Prey Armed
+ *      (shïp 554: the green prey, AI 3, the Kit Escort Gun, Strength 500,
+ *      mobile), gövt 296's default MaxOdds 1000 letting it attack.
+ *  C   Capture odds between the measured ratios and with marines: the Ring
+ *      Crawler Tough boarder with crew 30 (shïp 555) and 70 (shïp 556), so
+ *      against wave 8's crew-10 hulk (sÿst/spöb 2044) the ratios are 3 and 7;
+ *      oütf 468 Kit Marines 10 (ModType 25, ModVal 10: ten more effective
+ *      crew) and oütf 469 Kit Marines 20 Pct (ModType 25, ModVal -20: the
+ *      Bible's "+20% capture odds").
+ */
+function wave33Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const pointerRled = { red: 1971, green: 1972 };
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+    const escortGun = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    out.push(...shareRled(552, "Kit RH Hunter S100", pointerRled.red, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, strength: 100, ...escortGun }));
+    out.push(...shareRled(553, "Kit RH Prey S1", pointerRled.green, 24, { ...mobile, ai: 4, accel: 50, speed: 20, armor: 30000, shield: 30000,
+        shieldRecharge: 0, strength: 1 }));
+    out.push(...shareRled(554, "Kit RH Prey Armed", pointerRled.green, 24, { ...mobile, ai: 3, armor: 30000, shield: 30000, shieldRecharge: 0,
+        strength: 500, ...escortGun }));
+    out.push(dude(480, "Kit RH Hunter S100", 3, 297, 552), dude(481, "Kit RH Prey S1", 4, 296, 553), dude(482, "Kit RH Prey Armed", 3, 296, 554));
+    const huntA = system(1302, "Kit Reinf Hunt A", -760, -2280, 297, [1802]);
+    huntA.set = { ...huntA.set, avgShips: 6, dudes: [480, 481, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+        reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+    const huntB = system(1303, "Kit Reinf Hunt B", -720, -2280, 297, [1803]);
+    huntB.set = { ...huntB.set, avgShips: 6, dudes: [478, 482, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+        reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+    out.push(huntA, spob(1802, "Kit Reinf Hunt A Port", 0, 0, 138, { flags: 0x43 }));
+    out.push(huntB, spob(1803, "Kit Reinf Hunt B Port", 0, 0, 138, { flags: 0x43 }));
+
+    // --- C: boarders of crew 30 / 70 (wave 32's Tough boarder otherwise) and two marine outfits.
+    const RLED = { ring: 1955 };
+    const tough = { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...shareRled(555, "Kit Ring Crawler Crew 30", RLED.ring, 24, { ...tough, crew: 30 }));
+    out.push(...shareRled(556, "Kit Ring Crawler Crew 70", RLED.ring, 24, { ...tough, crew: 70 }));
+    const marines = (id, name, modVal) => {
+        const g = gun(id, name, 0);
+        return { ...g, set: { ...g.set, modType: 25, modVal } };
+    };
+    out.push(marines(468, "Kit Marines 10", 10), marines(469, "Kit Marines 20 Pct", -20));
+    return out;
+}
 
 /**
  * Wave-32 experiments (docs/reference_experiments.md, "... wave 32").

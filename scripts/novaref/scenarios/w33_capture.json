@@ -1,0 +1,94 @@
+{
+ "name": "w33_capture",
+ "_comment": "Wave 33, capture OUTCOMES: as w31_plunder_crew7 (7 single turret taps at 150 px disable the live hulk with 90 armor left, board), but the dialog click is Capture Ship (463, 353) instead of Abort; shots 1 s, 2.5 s and 5.5 s after it read the outcome. The odds are read from the shot before the click (tools/odds.sh).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "shot": "preboard",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      463,
+      353,
+      "capture"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 Space wait 900 wait 2000"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after2",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}
