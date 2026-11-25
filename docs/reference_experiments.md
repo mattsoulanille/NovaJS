@@ -10224,7 +10224,7 @@ when it turns hostile); times are video seconds (10 fps, per-frame pts).
 Proposed list below, with: the odds read after the hit (100 against 46.5 +
 50 passes, exactly even does not), the delay min(ReinfTime / 30, 24) s,
 the call day kept per pilot per system and saved with the pilot (a call
-stamps every pilot in the system), the fleet 1,800 px from the caller
+stamps only the caller: Matthew 2026-11-24, 03f8a70b), the fleet 1,800 px from the caller
 heading for him, held for the visit and left out of the traffic count (the
 new trader of finding 4), set on the caller when an NPC of its side still
 holds him as its aggressor, and the line from STR# 2002 306 / 307.
