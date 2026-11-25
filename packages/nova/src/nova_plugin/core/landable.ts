@@ -83,6 +83,18 @@ export function isInhabited(flags: { uninhabited: boolean }): boolean {
  *    MinStatus 32767 "player can never land" hypergate still counts: only
  *    the two static flags matter.)
  *  - the star map's BLUE system dots — see starmap.ts drawSystem.
+ *
+ *    A WORKING HYPERGATE IS A PORT. Every stock one (HG-V01 nova:1400 to
+ *    HG-Koria nova:1418) is Flags 0x0011, landable station with 0x0020
+ *    clear, and the original's Kania readout lists HG-Kania among the
+ *    ports, so the readout question is measured. The DOT of a system whose
+ *    only port is a gate is not: no reference capture shows one. In stock
+ *    data that is VNP-001 (nova:427 / 621), VNP-002 (425 / 619), Korell
+ *    (414 / 611) and Vellos (424 / 618), which draw blue today (Matthew's
+ *    playtest, 2026-11-24, reads VNP-001/002 as uninhabited). Kept as is
+ *    pending a reference measurement, because the only evidence there is
+ *    (the readout) points the other way. Wormholes are not affected: every
+ *    stock one sets 0x0020.
  *  - mïsn TravelStel/ReturnStel -2, "random inhabited stellar"
  *    (mission_logic), which must never pick somewhere unlandable.
  *

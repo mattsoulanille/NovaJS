@@ -133,6 +133,21 @@ export function makeSystemLabel(system: SystemData, x: number, y: number)
  *     enough: HJG-1034's UHP-0474 and Procyon's UHP-1002 are both landable
  *     but flagged uninhabited, and both systems draw light grey.
  *
+ * NOT A QUESTION: THE PLAYER'S STANDING (Matthew's playtest, 2026-11-24:
+ * "the system does not like me, but it's still blue instead of orange or
+ * red", South Manchester at "Criminal"). The original's dot ignores the
+ * player's legal record, measured twice on the reference Mac:
+ *  - CURRENT system, hostile: reference "A14" cell c1 (A14 Own, record -500
+ *    against CrimeTol 10, the map reads "Legal Status: Criminal" and the
+ *    owner's warships open fire): the ring is #0000ff, the centre #00adef
+ *    (evidence 20261123-a14/c1/.../01-map.png);
+ *  - a NON-current system past tolerance: "A14 wave 15" unowned run, Kit
+ *    Spread Unowned selected at "Minor Offender" (record below -CrimeTol):
+ *    #0000ff (evidence 20261124-w15/unowned/.../06-map2.png).
+ * Unmeasured: a system owned by a govt hostile to the player by its flags
+ * (gövt 0x0004 always-attacks, 0x0001 xenophobic) rather than by record;
+ * no NovaJS colour is guessed for it.
+ *
  * Rule 2's corner — a stellar that is inhabited but NOT landable, as in the
  * four stock Wraith systems (sÿst 510/521/582/593) — was measured on the
  * original with a test system (docs/reference_experiments.md, "M5

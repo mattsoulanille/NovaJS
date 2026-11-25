@@ -176,6 +176,31 @@ describe('landable against real Nova data', () => {
             expect(alive.map(g => g.id)).toContain('nova:1400'); // HG-V01
         });
 
+    it('counts a working hypergate as a PORT, as the original\'s Kania '
+        + 'readout ("Ports: Port Kane, HG-Kania") does', () => {
+            const hgKania = planets.find(p => p.id === 'nova:1404')!;
+            expect(hgKania.name).toBe('HG-Kania');
+            expect(hgKania.gate?.kind).toBe('hypergate');
+            expect(isPort(hgKania.flags)).toBeTrue();
+            // Every working gate carries the same flags, so the readout
+            // and the dot treat them alike (landable.ts isPort).
+            // (Stock ids only: the fixture may carry plug-ins.)
+            const stock = planets.filter(p => p.id.startsWith('nova:'));
+            const working = stock.filter(p =>
+                p.gate?.kind === 'hypergate' && landable(p));
+            expect(working.length).toBe(19);
+            for (const gate of working) {
+                expect(isPort(gate.flags))
+                    .withContext(`${gate.id} ${gate.name}`).toBeTrue();
+            }
+            // And no stock wormhole is a port: each sets 0x0020.
+            for (const worm of stock.filter(p =>
+                p.gate?.kind === 'wormhole')) {
+                expect(isPort(worm.flags))
+                    .withContext(`${worm.id} ${worm.name}`).toBeFalse();
+            }
+        });
+
     it('admits an ordinary port', () => {
         const earth = planets.find(p => p.id === 'nova:128')!;
         expect(earth.name).toBe('Earth');
