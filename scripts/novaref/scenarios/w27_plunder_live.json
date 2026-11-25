@@ -1,0 +1,109 @@
+{
+ "name": "w27_plunder_live",
+ "_comment": "Wave 27, the plunder self-destruct blast by mass: the Kit Ring Crawler Tough (100 shield / 3000 armor, no recharge, 0 credits) or Fragile Ten (100 / 300, shïp Flags 0x0010) disables an immobile live hulk (500 / 1,000 / 2,000 t, sÿst 1209-1211; 5,000 t sÿst 1202), sweeps and boards it, clicks Cargo (the likeliest trip), Credits, then Energy (a shot 1 s after each), then Abort; shots 1.5 s and 4.5 s later. Read the shield / armor bars before and after the trip.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "shot": "preboard",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      416,
+      325,
+      "cargo"
+     ],
+     [
+      340,
+      353,
+      "credits"
+     ],
+     [
+      322,
+      325,
+      "energy"
+     ],
+     [
+      416,
+      381,
+      "abort"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space@5000 wait 2500"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after2",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

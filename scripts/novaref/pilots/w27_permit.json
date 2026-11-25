@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w27-permit",
+  "edits": {
+    "ship": 703,
+    "stellar": 1613,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1207": 2,
+      "1208": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w27-permit"
+  }
+}

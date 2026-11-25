@@ -298,8 +298,135 @@ export default {
         ...wave24Resources(),
         ...wave25Resources(),
         ...wave26Resources(),
+        ...wave27Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-27 experiments (docs/reference_experiments.md, "... wave 27").
+ * Nothing retired. sÿst 1204-1213, spöb 1610-1618, shïp 529-535, düde
+ * 461-466, gövt 298, wëap 294, oütf 466, mïsn 957 (bit 9243; offer text
+ * dësc 4829). Map rows y = -1860 / -1920. The next free ids: sÿst 1214+,
+ * spöb 1619+ (spares 1495, 1496, 1499), shïp 536+, düde 467+, mïsn 958-959
+ * (then the stock gap 919-959 is used up: find a new mïsn range), gövt 297
+ * and below, flët 312+, wëap 295+, oütf 467+, bits 9244+.
+ *
+ * LESSONS: two kit systems at one map position draw as one dot (Kit Map
+ * Permit first sat on wave 26's Kit Board Heavy Quick, -760,-1800). Check a
+ * new one: node -e 'import("./kits/testkit.mjs").then(m => { const p = new
+ * Map(); for (const r of m.default.resources) if (r.type === "sÿst") { const
+ * k = r.set.x + "," + r.set.y; if (p.has(k)) console.log(k, p.get(k), r.id);
+ * else p.set(k, r.id); } })' (four old pairs, 2059/2078, 1550/2099,
+ * 1510/2085, 1511/2082, are known). A live AI 4 hulk is not always on the
+ * radar at Enter Ship (2 "target not found" in 13 plunder runs): rerun.
+ *
+ *  G   The gate map's UNEXPLORED destination that is a hyperspace NEIGHBOUR
+ *      (wave 25's A2 was not one: arrow, no dot) and ordinary hyperspace
+ *      lanes on the gate map: sÿst 1204 Kit Gate N1 (-760,-1860; its only
+ *      stellar the usable kit hypergate spöb 1610, HyperLinks 1611 + 1612;
+ *      hyperspace links 1205, 1207, 1208), sÿst 1205 Kit Gate N2 (-700,-1860,
+ *      gate spöb 1611 -> 1610; linked to 1204 by hyperspace too: the
+ *      unexplored NEIGHBOUR), sÿst 1206 Kit Gate N3 (-760,-1920, gate spöb
+ *      1612 -> 1610; NOT a hyperspace neighbour: wave 25's A2 control),
+ *      sÿst 1207 Kit Gate Lane (-820,-1860, no stellar: an explored ordinary
+ *      neighbour, a plain hyperspace lane from N1).
+ *  M   A refusal that is not MinStatus (a travel permit): gövt 298 Kit Permit
+ *      Owner (Require 0x1: the kit hulls contribute nothing, so every port of
+ *      the govt refuses) owns sÿst 1208 Kit Map Permit (-820,-1920; port spöb
+ *      1613, MinStatus -32767), a hyperspace neighbour of N1.
+ *  P   The self-destruct blast's mass curve (wave 26: none visible from 50
+ *      t, 100 shield + about 200 armor from 5,000 t, floored): live hulks
+ *      (AI 4 of the neutral gövt 363, immobile, DeathDelay 10, like 526)
+ *      shïp 529 Kit Hulk Pointer 500 / 530 1000 / 531 2000 (Mass 500 / 1,000
+ *      / 2,000 t), düde 461-463, sÿst 1209-1211 Kit Board 500 / 1000 / 2000
+ *      (ports spöb 1614-1616); added during the wave: shïp 534 Kit Hulk
+ *      Pointer 200 (200 t), düde 465, sÿst 1212 Kit Board 200 (port spöb
+ *      1617); shïp 535 Kit Hulk Pointer 100, düde 466, sÿst 1213 / spöb 1618. Whether the floor IS the disable threshold:
+ *      shïp 532 Kit Ring Crawler Fragile Ten (the Fragile boarder, 100 / 300,
+ *      with shïp Flags 0x0010 "disabled at 10% armor instead of 33%").
+ *  D   The UNPROVOKED disabled fleet lead: wëap 294 Kit Disable Missile (the
+ *      Kit Disable Gun's 3000 shield / 2100 armor in one GUIDED missile,
+ *      reload 30000 so one shot a run; a guided shot homes on its target and
+ *      should pass other ships), oütf 466. Used on wave 24's Kit Fleet Big
+ *      (sÿst 1192, flët 308).
+ *  R19 What triggers a call with no hit: shïp 533 Kit RV Guard S50 Unarmed
+ *      (shïp 494 with no weapon), düde 464 (AI 4, gövt 311), placed by mïsn
+ *      957 (b9243, offered on landing at Kit Reinf Far M's 3,000 px port spöb
+ *      1449) with ShipBehav 0: it targets the player but can never fire.
+ */
+function wave27Resources() {
+    const out = [];
+    const Y = -1860;
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { pointer: 1959, ring: 1955 };
+    const links = (ids) => [...ids, ...none16].slice(0, 16);
+
+    // --- G: a gate whose unexplored destination is also a hyperspace neighbour.
+    const gate = (sid, pid, name, x, y, hyperlinks, sysLinks) => {
+        const s = system(sid, `Kit Gate ${name}`, x, y, 363, pid === undefined ? [] : [pid]);
+        s.set = { ...s.set, links: links(sysLinks) };
+        out.push(s);
+        if (pid !== undefined) {
+            out.push(spob(pid, `Kit Gate ${name}`, 0, 0, 1400, { type: 1, flags: 0x11, flags2: 0x1000, govt: -1, minStatus: -32767, techLevel: 0,
+                specialTech: [-1, -1, -1], custPic: 37, custSnd: 120, hyperlinks: [...hyperlinks, ...none8].slice(0, 8) }));
+        }
+    };
+    gate(1204, 1610, "N1", -760, Y, [1611, 1612], [1205, 1207, 1208]);
+    gate(1205, 1611, "N2", -700, Y, [1610], [1204]);
+    gate(1206, 1612, "N3", -760, Y - 60, [1610], []);
+    gate(1207, undefined, "Lane", -820, Y, [], [1204]);
+
+    // --- M: a travel-permit refusal.
+    out.push(govt(298, "Kit Permit Owner", { require: 1, crimeTol: 30000, classes: [298, -1, -1, -1] }));
+    // At (-820,-1920): (-760,-1800) is wave 26's Kit Board Heavy Quick (the first gate run read the two dots as one).
+    const permit = system(1208, "Kit Map Permit", -820, Y - 60, 298, [1613]);
+    permit.set = { ...permit.set, links: links([1204]) };
+    out.push(permit, port(1613, "Kit Map Permit Port", 0, 0, { govt: 298 }));
+
+    // --- P: live hulks of 500 / 1,000 / 2,000 t; a boarder disabled at 10%.
+    const liveHulk = (shipId, mass, dudeId, sysId, x) => {
+        const name = `Kit Hulk Pointer ${mass}`;
+        out.push(...shareRled(shipId, name, RLED.pointer, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass, freeMass: 100, cargo: 50,
+            ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 }));
+        const d = dude(dudeId, name, 4, 363, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        out.push(d, traffic(system(sysId, `Kit Board ${mass}`, x, Y - 60, 363, [sysId + 405]), [[dudeId, 100]], 1),
+            port(sysId + 405, `Kit Board ${mass} Port`));
+    };
+    liveHulk(529, 500, 461, 1209, -600);
+    liveHulk(530, 1000, 462, 1210, -540);
+    liveHulk(531, 2000, 463, 1211, -480);
+    // Added during the wave (the 50 t hulk of wave 26 did nothing visible, 500 t about 44): shïp 534 Kit Hulk Pointer 200
+    // (200 t), düde 465, sÿst 1212 Kit Board 200 (port spöb 1617).
+    liveHulk(534, 200, 465, 1212, -420);
+    // And (the 200 t blast fit the 500-30,000 t line, 50 t did nothing): shïp 535 Kit Hulk Pointer 100, düde 466,
+    // sÿst 1213 Kit Board 100 (port spöb 1618).
+    liveHulk(535, 100, 466, 1213, -360);
+    const crawler = { accel: 2000, speed: 100, turn: 30, armor: 300, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50, maxGuns: 8, maxTurrets: 8,
+        ai: 3, strength: 50, crew: 10, flags: 0x0010, flags2: 0x00C8 };
+    out.push(...shareRled(532, "Kit Ring Crawler Fragile Ten", RLED.ring, 24, crawler));
+
+    // --- D: a guided disabling shot for the unprovoked fleet lead.
+    out.push(weap(294, "Kit Disable Missile", 134, { reload: 30000, duration: 300, armorDamage: 2100, shieldDamage: 3000, guidance: 1, speed: 600, guidedTurn: 60,
+        proxRadius: 0, blastRadius: 0, flags: 0, seekerFlags: 0, jamVuln: zero4 }));
+    out.push(gun(466, "Kit Disable Missile", 294));
+
+    // --- R19: an attacker that can never fire.
+    out.push(...shareRled(533, "Kit RV Guard S50 Unarmed", RLED.pointer, 24, { accel: 100, speed: 100, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10,
+        flags: 0, flags2: 0, ai: 4, armor: 30000, shield: 30000, shieldRecharge: 0, strength: 50 }));
+    out.push(dude(464, "Kit RV Guard S50 Unarmed", 4, 311, 533));
+    out.push(...misn(957, "Kit R unarmed attacker far port", 9243, { availStel: 1449, shipCount: 1, shipSyst: -1, shipDude: 464, shipGoal: -1,
+        shipBehav: 0, shipStart: -1 }));
+    return out;
+}
 
 /**
  * Wave-26 experiments (docs/reference_experiments.md, "... wave 26").

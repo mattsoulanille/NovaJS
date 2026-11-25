@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w27-farm-unarmed",
+  "edits": {
+    "ship": 497,
+    "stellar": 1449,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1158": 2
+    },
+    "missionBits": {
+      "9243": true
+    },
+    "nickname": "Probe",
+    "shipName": "w27-farm-unarmed",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w27-pd-ten",
+  "edits": {
+    "ship": 532,
+    "stellar": 1608,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1202": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w27-pd-ten",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

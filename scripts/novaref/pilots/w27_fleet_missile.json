@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w27-fleet-missile",
+  "edits": {
+    "ship": 497,
+    "stellar": 1494,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1192": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w27-fleet-missile",
+    "weapons": {
+      "128": 0,
+      "294": 1
+    },
+    "outfits": {
+      "128": 0,
+      "466": 1
+    }
+  }
+}
