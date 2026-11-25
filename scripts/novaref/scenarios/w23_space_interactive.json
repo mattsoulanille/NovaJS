@@ -1,0 +1,45 @@
+{
+ "name": "w23_space_interactive",
+ "_comment": "Wave 23: Enter Ship, recording from the start at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w23.jsonl) until {\"done\":true}; the pilot is pulled at the end. R19 (w23_*), #324 (w23_refilter*), mission ships, H1 by hand.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 4000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true,
+   "fps": 10
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "space",
+   "window": true
+  },
+  {
+   "script": "../loops/interactive.mjs",
+   "args": {
+    "inbox": "~/.local/share/novaref/inbox/w23.jsonl",
+    "maxMs": 1800000
+   }
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

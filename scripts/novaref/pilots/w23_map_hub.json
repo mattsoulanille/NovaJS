@@ -1,0 +1,25 @@
+{
+  "name": "novaref-w23-map-hub",
+  "edits": {
+    "ship": 703,
+    "stellar": 1477,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1175": 2,
+      "1176": 2,
+      "1177": 2,
+      "1178": 2,
+      "1179": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-map-hub",
+    "legal": {
+      "1178": -500
+    }
+  }
+}

@@ -294,8 +294,86 @@ export default {
         ...wave20Resources(),
         ...wave21Resources(),
         ...wave22Resources(),
+        ...wave23Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-23 experiments (docs/reference_experiments.md, "... wave 23").
+ * Nothing retired. sÿst 1174-1179, spöb 1476-1481, shïp 511-514, düde
+ * none, gövt 301, flët 307. Map rows y = -1340 to -1470 (the R1 star). The
+ * next free ids: sÿst 1180+, spöb 1482+, shïp 515+, düde 454+, mïsn 956+
+ * (the stock gap ends at 959), gövt 300 and below, flët 308+, wëap 294+,
+ * oütf 466+, bits 9242+.
+ *
+ *  S   Fleet escort scans (NovaJS f75e50dc, the Heraan Firebird): gövt 301
+ *      Kit Scan Fleet (ScanMask 0x0001, ScanFine 500, SmugPenalty 50,
+ *      CrimeTol 30000 so a find never makes the pilot hostile) owns sÿst
+ *      1174 Kit Fleet Scan (port spöb 1476 at (0,0)); its only traffic is
+ *      flët 307 Kit Scan Fleet: lead shïp 511 Kit SF Lead (cyan disc, AI 3)
+ *      and one each of shïp 512 Kit SF Escort Red / 513 Kit SF Escort Green
+ *      (AI 4), all one Kit Escort Gun, 3000 / 3000; avgShips 3. A clean pilot
+ *      and one carrying oütf 458 Kit Contraband Pod (ScanMask 0x0001) sit
+ *      by the port.
+ *  M   R1 map dots vs a govt's FLAGS: sÿst 1175 Kit Map Hub (363, port
+ *      1477) linked to 1176 Kit Map Attacks (owner 362 Kit Raider Govt,
+ *      0x0004, port 1478 of 362), 1177 Kit Map Xeno (owner 344 Kit Xeno,
+ *      0x0001, port 1479 of 344), 1178 Kit Map Wanted (owner 360 Kit Escort
+ *      Govt, CrimeTol 10: the pilot carries -500 there; port 1480 of 360) and
+ *      1179 Kit Map Clean (363, port 1481); 1176 - 1177 are also linked, so
+ *      a run can go hub -> 1176 -> 1177. No traffic anywhere.
+ *  H   Stellar hail: spöb 1480 is a STATION (Flags 0x11 | 0x02,
+ *      MinStatus 0) on spöb Type 1, the 150 px, 42-frame hypergate art (not
+ *      a gate): a hostile, animated station's comm.
+ */
+function wave23Resources() {
+    const out = [];
+    const links = (...ids) => [...ids, ...none16].slice(0, 16);
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const armed = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    const hull = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0,
+        armor: 3000, shield: 3000, strength: 50, ...armed };
+
+    // --- S: an AI 3 lead and two AI 4 escorts of a ScanMask govt.
+    out.push(govt(301, "Kit Scan Fleet", { scanMask: 0x0001, scanFine: 500, smugPenalty: 50, crimeTol: 30000, classes: [301, -1, -1, -1] }));
+    out.push(...shareRled(511, "Kit SF Lead", 1976, 24, { ...hull, ai: 3 }));
+    out.push(...shareRled(512, "Kit SF Escort Red", 1971, 24, { ...hull, ai: 4 }));
+    out.push(...shareRled(513, "Kit SF Escort Green", 1972, 24, { ...hull, ai: 4 }));
+    out.push(fleet(307, "Kit Scan Fleet", 511, [[512, 1, 1], [513, 1, 1], [512, 0, 0], [512, 0, 0]], 301, 1174));
+    out.push(traffic(system(1174, "Kit Fleet Scan", -640, -1340, 301, [1476]), [[-307, 100]], 3), port(1476, "Kit Fleet Scan Port"));
+
+    // --- M / H: the R1 star (map dots by govt flags) and a hostile animated station.
+    const hub = system(1175, "Kit Map Hub", -400, -1400, 363, [1477]);
+    hub.set.links = links(1176, 1177, 1178, 1179);
+    const attacks = system(1176, "Kit Map Attacks", -470, -1400, 362, [1478]);
+    attacks.set.links = links(1175, 1177);
+    const xeno = system(1177, "Kit Map Xeno", -330, -1400, 344, [1479]);
+    xeno.set.links = links(1175, 1176);
+    const wanted = system(1178, "Kit Map Wanted", -400, -1470, 360, [1480]);
+    wanted.set.links = links(1175);
+    const clean = system(1179, "Kit Map Clean", -400, -1340, 363, [1481]);
+    clean.set.links = links(1175);
+    out.push(hub, attacks, xeno, wanted, clean);
+    out.push(port(1477, "Kit Map Hub Port"), port(1478, "Kit Map Attacks Port", 0, 0, { govt: 362 }), port(1479, "Kit Map Xeno Port", 0, 0, { govt: 344 }),
+        port(1480, "Kit Map Wanted Station", 0, 0, { govt: 360, minStatus: 0, type: 1, flags: 0x11 | 0x02 }), port(1481, "Kit Map Clean Port"));
+
+    // --- Escort cap (hub, added during the wave): shïp 514 Kit Hire Disc (the Kit Disc Yellow's art and stats,
+    // HireRandom 100, TechLevel 1 (hiring is gated by the spöb TechLevel, not SpecialTech), cost 10,000: a 1,000 fee) is offered in every bar every day.
+    out.push(...shareRled(514, "Kit Hire Disc", 1974, 24, { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100,
+        cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000, hireRandom: 100, techLevel: 1 }));
+    return out;
+}
 
 /**
  * Wave-22 experiments (docs/reference_experiments.md, "... wave 22").

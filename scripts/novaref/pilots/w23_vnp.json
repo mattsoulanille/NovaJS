@@ -1,0 +1,21 @@
+{
+  "name": "novaref-w23-vnp",
+  "edits": {
+    "ship": 128,
+    "stellar": 1400,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "414": 2,
+      "424": 2,
+      "425": 2,
+      "427": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-vnp"
+  }
+}

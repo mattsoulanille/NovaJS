@@ -1,0 +1,16 @@
+{
+ "name": "w23_stock_interactive",
+ "_comment": "Wave 23: STOCK data, no plug-in, Last Pilot parked: Enter Ship with the pilot copy, recording at 10 fps, then hand-driven steps (loops/interactive.mjs, inbox ~/.local/share/novaref/inbox/w23.jsonl) until {\"done\":true}. Stock hails (w23_hail_gladius, w23_hail_vano), R2 map dots and an animated gate (w23_vnp), K8 wormhole (w23_worm).",
+ "pilot": { "as": "novaref-scenario" },
+ "park_last_pilot": true,
+ "steps": [
+  { "keys": "e wait 4000" },
+  { "move": true },
+  { "record": "start", "window": true, "fps": 10 },
+  { "wait": 1500 },
+  { "shot": "space", "window": true },
+  { "script": "../loops/interactive.mjs", "args": { "inbox": "~/.local/share/novaref/inbox/w23.jsonl", "maxMs": 1200000 } },
+  { "record": "stop" },
+  { "shot": "end", "window": true }
+ ]
+}

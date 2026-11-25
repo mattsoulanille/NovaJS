@@ -1,0 +1,24 @@
+{
+  "name": "novaref-w23-cap0",
+  "edits": {
+    "ship": 720,
+    "stellar": 2100,
+    "credits": 10000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-cap0",
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "novaref-w23-cap6c",
+  "edits": {
+    "ship": 720,
+    "stellar": 2100,
+    "credits": 10000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-cap6c",
+    "weapons": {
+      "128": 0
+    },
+    "outfits": {
+      "128": 0
+    },
+    "escorts": [
+      {
+        "ship": 721
+      },
+      {
+        "ship": 722
+      },
+      {
+        "ship": 723
+      },
+      {
+        "ship": 724
+      },
+      {
+        "ship": 725
+      },
+      {
+        "ship": 726
+      }
+    ]
+  }
+}

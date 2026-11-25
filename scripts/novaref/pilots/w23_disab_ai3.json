@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w23-disab-ai3",
+  "edits": {
+    "ship": 497,
+    "stellar": 1596,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1597": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-disab-ai3",
+    "weapons": {
+      "128": 0,
+      "288": 1
+    },
+    "outfits": {
+      "128": 0,
+      "462": 1
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w23-scan-pod",
+  "edits": {
+    "ship": 703,
+    "stellar": 1476,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1174": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w23-scan-pod",
+    "outfits": {
+      "128": 0,
+      "458": 1
+    }
+  }
+}
