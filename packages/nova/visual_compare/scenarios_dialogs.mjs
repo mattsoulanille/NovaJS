@@ -299,12 +299,14 @@ export const dialogScenarios = [
         title: 'Trade buy — bulk quantity dialog',
         description: 'Option-clicking Buy opens the bulk quantity '
             + 'dialog. The reference (trade_center/buy_quantity.png) is '
-            + 'the original\'s NATIVE macOS dialog — Aqua bevels, a blue '
-            + 'default button — and ours is a drawn panel, so the '
-            + 'STYLING is an accepted ART difference. What is compared '
-            + 'is the geometry: a 172x72 panel centred on the screen '
-            + '(x874..1045, y504..575), its entry field at x983..1040 '
-            + 'and its two buttons at y546..565.',
+            + 'the original\'s NATIVE macOS dialog, which ours draws '
+            + 'after it: a frameless white 172x72 panel centred on the '
+            + 'screen (x874..1045, y504..575), a white black-edged field '
+            + 'at x983..1039, y509..530 opening with its prefill '
+            + 'selected, a white Aqua Cancel and the blue default button '
+            + '(x884..953 / x966..1035, y546..566). The prefill differs: '
+            + 'it is the fleet\'s free tonnage (390 in the reference, '
+            + 'whose pilot has more hold than this one).',
         save: {
             ship: 'nova:164', outfits: [], system: EARTH.system,
             credits: 5000000,
@@ -328,8 +330,10 @@ export const dialogScenarios = [
             { name: 'buy_quantity', file: 'trade_center/buy_quantity.png' },
         ],
         regions: [
-            region('quantity_panel', 'Quantity panel (geometry; ART styling)',
+            region('quantity_panel', 'Quantity panel (prefill digits differ)',
                 874, 504, 172, 72),
+            region('quantity_buttons', 'Cancel / default button row',
+                874, 544, 172, 26),
         ],
     },
     {

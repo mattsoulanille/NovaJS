@@ -2,47 +2,54 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { beginPixiTextEntry, isReturnPress } from '../input_focus.js';
+import {
+    ALERT_LABEL_FONT, AquaButton, PromptField, SELECTION_COLOR,
+    SELECTION_INSET, SELECTION_INSET_LEFT,
+} from './alert_prompt.js';
 import { MenuControls } from './menu_controls.js';
 
-// The plain system dialog from the reference screenshots
-// (outfitter_hold_option_buy_or_sell_amount.png,
-// trade_center_hold_option_amount.png): a white panel with an
-// "Enter quantity:" label, a black entry field with white digits, and
-// grey bevel Cancel / <verb> buttons. It is not one of the game's
-// PICT frames, so it's drawn with Graphics.
-// Measured off trade_center/buy_quantity.png (1920x1080): the panel is
-// centred on the screen at x874..1045, y504..575; its entry field is
-// x983..1040, y508..530; Cancel is x885..954 and the default button
-// x966..1036, both y546..565. (The original's is a NATIVE macOS dialog
-// — blue default button, Aqua bevels — so only the rectangles are
-// reproduced, not the styling.)
+// The original's bulk quantity dialog is a NATIVE macOS (Aqua) dialog,
+// not one of the game's PICT frames, so it's drawn with Graphics: a
+// plain white panel with no frame, "Enter quantity:" in the system font,
+// a white entry field with a 1 px black edge whose contents open
+// selected (the system's light-blue highlight, so typing replaces them),
+// a white rounded Cancel and the blue default button (alert_prompt.ts's
+// AquaButton, as the Find and ship name prompts draw them). Every
+// rectangle is sampled off trade_center/buy_quantity.png (1920x1080):
+// the panel, centred on the screen, is x874..1045, y504..575 (172x72);
+// the field's edge x983..1039, y509..530 (57x22), its highlight
+// x987..1036, y512..527; Cancel x884..953 and the default button
+// x966..1035, both y546..566 (70x21). The label's and the digits' ink
+// share one baseline (y524, caps from y515), the label's starting at
+// x881, the digits' at x988.
+/** The panel, and everything below from its top left. */
 const PANEL_WIDTH = 172;
 const PANEL_HEIGHT = 72;
-const FIELD_WIDTH = 58;
-const FIELD_HEIGHT = 23;
-/** Field inset from the panel's right edge / top. */
-const FIELD_INSET_RIGHT = 5;
-const FIELD_INSET_TOP = 4;
-/** "Enter quantity:" ink starts 7px in, its cap 10px down. */
-const LABEL_INSET_X = 7;
-const LABEL_INSET_Y = 8;
+const FIELD_X = 109;
+const FIELD_Y = 5;
+const FIELD_WIDTH = 57;
+const FIELD_HEIGHT = 22;
+/**
+ * The text boxes' left edges: the face's side bearing puts the ink one
+ * pixel further in (the label's at 7 px, the digits' 5 px inside the
+ * field's edge).
+ */
+const FIELD_TEXT_INSET_X = 4;
+const LABEL_X = 6;
+/**
+ * The label's and the digits' text box top: both are the same face and
+ * size and share a baseline in the original (caps y515..524, 11 px below
+ * the panel's top).
+ */
+const TEXT_Y = 8;
+const CANCEL_X = 10;
+const CONFIRM_X = 92;
+const BUTTON_Y = 42;
 const BUTTON_WIDTH = 70;
-const BUTTON_HEIGHT = 20;
-const BUTTON_INSET_LEFT = 11;
-const BUTTON_INSET_RIGHT = 9;
-const BUTTON_INSET_BOTTOM = 10;
+const BUTTON_HEIGHT = 21;
 
 /** Longest quantity the field accepts (999,999,999 is beyond any cap). */
 const MAX_DIGITS = 9;
-
-const LABEL_FONT: Partial<PIXI.ITextStyle> = {
-    fontFamily: 'Geneva', fontSize: 12, fontWeight: 'bold', fill: 0x000000,
-    align: 'left', wordWrap: false,
-};
-const FIELD_FONT: Partial<PIXI.ITextStyle> = {
-    fontFamily: 'Geneva', fontSize: 12, fill: 0xffffff,
-    align: 'left', wordWrap: false,
-};
 
 /**
  * Applies one typed key to the quantity field's text. Returns the new
@@ -63,6 +70,41 @@ export function editQuantityText(current: string,
         return current.slice(0, -1);
     }
     return undefined;
+}
+
+/**
+ * Applies one key press to the quantity field, which opens with all of
+ * its text selected, as the native field does. Returns the new field, or
+ * undefined for keys the field ignores.
+ *
+ *  - a digit replaces the selection or is appended ({@link
+ *    editQuantityText});
+ *  - Backspace / Delete clears the selection; otherwise Backspace
+ *    deletes the last digit (the caret is always at the end, so Delete
+ *    has nothing after it);
+ *  - the arrows, Home and End drop the selection;
+ *  - Command-A / Control-A selects everything; any other Command /
+ *    Control chord does nothing.
+ *
+ * Pure, for tests.
+ */
+export function editQuantityField(field: PromptField, key: string,
+    modifiers: { meta?: boolean, ctrl?: boolean } = {}):
+    PromptField | undefined {
+    if (modifiers.meta || modifiers.ctrl) {
+        return key.toLowerCase() === 'a'
+            ? { text: field.text, selected: field.text !== '' } : undefined;
+    }
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home',
+        'End'].includes(key)) {
+        return { text: field.text, selected: false };
+    }
+    if (key === 'Delete') {
+        return field.selected ? { text: '', selected: false } : undefined;
+    }
+    const edited = editQuantityText(field.selected ? '' : field.text, key);
+    return edited === undefined
+        ? undefined : { text: edited, selected: false };
 }
 
 /**
@@ -89,8 +131,8 @@ export interface QuantityRequest {
 
 /**
  * The option-click bulk quantity dialog: "Enter quantity:", a numeric
- * field, Cancel and a verb button. Resolves with the (clamped)
- * quantity, or undefined on cancel.
+ * field (opening with the caller's prefill selected), Cancel and a verb
+ * button. Resolves with the (clamped) quantity, or undefined on cancel.
  *
  * Focus discipline: while shown, its MenuControls sits on top of the
  * focus stack, so the owning screen's navigation keys (and every other
@@ -101,9 +143,11 @@ export class QuantityDialog {
     container = new PIXI.Container();
     private controls: MenuControls;
     private result = new Subject<number | undefined>();
-    private valueText = new PIXI.Text('', FIELD_FONT);
-    private confirmButton: SystemButton;
-    private text = '';
+    private valueText = new PIXI.Text('', ALERT_LABEL_FONT);
+    private selection = new PIXI.Graphics();
+    private caret = new PIXI.Graphics();
+    private confirmButton: AquaButton;
+    private field: PromptField = { text: '', selected: false };
     private max = 0;
     private keyListener = (event: KeyboardEvent) => this.onKey(event);
 
@@ -120,41 +164,51 @@ export class QuantityDialog {
         shield.interactive = true;
         this.container.addChild(shield);
 
+        // Whole pixels (172 and 72 halve evenly), so the 1 px edges stay
+        // crisp.
         const left = -PANEL_WIDTH / 2;
         const top = -PANEL_HEIGHT / 2;
+        const fieldLeft = left + FIELD_X;
+        const fieldTop = top + FIELD_Y;
         const panel = new PIXI.Graphics()
-            // Drop shadow, then the white panel with a thin border.
-            .beginFill(0x000000, 0.35)
-            .drawRect(left + 3, top + 3, PANEL_WIDTH, PANEL_HEIGHT)
-            .endFill()
-            .lineStyle(1, 0x000000)
+            // The panel: plain white, no frame or shadow.
             .beginFill(0xffffff)
             .drawRect(left, top, PANEL_WIDTH, PANEL_HEIGHT)
             .endFill()
-            // The entry field: black, inset at the panel's top right.
-            .lineStyle(0)
-            .beginFill(0x000000)
-            .drawRect(left + PANEL_WIDTH - FIELD_WIDTH - FIELD_INSET_RIGHT,
-                top + FIELD_INSET_TOP, FIELD_WIDTH, FIELD_HEIGHT)
-            .endFill();
+            // The entry field: white with a 1 px black edge.
+            .lineStyle(1, 0x000000)
+            .drawRect(fieldLeft + 0.5, fieldTop + 0.5, FIELD_WIDTH - 1,
+                FIELD_HEIGHT - 1);
         panel.interactive = true;
         this.container.addChild(panel);
 
-        const label = new PIXI.Text('Enter quantity:', LABEL_FONT);
-        label.position.set(left + LABEL_INSET_X, top + LABEL_INSET_Y);
+        const label = new PIXI.Text('Enter quantity:', ALERT_LABEL_FONT);
+        label.position.set(left + LABEL_X, top + TEXT_Y);
         this.container.addChild(label);
 
-        this.valueText.position.set(
-            left + PANEL_WIDTH - FIELD_WIDTH - FIELD_INSET_RIGHT + 4,
-            top + FIELD_INSET_TOP + 4);
+        this.selection.beginFill(SELECTION_COLOR)
+            .drawRect(fieldLeft + SELECTION_INSET_LEFT,
+                fieldTop + SELECTION_INSET,
+                FIELD_WIDTH - SELECTION_INSET_LEFT - SELECTION_INSET,
+                FIELD_HEIGHT - 2 * SELECTION_INSET)
+            .endFill();
+        this.container.addChild(this.selection);
+
+        this.valueText.position.set(fieldLeft + FIELD_TEXT_INSET_X,
+            top + TEXT_Y);
         this.container.addChild(this.valueText);
 
-        const buttonY =
-            top + PANEL_HEIGHT - BUTTON_HEIGHT - BUTTON_INSET_BOTTOM;
-        const cancel = new SystemButton('Cancel',
-            left + BUTTON_INSET_LEFT, buttonY, () => this.close(undefined));
-        this.confirmButton = new SystemButton('OK',
-            left + PANEL_WIDTH - BUTTON_WIDTH - BUTTON_INSET_RIGHT, buttonY,
+        this.caret.beginFill(0x000000)
+            .drawRect(0, 0, 1, FIELD_HEIGHT - 2 * SELECTION_INSET - 2)
+            .endFill();
+        this.caret.position.y = fieldTop + SELECTION_INSET + 1;
+        this.container.addChild(this.caret);
+
+        const cancel = new AquaButton('Cancel', left + CANCEL_X,
+            top + BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, false,
+            () => this.close(undefined));
+        this.confirmButton = new AquaButton('OK', left + CONFIRM_X,
+            top + BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, true,
             () => this.confirm());
         this.container.addChild(cancel.container,
             this.confirmButton.container);
@@ -162,6 +216,11 @@ export class QuantityDialog {
         this.controls = new MenuControls(controlEvents, {
             depart: () => this.close(undefined),
         });
+    }
+
+    /** The field as it stands, for headless driving and specs. */
+    get value(): PromptField {
+        return { ...this.field };
     }
 
     private onKey(event: KeyboardEvent) {
@@ -179,21 +238,36 @@ export class QuantityDialog {
             this.close(undefined);
             return;
         }
-        const edited = editQuantityText(this.text, event.key);
+        const edited = editQuantityField(this.field, event.key,
+            { meta: event.metaKey, ctrl: event.ctrlKey });
         if (edited !== undefined) {
-            this.setText(edited);
+            // Command-A selects the field, not the page.
+            event.preventDefault();
+            this.setField(edited);
         }
     }
 
     /** Live-clamps the field: entering more than allowed shows the max. */
-    private setText(text: string) {
-        const clamped = clampQuantity(text, this.max);
-        this.text = text === '' ? '' : `${clamped}`;
-        this.valueText.text = this.text;
+    private setField(field: PromptField) {
+        const text = field.text === ''
+            ? '' : `${clampQuantity(field.text, this.max)}`;
+        this.field = { text, selected: field.selected && text !== '' };
+        this.valueText.text = text;
+        this.selection.visible = this.field.selected;
+        this.caret.visible = !this.field.selected;
+        this.caret.position.x = Math.min(
+            this.valueText.position.x + this.valueText.width,
+            -PANEL_WIDTH / 2 + FIELD_X + FIELD_WIDTH - 3);
     }
 
-    private confirm() {
-        this.close(clampQuantity(this.text, this.max));
+    /** The default button (and Return): answers with the clamped field. */
+    confirm() {
+        this.close(clampQuantity(this.field.text, this.max));
+    }
+
+    /** Answers as the Cancel button would (headless driving). */
+    cancel() {
+        this.close(undefined);
     }
 
     private close(value: number | undefined) {
@@ -207,70 +281,28 @@ export class QuantityDialog {
     async show(request: QuantityRequest): Promise<number | undefined> {
         this.max = Math.max(0, Math.floor(request.max));
         this.confirmButton.setLabel(request.verb);
-        this.setText(`${Math.max(0, Math.floor(request.initial))}`);
+        // The prefill opens selected, so the first digit typed replaces
+        // it (trade_center/buy_quantity.png).
+        this.setField({
+            text: `${Math.max(0, Math.floor(request.initial))}`,
+            selected: true,
+        });
         this.container.visible = true;
         this.controls.bind();
         // The quantity field owns the keyboard: without this, typed digits
         // (and Enter) would also reach the game's control relay as hotkeys.
         const releaseTextEntry = beginPixiTextEntry();
-        document.addEventListener('keydown', this.keyListener);
+        // Headless (specs, under node) there is no document: the dialog is
+        // answered through confirm() / cancel() instead.
+        const target = typeof document !== 'undefined' ? document : undefined;
+        target?.addEventListener('keydown', this.keyListener);
         try {
             return await firstValueFrom(this.result);
         } finally {
-            document.removeEventListener('keydown', this.keyListener);
+            target?.removeEventListener('keydown', this.keyListener);
             releaseTextEntry();
             this.controls.unbind();
             this.container.visible = false;
         }
-    }
-}
-
-/**
- * A classic grey bevel system button (the reference dialog's Cancel /
- * Buy / Sell), drawn with Graphics rather than the game's red PICT
- * buttons. (The starmap's Find dialog draws Aqua buttons instead; see
- * find_dialog.ts.)
- */
-export class SystemButton {
-    container = new PIXI.Container();
-    private label: PIXI.Text;
-
-    constructor(caption: string, x: number, y: number,
-        onClick: () => void) {
-        this.container.name = `Button:${caption}`;
-        this.container.position.set(x, y);
-
-        const face = new PIXI.Graphics()
-            .lineStyle(1, 0x000000)
-            .beginFill(0xbbbbbb)
-            .drawRect(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT)
-            .endFill()
-            // Bevel: light top/left, dark bottom/right.
-            .lineStyle(1, 0xeeeeee)
-            .moveTo(1, BUTTON_HEIGHT - 2).lineTo(1, 1)
-            .lineTo(BUTTON_WIDTH - 2, 1)
-            .lineStyle(1, 0x777777)
-            .lineTo(BUTTON_WIDTH - 2, BUTTON_HEIGHT - 2)
-            .lineTo(1, BUTTON_HEIGHT - 2);
-        this.container.addChild(face);
-
-        this.label = new PIXI.Text(caption, {
-            fontFamily: 'Geneva', fontSize: 12, fontWeight: 'bold',
-            fill: 0x000000, align: 'center',
-        });
-        this.label.anchor.set(0.5);
-        this.label.position.set(BUTTON_WIDTH / 2, BUTTON_HEIGHT / 2);
-        this.container.addChild(this.label);
-
-        this.container.interactive = true;
-        this.container.cursor = 'pointer';
-        this.container.on('pointerup', onClick);
-    }
-
-    setLabel(caption: string) {
-        this.label.text = caption;
-        // Keep the scene-graph name stable for headless driving:
-        // Button:Cancel / Button:Buy / Button:Sell / Button:Bet.
-        this.container.name = `Button:${caption}`;
     }
 }

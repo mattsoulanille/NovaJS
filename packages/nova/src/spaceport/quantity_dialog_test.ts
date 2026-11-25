@@ -1,5 +1,92 @@
 import 'jasmine';
-import { clampQuantity, editQuantityText } from './quantity_dialog.js';
+import { Subject } from 'rxjs';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { isTextEntryActive } from '../input_focus.js';
+import { PromptField } from './alert_prompt.js';
+import { installHeadlessPixi } from './headless_pixi_fixture.js';
+import {
+    clampQuantity, editQuantityField, editQuantityText, QuantityDialog,
+} from './quantity_dialog.js';
+
+const field = (text: string, selected = false): PromptField =>
+    ({ text, selected });
+
+describe('editQuantityField', () => {
+    it('replaces the opening selection with the first digit typed', () => {
+        expect(editQuantityField(field('390', true), '5'))
+            .toEqual(field('5'));
+        expect(editQuantityField(field('5'), '0')).toEqual(field('50'));
+    });
+
+    it('clears the selection with Backspace or Delete', () => {
+        expect(editQuantityField(field('390', true), 'Backspace'))
+            .toEqual(field(''));
+        expect(editQuantityField(field('390', true), 'Delete'))
+            .toEqual(field(''));
+        expect(editQuantityField(field('390'), 'Backspace'))
+            .toEqual(field('39'));
+        // The caret sits at the end: nothing after it to delete.
+        expect(editQuantityField(field('390'), 'Delete')).toBeUndefined();
+    });
+
+    it('drops the selection on the arrows, keeping the text', () => {
+        expect(editQuantityField(field('390', true), 'ArrowLeft'))
+            .toEqual(field('390'));
+        expect(editQuantityField(field('390', true), 'End'))
+            .toEqual(field('390'));
+    });
+
+    it('selects everything on Command-A / Control-A', () => {
+        expect(editQuantityField(field('390'), 'a', { meta: true }))
+            .toEqual(field('390', true));
+        expect(editQuantityField(field('390'), 'A', { ctrl: true }))
+            .toEqual(field('390', true));
+        expect(editQuantityField(field(''), 'a', { meta: true }))
+            .toEqual(field(''));
+        expect(editQuantityField(field('390'), 'v', { meta: true }))
+            .toBeUndefined();
+    });
+
+    it('ignores letters, selected or not', () => {
+        for (const key of ['d', 'b', 's', ' ', '-', 'e']) {
+            expect(editQuantityField(field('12', true), key))
+                .toBeUndefined();
+        }
+    });
+});
+
+describe('QuantityDialog', () => {
+    beforeAll(() => installHeadlessPixi());
+
+    it('opens with its prefill selected and answers it untouched', async () => {
+        const dialog = new QuantityDialog(new Subject<ControlEvent>());
+        const answer = dialog.show({ verb: 'Buy', initial: 390, max: 390 });
+        expect(dialog.container.visible).toBeTrue();
+        expect(dialog.value).toEqual(field('390', true));
+        expect(isTextEntryActive()).toBeTrue();
+        dialog.confirm();
+        expect(await answer).toBe(390);
+        expect(dialog.container.visible).toBeFalse();
+        expect(isTextEntryActive()).toBeFalse();
+    });
+
+    it('resolves undefined on Cancel', async () => {
+        const dialog = new QuantityDialog(new Subject<ControlEvent>());
+        const answer = dialog.show({ verb: 'Sell', initial: 3, max: 3 });
+        dialog.cancel();
+        expect(await answer).toBeUndefined();
+    });
+
+    it('names its Aqua buttons for headless driving', () => {
+        const dialog = new QuantityDialog(new Subject<ControlEvent>());
+        void dialog.show({ verb: 'Bet', initial: 10, max: 100 });
+        expect(dialog.container.getChildByName('Button:Cancel', true))
+            .toBeTruthy();
+        expect(dialog.container.getChildByName('Button:Bet', true))
+            .toBeTruthy();
+        dialog.cancel();
+    });
+});
 
 describe('editQuantityText', () => {
     it('appends typed digits', () => {

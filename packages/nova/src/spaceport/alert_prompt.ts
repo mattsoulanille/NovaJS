@@ -46,9 +46,9 @@ const FIELD_TEXT_INSET_Y = 3;
  * x324..529, y294..315, highlight x328..526, y297..312), in the system's
  * selection blue.
  */
-const SELECTION_INSET_LEFT = 4;
-const SELECTION_INSET = 3;
-const SELECTION_COLOR = 0xb2d7ff;
+export const SELECTION_INSET_LEFT = 4;
+export const SELECTION_INSET = 3;
+export const SELECTION_COLOR = 0xb2d7ff;
 
 /** The original's alert text is the system UI face, regular weight. */
 const SYSTEM_FONT = ['-apple-system', 'BlinkMacSystemFont', 'Helvetica Neue',
@@ -91,9 +91,10 @@ function blend(from: number, to: number, t: number): number {
  * An Aqua push button: the white rounded Cancel, or the blue default
  * button (a top-to-bottom gradient, drawn as 1 px bands under a rounded
  * mask so it needs no canvas texture). The container is named
- * `Button:<caption>` for headless driving.
+ * `Button:<caption>` for headless driving. Shared with the bulk quantity
+ * dialog (quantity_dialog.ts).
  */
-class AquaButton {
+export class AquaButton {
     container = new PIXI.Container();
     private label: PIXI.Text;
 
@@ -136,7 +137,9 @@ class AquaButton {
             align: 'center',
         });
         this.label.anchor.set(0.5);
-        this.label.position.set(width / 2, height / 2);
+        // Rounded up a half pixel on an odd height (21): the native
+        // caption sits 5 px below the top (trade_center/buy_quantity.png).
+        this.label.position.set(width / 2, Math.floor(height / 2));
         this.container.addChild(this.label);
 
         this.container.interactive = true;
