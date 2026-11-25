@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w28-pd-70",
+  "edits": {
+    "ship": 528,
+    "stellar": 1620,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1215": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w28-pd-70",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

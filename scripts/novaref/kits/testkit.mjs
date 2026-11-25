@@ -299,8 +299,70 @@ export default {
         ...wave25Resources(),
         ...wave26Resources(),
         ...wave27Resources(),
+        ...wave28Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-28 experiments (docs/reference_experiments.md, "... wave 28").
+ * Nothing retired. sÿst 1214-1220, spöb 1619-1625, shïp 536-541, düde
+ * 467-472. Map row y = -1920 (x -300 .. 0) plus (-700,-1920). The next free
+ * ids: sÿst 1221+, spöb 1626+ (spares 1495, 1496, 1499), shïp 542+, düde
+ * 473+, mïsn 958-959 (then the stock gap 919-959 is used up: find a new mïsn
+ * range), gövt 297 and below, flët 312+, wëap 295+, oütf 467+, bits 9244+.
+ *
+ *  P   The self-destruct blast's cut-off between 50 t (nothing, wave 26) and
+ *      100 t (28.4, wave 27): live immobile hulks like wave 27's (AI 4 of
+ *      the neutral gövt 363, 300 armor, DeathDelay 10) of 60 / 70 / 80 / 90
+ *      / 95 / 99 t: shïp 536-541 Kit Hulk Pointer 60 ... 99, düde 467-472,
+ *      the only traffic of sÿst 1214-1219 Kit Board 60 ... 99 (ports spöb
+ *      1619-1624), at (-300 .. 0, -1920).
+ *  G   A hypergate that REFUSES the player (the clearance lines' denied
+ *      case): sÿst 1220 Kit Gate Deny (-700,-1920; gövt 363), its only
+ *      stellar the kit hypergate spöb 1625 owned by gövt 363 with MinStatus
+ *      100 (a clean record is 0), HyperLinks to N1's gate 1610.
+ */
+function wave28Resources() {
+    const out = [];
+    const Y = -1920;
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const port = (id, name, x = 0, y = 0, set = {}) => spob(id, name, x, y, 138, { flags: 0x43, ...set });
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED_POINTER = 1959;
+
+    // --- P: the blast cut-off between 50 and 100 t.
+    [60, 70, 80, 90, 95, 99].forEach((mass, i) => {
+        const shipId = 536 + i, dudeId = 467 + i, sysId = 1214 + i;
+        const name = `Kit Hulk Pointer ${mass}`;
+        out.push(...shareRled(shipId, name, RLED_POINTER, 24, { armor: 300, shield: 0, accel: 0, speed: 0, turn: 0, mass, freeMass: 100, cargo: 50,
+            ai: 1, strength: 1, crew: 1, flags: 0, flags2: 0, cost: 50000, deathDelay: 10 }));
+        const d = dude(dudeId, name, 4, 363, shipId);
+        d.set = { ...d.set, flags: 0x0041 };
+        out.push(d, traffic(system(sysId, `Kit Board ${mass}`, -300 + 60 * i, Y, 363, [sysId + 405]), [[dudeId, 100]], 1),
+            port(sysId + 405, `Kit Board ${mass} Port`));
+    });
+
+    // --- G: a hypergate that refuses the player (MinStatus 100 at a clean record).
+    out.push(system(1220, "Kit Gate Deny", -700, Y, 363, [1625]));
+    out.push(spob(1625, "Kit Gate Deny", 0, 0, 1400, { type: 1, flags: 0x11, flags2: 0x1000, govt: 363, minStatus: 100, techLevel: 0,
+        specialTech: [-1, -1, -1], custPic: 37, custSnd: 120, hyperlinks: [1610, ...none8].slice(0, 8) }));
+
+    // --- M: ränk 0x0200 against a MinStatus refusal (wave 24's Kit Map Picky, gövt 363, port MinStatus 100).
+    out.push({ type: "ränk", id: 204, name: "Kit Land Anywhere Rank", clone: "ränk:128",
+        set: { "@0:i16": 1, "@2:i16": 363, "@4:i16": 100, "@6:i32": 0, "@10:i32": 0, "@22:i16": 0x0200 } });
+    out.push(...misn(958, "Kit land-anywhere rank of 363", 9244, { availStel: 1490, onAccept: "!b9244 K204" }));
+
+    // --- H: the hail pane's width on another ODD overflow: a landable port with Jupiter's 325 x 325 art (rlëD 2005).
+    out.push(system(1221, "Kit Hail Jupiter", -660, Y, 363, [1626]));
+    out.push(spob(1626, "Kit Hail Jupiter", 0, 0, 159, { flags: 0x43, govt: -1, minStatus: -32767 }));
+    return out;
+}
 
 /**
  * Wave-27 experiments (docs/reference_experiments.md, "... wave 27").

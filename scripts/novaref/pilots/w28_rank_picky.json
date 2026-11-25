@@ -1,0 +1,22 @@
+{
+  "name": "novaref-w28-rank-picky",
+  "edits": {
+    "ship": 703,
+    "stellar": 1490,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1187": 2,
+      "1188": 2,
+      "1193": 2
+    },
+    "missionBits": {
+      "9244": true
+    },
+    "nickname": "Probe",
+    "shipName": "w28-rank-picky"
+  }
+}
