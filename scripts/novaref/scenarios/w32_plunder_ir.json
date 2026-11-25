@@ -1,0 +1,120 @@
+{
+ "name": "w32_plunder_ir",
+ "_comment": "Wave 32, what an AMMO take delivers: as w30_plunder_ammo (board the stock-IR hulk, Ammo, Abort) with the w31_pd_ir boarder (oütf 134 + wëap 134, 0 rounds) against shïp 547 Kit Hulk IR (10 IR missiles; sÿst 1300). The secondary is selected (w) and shot before the approach, and after the board w is pressed and shot twice more, so the panel shows whether the take delivered the rounds, tripped or not.",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "keys": "w wait 800"
+  },
+  {
+   "shot": "secondary_before",
+   "window": true
+  },
+  {
+   "shot": "preboard",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      510,
+      325,
+      "ammo"
+     ],
+     [
+      416,
+      381,
+      "abort"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space@5000 wait 2500"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "shot": "after",
+   "window": true
+  },
+  {
+   "keys": "w wait 800"
+  },
+  {
+   "shot": "secondary",
+   "window": true
+  },
+  {
+   "keys": "w wait 800"
+  },
+  {
+   "shot": "secondary2",
+   "window": true
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "after2",
+   "window": true
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w32-c20-h10",
+  "edits": {
+    "ship": 548,
+    "stellar": 2044,
+    "credits": 0,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2044": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w32-c20-h10",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

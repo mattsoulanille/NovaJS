@@ -303,8 +303,71 @@ export default {
         ...wave29Resources(),
         ...wave30Resources(),
         ...wave31Resources(),
+        ...wave32Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-32 experiments (docs/reference_experiments.md, "... wave 32").
+ * Nothing retired (no mïsn needed). shïp 548-551, düde 478-479, gövt
+ * 296-297, flët 317, sÿst 1301, spöb 1801. Map row y = -2280 (x -800). The
+ * next free ids: sÿst 1302+, spöb 1802+ (spares 1495, 1496, 1499), shïp
+ * 552+, düde 480+, ränk 205+, mïsn NONE (retire an old kit mission to add
+ * one), gövt 295 and below, flët 318+, wëap 295+, oütf 468+, bits 9250+.
+ *
+ *  C   Capture odds against the boarder's crew: wave 26's Kit Ring Crawler
+ *      Tough (shïp 528: 100 shield / 3000 armor, crew 10, the ring sprite
+ *      the board loop reads) with crew 20 (shïp 548 Kit Ring Crawler Crew
+ *      20) and crew 50 (shïp 549 Kit Ring Crawler Crew 50), against wave
+ *      8's live crew 1 / 5 / 10 / 20 hulks (sÿst/spöb 2039 / 2043 / 2044 /
+ *      2040), so one crew ratio is reached with two crew pairs.
+ *  R19 A ship of the reinforcement fleet's side attacking ANOTHER NPC, the
+ *      player at the system's centre (the arrival inside the radar): gövt
+ *      297 Kit Reinf Hunter (Enemies 296) / 296 Kit Reinf Prey, flët 317,
+ *      shïp 550 Kit RH Hunter / 551 Kit RH Prey, düde 478 / 479, sÿst 1301
+ *      Kit Reinf Hunt (ReinfFleet 317, ReinfTime 150; port spöb 1801).
+ */
+function wave32Resources() {
+    const out = [];
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { ring: 1955 };
+    const tough = { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...shareRled(548, "Kit Ring Crawler Crew 20", RLED.ring, 24, { ...tough, crew: 20 }));
+    out.push(...shareRled(549, "Kit Ring Crawler Crew 50", RLED.ring, 24, { ...tough, crew: 50 }));
+
+    // --- R19: an NPC of the fleet's side ATTACKING ANOTHER NPC (the player only watches, at the system's centre, so
+    // the fleet's arrival is inside the radar). gövt 297 Kit Reinf Hunter (wave 19's 311 settings: MaxOdds 100,
+    // CrimeTol 30000, MediumName "Kit Reinf H"; Enemies 296) and gövt 296 Kit Reinf Prey (Enemies 297). flët 317 Kit
+    // Reinf Fleet H (wave 19's purple lead 472 + two blue guards 473, gövt 297, LinkSyst 1594). shïp 550 Kit RH Hunter
+    // (red pointer, AI 3, the Kit Escort Gun, 3000 / 3000, Strength 10: weak, so the odds are against its side) and
+    // 551 Kit RH Prey (green pointer, AI 1, unarmed, 30000 / 30000, Strength 500, Speed 20: it cannot get away);
+    // düde 478 (297's hunter) and 479 (296's prey), the only traffic of sÿst 1301 Kit Reinf Hunt (gövt 297,
+    // ReinfFleet 317, ReinfTime 150, ReinfIntrval 0; port spöb 1801 at the centre), avgShips 4 (each düde 50%).
+    const pointerRled = { red: 1971, green: 1972 };
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    out.push(govt(297, "Kit Reinf Hunter", { maxOdds: 100, disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000,
+        classes: [297, -1, -1, -1], enemies: [296, -1, -1, -1], mediumName: "Kit Reinf H" }));
+    out.push(govt(296, "Kit Reinf Prey", { disabPenalty: 1, boardPenalty: 1, killPenalty: 1, crimeTol: 30000,
+        classes: [296, -1, -1, -1], enemies: [297, -1, -1, -1] }));
+    out.push(fleet(317, "Kit Reinf Fleet H", 472, [[473, 2, 2], [473, 0, 0], [473, 0, 0], [473, 0, 0]], 297, 1594));
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+    out.push(...shareRled(550, "Kit RH Hunter", pointerRled.red, 24, { ...mobile, ai: 3, armor: 3000, shield: 3000, strength: 10,
+        weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(...shareRled(551, "Kit RH Prey", pointerRled.green, 24, { ...mobile, ai: 1, accel: 50, speed: 20, armor: 30000, shield: 30000,
+        shieldRecharge: 0, strength: 500 }));
+    out.push(dude(478, "Kit RH Hunter", 3, 297, 550), dude(479, "Kit RH Prey", 1, 296, 551));
+    const hunt = system(1301, "Kit Reinf Hunt", -800, -2280, 297, [1801]);
+    hunt.set = { ...hunt.set, avgShips: 4, dudes: [478, 479, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+        reinfFleet: 317, reinfTime: 150, reinfInterval: 0 };
+    out.push(hunt, spob(1801, "Kit Reinf Hunt Port", 0, 0, 138, { flags: 0x43 }));
+    return out;
+}
 
 /**
  * Wave-31 experiments (docs/reference_experiments.md, "... wave 31").
