@@ -15,7 +15,7 @@ import { BlastEndSystem } from '../combat/index.js';
 import { EscortCommandBehaviorSystem, EscortCommandInputSystem } from '../escorts/index.js';
 import { EscortLandingSystem } from '../escorts/index.js';
 import { FollowAI } from '../npc/index.js';
-import { deriveRepair, DisabledComponent, DisabledState, DISABLED_DECELERATION, isBelowDisableThreshold, repairedArmor, RepairComponent, rollRepairTime } from '../ship/index.js';
+import { deriveRepair, DisabledComponent, DisabledState, disabledCoastSpeed, isBelowDisableThreshold, repairedArmor, RepairComponent, rollRepairTime } from '../ship/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, ShieldComponent } from '../ship/index.js';
@@ -247,9 +247,11 @@ export const JumpDisableCancelSystem = new System({
  * A disabled ship is dead in space: no thrust, no turning. Runs after
  * every system that writes movement intent (player controls, NPC
  * steering, formation keeping, the jump sequence, the afterburner) and
- * erases whatever they wrote, then brakes the hulk toward rest at
- * DISABLED_DECELERATION ("slow to rest" — a disabled ship gradually
- * decelerates to zero velocity relative to the system).
+ * erases whatever they wrote, then lets the hulk coast to rest: its speed
+ * decays exponentially (disabledCoastSpeed, tau
+ * DISABLED_COAST_TIME_CONSTANT_S, measured on the original in reference
+ * "A disabled ship's coast, wave 25") and snaps to zero below
+ * DISABLED_REST_SPEED. The direction is kept.
  */
 export const DisabledMovementSystem = new System({
     name: 'DisabledMovementSystem',
@@ -262,8 +264,7 @@ export const DisabledMovementSystem = new System({
 
         const speed = movement.velocity.length;
         if (speed > 0) {
-            const next = Math.max(0,
-                speed - DISABLED_DECELERATION * time.delta_s);
+            const next = disabledCoastSpeed(speed, time.delta_s);
             // Replace (never mutate in place) the velocity vector.
             movement.velocity = next <= 0
                 ? new Vector(0, 0)

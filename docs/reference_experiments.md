@@ -12760,6 +12760,30 @@ which fits).
 Confidence: high for the shape on this hull (a clean track at 10 fps);
 medium for applying it to every hull.
 
+**Applied (wave-25 fixes, 2026-11-25).** The constant brake is gone:
+`DisabledMovementSystem` (`N/nova_plugin/encounters/disabled_plugin.ts`)
+multiplies a disabled hull's speed by exp(-dt / 3.74 s) every step
+(`disabledCoastSpeed`, `DISABLED_COAST_TIME_CONSTANT_S` in
+`N/nova_plugin/ship/disabled_component.ts`: x0.9956 a 1/60 s step, x0.991
+a 1/30 s tick), keeping the direction, and snaps it to rest below
+`DISABLED_REST_SPEED` 1.4 px/s, chosen so the measured coast ends where
+it did: 34.4 px/s comes to rest 12.0 s and 123 px after the hit
+(measured about 12 s and 125 px). A 300 px/s hulk now drifts about 20 s
+and 1,100 px. The comment marks the one hull and one start speed as the
+whole sample (the same tau for every hull is a GUESS). Math.exp is the
+deterministic one in the sim (installDeterministicMath); one multiply a
+step, no new state, no schema change. Boarding: the speed gate is on the
+RELATIVE speed, so a coasting hulk is boarded by matching it, and the
+board-velocity match (8d8a8939) gives the boarder the hulk's speed at the
+board; the hulk then slows away from it (at most its speed x 3.74 s
+further), more gently than under the old brake (comment in
+`ship/boarding_component.ts`). NPC pirates board inside 60 px/s of
+relative speed and steer to the hulk's position, unchanged. Specs:
+`disabled_plugin_test.ts` ("the disabled coast (exponential drag)": the
+measured track within 2 px/s at 1.8-7.8 s, rest at 11.5-12.5 s and
+115-130 px, the snap, the 300 px/s drift; the in-world coast still
+drifting after 5 s and at rest by tau x ln(100 / 1.4)).
+
 **Evidence:** `~/.local/share/novaref/evidence/20261125-w25/coast/*/` (`03-tab.png`, `04-hit.png` "Disabled", `05-c1.png` .. `34-c30.png`, `recording.mp4`: Space at frame 103).
 
 ### Wave-24 leftovers, wave 25: a +50 record below MinStatus 100 is ORANGE; the gate map draws an arrow to an UNEXPLORED destination but no dot; a cancelled gate map says "Hypergate jump cancelled." and the gate plays its closing animation (2026-11-25)

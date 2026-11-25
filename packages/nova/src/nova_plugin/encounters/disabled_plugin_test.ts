@@ -16,7 +16,9 @@ import { CloakActiveComponent } from '../ship/index.js';
 import {
     deriveRepair,
     DisabledComponent,
-    DISABLED_DECELERATION,
+    disabledCoastSpeed,
+    DISABLED_COAST_TIME_CONSTANT_S,
+    DISABLED_REST_SPEED,
     isBelowDisableThreshold,
     OUTFIT_REPAIR_DELAY_MAX_MS,
     OUTFIT_REPAIR_DELAY_MIN_MS,
@@ -45,6 +47,75 @@ import { Stat } from '../core/index.js';
 function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {
     return { data: { Outfit: { getCached: (id: string) => outfits[id] } } } as any;
 }
+
+/**
+ * The coast (reference "A disabled ship's coast, wave 25"): the original's
+ * trader, hit at 34.4 px/s, slowed as v = 34.4 e^(-t / 3.74 s) and came
+ * to rest about 12 s and 125 px after the hit. Stepped here at the sim's
+ * 60 Hz from the fitted start speed.
+ */
+describe('the disabled coast (exponential drag)', () => {
+    const DT = 1 / 60;
+    /** Speed at each whole step and the distance covered, from v0. */
+    function coast(v0: number) {
+        const speeds = [v0];
+        let distance = 0;
+        let v = v0;
+        while (v > 0 && speeds.length < 60 * 120) {
+            v = disabledCoastSpeed(v, DT);
+            distance += v * DT;
+            speeds.push(v);
+        }
+        return { speeds, distance, restS: (speeds.length - 1) * DT };
+    }
+
+    it('is a constant factor a step: about x0.991 per 1/30 s', () => {
+        expect(DISABLED_COAST_TIME_CONSTANT_S).toBe(3.74);
+        expect(disabledCoastSpeed(100, 1 / 30) / 100)
+            .toBeCloseTo(0.9911, 4);
+        // Two 1/60 s steps are one 1/30 s tick.
+        expect(disabledCoastSpeed(disabledCoastSpeed(100, DT), DT))
+            .toBeCloseTo(disabledCoastSpeed(100, 1 / 30), 10);
+        // About 23% lost a second, whatever the speed.
+        for (const v of [20, 300]) {
+            expect(disabledCoastSpeed(v, 1) / v).toBeCloseTo(0.765, 3);
+        }
+        // A zero step (a fresh world's first) changes nothing.
+        expect(disabledCoastSpeed(34.4, 0)).toBe(34.4);
+    });
+
+    it('follows the measured track and rests at about 12 s, 125 px',
+        () => {
+            const { speeds, distance, restS } = coast(34.4);
+            // The original's 0.6 s differences (px/s) at these times,
+            // within the track's own scatter.
+            const measured: [number, number][] = [
+                [1.8, 21.3], [3.0, 14.9], [4.2, 11.1], [5.4, 7.0],
+                [6.6, 5.6], [7.8, 4.7]];
+            for (const [t, v] of measured) {
+                expect(Math.abs(speeds[Math.round(t * 60)] - v))
+                    .withContext(`t ${t}`).toBeLessThan(2);
+            }
+            expect(restS).toBeGreaterThan(11.5);
+            expect(restS).toBeLessThan(12.5);
+            expect(distance).toBeGreaterThan(115);
+            expect(distance).toBeLessThan(130);
+        });
+
+    it('snaps to rest below DISABLED_REST_SPEED, never creeping', () => {
+        expect(DISABLED_REST_SPEED).toBe(1.4);
+        expect(disabledCoastSpeed(1.4, DT)).toBe(0);
+        expect(disabledCoastSpeed(1.405, DT)).toBe(0);
+        expect(disabledCoastSpeed(1.5, DT)).toBeGreaterThan(1.4);
+        // A fast hull drifts on far longer (GUESS: one tau for every
+        // hull): 300 px/s rests after about 20 s and 1,100 px.
+        const fast = coast(300);
+        expect(fast.restS).toBeGreaterThan(19);
+        expect(fast.restS).toBeLessThan(21);
+        expect(fast.distance).toBeGreaterThan(1050);
+        expect(fast.distance).toBeLessThan(1150);
+    });
+});
 
 describe('disable threshold helpers', () => {
     it('detects the threshold crossing', () => {
@@ -300,12 +371,20 @@ describe('ship disabling in a live world', () => {
             expect(movement.turning).toEqual(0);
             expect(movement.velocity.length).toBeLessThan(speedBefore);
 
-            // DISABLED_DECELERATION px/s^2: 100 px/s reaches zero within
-            // 100/DISABLED_DECELERATION seconds (plus slack for the
-            // partial first tick).
-            const steps = Math.ceil(
-                (100 / DISABLED_DECELERATION) * 60) + 10;
-            for (let i = 0; i < steps; i++) {
+            // The exponential coast: still drifting after 5 s (100 px/s
+            // keeps about a quarter of its speed), along its own line...
+            for (let i = 0; i < 5 * 60; i++) {
+                holdControls(world, ship, { accelerate: true });
+                world.step();
+            }
+            expect(movement.velocity.length).toBeGreaterThan(20);
+            expect(movement.velocity.length).toBeLessThan(30);
+            expect(movement.velocity.y).toEqual(0);
+            // ...and at rest by tau x ln(100 / DISABLED_REST_SPEED), about
+            // 16 s (plus slack).
+            const restSteps = Math.ceil(DISABLED_COAST_TIME_CONSTANT_S
+                * Math.log(100 / DISABLED_REST_SPEED) * 60) + 10;
+            for (let i = 5 * 60; i < restSteps; i++) {
                 holdControls(world, ship, { accelerate: true });
                 world.step();
             }

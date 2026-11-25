@@ -427,10 +427,18 @@ export function boardingBlockedReason(input: {
  * running behind it). Unmeasured on the original (reference Pending,
  * "U9 velocity"); a sim rule, listed in docs/novajs_enhancements.md.
  *
- * A hulk still COASTING to rest (DISABLED_DECELERATION) keeps braking
- * after the board while the boarder keeps the speed it was given, so the
- * two only stay together exactly when the hulk was already at rest (or
- * is a waiting rescue ship, which holds still).
+ * A hulk still COASTING to rest (disabled_component.ts
+ * disabledCoastSpeed: exponential drag, tau 3.74 s, measured in reference
+ * "A disabled ship's coast, wave 25") keeps slowing after the board while
+ * the boarder keeps the speed it was given, so the two only stay together
+ * exactly when the hulk was already at rest (or is a waiting rescue ship,
+ * which holds still). The coast lasts far longer than the old 45 px/s^2
+ * brake did (about 12 s for the measured 34 px/s hulk, not 0.8 s), so a
+ * moving hulk is a more common board now; the gate is on the RELATIVE
+ * speed, so matching it is enough. While the dialog is up the hulk goes
+ * on at most (its speed at the board) x tau further (about 125 px for
+ * that hulk) and the boarder at the board speed, so the hulls separate,
+ * more slowly than under the old brake, which stopped the hulk at once.
  *
  * Only the velocity changes: the heading, the turn and the thrust input
  * are the boarder's own. The vector is a fresh value (never the hulk's

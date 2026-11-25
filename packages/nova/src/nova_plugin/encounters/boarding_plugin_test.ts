@@ -461,8 +461,8 @@ describe('boarding in a live world', () => {
                 press(world, BOARDER, 'board');
                 expect(boarder.components.get(BoardingComponent)?.target)
                     .toEqual(TARGET);
-                // The hulk's velocity AT the board (it has braked a tick
-                // since, at DISABLED_DECELERATION); the boarder coasts.
+                // The hulk's velocity AT the board (it has coasted a tick
+                // since, disabledCoastSpeed); the boarder keeps it.
                 expect(velocityOf(boarder)).toEqual({ x: 30, y: -4 });
                 const boarderVelocity = boarder.components
                     .get(MovementStateComponent)!.velocity;

@@ -13,8 +13,9 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
  * .disableArmorFraction) — becomes DISABLED: dead in space. While disabled
  * it cannot thrust, turn, or fire; it decloaks; its shield, armor, and fuel
  * ("energy") recharges are suspended; its running lights go dark; and it
- * slowly decelerates to rest. It can still command its escorts, and it can
- * still be destroyed (armor reaching 0 follows the normal death path).
+ * coasts to rest (exponential drag, DISABLED_COAST_TIME_CONSTANT_S). It
+ * can still command its escorts, and it can still be destroyed (armor
+ * reaching 0 follows the normal death path).
  *
  * This module holds the component, its wire type, the tuning constants, and
  * the pure transition helpers, with no system imports — so gameplay systems
@@ -59,21 +60,47 @@ export type DisabledState = t.TypeOf<typeof DisabledState>;
 export const DisabledComponent = new Component<DisabledState>('DisabledComponent');
 
 /**
- * How hard a disabled ship brakes toward rest, in px/s^2 (velocity-space
- * units of MovementState). TUNABLE: the Bible doesn't give a rate; stock
- * ship speeds land around 110-180 px/s after ShipSpeedConversionFactor, so
- * 45 px/s^2 coasts a full-speed ship to a stop over ~3-4 s — visibly
- * "drifting to a halt" rather than parking instantly. (Raised from 30 with
- * #316's 1.5x ship speeds, to keep that 3-4 s.)
+ * How a disabled ship coasts to rest: EXPONENTIAL drag on its velocity
+ * (reference "A disabled ship's coast, wave 25"). Each sim step the speed
+ * is multiplied by exp(-dt / DISABLED_COAST_TIME_CONSTANT_S), so it loses
+ * about 23% a second whatever it started at, and the hulk drifts a total
+ * of about (start speed) x tau before it stops.
  *
- * KNOWN MISMATCH IN KIND, kept until a coast is recorded: the original's
- * disabled ships coast on for longer (reference "Disabled ships, wave 23":
- * a warship disabled at speed went 11 -> 35 radar px in about 3 s, about
- * its own speed, and was found at rest minutes later; wave 24's trader
- * coasted a few hundred px). Its rate is a GUESS until a recording gives
- * speed over time, so this brake is left as it is.
+ * MEASURED on the original: a trader flying a straight line at 34-38
+ * px/s took one Disable Gun hit; its track at 10 fps fits
+ * v = 34.4 e^(-t / 3.74 s) (residual sum of squares 9, against 149 for
+ * the best constant deceleration), about x0.991 per 1/30 s tick (x0.9956
+ * per NovaJS 1/60 s step). It came to rest about 12 s and 125 px after
+ * the hit and stayed there. ONLY ONE HULL AT ONE STARTING SPEED was
+ * measured: that the time constant is the same for every hull and every
+ * speed is a GUESS (wave 23's warship disabled at about 230 px/s drifted
+ * on for seconds, which fits it).
+ *
+ * (Replaced a constant 45 px/s^2 brake, a tuning guess that stopped this
+ * very hulk in 0.8 s after 25 px.)
  */
-export const DISABLED_DECELERATION = 45;
+export const DISABLED_COAST_TIME_CONSTANT_S = 3.74;
+
+/**
+ * Below this speed (px/s) a coasting hulk snaps to rest, so the
+ * exponential does not creep on forever. Chosen from the measured rest:
+ * 34.4 e^(-12 / 3.74) = 1.4 px/s, so the measured coast stops 12.0 s and
+ * 123 px after the hit (measured: about 12 s and 125 px). At 1.4 px/s the
+ * snap is 0.02 px a step, invisible. A hull disabled at 300 px/s stops
+ * after about 20 s and 1,100 px.
+ */
+export const DISABLED_REST_SPEED = 1.4;
+
+/**
+ * A coasting hulk's speed after one sim step of `deltaS` seconds: the
+ * exponential drag, then the snap to rest below DISABLED_REST_SPEED.
+ * Math.exp is the deterministic one in every simulating context
+ * (nova_ecs deterministic_math, installed by makeSystem).
+ */
+export function disabledCoastSpeed(speed: number, deltaS: number): number {
+    const next = speed * Math.exp(-deltaS / DISABLED_COAST_TIME_CONSTANT_S);
+    return next < DISABLED_REST_SPEED ? 0 : next;
+}
 
 /**
  * Repair margin: a self-repair brings armor to (threshold + this fraction

@@ -41,9 +41,9 @@ export const FormationSystem = new System({
             // A hulk drifts. DisabledMovementSystem runs after this one and
             // erases steering intent, but the RCS regime writes
             // movement.velocity DIRECTLY — and all that erasure does to a
-            // direct velocity write is bleed it off at
-            // DISABLED_DECELERATION, which is exactly the station-keeping
-            // nudge again next tick. So a disabled escort held its slot,
+            // direct velocity write is bleed a little of it off (the
+            // coast's drag, disabledCoastSpeed), which is exactly the
+            // station-keeping nudge again next tick. So a disabled escort held its slot,
             // matching its leader's course while dead in space. Ordering
             // cannot fix that (same reason the jump bail below exists); the
             // gate has to be here, before anything is written.
