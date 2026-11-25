@@ -7,7 +7,7 @@ import {
     assistWillingness,
     assistNeed,
     disabledRefusalText,
-    fuelOfferWithdrawnText,
+    fuelOfferWithdrawnText, mercyLoweredText, MERCY_LOWERED_FALLBACK,
     fuelSaleMoodText,
     FUEL_OFFER_WITHDRAWN_FALLBACK,
     FUEL_SALE_BAD_MOOD_FALLBACK,
@@ -719,6 +719,22 @@ describe('assistWillingness (ruling #297: "refuse to help you or make you '
             expect(assistNeed(false, tank(50, 50))).toBeUndefined();
             expect(assistNeed(false, undefined)).toBeUndefined();
         });
+    it('a mercy price answered with Lower Price (STR# 3000 150-154; '
+        + 'reference "R7 a provoked freighter\'s Beg For Mercy above 20M, '
+        + 'wave 31")', () => {
+            const strings: string[] = [];
+            strings[150] = 'What? How dare you! Prepare to die!';
+            strings[151] = 'Die, cheapskate!';
+            // The reference's one-based #151 is the group's first line.
+            expect(mercyLoweredText(strings, 0))
+                .toBe('What? How dare you! Prepare to die!');
+            expect(mercyLoweredText(strings, 1)).toBe('Die, cheapskate!');
+            expect(mercyLoweredText(undefined))
+                .toBe(MERCY_LOWERED_FALLBACK);
+            expect(MERCY_LOWERED_FALLBACK)
+                .toBe('What? How dare you! Prepare to die!');
+        });
+
     it('the fuel sale\'s lines and "Pay me N credits." (STR# 3000 115-119, '
         + '155-159; STR# 2002 186 + 32)', () => {
             const strings: string[] = [];

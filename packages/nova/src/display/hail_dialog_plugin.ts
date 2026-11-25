@@ -21,7 +21,7 @@ import {
     BUSY_RESPONSE_FALLBACK, assistIsFree, canRequestAssistance, channelOpenText,
     CLEARED_TO_DOCK_INDEX, CLEARED_TO_LAND_INDEX, DOCKING_DENIED_INDEX, genericGreetings,
     greetingText, HAIL_RESPONSE_TABLE, hashString, hostileResponseText, LANDING_DENIED_INDEX,
-    mercyAcceptedText, mercyRefusedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
+    mercyAcceptedText, mercyLoweredText, mercyRefusedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
     NO_NEED_RESPONSE_FALLBACK, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, planetTakesBribes,
     shipNoResponseText, assistWillingness, assistRefusedText, justAnEscortText,
     assistForPayText, assistPaidText, rudeGreetingText,
@@ -1001,6 +1001,11 @@ export async function computeContext(world: World,
                     // 135-139). Resolved here because the Pay handler is
                     // synchronous, exactly like the assistance replies.
                     accepted: mercyAcceptedText(shipStrings, shipSeed),
+                    // Lower Price's withdrawal, "What? How dare you!
+                    // Prepare to die!" (STR# 3000 150-154; reference "R7
+                    // a provoked freighter's Beg For Mercy above 20M, wave
+                    // 31").
+                    withdrawn: mercyLoweredText(shipStrings, shipSeed),
                 }
                 : undefined;
             // BEG FOR MERCY IS OFFERED TO EVERY IFF-HOSTILE SHIP whose govt

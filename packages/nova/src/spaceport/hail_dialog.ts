@@ -149,9 +149,11 @@ export interface HailContext {
         /**
          * What the ship says when Lower Price withdraws its offer ("If
          * that's the way you feel, then you can sit here forever.", STR#
-         * 3000 155-159), or a planet ("No deal, cheapskate.", STR# 3002
-         * 30-34; reference "R7 planet bribe, wave 28"). Fuel offers and
-         * a planet's bribe.
+         * 3000 155-159; a hostile ship's mercy price, "What? How dare you!
+         * Prepare to die!", 150-154, reference "R7 a provoked freighter's
+         * Beg For Mercy above 20M, wave 31"), or a planet ("No deal,
+         * cheapskate.", STR# 3002 30-34; reference "R7 planet bribe, wave
+         * 28"). Fuel offers, a ship's mercy price and a planet's bribe.
          */
         withdrawn?: string,
         /**
@@ -765,8 +767,20 @@ export function hailPress(state: HailPage, press: HailPress,
         case 'lowerPrice': {
             const purpose = context.bribe?.purpose;
             if (phase !== 'haggle' || !context.bribe
-                || (purpose !== 'fuel' && purpose !== 'landing')) {
+                || (purpose !== 'fuel' && purpose !== 'landing'
+                    && purpose !== 'mercy')) {
                 return state;
+            }
+            // A hostile ship's MERCY price WITHDRAWS at once ("What? How
+            // dare you! Prepare to die!", reference "R7 a provoked
+            // freighter's Beg For Mercy above 20M, wave 31"; GUESS from
+            // one press: it never counters). Back to the main page with
+            // the line in the well; Beg For Mercy stays and names the same
+            // price again (GUESS), and nothing reaches the simulation.
+            if (purpose === 'mercy') {
+                return { phase: 'main', context: {
+                    ...context, body: context.bribe.withdrawn ?? context.body,
+                } };
             }
             // A COUNTER (reference H1 wave 17: 4,000 -> 3,000; a planet's
             // 10,000 -> 7,500, "R7 bribe price, wave 22"): the popup
@@ -1487,7 +1501,8 @@ export class HailDialog {
         this.content.addChild(body);
 
         if (bribe?.purpose === 'fuel'
-            || (bribe?.purpose === 'landing' && bribe.canAfford)) {
+            || ((bribe?.purpose === 'landing' || bribe?.purpose === 'mercy')
+                && bribe.canAfford)) {
             // A ship's fuel price (reference H1 waves 16 and 17): Lower
             // Price over Accept Price, the original's own captions (STR#
             // 150 30 and 29). Lower Price counters with 3/4 or withdraws
@@ -1502,12 +1517,22 @@ export class HailDialog {
             // counters or withdraws, "R7 planet bribe, wave 28"), when the
             // pilot can pay it; an unaffordable planet price keeps
             // NovaJS's own page below (unmeasured on the original).
+            //
+            // So does a hostile ship's Beg For Mercy price (beg_mercy.png:
+            // "Pay me 20,000 credits." over Lower Price / Accept Price),
+            // when the pilot can pay it; its Lower Price withdraws the
+            // offer with no record to send (reference "R7 a provoked
+            // freighter's Beg For Mercy above 20M, wave 31").
             const lower =
                 this.placeButton('Lower Price', frame, originX, originY, 0);
             lower.click.subscribe(() => {
                 this.beep();
                 if (!bribe.canAfford) {
                     this.apply({ kind: 'cantAfford' });
+                    return;
+                }
+                if (bribe.purpose === 'mercy') {
+                    this.apply({ kind: 'lowerPrice' });
                     return;
                 }
                 const counter = this.callbacks.lowerPrice();
@@ -1530,8 +1555,9 @@ export class HailDialog {
             return;
         }
 
-        // Two rows, as in beg_mercy.png (the original's are Lower Price /
-        // Accept Price against a haggling pirate; ours pays or backs out).
+        // NovaJS's own two rows for what the original's popup was never
+        // captured on: a price the pilot cannot pay (Never Mind backs out)
+        // and a help price ('assist', which pays here).
         if (bribe && bribe.canAfford) {
             const pay = this.placeButton(
                 `Pay ${bribe.amount.toLocaleString()} cr`, frame,

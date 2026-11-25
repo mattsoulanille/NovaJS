@@ -569,8 +569,16 @@ export function askingCashCap(credits: number): number {
  * the pilot leaves the system ({@link planetBribeRefused}, reference "R7
  * planet bribe withdrawal, wave 29").
  *
- * NOT MODELLED: a SHIP's Lower Price on a bribe (3/4 or a withdrawal, as
- * for fuel); a second Offer Bribe in the same channel after a COUNTER
+ * A SHIP's Lower Price on its Beg For Mercy price WITHDRAWS the offer at the
+ * first press ("What? How dare you! Prepare to die!", STR# 3000 150-154,
+ * {@link mercyLoweredText}; reference "R7 a provoked freighter's Beg For
+ * Mercy above 20M, wave 31": ONE press, so GUESS that it always withdraws
+ * and never counters). Nothing is recorded: the plea was never paid, so
+ * the simulation has nothing to apply, and Beg For Mercy stays on the
+ * channel and names the same price again (GUESS: a second plea after the
+ * withdrawal is unmeasured).
+ *
+ * NOT MODELLED: a second Offer Bribe in the same channel after a COUNTER
  * answered as an insult (wave 22); a NEW hail's new price (the 0x8000
  * planet asked 25,000, then 99,000): here the price is fixed per ship (or
  * planet) and pilot for given cash.
@@ -1191,6 +1199,18 @@ export const FUEL_SALE_BAD_MOOD_FALLBACK =
  * cheapskate!", is the pirate's answer to a lowered mercy price.)
  */
 export const FUEL_OFFER_WITHDRAWN_FIRST_INDEX = 155;
+
+/**
+ * "What? How dare you! Prepare to die!" (STR# 3000 150-154, 0-based; the
+ * reference's one-based #151) — a hostile ship whose Beg For Mercy price
+ * the player answered with Lower Price: it withdraws the offer (reference
+ * "R7 a provoked freighter's Beg For Mercy above 20M, wave 31", one press,
+ * which read 150). The rest of the group ("Die, cheapskate!" / ... / "Ha
+ * ha ha! This will be your last mistake!") is picked by the ship's seed
+ * like every other response group.
+ */
+export const MERCY_LOWERED_FIRST_INDEX = 150;
+export const MERCY_LOWERED_FALLBACK = 'What? How dare you! Prepare to die!';
 export const FUEL_OFFER_WITHDRAWN_COUNT = RESPONSE_GROUP_SIZE;
 export const FUEL_OFFER_WITHDRAWN_FALLBACK = 'Ha ha ha. What a comedian.';
 
@@ -1440,6 +1460,13 @@ export function cantAffordText(strings: readonly string[] | undefined,
     seed = 0): string {
     return responseText(strings, CANT_AFFORD_FIRST_INDEX,
         CANT_AFFORD_FALLBACK, seed);
+}
+
+/** A Beg For Mercy price answered with Lower Price (STR# 3000 150-154). */
+export function mercyLoweredText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, MERCY_LOWERED_FIRST_INDEX,
+        MERCY_LOWERED_FALLBACK, seed);
 }
 
 /** A price for help answered with Lower Price (STR# 3000 155-159). */

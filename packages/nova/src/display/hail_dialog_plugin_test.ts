@@ -31,7 +31,7 @@ import {
     ASSIST_GRANTED_FALLBACK, ASSIST_GRANTED_FIRST_INDEX, BUSY_RESPONSE_FALLBACK,
     BUSY_RESPONSE_FIRST_INDEX, CHANNEL_OPEN_FALLBACK, CHANNEL_OPEN_FIRST_INDEX,
     GENERIC_GREETING_FIRST_INDEX, HAIL_RESPONSE_TABLE, HOSTILE_RESPONSE_FALLBACK,
-    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MERCY_REFUSED_FALLBACK,
+    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MERCY_LOWERED_FALLBACK, MERCY_REFUSED_FALLBACK,
     MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
     ASSIST_FOR_PAY_FALLBACK, ASSIST_PAID_FALLBACK, ASSIST_REFUSED_FALLBACK,
@@ -1027,6 +1027,10 @@ describe('computeContext: a ship hail OPENS with the channel-open group', () => 
             expect(result!.context.bribe?.purpose).toBe('mercy');
             expect(result!.context.bribe?.accepted)
                 .toBe(MERCY_ACCEPTED_FALLBACK);
+            // Lower Price's withdrawal (STR# 3000 150-154, reference "R7
+            // a provoked freighter's Beg For Mercy above 20M, wave 31").
+            expect(result!.context.bribe?.withdrawn)
+                .toBe(MERCY_LOWERED_FALLBACK);
             // The price in the fuel sale's words: the ship's mood line,
             // then "Pay me N credits." (20,000 flat, capped to a third of
             // 10,000).
@@ -1084,6 +1088,7 @@ describe('the comm dialog\'s button column survives its own presses', () => {
         bribe: {
             amount: 3000, canAfford: true, purpose: 'mercy',
             accepted: "Okay, I'll leave you alone.",
+            withdrawn: 'What? How dare you! Prepare to die!',
         },
     };
     const PORT: HailContext = {
@@ -1169,6 +1174,27 @@ describe('the comm dialog\'s button column survives its own presses', () => {
             expect(paid.context.body).toBe("Okay, I'll leave you alone.");
             expect(paid.context.bribe?.amount).toBe(3000);
             expect(slots(paid)).toEqual(['greetings', 'beg', 'close']);
+        });
+
+    it('Lower Price on a MERCY price withdraws it with the ship\'s line, '
+        + 'and Beg For Mercy stays (reference "R7 a provoked freighter\'s '
+        + 'Beg For Mercy above 20M, wave 31")', () => {
+            const haggling = pressAll(open(HOSTILE), [{ kind: 'beg' }],
+                HOSTILE);
+            const lowered = pressAll(haggling, [{ kind: 'lowerPrice' }],
+                HOSTILE);
+            expect(lowered.phase).toBe('main');
+            expect(lowered.context.body)
+                .toBe('What? How dare you! Prepare to die!');
+            expect(slots(lowered)).toEqual(['greetings', 'beg', 'close']);
+            // GUESS (unmeasured): a second plea names the same price.
+            const again = pressAll(lowered, [{ kind: 'beg' }], HOSTILE);
+            expect(again.phase).toBe('haggle');
+            expect(again.context.bribe?.amount).toBe(3000);
+            // A counter is never taken on a mercy price.
+            const countered = hailPress(haggling, { kind: 'lowerPrice',
+                counter: { ...HOSTILE.bribe!, amount: 2200 } }, HOSTILE);
+            expect((countered as HailPage).phase).toBe('main');
         });
 
     it('still CLOSES the channel when a PORT bribe is paid', () => {
