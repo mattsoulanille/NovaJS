@@ -7,7 +7,7 @@ import {
     ControlEvent, isSettledPort, landable,
 } from '../nova_plugin/core/index.js';
 import {
-    DISCOVERY_LANDED, DiscoveryLevel,
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
 } from "../nova_plugin/player/index.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { Button } from "./button.js";
@@ -94,6 +94,10 @@ export interface GateMapViewer {
     transitive: boolean;
     /** The docked ship's control bits, for NCB system visibility. */
     playerBits: ReadonlySet<number>;
+    /** How much the player knows about each system (discovery.ts): only an
+     * EXPLORED (entered) destination is offered. Omitted means every system
+     * is known. */
+    discoveryOf?: (systemId: string) => DiscoveryLevel;
 }
 
 /** What the hypergate map draws and offers for one showing. */
@@ -150,6 +154,13 @@ export interface GateMapView {
  * lane is drawn between the VISIBLE copies of its gates' systems, so a story
  * bit that swaps a system for its stacked copy (HG-Heraan's nova:344 / 540 /
  * 604) keeps the lane instead of pointing it at a copy the map hides.
+ *
+ * An UNEXPLORED destination keeps its lane but is not offered (measured,
+ * reference "Wave-24 leftovers, wave 25", Kit Gate A1 with only its own
+ * system explored: the arrow A1 -> A2 at full length, no dot or name at A2,
+ * and a click on it selected nothing). The lane says where the gate goes;
+ * picking a system needs the player to have been there. Its dot follows
+ * the star map's rule (SystemGraph does not force it onto the map).
  *
  * Destroyed gates (unusable) stay out exactly as before. Pure, so it is
  * unit-testable: SystemGraph itself cannot be constructed headlessly.
@@ -235,6 +246,14 @@ export function computeGateMapView(index: GateMapIndex,
     }
     const selectable = computeSelectableSystems(visibleSystemsOfSpob,
         destinations);
+    const discoveryOf = viewer.discoveryOf;
+    if (discoveryOf) {
+        for (const id of [...selectable.keys()]) {
+            if (id !== systemId && discoveryOf(id) < DISCOVERY_ENTERED) {
+                selectable.delete(id);
+            }
+        }
+    }
 
     // What a pick whitens: the lane to it, or the shortest chain.
     const routes = new Map<string, [string, string][]>();
@@ -289,10 +308,10 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
      * where the galaxy then draws grey. */
     portSpobs?: ReadonlySet<string>,
     /** How much the player knows about each system (discovery.ts). The
-     * transit map obeys the same visibility rule as the star map, except
-     * that the gate's own destinations and lanes are always drawn — you
-     * cannot pick what you cannot see. Omitted in tests, which then get
-     * the fully-known galaxy the map used to draw. */
+     * transit map obeys the same visibility rule as the star map: an
+     * unexplored destination's lane is drawn, its dot only if the star map
+     * would draw it (reference "Wave-24 leftovers, wave 25"). Omitted in
+     * tests, which then get the fully-known galaxy the map used to draw. */
     discoveryOf?: (systemId: string) => DiscoveryLevel,
     /** The docked ship's control bits: the map draws the systems that
      * exist under them, as the star map does. Omitted means no bits. */
@@ -475,6 +494,7 @@ export class GateMap extends Menu<GateMapResult> {
         }, {
             gateSpob: input.gateSpob, systemId: input.systemId,
             transitive: this.transitivity, playerBits,
+            discoveryOf: id => this.discoveryOf(id),
         });
         this.selectableSpobs = view.selectable;
 

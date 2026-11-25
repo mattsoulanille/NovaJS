@@ -9,7 +9,9 @@ import { getIntegrationGameData } from "../communication/simulation_test_fixture
 import { gateMapMissionMarks } from "../display/gate_map_plugin.js";
 import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { ControlBitsComponent } from "../nova_plugin/ncb/index.js";
-import { ActiveMission, MissionsComponent } from "../nova_plugin/player/index.js";
+import {
+    ActiveMission, DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, MissionsComponent,
+} from "../nova_plugin/player/index.js";
 import { landable } from "../nova_plugin/core/index.js";
 import {
     computeGateMapView, computeSelectableSystems,
@@ -443,6 +445,47 @@ describe('computeGateMapView', () => {
             expect(arrows(v.gateLinks)).toEqual(['A1>A2']);
             expect([...v.selectable.keys()]).toEqual(['A2']);
         });
+    });
+
+    // Measured: reference "Wave-24 leftovers, wave 25", Kit Gate A1 with
+    // ONLY its own system explored: the arrow A1 -> A2 at full length, no
+    // dot or name at A2, and one click on it selected nothing.
+    describe('an UNEXPLORED destination (wave 25)', () => {
+        /** Only `entered` have been entered. */
+        function known(...entered: string[]) {
+            return (id: string) => entered.includes(id)
+                ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN;
+        }
+
+        it('keeps its lane but is not offered', () => {
+            const v = computeGateMapView(wave24(), {
+                gateSpob: 'a1', systemId: 'A1', transitive: false,
+                playerBits: new Set(), discoveryOf: known('A1'),
+            });
+            expect(arrows(v.gateLinks)).toEqual(['A1>A2']);
+            expect([...v.selectable]).toEqual([]);
+            expect(v.routes.size).toBe(0);
+        });
+
+        it('is offered once explored', () => {
+            const v = computeGateMapView(wave24(), {
+                gateSpob: 'a1', systemId: 'A1', transitive: false,
+                playerBits: new Set(), discoveryOf: known('A1', 'A2'),
+            });
+            expect([...v.selectable]).toEqual([['A2', 'a2']]);
+        });
+
+        it('under transitivity, offers only the explored gates of the '
+            + 'chain, the lanes all drawn', () => {
+                const v = computeGateMapView(wave24(), {
+                    gateSpob: 'c1', systemId: 'C1', transitive: true,
+                    playerBits: new Set(), discoveryOf: known('C1', 'C3'),
+                });
+                expect(arrows(v.gateLinks)).toEqual(['C1>C2', 'C2>C3']);
+                expect([...v.selectable.keys()]).toEqual(['C3']);
+                expect(v.routes.get('C3')).toEqual(
+                    [['C1', 'C2'], ['C2', 'C3']]);
+            });
     });
 
     it('draws only the gate\'s own links with transitivity off, even inside '

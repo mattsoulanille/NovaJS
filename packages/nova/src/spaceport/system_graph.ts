@@ -257,11 +257,12 @@ export class SystemGraph {
                 ...this.missionMarks.map(m => m.systemId),
                 ...this.viewedMarks.map(m => m.systemId),
                 // Somewhere this map exists to let the player PICK is
-                // always drawn: a hypergate's destinations, and the
-                // endpoints of the lanes the transit map is showing. The
-                // gate's own network is knowledge the gate hands you.
+                // always drawn: a hypergate's offered destinations (all
+                // explored, gate_map.ts computeGateMapView). A lane's far
+                // end is NOT forced: the original draws the arrow to an
+                // unexplored destination with no dot ("Wave-24 leftovers,
+                // wave 25"), so it follows the ordinary drawn rule.
                 ...(this.selectable ?? []),
-                ...gateLinks.flat(),
             ],
             currentSystem);
         this.clickTargets = this.pickRepresentativeSystems(
