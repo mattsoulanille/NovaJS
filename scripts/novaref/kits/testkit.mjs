@@ -296,8 +296,59 @@ export default {
         ...wave22Resources(),
         ...wave23Resources(),
         ...wave24Resources(),
+        ...wave25Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-25 experiments (docs/reference_experiments.md, "... wave 25").
+ * Nothing retired. **A new spöb range 1600-1999** (above the stock maximum
+ * 1420 and below the kit's 2000; checked unused by the stock .ndat files and
+ * the kit: the 1421-1599 ranges are full). sÿst 1189 and 1195-1196, spöb
+ * 1600-1602, shïp 515-516, düde 455. Map row y = -1700. The next free ids:
+ * sÿst 1197+, spöb 1603+ (spares 1495, 1496, 1499), shïp 517+, düde 456+,
+ * mïsn 956+ (the stock gap ends at 959), gövt 299 and below (stock gövt stop
+ * at 195; none of 196-299 is used), flët 310+, wëap 294+, oütf 466+, bits
+ * 9242+.
+ *
+ *  H   The hire pool's gate (NovaJS e87f6873 takes an exact SpecialTech
+ *      match; wave 23 saw only TechLevel): sÿst 1189 Kit Hire Special (363),
+ *      port spöb 1600 (land, commodities, shipyard, bar; TechLevel 0,
+ *      SpecialTech 9100); shïp 515 Kit Hire Special Disc (shïp 514 with
+ *      TechLevel 9100: it can only come through the SpecialTech; HireRandom
+ *      100, BuyRandom 100). sÿst 1195 Kit Hire None (363), port spöb 1601
+ *      (the same flags, TechLevel 0, no SpecialTech): nothing for hire (no
+ *      stock hull with HireRandom > 0 has TechLevel below 3; 514 is TL 1).
+ *  C   A disabled ship's coast: shïp 516 Kit Coast Trader (wave 18's magenta
+ *      pointer trader 466 with Speed / Accel 100, so its coast stays on the
+ *      radar), düde 455 (AI 1, gövt 312), the only traffic of sÿst 1196 Kit
+ *      Coast Range (363, port spöb 1602), avgShips 1.
+ */
+function wave25Resources() {
+    const out = [];
+    const traffic = (s, dudes, avgShips) => {
+        s.set = { ...s.set, dudes: [...dudes.map((d) => d[0]), ...none8].slice(0, 8), dudeProbs: [...dudes.map((d) => d[1]), ...zero8].slice(0, 8), avgShips };
+        return s;
+    };
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    // Land 0x01, commodities 0x02, shipyard 0x08, bar 0x40.
+    const hirePort = (id, name, specialTech) => spob(id, name, 0, 0, 138, { flags: 0x4b, techLevel: 0, specialTech });
+
+    // --- H: a TechLevel-0 port whose only hireable hull comes through its SpecialTech; a port with nothing for hire.
+    out.push(...shareRled(515, "Kit Hire Special Disc", 1974, 24, { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100,
+        cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000, hireRandom: 100, buyRandom: 100, techLevel: 9100 }));
+    out.push(system(1189, "Kit Hire Special", -760, -1700, 363, [1600]), hirePort(1600, "Kit Hire Special Port", [9100, -1, -1]));
+    out.push(system(1195, "Kit Hire None", -680, -1700, 363, [1601]), hirePort(1601, "Kit Hire None Port", [-1, -1, -1]));
+
+    // --- C: a slow AI 1 trader to disable in flight and watch coast.
+    out.push(...shareRled(516, "Kit Coast Trader", 1959, 24, { accel: 100, speed: 100, turn: 30, mass: 50, freeMass: 100, cargo: 10, strength: 50, crew: 10,
+        flags: 0, flags2: 0, ai: 1, armor: 3000, shield: 3000 }), dude(455, "Kit Coast Trader", 1, 312, 516));
+    out.push(traffic(system(1196, "Kit Coast Range", -600, -1700, 363, [1602]), [[455, 100]], 1), spob(1602, "Kit Coast Range Port", 0, 0, 138, { flags: 0x43 }));
+    return out;
+}
 
 /**
  * Wave-23 experiments (docs/reference_experiments.md, "... wave 23").
@@ -370,7 +421,9 @@ function wave23Resources() {
         port(1480, "Kit Map Wanted Station", 0, 0, { govt: 360, minStatus: 0, type: 1, flags: 0x11 | 0x02 }), port(1481, "Kit Map Clean Port"));
 
     // --- Escort cap (hub, added during the wave): shïp 514 Kit Hire Disc (the Kit Disc Yellow's art and stats,
-    // HireRandom 100, TechLevel 1 (hiring is gated by the spöb TechLevel, not SpecialTech), cost 10,000: a 1,000 fee) is offered in every bar every day.
+    // HireRandom 100, TechLevel 1, cost 10,000: a 1,000 fee) is offered in every bar every day. (Wave 23 read "hiring is gated by TechLevel, not SpecialTech" off a
+    // TechLevel-9000 version; wave 25 refuted it: a SpecialTech match puts a hull in the hire pool. The first version had HireRandom 100 too,
+    // but its runs carried six escorts, so the cap greyed the button.)
     out.push(...shareRled(514, "Kit Hire Disc", 1974, 24, { accel: 600, speed: 600, turn: 60, armor: 30000, shield: 30000, mass: 50, freeMass: 100,
         cargo: 10, ai: 3, strength: 50, flags: 0, flags2: 0, cost: 10000, hireRandom: 100, techLevel: 1 }));
     return out;

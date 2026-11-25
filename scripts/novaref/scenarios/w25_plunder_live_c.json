@@ -1,0 +1,91 @@
+{
+ "name": "w25_plunder_live_c",
+ "_comment": "Wave 25, the plunder self-destruct series: board_capture_live (wave 8: Kit Ring Crawler + Kit Escort Gun turret disables the immobile AI 4 Kit Live Pointer of gövt 363, then the sweep boards it) with the dialog clicked energy, credits, cargo (a shot after each), then Abort. Each take is one draw of the security self-destruct (STR# 2002 #113).",
+ "pilot": {
+  "as": "novaref-scenario"
+ },
+ "plugins": [
+  "../kits/testkit.mjs"
+ ],
+ "steps": [
+  {
+   "keys": "e wait 3000"
+  },
+  {
+   "move": true
+  },
+  {
+   "record": "start",
+   "window": true
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "keys": "Tab wait 400"
+  },
+  {
+   "shot": "target",
+   "window": true
+  },
+  {
+   "script": "../loops/board.mjs",
+   "args": {
+    "speedPxS": 44,
+    "turnDegS": 87.1,
+    "near": 220,
+    "stepMs": 120,
+    "maxSteps": 40,
+    "dialogClicks": [
+     [
+      322,
+      325,
+      "energy"
+     ],
+     [
+      340,
+      353,
+      "credits"
+     ],
+     [
+      416,
+      325,
+      "cargo"
+     ],
+     [
+      416,
+      381,
+      "abort"
+     ]
+    ],
+    "fire": {
+     "atPx": 150,
+     "keys": "Space@5000 wait 2500"
+    },
+    "retarget": 3,
+    "fineBelowPx": 30,
+    "fineStepMs": 50,
+    "sweep": {
+     "atPx": 4,
+     "startOnSilent": true,
+     "repeat": 1,
+     "turnMs": 60,
+     "presses": 70,
+     "stopAfter": 1,
+     "clickTimes": 1
+    }
+   }
+  },
+  {
+   "wait": 1000
+  },
+  {
+   "record": "stop"
+  },
+  {
+   "shot": "end",
+   "window": true
+  }
+ ],
+ "pull": true
+}

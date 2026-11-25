@@ -1,0 +1,28 @@
+{
+  "name": "novaref-w25-live",
+  "edits": {
+    "ship": 818,
+    "stellar": 2039,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2039": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w25-live",
+    "weapons": {
+      "128": 0,
+      "361": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "185": 1,
+      "607": 1
+    }
+  }
+}

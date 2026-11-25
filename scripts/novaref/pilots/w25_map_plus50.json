@@ -1,0 +1,32 @@
+{
+  "name": "novaref-w25-map-plus50",
+  "edits": {
+    "ship": 703,
+    "stellar": 1491,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1180": 2,
+      "1181": 2,
+      "1182": 2,
+      "1183": 2,
+      "1184": 2,
+      "1185": 2,
+      "1186": 2,
+      "1187": 2,
+      "1188": 2,
+      "1193": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w25-map-plus50",
+    "legal": {
+      "1187": 50,
+      "1188": 50,
+      "1193": -5
+    }
+  }
+}
