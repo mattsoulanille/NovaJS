@@ -10917,7 +10917,637 @@ wave 19's agrees).
 `fuel_b/sheet.png`, `rank_calm/` (`v1.png`, `v2.png`), `rescue_cloak/`
 (the run's `06-m2.png`, `08-m4.png`), `nocargo/` (`sl.png`, `pi.png`).
 
+### R19 reinforcement fleets, wave 22: an AI 1 / AI 2 victim calls when the player hits it from near (up to about 475 px), not from 700+ px, whatever its speed; the distress line is separate from the call (2026-11-24, fourth pass)
+
+**Question** (the "Wave 21 leftovers" row). What makes an AI 1 victim
+call: vary one thing at a time from wave 20's mobile S50 (shïp 488, sÿst
+1143, which had called three times): the player's distance at the hit, the
+victim's speed, its shield after the hit, its AI type, the game day.
+Whether AI 3 / AI 4 callers send a distress line. The arrival centre.
+NovaJS on main 705cb7c0 (`N/nova_plugin/spawn/reinforcements.ts`, the
+wave-21 fix e7beca08) calls on any hit whenever the odds pass (`:442-537`;
+`:518` the odds, no range) and, since that fix, sends the trader caller's
+distress line WITH every call (`:529-534`).
+
+**Rig** (`wave22Resources` "R19"). Every system is owned by gövt 311 (flët
+305, ReinfTime 300 = 7.7 s, ReinfIntrval 0), avgShips 1, the port at
+(0,0). New: the mobile S50 with ONE change each: AI 2 (shïp 498, sÿst
+1160), AI 3 (499, 1161), AI 4 (500, 1162), an inherent ATTRIBUTES govt
+with gövt Flags2 0x0008 "don't send distress messages" (501, 1163: first
+built with Flags1 0x0008 by mistake, see below), Speed 20 with Accel kept
+(502, 1164: not needed in the end). Wave 21's slow S50 (shïp 482, Speed 20 /
+Accel 50) at 1159 and wave 20's AI 4 guard (494) at 1140 again. The player
+flies the Kit Ring Lancer (shïp 497, Strength 100 like the Kit Lancer) so
+the driver can steer by its pointer: `tools/hitat.mjs` targets the victim,
+reads its brackets (on screen) or its white radar blip, flies toward or
+away from it in legs, and fires ONE Kit Pulse Beam pulse when the victim
+is near (brackets within 200 px) or at a set radar distance; then window
+shots every ~4 s for 30+ s, and `tools/lines.mjs` reads every status-line
+message off the 10 fps recording, timed from the Space press. The radar
+here (one stellar at the centre) is about 29 px a radar px (nine
+bracket / blip pairs, 25-33).
+
+**Results** (every hit took the shield 100% -> 90% unless said; all on the
+pilot's first day, June 23):
+
+| run | victim | player's distance at the hit | distress line | "Sensors detect ..." |
+|---|---|---|---|---|
+| `mob_near` | mobile AI 1 S50 (1143) | about 150 px (on screen) | **none** | **7.9 s** |
+| `slow_near2` | SLOW AI 1 S50 (Speed 20; 1159) | about 150 px (on screen just before) | none | **7.9 s** |
+| `mob_mid` | mobile AI 1 S50 | about 475 px (radar 16.4) | none | **8.8 s** |
+| `slow_far2` | slow AI 1 S50 | about 815 px (radar 28.1) | none | **none** in 35 s |
+| `mob_far3` | mobile AI 1 S50 | about 925 px (radar 31.9), THREE hits 6.4 s apart (90 / 80 / 70%) | none | **none** in 30 s |
+| `mob_far2` | mobile AI 1 S50 | about 1,080 px (radar 37.2) | **"Kit RV Mobile S50: We're being attacked! Someone please help us!"** 0.2 s after the press | **none** in 30 s |
+| `ai2_near` | mobile AI 2 S50 (1160) | about 140 px | none | **7.8 s** |
+| `ai3_near` | mobile AI 3 S50 (1161) | about 90 px, beside the port | none | none: the victim was gone (landed or jumped) within ~2 s of the hit |
+| `guard_near` | AI 4 guard S50 (1140) | about 40 px | none | **7.8 s** |
+| `quiet_near` | AI 1 S50, attributes govt with Flags1 0x0008 (the wrong flag word) | about 50 px | none | 7.9 s |
+| `quiet2` | AI 1 S50 with an inherent ATTRIBUTES govt setting gövt Flags2 0x0008 "don't send distress messages" (1163, fixed) | about 150 px | none | **7.8 s** |
+| `mob_650` | mobile AI 1 S50 | about 700 px (radar 24) | none | **none** in 30 s |
+
+Not hit: `ai4_near` (the mobile AI 4 never came within 200 px in 150 s),
+`guard_far` (the AI 4 guard stayed about 300 px from the player however
+he flew: radar 10), `slow_near` (the slow victim sat about 330 px off
+screen for 90 s), `mob_far` (a driver bug). `farc` / `farc2` (the arrival
+centre, below): no hit.
+
+**Findings.**
+1. **The player's distance decides an AI 1 call, not the victim's speed:**
+   the slow S50 that never called in four wave-21 runs called at once
+   from about 150 px (`slow_near2`), and the mobile S50 that always called
+   did not from 700+ px (three runs, one of them three hits deep, to 70%
+   shield). Calls came from 40-475 px (seven runs, AI 1, 2 and 4). So the
+   threshold lies between about 475 and 700 px (`mob_650`: none from
+   about 700 px). Wave 21's
+   slow victims were hit from the port while they sat somewhere in the
+   system (traffic is placed anywhere), which fits; wave 19's "Speed-300
+   traders called on later days and not on the first" fits too (a call
+   needs the victim near, whatever the day: every call this wave was on
+   the first day). Wave 21's AI 4 call from beyond the radar (`far_a`,
+   1,600+ px) says the range is a TRADER rule (AI 1 / AI 2); AI 4 victims
+   call from far (one run).
+2. **A deeper shield does not make a far victim call** (`mob_far3`: 90,
+   80, 70%, nothing), so the range is not an odds effect.
+3. **The distress line is NOT paired with the call:** seven near calls
+   (AI 1, 2, 4) came with no line at all, and the far hit of `mob_far2`
+   drew a line ("We're being attacked! Someone please help us!", another
+   STR# 5003 row) with no fleet. Over waves 21-22 the line came from 3
+   of the 20 AI 1 / AI 2 victims hit (wave 21: 2 of 10, both near
+   callers; this wave 1 of 10, a far non-caller): a separate chance, not
+   the call. Wave 21's "no AI 1 victim without the line got a fleet" was
+   the distance (its eight silent hits were on victims off the screen, as
+   far as its shots show).
+4. **AI 4 callers are silent** (`guard_near`, as wave 21's `far_a`); the AI
+   3 victim beside the port left at once and did not call (one run, so AI
+   3 is still open).
+5. **The call is not a distress message:** a victim whose attributes govt
+   sets Flags2 0x0008 (no distress messages) called as usual from 150 px
+   (`quiet2`). (`quiet_near` first set Flags1 0x0008, "player's shots
+   won't hit", by mistake; it was hit and called, so on an attributes-only
+   InherentGovt that flag word does nothing to hits.)
+6. **The arrival centre: still not settled.** `farc` / `farc2` (sÿst 1165:
+   the only port 3,000 px from the centre, markers at the centre and
+   1,000 px off the port): the mobile AI 1 victim stayed 2,000-2,600 px
+   from the player at the port (radar 57-92 at about 33 px a radar px:
+   it hung about 500-1,000 px from the system's centre) for five minutes
+   and never came to the port; steering to it lost it (the white blip
+   blinks, Tab cycles off it). Since a trader only calls from near, the
+   rig needs the player to go to the victim far from the centre.
+
+**NovaJS today (main 705cb7c0).**
+- 1: `ReinforcementCallSystem` has no range (`reinforcements.ts:442-537`;
+  the module comment's "GUESSES: the whole system, no range" at
+  `:114`): **mismatch** for AI 1 / AI 2 victims hit from 700+ px
+  (NovaJS calls). The "KNOWN MISMATCH, slow AI 1 hulls" comments
+  (`:126-133`, `:458-462`) and docs/npc_behavior_gaps.md guess 18 are
+  explained by finding 1: speed plays no part.
+- 3: the wave-21 fix sends the trader's distress line with EVERY call
+  (`:529-534`, `sendsDistressCalls` / `distressCallDue`) and never without
+  one: **mismatch both ways** (7 near calls without a line, a far line
+  without a call).
+- 4: AI 4 silent: **matches** (`sendsDistressCalls` is traders only).
+
+**Proposed fixes.**
+- Add a range to the trader call: a hit by a player's ship on an AI 1 /
+  AI 2 victim calls only when the shooter (the responsible ship) is within
+  `REINFORCEMENT_TRADER_CALL_RANGE` of the victim, GUESS 600 px (measured:
+  475 calls, 700 does not); AI 3 / AI 4 victims keep no range (AI 4
+  measured from 1,600+). Measure the range from the responsible ship
+  (an escort's hit: its own distance, GUESS).
+- Drop the speed "KNOWN MISMATCH" comments and close guess 18 as
+  explained.
+- Unpair the distress line from the call: revert e7beca08's emission on
+  every call, and instead give a player's hit on a trader a chance to
+  draw a distress line on its own (GUESS 3 in 20 per victim; keep `distressCallDue`'s 8 s), near or far, with or without a call.
+  Equally defensible: leave the player's victims silent as before wave 21
+  and note the 3-in-20 line as unmodelled.
+
+Confidence: high for 1's two sides (seven calls inside 475 px, four
+non-calls from 700+ px, the slow hull both ways); medium for the threshold
+(475 calls, 700 does not; nothing in between); medium for 3 (twenty victims);
+low for AI 3 and the AI 4 range (one run each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/<run>/`:
+`sheet.png` (the hit and the watch shots), `lines.png` (the status-line
+messages), the run dir's shots and `recording.mp4`; `<run>.log` (the
+driver's readings per shot: brackets, radar blip, the steering legs).
+`mob_far3/panel.png` (90 / 80 / 70%), `slow_far2/panel.png`.
+
+### F1c formation fill, wave 22: past four escorts the formation fills a triangular lattice (rows of 2, 3, 4), the layout depends on the COUNT (an odd count takes row 2's centre), and bay fighters share it with hired escorts (2026-11-24)
+
+**Question** (hub, Matthew: "the formation fills in like Pascal's
+triangle"). F1 / F1b measured four hired escorts: a 45° V, rank k in row
+floor(k / 2) + 1 at (-r·a, ±r·a), a = 23.5 px for 24 px discs. Where do
+ranks 5 and up go; does the layout depend on the total; do bay fighters
+share the hired escorts' formation? NovaJS (main cf619ae4) looks a slot
+up in `FORMATION_COUNT_LAYOUTS[count]` (empty), the measured
+`FORMATION_RANK_CELLS` (ranks 0-3), then the interim GUESS
+`formationFillCell`, which fills the triangle row by row by RANK alone
+(`N/nova_plugin/npc/npc_formation.ts:175-276`).
+
+**Rig.** F1's: the white Kit Disc Leader (shïp 720) at Kit Port with hired
+24 px disc escorts in pilot order red, green, blue, yellow, magenta, cyan
+(721-726) and the new orange, azure, purple (shïp 505-507, same stats);
+for fighters, three new bays (wëap 291-293, three each) launching 24 px
+disc fighters red / green / blue (shïp 508-510). `tools/f1c.sh` /
+`f1c2.sh`: Enter Ship, shots at rest (and after every launch, `w` then a
+held Control, 6 s apart), 4 s of thrust, two shots at cruise;
+`tools/comps.mjs` takes EVERY disc component (384 px each) and its offset
+from the white leader, along (+ ahead) / across (+ left of travel), the
+travel axis from the formation's own symmetry (the escorts' mean).
+Hired escorts sit to ±0.5 px, identical at rest and at cruise in every
+run (as F1).
+
+**Hired escorts** (offsets in px; a = 23.5):
+
+| count | rank: colour (along, across) |
+|---|---|
+| 3 (`f1c_mix`, before any launch) | 1 yellow (-23.1, +23.6); 2 magenta (-23.6, -23.1); **3 cyan (-47.5, -0.6): the centre** |
+| 4 (F1) | 1 (-a, +a); 2 (-a, -a); 3 (-2a, +2a); 4 (-2a, -2a) |
+| 5 (`f1c_5`) | 1 red (-23.6, +23.4); 2 green (-23.4, -23.6); **3 blue (-47.0, -0.1)**; 4 yellow (-47.5, +47.8); 5 magenta (-47.8, -47.5) |
+| 6 (`f1c_6`) | 1 red (-23.5, +23.5); 2 green (-23.5, -23.5); 3 blue (-47.7, +47.7); 4 yellow (-47.7, -47.7); **5 magenta (-71.2, +24.2); 6 cyan (-71.3, -24.2)** |
+| 7 (`f1c_7`) | 1 red (-23.6, +23.8); 2 green (-23.8, -23.6); **3 blue (-47.1, -0.8)**; 4 yellow (-47.3, +47.6); 5 magenta (-47.6, -47.3); 6 cyan (-72.0, +23.7); 7 orange (-71.2, -23.4) |
+| 8 (`f1c_8`; the axis from the row-1 pair) | 1 red (-23.3, +23.3); 2 green (-23.3, -23.3); 3 blue (-47.0, +47.9); 4 yellow (-47.9, -47.0); 5 magenta (-71.2, +25.0); 6 cyan (-72.0, -23.3); **7 orange (-47.4, +0.4): the centre**; **8 azure (-71.2, +71.6): row 3 left outer, the right outer EMPTY** |
+| 9 (`f1c_9`) | 1 red (-23.4, +23.6); 2 green (-23.6, -23.4); 3 blue (-47.0, -0.8); 4 yellow (-47.8, +47.2); 5 magenta (-47.2, -47.8); 6 cyan (-71.4, +23.8); 7 orange (-71.6, -23.2); 8 azure (-71.2, +71.8); 9 purple (-71.8, -71.2) |
+
+**Bay fighters** (`f1c_bay2`: 9 fighters, no hired escort; `f1c_mix2`: the
+3 hired yellow / magenta / cyan, then 6 fighters). The fighters sit on the
+same lattice but looser (a least-squares lattice fit: rms about 7 px, a ≈
+21.5, against the hired escorts' 0.5 px), steady from shot to shot and at
+cruise. After each launch the WHOLE group re-flows to the layout of the
+new count: in `f1c_mix2` the hired cyan sat in the centre (3 escorts), and
+the first fighter's launch moved it out to a row-2 outer slot, the fighter
+taking the other (the 4-layout); with all 9 the group held the 9-layout
+(row 1: the hired yellow and magenta; row 2: the hired cyan in the centre
+and two fighters; row 3: four fighters).
+
+**Findings.**
+1. **Slots are the points of a 45° lattice behind the leader:** row r
+   (r·a astern) holds across offsets -r·a, -(r-2)·a, ..., +r·a (row 1: ±a;
+   row 2: -2a, 0, +2a; row 3: ±a, ±3a), the triangle Matthew remembered.
+2. **The layout depends on the count**, row by row (rows 1 / 2 / 3 hold
+   at most 2 / 3 / 4):
+
+   | count | row 1 | row 2 (-2a, 0, +2a) | row 3 (±a, ±3a) |
+   |---|---|---|---|
+   | 3 | ±a | centre | - |
+   | 4 | ±a | ±2a | - |
+   | 5 | ±a | centre, ±2a | - |
+   | 6 | ±a | ±2a | ±a |
+   | 7 | ±a | centre, ±2a | ±a |
+   | 8 | ±a | centre, ±2a | ±a, **+3a only** |
+   | 9 | ±a | centre, ±2a | ±a, ±3a |
+
+   An odd count up to 9 uses row 2's centre; 4 and 6 leave it empty and
+   stay symmetric; 8 is NOT symmetric (the centre plus one outer row-3
+   slot, on the left, rather than both outer slots). No single
+   nearest-first rule fits 6 and 8 together (nearest-first would put 6's
+   fifth escort in the centre); the table is the measurement.
+3. **Fill order by rank:** ranks 1-2 the row-1 pair (left first); with an
+   ODD count rank 3 takes the centre and the rest follow in pairs, row 2's
+   outer pair then row 3's inner then outer pair, left first; with 8, the
+   pairs come first (ranks 3-6) and the centre is rank 7, the left outer
+   rank 8. So earlier ranks move when the count changes (rank 3:
+   left-outer with 4, 6 or 8 escorts, the centre with 3, 5, 7 or 9).
+4. **Fighters and hired escorts share ONE formation**, hired escorts in the
+   front ranks, re-flowed at every launch. The fighters keep their slots
+   less tightly (about 7 px off the lattice), and the mixed run's row-2
+   outer slots sat about 58 px from the leader against the hired runs'
+   67 px (the fit is loose; low confidence on the fighters' exact step).
+
+**NovaJS today (main cf619ae4).** `formationFillCell` (`npc_formation.ts:214-247`)
+puts ranks 0-3 on the measured V and then row 2's centre, row 3 outer
+pair, inner pair, ..., the same for every count, and "a new escort never
+moves the ones already in place": **matches** 4 and 5 (5's centre is rank
+5 there, rank 3 on the original: the SET matches, the ranks do not);
+**mismatch** for 3 (no centre: the original puts rank 3 there), 6 ((-2a,
+0) and (-3a, -3a) instead of (-3a, ±a)), 7, 8 (the asymmetric layout) and
+9 (the set matches, the rank order not); and the original DOES move
+earlier ranks when the count changes.
+
+**Proposed fix.** Fill `FORMATION_COUNT_LAYOUTS` (its own hook) with the
+measured layouts, cells [rows astern, steps RIGHT] in rank order:
+3 `[1,-1],[1,1],[2,0]`;
+5 `[1,-1],[1,1],[2,0],[2,-2],[2,2]`;
+6 `[1,-1],[1,1],[2,-2],[2,2],[3,-1],[3,1]`;
+7 `[1,-1],[1,1],[2,0],[2,-2],[2,2],[3,-1],[3,1]`;
+8 `[1,-1],[1,1],[2,-2],[2,2],[3,-1],[3,1],[2,0],[3,-3]`;
+9 `[1,-1],[1,1],[2,0],[2,-2],[2,2],[3,-1],[3,1],[3,-3],[3,3]`
+(1, 2 and 4 are the rank table). Counts above 9 stay on
+`formationFillCell` as a GUESS. Pass the live count everywhere so the
+group re-flows when it changes (the original does). Hired escorts and carried fighters in one group (hired
+first); for the fighters keep the same slots (the looser hold is their
+steering, not their slot, as far as this run shows).
+
+Confidence: high for 1-3 at every count 3-9 with hired escorts (±0.5 px, rest
+and cruise); medium for 4 (one bay run, one mixed run, the fighters' fit
+at 7 px rms).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/f1c_<n>/`
+(`comps.txt`: every shot's offsets; the run dir's `r1`, `c2` shots),
+`f1c_bay2/`, `f1c_mix2/` (one shot per launch, `L1`-`L9`); `f1c_5/shots.png`
+(rest and cruise side by side). `f1c_bay` / `f1c_mix` launched nothing
+(`ctrl@120` does not press Control: use `down:ctrl ... up:ctrl`).
+
+### R7 bribe price, wave 22: thousands, not a share of the cash; a third of the cash caps it and 1,000 is the floor; 0x8000 ships ask a flat 20,000 and take bribes only with 0x0200 / 0x2000 (2026-11-24)
+
+**Question** (hub, from Matthew's playtest: a planet asked 6,734,000 of
+his 22.45M in NovaJS). NovaJS asks 10% of the player's cash, 30% for a
+gövt with Flags 0x8000 "larger bribes", at least 500 and at most the cash
+(`bribeAmount`, `N/nova_plugin/reputation/hail.ts:80-103`), and lets every
+ship of a 0x8000 govt take a bribe (`shipTakesBribes`, `:63-79`). What
+does the original ask, from a planet and from a ship, at several cash
+levels, and does anything else move it?
+
+**Rig** (`wave22Resources` "R7"). gövt 304 Kit Bribe Plain (Flags 0x4000
+planets, 0x2000 freighters, 0x0200 warships take bribes), 303 Kit Bribe
+Large (0x8000 only), 302 Kit Bribe Large Ships (0x8000 | 0x0200), each
+CrimeTol 10, owning sÿst 1169 / 1170 / 1173 with its port (spöb 1461 /
+1462 / 1475, MinStatus 0) and AI 3 Kit Bribe Warships (shïp 503: Strength
+50, the Kit Escort Gun; düde 450 / 452 / 453), avgShips 3. Pilots: the Kit
+Lancer at the port, record -50 there (landing refused, the warships
+hostile), credits 300 to 100,000,000; `_rec` record -2000, `_rate` combat
+rating 30000. Per run (`tools/bribe.sh`, `bribe2.sh`): `l l` ("Landing
+request denied."), `y` on the port, **Offer Bribe** -> the price, Lower
+Price; then three warships: Tab, `y`, **Beg For Mercy** -> the price.
+Never Accept.
+
+| credits | planet, 304 | planet, 303 (0x8000) | planet, 302 | 304 warships (Beg For Mercy) | 303 warships | 302 warships |
+|---|---|---|---|---|---|---|
+| 300 | 1,000 | - | - | 1,000, 1,000, 1,000 | - | - |
+| 10,000 | 3,000, 3,000 | 3,000, 3,000 (two hails) | 3,000 | 1,000 (good), 2,000, 3,000 (mean); 1,000 (good), 3,000 (bad), 3,000 (bad) | refuse ("Not a chance.") | 3,000, 3,000, 3,000 (one good) |
+| 1,000,000 | 3,000, 3,000; 3,000 at record -2000; 3,000 at rating 30000 | 4,000, 4,000 (two hails) | 4,000 | 3,000, 2,000, 3,000; rating 30000: 1,000 (good), 3,000 (terrible), 4,000 (bad) | refuse ("You wish." x2) | **20,000, 20,000, 20,000** (neutral, mean, neutral) |
+| 5,000,000 | 6,000 | - | - | 2,000 (good), 4,000 (bad), 3,000 | - | - |
+| 20,000,000 | 10,000; 18,000; 17,000 | 4,000 | 9,000 | 10,000 (bad), 2,000 (good), 2,000; 1,000, 3,000, 8,000 (all three "good mood") | - | **20,000, 20,000, 20,000** |
+| 100,000,000 | **refused** ("You wish.") | 25,000, then **99,000** on a second hail | - | 3,000 (good), 8,000, 14,000 | refuse ("Yeah, right!", "You wish.") | - |
+
+The planet's dialog: Offer Bribe / Demand Tribute / Close Channel, an
+opening line ("You want in? You'd better grease the hand that feeds you
+buddy.", "We'll let you slip by the security barrier if you pay us.", ...)
+and "Pay us N credits." with Lower Price / Accept Price. **Lower Price**
+either withdraws ("Your greed has been noted. Go away.") or counters with
+3/4 rounded down to 100 (10,000 -> 7,500; 3,000 -> 2,200), like the fuel
+sale; a second Offer Bribe in the same channel answers "We don't take
+kindly to insults." / "Are you trying to insult us?"; a NEW hail asks
+again (a new price: 25,000 then 99,000). The ships' Beg For Mercy uses the
+fuel sale's mood lines ("You're in luck, I'm in a good mood today.", "I'm
+in a bad mood today, so it's going to cost extra.", ...) and "Pay me N
+credits.".
+
+**Findings.**
+1. **The bribe is NOT a share of the cash.** At 1M the ordinary asks are
+   1,000-4,000 (0.1-0.4%), at 20M 1,000-18,000 (under 0.1%), at 100M
+   3,000-99,000; always a whole 1,000.
+2. **A third of the cash caps it, rounded down to 1,000s, and 1,000 is
+   the floor even when the pilot has less:** at 10,000 credits every ask
+   above 3,000 came out 3,000 (bad moods, the 0x8000 ships' 20,000, the
+   planets); at 300 credits every ask was 1,000 (more than the pilot had),
+   as the fuel sale at 300 credits (wave 18).
+3. **Up to about 1M the ship's price is the fuel sale's** (good 1,000,
+   neutral 2,000-3,000, bad 3,000-4,000, the same mood lines and the same
+   3/4 counter); above that the asks GROW with the cash, slowly and very
+   unevenly (a "good mood" asked 1,000, 3,000 and 8,000 at 20M; neutral
+   8,000 and 14,000 at 100M). The shape is not settled (one to three asks
+   per cash level per kind).
+4. **Planets of a 0x4000 govt** ask about 3,000 at 10k-1M, 6,000 at 5M,
+   9,000-18,000 at 20M; one refused outright at 100M ("You wish."). A 0x8000
+   govt's planet "always takes bribes": 3,000-4,000 up to 20M, then
+   25,000 / 99,000 at 100M.
+5. **0x8000 alone does not make ships take bribes:** gövt 303's warships
+   (0x8000, no 0x0200) refused every Beg For Mercy ("Not a chance.", "You
+   wish.", "Yeah, right!"); with 0x0200 too (gövt 302) they asked a FLAT
+   **20,000** at 1M and at 20M alike (six asks, every mood), capped to
+   3,000 at 10k. That is the "larger" demand: not a percentage.
+6. **The legal record (-50 vs -2000) and the combat rating (0 vs 30000)
+   did not move the planet's 3,000 at 1M**, nor the ships' range.
+
+**NovaJS today (main cf619ae4).**
+- 1-2: `bribeAmount` (`hail.ts:98-103`) asks 10% of the cash (30% with
+  0x8000), floor 500, capped at the cash: **mismatch** (Matthew's 6.7M of
+  22.45M is its 30%; the original asks thousands).
+- 3: Beg For Mercy's price is `bribeAmount`, not the fuel sale's terms
+  (`fuelSaleTerms`, `:467-480`): **mismatch** (the mood line and the
+  1,000 steps).
+- 5: `shipTakesBribes` (`:63-79`) returns true for every 0x8000 ship:
+  **mismatch** (0x8000 needs 0x0200 for warships / 0x2000 for freighters;
+  it only sets the size of the demand). `planetTakesBribes`
+  (`:1184-1186`, 0x4000 or 0x8000): **matches**.
+- The bribe's Lower Price (3/4 or a withdrawal) and the "insult"
+  refusal of a second offer: the haggle page is shared by every purpose
+  (`N/spaceport/hail_dialog.ts:117-127`) but only the fuel sale's Lower
+  Price is modelled as a counter (`:373-378`); what a bribe's Lower Price
+  does in NovaJS was not checked.
+
+**Proposed fixes.**
+- Price a ship's bribe like the fuel sale: `fuelSaleTerms`'s mood and
+  steps (good 1,000, neutral 2,000-3,000, bad 3,000-4,000), the cash cap
+  (`fuelAskingBase`: a third, in 1,000s) and the 1,000 floor, with the
+  same Lower Price (3/4 or a withdrawal). A 0x8000 govt's ship (that takes
+  bribes at all) asks a flat 20,000 before the cap.
+- A planet asks 3,000 (0x4000) / 4,000 (0x8000) before the cap, GUESS for
+  the step; Lower Price as for ships; a second offer in the same channel
+  is refused.
+- Growth above 1M: GUESS, e.g. scale the base by sqrt(cash / 1,000,000)
+  rounded to 1,000s (5M: x2.2, 20M: x4.5, 100M: x10), which brackets the
+  planet asks (6,000; 9,000-18,000; 25,000) and most ship asks; or leave
+  the 1M figures flat and note the growth. Either is far closer than a
+  percentage.
+- `shipTakesBribes`: 0x8000 no longer implies "takes bribes".
+
+Confidence: high for 1, 2 and 5 (every ask on screen); medium for 3-4's
+small-cash figures (they repeat the fuel sale's); low for the growth's
+shape; medium for 6 (one run each).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/bribe_<govt>_<cash>[_b|_r|_c]/sheet.png`
+(the planet's price, then each warship's), `bribe_plain_1m/` (the planet
+dialog, Lower Price and the "insults" answer: `br`-shots in the run dir),
+`bribe_plain_20m/` (the 7,500 counter), `bribe_plain_1m_rec/` (2,200).
+
+### #324 wave 22: a bar accept withdraws a BBS job before the next accept; shipyard and outfitter offers are not rolled at the first open; a re-landing in the same system adds nothing and keeps the random draws (2026-11-24)
+
+**Questions** (the "Wave 21 leftovers" row, and the GUESSES main 705cb7c0
+marks in `landingOffers`, `N/spaceport/mission_offers.ts:193-258`): does a
+plain reopen of the BBS re-filter (wave 21 saw only an accept do it); are
+the AvailLoc 5 / 6 (shipyard / outfitter) offers rolled like the trade
+center's, and at the touch-down or at the location's first open; what a
+second landing in the same system offers (re-rolled?).
+
+**Rig** (`wave22Resources` "#324"). sÿst 1167 Kit Live Refilter (gövt 363),
+port spöb 1460 (PORT_FLAGS), linked to 1168 Kit Live Refilter Next (no
+stellar). At 1460: BBS 945 job X (!b9233), bar offer 946 Y (!b9234,
+OnAccept "b9233 b9234": accepting it in the BAR makes X stop qualifying),
+BBS 947 job Z (!b9235), BBS 950 setter (!b9236, OnAccept b9236), offers
+948 (shipyard, AvailLoc 5) and 949 (outfitter, AvailLoc 6) on b9236, BBS
+951-954 Kit L rand 1-4 (AvailRandom 50). Pilots `w22_refilter` (no bits)
+and `w22_refilter_ctrl` (b9236 preset). Hand-driven.
+
+| step (`refilter`, no bits; June 23) | what showed |
+|---|---|
+| land, BBS | X, Z, setter, **rand 2, rand 3** (1 and 4 not drawn) |
+| bar | offer Y (No / Yes) -> **Yes** (b9233 set) |
+| reopen the BBS (no accept on it since) | **X GONE**: Z, setter, rand 2, rand 3 |
+| accept the setter (b9236 set) | the BBS stays open: Z, rand 2, rand 3 |
+| shipyard, FIRST open of the landing | **no offer** |
+| outfitter, first open | **no offer** |
+| take off, land again (June 24, same system) | - |
+| shipyard, outfitter | **no offer, no offer** |
+| BBS | Z, **rand 2, rand 3** (the same draw) |
+| control (`refilter_ctrl`, b9236 preset; a new session) | shipyard: **offer 948** on entry; outfitter: **offer 949**; BBS: X, Z, **rand 1, rand 4** |
+
+A jump out and back was flown but no landing followed (the arrival point
+was off the radar of the port: see the reliability notes).
+
+**Findings.**
+1. **A reopened BBS does not list a job whose bits an accept ELSEWHERE
+   (the bar) falsified**, with no accept on the BBS in between. With wave
+   21 (a reopen after an `i` ABORT's record change still listed the
+   record-gated job until the next accept), two readings fit: every
+   accept re-checks every location's list (the abort is not an accept),
+   or a reopen re-checks bits but not records. Either way NovaJS's
+   re-filter on every read gives this run's answer.
+2. **AvailLoc 5 / 6 work like the trade center** (the control offered both
+   on entry).
+3. **Venue offers are NOT rolled at the location's first open:** the
+   shipyard and the outfitter, opened for the first time AFTER the
+   accept that made their offers qualify, offered nothing. So the set is
+   fixed by the touch-down (or earlier).
+4. **A second landing in the same system (a new day: the take-off advanced
+   the date) added nothing either**: no shipyard or outfitter offer though
+   b9236 had been set a landing earlier, and the BBS kept the first
+   landing's AvailRandom draw (rand 2 and 3 both times; 1 in 16 by chance),
+   while a new session drew rand 1 and 4. That points at the Bible's
+   "Mission randomizing values are recalculated each time you warp into a
+   system" for the whole offer set, not per landing: what an accept makes
+   available waits for the next SYSTEM ENTRY. (Wave 21's "not offered
+   until the next landing" was never checked at a next landing in the
+   same system.) One run; the jump-and-back case is not measured.
+
+**NovaJS today (main 705cb7c0).**
+- 1: `landingOffers` re-filters every read with `stillOffered`
+  (`mission_offers.ts:237-258`): **matches**.
+- 2: `venue_offers.ts:41` rolls AvailLoc 5 / 6 like 4: **matches**.
+- 3: the set is rolled at the FIRST OPEN of each location
+  (`mission_offers.ts:242-246`; the comment's GUESS at `:213-218`):
+  **mismatch** (the shipyard / outfitter would offer 948 / 949 here).
+- 4: the set lives on the LANDING's transaction
+  (`N/spaceport/landed_transaction.ts:245` `offerSets`), so a second
+  landing re-rolls the qualifying set: **mismatch** (a re-landing would
+  offer 948 / 949); the AvailRandom draws are per system visit
+  (`offerRollsForSystem`, `mission_offers.ts:55`): **matches**.
+
+**Proposed fixes.**
+- Roll every location's offer set at the touch-down, not at its first
+  open (all locations at once, against the landing's starting state).
+- Better, if a second run confirms finding 4: keep the frozen sets per
+  SYSTEM VISIT like the AvailRandom rolls (`offerRollsForSystem`), so a
+  re-landing in the same system re-uses them (re-filtered by
+  `stillOffered`, so withdrawals stay live) and only a system entry rolls
+  new ones. The KNOWN GAP (a jump out and back with no landing keeps the
+  old visit) then needs the system-entry reset that comment already names.
+
+Confidence: high for 1-3 (each step shot, a control), medium for 4 (one
+run; the random draw matched by chance at 1 in 16).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/refilter/`
+(run shots `03-bbs0`, `04-bar0`, `06-bbs1`, `07-bbs_set`, `08-bbs2`,
+`09-yard1`, `10-outf1`, `12-land2`, `13-yard2`, `14-outf2`, `15-bbs3`),
+`refilter_ctrl/` (`03-yard`, the outfitter and BBS shots).
+
+### K8 stellar radar shape, wave 22: a STATION is a 2 x 2 dot whatever its size (the working hypergate too); a planet is a ring from about 96 px, a dot up to 88 px (2026-11-24)
+
+**Question** (hub, from Matthew's playtest; catalogue K8). Does a WORKING
+hypergate (spïn 2001, 150 x 150, 42 frames: HG-Secundus, spöb 1408, at
+(400, -525) in Nesre Secundus) show on the radar as a hollow ring or a 2 x
+2 dot; is it a gate rule or a size rule; where in the 61-109 px band the
+ring starts. NovaJS (main cf619ae4, from 65d6b6fa) shapes by the larger side of the
+sprite frame: `stellarRadarShape` rings at `STELLAR_RING_MIN_SIZE` 64 and
+up (`N/display/status_bar_radar.ts:196-219`), so a 2001 gate is a ring.
+
+**Runs.**
+- `k8_gate` (STOCK data, no plug-in, Last Pilot parked; scenario
+  `w22_stock_interactive.json`; pilot `w22_k8_gate`: a stock Shuttle whose
+  last stellar is HG-Secundus): Enter Ship put the player on the gate (its
+  radar pixel under the player's dot), so he flew about 2.5 s off it and
+  the radar was shot and zoomed (`radar_zoom.png`). The blips fit the
+  system's layout at about 30 px a radar px: Nesre Secundus IV (Type 25,
+  flags 0x20) a **ring**; HG-Secundus (Type 1, flags 0x11), Pyrogenesis I
+  (Type 43, flags 0x2101053) and Spacedock V (Type 36, flags 0x55) **2 x 2
+  dots**. Every dot here carries spöb Flags 0x10 "Stellar is a station
+  instead of a planet".
+- `k8_shapes` (kit sÿst 1171: six LANDABLE PLANETS, flags 0x43, 700 px
+  around the port, their spöb Type picking a stock spïn): Type 1 (spïn
+  2001, the gate art, 150 px, not a gate here) **ring**; Type 6 (2006, 72
+  px) **dot**; Type 19 (2019, 87) **dot**; Type 24 (2024, 88) **dot**; Type
+  26 (2026, 96) **ring**; Type 17 (2017, 104) **ring**.
+- `k8_station` (kit sÿst 1172): the same arts as STATIONS (flags 0x11):
+  Type 1 (150 px) **dot**, Type 17 (104 px) **dot**, Type 6 (72 px) dot;
+  and Type 26 (96 px) as a plain planet (0x01) **ring** (the control).
+
+**Findings.**
+1. **The working hypergate is a 2 x 2 dot**, because it is flagged a
+   station (spöb Flags 0x10): its 150 px art as a plain planet is a ring,
+   and a 104 px or 150 px STATION is a dot. So it is neither a gate rule
+   nor a size rule alone: **stations are dots, planets go by size.** (The
+   wormhole was not needed: the station test separates the readings; Spica's
+   wormhole, spöb 466, flags 0x21, is not a station, so by this rule it is
+   a ring at 104 px.)
+2. **A planet's ring starts between 88 and 96 px** (the larger side of the
+   frame): 72, 87 and 88 dots; 96, 104 and 150 rings. With NovaJS's
+   evidence (Kiniké 112 a ring, Kolan 48 a dot).
+
+**NovaJS today (main cf619ae4).** `stellarRadarShape` (`status_bar_radar.ts:216-219`)
+rings every stellar of 64 px and up: **mismatch** for every station of
+64+ px (HG-Secundus and the working gates, Spacedock-type stations) and
+for 64-88 px planets (72, 87, 88 measured dots).
+
+**Proposed fix.** `stellarRadarShape(size, isStation)`: a dot when the
+spöb has Flags 0x10 (station), else a ring from `STELLAR_RING_MIN_SIZE`
+= 96 (any value in 89-96 fits; 96 is the smallest measured ring) and a dot
+below. The uninhabited gate art (spïn 2063, 53 x 60) stays a dot either
+way.
+
+Confidence: high (three runs, every blip named by the layout; the
+station control in the same shot as a 96 px planet ring).
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/k8_gate/radar_zoom.png`
+(left: 2.5 s off the gate, right: 5 s), `k8_shapes/radar_zoom.png`,
+`k8_station/radar_zoom.png` (radar crops x3); the run dirs' window shots.
+
+### H1 / mission-ship leftovers, wave 22: a good mood's 2,000 again at record -5, Lower Price counters about one first press in four, ränk 0x0400 with nobody attacking hears "You're in no danger.", düde 441 does appear as a BBS job's ship on a 3,000 px port (2026-11-24)
+
+**Fuel price** (Kit Assist Stay, fuelless Kit Lancer Heavy, 1,000,000
+credits; `tools/fuelrun.sh`: per ship Request Assistance, Lower Price
+twice, Close Channel):
+
+| run | good | neutral | bad | first Lower Price |
+|---|---|---|---|---|
+| `fuel_m5` (record -5) | 1,000, 1,000, 1,000, **2,000** ("You're lucky - I'm in a good mood today.") | - | 4,000, 4,000 | 0 counters in 6 |
+| `fuel_rich2` (record 0) | 1,000 (countered 700) | 3,000, 3,000, 3,000, 3,000 | 4,000 | 2 counters in 6 |
+
+The Lower Price counter rate over every fuel run since wave 19, read
+off the first `-lp` shot of each ship (`tools/counters.mjs`: the "Pay me"
+sub-dialog still up = a counter): wave 19 5 of 24 (`fuel_10k` 2, `fuel_7k`
+0, `fuel_m1` 1, `fuel_m9` 2), wave 20 7 of 18 (`fuel_8k` 3, `fuel_m8` 2,
+`fuel_rich` 2), wave 21 1 of 12, wave 22 2 of 12; with wave 17's 5 of
+13: 20 of 79 first presses, 25%.
+
+**ränk 0x0400 with nobody attacking** (`w22_rank_alone`: offer 955 at
+Kit Rank Calm, K200 and no raider; the player at full shield and fuel):
+three AI 4 warships of the affiliated govt 363 (Kit AS Green, Kit AS
+Yellow twice) answered Request Assistance with **"You're in no danger."**
+(twice) and **"There's no danger to you right now."**: the no-need group
+(STR# 3000 70-74), not a refusal.
+
+**Mission ships** (wave 21's offer 940, düde 441 on a 3,000 px port,
+never appeared): BBS 941 put düde 441 on a (0,0) port (`shiptest`: the
+Kit RV Guard S50 there at take-off, Tab'd); BBS 942-944 at Kit Reinf Far
+M's port at (3000, 0) (`farm`, all three accepted on one visit): at the
+take-off a magenta pointer hull and the orange Kit AS Orange sat beside
+the port, and the Tab census found **Kit AS Orange and Kit RV Guard S50**
+(the mobile 437 was not in the census: it may have landed or left at
+once).
+
+**Findings.**
+1. **A good mood asked 2,000 again at record -5** (one of four goods;
+   wave 18's one good there was 2,000 too), and never at record 0 (three
+   goods in waves 21-22) or -8 / -9 (four in waves 19-20). So a good mood is
+   1,000 at a clean record and SOMETIMES 2,000 at a negative one; the
+   record's role (or the cash's) is not settled. Bad moods at -5: 4,000
+   (as wave 18).
+2. **Lower Price counters about one first press in four** (20 of 79 first presses since wave 17),
+   below NovaJS's two in five.
+3. **ränk 0x0400 is not a battle-assistance answer when the player needs
+   nothing**: the plain no-need line, as without the ränk.
+4. **düde 441 is not the problem with offer 940**: it appears as a mission
+   ship at a (0,0) port and at the 3,000 px port (as a BBS job, ShipSyst
+   -1 written out). What differs in 940 is the AvailLoc-3 offer accepted
+   on the landing; not chased further.
+
+**NovaJS today (main cf619ae4, unchanged since 705cb7c0).**
+- 1: `fuelSaleTerms` (`N/nova_plugin/reputation/hail.ts:467-480`, wave 21's
+  fix): a good mood always asks 1,000: **matches** at a clean record,
+  **mismatch** for one good in four at -5 (and wave 18's).
+- 2: `FUEL_COUNTER_IN_FIVE = 2` (`hail.ts:586`, used at `:620-625`): 40%
+  against the measured 25%: **mismatch** (small).
+- 3: `assistNeed` (`hail.ts:393`) answers a pilot who needs nothing from
+  the no-need group (`NO_NEED_RESPONSE_FIRST_INDEX` 70, `:798`) before
+  any ränk test (the comment at `:329-331`): **matches**.
+- 4: nothing to compare (a kit data question).
+
+**Proposed fixes.**
+- `fuelSaleTerms`: keep 1,000 for a good mood at a record of 0 or above;
+  at a negative record, a good mood asks 2,000 one time in four (GUESS
+  from 2 of 5 at -5 and 0 of 4 at -8 / -9: the -8 / -9 ones may be the
+  cash cap, so leave it a GUESS) or leave it as is and note it.
+- `FUEL_COUNTER_IN_FIVE`: one in four (a `% 4 < 1` test) or keep two in
+  five as within the noise; the data say about 25%.
+
+Confidence: medium for 1 (two 2,000s in five goods at -5), high for 2's
+count (the shots), high for 3 (three ships), high for 4.
+
+**Evidence:** `~/.local/share/novaref/evidence/20261124-w22/fuel_m5/sheet.png`,
+`fuel_rich2/sheet.png` (the first `fuel_rich` failed at `open_pilot`), `rank_alone/` (the `ra1`-`ra3` shots), `shiptest/`
+(`tab1`), `farm/` (`a1`-`a3`, `off`, `t1`-`t4`); `tools/counters.mjs`.
+
 ### Reliability notes (for anyone running the reference)
+
+- **`ctrl@120` does not press Control (wave 22):** the bay counter did
+  not move; `down:ctrl wait 150 up:ctrl` launches one fighter per press.
+- **Nine hired escorts load from a pilot file** (wave 22 `f1c_9`): the
+  original flies all nine.
+- **An AI 1 / AI 2 victim hit from 700+ px never calls the fleet (wave
+  22)**: every reinforcement rig with a trader victim must hit it from the
+  screen (wave 21's "slow hulls never call" was this). `tools/hitat.mjs`
+  (wave-22 evidence) targets, reads the brackets / white radar blip, steers
+  the Kit Ring Lancer toward or away from the victim and fires at a set
+  distance.
+- **The targeted ship's white radar blip blinks** (absent in every other
+  shot, wave 22): a driver must not read one missing blip as "gone".
+- **The radar scale (wave 22):** about 29 px a radar px in a kit system
+  whose only stellar is at the centre (nine bracket / blip pairs), about 33
+  in Kit Reinf Far C (a marker 1,000 px off the port at 30.5 radar px).
+- **Traffic in a system whose only port is 3,000 px out hangs 500-1,000
+  px from the CENTRE** for 5+ minutes and never visits the port (wave 22
+  `farc2`; wave 21 saw the same at 6,000).
+- **The Kit Ring Lancer moves about 1 px a ms under thrust**; a tap under
+  about 300 ms barely moves it (the Down brake eats it). Legs of 500-1,500
+  ms work.
+- **gövt Flags vs Flags2 (wave 22):** 0x0008 is "player's shots won't hit"
+  in Flags but "no distress messages" in Flags2; the first Kit Quiet Attr
+  set the wrong word. Read the Bible's flag list header before using a bit.
+- **`j` beside a planet does nothing;** fly a few hundred px off first. A
+  jump back into a system arrives off the port's radar (no blip, no arrow
+  in one shot): landing after a jump needs a steering driver.
+- **A planet's bribe dialog stays up after a Lower Price COUNTER**
+  (wave 22 `bribe_plain_20m`, `_1m_rec`): a script that closes the channel
+  after one Lower Price leaves it open, and its later clicks press Offer
+  Bribe ("We don't take kindly to insults."). `tools/bribe2.sh` presses
+  Lower Price twice.
+- **AI 1 freighters of a CrimeTol-10 govt stay neutral at record -50**
+  (no Beg For Mercy) while its AI 3 warships are hostile: bribe rigs need
+  warships.
+- **`open_pilot` failed once more** ("panel still open; cancelled", wave 22
+  `fuel_rich`); rerun.
 
 - **A port with trade tiers lists stock cargo jobs on its BBS (wave
   21):** Kit Live Port (PORT_FLAGS) listed a stock "Delivery to Earth"
@@ -11322,8 +11952,9 @@ wave 19's agrees).
 | Wave 18 leftovers | Traffic: do FLEET members (a kit flët's lead and escorts, a reinforcement flët) stay in a full system; the Pegasus that stayed in Arcturus; arrival timing below the census spacing (needs a full-system tracker, not the radar). H1: ränk 0x0400 against a warship (put an anchored or AI 4 363 warship at the port as a mission ship); ränk 0x0800 with an ALLY of the affiliated govt; the cash and record terms of the fuel price (more ships per case; a cash threshold; record -5 vs -9); Lower Price at a negative record. P1: stray hits, boards, one-way alliances (guesses 3, 4, 6, 7). A14: a boarding's spread (guess 6), guesses 2-5, 7-10, 12-14; whether NovaJS shows "Uninhabited System" on the map. Rescue: board the 300 px marker hulk by hand (the board loop's sweep answered "not close enough" at 22 px), the ShipStart-2 reveal (mïsn 924 / 1122), a no-cargo goal-5 completion (923). C1: a 0x0400 ship's jump-out on screen (a system whose jump distance is inside the screen, or a radar track to the vanish). Contraband: whether a cutter leaves its clean ship when the player flies off (still in the system). | **Wave 18.** **Wave 19:** fleets leave (no member stays; a fleet arrives whole); the fuel price is capped by cash (about a third, in 1,000s), no record term needed, Lower Price counters at -1 / -9, ränk 0x0400 warships refuse, ränk 0x0800 allies refuel free, nobody repairs; a cutter does not follow; the marker rescue boarded by hand (Tab first), ShipStart 2 is a live waiting ship, a no-cargo rescue never completes; a boarding spreads like a kill; the map's "Uninhabited System" is missing in NovaJS. Left: see Wave 19 leftovers. |
 | Wave 19 leftovers | Fuel price: the cash fraction (8,000 credits splits a third from 0.3 / 0.375), whether bad moods add 1,000 below about record -5 (bad 4,000 only at -5 / -9), whether a good mood ever asks 2,000 at a clean record. ränk 0x0800: the affiliated govt's own answer to a fuelless pilot when an ally is also around (only wave 18's), a repair with nobody attacking. ränk 0x0400: any battle assistance at all (a ship that is NOT already fighting the attacker). Reinforcements (R19): the threshold (player Strength between 1 and 100; shield-scaled odds), the ReinfTime scale (300 -> 10 s, 900 -> 23-25 s: test 600 and 1800), whether the fleet ever leaves and why it was hostile in 1506 but neutral in 1507, ReinfIntrval above 1, allies of the fleet govt as victims, the oütf ModType 44 inhibitor, where the fleet jumps in. Rescue: a ShipStart-2 ship WITH a cloaking device (does it start cloaked?), the silent first press of a no-cargo rescue (alignment or the rule?), where a released waiting ship goes. Fleets: escorts outliving their lead in NovaJS (checked: they lingered until their own roll; fixed to follow the lead out). Contraband: the leash distance at which a sitting cutter lets go. Still open from wave 18: the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 19** (fixes applied 2026-11-24: the "Applied (wave-19 fixes)" notes in the three wave-19 sections) **Wave 20** answered: R19's delay (ReinfTime / 39 s, linear to 1800), the odds (NovaJS's sum fits ten of eleven points; player Strength 100 / 300 against S50-S400 at 0-90% shield), ReinfIntrval 2 (every 2 days after the call), an ally's ship calls its ally's fleet, the ModType 44 inhibitor (class and -1), the arrival is not around a far player, the fleet is hostile while the victim holds the player as its attacker and stays; an anchored victim never calls and a victim that left before the arrival got no fleet; the fuel cash cap is a third (8,000 -> 2,000), a bad mood asks 4,000 at a clean record, the affiliated govt refuels free beside its ally, ränk 0x0400 warships refuse again (all fighting), a cloaked ShipStart-2 ship shows on radar and Tab. Left: see Wave 20 leftovers. Fixes applied 2026-11-24: the "Applied (wave-20 fixes)" notes in the two wave-20 sections. |
 | Wave 20 leftovers | R19: where the fleet comes in when the victim is far from the port (the victim or the system's centre: every run had them together; AI 4 victims hold their station, AI 1 victims leave; try an AI 1 victim far from the port with a short ReinfTime); why one S150 call came at 90% shield (one of three runs); a NEUTRAL fleet (wave 19's 1507: no NPC holding the player as its attacker? e.g. a victim that has calmed down or begged-for-mercy); whether a fleet ever leaves when neutral; whether a victim that leaves always cancels the arrival (one run). Fuel price: a good mood's 2,000 at a clean record (no good mood came up at record 0 in two runs). ränk 0x0400: a warship NOT yet fighting the attacker (all asked were at 94-98% shield). Rescue: the cloaked ShipStart-2 ship on screen (fly to it), the silent first press of a no-cargo rescue. Still open from wave 19: fleets' escorts outliving their lead in NovaJS (applied on main 4023a7f4, not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 20** **Wave 21** answered ("... wave 21" sections): #324 (an accept withdraws listings that no longer qualify at once, adds none until the next landing, closes an emptied BBS; bar and trade-center offers are rolled at the landing; the map's NCB visibility changes at the next landing or JUMP, wave 10's leftover, its Legal Status at once; **applied in 5dedaee2** except the map's visibility, which waits on a ruling); an AI 1 victim calls the fleet with a distress line or not at all (slow AI 1 hulls never called, so the "victim that leaves cancels" run was no call); S150 is one call in five; the neutral fleet was not reproduced; the good mood asks 1,000 at a clean record (twice); ränk 0x0400 refuses at 100% shield; the cloaked ShipStart-2 ship is drawn uncloaked, waiting; a no-cargo rescue's first aligned press is a silent board. Not settled: the arrival centre (the far-port rigs failed). Left: see Wave 21 leftovers. |
-| Wave 21 leftovers | R19: what makes an AI 1 victim call (the distress pairing; speed, hull, day, attacker distance?): repeat the mobile S50 at 1143 a few times with the attacker far (1,000+ px) and near, and a mobile S150; whether AI 3 / AI 4 victims ever send a distress line; the arrival centre (needs a victim that calls far from the system's centre: a fast AI 1 caller met in flight 3,000+ px from the centre, with the radar calibrated); a neutral fleet and its stay; whether a departed caller cancels (no run left). #324: whether a reopened BBS re-filters at all (only an accept was seen to), the AvailLoc 5 / 6 venues (assumed like the trade center), a second landing the same day (re-rolled?). Fuel: a good mood's 2,000 (only wave 18's at -5); the Lower Price counter rate over waves 17-21. ränk 0x0400: a warship asked while the player is NOT under attack at all (no raider). Rescue: none (no-cargo first press answered). Mission ships: why offer 940's AI 4 düde 441 never appeared. Still open from wave 20: fleets' escorts outliving their lead in NovaJS (not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 21** |
-| F1c | Where escorts beyond the fourth fly: does the original fill the triangle inside the 45° V, extend the arms, or change the layout with the count? (F1/F1b/F1n only ever had 4 escorts; Matthew 2026-11-24: six escorts flying a bare V is wrong) | **Pending.** Rig: F1b's `formation_rest.json` and `analysis/disc_shot.mjs`, all hulls 24 px discs (a = 23.5) so the step is fixed; the player (white 720) sits AT REST in Kit Range for about 10 s after the last escort joins, then a lossless screenshot; offsets along / across the leader's heading (+ = ahead / left), in px and in units of a, for EVERY escort. Counts: **5, 6, 7 and 9**. Hire one at a time and shoot after each hire as well, so each rank is identified by when it appeared (the kit has only four escort colours; extra discs of new colours make the counts easier to read). The hired cap is 6 in NovaJS (`escort_cap.ts` MAX_ESCORTS; confirm in the original), so reach 7 and 9 with bay fighters (a kit carrier with a 24 px fighter bay) and record whether fighters take ranks among the hired escorts, after them, or a formation of their own; if the cap blocks that, measure 7 and 9 as an NPC flët (F1n rig, `f1n_observe.json` + `fleet_groups.mjs`, one escort type per field). Also: dismiss rank 1 of 6 and record where the other five settle (do ranks re-flow?). NovaJS today (interim GUESS, `N/nova_plugin/npc/npc_formation.ts` formationFillCell): row r of the triangle has r + 1 cells at lateral -r, -(r-2), ..., +r steps; 5 escorts add (-2a, 0); 6 add (-3a, left 3a); 7 add (-3a, right 3a); 8 and 9 add (-3a, left a) then (-3a, right a). Measured ranks go into FORMATION_RANK_CELLS; a count-dependent layout goes into FORMATION_COUNT_LAYOUTS. |
+| Wave 21 leftovers | R19: what makes an AI 1 victim call (the distress pairing; speed, hull, day, attacker distance?): repeat the mobile S50 at 1143 a few times with the attacker far (1,000+ px) and near, and a mobile S150; whether AI 3 / AI 4 victims ever send a distress line; the arrival centre (needs a victim that calls far from the system's centre: a fast AI 1 caller met in flight 3,000+ px from the centre, with the radar calibrated); a neutral fleet and its stay; whether a departed caller cancels (no run left). #324: whether a reopened BBS re-filters at all (only an accept was seen to), the AvailLoc 5 / 6 venues (assumed like the trade center), a second landing the same day (re-rolled?). Fuel: a good mood's 2,000 (only wave 18's at -5); the Lower Price counter rate over waves 17-21. ränk 0x0400: a warship asked while the player is NOT under attack at all (no raider). Rescue: none (no-cargo first press answered). Mission ships: why offer 940's AI 4 düde 441 never appeared. Still open from wave 20: fleets' escorts outliving their lead in NovaJS (not re-measured), the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 21** **Wave 22** answered ("... wave 22" sections): what makes an AI 1 victim call is the player's DISTANCE (calls from 40-475 px, none from 700+ px, slow or mobile hull, AI 1 and 2, any day; a deeper shield does not help), the distress line is a separate chance (3 of 20 victims, with or without a call), AI 4 callers are silent, a Flags2-0x0008 victim still calls; #324: a bar accept withdraws a BBS job before any BBS accept, AvailLoc 5 / 6 work, venue offers are fixed by the touch-down (not the first open), a re-landing in the system added nothing and kept the AvailRandom draw; fuel: a good mood's 2,000 again at -5, Lower Price counters 20 of 79 (25%); ränk 0x0400 with no need: the no-need line; düde 441 appears as a mission ship (940's miss is the offer, not the düde). Added by the hub: F1c formation fill (a triangular lattice per count, 3-9 hired measured, bay fighters share it), R7 bribe price (thousands, a third-of-cash cap, 1,000 floor, 0x8000 ships a flat 20,000 and only with 0x0200 / 0x2000) and K8 (stations are radar dots, planets ring from 89-96 px). Not settled: the arrival centre, the AI 3 caller, a neutral fleet. Left: see Wave 22 leftovers. |
+| F1c | Where escorts beyond the fourth fly: does the original fill the triangle inside the 45° V, extend the arms, or change the layout with the count? (F1/F1b/F1n only ever had 4 escorts; Matthew 2026-11-24: six escorts flying a bare V is wrong) | **Answered, wave 22** ("F1c formation fill, wave 22"): counts 3-9 with HIRED escorts (nine hired load and fly; the original's cap is not 6), the layout depends on the count (row 2's centre for odd counts, 8 asymmetric), ranks re-flow at every count change, bay fighters share the formation with the hired escorts (hired first). Dismissal of rank 1 not run. Originally pending: Rig: F1b's `formation_rest.json` and `analysis/disc_shot.mjs`, all hulls 24 px discs (a = 23.5) so the step is fixed; the player (white 720) sits AT REST in Kit Range for about 10 s after the last escort joins, then a lossless screenshot; offsets along / across the leader's heading (+ = ahead / left), in px and in units of a, for EVERY escort. Counts: **5, 6, 7 and 9**. Hire one at a time and shoot after each hire as well, so each rank is identified by when it appeared (the kit has only four escort colours; extra discs of new colours make the counts easier to read). The hired cap is 6 in NovaJS (`escort_cap.ts` MAX_ESCORTS; confirm in the original), so reach 7 and 9 with bay fighters (a kit carrier with a 24 px fighter bay) and record whether fighters take ranks among the hired escorts, after them, or a formation of their own; if the cap blocks that, measure 7 and 9 as an NPC flët (F1n rig, `f1n_observe.json` + `fleet_groups.mjs`, one escort type per field). Also: dismiss rank 1 of 6 and record where the other five settle (do ranks re-flow?). NovaJS today (interim GUESS, `N/nova_plugin/npc/npc_formation.ts` formationFillCell): row r of the triangle has r + 1 cells at lateral -r, -(r-2), ..., +r steps; 5 escorts add (-2a, 0); 6 add (-3a, left 3a); 7 add (-3a, right 3a); 8 and 9 add (-3a, left a) then (-3a, right a). Measured ranks go into FORMATION_RANK_CELLS; a count-dependent layout goes into FORMATION_COUNT_LAYOUTS. |
+| Wave 22 leftovers | F1c: counts above 9 (hired 10+, or more fighters), the fighters' exact step (a lattice fit at 7 px rms), a fighters-only fill order with distinct colours, NPC fleets (flët) with 5+ escorts. R19: the trader call range between 475 and 700 px (one point inside, e.g. 600); whether the range is from the shooter or the player (an escort's hit); AI 3 victims (the one hit left at once) and the AI 4 range (wave 21's one far call); the distress line's own chance (3 of 20 victims); the arrival centre (traffic will not come to a far port: the player must go to a victim 3,000+ px from the centre and hit it from near); a neutral fleet; a departed caller. R7: the shape of the bribe's growth above 1M (more asks per cash level, 2M-200M), whether the planet's price depends on the planet (another spöb, tech level, defence fleet), the plain planet's refusal at 100M (chance or cash), the 0x8000 ships' 20,000 (the hull's cost or Strength? another hull), freighters' bribes (0x2000). #324: a jump out and back before landing (does it re-roll the offer set, as the Bible's AvailRandom note says; needs a landing after a jump), a second run of the re-landing case. K8: the wormhole (predicted a ring: not a station). Fuel: the good mood's 2,000 at a negative record (the rule). Still open from wave 21: fleets' escorts outliving their lead in NovaJS, the Arcturus Pegasus, arrival timing below the census spacing, P1 stray hits / boards / one-way alliances, A14 guesses 2-5, 7-10, 12-14, C1 a 0x0400 jump-out on screen. | **Wave 22** |
 
 ## Catalogue
 
