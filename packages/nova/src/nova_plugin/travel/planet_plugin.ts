@@ -83,12 +83,13 @@ export const PlanetDataProvider = ProvideFromCache({
  *   line outside the clearance zone clears nothing (reference "Hypergate
  *   `l` range and the request lines, wave 29").
  * - `clearedUntil`, with a clearance: the sim time (ms) it lapses at
- *   (STELLAR_CLEARANCE_MS after it was given), a hypergate's as a port's
- *   or a station's (reference "Landing clearance lapse, wave 32", findings
- *   1 and 3). A lapsed clearance is not honoured, and the next press
- *   starts over; the lapse itself is silent and leaves no request behind
- *   (findings 2 and 4). A clearance stored without one (a snapshot from
- *   before wave 32) never lapses.
+ *   (stellarClearanceMs after it was given: a planet's and a hypergate's
+ *   PLANET_CLEARANCE_MS, a station's the shorter STATION_CLEARANCE_MS;
+ *   reference "Landing clearance lapse, wave 32", findings 1 and 3, and
+ *   "..., wave 35", findings 1-3). A lapsed clearance is not honoured,
+ *   and the next press starts over; the lapse itself is silent and leaves
+ *   no request behind (wave 32, findings 2 and 4). A clearance stored
+ *   without one (a snapshot from before wave 32) never lapses.
  * - `requested` holds the uuid of the stellar whose REQUEST line the
  *   ship's selecting `l` drew from outside the clearance zone and that
  *   has not cleared it yet: the ship that then comes inside the zone is
@@ -132,7 +133,7 @@ export function holdsClearance(planetTarget: PlanetTarget | undefined,
 /**
  * Whether the ship holds a hypergate clearance at its selected stellar at
  * sim time `now` (what opens the gate, display/gate_animation_plugin.ts).
- * A gate's clearance lapses on the ports' clock (reference "Landing
+ * A gate's clearance lapses on the planets' clock (reference "Landing
  * clearance lapse, wave 32", finding 3), so this is {@link holdsClearance}
  * by another name: the caller knows the stellar is a gate.
  */
@@ -142,7 +143,7 @@ export function holdsGateClearance(planetTarget: PlanetTarget | undefined,
 }
 
 /** Whether the ship's clearance at its selected stellar has LAPSED by
- * `now` (STELLAR_CLEARANCE_MS after it was given). */
+ * `now` (stellarClearanceMs after it was given). */
 export function clearanceLapsed(planetTarget: PlanetTarget | undefined,
     now: number): boolean {
     return planetTarget?.target !== undefined
@@ -386,18 +387,44 @@ export const HYPERGATE_SELECT_RANGE = 500;
 export const STELLAR_CLEARANCE_RANGE = 249;
 
 /**
- * How long a clearance holds, in sim ms: a port's, a station's and a
- * hypergate's alike. MEASURED (reference "Landing clearance lapse, wave
- * 32", finding 1): presses 24.32 and 24.51 s after the clearance landed,
- * presses 24.61 s and later (nine of them) got a fresh clearance, so it
- * lapses between 24.51 and 24.61 s (wave 31's 13.4-25.1 s bracket
- * agrees). GUESS: the middle, 24.56 s, rounded to 24.55 (the recordings'
- * frame stamps cannot resolve finer). A hypergate's clearance lapses on
- * the same clock (finding 3: held 23.5 s, lapsed 25.5 and 46.1 s; wave
- * 29's gate REQUEST that held 41 s was a request, not a clearance). The
- * lapse is silent (finding 2) and leaves nothing standing (finding 4).
+ * How long a PLANET's clearance holds, in sim ms (a port without the
+ * station flag), and a hypergate's. MEASURED (reference "Landing clearance
+ * lapse, wave 35", finding 1): on the 250 px planet presses 24.617 and
+ * 24.649 s after the clearance landed, presses 24.645 and 24.673 s got a
+ * fresh clearance (two cascades whose edges overlap within a frame), so it
+ * lapses at about 24.62-24.65 s (wave 32's "landed 24.51, lapsed 24.61"
+ * agrees within its frame stamps' jitter). GUESS: the middle, 24.63 s.
+ * A hypergate's clearance stays on this clock until a gate's edge is
+ * measured (wave 32, finding 3: held 23.5 s, lapsed 25.5 and 46.1 s;
+ * wave 29's gate REQUEST that held 41 s was a request, not a clearance).
+ * The lapse is silent (wave 32, finding 2) and leaves nothing standing
+ * (finding 4). A station's is {@link STATION_CLEARANCE_MS}.
  */
-export const STELLAR_CLEARANCE_MS = 24_550;
+export const PLANET_CLEARANCE_MS = 24_630;
+
+/**
+ * How long a STATION's clearance holds, in sim ms: about 0.2 s (six of
+ * the original's frames) less than a planet's. MEASURED (reference
+ * "Landing clearance lapse, wave 35", finding 2): on the 315 x 200 station
+ * (spöb Flags 0x11) a press 24.396 s after the clearance docked, and every
+ * press from 24.526 to 24.80 s (twenty, two cascades) got a fresh
+ * clearance; wave 33's station lapsed at 24.44 s. GUESS: the middle of
+ * 24.396-24.44, 24.42 s; and GUESS that the stellar's station flag (spöb
+ * Flags 0x0010), not its art, picks this clock (one station and one
+ * planet art measured). See {@link stellarClearanceMs}.
+ */
+export const STATION_CLEARANCE_MS = 24_420;
+
+/**
+ * How long a clearance at `planetData` holds (sim ms): a station's (the
+ * station flag) {@link STATION_CLEARANCE_MS}, a planet's or a hypergate's
+ * {@link PLANET_CLEARANCE_MS} (reference "Landing clearance lapse, wave
+ * 35", finding 3: two clocks; a gate keeps the planet's until measured).
+ */
+export function stellarClearanceMs(planetData: PlanetData): number {
+    return planetData.flags.isStation && planetData.gate?.kind !== 'hypergate'
+        ? STATION_CLEARANCE_MS : PLANET_CLEARANCE_MS;
+}
 
 /**
  * The odds of a port's or station's clearance line, out of
@@ -928,9 +955,10 @@ const AttemptLandingSystem = new System({
             const usesClearance = stellarUsesClearance(planetData);
             // A clearance that has LAPSED, a port's, a station's or a
             // hypergate's (reference "Landing clearance lapse, wave 32",
-            // findings 1 and 3: a fresh clearance at rest inside the zone
-            // 24.61 s and more after it; wave 31, finding 5: a fresh
-            // request from outside it): the press starts over.
+            // findings 1 and 3, and "..., wave 35": a fresh clearance at
+            // rest inside the zone once its clock has run, a station's
+            // sooner than a planet's; wave 31, finding 5: a fresh request
+            // from outside it): the press starts over.
             if (usesClearance && clearanceLapsed(planetTarget, now)) {
                 answerSelection(uuid, planetPosition, id, planetData!);
                 return;
@@ -1103,8 +1131,8 @@ const AttemptLandingSystem = new System({
 
 /**
  * Records a clearance on a ship's selection (a gate opens, the standing
- * request if any is answered; it lapses STELLAR_CLEARANCE_MS later, a
- * gate's too) and returns the LandingClearedEvent that prints its line: a
+ * request if any is answered; it lapses stellarClearanceMs later: a
+ * station's sooner than a planet's or a gate's) and returns the LandingClearedEvent that prints its line: a
  * gate's form is picked display-side, a port's or station's two pieces
  * here by salted hash (stellarClearedForm).
  */
@@ -1113,11 +1141,12 @@ function grantClearance(planetTarget: PlanetTarget, uuid: string,
     automatic?: boolean): LandingCleared {
     planetTarget.cleared = uuid;
     delete planetTarget.requested;
-    // A hypergate's clearance lapses on the ports' clock (reference
-    // "Landing clearance lapse, wave 32", finding 3); the gate then closes
-    // as for any clearance it no longer sees (GateAnimationSystem; GUESS:
-    // the original's lapsed-gate animation is unmeasured).
-    planetTarget.clearedUntil = now + STELLAR_CLEARANCE_MS;
+    // Two clocks, a station's and a planet's (reference "Landing clearance
+    // lapse, wave 35"); a hypergate's clearance lapses on the planets'
+    // (wave 32, finding 3); the gate then closes as for any clearance it
+    // no longer sees (GateAnimationSystem; GUESS: the original's
+    // lapsed-gate animation is unmeasured).
+    planetTarget.clearedUntil = now + stellarClearanceMs(planetData);
     const flag = automatic ? { automatic } : {};
     if (planetData.gate?.kind === 'hypergate') {
         return { kind: 'hypergate', ...flag };

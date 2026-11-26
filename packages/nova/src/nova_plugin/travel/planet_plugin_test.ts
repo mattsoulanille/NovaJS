@@ -11,7 +11,7 @@ import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { GameDataAggregator } from '../../server/parsing/game_data_aggregator.js';
 import { completeEntity } from '../spawn/index.js';
 import { makeShip } from '../ship/index.js';
-import { makeSystem } from '../make_system.js';
+import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { applyControlEvents } from '../player/index.js';
 import {
@@ -21,7 +21,8 @@ import {
     HYPERGATE_SELECT_RANGE, hypergateRequestOnline,
     inClearanceZone, inLandingZone, WORMHOLE_LAND_RANGE_CAP,
     LANDING_REQUEST_FORMS,
-    STELLAR_CLEARANCE_MS, STELLAR_CLEARED_FORM_ODDS, STELLAR_CLEARED_OUT_OF,
+    PLANET_CLEARANCE_MS, STATION_CLEARANCE_MS, stellarClearanceMs,
+    STELLAR_CLEARED_FORM_ODDS, STELLAR_CLEARED_OUT_OF,
     STELLAR_CLEARED_WELCOME, stellarApproachRange, stellarClearedForm,
     LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
     LandingBlockedEvent, LandingCleared, LandingClearedEvent,
@@ -102,7 +103,7 @@ function place(ship: Entity, position: Position, velocity = new Vector(0, 0)) {
 
 /**
  * Selects `uuid` with traffic control's clearance held (what an `l` inside
- * the 249 px clearance zone gives, for STELLAR_CLEARANCE_MS from now: a
+ * the 249 px clearance zone gives, for stellarClearanceMs from now: a
  * gate's, a port's or a station's), so the next `l` inside the landing
  * window lands. Since wave 31 only a cleared ship lands.
  */
@@ -111,8 +112,9 @@ function selectCleared(world: World, ship: Entity, uuid: string) {
     selectPlanetTarget(target, uuid);
     target.cleared = uuid;
     delete target.requested;
+    const data = world.entities.get(uuid)?.components.get(PlanetDataComponent);
     target.clearedUntil = (world.resources.get(TimeResource)?.time ?? 0)
-        + STELLAR_CLEARANCE_MS;
+        + (data ? stellarClearanceMs(data) : PLANET_CLEARANCE_MS);
 }
 
 /** The world's sim clock (ms), what a clearance's lapse is judged by. */
@@ -2170,6 +2172,12 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
         return world.resources.get(TimeResource)!.time;
     }
 
+    /** How long the clearance the last press gave lasts, from that press
+     * (which read the clock before its step advanced it). */
+    function clearanceLife(world: World, ship: Entity) {
+        return target(ship).clearedUntil! - (now(world) - SIMULATION_STEP_MS);
+    }
+
     function pressRecording(world: World) {
         const cleared: LandingCleared[] = [];
         const requests: LandingRequest[] = [];
@@ -2239,9 +2247,11 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
                     expect([0, 1, 2]).toContain(line.form!);
                     expect(typeof line.welcome).toBe('boolean');
                     expect(line.automatic).toBeUndefined();
-                    // The lapse is STELLAR_CLEARANCE_MS from the press.
-                    expect(target(ship).clearedUntil! - now(world))
-                        .toBeCloseTo(STELLAR_CLEARANCE_MS, -2);
+                    // The lapse is the stellar's clock from the press: a
+                    // station's sooner (wave 35).
+                    expect(clearanceLife(world, ship))
+                        .toBeCloseTo(isStation ? STATION_CLEARANCE_MS
+                            : PLANET_CLEARANCE_MS, 6);
                 }
             }
         }
@@ -2361,12 +2371,20 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
             }
         }, 30_000);
 
-    it('lapses a port\'s clearance after 24.55 s (reference "Landing '
-        + 'clearance lapse, wave 32": held at 24.51, lapsed at 24.61): a '
-        + 'press 13.4 s on lands, one 25.1 s on outside the square draws a '
-        + 'fresh request, one 36.7 s on inside it a fresh clearance '
-        + '(wave 31, finding 5)', async () => {
-            expect(STELLAR_CLEARANCE_MS).toBe(24_550);
+    /** Moves the sim clock so the NEXT press (one step on) comes
+     * `interval` ms after the press that cleared the ship: the reference's
+     * intervals run press to press. */
+    function waitForPress(world: World, interval: number) {
+        world.resources.get(TimeResource)!.time +=
+            interval - SIMULATION_STEP_MS;
+    }
+
+    it('lapses a planet\'s clearance after 24.63 s (reference "Landing '
+        + 'clearance lapse, wave 35": landed at 24.617 / 24.649, lapsed at '
+        + '24.645 / 24.673): a press 13.4 s on lands, one 25.1 s on outside '
+        + 'the square draws a fresh request, one 36.7 s on inside it a '
+        + 'fresh clearance (wave 31, finding 5)', async () => {
+            expect(PLANET_CLEARANCE_MS).toBe(24_630);
             const time = (world: World) =>
                 world.resources.get(TimeResource)!;
             {
@@ -2378,13 +2396,16 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
                     .toBeFalse();
                 expect(pressRecording(world).lands).toBe(1);
             }
-            // The wave-32 bracket: 24.32 and 24.51 s land, 24.61 s and
-            // more get a fresh clearance (at rest at 230 px).
+            // The wave-35 cascades (at rest at 230 px, press to press):
+            // 24.32 and 24.51 s (wave 32) and 24.617 s land, 24.673 s and
+            // more get a fresh clearance (24.645 lapsed and 24.649 landed
+            // in the two cascades: the edge, a GUESS inside that frame).
             for (const [after, lands] of [[24_320, true], [24_510, true],
-                [24_610, false], [24_740, false]] as const) {
+                [24_617, true], [24_673, false], [24_706, false],
+                [24_803, false]] as const) {
                 const { world, ship, stellar } = await port([250, 250]);
                 selectAt(world, ship, stellar, 230);
-                time(world).time += after;
+                waitForPress(world, after);
                 const press = pressRecording(world);
                 expect(press.lands).withContext(`${after}`).toBe(lands ? 1 : 0);
                 expect(press.cleared.map(c => c.kind)).withContext(`${after}`)
@@ -2423,7 +2444,58 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
             }
         }, 30_000);
 
-    it('lapses a hypergate\'s clearance on the same clock (reference '
+    it('lapses a STATION\'s clearance sooner, after 24.42 s (reference '
+        + '"Landing clearance lapse, wave 35", finding 2: the 315 x 200 '
+        + 'station docked at 24.396 s, lapsed at 24.44 (wave 33) and at '
+        + 'every interval from 24.526 to 24.80 s)', async () => {
+            expect(STATION_CLEARANCE_MS).toBe(24_420);
+            for (const [after, docks] of [[13_400, true], [24_150, true],
+                [24_396, true], [24_440, false], [24_526, false],
+                [24_617, false], [24_803, false]] as const) {
+                const { world, ship, stellar } = await port([315, 200], true);
+                expect(selectAt(world, ship, stellar, 230).cleared
+                    .map(c => c.kind)).toEqual(['station']);
+                waitForPress(world, after);
+                const press = pressRecording(world);
+                expect(press.lands).withContext(`${after}`)
+                    .toBe(docks ? 1 : 0);
+                expect(press.cleared.map(c => c.kind)).withContext(`${after}`)
+                    .toEqual(docks ? [] : ['station']);
+                if (!docks) {
+                    // Silent, and cleared afresh: the next press docks.
+                    expect(press.blocked).withContext(`${after}`)
+                        .toEqual([]);
+                    expect(pressRecording(world).lands).toBe(1);
+                }
+            }
+        }, 60_000);
+
+    it('picks the clock by the station flag, not the art: the 250 px '
+        + 'port with the flag lapses on the station clock, the 315 x 200 '
+        + 'art without it on the planet clock (GUESS, wave 35)', async () => {
+            for (const [frame, isStation, after, lands] of [
+                [[250, 250], true, 24_500, false],
+                [[250, 250], false, 24_500, true],
+                [[315, 200], false, 24_500, true],
+                [[315, 200], true, 24_500, false],
+            ] as Array<[[number, number], boolean, number, boolean]>) {
+                const context = `${frame} ${isStation}`;
+                const { world, ship, stellar } = await port(frame, isStation);
+                selectAt(world, ship, stellar, 230);
+                expect(clearanceLife(world, ship)).withContext(context)
+                    .toBeCloseTo(isStation ? STATION_CLEARANCE_MS
+                        : PLANET_CLEARANCE_MS, 6);
+                expect(stellarClearanceMs(world.entities.get(PORT)!
+                    .components.get(PlanetDataComponent)!))
+                    .withContext(context).toBe(isStation
+                        ? STATION_CLEARANCE_MS : PLANET_CLEARANCE_MS);
+                waitForPress(world, after);
+                expect(pressRecording(world).lands).withContext(context)
+                    .toBe(lands ? 1 : 0);
+            }
+        }, 60_000);
+
+    it('lapses a hypergate\'s clearance on the planets\' clock (reference '
         + '"Landing clearance lapse, wave 32", finding 3: held at 23.5 s, '
         + 'a fresh clearance at 25.5 and 46.1 s)', async () => {
             for (const [after, enters] of [[23_510, true], [25_520, false],
@@ -2436,8 +2508,9 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
                 place(ship, gate.position);
                 expect(pressRecording(world).cleared.map(c => c.kind))
                     .toEqual(['hypergate']);
-                expect(target(ship).clearedUntil! - now(world))
-                    .toBeCloseTo(STELLAR_CLEARANCE_MS, -2);
+                // A gate keeps the planets' clock (wave 35: unmeasured).
+                expect(clearanceLife(world, ship))
+                    .toBeCloseTo(PLANET_CLEARANCE_MS, 6);
                 world.resources.get(TimeResource)!.time += after;
                 expect(holdsGateClearance(target(ship), now(world)))
                     .withContext(`${after}`).toBe(enters);
