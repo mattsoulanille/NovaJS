@@ -635,17 +635,16 @@ export const DrawRadar = new System({
             // THE COLOUR IS THE TARGET BRACKETS' (hostility.ts's
             // styleForTarget), read whole, so a blip and the corners around
             // the same ship cannot disagree: own flock green; a ship this
-            // player has BOUGHT OFF (beg for mercy) neutral until the
-            // reprieve lapses (Matthew: "its IFF should become neutral
+            // player has BOUGHT OFF (beg for mercy) neutral while the
+            // reprieve holds (Matthew: "its IFF should become neutral
             // again"); a ship attacking the player red; and otherwise red
             // only for a ship that would attack the player ON SIGHT — a
             // warship or interceptor of a hostile govt, never a trader of
             // one (reference K9; Matthew, 2026-11-23: "IFF bracket colors
             // correspond to hostility regardless of govt's stance").
             // Judged on the MIRRORED SIM CLOCK, which is what stamped
-            // pacifiedUntil and the aggression log; this world's
-            // TimeResource is wall-clock epoch ms and would call every
-            // reprieve and every aggression expired.
+            // the aggression log; this world's TimeResource is wall-clock
+            // epoch ms and would call every aggression expired.
             //
             // DISABLED ships (DisabledComponent — real, serializer-registered
             // sim state, so it is here in the display world) are GREY with or

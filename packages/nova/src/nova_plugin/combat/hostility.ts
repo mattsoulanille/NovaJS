@@ -88,10 +88,10 @@ export { isAttackingPlayer } from '../npc/index.js';
  *     friendly corners, ahead of every political/behavioral tier: your
  *     own ships are yours regardless of government.
  *  2b. BOUGHT OFF: a ship this player has bribed to leave them alone
- *     (beg for mercy — NpcComponent.pacifiedFrom/pacifiedUntil, set by
- *     hail_plugin's applyHail) reads NEUTRAL to the briber, ahead of both
- *     the behavioral and the political tiers, for as long as the reprieve
- *     runs. Matthew: "when an NPC accepts a beg-for-mercy bribe, its IFF
+ *     (beg for mercy — NpcComponent.pacifiedFrom, set by hail_plugin's
+ *     applyHail) reads NEUTRAL to the briber, ahead of both the
+ *     behavioral and the political tiers, for as long as the reprieve
+ *     runs (the visit, until the briber provokes it). Matthew: "when an NPC accepts a beg-for-mercy bribe, its IFF
  *     should become neutral again so PD weapons don't shoot at it and
  *     anger it again." That is not cosmetic — the point defense prey
  *     filter (point_defense.ts) shoots hostile fighters, so a pirate that
@@ -158,14 +158,14 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     if (isInFlock(targetUuid, playerUuid, getEntity)) {
         return 'friendly';
     }
-    // Bought off (beg for mercy): neutral to the briber until the reprieve
-    // lapses, ahead of both the behavioral and the political tiers — see
-    // tier 2b above. Not 'friendly': the money buys indifference, not an
-    // ally, and the ship goes back to hostile the moment it lapses or the
-    // player shoots it (NpcDecisionSystem clears pacifiedFrom on damage from
-    // the briber, which flips this tier straight back off).
+    // Bought off (beg for mercy): neutral to the briber for the reprieve,
+    // ahead of both the behavioral and the political tiers — see tier 2b
+    // above. Not 'friendly': the money buys indifference, not an ally, and
+    // the ship goes back to hostile the moment the player shoots it
+    // (npc_targeting.ts's provoke clears pacifiedFrom on damage from the
+    // briber, which flips this tier straight back off).
     if (isPacifiedToward(targetEntity.components.get(NpcComponent),
-        playerUuid, now)) {
+        playerUuid)) {
         return targetCornerStyle('neutral', false);
     }
     const govtId = targetEntity.components.get(GovtComponent)?.id;

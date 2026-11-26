@@ -545,9 +545,9 @@ export const SystemVisitComponent = new Component<number>('SystemVisit');
 /**
  * How long a bribe keeps a stellar's landing pad open, in ms. TUNABLE /
  * ASSUMPTION: the Bible quantifies neither the price nor the duration of a
- * planet bribe. Two minutes matches the ship-bribe reprieve (hail_plugin's
- * BRIBE_PACIFY_MS) — long enough to fly in and land, short enough that the
- * clearance has to be re-bought on a later visit. The legal record is
+ * planet bribe. Two minutes (once the ship-bribe reprieve's, which since
+ * wave 37 holds for the visit) — long enough to fly in and land, short
+ * enough that the clearance has to be re-bought on a later visit. The legal record is
  * unchanged by a bribe, exactly as a ship bribe leaves it alone.
  */
 export const STELLAR_BRIBE_MS = 120_000;

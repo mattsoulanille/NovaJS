@@ -523,7 +523,7 @@ describe('piracy police and distress calls in the sim', () => {
         it('voids a police ship\'s bribe', async () => {
             await scene(NOSY, SHIPPING);
             Object.assign(npc('police'),
-                { pacifiedFrom: 'player', pacifiedUntil: now() + 60_000 });
+                { pacifiedFrom: 'player' });
             hit('victim', 'player', { group: 'player', aimed: true });
             expect(npc('police').aggressor).toBe('player');
             expect(npc('police').pacifiedFrom).toBeUndefined();

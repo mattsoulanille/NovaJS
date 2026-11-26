@@ -76,11 +76,13 @@ export const NpcState = t.intersection([t.type({
      * the miner's mining branch finds nothing to do. */
     mineTarget: t.string,
     /** Uuid of a ship this NPC has been bribed to leave alone (hail bribe /
-     * beg-for-mercy). While `pacifiedUntil` has not lapsed, this ship is
-     * skipped as a hostile and forgotten as an aggressor. */
+     * beg-for-mercy). For the rest of this ship's visit it is skipped as a
+     * hostile and forgotten as an aggressor; only a provocation by the
+     * briber's side ends it (npc_targeting.ts's provoke). No lapse:
+     * reference "A paid ship bribe (A8), wave 37" (an anchored bribed
+     * warship stayed bought for the 4.5 minutes watched; a mobile one
+     * leaves, hail_plugin's applyHail). */
     pacifiedFrom: t.string,
-    /** Sim time (ms) until which `pacifiedFrom` is ignored. */
-    pacifiedUntil: t.number,
     /** How hard this ship is being hit: a leaky bucket of recent damage,
      * in fractions of its max shield, as of `damageLoadAt` (npc_retreat.ts).
      * Kept only for warships of a gövt Flags 0x0010 government, and
@@ -119,20 +121,18 @@ export type NpcState = t.TypeOf<typeof NpcState>;
 export const NpcComponent = new Component<NpcState>('NpcComponent');
 
 /**
- * Whether this NPC has been BOUGHT OFF by `uuid` and the reprieve is still
- * running at sim time `now` — the beg-for-mercy bribe (hail_plugin's
- * applyHail).
+ * Whether this NPC has been BOUGHT OFF by `uuid` — the beg-for-mercy bribe
+ * (hail_plugin's applyHail), which holds until the briber's side provokes
+ * the ship (no lapse: reference "A paid ship bribe (A8), wave 37").
  *
  * Pure, total, and over synced state only (NpcComponent is
  * serializer-registered), so the simulation's own decision loop, the
  * hostility rule the target corners / 'r' key / point defense read
  * (hostility.ts), and the radar's IFF colouring all reach the same verdict on
- * every peer. NpcDecisionSystem's inline version of this test additionally
- * CLEARS the lapsed fields; this one only reads, so display callers cannot
- * mutate simulation state by asking.
+ * every peer. It only reads, so display callers cannot mutate simulation
+ * state by asking.
  */
 export function isPacifiedToward(npc: NpcState | undefined,
-    uuid: string | undefined, now: number): boolean {
-    return !!npc && uuid !== undefined && npc.pacifiedFrom === uuid
-        && npc.pacifiedUntil !== undefined && now < npc.pacifiedUntil;
+    uuid: string | undefined): boolean {
+    return !!npc && uuid !== undefined && npc.pacifiedFrom === uuid;
 }

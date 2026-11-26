@@ -1183,8 +1183,6 @@ describe("an escort's hostility matches its owner's target corners", () => {
         world.entities.get(uuid)!.components.set(NpcComponent, {
             ...npc,
             pacifiedFrom: 'player',
-            pacifiedUntil:
-                world.resources.get(TimeResource)!.time + 60_000,
         });
     }
 

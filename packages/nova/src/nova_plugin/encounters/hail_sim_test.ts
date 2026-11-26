@@ -26,10 +26,11 @@ import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { ActiveRanksComponent } from '../ncb/index.js';
 import {
     AssistingComponent, FuelHaggleComponent, MercyHaggleComponent,
+    SystemHoldComponent,
 } from '../npc/index.js';
 import { JumpComponent } from '../travel/index.js';
 import {
-    applyHail, BRIBE_PACIFY_MS, isSomeoneElsesEscort, SentHailComponent,
+    applyHail, bribedShipLeaves, isSomeoneElsesEscort, SentHailComponent,
 } from './hail_plugin.js';
 import { FormationComponent } from '../npc/index.js';
 import { OwnerComponent } from '../combat/index.js';
@@ -52,6 +53,14 @@ async function makeWorld() {
     });
     // A class that INHERITS gövt 0x0400 from its attributes govt (the stock
     // Wraith (Adult) nova:185, InherentGovt 159).
+    // A hull that cannot move (Speed / Accel 0): reference "A paid ship
+    // bribe (A8), wave 37"'s anchored Kit Bribe Warship, shïp 589.
+    const anchored = getDefaultShipData();
+    gameData.data.Ship.map.set('test:anchored', {
+        ...anchored,
+        id: 'test:anchored',
+        physics: { ...anchored.physics, speed: 0, acceleration: 0 },
+    });
     gameData.data.Ship.map.set('test:wraith', {
         ...getDefaultShipData(),
         id: 'test:wraith',
@@ -165,8 +174,11 @@ describe('applyHail: bribe / beg for mercy', () => {
                 .toBe(80_000);
             const npc = target(world).components.get(NpcComponent)!;
             expect(npc.pacifiedFrom).toBe('player');
-            expect(npc.pacifiedUntil).toBeGreaterThan(0);
             expect(npc.aggressor).toBeUndefined();
+            // It can move, so it leaves (reference "A paid ship bribe
+            // (A8), wave 37": three of three were entering hyperspace
+            // 13-23 s after the payment).
+            expect(npc.mode).toBe('depart');
             // The pacified pirate drops its attack on the briber.
             expect(target(world).components.get(TargetComponent)!.target)
                 .toBeUndefined();
@@ -224,15 +236,12 @@ describe('applyHail: bribe / beg for mercy', () => {
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
             expect(player(world).components.get(CreditsComponent)!.credits)
                 .toBe(80_000);
-            const until =
-                target(world).components.get(NpcComponent)!.pacifiedUntil;
 
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
             expect(player(world).components.get(CreditsComponent)!.credits)
                 .toBe(80_000);
-            // Nor is the reprieve silently extended by the free press.
-            expect(target(world).components.get(NpcComponent)!.pacifiedUntil)
-                .toBe(until);
+            expect(target(world).components.get(NpcComponent)!.pacifiedFrom)
+                .toBe('player');
         });
 
     it('does nothing to a non-hostile ship the player is not fighting',
@@ -267,7 +276,7 @@ describe('applyHail: bribe / beg for mercy', () => {
             .toBe(100_000 - fuelSaleTerms('target', 0).base);
         const npc = target(world).components.get(NpcComponent)!;
         expect(npc.pacifiedFrom).toBe('player');
-        expect(npc.pacifiedUntil).toBeGreaterThan(0);
+        expect(npc.mode).toBe('depart');
         expect(target(world).components.get(TargetComponent)!.target)
             .toBeUndefined();
     });
@@ -311,15 +320,78 @@ describe('applyHail: bribe / beg for mercy', () => {
             }
         });
 
-    it('the pacify reprieve lapses after BRIBE_PACIFY_MS', async () => {
+    it('a mobile bribed ship flies out and jumps (reference "A paid ship '
+        + 'bribe (A8), wave 37", finding 2)', async () => {
         const { world, addShip } = await makeWorld();
         await addShip('target', 500, 0, ship => {
             ship.components.set(GovtComponent, { id: 'test:pirate' });
-            ship.components.set(NpcComponent, { aiType: 3 });
+            ship.components.set(NpcComponent,
+                { aiType: 3, mode: 'attack', aggressor: 'player' });
+            ship.components.set(TargetComponent, { target: 'player' });
         });
         applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+        expect(target(world).components.get(NpcComponent)!.mode)
+            .toBe('depart');
+        // It heads out at once and starts its jump past the no-jump zone;
+        // until then it never turns back on the player.
+        let jumped = false;
+        for (let i = 0; i < 30 * 120 && !jumped; i++) {
+            world.step();
+            const ship = world.entities.get('target');
+            if (!ship || ship.components.has(JumpComponent)) {
+                jumped = true;
+                break;
+            }
+            expect(ship.components.get(NpcComponent)!.mode)
+                .withContext(`step ${i}`).toBe('depart');
+            expect(ship.components.get(TargetComponent)?.target)
+                .toBeUndefined();
+        }
+        expect(jumped).toBeTrue();
+    });
+
+    it('an ANCHORED bribed ship stays, bought for the visit: no lapse '
+        + '(reference "A paid ship bribe (A8), wave 37", finding 3)',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('target', 500, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'player' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            }, 'test:anchored');
+            expect(bribedShipLeaves(target(world))).toBeFalse();
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            const npc = target(world).components.get(NpcComponent)!;
+            expect(npc.mode).not.toBe('depart');
+            // Five minutes of sim time (the old reprieve lapsed at two; the
+            // reference watched 4.5): still bought, never back on the player.
+            const time = world.resources.get(TimeResource)!;
+            for (let i = 0; i < 10; i++) {
+                time.time += 30_000;
+                world.step();
+                const now = target(world).components.get(NpcComponent)!;
+                expect(now.pacifiedFrom).withContext(`${i}`).toBe('player');
+                expect(target(world).components.get(TargetComponent)?.target)
+                    .withContext(`${i}`).not.toBe('player');
+            }
+        });
+
+    it('a HELD ship (system_hold.ts) does not leave on a bribe', async () => {
+        const { world, addShip } = await makeWorld();
+        await addShip('target', 500, 0, ship => {
+            ship.components.set(GovtComponent, { id: 'test:pirate' });
+            ship.components.set(NpcComponent,
+                { aiType: 3, mode: 'attack', aggressor: 'player' });
+            ship.components.set(TargetComponent, { target: 'player' });
+            ship.components.set(SystemHoldComponent,
+                { reason: 'missionGoal' });
+        });
+        expect(bribedShipLeaves(target(world))).toBeFalse();
+        applyHail(world, PEER, { kind: 'bribe', target: 'target' });
         const npc = target(world).components.get(NpcComponent)!;
-        expect(npc.pacifiedUntil).toBeGreaterThanOrEqual(BRIBE_PACIFY_MS);
+        expect(npc.pacifiedFrom).toBe('player');
+        expect(npc.mode).not.toBe('depart');
     });
 
     it('the reprieve is voided when the briber shoots the ship again',
@@ -335,7 +407,7 @@ describe('applyHail: bribe / beg for mercy', () => {
             applyHail(world, PEER, { kind: 'bribe', target: 'target' });
             const npc = target(world).components.get(NpcComponent)!;
             expect(npc.pacifiedFrom).toBe('player');
-            expect(npc.pacifiedUntil).toBeGreaterThan(0);
+            expect(npc.mode).toBe('depart');
 
             // A projectile fired by the player (its SourceComponent) hits the
             // pacified ship. NpcAggressionSystem reads the source off the
@@ -353,7 +425,9 @@ describe('applyHail: bribe / beg for mercy', () => {
             const after = target(world).components.get(NpcComponent)!;
             expect(after.aggressor).toBe('player');
             expect(after.pacifiedFrom).toBeUndefined();
-            expect(after.pacifiedUntil).toBeUndefined();
+            // On its way out, it turns back to the fight (GUESS: the
+            // reference provoked only an anchored ship, A8 wave 37 a8_e).
+            expect(after.mode).not.toBe('depart');
         });
 });
 
@@ -1133,7 +1207,6 @@ describe('applyHail: an unfriendly ship refuses or charges; an escort '
             ship.components.set(GovtComponent, { id: govt });
             ship.components.set(NpcComponent, {
                 aiType: 3, pacifiedFrom: 'player',
-                pacifiedUntil: BRIBE_PACIFY_MS * 10,
             });
         };
     }

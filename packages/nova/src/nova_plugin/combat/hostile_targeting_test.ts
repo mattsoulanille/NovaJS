@@ -767,16 +767,16 @@ describe('a ship bought off with a bribe reads NEUTRAL to the briber', () => {
             world.resources.get(SystemIdResource))).toBe('hostile');
     });
 
-    it('goes hostile again the instant the reprieve lapses', async () => {
+    it('stays neutral for the visit: the reprieve never lapses (reference '
+        + '"A paid ship bribe (A8), wave 37")', async () => {
         const { world } = await bribedWorld();
         applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
         expect(cornerStyle(world, 'pirate')).toBe('neutral');
 
-        // The boundary is strict: at pacifiedUntil the truce is over.
-        const npc = world.entities.get('pirate')!.components
-            .get(NpcComponent)!;
-        npc.pacifiedUntil = world.resources.get(TimeResource)!.time;
-        expect(cornerStyle(world, 'pirate')).toBe('hostile');
+        // Ten minutes on (the anchored reference ship stayed bought for
+        // the 4.5 minutes watched; NovaJS's old reprieve lapsed at 2).
+        world.resources.get(TimeResource)!.time += 600_000;
+        expect(cornerStyle(world, 'pirate')).toBe('neutral');
     });
 
     it('goes hostile again if the PLAYER shoots it, exactly as before',

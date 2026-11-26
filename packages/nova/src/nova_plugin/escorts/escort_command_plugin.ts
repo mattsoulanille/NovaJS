@@ -423,7 +423,7 @@ export interface EscortHostilityContext {
  *    owner's own wing shooting each other while the HUD painted them all
  *    friendly.
  *  - BOUGHT OFF (tier 2b): a ship the OWNER bribed to leave them alone
- *    (beg for mercy; NpcComponent.pacifiedFrom/pacifiedUntil) is not
+ *    (beg for mercy; NpcComponent.pacifiedFrom) is not
  *    hostile to their escorts either, ahead of everything else. Without
  *    this a defending escort — or an opportunistic turret on a formation
  *    one — kept shooting the pirate the player had just paid off, which
@@ -482,8 +482,7 @@ export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
         return false;
     }
     // Bought off by the owner: not a target, whatever the politics say.
-    if (isPacifiedToward(other.components.get(NpcComponent), rootUuid,
-        ctx.now)) {
+    if (isPacifiedToward(other.components.get(NpcComponent), rootUuid)) {
         return false;
     }
     const otherGovt =

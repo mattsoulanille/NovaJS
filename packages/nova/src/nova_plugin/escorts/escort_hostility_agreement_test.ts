@@ -322,7 +322,7 @@ const ROWS: Row[] = [
 
     // --- Bought off (tier 2b) ---
     {
-        name: 'a pirate the OWNER bribed, inside the reprieve',
+        name: 'a pirate the OWNER bribed (the reprieve holds for the visit)',
         hostile: false,
         build: () => ({
             other: new Entity(OTHER)
@@ -330,22 +330,18 @@ const ROWS: Row[] = [
                 .addComponent(GovtComponent, { id: 'nova:137' })
                 .addComponent(NpcComponent, {
                     aiType: 3, pacifiedFrom: ROOT,
-                    pacifiedUntil: NOW + 10_000,
                 }),
             root: new Entity(ROOT),
         }),
     },
     {
-        name: 'a pirate whose bribe has LAPSED',
+        name: 'the same pirate once the bribe is voided (provoked)',
         hostile: true,
         build: () => ({
             other: new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
                 .addComponent(GovtComponent, { id: 'nova:137' })
-                .addComponent(NpcComponent, {
-                    aiType: 3, pacifiedFrom: ROOT,
-                    pacifiedUntil: NOW - 1,
-                }),
+                .addComponent(NpcComponent, { aiType: 3 }),
             root: new Entity(ROOT),
         }),
     },
@@ -358,7 +354,6 @@ const ROWS: Row[] = [
                 .addComponent(GovtComponent, { id: 'nova:137' })
                 .addComponent(NpcComponent, {
                     aiType: 3, pacifiedFrom: 'somebody-else',
-                    pacifiedUntil: NOW + 10_000,
                 }),
             root: new Entity(ROOT),
         }),

@@ -1380,7 +1380,6 @@ describe('boarding in a live world', () => {
             const { world, boarder, bystander } = await hostileWorld();
             const npc = bystander.components.get(NpcComponent)!;
             npc.pacifiedFrom = TARGET;
-            npc.pacifiedUntil = 1e12;
             world.step();
 
             captureAsEscort(world, boarder);

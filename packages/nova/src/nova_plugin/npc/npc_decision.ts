@@ -469,15 +469,13 @@ export const NpcDecisionSystem = new System({
         if (npc.aggressor !== undefined && ownSide(npc.aggressor)) {
             npc.aggressor = undefined;
         }
-        // A bribe (hail beg-for-mercy) buys a reprieve: while it holds, the
-        // briber is skipped as a hostile below and forgotten as an
-        // aggressor; when it lapses, the ship resumes hunting a criminal.
-        if (npc.pacifiedUntil !== undefined && time.time >= npc.pacifiedUntil) {
-            npc.pacifiedFrom = undefined;
-            npc.pacifiedUntil = undefined;
-        }
-        const pacifiedFrom = npc.pacifiedUntil !== undefined
-            ? npc.pacifiedFrom : undefined;
+        // A bribe (hail beg-for-mercy) buys the briber off for the visit:
+        // the briber is skipped as a hostile below and forgotten as an
+        // aggressor until they provoke the ship (npc_targeting.ts's
+        // provoke). A ship that can leave is sent on its way at the
+        // payment (hail_plugin's applyHail), so this matters mostly for
+        // one that cannot (reference "A paid ship bribe (A8), wave 37").
+        const pacifiedFrom = npc.pacifiedFrom;
         if (pacifiedFrom && npc.aggressor === pacifiedFrom) {
             npc.aggressor = undefined;
         }

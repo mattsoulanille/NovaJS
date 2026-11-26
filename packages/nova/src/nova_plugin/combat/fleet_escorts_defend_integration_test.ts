@@ -248,13 +248,10 @@ describe('fleet escorts defend their leader (reference P1 wave 13)', () => {
 
     it('voids a guard\'s bribe the way a hit on it would', async () => {
         await scene();
-        const now = world.resources.get(TimeResource)!.time;
-        Object.assign(npc('guardA'),
-            { pacifiedFrom: 'player', pacifiedUntil: now + 60_000 });
+        Object.assign(npc('guardA'), { pacifiedFrom: 'player' });
         hit('lead', 'player', { group: 'player', aimed: true });
         expect(npc('guardA').aggressor).toBe('player');
         expect(npc('guardA').pacifiedFrom).toBeUndefined();
-        expect(npc('guardA').pacifiedUntil).toBeUndefined();
     });
 
     it('leaves a follower under an escort command (a bay fighter) to the '

@@ -61,12 +61,12 @@ import {
 import { ActiveRanksComponent } from '../ncb/index.js';
 import { ranksAllowAssistance, ranksGiveFreeFuel } from '../ncb/index.js';
 import { OutfitsStateComponent } from '../ship/index.js';
-import { ShipDataComponent } from '../ship/index.js';
+import { ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
 import {
     alliedEitherWay, localLawIn, shipDisposition,
 } from '../reputation/index.js';
 import {
-    isPacifiedToward, NpcComponent, NpcSteeringSystem,
+    heldInSystem, isPacifiedToward, NpcComponent, NpcSteeringSystem,
 } from '../npc/index.js';
 import { AggressionComponent, isIffHostile } from '../combat/index.js';
 import { contrabandDetectedBy, ShootAllWeaponsComponent } from '../npc/index.js';
@@ -275,12 +275,25 @@ function sendPlayerHail(world: World, sender: Entity, to: string,
     });
 }
 
-/** How long a bribe keeps a hostile ship off the player's back, in ms.
- * TUNABLE / ASSUMPTION: the Bible doesn't quantify the reprieve; a bribe in
- * the original buys a lasting break until the player provokes them again.
- * Two minutes is long enough to escape and short enough that a persistent
- * criminal is eventually hunted again (the reputation record is unchanged). */
-export const BRIBE_PACIFY_MS = 120_000;
+/**
+ * Whether a ship just BOUGHT OFF (a paid Beg For Mercy) leaves the system:
+ * reference "A paid ship bribe (A8), wave 37" — all three bribed MOBILE
+ * warships flew off at once and were entering hyperspace 13-23 s after the
+ * payment, while one that could not move (hull Speed / Accel 0) stayed,
+ * bought, for the 4.5 minutes watched. So a ship leaves when it can: it
+ * moves (its effective speed and acceleration, outfits included, are
+ * above 0; GUESS: either at 0 anchors it) and nothing holds it here
+ * (system_hold.ts: a refuel offer on the table, a rescue target waiting).
+ * It leaves by the ordinary NPC jump-out ('depart': straight out past the
+ * no-jump zone, then the jump), so when it is gone depends on where it is
+ * and how fast it flies (the measured 13-23 s is the stock kit warship's).
+ */
+export function bribedShipLeaves(ship: Entity): boolean {
+    const physics = ship.components.get(ShipPhysicsComponent)
+        ?? ship.components.get(ShipDataComponent)?.physics;
+    return physics !== undefined && physics.speed > 0
+        && physics.acceleration > 0 && !heldInSystem(ship);
+}
 
 /** Assist: the helper thrusts toward the client until within this range. */
 export const ASSIST_ARRIVAL_RANGE = 300;
@@ -704,11 +717,9 @@ export function applyHail(world: World, peerId: string | undefined,
     // slot after a successful bribe (the reference keeps Request Assistance
     // there too — hail/request_assistance.png), so a second Pay press can
     // reach here; charging for a reprieve the player already owns would let
-    // the button drain them. The reprieve itself is not extended either: it
-    // runs from the payment that bought it, and a player who wants a fresh
-    // one waits for this one to lapse (or provokes the ship, which voids it).
-    if (isPacifiedToward(target.components.get(NpcComponent), found.uuid,
-        now)) {
+    // the button drain them. The reprieve holds for the visit (no lapse),
+    // so there is nothing to renew; provoking the ship voids it.
+    if (isPacifiedToward(target.components.get(NpcComponent), found.uuid)) {
         return;
     }
     // The Bible's mercy semantics, the same pure verdict the dialog draws
@@ -756,12 +767,24 @@ export function applyHail(world: World, peerId: string | undefined,
     // ACCEPT PRICE: the haggle is over.
     target.components.get(MercyHaggleComponent)?.delete(found.uuid);
     // Pacify the ship: forget the player as an aggressor and ignore them as a
-    // hostile until the reprieve lapses (NpcDecisionSystem honors this).
+    // hostile for the rest of its visit (NpcDecisionSystem honors this), and
+    // send it on its way if it can leave (bribedShipLeaves). Reference "A
+    // paid ship bribe (A8), wave 37": non-hostile at once; a mobile one
+    // flies off and jumps; an anchored one stays bought (4.5 minutes, no
+    // lapse); one hit from the briber ends it (npc_targeting.ts's provoke,
+    // which also turns a departing one back to the fight); and only THIS
+    // ship is bought off (the system's other warships stay hostile).
+    //
+    // MULTIPLAYER: the bribe is the briber's alone. An anchored bought ship
+    // skips only `pacifiedFrom` and stays hostile to every other pilot (and
+    // their flocks); a departing one fights nobody on its way out, because
+    // a departing NPC decides nothing (NpcDecisionSystem), so a pilot it
+    // was hunting gets the same relief until it jumps — unless that pilot
+    // hits it, which records them as its aggressor but, not being the
+    // briber, does not turn it back (GUESS; single-player reference only).
     const npc = target.components.get(NpcComponent);
     if (npc) {
-        const time = world.resources.get(TimeResource);
         npc.pacifiedFrom = found.uuid;
-        npc.pacifiedUntil = (time?.time ?? 0) + BRIBE_PACIFY_MS;
         // The briber's escorts too: a ship one of them provoked records
         // that escort as its aggressor (npc_targeting.ts's
         // responsibleShip), and the money buys off the whole flock's fight.
@@ -774,6 +797,18 @@ export function applyHail(world: World, peerId: string | undefined,
         if (npc.mode === 'attack' && tgt?.target === found.uuid) {
             npc.mode = undefined;
             tgt.target = undefined;
+        }
+        if (bribedShipLeaves(target)) {
+            // Off at once, by the ordinary jump-out (the out-of-ammo exit's
+            // shape: whatever it was about is dropped).
+            npc.mode = 'depart';
+            if (tgt) {
+                tgt.target = undefined;
+            }
+            npc.boardTarget = undefined;
+            delete npc.mineTarget;
+            delete npc.scanTarget;
+            delete npc.scanSatOn;
         }
     }
     forgetMutualAggression(player, action.target, target, found.uuid);

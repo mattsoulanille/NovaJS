@@ -2106,7 +2106,6 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                 const { world, gameData } = iffWorld('test:pirate', target => {
                     target.components.set(NpcComponent, {
                         aiType: 3, pacifiedFrom: PLAYER,
-                        pacifiedUntil: NOW + 60_000,
                     });
                 }, {
                     flags: {
@@ -2166,7 +2165,6 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
                 const { world, gameData } = iffWorld('test:hater', target => {
                     target.components.set(NpcComponent, {
                         aiType: 3, pacifiedFrom: PLAYER,
-                        pacifiedUntil: NOW + 60_000,
                     });
                 }, {
                     flags: {
@@ -2204,7 +2202,6 @@ describe('computeContext: the channel shows the ship\'s IFF (ruling #297)',
             const { world, gameData } = iffWorld('test:pirate', target => {
                 target.components.set(NpcComponent, {
                     aiType: 3, pacifiedFrom: PLAYER,
-                    pacifiedUntil: NOW + 60_000,
                 });
             }, {
                 flags: { ...getDefaultGovtData().flags, xenophobic: true },
@@ -2457,7 +2454,7 @@ describe('computeContext on the synthetic data set (ruling #297)', () => {
                 .addComponent(ShipDataComponent, corsair)
                 .addComponent(GovtComponent, { id: SYNTHETIC.govts.raiders })
                 .addComponent(NpcComponent, {
-                    aiType: 3, pacifiedFrom: PLAYER, pacifiedUntil: 120_000,
+                    aiType: 3, pacifiedFrom: PLAYER,
                 }));
             const strings = (await gameData.data.StringTable
                 .get(HAIL_RESPONSE_TABLE)).strings;

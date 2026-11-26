@@ -840,6 +840,17 @@ export const STATE_HASH_INTERVAL = 60;
 //    is 0.32 (was 0.34). The derived wire schema fingerprint changes
 //    (46582f94c5a30caa -> 3c78611777d52ae3), and the join gate keeps older
 //    and newer builds apart.
+//    Also under 8, no further bump (maintainer's standing ruling for
+//    schema-only changes): the wave-37 ship bribe (reference "A paid ship
+//    bribe (A8), wave 37"). NpcState (npc/npc_component.ts) drops its
+//    OPTIONAL `pacifiedUntil`: a paid Beg For Mercy no longer lapses after
+//    two minutes, so `pacifiedFrom` alone is the reprieve. No input kind
+//    or message kind changes. Sim-rule changes alongside: a bribed ship
+//    that can move and is not held leaves at once by the ordinary NPC
+//    jump-out ('depart'), and a hit from the briber's side turns a
+//    departing one back. The derived wire schema fingerprint changes
+//    (3c78611777d52ae3 -> 2b73837b144ad4ac), and the join gate keeps older
+//    and newer builds apart.
 
 export const PROTOCOL_VERSION = 8;
 

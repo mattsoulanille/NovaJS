@@ -237,7 +237,16 @@ function provoke(npc: NpcState, source: string,
         && (npc.pacifiedFrom === source
             || flockPlayer(source, getEntity) === npc.pacifiedFrom)) {
         npc.pacifiedFrom = undefined;
-        npc.pacifiedUntil = undefined;
+        // A bribed ship on its way out (hail_plugin's applyHail sends a
+        // ship that can leave off at the payment) turns back to the fight
+        // the bribe had ended: 'depart' is otherwise final
+        // (NpcDecisionSystem decides nothing for a departing ship), and the
+        // briber could shoot a ship that never answers. GUESS: the
+        // reference provoked only an anchored bribed ship (A8, wave 37:
+        // hostile at once); a ship already in its jump stays committed.
+        if (npc.mode === 'depart') {
+            npc.mode = undefined;
+        }
     }
 }
 
