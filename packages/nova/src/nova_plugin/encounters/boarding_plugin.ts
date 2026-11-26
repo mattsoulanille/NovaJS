@@ -21,7 +21,8 @@ import {
     boardCaptureOdds, capturable, CaptureBayCandidate, chooseCaptureBay,
     clearPlunderRecord, creditBooty, fuelTransferAmount, matchBoardedVelocity,
     planAmmoPlunder, planCargoPlunder, PlunderItem, plunderSpent,
-    plunderTripsSelfDestruct,
+    plunderTripsSelfDestruct, boarderMarines, boarderEffectiveCrew,
+    captureTripsSelfDestruct,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
 import { GateDepartureSystem, LandEvent } from '../travel/index.js';
@@ -759,6 +760,12 @@ const BoardingGateSystem = new System({
         // Made only here, as a plunder session opens — the refusals, the
         // bay capture and the own-escort repair above draw nothing.
         const moneyRoll = random.next();
+        // The boarder's marines (oütf ModType 25, reference "Capture, wave
+        // 33", finding 4): positive ModVals join its crew in the ratio,
+        // negative ones add points to the drawn odds. Static game data
+        // over the synced outfit list: no draw.
+        const marines = boarderMarines(boarderOutfits,
+            id => gameData.data.Outfit.getCached(id)?.marines);
         entity.components.set(BoardingComponent, {
             target: targetUuid!,
             creditsAvailable: creditBooty(targetShipData!.price, moneyRoll),
@@ -767,9 +774,11 @@ const BoardingGateSystem = new System({
             // 31": drawn per board), frozen so the dialog's figure and
             // the capture roll are one number. Computed for every board,
             // capturable or not; the dialog and the roll gate on that.
-            captureOdds: boardCaptureOdds(shipData.crew,
+            captureOdds: boardCaptureOdds(
+                boarderEffectiveCrew(shipData.crew, marines),
                 targetShipData!.crew,
-                captureOddsDraw(uuid, targetUuid!, moneyRoll)),
+                captureOddsDraw(uuid, targetUuid!, moneyRoll),
+                marines.oddsPoints),
             cargoTaken: priorBoarded?.cargoTaken ?? false,
             creditsTaken: priorBoarded?.creditsTaken ?? false,
             fuelTaken: priorBoarded?.fuelTaken ?? false,
@@ -1406,8 +1415,9 @@ const BoardingActionSystem = new System({
         // tripped Cargo take still filled the hold), so a trip only ends
         // the session and destroys the hulk.
         const tripped = (item: PlunderItem): boolean => {
-            if (!tripPlunderSelfDestruct(item, target, boarding.target,
-                random, time, emit)) {
+            if (!tripPlunderSelfDestruct(
+                roll => plunderTripsSelfDestruct(item, roll), target,
+                boarding.target, random, time, emit)) {
                 return false;
             }
             endBoardingSession(entity, target);
@@ -1537,16 +1547,29 @@ const BoardingActionSystem = new System({
             && boarding.capture === 'none'
             && capturable(target, boardingGovtLookup(govts, gameData))
             && cappedEscortCount(uuid, { world: entities }) < MAX_ESCORTS) {
+            // THE CAPTURE SELF-DESTRUCT (reference "Capture, wave 33",
+            // finding 5: 2 of 27 clicks answered "Oops! ..." with no
+            // outcome, the hulk destroyed): its own seeded draw, made
+            // BEFORE the capture roll (GUESS), with the plunder trip's
+            // exemptions (tripPlunderSelfDestruct). A trip spends the
+            // attempt, charges the piracy and ends the session as a
+            // plunder trip does; nothing is captured.
+            chargeCrime();
+            if (tripPlunderSelfDestruct(captureTripsSelfDestruct, target,
+                boarding.target, random, time, emit)) {
+                boarding.capture = 'failed';
+                endBoardingSession(entity, target);
+                emit(PlunderSelfDestructEvent, {}, [uuid]);
+                return;
+            }
             // The odds the dialog showed, drawn as the session opened
-            // (boardCaptureOdds; 0 for a crewless boarder — Bible: a
-            // 0-crew boarder can't capture). Marines (ModType 25) would
-            // add to the boarder's effective crew there — a documented
-            // seam (unparsed), so the raw shïp Crew is used.
+            // (boardCaptureOdds over the boarder's effective crew, its
+            // marines counted; 0 for a crewless boarder — Bible: a 0-crew
+            // boarder can't capture).
+            // (Piracy was charged for the attempt above, whatever the
+            // outcome, before the session can end under us.)
             const won = random.next() < boarding.captureOdds / 100;
             boarding.capture = won ? 'succeeded' : 'failed';
-            // Piracy is charged for the attempt either way, before the
-            // session can end under us.
-            chargeCrime();
             if (!won) {
                 // REPELLED. The boarders are thrown off the hulk: the
                 // dialog closes on the spot and nothing further can be
@@ -1624,15 +1647,20 @@ export function captureOddsDraw(boarderUuid: string, victimUuid: string,
  * per-action flags guard replays), one per take whatever the item, and
  * the exemptions read synced components, so every peer draws the same
  * count.
+ *
+ * A CAPTURE ATTEMPT draws here too (reference "Capture, wave 33", finding
+ * 5; captureTripsSelfDestruct), before its capture roll, with the same
+ * exemptions and the same destruction. `trips` maps the one draw to the
+ * verdict at the caller's odds.
  */
-function tripPlunderSelfDestruct(item: PlunderItem, hulk: Entity,
-    hulkUuid: string, random: { next(): number }, time: Time,
+function tripPlunderSelfDestruct(trips: (roll: number) => boolean,
+    hulk: Entity, hulkUuid: string, random: { next(): number }, time: Time,
     emit: EmitFunction): boolean {
     if (hulk.components.has(ControlledByComponent)
         || hulk.components.has(MissionShipComponent)) {
         return false;
     }
-    if (!plunderTripsSelfDestruct(item, random.next())) {
+    if (!trips(random.next())) {
         return false;
     }
     const attribution = hulk.components.get(DamageAttributionComponent);

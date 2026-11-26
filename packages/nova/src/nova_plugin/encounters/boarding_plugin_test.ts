@@ -35,6 +35,7 @@ import {
     boardCaptureOdds, BoardedComponent, BoardingComponent, captureChance,
     creditBooty, ExplodingComponent,
     PLUNDER_SELF_DESTRUCT_CHANCE, plunderTripsSelfDestruct,
+    CAPTURE_SELF_DESTRUCT_CHANCE,
 } from '../ship/index.js';
 import { InitiateJumpEvent } from '../travel/index.js';
 import { LandEvent } from '../travel/index.js';
@@ -83,8 +84,11 @@ const SECOND_BOARDER = 'boarder2';
 const TARGET = 'target';
 
 /**
- * Pins the seeded capture roll: `next()` returns 0, which always lands
- * inside the chance (a SUCCESS), or 0.999, which never does (REPELLED).
+ * Pins the seeded capture roll: `next()` returns CAPTURE_SELF_DESTRUCT_
+ * CHANCE (0.1), which never trips the capture self-destruct drawn first
+ * and lands inside any chance above 10% (a SUCCESS; every success here is
+ * at 75%), or 0.999, which does neither (REPELLED). Every plunder take
+ * still trips at 0.1, as it did at 0.
  *
  * Needed because the player now gets exactly ONE capture attempt per
  * session (Matthew's ruling), so the old "press until it lands" loops
@@ -93,7 +97,7 @@ const TARGET = 'target';
  */
 function forceCaptureRoll(world: World, succeed: boolean) {
     const random = new Random();
-    random.next = () => (succeed ? 0 : 0.999);
+    random.next = () => (succeed ? CAPTURE_SELF_DESTRUCT_CHANCE : 0.999);
     world.resources.set(RandomResource, random);
 }
 
@@ -1771,6 +1775,68 @@ describe('boarding in a live world', () => {
                 }
                 expect(captureChance(10, 1)).toEqual(0.75);
             });
+
+            /**
+             * Marines (oütf ModType 25, reference "Capture, wave 33",
+             * finding 4): Kit Marines 10 put crew 10 v 10 into ratio 2's
+             * band; Kit Marines 20 Pct added about 20 points.
+             */
+            it('counts the boarder\'s marines: positive ModVal as crew, '
+                + 'negative as points', async () => {
+                    const MARINES = 'test:marines10';
+                    const PERCENT = 'test:marines20pct';
+                    for (const [outfit, expected] of [
+                        [undefined, (draw: number) =>
+                            boardCaptureOdds(10, 10, draw)],
+                        [MARINES, (draw: number) =>
+                            boardCaptureOdds(20, 10, draw)],
+                        [PERCENT, (draw: number) =>
+                            boardCaptureOdds(10, 10, draw, 20)],
+                    ] as const) {
+                        const { world, boarder, gameData } =
+                            await boardingWorld({
+                                boarderCrew: 10, targetCrew: 10,
+                            });
+                        // Two kit outfits the synthetic data lacks, served
+                        // beside the real ones for this spec only.
+                        const outfitData = gameData.data.Outfit;
+                        if (!jasmine.isSpy(outfitData.getCached)) {
+                            const real = outfitData.getCached
+                                .bind(outfitData);
+                            spyOn(outfitData, 'getCached')
+                                .and.callFake((id: string) =>
+                                    id === MARINES ? {
+                                        ...getDefaultOutfitData(), id,
+                                        marines: 10,
+                                    } : id === PERCENT ? {
+                                        ...getDefaultOutfitData(), id,
+                                        marines: -20,
+                                    } : real(id));
+                        }
+                        if (outfit) {
+                            const outfits = new Map(boarder.components
+                                .get(OutfitsStateComponent) ?? []);
+                            outfits.set(outfit, { count: 1 });
+                            boarder.components.set(OutfitsStateComponent,
+                                outfits);
+                        }
+                        pin(world, 0.4);
+                        press(world, BOARDER, 'board');
+                        const odds = boarder.components
+                            .get(BoardingComponent)!.captureOdds;
+                        expect(odds).withContext(String(outfit)).toEqual(
+                            expected(captureOddsDraw(BOARDER, TARGET, 0.4)));
+                        if (outfit === MARINES) {
+                            // Ratio 2's band (32% +-5).
+                            expect(odds).toBeGreaterThanOrEqual(27);
+                            expect(odds).toBeLessThanOrEqual(37);
+                        } else if (outfit === PERCENT) {
+                            // Ratio 1's 20% +-5, plus 20.
+                            expect(odds).toBeGreaterThanOrEqual(35);
+                            expect(odds).toBeLessThanOrEqual(45);
+                        }
+                    }
+                });
         });
 
     /**
@@ -1966,16 +2032,54 @@ describe('boarding in a live world', () => {
                         .toBeTrue();
                 });
 
-            it('the capture attempt draws its own roll only, never the '
-                + 'self-destruct', async () => {
+            it('a capture attempt can trip it too, drawn BEFORE the capture '
+                + 'roll (reference "Capture, wave 33", finding 5: 2 in 27 '
+                + 'clicks)', async () => {
+                    expect(CAPTURE_SELF_DESTRUCT_CHANCE).toBe(0.1);
                     const { world, boarder, target, lines } = await boarded();
+                    const counter = pinDraws(world, 0.05);
+                    press(world, BOARDER, 'plunderCapture');
+                    // One draw: the trip; no capture roll after it.
+                    expect(counter.draws).toBe(1);
+                    expect(lines).toEqual([[BOARDER]]);
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeTrue();
+                    // Nothing captured: the session is over, the hulk
+                    // never joins the boarder.
+                    expect(boarder.components.has(BoardingComponent))
+                        .toBeFalse();
+                    expect(target.components.get(FormationComponent)?.leader)
+                        .toBeUndefined();
+                    // Not the boarder's kill (as a plunder trip).
+                    expect(boarder.components.get(CombatRatingComponent)!
+                        .kills).toBe(0);
+                });
+
+            it('an attempt that does not trip draws twice: the trip, then '
+                + 'the capture roll', async () => {
+                    const { world, boarder, target, lines } = await boarded();
+                    const counter = pinDraws(world,
+                        CAPTURE_SELF_DESTRUCT_CHANCE);
+                    press(world, BOARDER, 'plunderCapture');
+                    expect(counter.draws).toBe(2);
+                    expect(boarder.components.get(BoardingComponent)?.capture)
+                        .toEqual('succeeded');
+                    expect(target.components.has(ExplodingComponent))
+                        .toBeFalse();
+                    expect(lines).toEqual([]);
+                });
+
+            it('a capture attempt on an exempt hulk draws only its roll',
+                async () => {
+                    const { world, boarder, lines } = await boarded();
+                    const target = world.entities.get(TARGET)!;
+                    target.components.set(MissionShipComponent,
+                        { mission: 'nova:9999', owner: BOARDER });
                     const counter = pinDraws(world, 0);
                     press(world, BOARDER, 'plunderCapture');
                     expect(counter.draws).toBe(1);
                     expect(boarder.components.get(BoardingComponent)?.capture)
                         .toEqual('succeeded');
-                    expect(target.components.has(ExplodingComponent))
-                        .toBeFalse();
                     expect(lines).toEqual([]);
                 });
 

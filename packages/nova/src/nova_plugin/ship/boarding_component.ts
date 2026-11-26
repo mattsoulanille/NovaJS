@@ -47,9 +47,9 @@ import { ControlledByComponent } from '../player/index.js';
  *    Max when MaxAmmo is 0). Deterministic: victim outfit ids visited in
  *    sorted order, capacity shared across outfits feeding one weapon.
  *  - Capture odds follow the original's measured odds against the crew
- *    ratio (captureChance) with no marines term, because ModType 25 is
- *    not parsed yet. The marines additive is a documented seam in
- *    captureChance's caller.
+ *    ratio (captureChance), the boarder's crew counting its marines
+ *    (ModType 25, boarderMarines: positive ModVals add crew, negative
+ *    ones add percentage points; reference "Capture, wave 33").
  *
  * MATCHES THE ORIGINAL (ruling #378, Matthew 2026-11-23: "match the
  * original fully ... It's supposed to be difficult to do while in
@@ -671,17 +671,23 @@ export function capturable(target: Entity,
 /**
  * ============================================================================
  * Capture odds (fitted to the original, ruling #378; reference "U9 wave 8",
- * "Capture odds, wave 31" and "Capture odds at crew ratio 1 and above,
- * wave 32")
+ * "Capture odds, wave 31", "Capture odds at crew ratio 1 and above, wave
+ * 32" and "Capture, wave 33")
  * ============================================================================
  *
  * The odds the original shows against a hulk the player disabled, keyed by
  * the crew RATIO boarder / defender (wave 32, finding 2: the ratio is what
  * counts, 20 v 20 read as 10 v 10 and 20 v 10 as 10 v 5):
  *
- *     ratio   10    5      2      1      0.67   0.5    0.25   0.2
- *     odds    75%   59.8%  31.7%  19.4%  18%    16.2%  10%    12.0%
- *     used    75%   60%    32%    20%    18%    16.5%  12%    12%
+ *     ratio   10    7     5      3      2      1      0.67   0.5    0.25   0.2
+ *     odds    75%   75%   59.8%  42.4%  31.7%  19.4%  18%    16.2%  10%    12.0%
+ *     used    75%   75%   60%    (41%)  32%    20%    18%    16.5%  12%    12%
+ *
+ * RATIO 7 ALREADY READS THE CAP (wave 33, finding 2: crew 70 v 10, 75% on
+ * all five boards), so the table reaches CAPTURE_CHANCE_MAX there, not at
+ * 10; between 5 and 7 nothing was read (GUESS: linear from 5's 60%).
+ * Ratio 3 (wave 33, finding 3: 38-45%, mean 42.4 over five boards) sits on
+ * the straight line from 2 to 5 (41%), so it needs no point of its own.
  *
  * 0.67 is wave 8's single reading; the rest are MEANS over the boards of
  * waves 8 and 30-32: 10 (75% on every board, waves 8 and 32; 500 against 1
@@ -693,7 +699,7 @@ export function capturable(target: Entity,
  * boards). No simple formula fits (a crew share would give 83 / 67 / 50 /
  * 40 / 33 / 20%), so captureChance interpolates the table linearly in the
  * ratio: from 0 at ratio 0 (floored at CAPTURE_CHANCE_MIN) up to the cap
- * at ratio 10 (between 5 and 10 nothing was measured).
+ * at ratio 7.
  *
  * THE 0.25 POINT IS HELD AT 0.2's 12%, not its own 10% mean: three boards
  * (7, 11, 12) are too few to say the odds DIP as the boarders gain on the
@@ -727,15 +733,15 @@ export const CAPTURE_ODDS_BY_CREW_RATIO:
         [1, 0.20],
         [2, 0.32],
         [5, 0.60],
+        [7, CAPTURE_CHANCE_MAX],
         [10, CAPTURE_CHANCE_MAX],
     ];
 
 /**
  * The MEAN capture probability from crew counts (Bible: odds relate to crew,
- * and marines add to the boarder's effective crew — that additive is a
- * documented seam: ModType 25 is unparsed, so `attackerCrew` is the raw
- * shïp Crew today). See CAPTURE_ODDS_BY_CREW_RATIO; a board's own odds are
- * boardCaptureOdds.
+ * and marines add to the boarder's effective crew: `attackerCrew` is the
+ * EFFECTIVE crew, shïp Crew plus the positive marines, boarderMarines).
+ * See CAPTURE_ODDS_BY_CREW_RATIO; a board's own odds are boardCaptureOdds.
  */
 export function captureChance(attackerCrew: number,
     defenderCrew: number): number {
@@ -783,9 +789,14 @@ export const CAPTURE_ODDS_SPREAD_POINTS = 5;
  * boarder, the victim and the board's own seeded draw: boarding_plugin.ts),
  * so every peer and the display read the same number. 0 for a crewless
  * boarder, like captureChance.
+ *
+ * `bonusPoints`: the boarder's percent marines (boarderMarines), added
+ * after the draw and capped at CAPTURE_CHANCE_MAX (reference "Capture,
+ * wave 33", finding 4: ModVal -20 read 35, 35, 45 at ratio 1, whose own
+ * boards read 15-25; GUESS: the cap holds over the bonus, unmeasured).
  */
 export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
-    draw: number): number {
+    draw: number, bonusPoints = 0): number {
     const mean = Math.round(captureChance(attackerCrew, defenderCrew) * 100);
     if (mean <= 0) {
         return 0;
@@ -794,7 +805,95 @@ export function boardCaptureOdds(attackerCrew: number, defenderCrew: number,
     const cap = Math.round(CAPTURE_CHANCE_MAX * 100);
     const w = Math.max(0, Math.min(CAPTURE_ODDS_SPREAD_POINTS,
         mean - floor, cap - mean));
-    return mean - w + ((draw >>> 0) % (2 * w + 1));
+    const odds = mean - w + ((draw >>> 0) % (2 * w + 1));
+    return Math.min(cap, odds + Math.max(0, Math.floor(bonusPoints) || 0));
+}
+
+/**
+ * ============================================================================
+ * Marines (oütf ModType 25; reference "Capture, wave 33", finding 4)
+ * ============================================================================
+ *
+ * The Bible: "Adds the value in ModVal to your ship's effective crew
+ * complement when calculating capture odds. 1 and up: add this number to
+ * the player's ship's effective crew size. -1 to -100: increase the
+ * player's capture odds by this amount (e.g. -5 is an increase of 5%)".
+ *
+ * MEASURED, one outfit of each kind on a crew-10 boarder against a crew-10
+ * hulk: ModVal 10 read 34, 32, 25 (ratio 2's band, 29-34, not ratio 1's
+ * 15-25: ten more crew, 20 v 10); ModVal -20 read 35, 35, 45 (ratio 1's
+ * mean plus about 20 points). So:
+ *
+ *  - `crew`: every positive ModVal adds that many crew to the boarder's
+ *    side of the ratio (captureChance);
+ *  - `oddsPoints`: every negative one adds its magnitude, in percentage
+ *    points, to the board's drawn odds (boardCaptureOdds), under the cap.
+ *
+ * GUESSES: several units (or several marine outfits) add up, count times
+ * ModVal; a percent ModVal below -100 counts as 100; marines give a
+ * CREWLESS boarder nothing (the Bible's "0 crew ... can't capture" holds:
+ * see boarderEffectiveCrew); only one unit of each kind was measured, at
+ * ratio 1 only.
+ */
+export interface BoarderMarines {
+    /** Crew the positive ModVals add. */
+    crew: number;
+    /** Percentage points the negative ModVals add to the odds. */
+    oddsPoints: number;
+}
+
+/**
+ * Sums a boarder's marines from its outfits (`outfits`: id -> count, as
+ * OutfitsState; `marinesOf`: the outfit's parsed ModType 25 value, 0 for
+ * none). Order-free sums of integers, so every peer agrees.
+ */
+export function boarderMarines(
+    outfits: Iterable<readonly [string, { count: number }]> | undefined,
+    marinesOf: (outfitId: string) => number | undefined): BoarderMarines {
+    let crew = 0;
+    let oddsPoints = 0;
+    for (const [id, state] of outfits ?? []) {
+        const count = Math.max(0, Math.floor(state.count) || 0);
+        const value = Math.trunc(marinesOf(id) ?? 0) || 0;
+        if (count <= 0 || value === 0) {
+            continue;
+        }
+        if (value > 0) {
+            crew += value * count;
+        } else {
+            oddsPoints += Math.min(100, -value) * count;
+        }
+    }
+    return { crew, oddsPoints };
+}
+
+/** The boarder's EFFECTIVE crew for the capture ratio: shïp Crew plus its
+ * positive marines; a crewless boarder stays crewless (it cannot capture,
+ * GUESS that marines do not change that). */
+export function boarderEffectiveCrew(shipCrew: number,
+    marines: BoarderMarines): number {
+    return shipCrew > 0 ? shipCrew + marines.crew : 0;
+}
+
+/**
+ * ============================================================================
+ * The capture self-destruct (reference "Capture, wave 33", finding 5)
+ * ============================================================================
+ *
+ * A Capture Ship click can be answered "Oops! You tripped this ship's
+ * security self-destruct mechanism." (STR# 2002 #112) instead of an
+ * outcome: no capture, the hulk destroyed, as a plunder take's trip
+ * (PLUNDER_SELF_DESTRUCT_CHANCE). MEASURED: 2 of 27 clicks (one at 75%,
+ * one at 32%). GUESSES: a separate draw made BEFORE the capture roll (a
+ * trip leaves no outcome to read), its rate 0.1 (2 in 27 is 0.07, Wilson
+ * 95% about 0.02-0.23), the same at every odds.
+ */
+export const CAPTURE_SELF_DESTRUCT_CHANCE = 0.1;
+
+/** Whether a capture attempt trips the hulk's self-destruct, given ONE
+ * uniform draw `roll` in [0, 1) from the seeded RandomResource. */
+export function captureTripsSelfDestruct(roll: number): boolean {
+    return roll < CAPTURE_SELF_DESTRUCT_CHANCE;
 }
 
 /**

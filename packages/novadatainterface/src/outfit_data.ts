@@ -319,8 +319,9 @@ export interface OutfitData extends BaseData {
     /**
      * Marines added to the ship's effective crew for capture odds (ModType 25).
      * Positive adds crew; -1..-100 is a direct capture-odds bonus percent. 0
-     * for non-marine outfits. Boarding/capture does not exist in the sim yet,
-     * so this is plumbed but unconsumed.
+     * for non-marine outfits. Consumed by nova's capture odds
+     * (ship/boarding_component.ts boarderMarines, reference "Capture, wave
+     * 33").
      */
     marines: number,
     /**

@@ -19,6 +19,8 @@ import {
     captureChance,
     CAPTURE_CHANCE_MAX, CAPTURE_CHANCE_MIN, CAPTURE_ODDS_BY_CREW_RATIO,
     CAPTURE_ODDS_SPREAD_POINTS,
+    boarderMarines, boarderEffectiveCrew, CAPTURE_SELF_DESTRUCT_CHANCE,
+    captureTripsSelfDestruct,
     creditBooty,
     creditBootyBase,
     creditBootyRandomSteps,
@@ -481,6 +483,91 @@ describe('boardCaptureOdds (drawn per board, reference "Capture odds, '
             expect(odds).toBeLessThanOrEqual(17);
         }
     });
+
+    it('adds percent marines after the draw, under the cap', () => {
+        for (let draw = 0; draw < 11; draw++) {
+            expect(boardCaptureOdds(10, 10, draw, 20))
+                .toEqual(boardCaptureOdds(10, 10, draw) + 20);
+            expect(boardCaptureOdds(50, 10, draw, 20)).toEqual(75);
+            expect(boardCaptureOdds(10, 10, draw, -5))
+                .toEqual(boardCaptureOdds(10, 10, draw));
+        }
+        // A crewless boarder still cannot capture.
+        expect(boardCaptureOdds(0, 10, 3, 50)).toEqual(0);
+    });
+});
+
+describe('capture, wave 33 (reference "Capture, wave 33")', () => {
+    const shown = (attacker: number, defender: number) =>
+        Math.round(captureChance(attacker, defender) * 100);
+
+    it('reaches the 75% cap by ratio 7 (crew 70 v 10: 75 on all five '
+        + 'boards)', () => {
+            expect(CAPTURE_ODDS_BY_CREW_RATIO).toContain([7, 0.75]);
+            expect(captureChance(70, 10)).toEqual(CAPTURE_CHANCE_MAX);
+            for (let draw = 0; draw < 11; draw++) {
+                expect(boardCaptureOdds(70, 10, draw)).toEqual(75);
+            }
+            // Between 5 and 7: linear from 60% (GUESS).
+            expect(shown(60, 10)).toEqual(68);
+        });
+
+    it('reads ratio 3 on the 2-5 line (38-45%, mean 42.4)', () => {
+        expect(shown(30, 10)).toEqual(41);
+        for (const board of [42, 42, 38, 45, 45]) {
+            expect(Math.abs(board - shown(30, 10)))
+                .toBeLessThanOrEqual(CAPTURE_ODDS_SPREAD_POINTS);
+        }
+    });
+
+    describe('marines (oütf ModType 25)', () => {
+        const values: Record<string, number> = {
+            marines10: 10, marines20pct: -20, plain: 0, huge: -500,
+        };
+        const of = (id: string) => values[id];
+
+        it('a positive ModVal adds crew, a negative one points', () => {
+            expect(boarderMarines(new Map([['marines10', { count: 1 }]]),
+                of)).toEqual({ crew: 10, oddsPoints: 0 });
+            expect(boarderMarines(new Map([['marines20pct', { count: 1 }]]),
+                of)).toEqual({ crew: 0, oddsPoints: 20 });
+            expect(boarderMarines(new Map([['plain', { count: 3 }],
+                ['unknown', { count: 1 }]]), of))
+                .toEqual({ crew: 0, oddsPoints: 0 });
+            expect(boarderMarines(undefined, of))
+                .toEqual({ crew: 0, oddsPoints: 0 });
+        });
+
+        it('sums units and outfits (GUESS), a percent at most 100 a unit',
+            () => {
+                expect(boarderMarines(new Map([
+                    ['marines10', { count: 3 }],
+                    ['marines20pct', { count: 2 }],
+                    ['huge', { count: 1 }],
+                ]), of)).toEqual({ crew: 30, oddsPoints: 140 });
+            });
+
+        it('Kit Marines 10 puts crew 10 v 10 into ratio 2\'s band (34, 32, '
+            + '25)', () => {
+                const crew = boarderEffectiveCrew(10,
+                    { crew: 10, oddsPoints: 0 });
+                expect(crew).toEqual(20);
+                expect(shown(crew, 10)).toEqual(32);
+            });
+
+        it('gives a crewless boarder no crew (GUESS)', () => {
+            expect(boarderEffectiveCrew(0, { crew: 10, oddsPoints: 0 }))
+                .toEqual(0);
+        });
+    });
+
+    it('a capture click trips the self-destruct about one in ten (2 in 27; '
+        + 'GUESS)', () => {
+            expect(CAPTURE_SELF_DESTRUCT_CHANCE).toEqual(0.1);
+            expect(captureTripsSelfDestruct(0.0999)).toBeTrue();
+            expect(captureTripsSelfDestruct(0.1)).toBeFalse();
+            expect(captureTripsSelfDestruct(0.9)).toBeFalse();
+        });
 });
 
 describe('money booty (the original\'s, ruling #378)', () => {
