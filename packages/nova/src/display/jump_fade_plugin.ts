@@ -8,7 +8,7 @@ import { System } from 'nova_ecs/system';
 import * as PIXI from 'pixi.js';
 import { Subscription } from 'rxjs';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/index.js';
-import { FinishJumpEvent, JumpComponent, JUMP_DEPART_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from '../nova_plugin/travel/index.js';
+import { FinishJumpEvent, JumpComponent, jumpBurnMs, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from '../nova_plugin/travel/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 import { ShipBaseSetAnimationSystem } from "./ship_animation_plugin.js";
@@ -141,7 +141,7 @@ export const JumpFadeSystem = new System({
         let rate: number;
         if (jumpVisualSetting.mode === 'fade') {
             if (jump?.stage === 'accelerating') {
-                rate = 1000 / JUMP_DEPART_DELAY_MS;
+                rate = 1000 / jumpBurnMs(jump);
             } else {
                 // Ships arrive at regular speed with control returned
                 // immediately, so there is no arrival stage to track:

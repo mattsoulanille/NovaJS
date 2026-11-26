@@ -100,6 +100,12 @@ export const JumpStateType = t.intersection([t.type({
      * (spinup, accelerating) began. Cleared at departure: logical time
      * differs between systems. */
     stageStart: t.number,
+    /** Logical time (TimeResource ms) the ship departs at: the fixed
+     * clock (jump_plugin.ts JUMP_CLOCK_MS) started when the ship came to
+     * rest. Set on a player's or a follower's jump, never on a vanishing
+     * NPC departure (its phases are not clocked). Cleared at departure
+     * with stageStart. ADDITIVE (wave 39, U8). */
+    departAt: t.number,
     /**
      * How many further jumps to auto-continue along the route without the
      * player re-pressing the jump key ("multi-jump" outfits, ModType 32). Set

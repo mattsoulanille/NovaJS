@@ -42,19 +42,50 @@ import { JumpComponent, JumpState, JumpStateType } from "./jump_state.js";
 // player's are MEASURED on the original (reference "Jump phases and fuel
 // (U8), wave 38": `j` -> arrival 4.8 s from rest, a turn at the hull's
 // rate, about 0.4 s still, then about 3.5 s of acceleration, departure and
-// arrival on one frame).
+// arrival on one frame; "Jump phases on a slow hull (U8), wave 39": a
+// Turn-10 / Accel-100 hull takes the SAME 4.73 s from rest and 5.5-5.8 s
+// from cruise, turning at its own rate almost to the flash and
+// accelerating only in the last half second).
+//
+// THE FIXED CLOCK (the player's jump, and a follower's). The departure
+// comes JUMP_CLOCK_MS after the ship is at rest (at once for a ship that
+// is already, or that jumps without slowing), whatever its turn rate;
+// a moving ship first brakes, at a rate that stops it from its top speed
+// in JUMP_BRAKE_MS whatever its acceleration. Inside the clock it turns
+// onto the jump heading at its own rate, holds JUMP_SPINUP_DELAY_MS, and
+// burns: from JUMP_DEPART_DELAY_MS before the departure, or later if the
+// turn and the hold run past that, and at the latest JUMP_MIN_BURN_MS
+// before it, turned or not. The departure itself does not wait for the
+// turn (the arrival heading is the arrival rule's anyway). An NPC's
+// departure (`vanish`) keeps its phases: a physical stop, the turn, 1 s
+// still and a 2 s burn (NPC_DEPARTURE_*).
 /** Radius of the no-jump zone around the system center, in pixels. */
 export const JUMP_DISTANCE = 1000;
-/** Delay between finishing the turn toward the destination and the
- * hyperdrive engaging (thrust starting): the ~0.4 s the original's ship
- * sits still, facing the destination (U8 wave 38, u8_a j1: 0.43 s; GUESS
- * for the split, read off one jump, the sum is frame-exact). */
+/** From the ship at rest (or the press, for a ship that need not stop) to
+ * its departure. MEASURED: 4.77-4.87 s from the press for the Kit Jump
+ * Lancer (wave 38), 4.73 s for the slow hull (wave 39). */
+export const JUMP_CLOCK_MS = 4800;
+/** How long a ship at its top speed takes to brake to rest when its jump
+ * starts, whatever its acceleration (the brake rate scales with the top
+ * speed). MEASURED: from cruise the sequence ran about 0.9 s longer than
+ * from rest on both hulls (5.73 against 4.80 s; 5.53 / 5.77 against 4.73
+ * s), the slow hull's own thrust being far too weak to stop it that fast.
+ * GUESS: a forced brake while the ship turns onto the jump heading (the
+ * slow hull's turn steps ran through the brake). */
+export const JUMP_BRAKE_MS = 900;
+/** The least time a ship holds still, facing the destination, before the
+ * hyperdrive engages (thrust starting): the ~0.4 s the original's ship
+ * sat still (U8 wave 38, u8_a j1: 0.43 s; GUESS that it is a minimum). */
 export const JUMP_SPINUP_DELAY_MS = 400;
-/** How long a departing ship accelerates before it vanishes into
- * hyperspace. Acceleration is scaled so the ship reaches its full jump
- * speed exactly at departure. Facing the destination to arrival is
- * 3.7-3.9 s on the original (U8 wave 38), so spin-up + this = 3.8 s. */
+/** The burn's length when the turn leaves room for it: it starts this
+ * long before the departure. Acceleration is scaled so the ship reaches
+ * its full jump speed exactly at departure. MEASURED: about 3.5 s of
+ * acceleration (U8 wave 38: 3.47 s from rest, about 3.6 s from cruise). */
 export const JUMP_DEPART_DELAY_MS = 3400;
+/** The burn starts at the latest this long before the departure, even
+ * for a ship that is still turning (the slow hull accelerated only in the
+ * last half second, U8 wave 39; GUESS for the exact figure). */
+export const JUMP_MIN_BURN_MS = 500;
 /**
  * The pre-wave-38 tuning, kept for an NPC's DEPARTURE (a `vanish` jump,
  * beginDepartureJump): U8 timed only the player's own jumps, so an NPC
@@ -65,13 +96,43 @@ export const JUMP_DEPART_DELAY_MS = 3400;
 export const NPC_DEPARTURE_SPINUP_DELAY_MS = 1000;
 export const NPC_DEPARTURE_DEPART_DELAY_MS = 2000;
 /** The spin-up and burn lengths of THIS jump: the measured player
- * timings, or the pre-wave-38 ones for a vanishing NPC departure. */
+ * minimum hold and nominal burn (the fixed clock, jumpDepartsAt, decides
+ * the real ones), or the pre-wave-38 ones for a vanishing NPC
+ * departure. */
 export function jumpStageDelays(jump: Pick<JumpState, 'vanish'>):
     { spinupMs: number, departMs: number } {
     return jump.vanish
         ? { spinupMs: NPC_DEPARTURE_SPINUP_DELAY_MS,
             departMs: NPC_DEPARTURE_DEPART_DELAY_MS }
         : { spinupMs: JUMP_SPINUP_DELAY_MS, departMs: JUMP_DEPART_DELAY_MS };
+}
+/**
+ * When THIS jump departs (logical ms), from a sequence that has reached
+ * its timed stages: the fixed clock's `departAt` for a player's or a
+ * follower's jump; a vanishing NPC departure's burn start + its 2 s burn.
+ * Undefined before either is known.
+ */
+export function jumpDepartsAt(jump: Pick<JumpState,
+    'vanish' | 'departAt' | 'stage' | 'stageStart'>): number | undefined {
+    if (jump.vanish) {
+        return jump.stage === 'accelerating' && jump.stageStart !== undefined
+            ? jump.stageStart + NPC_DEPARTURE_DEPART_DELAY_MS : undefined;
+    }
+    return jump.departAt;
+}
+/**
+ * How long THIS jump's departure burn lasts, in ms: from the burn's
+ * start (stageStart of 'accelerating') to the departure. The nominal
+ * burn when either end is unknown. Never below one millisecond, so the
+ * burn acceleration (jumpSpeed / burn) stays finite.
+ */
+export function jumpBurnMs(jump: Pick<JumpState,
+    'vanish' | 'departAt' | 'stage' | 'stageStart'>): number {
+    const departs = jumpDepartsAt(jump);
+    if (departs === undefined || jump.stageStart === undefined) {
+        return jumpStageDelays(jump).departMs;
+    }
+    return Math.max(1, departs - jump.stageStart);
 }
 /** The "normal" hyperspace jump speed, scaled per ship by the shïp
  * resource's jump speed flags (75% / 125% / 150%). */
@@ -721,12 +782,37 @@ export const JumpSequenceSystem = new System({
         }
         overrideControls(movement);
         const target = new Angle(jump.direction);
+        // The fixed clock (the module comment) runs every jump but an NPC's
+        // departure.
+        const clocked = !jump.vanish;
 
         switch (jump.stage) {
             case 'stopping': {
                 // Come to a complete stop before turning to the
                 // destination (skipped for ships that can jump without
                 // slowing down).
+                if (clocked) {
+                    // A forced brake that stops the ship from its top
+                    // speed in JUMP_BRAKE_MS, while it turns onto the jump
+                    // heading at its own rate.
+                    movement.turnTo = target;
+                    const top = getShipMovementPhysics(shipPhysics)
+                        .maxVelocity;
+                    const speed = movement.velocity.length;
+                    const brake = top * time.delta_s
+                        / (JUMP_BRAKE_MS / 1000);
+                    if (!(brake > 0) || speed <= brake) {
+                        movement.velocity = new Vector(0, 0);
+                        movement.targetSpeed = 0;
+                        jump.stage = 'aligning';
+                        jump.departAt = time.time + JUMP_CLOCK_MS;
+                        break;
+                    }
+                    movement.velocity =
+                        movement.velocity.scale((speed - brake) / speed);
+                    movement.targetSpeed = speed - brake;
+                    break;
+                }
                 const speed = movement.velocity.length;
                 const stopThreshold =
                     shipPhysics.acceleration * time.delta_s * 2;
@@ -752,12 +838,24 @@ export const JumpSequenceSystem = new System({
             }
             case 'aligning': {
                 movement.turnTo = target;
+                if (clocked && jump.departAt === undefined) {
+                    // A ship that jumps without slowing: the clock starts
+                    // with the sequence.
+                    jump.departAt = time.time + JUMP_CLOCK_MS;
+                }
                 const misalignment =
                     movement.rotation.distanceTo(target).angle;
-                if (Math.abs(misalignment) < ALIGNED_TOLERANCE) {
-                    movement.turnTo = null;
-                    movement.rotation = target;
-                    jump.stage = 'spinup';
+                const aligned = Math.abs(misalignment) < ALIGNED_TOLERANCE;
+                // A slow turner still short of the heading when the burn
+                // is due burns anyway, still turning (U8 wave 39).
+                const burnDue = clocked && jump.departAt !== undefined
+                    && time.time >= jump.departAt - JUMP_MIN_BURN_MS;
+                if (aligned || burnDue) {
+                    if (aligned) {
+                        movement.turnTo = null;
+                        movement.rotation = target;
+                    }
+                    jump.stage = burnDue ? 'accelerating' : 'spinup';
                     jump.stageStart = time.time;
                     // The warp-up sound starts the moment the ship is
                     // ready to jump: stopped (for ships that must
@@ -774,10 +872,19 @@ export const JumpSequenceSystem = new System({
                 break;
             }
             case 'spinup': {
-                // The hyperdrive charges while the ship holds still.
+                // The hyperdrive charges while the ship holds still: at
+                // least the spin-up delay, and on the fixed clock until
+                // the burn's slot (JUMP_DEPART_DELAY_MS before the
+                // departure), but never past its latest start.
                 movement.turnTo = target;
-                if (time.time - (jump.stageStart ?? time.time)
-                    >= jumpStageDelays(jump).spinupMs) {
+                const held = time.time - (jump.stageStart ?? time.time);
+                const departAt = clocked ? jump.departAt : undefined;
+                const burnNow = departAt === undefined
+                    ? held >= jumpStageDelays(jump).spinupMs
+                    : time.time >= departAt - JUMP_MIN_BURN_MS
+                        || (held >= JUMP_SPINUP_DELAY_MS
+                            && time.time >= departAt - JUMP_DEPART_DELAY_MS);
+                if (burnNow) {
                     jump.stage = 'accelerating';
                     jump.stageStart = time.time;
                 }
@@ -790,8 +897,10 @@ export const JumpSequenceSystem = new System({
                 // applied by EffectiveMovementPhysicsSystem (the single
                 // per-tick writer of effective movement physics), which
                 // runs after this system and reads the jump stage.
-                if (time.time - (jump.stageStart ?? time.time)
-                    >= jumpStageDelays(jump).departMs) {
+                const departsAt = jumpDepartsAt(jump)
+                    ?? (jump.stageStart ?? time.time)
+                        + jumpStageDelays(jump).departMs;
+                if (time.time >= departsAt) {
                     const destination = jump.to;
                     if (jump.vanish) {
                         // VANISH TERMINAL (an NPC departure). There is no
@@ -831,6 +940,7 @@ export const JumpSequenceSystem = new System({
                         // this case re-firing every tick.
                         jump.stage = 'arriving';
                         jump.stageStart = undefined;
+                        jump.departAt = undefined;
                         emit(InitiateJumpEvent, { to: destination }, [uuid]);
                         break;
                     }
@@ -854,6 +964,7 @@ export const JumpSequenceSystem = new System({
                     movement.targetSpeed = basePhysics.maxVelocity;
                     jump.stage = 'arriving';
                     jump.stageStart = undefined;
+                    jump.departAt = undefined;
                     // A jump costs FUEL_PER_JUMP (EVN Bible: fuel
                     // "100 = 1 jump"). It is deducted at departure — the
                     // moment the ship actually leaves the system, which

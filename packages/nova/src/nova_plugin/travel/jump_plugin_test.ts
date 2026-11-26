@@ -18,7 +18,8 @@ import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
 import { DisabledComponent } from "../ship/index.js";
 import { Angle } from "nova_ecs/datatypes/angle";
-import { jumpStageDelays, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { jumpStageDelays, JUMP_BRAKE_MS, JUMP_CLOCK_MS, JUMP_MIN_BURN_MS, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { ShipPhysics } from "novadatainterface/ship_data";
 import { PlanetTargetComponent } from "./planet_plugin.js";
 import { ControlledByComponent } from "../player/index.js";
 import { ShipDisabled, ShipDisabledEvent } from "../encounters/index.js";
@@ -46,7 +47,7 @@ async function findLinkedSystems(gameData: GameDataAggregator) {
     throw new Error('Expected a system with hyperspace links');
 }
 
-async function makeJumpHarness() {
+async function makeJumpHarness(physics: Partial<ShipPhysics> = {}) {
     const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
     const { originId, destinationId } = await findLinkedSystems(gameData);
@@ -70,6 +71,12 @@ async function makeJumpHarness() {
     ship.components.set(PlayerShipSelector, undefined);
     ship.components.set(JumpRouteComponent, { route: [destinationId] });
     await completeEntity(world, ship);
+    // A hull variant for the clock specs: ShipPhysicsComponent is derived
+    // once from the cached shïp (ShipPhysicsProvider) and kept until the
+    // ship data or outfits change, so a fresh object here sticks.
+    ship.components.set(ShipPhysicsComponent, {
+        ...ship.components.get(ShipPhysicsComponent)!, ...physics,
+    });
     world.entities.set(SHIP_UUID, ship);
 
     const origin = await gameData.data.System.get(originId);
@@ -154,12 +161,14 @@ describe('jump sequence', () => {
         stepUntil(world, () => jump.stage !== 'aligning');
         expect(jump.stage).toEqual('spinup');
         expect(movement.rotation.angle).toBeCloseTo(expectedDirection, 6);
-        // The ship holds still while the hyperdrive spins up.
+        // The ship holds still while the hyperdrive spins up: at least
+        // the spin-up delay, then until the burn's slot on the fixed
+        // clock (JUMP_DEPART_DELAY_MS before the departure).
         const spinupTicks = stepUntil(world, () => jump.stage !== 'spinup');
         expect(spinupTicks).toBeGreaterThanOrEqual(
             ticksFor(JUMP_SPINUP_DELAY_MS) - 1);
-        expect(spinupTicks).toBeLessThanOrEqual(
-            ticksFor(JUMP_SPINUP_DELAY_MS) + 1);
+        expect(jump.departAt! - jump.stageStart!)
+            .toBeLessThanOrEqual(JUMP_DEPART_DELAY_MS);
         expect(movement.velocity.length).toEqual(0);
 
         expect(jump.stage).toEqual('accelerating');
@@ -991,30 +1000,105 @@ describe('a route hop naming the system the ship is already in', () => {
  * collapses the jump with its own line, and nothing else the player does
  * stops it.
  */
-describe('jump phases (U8, wave 38)', () => {
-    async function restingFacingDestination() {
-        const harness = await makeJumpHarness();
+describe('jump phases (U8, waves 38-39)', () => {
+    async function restingFacingDestination(
+        physics: Partial<ShipPhysics> = {}, offHeading = 0) {
+        const harness = await makeJumpHarness(physics);
         const movement = harness.ship.components.get(MovementStateComponent)!;
         movement.position = new Position(0, -(JUMP_DISTANCE * 2));
         movement.velocity = new Vector(0, 0);
-        movement.rotation = new Angle(harness.expectedDirection);
+        movement.rotation =
+            new Angle(harness.expectedDirection + offHeading);
         harness.world.step();
         return harness;
     }
 
-    it('departs 3.8 s after the press for a ship already at rest and '
-        + 'facing the destination: 0.4 s still, a 3.4 s burn', async () => {
-        expect(JUMP_SPINUP_DELAY_MS).toBe(400);
-        expect(JUMP_DEPART_DELAY_MS).toBe(3400);
-        const { world } = await restingFacingDestination();
+    /** Ticks from the press to the departure (FinishJumpEvent), and the
+     * stages seen on the way, in order. */
+    function timeJump(world: World, ship: Entity) {
         let finished = false;
         world.events.get(FinishJumpEvent).subscribe(() => { finished = true; });
         pressHyperjump(world);
-        const ticks = stepUntil(world, () => finished) + 1;
-        const expected = ticksFor(JUMP_SPINUP_DELAY_MS + JUMP_DEPART_DELAY_MS);
+        const stages: string[] = [];
+        let burnTicks = 0;
+        const ticks = stepUntil(world, () => {
+            const stage = ship.components.get(JumpComponent)?.stage;
+            if (stage && stages[stages.length - 1] !== stage) {
+                stages.push(stage);
+            }
+            if (stage === 'accelerating') {
+                burnTicks++;
+            }
+            return finished;
+        }) + 1;
+        return { ticks, stages, burnTicks };
+    }
+
+    it('pins the measured clock: 4.8 s from rest, a 0.9 s brake from top '
+        + 'speed, 0.4 s still at least, a 3.4 s burn, half a second at '
+        + 'the latest', () => {
+            expect(JUMP_CLOCK_MS).toBe(4800);
+            expect(JUMP_BRAKE_MS).toBe(900);
+            expect(JUMP_SPINUP_DELAY_MS).toBe(400);
+            expect(JUMP_DEPART_DELAY_MS).toBe(3400);
+            expect(JUMP_MIN_BURN_MS).toBe(500);
+        });
+
+    it('departs 4.8 s after the press for a ship already at rest and '
+        + 'facing the destination: still, then a 3.4 s burn', async () => {
+        const { world, ship } = await restingFacingDestination();
+        const { ticks, stages, burnTicks } = timeJump(world, ship);
+        const expected = ticksFor(JUMP_CLOCK_MS);
         expect(ticks).toBeGreaterThanOrEqual(expected - 2);
-        expect(ticks).toBeLessThanOrEqual(expected + 4);
+        expect(ticks).toBeLessThanOrEqual(expected + 3);
+        expect(stages).toEqual(
+            ['aligning', 'spinup', 'accelerating', 'arriving']);
+        expect(Math.abs(burnTicks - ticksFor(JUMP_DEPART_DELAY_MS)))
+            .toBeLessThanOrEqual(2);
     }, 30_000);
+
+    it('a slow-turning hull departs on the SAME clock, burning only at the '
+        + 'end while still turning (reference "Jump phases on a slow hull '
+        + '(U8), wave 39")', async () => {
+            // Turned right round, with a turn rate that cannot finish the
+            // half turn inside the clock (about 29 deg/s, the Kit Jump
+            // Slow's Turn 10).
+            const slow = await restingFacingDestination(
+                { turnRate: 0.5, acceleration: 1 }, Math.PI);
+            const fast = await restingFacingDestination({}, Math.PI);
+            const slowRun = timeJump(slow.world, slow.ship);
+            const fastRun = timeJump(fast.world, fast.ship);
+            expect(Math.abs(slowRun.ticks - fastRun.ticks))
+                .toBeLessThanOrEqual(1);
+            expect(Math.abs(slowRun.ticks - ticksFor(JUMP_CLOCK_MS)))
+                .toBeLessThanOrEqual(3);
+            // Never aligned: straight from the turn into the burn, the
+            // last half second.
+            expect(slowRun.stages)
+                .toEqual(['aligning', 'accelerating', 'arriving']);
+            expect(Math.abs(slowRun.burnTicks - ticksFor(JUMP_MIN_BURN_MS)))
+                .toBeLessThanOrEqual(2);
+        }, 30_000);
+
+    it('from top speed: the same clock after a 0.9 s brake, however weak '
+        + 'the hull\'s own thrust', async () => {
+            for (const acceleration of [1, 2000]) {
+                const { world, ship, expectedDirection } =
+                    await restingFacingDestination({ acceleration });
+                const physics = ship.components.get(ShipPhysicsComponent)!;
+                const movement = ship.components.get(MovementStateComponent)!;
+                // Cruising straight away from the destination.
+                movement.velocity = new Angle(expectedDirection + Math.PI)
+                    .getUnitVector().scale(physics.speed);
+                const { ticks, stages } = timeJump(world, ship);
+                expect(stages[0]).toBe('stopping');
+                const expected = ticksFor(JUMP_BRAKE_MS + JUMP_CLOCK_MS);
+                expect(ticks).withContext(`acceleration ${acceleration}`)
+                    .toBeGreaterThanOrEqual(expected - 3);
+                expect(ticks).withContext(`acceleration ${acceleration}`)
+                    .toBeLessThanOrEqual(expected + 3);
+            }
+        }, 30_000);
 
     it('arrives one second of top speed outside the no-jump radius',
         async () => {

@@ -9,7 +9,7 @@ import {
     IonizationComponent, IonizationRechargeSystem, ionSlowdown,
     IsIonizedComponent,
 } from '../ship/index.js';
-import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, jumpStageDelays } from './jump_plugin.js';
+import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, jumpBurnMs } from './jump_plugin.js';
 import { ShipControlStateComponent, StrictPlayComponent } from '../player/index.js';
 import { ControlShipSystem } from './ship_controller_plugin.js';
 import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
@@ -151,7 +151,7 @@ export const EffectiveMovementPhysicsSystem = new System({
             const jumpSpeed = JUMP_BASE_SPEED * shipPhysics.jumpSpeedMult;
             movementPhysics.maxVelocity = jumpSpeed;
             movementPhysics.acceleration =
-                jumpSpeed / (jumpStageDelays(jump).departMs / 1000);
+                jumpSpeed / (jumpBurnMs(jump) / 1000);
         }
     },
     // Overrides the acceleration ControlShipSystem chose (and the jump
