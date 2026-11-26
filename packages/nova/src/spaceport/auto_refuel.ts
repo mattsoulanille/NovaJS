@@ -16,9 +16,12 @@ import { OutfitsStateComponent, ShipPhysicsComponent } from '../nova_plugin/ship
  * (NovaJS used to regenerate 2.5 units a second in flight: a tuned guess,
  * not a deliberate departure.)
  *
- * GUESS (unmeasured): when the credits fall short of the fill nothing is
- * bought, and the Refuel button stays as it would without the outfit
- * (greyed). Only the landing fills; an Auto-recharger bought while docked
+ * MEASURED (reference "The Auto-recharger short of credits (E7 leftover),
+ * wave 40"): when the credits fall short of the fill it buys a PARTIAL
+ * tank, as many units as they pay for (100 credits: 100 units, 0 credits
+ * left; spaceport.ts autoRefuelPurchase). GUESS (unread): the Refuel
+ * button then stays for the rest, greyed as it would be without the
+ * outfit. Only the landing fills; an Auto-recharger bought while docked
  * takes effect at the next landing.
  */
 

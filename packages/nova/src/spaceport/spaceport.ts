@@ -88,6 +88,31 @@ export function refuelCost(fuel: { current: number, max: number }): number {
         (fuel.max - fuel.current) / FUEL_PER_JUMP * REFUEL_COST_PER_JUMP);
 }
 
+/**
+ * The auto-refueller's purchase at touch-down: the full fill when the
+ * credits pay for it, otherwise as many WHOLE units as they do (reference
+ * "The Auto-recharger short of credits (E7 leftover), wave 40": 100
+ * credits bought 100 units at 1 credit a unit and left 0). Zero units when
+ * the tank is full or nothing is affordable.
+ */
+export function autoRefuelPurchase(fuel: { current: number, max: number },
+    credits: number): { units: number, cost: number } {
+    const missing = fuel.max - fuel.current;
+    if (missing <= 0) {
+        return { units: 0, cost: 0 };
+    }
+    const full = refuelCost(fuel);
+    if (credits >= full) {
+        return { units: missing, cost: full };
+    }
+    const units = Math.max(0, Math.min(missing,
+        Math.floor(credits * FUEL_PER_JUMP / REFUEL_COST_PER_JUMP)));
+    return {
+        units,
+        cost: Math.ceil(units / FUEL_PER_JUMP * REFUEL_COST_PER_JUMP),
+    };
+}
+
 /** The entity's owned outfits as [id, count] pairs (empty when none). */
 function outfitCounts(entity: Entity | undefined): [string, number][] {
     const outfits = entity?.components.get(OutfitsStateComponent);
@@ -601,11 +626,12 @@ export class Spaceport extends Menu<Entity> {
         input = this.transaction?.ship ?? input;
         // An auto-refueller (oütf ModType 19) fills the tank at touch-down,
         // at the port's price, so the Refuel button is gone (reference
-        // "The Auto-recharger (E7), wave 39"; spaceport/auto_refuel.ts).
+        // "The Auto-recharger (E7), wave 39"; spaceport/auto_refuel.ts);
+        // short of credits it buys what they pay for (wave 40).
         try {
             if (await hasAutoRefueller(input,
                 id => this.simulationData.data.Outfit.get(id))) {
-                this.buyFullTank(input);
+                this.buyFuel(input, true);
             }
         } catch (e) {
             console.warn('Auto-refuel on landing failed:', e);
@@ -1050,14 +1076,15 @@ export class Spaceport extends Menu<Entity> {
         if (!entity) {
             return;
         }
-        this.buyFullTank(entity);
+        this.buyFuel(entity, false);
         this.refreshRefuelButton();
     }
 
     /** Fills the tank at the port's price when it is not full and the
-     * fill is affordable (the Refuel button's purchase; the auto-refueller
-     * makes it at touch-down). */
-    private buyFullTank(entity: Entity) {
+     * fill is affordable (the Refuel button's purchase). With `partial`
+     * (the auto-refueller at touch-down) a fill the credits fall short of
+     * buys as much as they pay for instead (autoRefuelPurchase). */
+    private buyFuel(entity: Entity, partial: boolean) {
         const fuel = entity.components.get(FuelComponent);
         const credits = entity.components.get(CreditsComponent);
         // Re-check rather than trusting button state: clicking flips a
@@ -1065,8 +1092,11 @@ export class Spaceport extends Menu<Entity> {
         if (!fuel || fuel.current >= fuel.max || !credits) {
             return;
         }
-        const cost = refuelCost(fuel);
-        if (credits.credits < cost) {
+        const purchase = partial
+            ? autoRefuelPurchase(fuel, credits.credits)
+            : { units: fuel.max - fuel.current, cost: refuelCost(fuel) };
+        const cost = purchase.cost;
+        if (purchase.units <= 0 || credits.credits < cost) {
             return;
         }
         // A writer outside the venues: through the landing's ledger, so
@@ -1082,7 +1112,8 @@ export class Spaceport extends Menu<Entity> {
         }
         // Fuel is not part of the working copy (nothing a venue does while
         // docked changes it), so the entity is the one place it lives.
-        fuel.current = fuel.max;
+        fuel.current = purchase.units >= fuel.max - fuel.current
+            ? fuel.max : fuel.current + purchase.units;
     }
 
     override async build() {
