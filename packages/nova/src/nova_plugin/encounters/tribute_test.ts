@@ -482,6 +482,28 @@ describe('Demand Tribute in the sim', () => {
             expect(record(world, 'a')).toBe(-600);
         });
 
+    it('launches the same fleet, in the same places, in two worlds fed the '
+        + 'same demand (seeded Random and the IdFactory only)', async () => {
+            const run = async () => {
+                const { world, addPlayer } = await build(10);
+                await addPlayer('a', PEER_A, 12_800);
+                applyHail(world, PEER_A,
+                    { kind: 'demandTribute', target: FORT_UUID });
+                advance(world, DEFENSE_FIRST_LAUNCH_MS + 3_000);
+                sink(world, 2);
+                advance(world, 2_000);
+                return defenders(world).map(([uuid, ship]) => {
+                    const movement = ship.components
+                        .get(MovementStateComponent)!;
+                    return [uuid, movement.position.x, movement.position.y,
+                        ship.components.get(TargetComponent)?.target];
+                });
+            };
+            const first = await run();
+            expect(first.length).toBe(6);
+            expect(await run()).toEqual(first);
+        });
+
     it('releases a dominated stellar (and only then)', async () => {
         const { world, addPlayer } = await build();
         await addPlayer('a', PEER_A, 12_800);
