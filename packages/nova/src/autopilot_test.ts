@@ -82,7 +82,7 @@ describe('Autopilot landing on the square zone', () => {
             frame: [325, 325], offset: [1200, 1200] },
         { name: 'a big 325 px planet, inertialess',
             frame: [325, 325], offset: [-1500, 200], inertialess: true },
-        { name: 'a 250 px planet (window 425, clearance zone 249)',
+        { name: 'a 250 px planet (window 435, clearance zone 249)',
             frame: [250, 250], offset: [1000, 0] },
     ];
     for (const { name, frame, offset, inertialess } of cases) {
@@ -162,10 +162,10 @@ describe('Autopilot landing on the square zone', () => {
         + 'is wider, and lands from there', () => {
             const big = { ...getDefaultPlanetData(),
                 spriteFrameSize: [250, 250] as [number, number] };
-            expect(stellarLandingRange(big)).toBeCloseTo(425, 9);
+            expect(stellarLandingRange(big)).toBeCloseTo(435, 9);
             expect(stellarApproachRange(big)).toBe(STELLAR_CLEARANCE_RANGE);
             const small = { ...getDefaultPlanetData(),
                 spriteFrameSize: [72, 72] as [number, number] };
-            expect(stellarApproachRange(small)).toBeCloseTo(122.4, 9);
+            expect(stellarApproachRange(small)).toBeCloseTo(125.28, 9);
         });
 });

@@ -561,8 +561,19 @@ export const LAND_SPEED_SQUARED = 400;
  * 146, too far at 167) and 1.75 (80 px frame: landed at 117.5, too far at
  * 140); the 15x21 and 17x31 stations, the 35x22 one and the 40-112 px
  * planets all agree with about 1.7.
+ *
+ * Reference "Landing leftovers, wave 33", finding 2: the cleared 250 px
+ * planet LANDED from 432.4 px and was too far at 439.4, so k is at least
+ * 1.73 (432.4 / 250) and under 1.758; 1.7 (425) was a little short. With
+ * the 80 px frame's "too far" at exactly 140 (k < 1.75, the zone being
+ * inclusive) that leaves [1.730, 1.75): 1.74 is the middle (435 px for the
+ * 250 px art, 139.2 for the 80 px one). GUESS: one art measured past 425,
+ * and a straight k at all (1.7 W plus the ship's half-size, or a wider
+ * true frame, fit as well); every older bracket (the 15-112 px planets
+ * and stations, the 72 / 96 / 150 / 325 px gates, the 315x200 station's
+ * dock from 230) still holds.
  */
-export const LAND_RANGE_PER_FRAME_WIDTH = 1.7;
+export const LAND_RANGE_PER_FRAME_WIDTH = 1.74;
 /**
  * A WORMHOLE's landing-window cap, in px: wave 6's planet cap ("U9 wave
  * 6": the 250 px art too far at 235.5, the 325 px art at 213), kept for
@@ -578,9 +589,10 @@ const DEFAULT_SPRITE_FRAME_SIZE: readonly [number, number] = [50, 50];
 
 /**
  * The half-width of a stellar's landing window, in px, from one frame of
- * its sprite ([width, height]): R = 1.7 W, W the frame's WIDTH, with no
- * cap (reference "Planet and station clearance, wave 31", finding 3: a
- * ship cleared at a 250 px planet landed from 425.4 px = 1.7 x 250).
+ * its sprite ([width, height]): R = 1.74 W (LAND_RANGE_PER_FRAME_WIDTH),
+ * W the frame's WIDTH, with no cap (reference "Planet and station
+ * clearance, wave 31", finding 3: a ship cleared at a 250 px planet landed
+ * from 425.4 px; "Landing leftovers, wave 33": and from 432.4, not 439.4).
  *
  * The zone is a SQUARE around the stellar's centre, not a circle: the
  * original lands a ship when max(|dx|, |dy|) <= R (inLandingZone).
