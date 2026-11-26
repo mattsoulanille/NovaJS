@@ -71,7 +71,8 @@ export function resetOfferRolls(): void {
 }
 
 /**
- * The missions AUTO-ACCEPTED (offerAutoAccepts: no offer text) during a
+ * The missions AUTO-ACCEPTED (offerAutoAccepts: no offer text, can't
+ * refuse) during a
  * system visit, keyed by that visit's {@link OfferRolls} so they share its
  * lifetime: a new system visit is a new rolls map, and a fresh record.
  *
@@ -123,10 +124,10 @@ export function autoAcceptOffer(session: MissionSession, offer: MissionOffer,
 }
 
 /**
- * Auto-accepts every acceptable text-less offer in `offers`, in order
- * (see autoAcceptOffer), and returns the offers that remain to be ASKED —
- * the ones with offer text. The text-less ones are never left to ask:
- * there is nothing to show. For the BBS, which lists its offers rather
+ * Auto-accepts every acceptable text-less, unrefusable offer in `offers`,
+ * in order (see autoAcceptOffer), and returns the offers that remain to be
+ * ASKED — the rest; a refusable text-less one is asked with an empty text
+ * (R14, wave 40). For the BBS, which lists its offers rather
  * than asking them one popup at a time; the popup sites go through
  * presentOffers, which interleaves the same accept with its popups.
  */

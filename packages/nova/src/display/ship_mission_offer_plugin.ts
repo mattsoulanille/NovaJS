@@ -24,7 +24,7 @@ import {
 } from '../nova_plugin/reputation/index.js';
 import {
     AcceptedMission, ShipOfferSpentComponent, MissionOffer, buildAcceptedMissionShips,
-    expandMissionText, offerAutoAccepts, RefusedMission,
+    expandMissionText, offerAutoAccepts, offerTextBlank, RefusedMission,
 } from '../nova_plugin/missions/index.js';
 import { isAttackingPlayer } from '../nova_plugin/combat/index.js';
 import { contrabandDetectedBy } from '../nova_plugin/npc/index.js';
@@ -32,7 +32,7 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { PersComponent } from '../nova_plugin/spawn/index.js';
 import { offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { OfferPopup } from '../spaceport/offer_popup.js';
+import { OfferPopup, offerButtons } from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import {
     buildShipMissionAccept, buildShipMissionOffer, buildShipMissionRefusal,
@@ -271,17 +271,22 @@ export async function presentShipOffer(world: World, targetUuid: string,
         return false;
     }
     if (offerAutoAccepts(offer.data)) {
-        // A LinkMission with NO offer text is taken on unasked (#319), the
-        // rule every offer site follows (offerAutoAccepts): straight to the
-        // accept a click would run, ships, briefing and all. No përs in
-        // the stock data or the installed plug-ins links one today.
+        // A LinkMission with NO offer text that cannot be refused is taken
+        // on unasked (#319), the rule every offer site follows
+        // (offerAutoAccepts): straight to the accept a click would run,
+        // ships, briefing and all. No përs in the stock data or the
+        // installed plug-ins links one today.
         await acceptShipOffer(world, player, target, targetUuid, pers, offer,
             gameData, universe, popup, systemId);
         return true;
     }
-    const text = await expandOfferText(world, universe, offer,
+    // A refusable one with no text is asked in an EMPTY dialog, as the
+    // spaceport asks it (R14, wave 40; GUESS that a ship's offer does the
+    // same: the run was a landing).
+    const blank = offerTextBlank(offer.data);
+    const text = blank ? '' : await expandOfferText(world, universe, offer,
         persComponent.name || pers.name, offer.data.offerText);
-    if (!text.trim()) {
+    if (!blank && !text.trim()) {
         // "Invisible missions still get their offer text unless it is
         // empty": mïsn Flags 0x0400 (invisible) hides a mission from the
         // player-info list, not from its own offer — mïsn 133 and the
@@ -291,13 +296,10 @@ export async function presentShipOffer(world: World, targetUuid: string,
         return false;
     }
 
-    const choice = await popup.show(text, {
-        accept: offer.data.acceptButton || 'Accept',
-        // mïsn Flags 0x0004 cantRefuse — the same rule presentOffers
-        // applies on the spaceport boards: no Refuse button at all.
-        refuse: offer.data.flags.cantRefuse ? null
-            : (offer.data.refuseButton || 'Refuse'),
-    }, { pict: offer.data.offerPict, style: 'offer' });
+    // mïsn Flags 0x0004 cantRefuse — the same rule presentOffers applies
+    // on the spaceport boards: no Refuse button at all (offerButtons).
+    const choice = await popup.show(text, offerButtons(offer),
+        { pict: offer.data.offerPict, style: 'offer' });
     if (choice !== 'accept') {
         // See the module note: OnRefuse runs, the offer stays on the table.
         await refuseShipOffer(world, player, targetUuid, offer, gameData,

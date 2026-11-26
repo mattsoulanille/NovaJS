@@ -41,9 +41,27 @@ export interface MissionOffer {
 }
 
 /**
+ * Whether the offer text of `mission` — dësc 4000 + (id - 128),
+ * MissionData.offerText — is absent or blank. Judged on the RAW text (see
+ * offerAutoAccepts).
+ */
+export function offerTextBlank(mission: MissionData): boolean {
+    return mission.offerText.trim() === '';
+}
+
+/**
  * Whether an offer of `mission` is AUTO-ACCEPTED rather than asked: its
- * offer text — dësc 4000 + (id - 128), MissionData.offerText — is absent
- * or blank (#319).
+ * offer text is absent or blank AND it cannot be refused (mïsn Flags
+ * 0x0004) (#319).
+ *
+ * The original (reference_experiments "A mission with no offer text
+ * (R14), wave 40"): a text-less mïsn with Flags 0 is still PUT to the
+ * player, in an EMPTY No / Yes offer dialog that Yes accepts and No
+ * refuses (OnRefuse runs); the same mïsn with Flags 0x0004 | 0x0400
+ * (can't refuse, invisible: Death's shape below) is accepted with no
+ * dialog at all. Which of the two flags does it was not separated: GUESS
+ * can't-refuse, since an empty dialog with only a Yes would ask nothing.
+ * The offer sites show a blank refusable offer as an empty dialog.
  *
  * The Bible is silent on the case; the ruling ("I think they're supposed
  * to be auto-accepted") rests on how the data uses it. Every text-less
@@ -68,7 +86,7 @@ export interface MissionOffer {
  * offer, and stays the skip it always was.
  */
 export function offerAutoAccepts(mission: MissionData): boolean {
-    return mission.offerText.trim() === '';
+    return offerTextBlank(mission) && mission.flags.cantRefuse;
 }
 
 /**

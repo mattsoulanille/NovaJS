@@ -5,6 +5,7 @@ import { getSyntheticGameData } from '../communication/simulation_test_fixture.j
 import { makeShip } from '../nova_plugin/ship/index.js';
 import {
     LOCATION_BAR, LOCATION_MAIN_SPACEPORT, MissionOffer, offerAutoAccepts,
+    offerTextBlank,
 } from '../nova_plugin/missions/index.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
@@ -83,11 +84,16 @@ function recordingPopup() {
 }
 
 describe('offers with no offer text (#319)', () => {
-    it('are the scenario\'s three text-less missions, and only them', async () => {
+    it('are the scenario\'s two text-less, unrefusable missions, and only '
+        + 'them', async () => {
         const { universe } = await bench([]);
-        const textless = universe.missions.filter(offerAutoAccepts)
+        const textless = universe.missions.filter(offerTextBlank)
             .map(m => m.id).sort();
         expect(textless).toEqual([SUMMONS, WINDFALL, MUSTER_REPORT].sort());
+        // The third can be refused (Flags 0), so it would be ASKED, in an
+        // empty dialog (R14, wave 40), were it ever offered.
+        expect(universe.missions.filter(offerAutoAccepts).map(m => m.id)
+            .sort()).toEqual([SUMMONS, WINDFALL].sort());
         // The third is never on offer: its AvailBits (`bN & !bN`) cannot
         // hold, whatever the player's bits.
         const report = universe.missions.find(m => m.id === MUSTER_REPORT)!;
@@ -211,4 +217,84 @@ describe('offers with no offer text (#319)', () => {
             expect(remaining.some(o => offerAutoAccepts(o.data))).toBeFalse();
             expect(session.state.missions.has(SUMMONS)).toBeTrue();
         });
+});
+
+/**
+ * The original (reference_experiments "A mission with no offer text
+ * (R14), wave 40"): a text-less mïsn the player CAN refuse (Flags 0) is
+ * still put to them, in an EMPTY No / Yes dialog; only a text-less one
+ * that can't be refused (Flags 0x0004 | 0x0400, the Silent Summons' and
+ * ARPIA Death's shape) is taken silently. The Silent Summons with its
+ * can't-refuse flag cleared stands in for the kit's mïsn 1024.
+ */
+describe('a refusable offer with no text (R14, wave 40)', () => {
+    const REFUSED_BIT = 9257;
+
+    function refusable(offer: MissionOffer): MissionOffer {
+        return {
+            ...offer,
+            data: {
+                ...offer.data,
+                flags: { ...offer.data.flags, cantRefuse: false },
+                onRefuse: `b${REFUSED_BIT}`,
+            },
+        };
+    }
+
+    /** A popup stand-in that records what it showed and answers `answer`. */
+    function answeringPopup(answer: 'accept' | 'refuse') {
+        const shown: { text: string, refuse?: string | null }[] = [];
+        const popup = {
+            async show(text: string, buttons: { refuse?: string | null }) {
+                shown.push({ text, refuse: buttons.refuse });
+                return answer;
+            },
+        } as unknown as OfferPopup;
+        return { popup, shown };
+    }
+
+    async function summonsOffer() {
+        const { universe, session: open } = await bench([BITS.summonsOpen]);
+        const session = await open();
+        const rolls: OfferRolls = new Map();
+        const offer = rollOffers(session, universe, LOCATION_MAIN_SPACEPORT,
+            rolls).find(o => o.data.id === SUMMONS)!;
+        return { universe, session, rolls, offer: refusable(offer) };
+    }
+
+    it('is not auto-accepted', async () => {
+        const { offer } = await summonsOffer();
+        expect(offerTextBlank(offer.data)).toBeTrue();
+        expect(offerAutoAccepts(offer.data)).toBeFalse();
+    });
+
+    it('is asked in an empty dialog with a refuse button, and Yes takes it',
+        async () => {
+            const { universe, session, rolls, offer } = await summonsOffer();
+            const { popup, shown } = answeringPopup('accept');
+            await presentOffers(popup, session, universe, [offer], rolls);
+            expect(shown.length).toBe(1);
+            expect(shown[0].text).toBe('');
+            expect(shown[0].refuse).toBeTruthy();
+            expect(session.state.missions.has(SUMMONS)).toBeTrue();
+            expect(session.state.bits.has(BITS.summonsTaken)).toBeTrue();
+        });
+
+    it('can be refused: OnRefuse runs and nothing is taken', async () => {
+        const { universe, session, rolls, offer } = await summonsOffer();
+        const { popup, shown } = answeringPopup('refuse');
+        await presentOffers(popup, session, universe, [offer], rolls);
+        expect(shown.map(s => s.text)).toEqual(['']);
+        expect(session.state.missions.has(SUMMONS)).toBeFalse();
+        expect(session.state.bits.has(REFUSED_BIT)).toBeTrue();
+        expect(session.state.bits.has(BITS.summonsTaken)).toBeFalse();
+    });
+
+    it('stays a row on a listing board', async () => {
+        const { session, rolls, offer } = await summonsOffer();
+        const { accepted, remaining } =
+            autoAcceptOffers(session, [offer], rolls);
+        expect(accepted).toEqual([]);
+        expect(remaining.map(o => o.data.id)).toEqual([SUMMONS]);
+    });
 });

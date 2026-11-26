@@ -318,9 +318,11 @@ export class MissionBoard extends Menu<Entity> {
         // available — that one is listed after the next system entry, as
         // in the original.
         const rolls = this.transaction.offerRolls;
-        // A listing with no offer text has nothing to list it WITH: it is
-        // taken on as the board opens, through the same accept a click
-        // runs (#319, offerAutoAccepts), and never becomes a row.
+        // A listing with no offer text that cannot be refused is taken on
+        // as the board opens, through the same accept a click runs (#319,
+        // offerAutoAccepts), and never becomes a row; a refusable one is
+        // listed with an empty description (R14, wave 40: the original
+        // still asks it).
         const { accepted, remaining } = autoAcceptOffers(session,
             landingOffers(this.transaction.offerSets, session, this.universe,
                 this.location, rolls), rolls);

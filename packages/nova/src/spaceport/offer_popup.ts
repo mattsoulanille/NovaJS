@@ -3,7 +3,7 @@ import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
     acceptOffer, MissionOffer, refuseOffer, expandMissionText,
-    offerAutoAccepts,
+    offerAutoAccepts, offerTextBlank,
 } from '../nova_plugin/missions/index.js';
 import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
@@ -611,6 +611,21 @@ function isPopupScrollKey(key: string): key is PopupScrollKey {
 }
 
 /**
+ * The buttons a mission offer is asked with: the mïsn's own labels, or
+ * Accept / Refuse; no refuse button at all under mïsn Flags 0x0004
+ * cantRefuse. Shared by the spaceport offers (presentOffers) and the
+ * in-flight ship offers (ship_mission_offer_plugin.ts).
+ */
+export function offerButtons(offer: MissionOffer):
+    { accept: string, refuse: string | null } {
+    return {
+        accept: offer.data.acceptButton || 'Accept',
+        refuse: offer.data.flags.cantRefuse ? null
+            : (offer.data.refuseButton || 'Refuse'),
+    };
+}
+
+/**
  * Presents a pre-rolled list of mission offers one popup at a time (the
  * shared bar / main-spaceport offer flow). Each offer shows its expanded
  * offer text with the mïsn's custom accept/refuse labels; Accept runs
@@ -619,10 +634,12 @@ function isPopupScrollKey(key: string): key is PopupScrollKey {
  * the accept button. Mutations land in the session's working copy; the
  * caller commits.
  *
- * An offer with NO offer text (offerAutoAccepts) is not asked at all: it
- * is accepted on the spot, through the same accept and the same briefing
- * popup a click would have led to (#319; ARPIA's "Death", arpia:1123, is
- * the mission that needs it). `rolls` — the system visit's, as the caller
+ * An offer with NO offer text that cannot be refused (offerAutoAccepts)
+ * is not asked at all: it is accepted on the spot, through the same
+ * accept and the same briefing popup a click would have led to (#319;
+ * ARPIA's "Death", arpia:1123, is the mission that needs it). One that
+ * CAN be refused is asked in an empty dialog (R14, wave 40). `rolls` —
+ * the system visit's, as the caller
  * rolled `offers` with — carries the auto-accept loop guard (see
  * mission_offers.ts autoAcceptedByVisit); without it nothing is
  * remembered.
@@ -677,17 +694,18 @@ export async function presentOffers(popup: OfferPopup,
             ...identity,
         };
         const ctx = descContext();
-        const text = expandMissionText(offer.data.offerText, substitutions, ctx);
-        if (!text) {
+        // No offer text at all, and refusable: asked in an EMPTY dialog
+        // (R14, wave 40; offerAutoAccepts).
+        const blank = offerTextBlank(offer.data);
+        const text = blank ? ''
+            : expandMissionText(offer.data.offerText, substitutions, ctx);
+        if (!text && !blank) {
             // Authored text that expands to nothing for this player (a
             // dësc made of conditionals): nothing to ask with.
             continue;
         }
-        const choice = await popup.show(text, {
-            accept: offer.data.acceptButton || 'Accept',
-            refuse: offer.data.flags.cantRefuse ? null
-                : (offer.data.refuseButton || 'Refuse'),
-        }, { pict: offer.data.offerPict, style: 'offer' });
+        const choice = await popup.show(text, offerButtons(offer),
+            { pict: offer.data.offerPict, style: 'offer' });
         if (choice === 'accept') {
             // The offer's acceptable flag was frozen when offers were
             // rolled; a prior accept this visit may have filled the hold
