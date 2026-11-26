@@ -585,6 +585,17 @@ gövt 284 and below, flët 324, jünk 205, bits 9255. Set
 `stellarShipCount` for any kit stellar whose defence fleet matters (see
 "Custom pilots"). `scenarios/w39_space_interactive.json` /
 `w39_space_early.json` (inbox `w39.jsonl`).
+Wave 40 used sÿst 1408-1427, spöb 1963-1986, shïp 599-627, düde 518-522,
+wëap 296-304, oütf 470-486 and bits 9255-9265, and RETIRED wave 10's
+friendly-fire mïsn 1024-1031 (bits 9065-9072; the ships and düdes stay),
+using 1024-1030 for its own; it also linked wave 39's sÿst 1402 to its
+record-spread chain 1424-1427. Next free: sÿst 1428, spöb 1987 (spares
+1495 / 1496 / 1499), shïp 628, düde 523, ränk 205, mïsn 1031 (then retire
+another old kit mission), wëap 305, oütf 487, gövt 284 and below, flët 324,
+jünk 205, bits 9266. A player's fighter bay is a SECONDARY: select it with
+`w` before `down:ctrl` (wave 40's first E8 runs launched nothing).
+`scenarios/w40_space_interactive.json` / `w40_space_early.json` (inbox
+`w40.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

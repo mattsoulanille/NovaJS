@@ -1,0 +1,29 @@
+{
+  "name": "novaref-w40-r14",
+  "edits": {
+    "ship": 703,
+    "stellar": 1973,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1412": 2
+    },
+    "missionBits": {
+      "9255": true
+    },
+    "nickname": "Probe",
+    "shipName": "w40-r14",
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6
+    }
+  }
+}

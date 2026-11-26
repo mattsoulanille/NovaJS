@@ -311,8 +311,202 @@ export default {
         ...wave37Resources(),
         ...wave38Resources(),
         ...wave39Resources(),
+        ...wave40Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-40 experiments (docs/reference_experiments.md, "... wave 40"):
+ * the never-run catalogue rows and wave-39 leftovers. RETIRED: wave 10's
+ * friendly-fire mïsn 1024-1031 (bits 9065-9072; their ships and düdes
+ * stay) for R14 / R17 / R15 / E1. Used: sÿst 1408-1427, spöb 1963-1986,
+ * shïp 599-627, düde 518-522, wëap 296-304, oütf 470-486, mïsn 1024-1030,
+ * bits 9255-9265; wave 39's sÿst 1402 now also links to 1424. Map row
+ * y = -2700 (x -800 .. -40). The next free ids: sÿst 1428+, spöb 1987+
+ * (spares 1495, 1496, 1499), shïp 628+, düde 523+, ränk 205+, mïsn 1031
+ * (then retire another old kit mission), gövt 284 and below, flët 324+,
+ * wëap 305+, oütf 487+, jünk 205+, bits 9266+.
+ *
+ * LESSONS: a player's fighter bay is a secondary (select it with `w`
+ * first); a jump needs the ship 1,000 px from the system centre, so a
+ * return jump must be pressed in the same keys step as the arrival.
+ *
+ *  U7  spöb Gravity: sÿst 1408 Kit Gravity 100 (spöb 1963, Gravity 100, at
+ *      the centre; decoration start points 1964 at 300 px, 1965 at 1,000
+ *      px), 1409 Kit Gravity 1000 (1966; starts 1967 / 1968 / 1969 at 300 /
+ *      1,000 / 2,000 px), 1410 Kit Gravity Push (1970, Gravity -1000; start
+ *      1971 at 300 px). No traffic. Added: 1422 Kit Gravity 1 (1983, start
+ *      1984) and 1423 Kit Gravity 10 (1985, start 1986), both at 300 px.
+ *  R11 shïp 599 Kit Small Hold (cargo 20, TechLevel 9401) sold only at sÿst
+ *      1411 Kit Small Hold Yard (spöb 1972: shipyard, TechLevel 0,
+ *      SpecialTech 9401).
+ *  R14 mïsn 1024 Kit R14 no offer text (AvailLoc 3 at spöb 1973, sÿst 1412;
+ *      bit 9255; OnAccept b9256 !b9255, OnRefuse b9257) with NO dësc;
+ *      added: mïsn 1030 (bit 9264) the same with Flags 0x0004 | 0x0400.
+ *  R17 sÿst 1413 Kit R17 Origin (spöb 1974) linked to 1414 Kit R17 Closed
+ *      (spöb 1975: the 250 px planet art, MinStatus 32767); mïsn 1025 (bit
+ *      9258, AvailLoc 3 at 1974) has TravelStel 1975.
+ *  R15 sÿst 1415 Kit R15 Range (spöb 1976, linked to 1421 Kit R15 Next,
+ *      spöb 1982): mïsn 1026 (bit 9259) puts shïp 626 Kit R15 Target (a
+ *      red disc, immobile, armor 25: one Kit Escort Gun bolt) on the port
+ *      with ShipGoal 0 and OnShipDone S1027; mïsn 1027 (never offered: bit
+ *      9263 is never set) has ShipSyst -6, ShipStart -1, one shïp 627 Kit
+ *      R15 Follower (an immobile yellow disc).
+ *  R22 sÿst 1416 Kit BuyRandom (spöb 1977: outfitter only, TechLevel 0,
+ *      SpecialTech 9402): oütf 470-477 Kit BR50 A..H (BuyRandom 50) and 478
+ *      Kit BR100 (BuyRandom 100).
+ *  E1  sÿst 1417 Kit Neg Shield Range (spöb 1978): mïsn 1028 (bit 9260) puts
+ *      shïp 600 Kit Neg Shield (Shield -100) and mïsn 1029 (bit 9261) shïp
+ *      601 Kit Pos Shield (Shield 500) on the port (immobile red discs, AI
+ *      1, gövt 363, armor 30000, no recharge; düde 518 / 519).
+ *  E2  wëap 296 Kit Side Gun (unguided, Inaccuracy -30) + oütf 479.
+ *  E3  wëap 297 Kit Slow Gun (unguided, Reload 600 = 20 s) + oütf 480.
+ *  E8  wëap 298 Kit Disc Bay (the stock Viper Bay's Speed) and 299 Kit Disc
+ *      Bay Fast (Speed 1000), both carrying shïp 602 Kit Bay Disc (a green
+ *      disc, Speed / Accel 300); oütf 481 / 482.
+ *  E10 wëap 300 Kit Decay Beam (fixed beam, Count 30, Decay 5, Falloff 4,
+ *      green) and 301 Kit Plain Beam (Decay 0); 302 / 303 / 304 Kit Fade
+ *      Bolt F1 / F4 / F0 (a slow unguided bolt, Count 90, Falloff 1 / 4 /
+ *      0); oütf 483-486 (no outfit for 304).
+ *  E11 shïp 606-625 Kit E11 Axxx Txx (Accel 50 k, Turn 5 k, k = 1..20;
+ *      TechLevel 9403) sold only at sÿst 1419 Kit E11 Yard (spöb 1980).
+ *  U8  shïp 603 Kit Jump Slow Ring (wave 39's Kit Jump Slow on the Kit Ring
+ *      pointer sprite) for wave 38's Kit Jump A Start.
+ *  E6  shïp 604 Kit Ring Ion D50 (the Kit Ring Ion with Deionize 50: 0.5 a
+ *      frame) for wave 6's ion target (mïsn 1005, bit 9046).
+ *  R18 sÿst 1418 Kit Tribute Station (owner 290): spöb 1979 Kit Tribute
+ *      Station Six (the 315 x 200 station art, flags 0x53, Tribute 1500,
+ *      wave 38's düde 509, DefCount 6). Added: sÿst 1424-1427 Kit Spread
+ *      3..6 (empty, owner 363), a chain hung off sÿst 1402, so a demand
+ *      at Plain Six (1400) reads its record spread 1-6 jumps out.
+ *  A11 shïp 605 Kit Nofuel Trader (Kit Probe B with Fuel 0: it cannot jump
+ *      out), düde 520 (AI 1, gövt 363); sÿst 1420 Kit Respawn Nofuel
+ *      (avgShips 3, port spöb 1981 at the centre).
+ */
+function wave40Resources() {
+    const out = [];
+    const Y = -2700;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const port = (id, name, set = {}) => spob(id, name, 0, 0, 138, { flags: 0x43, ...set });
+    const decoration = (id, name, x) => spob(id, name, x, 0, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    const linked = (sys, links) => { sys.set = { ...sys.set, links: [...links, ...none16].slice(0, 16) }; return sys; };
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { ring: 1955, red: 1971, green: 1972, yellow: 1974 };
+    // A mïsn WITHOUT the helper's dësc (R14).
+    const bareMisn = (id, name, bit, set) => ({ type: "mïsn", id, name, clone: "mïsn:128", set: { ...misnBase, availBits: `b${bit}`, ...set } });
+    // --- U7: sÿst 1408-1410, spöb 1963-1971.
+    const grav = (sid, name, pid, gravity, starts) => {
+        out.push(system(sid, name, nextX(), Y, 363, [pid, ...starts.map(([id]) => id)]),
+            spob(pid, `${name} Well`, 0, 0, 138, { flags: 0x01, gravity }),
+            ...starts.map(([id, x]) => decoration(id, `${name} Start ${x}`, x)));
+    };
+    grav(1408, "Kit Gravity 100", 1963, 100, [[1964, 300], [1965, 1000]]);
+    grav(1409, "Kit Gravity 1000", 1966, 1000, [[1967, 300], [1968, 1000], [1969, 2000]]);
+    grav(1410, "Kit Gravity Push", 1970, -1000, [[1971, 300]]);
+    // --- R11: shïp 599, sÿst 1411, spöb 1972.
+    out.push(...ship(599, "Kit Small Hold", 128, { accel: 300, speed: 300, turn: 30, armor: 3000, shield: 3000, mass: 50, freeMass: 100,
+        cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0, techLevel: 9401 }));
+    out.push(system(1411, "Kit Small Hold Yard", nextX(), Y, 363, [1972]),
+        port(1972, "Kit Small Hold Yard Port", { flags: 0x0B, techLevel: 0, specialTech: [9401, -1, -1] }));
+    // --- R14: sÿst 1412, spöb 1973, mïsn 1024 (no dësc).
+    out.push(system(1412, "Kit R14 Range", nextX(), Y, 363, [1973]), port(1973, "Kit R14 Port"));
+    out.push(bareMisn(1024, "Kit R14 no offer text", 9255, { availStel: 1973, onAccept: "b9256 !b9255", onRefuse: "b9257" }));
+    // --- R17: sÿst 1413-1414, spöb 1974-1975, mïsn 1025.
+    out.push(linked(system(1413, "Kit R17 Origin", nextX(), Y, 363, [1974]), [1414]), port(1974, "Kit R17 Origin Port"));
+    out.push(linked(system(1414, "Kit R17 Closed", nextX(), Y, 363, [1975]), [1413]),
+        spob(1975, "Kit R17 Closed Port", 0, 0, 176, { flags: 0x43, minStatus: 32767 }));
+    out.push(...misn(1025, "Kit R17 to the closed port", 9258, { availStel: 1974, travelStel: 1975, onAccept: "!b9258", payVal: 1000 }));
+    // --- R15: sÿst 1415 / 1421, spöb 1976 / 1982, shïp 626-627, düde 521-522, mïsn 1026-1027.
+    const still = { accel: 0, speed: 0, turn: 0, mass: 50, freeMass: 100, cargo: 10, crew: 5, flags: 0, flags2: 0, ai: 1, shield: 0,
+        shieldRecharge: 0, armorRecharge: 0 };
+    out.push(...shareRled(626, "Kit R15 Target", RLED.red, 24, { ...still, armor: 25, strength: 10 }));
+    out.push(...shareRled(627, "Kit R15 Follower", RLED.yellow, 24, { ...still, armor: 30000, strength: 10 }));
+    out.push(dude(521, "Kit R15 Target", 1, 363, 626), dude(522, "Kit R15 Follower", 1, 363, 627));
+    out.push(linked(system(1415, "Kit R15 Range", nextX(), Y, 363, [1976]), [1421]), port(1976, "Kit R15 Port"));
+    out.push(...misn(1026, "Kit R15 kill the target", 9259, { availStel: 1976, shipCount: 1, shipDude: 521, shipGoal: 0, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9259", onShipDone: "S1027" }));
+    out.push(...misn(1027, "Kit R15 follower", 9263, { availStel: 1976, shipCount: 1, shipSyst: -6, shipDude: 522, shipGoal: -1, shipBehav: -1,
+        shipStart: -1 }));
+    // --- R22: sÿst 1416, spöb 1977, oütf 470-478.
+    out.push(system(1416, "Kit BuyRandom", nextX(), Y, 363, [1977]),
+        port(1977, "Kit BuyRandom Port", { flags: 0x05, techLevel: 0, specialTech: [9402, -1, -1] }));
+    const brOutfit = (id, name, buyRandom) => ({ type: "oütf", id, name, clone: "oütf:130", set: {
+        displayWeight: 2000 + id, mass: 0, techLevel: 9402, modType: 2, modVal: 1, max: 32, flags: 0, cost: 100, modType2: -1, modVal2: 0,
+        modType3: -1, modVal3: 0, modType4: -1, modVal4: 0, contribute: 0, require: 0, availability: "", onPurchase: "", onSell: "",
+        shortName: name, lcName: name.toLowerCase(), lcPlural: name.toLowerCase() + "s", itemClass: 0, scanMask: 0, buyRandom } });
+    "ABCDEFGH".split("").forEach((c, i) => out.push(brOutfit(470 + i, `Kit BR50 ${c}`, 50)));
+    out.push(brOutfit(478, "Kit BR100", 100));
+    // --- E1: shïp 600-601, düde 518-519, sÿst 1417, spöb 1978, mïsn 1028-1029.
+    out.push(...shareRled(600, "Kit Neg Shield", RLED.red, 24, { ...still, armor: 30000, strength: 10, shield: -100 }));
+    out.push(...shareRled(601, "Kit Pos Shield", RLED.red, 24, { ...still, armor: 30000, strength: 10, shield: 500 }));
+    out.push(dude(518, "Kit Neg Shield", 1, 363, 600), dude(519, "Kit Pos Shield", 1, 363, 601));
+    out.push(system(1417, "Kit Neg Shield Range", nextX(), Y, 363, [1978]), port(1978, "Kit Neg Shield Port"));
+    out.push(...misn(1028, "Kit E1 negative shield", 9260, { availStel: 1978, shipCount: 1, shipDude: 518, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9260" }));
+    out.push(...misn(1029, "Kit E1 positive shield", 9261, { availStel: 1978, shipCount: 1, shipDude: 519, shipGoal: -1, shipBehav: -1,
+        shipStart: -1, onAccept: "!b9261" }));
+    // --- E2 / E3 / E8 / E10: wëap 296-304, oütf 479-486, shïp 602.
+    const bolt = { reload: 30, duration: 60, armorDamage: 1, shieldDamage: 1, guidance: -1 };
+    out.push(weap(296, "Kit Side Gun", 131, { ...bolt, inaccuracy: -30 }), gun(479, "Kit Side Gun", 296));
+    out.push(weap(297, "Kit Slow Gun", 131, { ...bolt, reload: 600 }), gun(480, "Kit Slow Gun", 297));
+    out.push(...shareRled(602, "Kit Bay Disc", RLED.green, 24, { accel: 300, speed: 300, turn: 30, mass: 20, freeMass: 10, cargo: 0, crew: 1,
+        flags: 0, flags2: 0, ai: 3, armor: 300, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 10 }));
+    out.push(weap(298, "Kit Disc Bay", 149, { reload: 30, guidance: 99, ammoType: 602 }), gun(481, "Kit Disc Bay", 298));
+    out.push(weap(299, "Kit Disc Bay Fast", 149, { reload: 30, guidance: 99, ammoType: 602, speed: 1000 }), gun(482, "Kit Disc Bay Fast", 299));
+    const beam = { reload: 150, duration: 30, armorDamage: 1, shieldDamage: 1, guidance: 0, beamLength: 300, beamWidth: 2, coronaFalloff: 4,
+        beamColor: 0x0000ff00, coronaColor: 0x00008000 };
+    out.push(weap(300, "Kit Decay Beam", 170, { ...beam, decay: 5 }), gun(483, "Kit Decay Beam", 300));
+    out.push(weap(301, "Kit Plain Beam", 170, { ...beam, decay: 0 }), gun(484, "Kit Plain Beam", 301));
+    const fade = { ...bolt, reload: 150, duration: 90, speed: 100 };
+    out.push(weap(302, "Kit Fade Bolt F1", 131, { ...fade, coronaFalloff: 1 }), gun(485, "Kit Fade Bolt F1", 302));
+    out.push(weap(303, "Kit Fade Bolt F4", 131, { ...fade, coronaFalloff: 4 }), gun(486, "Kit Fade Bolt F4", 303));
+    out.push(weap(304, "Kit Fade Bolt F0", 131, { ...fade, coronaFalloff: 0 }));
+    // --- E11: shïp 606-625, sÿst 1419, spöb 1980.
+    for (let k = 1; k <= 20; k++) {
+        const accel = 50 * k, turn = 5 * k;
+        out.push(...ship(605 + k, `Kit E11 A${String(accel).padStart(4, "0")} T${String(turn).padStart(3, "0")}`, 128, { accel, speed: 300, turn,
+            armor: 300, shield: 300, mass: 50, freeMass: 100, cargo: 20, maxGuns: 4, maxTurrets: 4, ai: 3, strength: 10, flags: 0, flags2: 0,
+            techLevel: 9403 }));
+    }
+    out.push(system(1419, "Kit E11 Yard", nextX(), Y, 363, [1980]),
+        port(1980, "Kit E11 Yard Port", { flags: 0x09, techLevel: 0, specialTech: [9403, -1, -1] }));
+    // --- U8: shïp 603 (wave 38's sÿst 1387). E6: shïp 604 (Kit Port, mïsn 1005).
+    const ring = (id, name, set) => shareRled(id, name, RLED.ring, 24, { mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3,
+        strength: 100, crew: 10, flags: 0, armor: 30000, shield: 30000, shieldRecharge: 1000, ...set });
+    out.push(...ring(603, "Kit Jump Slow Ring", { accel: 100, speed: 200, turn: 10, flags2: 0x0088, fuel: 300 }));
+    out.push(...ring(604, "Kit Ring Ion D50", { accel: 2000, speed: 800, turn: 30, flags2: 0x00C8, ionization: 100, deionize: 50 }));
+    // --- R18: sÿst 1418, spöb 1979 (gövt 290, düde 509: wave 38).
+    out.push(system(1418, "Kit Tribute Station", nextX(), Y, 290, [1979]),
+        spob(1979, "Kit Tribute Station Six", 0, 0, 311, { flags: 0x53, govt: 290, tribute: 1500, defenseDude: 509, defenseCount: 6 }));
+    // --- A11: shïp 605, düde 520, sÿst 1420, spöb 1981.
+    out.push(...ship(605, "Kit Nofuel Trader", 128, { accel: 150, speed: 600, turn: 30, armor: 30000, shield: 30000, mass: 50, freeMass: 500,
+        cargo: 50, maxGuns: 8, maxTurrets: 8, ai: 1, strength: 10, flags: 0, flags2: 0x0088, fuel: 0 }));
+    out.push(dude(520, "Kit Nofuel Trader", 1, 363, 605));
+    const a11 = system(1420, "Kit Respawn Nofuel", nextX(), Y, 363, [1981]);
+    a11.set = { ...a11.set, avgShips: 3, dudes: [520, ...none8.slice(1)], dudeProbs: [100, ...zero8.slice(1)] };
+    out.push(a11, port(1981, "Kit Respawn Nofuel Port"));
+    // --- R15's neighbour.
+    out.push(linked(system(1421, "Kit R15 Next", nextX(), Y, 363, [1982]), [1415]), port(1982, "Kit R15 Next Port"));
+    // --- U7 (added during the wave: Gravity 100 and 1000 pulled alike): sÿst 1422 Kit Gravity 1 (spöb 1983, start 1984 at
+    // 300 px) and 1423 Kit Gravity 10 (spöb 1985, start 1986 at 300 px).
+    grav(1422, "Kit Gravity 1", 1983, 1, [[1984, 300]]);
+    grav(1423, "Kit Gravity 10", 1985, 10, [[1986, 300]]);
+    // --- R14 (added during the wave: the text-less offer came up as an EMPTY No / Yes dialog): mïsn 1030 (bit 9264) the same
+    // with Flags 0x0004 | 0x0400 (can't refuse, invisible), ARPIA's "Death" shape; OnAccept b9265 !b9264.
+    out.push(bareMisn(1030, "Kit R14 no text cantRefuse invisible", 9264, { availStel: 1973, flags: 0x0004 | 0x0400,
+        onAccept: "b9265 !b9264" }));
+    // --- R18 (added during the wave, the hub's question: how far does a demand's record hit spread?): a chain sÿst 1424-1427
+    // Kit Spread 3..6 (no stellars, owner 363) hung off wave 39's Kit Tribute Fed (1402, two jumps from Plain Six's 1400), so
+    // the pulled pilot's legal records read the spread at 1..6 jumps. 1402's links are patched in wave15Patches' style here.
+    const spread = [1424, 1425, 1426, 1427];
+    spread.forEach((sid, i) => out.push(linked(system(sid, `Kit Spread ${i + 3}`, nextX(), Y, 363, []),
+        [i === 0 ? 1402 : spread[i - 1], spread[i + 1]].filter((l) => l !== undefined))));
+    return out;
+}
 
 /**
  * Wave-39 experiments (docs/reference_experiments.md, "... wave 39"):
@@ -391,7 +585,8 @@ function wave39Resources() {
     tributeSys(1400, "Kit Tribute Plain", [1401, 1406], 1955, "Kit Tribute Plain Six", { tribute: 1234, defenseDude: 509, defenseCount: 6 });
     tributeSys(1401, "Kit Tribute Strong", [1400, 1402], 1956, "Kit Tribute Strong Six", { tribute: -1, techLevel: 4, defenseDude: 512,
         defenseCount: 1062 });
-    tributeSys(1402, "Kit Tribute Fed", [1401], 1957, "Kit Tribute Fed Four", { tribute: 0, techLevel: 3, defenseDude: 130, defenseCount: 1042 });
+    // 1402 also links to wave 40's Kit Spread 3 (sÿst 1424), the record-spread chain.
+    tributeSys(1402, "Kit Tribute Fed", [1401, 1424], 1957, "Kit Tribute Fed Four", { tribute: 0, techLevel: 3, defenseDude: 130, defenseCount: 1042 });
     // --- U8: shïp 595 (wave 38's sÿst 1387 / 1388).
     out.push(...ship(595, "Kit Jump Slow", 135, { accel: 100, speed: 200, turn: 10, armor: 30000, shield: 30000, shieldRecharge: 1000, mass: 50,
         freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x0088, fuel: 300 }));
@@ -4269,15 +4464,8 @@ function wave10Resources() {
     [[320, "Bolt 362", 362, 837], [321, "Beam 362", 362, 840], [322, "Missile 362", 362, 841], [323, "Bolt 358", 358, 837], [324, "Blast 362", 362, 842]]
         .forEach(([did, name, g, sid]) => out.push(dude(did, `Kit FF Shooter ${name}`, 3, g, sid)));
     [[325, 362], [326, 359], [327, 363]].forEach(([did, g]) => out.push(dude(did, `Kit FF Victim ${g}`, 3, g, 838)));
-    const ff = { availStel: 2047, shipCount: 1, shipGoal: -1, shipBehav: -1 };
-    out.push(...misn(1024, "Kit F shooter bolt 362", 9065, { ...ff, shipDude: 320, shipStart: -3 }));
-    out.push(...misn(1025, "Kit F shooter beam 362", 9066, { ...ff, shipDude: 321, shipStart: -3 }));
-    out.push(...misn(1026, "Kit F shooter missile 362", 9067, { ...ff, shipDude: 322, shipStart: -3 }));
-    out.push(...misn(1027, "Kit F shooter bolt 358", 9068, { ...ff, shipDude: 323, shipStart: -3 }));
-    out.push(...misn(1031, "Kit F shooter blast 362", 9072, { ...ff, shipDude: 324, shipStart: -3 }));
-    out.push(...misn(1028, "Kit F victim 362", 9069, { ...ff, shipDude: 325, shipStart: -2, availLoc: 0 }));
-    out.push(...misn(1029, "Kit F victim 359", 9070, { ...ff, shipDude: 326, shipStart: -2, availLoc: 0 }));
-    out.push(...misn(1030, "Kit F victim 363", 9071, { ...ff, shipDude: 327, shipStart: -2, availLoc: 0 }));
+    // mïsn 1024-1031 (bits 9065-9072, the shooters and victims above) were retired in wave 40 for R14 / R17 / R15 / E1
+    // (wave40Resources); the ships, düdes and govts stay.
 
     // --- T: a jünk both sold and bought at Kit Port.
     out.push({ type: "jünk", id: 202, name: "Kit Doodads", clone: "jünk:128", set: { soldAt: [2100, ...none8.slice(1)], boughtAt: [2100, ...none8.slice(1)], basePrice: 400, flags: 0, scanMask: 0, lcName: "kit doodads", abbrev: "Doodads", buyOn: "", sellOn: "" } });

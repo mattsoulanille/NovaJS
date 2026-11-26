@@ -1,0 +1,38 @@
+{
+  "name": "novaref-w40-e8f",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w40-e8f",
+    "weapons": {
+      "128": 0,
+      "299": {
+        "count": 1,
+        "ammo": 4
+      }
+    },
+    "outfits": {
+      "128": 0,
+      "482": 1
+    },
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6
+    }
+  }
+}

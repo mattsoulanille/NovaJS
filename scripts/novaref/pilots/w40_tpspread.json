@@ -1,0 +1,44 @@
+{
+  "name": "novaref-w40-tpspread",
+  "edits": {
+    "ship": 703,
+    "stellar": 1955,
+    "credits": 100000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1395": 2,
+      "1396": 2,
+      "1400": 2,
+      "1401": 2,
+      "1402": 2,
+      "1406": 2,
+      "1418": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w40-tpspread",
+    "weapons": {
+      "128": 0,
+      "360": 1,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "600": 1,
+      "607": 1
+    },
+    "rating": 12800,
+    "stellarShipCount": {
+      "1950": 6,
+      "1952": 30,
+      "1955": 6,
+      "1956": 6,
+      "1957": 4,
+      "1961": 6,
+      "1979": 6
+    }
+  }
+}
