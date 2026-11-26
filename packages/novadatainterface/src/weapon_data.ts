@@ -217,10 +217,11 @@ export interface BaseWeaponData extends BaseData {
      * holds the absolute value; this marks that it is a FIXED side angle
      * rather than a random spread. ResForge's wëap template labels the
      * negative range "Fixed (unguided only)" with the note "Needs
-     * off-axis exits", which is how the side is chosen: the shot leans
-     * toward the side of the ship its exit point is on (see
-     * fixedAngleOffset in the sim). Only 'unguided' shots honour it, per
-     * that template note; every other guidance keeps the random spread.
+     * off-axis exits". MEASURED (reference "Negative Inaccuracy (E2),
+     * wave 40"): an unguided Inaccuracy -30 gun fired STRAIGHT from the
+     * Shuttle shän's ±3 px exits, so the sim fires an unguided
+     * fixed-angle weapon with no side angle and no spread; every other
+     * guidance keeps the random spread.
      * No stock combat weapon sets it; plug-ins do (More Blasters CHEAT
      * "Side Radar Missile", -90).
      */

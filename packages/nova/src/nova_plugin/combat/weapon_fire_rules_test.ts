@@ -709,24 +709,27 @@ describe('exclusive weapon (wëap Flags3 0x0020)', () => {
     });
 });
 
-describe('fixed side angle (wëap Inaccuracy < 0, #99)', () => {
-    it('fires to the side its exit point is on, by exactly the angle', async () => {
+describe('negative Inaccuracy (wëap Inaccuracy < 0, #99, E2 wave 40)', () => {
+    // Reference "Negative Inaccuracy (E2), wave 40": an unguided
+    // Inaccuracy -30 gun fired straight along the heading from exits on
+    // both sides, every shot.
+    it('fires an unguided gun straight from exits on either side', async () => {
         const { world, ship } = await makeTestWorld({
             weapons: [[weapon('test:side', { accuracy: 90, firesAtFixedAngle: true }), 1]],
         });
         setFiring(ship, 'test:side', true);
         await stepWorld(world, 3);
-        // The exit cursor advances before each shot, so shot 1 leaves
-        // the port gun (x = -10) and shot 2 the starboard one (x = +10).
-        const [first, second] = projectiles(world)
-            .sort((a, b) => a.uuid.localeCompare(b.uuid));
-        expect(first.components.get(MovementStateComponent)!.rotation.angle)
-            .toBeCloseTo(-Math.PI / 2, 9);
-        expect(second.components.get(MovementStateComponent)!.rotation.angle)
-            .toBeCloseTo(Math.PI / 2, 9);
+        // The exit cursor alternates the port (x = -10) and starboard
+        // (x = +10) guns; neither leans.
+        const shots = projectiles(world);
+        expect(shots.length).toBeGreaterThanOrEqual(2);
+        for (const shot of shots) {
+            expect(shot.components.get(MovementStateComponent)!.rotation.angle)
+                .toBeCloseTo(0, 9);
+        }
     });
 
-    it('goes to starboard from an exit on the ship\'s axis', async () => {
+    it('fires straight from an exit on the ship\'s axis', async () => {
         const { world, ship } = await makeTestWorld({
             weapons: [[weapon('test:sidec', {
                 accuracy: 30, firesAtFixedAngle: true, exitType: 'center',
@@ -736,7 +739,7 @@ describe('fixed side angle (wëap Inaccuracy < 0, #99)', () => {
         await stepWorld(world, 1);
         const [shot] = projectiles(world);
         expect(shot.components.get(MovementStateComponent)!.rotation.angle)
-            .toBeCloseTo(Math.PI / 6, 9);
+            .toBeCloseTo(0, 9);
     });
 
     it('is a spread, not a fixed angle, for a positive Inaccuracy', async () => {

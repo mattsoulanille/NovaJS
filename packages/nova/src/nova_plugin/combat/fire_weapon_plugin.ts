@@ -214,29 +214,6 @@ export function sampleInaccuracy(accuracy: number, random: Random) {
 }
 
 /**
- * The aim offset, in radians, of a weapon with a NEGATIVE wëap
- * Inaccuracy: "Fires to the side by this angle (absolute value in
- * degrees)" (EVN Bible ~:3139). `accuracy` is that absolute value.
- *
- * WHICH side the Bible does not say. ResForge's wëap template annotates
- * the negative range "Fixed (unguided only) ... Needs off-axis exits",
- * and that note is the rule adopted here: the shot leans toward the
- * side of the ship its exit point sits on, so a weapon with a gun
- * position on each flank fires its broadsides alternately left and
- * right as the exit points cycle, which is exactly what "needs
- * off-axis exits" describes. `exitX` is the exit point's raw shän x
- * offset — positive is the ship's starboard (see applyExitPoint), and
- * positive angles turn to starboard (Angle.getUnitVector). An exit ON
- * the axis (x = 0, including exitType 'center') has no side to lean to
- * and goes to starboard. Deterministic: no PRNG draw at all, unlike the
- * random spread — the whole point of a fixed angle.
- */
-export function fixedAngleOffset(accuracy: number, exitX: number): number {
-    const side = exitX < 0 ? -1 : 1;
-    return side * accuracy * (2 * Math.PI / 360);
-}
-
-/**
  * Returns evenly spaced angles centered around zero with a given spacing
  * inbetween.
  */
@@ -609,17 +586,22 @@ export abstract class WeaponEntry {
 
         // The weapon's error as it leaves the ship (wëap Inaccuracy,
         // ~:3137-3143): "ignored for guidance-10 point defense beams",
-        // so those draw nothing and aim true; a negative Inaccuracy is a
-        // fixed side angle (fixedAngleOffset) rather than a spread, on
-        // unguided shots. Everything else gets the uniform random error.
+        // so those draw nothing and aim true. A NEGATIVE Inaccuracy on an
+        // unguided gun ("fires to the side by this angle") fires STRAIGHT
+        // too: MEASURED (reference "Negative Inaccuracy (E2), wave 40"),
+        // an Inaccuracy -30 gun on the Shuttle shän's ±3 px exits put
+        // every shot within a degree of the heading, one gun or two. What
+        // makes the Bible's side angle appear is not known (GUESS: some
+        // other field), so until a rig shows it there is no side angle
+        // and no spread. Everything else gets the uniform random error.
         // Which branch a weapon takes is a property of its synced data,
         // so every peer draws the PRNG the same number of times.
         let aimOffset = 0;
-        if (inaccuracy && this.data.guidance !== 'pointDefenseBeam') {
-            aimOffset = this.data.firesAtFixedAngle
-                && this.data.guidance === 'unguided'
-                ? fixedAngleOffset(this.data.accuracy, exitPointData.position[0])
-                : sampleInaccuracy(this.data.accuracy, this.random);
+        const firesStraight = this.data.guidance === 'pointDefenseBeam'
+            || (this.data.firesAtFixedAngle
+                && this.data.guidance === 'unguided');
+        if (inaccuracy && !firesStraight) {
+            aimOffset = sampleInaccuracy(this.data.accuracy, this.random);
             angle = angle.add(aimOffset);
         }
 
