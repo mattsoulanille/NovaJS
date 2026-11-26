@@ -54,6 +54,15 @@ export function attributesGovtId(inherentGovt: number): number | null {
 }
 
 /**
+ * A shïp's Shield field as a shield capacity: a negative value is 5 x its
+ * absolute value (EVN Bible ~:2351; reference "Negative shïp Shield (E1),
+ * wave 40": -100 behaved exactly like 500).
+ */
+export function shipShieldCapacity(shield: number): number {
+    return shield < 0 ? 5 * -shield : shield;
+}
+
+/**
  * A gövt's InhJam1-4 as a fresh four-tuple (missing govt or entries -> 0).
  */
 function inheritedJamming(inhJam: readonly number[] | undefined)
@@ -356,7 +365,11 @@ export async function ShipParse(ship: ShipResource,
     const scoopsAsteroidDebris = Boolean(ship.flags3N & 0x0002);
 
     var physics: ShipPhysics = {
-        shield: ship.shield,
+        // shïp Shield (EVN Bible ~:2351): a NEGATIVE value is a shield of
+        // 5 x its absolute value, for shields past the field's 32767.
+        // MEASURED (reference "Negative shïp Shield (E1), wave 40"): a
+        // Shield -100 hull took bolts exactly like a Shield 500 one.
+        shield: shipShieldCapacity(ship.shield),
         shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
         armor: ship.armor,
         armorRecharge: ship.armorRecharge * FPS / 1000,

@@ -74,6 +74,20 @@ describe("ShipParse", () => {
             });
     });
 
+    describe("Shield (EVN Bible ~:2351)", () => {
+        it("keeps a positive shield as written", async () => {
+            const ship = await parse({ shield: 500 });
+            expect(ship.physics.shield).toBe(500);
+        });
+
+        it("reads a NEGATIVE shield as 5 x its absolute value", async () => {
+            // Reference "Negative shïp Shield (E1), wave 40": a Shield
+            // -100 hull dropped exactly like a Shield 500 one.
+            const ship = await parse({ shield: -100 });
+            expect(ship.physics.shield).toBe(500);
+        });
+    });
+
     describe("FuelRegen and Flags 0x0008 (EVN Bible ~:2517, ~:2554)", () => {
         it("converts FuelRegen for AI use whether or not the flag is set",
             async () => {
