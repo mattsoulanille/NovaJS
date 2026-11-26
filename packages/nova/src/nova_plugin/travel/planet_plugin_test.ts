@@ -19,7 +19,8 @@ import {
     holdsGateClearance, holdsRequest,
     STELLAR_CLEARANCE_RANGE, HYPERGATE_ONLINE, HYPERGATE_ONLINE_OUT_OF,
     HYPERGATE_SELECT_RANGE, hypergateRequestOnline,
-    inLandingZone, WORMHOLE_LAND_RANGE_CAP, LANDING_REQUEST_FORMS,
+    inClearanceZone, inLandingZone, WORMHOLE_LAND_RANGE_CAP,
+    LANDING_REQUEST_FORMS,
     STELLAR_CLEARANCE_MS, STELLAR_CLEARED_FORM_ODDS, STELLAR_CLEARED_OUT_OF,
     STELLAR_CLEARED_WELCOME, stellarApproachRange, stellarClearedForm,
     LAND_RANGE_PER_FRAME_WIDTH, LAND_SPEED_SQUARED, LandEvent,
@@ -300,38 +301,51 @@ describe('AttemptLandingSystem', () => {
 
 /**
  * The landing zone measured on the original (docs/reference_experiments.md,
- * "U9 wave 6: landing range of the tiny stations", which re-reads wave 4's
- * runs): a SQUARE, max(|dx|, |dy|) <= R, R = 1.74 W from the frame's
- * width W, with no cap since wave 31 ("Planet and station clearance, wave
- * 31", finding 3: wave 6's 212 px cap was the clearance zone and its lapse
- * read through a stale request); the speed gate is an absolute 20 px/s
- * ("U9 wave 4").
+ * "Cleared landing window, wave 34", over "U9 wave 6: landing range of the
+ * tiny stations", which re-reads wave 4's runs): a SQUARE, max(|dx|, |dy|)
+ * < R, STRICT, R = trunc(1.75 W) from the frame's width W, with no cap
+ * since wave 31 ("Planet and station clearance, wave 31", finding 3: wave
+ * 6's 212 px cap was the clearance zone and its lapse read through a stale
+ * request); the speed gate is an absolute 20 px/s ("U9 wave 4").
  */
 describe('landingRange', () => {
-    it('is 1.74 x the frame WIDTH, with no cap (wave 33)', () => {
-        expect(LAND_RANGE_PER_FRAME_WIDTH).toBe(1.74);
-        expect(landingRange([40, 40])).toBeCloseTo(69.6, 9);
-        expect(landingRange([112, 112])).toBeCloseTo(194.88, 9);
-        expect(landingRange([250, 250])).toBeCloseTo(435, 9);
-        expect(landingRange([325, 325])).toBeCloseTo(565.5, 9);
+    it('is trunc(1.75 x the frame WIDTH), with no cap (wave 34)', () => {
+        expect(LAND_RANGE_PER_FRAME_WIDTH).toBe(1.75);
+        // Wave 34's four arts: 40 -> 70, 72 -> 126, 17 -> 29 (29.75
+        // truncated), 100 -> 175.
+        expect(landingRange([40, 40])).toBe(70);
+        expect(landingRange([72, 72])).toBe(126);
+        expect(landingRange([17, 31])).toBe(29);
+        expect(landingRange([100, 70])).toBe(175);
+        expect(landingRange([112, 112])).toBe(196);
+        expect(landingRange([250, 250])).toBe(437);
+        expect(landingRange([325, 325])).toBe(568);
     });
 
     it('reads the width, never the height (tall and wide stations)', () => {
-        // 15x21 -> 26.1 and 17x31 -> 29.58, not 36.5 and 53.9; 35x22 ->
-        // 60.9, not 38.3.
-        expect(landingRange([15, 21])).toBeCloseTo(26.1, 9);
-        expect(landingRange([17, 31])).toBeCloseTo(29.58, 9);
-        expect(landingRange([35, 22])).toBeCloseTo(60.9, 9);
-        expect(landingRange([315, 200])).toBeCloseTo(548.1, 9);
+        // 15x21 -> 26 and 17x31 -> 29, not 36 and 54; 35x22 -> 61, not
+        // 38; 100x70 -> 175, not 122.
+        expect(landingRange([15, 21])).toBe(26);
+        expect(landingRange([17, 31])).toBe(29);
+        expect(landingRange([35, 22])).toBe(61);
+        expect(landingRange([100, 70])).toBe(175);
+        expect(landingRange([315, 200])).toBe(551);
     });
 
-    it('measures the zone as a square (max(|dx|, |dy|), inclusive)', () => {
+    it('measures the zone as a square (max(|dx|, |dy|)), strict', () => {
         expect(landingDistance(-28, -22)).toBe(28);
         expect(landingDistance(3, -40)).toBe(40);
-        expect(inLandingZone(50, 50, 50)).toBeTrue();
-        expect(inLandingZone(50, 50.01, 50)).toBeFalse();
-        expect(inLandingZone(-50, 0, 50)).toBeTrue();
+        expect(inLandingZone(49.99, 49.99, 50)).toBeTrue();
+        expect(inLandingZone(50, 0, 50)).toBeFalse();
+        expect(inLandingZone(49, 50, 50)).toBeFalse();
+        expect(inLandingZone(-49, 0, 50)).toBeTrue();
     });
+
+    it('keeps the 249 px clearance square inclusive (unmeasured edge)',
+        () => {
+            expect(inClearanceZone(249, -249)).toBeTrue();
+            expect(inClearanceZone(249.01, 0)).toBeFalse();
+        });
 
     it('gives the default PlanetData, and unknown data, the 50 px frame\'s '
         + '87 px zone', () => {
@@ -467,10 +481,53 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
                 expect(press(frame, [stop, 0]))
                     .withContext(`${frame} at ${stop}`).toEqual('landed');
             }
-            // Wave 33: too far at 439.4 (1.74 W = 435).
+            // Wave 33: too far at 439.4 (trunc(1.75 W) = 437): 436
+            // lands, 437 does not.
             expect(press([250, 250], [439.4, 0])).toEqual('tooFar');
-            expect(press([250, 250], [436, 0])).toEqual('tooFar');
+            expect(press([250, 250], [436, 0])).toEqual('landed');
+            expect(press([250, 250], [437, 0])).toEqual('tooFar');
         }, 30_000);
+
+    // Reference "Cleared landing window, wave 34": four arts at rest, each
+    // edge to the pixel (landed / too far), the walk-out from the 315 x
+    // 200 station, and the 96 / 160 px hulls too far at 150 px from the
+    // 72 px planet (the window is centre to centre; NovaJS's has no ship
+    // term at all).
+    it('matches wave 34\'s four at-rest edges to the pixel', async () => {
+        const press = await presser();
+        const edges: Array<[string, [number, number], number, number]> = [
+            ['40 px planet', [40, 40], 69, 70],
+            ['72 px planet', [72, 72], 125, 126],
+            ['17 x 31 station', [17, 31], 28, 29],
+            ['100 x 70 station', [100, 70], 174, 175],
+        ];
+        for (const [name, frame, landed, tooFar] of edges) {
+            expect(press(frame, [landed, 0]))
+                .withContext(`${name} landed at ${landed}`).toEqual('landed');
+            expect(press(frame, [0, -landed]))
+                .withContext(`${name} landed at ${landed} (y)`)
+                .toEqual('landed');
+            expect(press(frame, [tooFar, 0]))
+                .withContext(`${name} too far at ${tooFar}`)
+                .toEqual('tooFar');
+            expect(press(frame, [-tooFar, 3]))
+                .withContext(`${name} too far at -${tooFar}`)
+                .toEqual('tooFar');
+        }
+        // The 17 px station's window is the TRUNCATED 1.75 W: 28.9 lands
+        // (under 29) though 1.75 W is 29.75 (unmeasured between 28 and 29:
+        // the wave-34 leftover "a fractional ship position").
+        expect(press([17, 31], [28.9, 0])).toEqual('landed');
+        // The 315 x 200 station docked from 545.4 (dy -18): 1.7 W = 535.5
+        // would have refused; trunc(1.75 W) = 551.
+        expect(press([315, 200], [545.4, -18])).toEqual('landed');
+        expect(press([315, 200], [551, 0])).toEqual('tooFar');
+        // The 96 and 160 px hulls at 150 px from the 72 px planet.
+        expect(press([72, 72], [150, 0])).toEqual('tooFar');
+        // Wave 6's 80 px frame too far at exactly 140 = trunc(1.75 x 80).
+        expect(press([80, 80], [140, 0])).toEqual('tooFar');
+        expect(press([80, 80], [139, 0])).toEqual('landed');
+    }, 30_000);
 
     it('agrees with wave 4\'s circular (Euclidean) brackets', () => {
         // Wave 4 measured distance from the centre, not the offsets. A stop
@@ -491,7 +548,7 @@ describe('AttemptLandingSystem square zone vs the measured brackets', () => {
         for (const [frame, tooFar, landed] of circle) {
             const range = landingRange(frame);
             expect(landed / Math.SQRT2).withContext(`${frame} landed`)
-                .toBeLessThanOrEqual(range);
+                .toBeLessThan(range);
             expect(tooFar).withContext(`${frame} too far`)
                 .toBeGreaterThan(range);
         }
@@ -527,12 +584,12 @@ describe('AttemptLandingSystem landing window', () => {
     }
 
     it('reads the range from the stellar\'s sprite: Port Amberline\'s '
-        + '40 px frame lands within 69.6 px', async () => {
+        + '40 px frame lands short of 70 px', async () => {
             const { world } = await atStellar(PORT);
             const data = world.entities.get(PORT)!
                 .components.get(PlanetDataComponent)!;
             expect(data.spriteFrameSize).toEqual([40, 40]);
-            expect(stellarLandingRange(data)).toBeCloseTo(69.6, 9);
+            expect(stellarLandingRange(data)).toBe(70);
 
             const inside = await pressAt(PORT, 69);
             expect(inside.blocked).toEqual([]);
@@ -544,18 +601,18 @@ describe('AttemptLandingSystem landing window', () => {
         }, 30_000);
 
     it('gives a smaller sprite a smaller range: the Sallow Moon\'s 28 px '
-        + 'frame lands within 48.72 px', async () => {
+        + 'frame lands short of 49 px', async () => {
             expect((await pressAt(MOON, 48)).lands.length).toBe(1);
             expect((await pressAt(MOON, 49)).blocked.map(b => b.reason))
                 .toEqual(['tooFar']);
         }, 30_000);
 
     it('lands a cleared ship on a big planet from far out (a 325 px frame '
-        + 'lands within 565.5 px: no 212 px cap since wave 31)', async () => {
+        + 'lands short of 568 px: no 212 px cap since wave 31)', async () => {
             const big: [number, number] = [325, 325];
-            expect((await pressAt(PORT, 565, undefined, big)).lands.length)
+            expect((await pressAt(PORT, 567, undefined, big)).lands.length)
                 .toBe(1);
-            expect((await pressAt(PORT, 566, undefined, big)).blocked
+            expect((await pressAt(PORT, 568, undefined, big)).blocked
                 .map(b => b.reason)).toEqual(['tooFar']);
         }, 30_000);
 
@@ -1814,9 +1871,10 @@ describe('the hypergate `l` range and the request lines', () => {
 // the CLEARANCE zone (the selecting `l`, and the automatic clearance of a
 // standing request) is a square of half-side 248-250 px whatever the art
 // (STELLAR_CLEARANCE_RANGE, 249 a GUESS inside it); the ENTRY window
-// (the `l` that opens the gate map) goes by the art, 1.74 x its width, with
-// no 212 px cap. On the synthetic Kestrel Gate, its art set to the stock
-// 150 px gate's or to the 72 px planet art of Kit Gate Small.
+// (the `l` that opens the gate map) goes by the art, trunc(1.75 x its
+// width) (wave 34), with no 212 px cap. On the synthetic Kestrel Gate,
+// its art set to the stock 150 px gate's or to the 72 px planet art of Kit
+// Gate Small.
 describe('hypergates, wave 30: the clearance zone, the entry window, the '
     + 'automatic clearance and the #74 / #75 draw', () => {
     const KESTREL_GATE = `planet ${SYNTHETIC.planets.kestrelGate}`;
@@ -1865,24 +1923,27 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
         return pressRecording(world);
     }
 
-    it('makes the gate entry window 1.74 x the art with no 212 px cap (a '
-        + 'planet\'s too since wave 31; a wormhole keeps it)', () => {
+    it('makes the gate entry window trunc(1.75 x the art) with no 212 px '
+        + 'cap (a planet\'s too since wave 31; a wormhole keeps it)', () => {
         expect(STELLAR_CLEARANCE_RANGE).toBe(249);
         const gate = (w: number, kind: 'hypergate' | 'wormhole' =
             'hypergate'): PlanetData => ({
             ...getDefaultPlanetData(), spriteFrameSize: [w, w],
             gate: { kind, destinations: [], emergenceAngle: 0 },
         });
-        expect(stellarLandingRange(gate(150))).toBeCloseTo(261, 9);
-        expect(stellarLandingRange(gate(72))).toBeCloseTo(125.28, 9);
-        expect(stellarLandingRange(gate(300))).toBeCloseTo(522, 9);
+        expect(stellarLandingRange(gate(150))).toBe(262);
+        expect(stellarLandingRange(gate(72))).toBe(126);
+        // Wave 31's 96 px gate: in at 155, out at 172.
+        expect(stellarLandingRange(gate(96))).toBe(168);
+        expect(stellarLandingRange(gate(300))).toBe(525);
         expect(stellarLandingRange({
             ...getDefaultPlanetData(), spriteFrameSize: [300, 300],
-        })).toBeCloseTo(522, 9);
+        })).toBe(525);
         expect(WORMHOLE_LAND_RANGE_CAP).toBe(212);
         expect(stellarLandingRange(gate(300, 'wormhole'))).toBe(212);
-        expect(stellarLandingRange(gate(72, 'wormhole')))
-            .toBeCloseTo(125.28, 9);
+        expect(stellarLandingRange(gate(72, 'wormhole'))).toBe(126);
+        // The stock 104 px wormhole: 182 (unmeasured between 150 and 230).
+        expect(stellarLandingRange(gate(104, 'wormhole'))).toBe(182);
     });
 
     it('clears inside a 249 px SQUARE and requests outside it, the same '
@@ -2040,8 +2101,8 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
 // 249 px square (whatever the art) CLEARS and prints "Cleared to land,
 // <ship>. Welcome to <port>." etc. (#94-101), a standing request is
 // cleared with no press on entering it, only a cleared ship lands, inside
-// 1.74 x the art's width with no 212 px cap, and a clearance lapses within
-// 13.4-25.1 s (20 s, GUESS). Port Amberline stands in for every art, its
+// trunc(1.75 x the art's width) with no 212 px cap (wave 34), and a
+// clearance lapses within 13.4-25.1 s (20 s, GUESS). Port Amberline stands in for every art, its
 // frame and station flag swapped; the ship sits east of it, where it is
 // the nearest port.
 describe('planets and stations, wave 31: the clearance square, the cleared '
@@ -2147,7 +2208,7 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
     }, 30_000);
 
     it('answers "too far" to an uncleared press outside the square even '
-        + 'inside 1.74 W (finding 4: the 250 px planet and the 315 px '
+        + 'inside trunc(1.75 W) (finding 4: the 250 px planet and the 315 px '
         + 'station requested at 260)', async () => {
         for (const [frame, isStation] of [
             [[250, 250], false], [[315, 200], true],
@@ -2175,10 +2236,10 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
 
     it('lands a ship cleared at 230 px on a 250 px planet from 294, 359 '
         + 'and 425 px (finding 3: no 212 px cap) and 432.4 (wave 33), and '
-        + 'not from 436 (1.74 W = 435; wave 33 too far at 439.4)',
+        + 'not from 437 (trunc(1.75 W); wave 33 too far at 439.4)',
         async () => {
             const { world, ship, stellar } = await port([250, 250]);
-            for (const dx of [294, 359, 425, 432.4]) {
+            for (const dx of [294, 359, 425, 432.4, 436]) {
                 expect(selectAt(world, ship, stellar, 230).cleared.length)
                     .toBe(1);
                 at(ship, stellar, dx);
@@ -2187,7 +2248,7 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
             }
             expect(selectAt(world, ship, stellar, 230).cleared.length)
                 .toBe(1);
-            at(ship, stellar, 436);
+            at(ship, stellar, 437);
             const far = pressRecording(world);
             expect(far.blocked).toEqual(['tooFar']);
             // Still cleared: no fresh request, no fresh clearance.
@@ -2197,7 +2258,7 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
         }, 30_000);
 
     it('says "too far" to a cleared 72 px planet\'s second `l` at 140 and '
-        + '230 px (window 125), and lands inside it', async () => {
+        + '230 px (window 126), and lands inside it', async () => {
         const { world, ship, stellar } = await port([72, 72]);
         for (const dx of [140, 230]) {
             expect(selectAt(world, ship, stellar, dx).cleared.length)
@@ -2465,7 +2526,7 @@ describe('planets and stations, wave 31: the clearance square, the cleared '
             });
             expect(stellarApproachRange(planet(250)))
                 .toBe(STELLAR_CLEARANCE_RANGE);
-            expect(stellarApproachRange(planet(72))).toBeCloseTo(125.28, 9);
+            expect(stellarApproachRange(planet(72))).toBe(126);
             expect(stellarApproachRange({
                 ...planet(325),
                 gate: { kind: 'wormhole', destinations: [],

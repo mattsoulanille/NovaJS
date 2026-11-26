@@ -26,7 +26,7 @@ export interface ControlSinks {
  * a SQUARE around its centre measured as max(|dx|, |dy|)
  * (landingDistance) of half-width stellarApproachRange (the smaller of
  * the 249 px clearance zone, where the first tap clears, and the art's
- * 1.74 W window, where the next one lands), and slower than 20 px/s
+ * trunc(1.75 W) window, where the next one lands), and slower than 20 px/s
  * (LAND_SPEED_SQUARED); aim inside both: 90% of the half-width on the
  * same square, half the speed² (about 14 px/s). The approach itself flies
  * at the centre, so it enters the square on any heading.

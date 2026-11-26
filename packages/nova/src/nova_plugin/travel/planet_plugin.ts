@@ -372,10 +372,11 @@ export const HYPERGATE_SELECT_RANGE = 500;
  * and 17 and 315 px stations cleared at 230 / 245 and requested at 260,
  * and a coasting request was cleared at max(|dx|, |dy|) 244-246 for both
  * port arts ("Planet and station clearance, wave 31", finding 2). GUESS on
- * the exact edge inside the 248-250 bracket: 249, inclusive like the
- * landing zone. Wormholes have no clearance step. The LANDING window (the
- * press that lands, docks or opens the gate map) is separate and goes by
- * the art: {@link stellarLandingRange}.
+ * the exact edge inside the 248-250 bracket: 249, inclusive
+ * (inClearanceZone; the landing window's strict edge, wave 34, was
+ * measured on the window alone). Wormholes have no clearance step. The
+ * LANDING window (the press that lands, docks or opens the gate map) is
+ * separate and goes by the art: {@link stellarLandingRange}.
  */
 export const STELLAR_CLEARANCE_RANGE = 249;
 
@@ -554,26 +555,24 @@ registerSimulationBridgeEvent({ event: LandingRequestEvent });
 export const LAND_SPEED_SQUARED = 400;
 
 /**
- * The landing zone's half-width per px of the stellar's frame WIDTH. FITTED
- * on the original (docs/reference_experiments.md, "U9 wave 6: landing range
- * of the tiny stations"): measured as max(|dx|, |dy|), every at-rest bracket
- * of waves 4 and 6 allows k = R / W between 1.66 (88 px frame: landed at
- * 146, too far at 167) and 1.75 (80 px frame: landed at 117.5, too far at
- * 140); the 15x21 and 17x31 stations, the 35x22 one and the 40-112 px
- * planets all agree with about 1.7.
- *
- * Reference "Landing leftovers, wave 33", finding 2: the cleared 250 px
- * planet LANDED from 432.4 px and was too far at 439.4, so k is at least
- * 1.73 (432.4 / 250) and under 1.758; 1.7 (425) was a little short. With
- * the 80 px frame's "too far" at exactly 140 (k < 1.75, the zone being
- * inclusive) that leaves [1.730, 1.75): 1.74 is the middle (435 px for the
- * 250 px art, 139.2 for the 80 px one). GUESS: one art measured past 425,
- * and a straight k at all (1.7 W plus the ship's half-size, or a wider
- * true frame, fit as well); every older bracket (the 15-112 px planets
- * and stations, the 72 / 96 / 150 / 325 px gates, the 315x200 station's
- * dock from 230) still holds.
+ * The landing window's factor on the stellar's frame WIDTH: the window is
+ * trunc(1.75 W), strict (landingRange, inLandingZone). MEASURED to the
+ * pixel at rest on four arts (docs/reference_experiments.md, "Cleared
+ * landing window, wave 34", finding 1): a cleared ship landed / was too
+ * far at 69 / 70 px from a 40 px planet, 125 / 126 from a 72 px planet,
+ * 28 / 29 from the 17 x 31 station (1.75 W = 29.75: the truncation) and
+ * 174 / 175 from the 100 x 70 station, so every art lands one pixel inside
+ * trunc(1.75 W) and refuses ON it. Every older reading fits: wave 6's 80 px
+ * frame too far at exactly 140 ("U9 wave 6"; its 88 px frame landed at
+ * 146, too far at 167), wave 31's walk-out landing from 425.4 and wave
+ * 33's 250 px planet landing from 432.4 and too far at 439.4 (437), the
+ * 315 x 200 station docked from 545.4 (551), the 96 px gate in at 155 and
+ * out at 172 (168). Stations go by their width like planets (finding 2),
+ * and the ship's own size plays no part (finding 3: 96 and 160 px hulls
+ * too far at 150 px from the 72 px planet), so the window is centre to
+ * centre; no plain inclusive factor fits all four arts (finding 4).
  */
-export const LAND_RANGE_PER_FRAME_WIDTH = 1.74;
+export const LAND_RANGE_PER_FRAME_WIDTH = 1.75;
 /**
  * A WORMHOLE's landing-window cap, in px: wave 6's planet cap ("U9 wave
  * 6": the 250 px art too far at 235.5, the 325 px art at 213), kept for
@@ -582,6 +581,9 @@ export const LAND_RANGE_PER_FRAME_WIDTH = 1.74;
  * reliability note "U9's 212 px landing cap is superseded"), and gates
  * have none (waves 30-31: a 325 px gate's map at 245); nothing measured a
  * wormhole wider than 125 px, so wormholes keep the old rule (GUESS).
+ * The stock 104 px wormhole's window is trunc(1.75 x 104) = 182, under the
+ * cap; wave 34 ("Wormholes, wave 34") put it through at 150 px and "too
+ * far" at 230, the edge between them unmeasured.
  */
 export const WORMHOLE_LAND_RANGE_CAP = 212;
 /** getDefaultPlanetData's frame size, used when the frame is unknown. */
@@ -589,17 +591,18 @@ const DEFAULT_SPRITE_FRAME_SIZE: readonly [number, number] = [50, 50];
 
 /**
  * The half-width of a stellar's landing window, in px, from one frame of
- * its sprite ([width, height]): R = 1.74 W (LAND_RANGE_PER_FRAME_WIDTH),
- * W the frame's WIDTH, with no cap (reference "Planet and station
- * clearance, wave 31", finding 3: a ship cleared at a 250 px planet landed
- * from 425.4 px; "Landing leftovers, wave 33": and from 432.4, not 439.4).
+ * its sprite ([width, height]): R = trunc(1.75 W)
+ * (LAND_RANGE_PER_FRAME_WIDTH), W the frame's WIDTH, with no cap, and a
+ * ship lands only STRICTLY inside it (inLandingZone; reference "Cleared
+ * landing window, wave 34": 40 px -> 70, 72 px -> 126, 17 px -> 29, 100 px
+ * -> 175, each refused on the edge and landed a pixel inside it).
  *
  * The zone is a SQUARE around the stellar's centre, not a circle: the
- * original lands a ship when max(|dx|, |dy|) <= R (inLandingZone).
+ * original lands a ship when max(|dx|, |dy|) < R (inLandingZone).
  * Measured ("U9 wave 6"): a 17x31 station landed at (-28, -22), 35.6 px
  * away on the diagonal, but was too far at (-6, 34), 34.5 px straight
  * below: no circle fits that pair, the square does. Tall and wide frames
- * land like their width (15x21 -> about 25 px, 17x31 -> 29, 35x22 -> 60),
+ * land like their width (15x21 -> 26 px, 17x31 -> 29, 35x22 -> 61),
  * never their height; the station flag changes nothing.
  *
  * Only a CLEARED ship lands inside it (a port, a station or a gate): an
@@ -608,7 +611,7 @@ const DEFAULT_SPRITE_FRAME_SIZE: readonly [number, number] = [50, 50];
  */
 export function landingRange(spriteFrameSize: readonly [number, number]):
     number {
-    return LAND_RANGE_PER_FRAME_WIDTH * spriteFrameSize[0];
+    return Math.trunc(LAND_RANGE_PER_FRAME_WIDTH * spriteFrameSize[0]);
 }
 
 /**
@@ -620,10 +623,20 @@ export function landingDistance(dx: number, dy: number): number {
 }
 
 /** Whether an offset (dx, dy) from a stellar's centre is inside a landing
- * zone of half-width `range` (inclusive: the original's <= R). */
+ * window of half-width `range`: STRICT, the original's max(|dx|, |dy|) < R
+ * (reference "Cleared landing window, wave 34": every art refused a ship
+ * exactly on trunc(1.75 W)). */
 export function inLandingZone(dx: number, dy: number, range: number):
     boolean {
-    return landingDistance(dx, dy) <= range;
+    return landingDistance(dx, dy) < range;
+}
+
+/** Whether an offset (dx, dy) from a stellar's centre is inside its
+ * CLEARANCE zone, the square of half-side STELLAR_CLEARANCE_RANGE,
+ * inclusive (a GUESS inside the measured 248-250 bracket, unchanged by
+ * wave 34, which measured only the landing window's edge). */
+export function inClearanceZone(dx: number, dy: number): boolean {
+    return landingDistance(dx, dy) <= STELLAR_CLEARANCE_RANGE;
 }
 
 /**
@@ -635,10 +648,11 @@ export function inLandingZone(dx: number, dy: number, range: number):
  *
  * A HYPERGATE's entry window (the `l` that opens the gate map once the
  * ship is cleared) goes by the art like a planet's: the stock 150 px
- * gate's map opened at 248 px and on the 255 px (180, 180) diagonal (1.7
- * x 150 = 255), a 72 px gate's second `l` was "too far" at 140 px (1.7 x
- * 72 = 122; reference "Hypergates, wave 30", finding 2), a 96 px gate's
- * map opened at 155 and not at 172, and a 325 px gate's at 245
+ * gate's map opened at 248 px and on the 255 px (180, 180) diagonal
+ * (trunc(1.75 x 150) = 262), a 72 px gate's second `l` was "too far" at
+ * 140 px (126; reference "Hypergates, wave 30", finding 2), a 96 px
+ * gate's map opened at 155 and not at 172 (168), and a 325 px gate's at
+ * 245
  * ("Hypergates across art sizes, wave 31"). A WORMHOLE keeps the old
  * 212 px cap (WORMHOLE_LAND_RANGE_CAP; not measured). Clearing the ship is
  * a separate, art-independent zone: STELLAR_CLEARANCE_RANGE.
@@ -882,7 +896,7 @@ const AttemptLandingSystem = new System({
                 return;
             }
             const offset = stellarPosition.subtract(position);
-            if (inLandingZone(offset.x, offset.y, STELLAR_CLEARANCE_RANGE)) {
+            if (inClearanceZone(offset.x, offset.y)) {
                 clear(uuid, id, planetData);
                 return;
             }
@@ -930,8 +944,10 @@ const AttemptLandingSystem = new System({
             // once cleared).
             const awaitingClearance = usesClearance
                 && !holdsClearance(planetTarget, now);
-            const range = awaitingClearance ? STELLAR_CLEARANCE_RANGE
-                : stellarLandingRange(planetData);
+            const inZone = awaitingClearance
+                ? inClearanceZone(offset.x, offset.y)
+                : inLandingZone(offset.x, offset.y,
+                    stellarLandingRange(planetData));
             // A gate's window lines name the gate ("You're too far away to
             // enter this hypergate." / "... wormhole.", STR# 2002 one-based
             // 65 / 66 and 69 / 70, reference "Gate approach lines, wave
@@ -940,7 +956,7 @@ const AttemptLandingSystem = new System({
                 ? { gateKind: planetData.gate.kind } : {};
             // "Too far" (outside the square zone) before "too fast", as
             // the original answers.
-            if (!inLandingZone(offset.x, offset.y, range)) {
+            if (!inZone) {
                 emit(LandingBlockedEvent,
                     { reason: 'tooFar', isStation, ...gateKind },
                     [playerUuid]);
@@ -1164,8 +1180,7 @@ export const StellarAutoClearanceSystem = new System({
                 return;
             }
             const offset = stellarPosition.subtract(position);
-            if (!inLandingZone(offset.x, offset.y,
-                STELLAR_CLEARANCE_RANGE)) {
+            if (!inClearanceZone(offset.x, offset.y)) {
                 return;
             }
             if (!stellarClearanceFor({

@@ -162,10 +162,10 @@ describe('Autopilot landing on the square zone', () => {
         + 'is wider, and lands from there', () => {
             const big = { ...getDefaultPlanetData(),
                 spriteFrameSize: [250, 250] as [number, number] };
-            expect(stellarLandingRange(big)).toBeCloseTo(435, 9);
+            expect(stellarLandingRange(big)).toBe(437);
             expect(stellarApproachRange(big)).toBe(STELLAR_CLEARANCE_RANGE);
             const small = { ...getDefaultPlanetData(),
                 spriteFrameSize: [72, 72] as [number, number] };
-            expect(stellarApproachRange(small)).toBeCloseTo(125.28, 9);
+            expect(stellarApproachRange(small)).toBe(126);
         });
 });
