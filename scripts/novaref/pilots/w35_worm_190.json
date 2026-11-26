@@ -1,0 +1,20 @@
+{
+  "name": "novaref-w35-worm-190",
+  "edits": {
+    "ship": 497,
+    "stellar": 1887,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1204": 2,
+      "1324": 2,
+      "1346": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w35-worm-190"
+  }
+}

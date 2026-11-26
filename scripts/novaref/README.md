@@ -535,6 +535,12 @@ Wave 34 used sÿst 1304-1338, spöb 1804-1872, shïp 557-562 and düde 483-487
 shïp 563, düde 488, ränk 205, mïsn **none**, wëap 295, oütf 470, gövt 295
 and below, flët 318, bits 9250. Wormhole rigs: clone stock spöb 465 (Flags
 0x21, Flags2 0x2200) and give HyperLinks the destination WORMHOLE's spöb id.
+Wave 35 used sÿst 1339-1364, spöb 1873-1911, shïp 563-573, düde 488-496
+and flët 318-320 (no mïsn); next free: sÿst 1365, spöb 1912 (spares 1495 /
+1496 / 1499), shïp 574, düde 497, ränk 205, mïsn **none**, wëap 295, oütf
+470, gövt 295 and below, flët 321, bits 9250. A flët placed by a system
+(DudeTypes -id) gives an NPC fight a fixed side; `scenarios/w35_space_early.json`
+records from before Enter Ship (a traffic fight's first seconds).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

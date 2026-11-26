@@ -306,8 +306,153 @@ export default {
         ...wave32Resources(),
         ...wave33Resources(),
         ...wave34Resources(),
+        ...wave35Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-35 experiments (docs/reference_experiments.md, "... wave 35").
+ * Nothing retired (no mïsn needed). sÿst 1339-1364, spöb 1873-1911, shïp
+ * 563-573, düde 488-496, flët 318-320. Map row y = -2400 (x -800 .. 200).
+ * The next free ids: sÿst 1365+, spöb 1912+ (spares 1495, 1496, 1499), shïp
+ * 574+, düde 497+, ränk 205+, mïsn NONE (retire an old kit mission to add
+ * one), gövt 295 and below, flët 321+, wëap 295+, oütf 470+, bits 9250+.
+ *
+ * LESSONS: AI 3 traffic comes and goes within a minute or two, so an NPC
+ * fight's composition is only known for a call in the first seconds; small
+ * traffic (avgShips 2) gives one of each about half the time. A shield
+ * recharge of 30000 (30 points a frame) keeps a hull at 100% through any
+ * fight, so the shield weighting can be held fixed.
+ *
+ *  W   A wormhole's entry window and `l` selection range (wave 34's Kit Worm
+ *      rigs: the pilot at rest on a decoration stellar at (0, 0), the stock
+ *      Wormhole art and flags, spöb 465's 104 px art, at (d, 0), linked to
+ *      wave 34's Kit Worm Dest wormhole 1847). The window: Kit Worm 170 / 176
+ *      / 177 / 180 / 181 / 182 / 183 / 190 (sÿst 1339-1346, spöb 1873-1888;
+ *      1.7 W = 176.8, 1.74 W = 181.0, trunc(1.75 W) = 182). The selection:
+ *      Kit Worm Far 400 / 498 / 500 / 600 (sÿst 1347-1350, spöb 1889-1896)
+ *      and Kit Worm Far Diag 400 (the wormhole at (400, 400): max 400,
+ *      distance 566; sÿst 1351, spöb 1897-1898).
+ *  R19 NPC fights (wave 34's Kit Reinf Hunt rigs, gövt 297 / 296, MaxOdds
+ *      100), with hulls that keep their shield: shïp 563 Kit RH Hunter Full
+ *      (Strength 10, 30000 shield recharging 30000 / 1000 a frame, so it
+ *      stays at 100%), 564 Kit RH Hunter Weak (Strength 10, 10 shield, 30000
+ *      armor: 0% shield after the first hit), 565 / 566 Kit RH Prey S12 /
+ *      S11 Full (armed AI 3 preys of gövt 296, recharging like 563); düde
+ *      488-491. sÿst 1352 Kit Reinf Friends Full (Hunter Full 80 : Prey S12
+ *      Full 20, avgShips 5: 2 preys against 3 hunters is 24 against 30) and
+ *      1353 Kit Reinf Friends Weak (the same with Hunter Weak); 1354 Kit Reinf
+ *      Odds 1.1 (Hunter Full 50 : Prey S11 Full 50, avgShips 4: equal counts
+ *      are 1.1 to 1); 1355 Kit Reinf Day (Hunter Full 50 : wave 33's
+ *      Strength-500 armed prey 482 50, ReinfFleet 318 Kit Reinf Fleet Fragile:
+ *      three shïp 567 Kit RF Fragile, 60 armor, no shield, Strength 1, so the
+ *      preys destroy the fleet and the hunters stay under attack the same
+ *      visit). Ports spöb 1899-1902 at the centres.
+ *  C   Capture at crew ratio 6.5: shïp 568 Kit Ring Crawler Crew 65 against
+ *      wave 8's crew-10 hulk.
+ */
+function wave35Resources() {
+    const out = [];
+    const Y = -2400;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const decoration = (id, name, x = 0, y = 0) => spob(id, name, x, y, 132, { flags: 0, techLevel: 0, specialTech: [-1, -1, -1] });
+    let sid = 1339, pid = 1873;
+    const DEST = 1847;
+    const worm = (id, name, x, y) => spob(id, name, x, y, 465, { flags: 0x21, flags2: 0x2200, govt: -1, minStatus: -32767,
+        techLevel: 0, specialTech: [-1, -1, -1], hyperlinks: [DEST, ...none8].slice(0, 8) });
+    const rig = (label, x, y) => {
+        out.push(system(sid, label, nextX(), Y, 363, [pid, pid + 1]), decoration(pid, `${label} Start`), worm(pid + 1, label, x, y));
+        sid++;
+        pid += 2;
+    };
+    // --- W: sÿst 1339-1351, spöb 1873-1898.
+    for (const d of [170, 176, 177, 180, 181, 182, 183, 190]) rig(`Kit Worm ${d}`, d, 0);
+    for (const d of [400, 498, 500, 600]) rig(`Kit Worm Far ${d}`, d, 0);
+    rig("Kit Worm Far Diag 400", 400, 400);
+    if (sid !== 1352 || pid !== 1899) throw new Error(`wave35: W ended at sÿst ${sid}, spöb ${pid}`);
+    // --- R19: shïp 563-567, düde 488-491, flët 318, sÿst 1352-1355, spöb 1899-1902.
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { red: 1971, green: 1972, purple: 1960 };
+    const mobile = { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 10, crew: 10, flags: 0, flags2: 0 };
+    const escortGun = { weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] };
+    const full = { armor: 30000, shield: 30000, shieldRecharge: 30000 };
+    out.push(...shareRled(563, "Kit RH Hunter Full", RLED.red, 24, { ...mobile, ai: 3, ...full, strength: 10, ...escortGun }));
+    out.push(...shareRled(564, "Kit RH Hunter Weak", RLED.red, 24, { ...mobile, ai: 3, armor: 30000, shield: 10, shieldRecharge: 0, strength: 10,
+        ...escortGun }));
+    out.push(...shareRled(565, "Kit RH Prey S12 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 12, ...escortGun }));
+    out.push(...shareRled(566, "Kit RH Prey S11 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 11, ...escortGun }));
+    out.push(...shareRled(567, "Kit RF Fragile", RLED.purple, 24, { ...mobile, ai: 3, armor: 60, shield: 0, shieldRecharge: 0, strength: 1,
+        ...escortGun }));
+    out.push(dude(488, "Kit RH Hunter Full", 3, 297, 563), dude(489, "Kit RH Hunter Weak", 3, 297, 564),
+        dude(490, "Kit RH Prey S12 Full", 3, 296, 565), dude(491, "Kit RH Prey S11 Full", 3, 296, 566));
+    const fleet = (id, name, lead, escorts, govtId, linkSyst) => ({ type: "flët", id, name, clone: "flët:128",
+        set: { "@0:i16": lead, "@2:i16x4": escorts.map((e) => e[0]), "@10:i16x4": escorts.map((e) => e[1]), "@18:i16x4": escorts.map((e) => e[2]),
+            "@26:i16": govtId, "@28:i16": linkSyst, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    out.push(fleet(318, "Kit Reinf Fleet Fragile", 567, [[567, 2, 2], [567, 0, 0], [567, 0, 0], [567, 0, 0]], 297, 1594));
+    const hunt = (name, avgShips, dudes, probs, reinfFleet) => {
+        const sys = system(sid, name, nextX(), Y, 297, [pid]);
+        sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...probs, ...zero8].slice(0, 8),
+            reinfFleet, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(pid, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+        sid++;
+        pid++;
+    };
+    hunt("Kit Reinf Friends Full", 5, [488, 490], [80, 20], 317);
+    hunt("Kit Reinf Friends Weak", 5, [489, 490], [80, 20], 317);
+    hunt("Kit Reinf Odds 1.1", 4, [488, 491], [50, 50], 317);
+    hunt("Kit Reinf Day", 4, [488, 482], [50, 50], 318);
+    // --- C: shïp 568, the crew-65 boarder (wave 32's Tough boarder otherwise).
+    const tough = { accel: 2000, speed: 100, turn: 30, armor: 3000, shield: 100, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 50,
+        maxGuns: 8, maxTurrets: 8, ai: 3, strength: 50, crew: 10, flags: 0, flags2: 0x00C8 };
+    out.push(...shareRled(568, "Kit Ring Crawler Crew 65", 1955, 24, { ...tough, crew: 65 }));
+    // --- R19b (added during the wave: avgShips 4-5 drew compositions far from the ratio under test): SMALL traffic so the
+    // likely draw is the one under test. shïp 569 / 570 Kit RH Prey S15 / S10 Full, düde 492 / 493; sÿst 1356 Kit Reinf
+    // Pair 1.1 (Hunter Full 50 : Prey S11 Full 50, avgShips 2: one each is 11 against 10), 1357 Kit Reinf Pair 1.0 (Prey
+    // S10 Full: 10 against 10), 1358 Kit Reinf Friends 15 (Hunter Full 67 : Prey S15 Full 33, avgShips 3: one prey
+    // against two hunters is 15 against 20, against the victim alone 15 against 10). Ports spöb 1903-1905.
+    out.push(...shareRled(569, "Kit RH Prey S15 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 15, ...escortGun }));
+    out.push(...shareRled(570, "Kit RH Prey S10 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 10, ...escortGun }));
+    out.push(dude(492, "Kit RH Prey S15 Full", 3, 296, 569), dude(493, "Kit RH Prey S10 Full", 3, 296, 570));
+    sid = 1356;
+    pid = 1903;
+    hunt("Kit Reinf Pair 1.1", 2, [488, 491], [50, 50], 317);
+    hunt("Kit Reinf Pair 1.0", 2, [488, 493], [50, 50], 317);
+    hunt("Kit Reinf Friends 15", 3, [488, 492], [67, 33], 317);
+    // --- R19c (added during the wave: AI 3 traffic comes and goes, so a single-ship draw rarely held two hunters and a
+    // prey at once): the hunters as a FLEET placed by the system (sÿst DudeTypes -id), exactly three: flët 319 Kit
+    // Hunter Pack Full (lead + two escorts shïp 563) and 320 Kit Hunter Pack Weak (shïp 564), gövt 297. sÿst 1359 Kit
+    // Reinf Pack Full (the pack 50 : Prey S15 Full 50, avgShips 2: a pack and a prey is 15 against 30, the victim
+    // alone 15 against 10) and 1360 Kit Reinf Pack Weak (the weak pack: 15 against 9 once all three are hit). Ports spöb
+    // 1906-1907.
+    out.push(fleet(319, "Kit Hunter Pack Full", 563, [[563, 2, 2], [563, 0, 0], [563, 0, 0], [563, 0, 0]], 297, 1594));
+    out.push(fleet(320, "Kit Hunter Pack Weak", 564, [[564, 2, 2], [564, 0, 0], [564, 0, 0], [564, 0, 0]], 297, 1594));
+    hunt("Kit Reinf Pack Full", 2, [-319, 492], [50, 50], 317);
+    hunt("Kit Reinf Pack Weak", 2, [-320, 492], [50, 50], 317);
+    // --- R19d (added during the wave: the weak PACK never called, maybe because fleet members do not call): the shield
+    // weighting with single ships, shïp 571 Kit RH Prey S8 Full (düde 494); sÿst 1361 Kit Reinf Pair Weak 0.8 (Hunter
+    // Weak 50 : Prey S8 Full 50, avgShips 2: one each is 8 against 10, against 3 if the hit hunter is weighted at 30%)
+    // and 1362 Kit Reinf Pair Full 0.8 (Hunter Full: 8 against 10 whatever the weighting). Ports spöb 1908-1909.
+    out.push(...shareRled(571, "Kit RH Prey S8 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 8, ...escortGun }));
+    out.push(dude(494, "Kit RH Prey S8 Full", 3, 296, 571));
+    hunt("Kit Reinf Pair Weak 0.8", 2, [489, 494], [50, 50], 317);
+    hunt("Kit Reinf Pair Full 0.8", 2, [488, 494], [50, 50], 317);
+    // --- R19e (added during the wave: one Strength-8 prey against one FULL Strength-10 hunter called too): does a lone
+    // victim call against ANY attacker (its friends without itself are none)? shïp 572 Kit RH Prey S4 Full (düde 495),
+    // sÿst 1363 Kit Reinf Pair 0.4 (Hunter Full 50 : Prey S4 Full 50, avgShips 2: one each is 4 against 10), port 1910.
+    out.push(...shareRled(572, "Kit RH Prey S4 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 4, ...escortGun }));
+    out.push(dude(495, "Kit RH Prey S4 Full", 3, 296, 572));
+    hunt("Kit Reinf Pair 0.4", 2, [488, 495], [50, 50], 317);
+    // --- R19f (added during the wave: one Strength-15 prey against two Full hunters, 0.75, called): shïp 573 Kit RH Prey
+    // S6 Full (düde 496), sÿst 1364 Kit Reinf Pair 0.6 (one each is 6 against 10), port 1911.
+    out.push(...shareRled(573, "Kit RH Prey S6 Full", RLED.green, 24, { ...mobile, ai: 3, ...full, strength: 6, ...escortGun }));
+    out.push(dude(496, "Kit RH Prey S6 Full", 3, 296, 573));
+    hunt("Kit Reinf Pair 0.6", 2, [488, 496], [50, 50], 317);
+    return out;
+}
 
 /**
  * Wave-34 experiments (docs/reference_experiments.md, "... wave 34").
