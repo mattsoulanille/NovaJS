@@ -12,6 +12,7 @@ import { completeEntity } from '../spawn/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { ShipControlStateComponent } from '../player/index.js';
+import { IonizationComponent, IsIonizedComponent } from '../ship/index.js';
 
 const SHIP_ID = 'test:ship';
 const BASE_SPEED = getDefaultShipPhysics().speed;
@@ -60,7 +61,7 @@ describe('afterburner release', () => {
             expect(OVERSPEED_DECAY_FACTOR).toBe(0.5);
         });
 
-    async function makeAfterburnerWorld() {
+    async function makeAfterburnerWorld(ionization = 0) {
         const gameData = new MockGameData();
         const shipData: ShipData = {
             ...getDefaultShipData(),
@@ -70,6 +71,7 @@ describe('afterburner release', () => {
                 energy: 10000,
                 // Plenty of fuel to hold the burn as long as we like.
                 afterburner: 1,
+                ionization,
             },
         };
         gameData.data.Ship.map.set(SHIP_ID, shipData);
@@ -159,6 +161,22 @@ describe('afterburner release', () => {
         expect(ship.components.get(MovementPhysicsComponent)!.maxVelocity)
             .toEqual(BASE_SPEED);
     });
+
+    it('still burns on a fully ionized hull (reference "Ionization\'s cap '
+        + 'and the afterburner (E6 leftovers), wave 40")', async () => {
+            const { world, ship } = await makeAfterburnerWorld(100);
+            // Far past IonizeMax: the charge is not capped.
+            ship.components.get(IonizationComponent)!.current = 5000;
+            await stepWorld(world, 2);
+            expect(ship.components.get(IsIonizedComponent)).toBeTrue();
+            ship.components.get(ShipControlStateComponent)!
+                .set('afterburner', true);
+            await stepWorld(world, 600);
+            expect(ship.components.get(IsIonizedComponent)).toBeTrue();
+            expect(ship.components.get(MovementPhysicsComponent)!.maxVelocity)
+                .toEqual(BASE_SPEED * AFTERBURNER_FACTOR);
+            expect(speed(ship)).toBeGreaterThan(BASE_SPEED);
+        });
 
     it('re-engages from the coast-down without losing the boost', async () => {
         const { world, ship } = await burnToTopSpeed();
