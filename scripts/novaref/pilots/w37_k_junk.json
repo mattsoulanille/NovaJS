@@ -1,0 +1,18 @@
+{
+  "name": "novaref-w37-k-junk",
+  "edits": {
+    "ship": 703,
+    "stellar": 1933,
+    "credits": 10000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1380": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w37-k-junk"
+  }
+}

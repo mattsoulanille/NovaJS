@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w37-r6-self",
+  "edits": {
+    "ship": 703,
+    "stellar": 1931,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1378": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w37-r6-self",
+    "weapons": {
+      "128": 0,
+      "365": 1
+    },
+    "outfits": {
+      "128": 0,
+      "607": 1
+    }
+  }
+}

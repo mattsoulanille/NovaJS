@@ -548,6 +548,16 @@ wëap 295, oütf 470, gövt 293 and below, flët 323, bits 9250. A flët with
 no escorts (counts 0) places a single ship; an UNARMED AI 3 hull of an
 always-hostile govt does not close on the player (arm it with a harmless
 gun). `scenarios/w36_board_take.json` is the slow-pass board with a take.
+Wave 37 used sÿst 1376-1385, spöb 1929-1938, shïp 576-589, düde 502-508,
+gövt 291-293, wëap 295, flët 323 and jünk 204 (no mïsn); next free: sÿst
+1386, spöb 1939 (spares 1495 / 1496 / 1499), shïp 590, düde 509, ränk 205,
+mïsn **none**, wëap 296, oütf 470, gövt 290 and below, flët 324, jünk 205,
+bits 9250. A bribed MOBILE warship leaves within seconds (watch a bribe on
+the anchored sÿst 1384 rig); an AI 3 armed only with a one-shot weapon
+(Reload 30000) never fires it at the player; Tab does not target hired
+escorts; `down:ctrl wait 200 up:ctrl` fires the secondary (`ctrl@120` did
+not). `scenarios/w37_space_interactive.json` / `w37_space_early.json`
+(inbox `w37.jsonl`).
 
 **Caches:** the game reads Plug-ins only at launch, so a plug-in change
 always needs a fresh launch (`run` does this). Pilots are read when they

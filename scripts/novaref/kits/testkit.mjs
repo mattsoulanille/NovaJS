@@ -308,8 +308,162 @@ export default {
         ...wave34Resources(),
         ...wave35Resources(),
         ...wave36Resources(),
+        ...wave37Resources(),
     ].map(wave15Patches).map(withoutRunningLights),
 };
+
+/**
+ * Wave-37 experiments (docs/reference_experiments.md, "... wave 37"):
+ * catalogue gaps. Nothing retired (no mïsn needed). sÿst 1376-1385, spöb
+ * 1929-1938, shïp 576-589, düde 502-508, gövt 291-293, wëap 295, flët 323,
+ * jünk 204. Map row y = -2520 (x -800 .. -440). The next free ids: sÿst
+ * 1386+, spöb 1939+ (spares 1495, 1496, 1499), shïp 590+, düde 509+, ränk
+ * 205+, mïsn NONE (retire an old kit mission to add one), gövt 290 and
+ * below, flët 324+, wëap 296+, oütf 470+, jünk 205+, bits 9250+.
+ *
+ * LESSONS: a bribed MOBILE warship leaves the system within seconds, so a
+ * bribe's life needs an anchored ship (A8); an AI 3 armed only with a
+ * one-shot weapon (Reload 30000) never fired it at the player, so the Kit
+ * Pirate carries the Kit Escort Gun now; the 0x1000 pirates as TRAFFIC
+ * never engaged the player (A9 not reached: place one by a mission).
+ *
+ *  A10 A disabled player with nobody around: shïp 576 Kit Self Disable (a
+ *      Kit Lancer-like player hull with shield 0, armor 2500, NO armor
+ *      recharge) and 577 Kit Self Disable Rech (the same with ArmorRech 300,
+ *      9 points a second). The pilot carries the Kit Big Blast (oütf 610,
+ *      wëap 373: 2000 damage, 300 px blast at the muzzle); one tap takes
+ *      the hull to 500 / 2500 = 20%, under the one-third disable line.
+ *      Kit Range (no traffic).
+ *  A9  Pirates and a disabled player: gövt 293 Kit Pirate Plunder (Flags
+ *      0x1000 "warships plunder trader-type enemies (including the player)"
+ *      | 0x0004 always attacks the player) and 292 Kit Pirate Plain (0x0004
+ *      only); wëap 295 Kit Pirate Pulse (a 1-frame turret beam, 1200
+ *      damage, Reload 30000; unused since mid-wave: the AI never fired
+ *      it); shïp 578 Kit Pirate (blue disc, AI 3, Speed / Accel 300, crew
+ *      20, the Kit Escort Gun since late in the wave); düde 502 / 503; shïp 579 Kit
+ *      Fragile Trader (shïp 451 Kit Fragile with InherentAI 1, so a
+ *      "trader-type" player). sÿst 1376 Kit Pirate Plunder Range / 1377 Kit
+ *      Pirate Plain Range (owner 363; the pirate is the only traffic,
+ *      avgShips 2 / 1), ports spöb 1929 / 1930 at the centres.
+ *  R6  Kill credit: gövt 291 Kit EK Victim (KillPenalty 1000, CrimeTol
+ *      30000: never hostile, the port always takes the player); shïp 580 Kit
+ *      EK Victim (yellow disc, AI 1, armor 25 and no shield: one 30-damage
+ *      Kit Escort Gun bolt destroys it without a disable first; Strength
+ *      200), düde 504; sÿst 1378 Kit Escort Kill Range (owner 291, avgShips
+ *      3, port spöb 1931).
+ *  R12 Escort wages: Kit Wage hulls (the Kit Escort with mass 100, crew 20,
+ *      Strength 100, Cost 100,000 unless the name says otherwise): shïp 581
+ *      10k, 582 100k, 583 150k, 584 1M, 585 100k Crew 80, 586 100k Str 400,
+ *      587 100k Mass 400, 588 Cost 1,000.
+ *  K6  What turns the Trade Center on: sÿst 1379 Kit TC One Tier (spöb 1932,
+ *      flags 0x43 plus food LOW only, 0x10000000) and sÿst 1380 Kit TC Junk
+ *      Only (spöb 1933, 0x43 and no tier; jünk 204 Kit TC Junk is sold
+ *      there).
+ *  R19 The MaxOdds-200 edge (wave 36: no call at 0.6, a call at 1.2): düde
+ *      505 / 506 / 507 Kit RH Prey S10 / S11 / S8 Full M (wave 35's shïp
+ *      570 / 566 / 571 in gövt 294) against wave 36's Hunter Full M200 (düde
+ *      498, Strength 10); sÿst 1381 Kit Reinf M200 1.0, 1382 Kit Reinf M200
+ *      1.1, 1383 Kit Reinf M200 0.8 (owner 295, ReinfFleet 321), ports spöb
+ *      1934-1936.
+ *  A8  A ship bribe's life (added during the wave): shïp 589 Kit Bribe
+ *      Warship Anchored, düde 508, sÿst 1384 Kit Bribe Anchored, port spöb
+ *      1937 (MinStatus -32767); see the code below.
+ *  A9b A 0x1000 pirate as a placed fleet (added during the wave): flët 323
+ *      Kit Pirate Plunder Fleet (shïp 578 alone, gövt 293), sÿst 1385 Kit
+ *      Pirate Mix (düde 502 : -323, avgShips 3), port spöb 1938.
+ */
+function wave37Resources() {
+    const out = [];
+    const Y = -2520;
+    let col = 0;
+    const nextX = () => -800 + 40 * col++;
+    const shareRled = (id, name, rledId, size, set) => [
+        { type: "shïp", id, name, clone: "shïp:128", set: { ...shipBase, shortName: name, longName: name, commName: name, subtitle: "", ...set } },
+        { type: "shän", id, name, clone: "shän:128", set: { "@0:i16": rledId, "@2:i16": rledId + 1, "@4:i16": 1, "@6:i16": size, "@8:i16": size } },
+    ];
+    const RLED = { blue: 1973, yellow: 1974 };
+    const port = (id, name, flags = 0x43) => spob(id, name, 0, 0, 138, { flags });
+    // --- A10: shïp 576-577 (Kit Range).
+    const selfDisable = { accel: 2000, speed: 800, turn: 60, armor: 2500, shield: 0, shieldRecharge: 0, mass: 50, freeMass: 1000, cargo: 200,
+        maxGuns: 16, maxTurrets: 16, ai: 3, strength: 100, flags: 0, flags2: 0x00C8 };
+    out.push(...ship(576, "Kit Self Disable", 135, { ...selfDisable, armorRecharge: 0 }));
+    out.push(...ship(577, "Kit Self Disable Rech", 135, { ...selfDisable, armorRecharge: 300 }));
+    // --- A9: gövt 292-293, wëap 295, shïp 578-579, düde 502-503, sÿst 1376-1377, spöb 1929-1930.
+    out.push(govt(293, "Kit Pirate Plunder", { flags: 0x1000 | 0x0004 }), govt(292, "Kit Pirate Plain", { flags: 0x0004 }));
+    out.push(weap(295, "Kit Pirate Pulse", 170, { reload: 30000, duration: 1, armorDamage: 1200, shieldDamage: 1200, guidance: 3, beamLength: 400, flags: 0 }));
+    out.push(...shareRled(578, "Kit Pirate", RLED.blue, 24, { accel: 300, speed: 300, turn: 30, mass: 50, freeMass: 100, cargo: 50, crew: 20, flags: 0,
+        flags2: 0, ai: 3, armor: 3000, shield: 3000, strength: 50, weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    // ^ The Kit Escort Gun (wëap 365, 30 damage, reload 20) since late in the wave: with the one-shot Kit Pirate Pulse beam
+    // (295, a9_p) and then wave 13's one-shot Kit Disabler bolt (285, a9_p2) the pirate circled the player for 4.5
+    // minutes and never fired. With an ordinary gun it disables the 1500-armor player in about 22 s and then either
+    // plunders (0x1000) or goes on to destroy him: the Bible's "plunder ... before destroying them".
+    out.push(dude(502, "Kit Pirate Plunder", 3, 293, 578), dude(503, "Kit Pirate Plain", 3, 292, 578));
+    out.push(...ship(579, "Kit Fragile Trader", 135, { accel: 2000, speed: 800, turn: 60, armor: 1500, shield: 0, shieldRecharge: 0, armorRecharge: 0,
+        mass: 50, freeMass: 1000, cargo: 200, maxGuns: 16, maxTurrets: 16, ai: 1, strength: 100, flags: 0, flags2: 0x00C8 }));
+    const traffic = (id, name, owner, spobId, dudes, avgShips) => {
+        const sys = system(id, name, nextX(), Y, owner, [spobId]);
+        sys.set = { ...sys.set, avgShips, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [...dudes.map(() => Math.floor(100 / dudes.length)), ...zero8].slice(0, 8) };
+        out.push(sys, port(spobId, `${name} Port`));
+    };
+    // avgShips 2 (added during the wave: the first a9 run had no pirate at all in 4.5 minutes).
+    traffic(1376, "Kit Pirate Plunder Range", 363, 1929, [502], 2);
+    traffic(1377, "Kit Pirate Plain Range", 363, 1930, [503], 1);
+    // --- R6: gövt 291, shïp 580, düde 504, sÿst 1378, spöb 1931.
+    out.push(govt(291, "Kit EK Victim", { killPenalty: 1000, disabPenalty: 100, boardPenalty: 100, crimeTol: 30000 }));
+    out.push(...shareRled(580, "Kit EK Victim", RLED.yellow, 24, { accel: 100, speed: 100, turn: 20, mass: 50, freeMass: 100, cargo: 10, crew: 5,
+        flags: 0, flags2: 0, ai: 1, armor: 25, shield: 0, shieldRecharge: 0, armorRecharge: 0, strength: 200 }));
+    out.push(dude(504, "Kit EK Victim", 1, 291, 580));
+    traffic(1378, "Kit Escort Kill Range", 291, 1931, [504], 3);
+    // --- R12: shïp 581-588.
+    const wage = { armor: 4000, shield: 4000, accel: 600, speed: 330, turn: 70, weapons: [365, -1, -1, -1], weaponCounts: [2, 0, 0, 0],
+        weaponAmmo: [0, 0, 0, 0], ai: 3, strength: 100, crew: 20, mass: 100, cost: 100000 };
+    [[581, "Kit Wage 10k", { cost: 10000 }], [582, "Kit Wage 100k", {}], [583, "Kit Wage 150k", { cost: 150000 }],
+        [584, "Kit Wage 1M", { cost: 1000000 }], [585, "Kit Wage 100k Crew 80", { crew: 80 }], [586, "Kit Wage 100k Str 400", { strength: 400 }],
+        [587, "Kit Wage 100k Mass 400", { mass: 400 }], [588, "Kit Wage 1k", { cost: 1000 }]]
+        .forEach(([id, name, set]) => out.push(...ship(id, name, 163, { ...wage, ...set })));
+    // --- K6: sÿst 1379-1380, spöb 1932-1933, jünk 204.
+    out.push(system(1379, "Kit TC One Tier", nextX(), Y, 363, [1932]), port(1932, "Kit TC One Tier", 0x10000043));
+    out.push(system(1380, "Kit TC Junk Only", nextX(), Y, 363, [1933]), port(1933, "Kit TC Junk Only", 0x43));
+    out.push({ type: "jünk", id: 204, name: "Kit TC Junk", clone: "jünk:128", set: { soldAt: [1933, ...none8.slice(1)], boughtAt: none8, basePrice: 500,
+        flags: 0, scanMask: 0, lcName: "kit tc junk", abbrev: "TC Junk", buyOn: "", sellOn: "" } });
+    // --- R19: düde 505-507, sÿst 1381-1383, spöb 1934-1936.
+    out.push(dude(505, "Kit RH Prey S10 Full M", 3, 294, 570), dude(506, "Kit RH Prey S11 Full M", 3, 294, 566),
+        dude(507, "Kit RH Prey S8 Full M", 3, 294, 571));
+    let sid = 1381, pid = 1934;
+    const hunt = (name, dudes) => {
+        const sys = system(sid, name, nextX(), Y, 295, [pid]);
+        sys.set = { ...sys.set, avgShips: 2, dudes: [...dudes, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8),
+            reinfFleet: 321, reinfTime: 150, reinfInterval: 0 };
+        out.push(sys, spob(pid, `${name} Port`, 0, 0, 138, { flags: 0x43 }));
+        sid++;
+        pid++;
+    };
+    hunt("Kit Reinf M200 1.0", [498, 505]);
+    hunt("Kit Reinf M200 1.1", [498, 506]);
+    hunt("Kit Reinf M200 0.8", [498, 507]);
+    if (sid !== 1384 || pid !== 1937) throw new Error(`wave37: R19 ended at sÿst ${sid}, spöb ${pid}`);
+    // --- A8 (added during the wave: the first bribed Kit Bribe Warship jumped out within 15 s of the bribe): shïp 589 Kit
+    // Bribe Warship Anchored (wave 22's shïp 503 with Speed / Accel 0, a cyan disc), düde 508 (gövt 304 Kit Bribe Plain:
+    // 0x0200 warships take bribes, CrimeTol 10), the only traffic of sÿst 1384 Kit Bribe Anchored (owner 304, avgShips 2);
+    // its port spöb 1937 has MinStatus -32767, so a record -50 pilot can land there and take off a day later.
+    out.push(...shareRled(589, "Kit Bribe Warship Anchored", 1976, 24, { accel: 0, speed: 0, turn: 30, mass: 50, freeMass: 100, cargo: 10,
+        crew: 10, flags: 0, flags2: 0, armor: 30000, shield: 30000, shieldRecharge: 0, strength: 50, ai: 3,
+        weapons: [365, -1, -1, -1], weaponCounts: [1, 0, 0, 0], weaponAmmo: [0, 0, 0, 0] }));
+    out.push(dude(508, "Kit Bribe Warship Anchored", 3, 304, 589));
+    const anchored = system(1384, "Kit Bribe Anchored", nextX(), Y, 304, [1937]);
+    anchored.set = { ...anchored.set, avgShips: 2, dudes: [508, ...none8].slice(0, 8), dudeProbs: [100, ...zero8].slice(0, 8) };
+    out.push(anchored, spob(1937, "Kit Bribe Anchored Port", 0, 0, 138, { flags: 0x43, govt: 304, minStatus: -32767 }));
+    // --- A9b (added during the wave: Kit Pirate Plunder Range never showed its pirate in two 4.5-minute runs, at avgShips 1
+    // and 2, while the 0x0004-only Plain Range did): flët 323 Kit Pirate Plunder Fleet (shïp 578 alone, gövt 293) and sÿst
+    // 1385 Kit Pirate Mix (DudeTypes 502 : -323, 50 : 50, avgShips 3), port spöb 1938 at the centre.
+    out.push({ type: "flët", id: 323, name: "Kit Pirate Plunder Fleet", clone: "flët:128",
+        set: { "@0:i16": 578, "@2:i16x4": [578, 578, 578, 578], "@10:i16x4": [0, 0, 0, 0], "@18:i16x4": [0, 0, 0, 0],
+            "@26:i16": 293, "@28:i16": 1594, "@30:str256": "", "@286:i16": -1, "@288:u16": 0 } });
+    const mix = system(1385, "Kit Pirate Mix", nextX(), Y, 363, [1938]);
+    mix.set = { ...mix.set, avgShips: 3, dudes: [502, -323, ...none8].slice(0, 8), dudeProbs: [50, 50, ...zero8].slice(0, 8) };
+    out.push(mix, spob(1938, "Kit Pirate Mix Port", 0, 0, 138, { flags: 0x43 }));
+    return out;
+}
 
 /**
  * Wave-36 experiments (docs/reference_experiments.md, "... wave 36").

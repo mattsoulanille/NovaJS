@@ -1,0 +1,44 @@
+{
+  "name": "novaref-w37-r12a",
+  "edits": {
+    "ship": 703,
+    "stellar": 2100,
+    "credits": 200000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "2100": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w37-r12a",
+    "escorts": [
+      {
+        "ship": 581,
+        "hired": true
+      },
+      {
+        "ship": 582,
+        "hired": true
+      },
+      {
+        "ship": 583,
+        "hired": true
+      },
+      {
+        "ship": 584,
+        "hired": true
+      },
+      {
+        "ship": 585,
+        "hired": true
+      },
+      {
+        "ship": 586,
+        "hired": true
+      }
+    ]
+  }
+}

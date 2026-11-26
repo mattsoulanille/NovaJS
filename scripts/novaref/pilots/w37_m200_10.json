@@ -1,0 +1,26 @@
+{
+  "name": "novaref-w37-m200-10",
+  "edits": {
+    "ship": 497,
+    "stellar": 1934,
+    "credits": 1000000,
+    "fuel": 3000,
+    "clearMissions": true,
+    "clearMissionBits": true,
+    "clearLegal": true,
+    "explored": {
+      "1381": 2
+    },
+    "missionBits": {},
+    "nickname": "Probe",
+    "shipName": "w37-m200-10",
+    "weapons": {
+      "128": 0,
+      "290": 1
+    },
+    "outfits": {
+      "128": 0,
+      "463": 1
+    }
+  }
+}
