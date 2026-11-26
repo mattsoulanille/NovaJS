@@ -1526,11 +1526,12 @@ describe('the gate approach lines', () => {
             .toEqual([['tooFast', 'wormhole']]);
     }, 30_000);
 
-    // Reference "Wormholes, wave 34", finding 3: a far `l` (about 730 px
-    // from the only wormhole) selected nothing, one at 300 px selected it.
-    // NovaJS gives the wormhole the hypergate's 500 px circle (GUESS on the
-    // radius). Halden Refuge, the station in Ossory Shoal, is picked
-    // instead from beyond it, and with it gone `l` selects nothing.
+    // Reference "Wormholes, wave 35", finding 2 (MEASURED): a stopped
+    // ship's `l` selected the wormhole at 400 and 498 px and nothing at 500
+    // or 600 px, nor on the (400, 400) diagonal (566 px away): the gates'
+    // 500 px circle (wave 34: selected at 300, nothing at about 730).
+    // Halden Refuge, the station in Ossory Shoal, is picked instead from
+    // beyond it, and with it gone `l` selects nothing.
     it('selects a wormhole only inside the gates\' 500 px circle',
         async () => {
             const { world, ship, gate } = await atGate(
@@ -1545,10 +1546,22 @@ describe('the gate approach lines', () => {
             expect(near.blocked.map(b => [b.reason, b.gateKind]))
                 .toEqual([['tooFar', 'wormhole']]);
 
-            selectPlanetTarget(target, undefined);
-            place(ship, new Position(gate.position.x - 501, gate.position.y));
-            pressLand(world);
-            expect(target.target).toBe(REFUGE);
+            for (const d of [400, 498]) {
+                selectPlanetTarget(target, undefined);
+                place(ship, new Position(gate.position.x - d,
+                    gate.position.y));
+                pressLand(world);
+                expect(target.target).withContext(`${d}`).toBe(gate.uuid);
+            }
+            for (const [dx, dy] of [[-500, 0], [-501, 0], [-600, 0],
+                [-400, 400], [-400, -400]]) {
+                selectPlanetTarget(target, undefined);
+                place(ship, new Position(gate.position.x + dx,
+                    gate.position.y + dy));
+                pressLand(world);
+                expect(target.target).withContext(`(${dx}, ${dy})`)
+                    .toBe(REFUGE);
+            }
 
             selectPlanetTarget(target, undefined);
             world.entities.delete(REFUGE);
@@ -1984,8 +1997,16 @@ describe('hypergates, wave 30: the clearance zone, the entry window, the '
         expect(WORMHOLE_LAND_RANGE_CAP).toBe(212);
         expect(stellarLandingRange(gate(300, 'wormhole'))).toBe(212);
         expect(stellarLandingRange(gate(72, 'wormhole'))).toBe(126);
-        // The stock 104 px wormhole: 182 (unmeasured between 150 and 230).
-        expect(stellarLandingRange(gate(104, 'wormhole'))).toBe(182);
+        // The stock 104 px wormhole: 182, strict, MEASURED (reference
+        // "Wormholes, wave 35", finding 1: through at 180 / 181, "too far"
+        // at 182 / 183).
+        const worm = stellarLandingRange(gate(104, 'wormhole'));
+        expect(worm).toBe(182);
+        for (const [d, through] of [[180, true], [181, true], [182, false],
+            [183, false]] as const) {
+            expect(inLandingZone(d, 0, worm)).withContext(`${d}`)
+                .toBe(through);
+        }
     });
 
     it('clears inside a 249 px SQUARE and requests outside it, the same '

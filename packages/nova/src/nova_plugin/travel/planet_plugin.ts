@@ -352,11 +352,12 @@ export function landingRequestForm(stellarId: string, pilotUuid: string,
  * whose larger coordinate is inside the 475 px the axis selected, so the
  * range is a CIRCLE, not a square like the landing zone. GUESS on the
  * exact radius inside the 490-500 bracket: a gate is skipped at
- * `distance >= 500`. A WORMHOLE gets the same circle
- * (GUESS on its radius: reference "Wormholes, wave 34", finding 3, an `l`
- * about 730 px from the only wormhole selected nothing, one at 290-300 px
- * selected it; the range between is unmeasured, and a wormhole being a
- * gate kind, it takes the hypergate's 500). Ports and stations are picked
+ * `distance >= 500`. A WORMHOLE gets the same circle, MEASURED (reference
+ * "Wormholes, wave 35", finding 2: a stopped ship's `l` selected the stock
+ * 104 px wormhole at 400 and 498 px and nothing at 500 and 600 px, nor on
+ * the (400, 400) diagonal, inside a 500 px square but 566 px away: a
+ * circle of 498-500, as the gates'; wave 34 had it at 290-300 px, not at
+ * about 730). Ports and stations are picked
  * from any distance (a port and a station from 1,000 px, a port from
  * beyond the radar's edge: same section, and "R7 planet bribe withdrawal,
  * wave 29").
@@ -612,10 +613,14 @@ export const LAND_RANGE_PER_FRAME_WIDTH = 1.75;
  * (a cleared ship landed on a 250 px planet from 294, 359 and 425 px; the
  * reliability note "U9's 212 px landing cap is superseded"), and gates
  * have none (waves 30-31: a 325 px gate's map at 245); nothing measured a
- * wormhole wider than 125 px, so wormholes keep the old rule (GUESS).
- * The stock 104 px wormhole's window is trunc(1.75 x 104) = 182, under the
- * cap; wave 34 ("Wormholes, wave 34") put it through at 150 px and "too
- * far" at 230, the edge between them unmeasured.
+ * wormhole wider than 125 px, so wormholes keep the old rule (GUESS: the
+ * cap binds only a wormhole art wider than 121 px, and none is stock; keep
+ * it or drop it with the planets' cap, Matthew's call). Below it the
+ * wormhole's window is the planets' trunc(1.75 W), strict, MEASURED
+ * ("Wormholes, wave 35", finding 1): the stock 104 px wormhole took the
+ * ship through at 180 and 181 px and was "too far" at 182 and 183, so
+ * trunc(1.75 x 104) = 182 is its edge (wave 34: through at 150, "too far"
+ * at 230).
  */
 export const WORMHOLE_LAND_RANGE_CAP = 212;
 /** getDefaultPlanetData's frame size, used when the frame is unknown. */
@@ -685,8 +690,10 @@ export function inClearanceZone(dx: number, dy: number): boolean {
  * 140 px (126; reference "Hypergates, wave 30", finding 2), a 96 px
  * gate's map opened at 155 and not at 172 (168), and a 325 px gate's at
  * 245
- * ("Hypergates across art sizes, wave 31"). A WORMHOLE keeps the old
- * 212 px cap (WORMHOLE_LAND_RANGE_CAP; not measured). Clearing the ship is
+ * ("Hypergates across art sizes, wave 31"). A WORMHOLE's window is the
+ * same trunc(1.75 W), strict (MEASURED on the 104 px art: through at 181,
+ * "too far" at 182, "Wormholes, wave 35") under the old 212 px cap
+ * (WORMHOLE_LAND_RANGE_CAP; the cap is not measured). Clearing the ship is
  * a separate, art-independent zone: STELLAR_CLEARANCE_RANGE.
  */
 export function stellarLandingRange(planetData?: PlanetData): number {
@@ -1075,7 +1082,7 @@ const AttemptLandingSystem = new System({
         // skipped, so 'l' never tries to land on Jupiter; a port may still
         // deny landing, which is the clearance gate above). A hypergate or
         // a wormhole counts only inside HYPERGATE_SELECT_RANGE (a circle,
-        // wave 29; the wormhole's radius a GUESS, wave 34), so from farther
+        // wave 29; the wormhole's measured in wave 35), so from farther
         // out `l` picks a port or nothing at all. Unknown
         // planet data (provider not yet run) counts as landable, as
         // elsewhere. Ties break on the lexicographically smaller uuid so every peer
@@ -1092,7 +1099,7 @@ const AttemptLandingSystem = new System({
             const distanceSquared =
                 planetPosition.subtract(position).lengthSquared;
             // A gate (a hypergate or a wormhole) is picked only inside a
-            // CIRCLE of HYPERGATE_SELECT_RANGE (waves 29, 34); ports at
+            // CIRCLE of HYPERGATE_SELECT_RANGE (waves 29, 34, 35); ports at
             // any distance.
             const gateKind = data?.gate?.kind;
             if ((gateKind === 'hypergate' || gateKind === 'wormhole')
