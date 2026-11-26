@@ -1028,36 +1028,91 @@ describe('outfitResaleValue', () => {
     });
 });
 
-describe('sellRefund (same-visit full refund)', () => {
+describe('sellRefund (the full refund above the count on entry)', () => {
     const outfit = makeOutfit('nova:200', { price: 5000 });
 
-    it('refunds the full price for a unit bought this visit', () => {
-        expect(sellRefund(outfit, 1))
-            .toEqual({ credited: 5000, boughtThisVisit: 0 });
+    /**
+     * Runs a visit's buys (+n) and sells (-n) from `entry` units aboard,
+     * as the Outfitter does (a receipt per unit bought; sellRefund per unit
+     * sold), and returns each sale's refund.
+     */
+    function visit(item: OutfitData, entry: number, moves: number[]) {
+        let owned = entry;
+        let boughtThisVisit = 0;
+        const credited: number[] = [];
+        for (const move of moves) {
+            if (move > 0) {
+                owned += move;
+                boughtThisVisit += move;
+                continue;
+            }
+            for (let i = 0; i < -move; i++) {
+                const refund = sellRefund(item,
+                    { owned, countOnEntry: entry, boughtThisVisit });
+                credited.push(refund.credited);
+                boughtThisVisit = refund.boughtThisVisit;
+                owned--;
+            }
+        }
+        return credited;
+    }
+
+    it('pays the reference\'s sequence (reference "Outfit resale (R9), '
+        + 'wave 36": Kit Plain Mass, 1,000 cr, two aboard on entry)', () => {
+        const plainMass = makeOutfit('kit:455', { price: 1000 });
+        // Sell x2, Buy, Sell, Buy x3, Sell x3.
+        expect(visit(plainMass, 2, [-1, -1, +1, -1, +3, -1, -1, -1]))
+            .toEqual([500, 500, 500, 1000, 500, 500]);
+        // Over the sequence: 9,998 -> 9,498 credits, as measured.
+        expect(9_998 + 500 + 500 - 1000 + 500 - 3000 + 1000 + 500 + 500)
+            .toBe(9_498);
     });
 
-    it('falls back to the 50% resale for a pre-owned unit', () => {
-        expect(sellRefund(outfit, 0))
+    it('refunds the full price for a unit above the count on entry', () => {
+        expect(sellRefund(outfit,
+            { owned: 1, countOnEntry: 0, boughtThisVisit: 1 }))
+            .toEqual({ credited: 5000, boughtThisVisit: 0 });
+        expect(sellRefund(outfit,
+            { owned: 3, countOnEntry: 2, boughtThisVisit: 3 }))
+            .toEqual({ credited: 5000, boughtThisVisit: 2 });
+    });
+
+    it('falls back to the 50% resale at or below the count on entry, '
+        + 'even for a unit bought this visit', () => {
+        expect(sellRefund(outfit,
+            { owned: 1, countOnEntry: 1, boughtThisVisit: 0 }))
+            .toEqual({ credited: 2500, boughtThisVisit: 0 });
+        expect(sellRefund(outfit,
+            { owned: 1, countOnEntry: 2, boughtThisVisit: 1 }))
+            .toEqual({ credited: 2500, boughtThisVisit: 0 });
+        expect(sellRefund(outfit,
+            { owned: 2, countOnEntry: 2, boughtThisVisit: 3 }))
+            .toEqual({ credited: 2500, boughtThisVisit: 1 });
+    });
+
+    it('splits a bulk sell: from none on entry, bought 3, sold 3 at full '
+        + 'price (wave 10\'s same-visit refunds)', () => {
+        expect(visit(outfit, 0, [+3, -3])).toEqual([5000, 5000, 5000]);
+        // Two aboard on entry, three bought, five sold: 3 full, 2 half.
+        expect(visit(outfit, 2, [+3, -5]))
+            .toEqual([5000, 5000, 5000, 2500, 2500]);
+    });
+
+    it('needs a receipt: a unit above the entry count that was never '
+        + 'bought (an OnPurchase grant) sells at the 50% resale', () => {
+        expect(sellRefund(outfit,
+            { owned: 1, countOnEntry: 0, boughtThisVisit: 0 }))
             .toEqual({ credited: 2500, boughtThisVisit: 0 });
     });
 
-    it('drains same-visit purchases first, then pre-owned (bulk split)', () => {
-        // Bought 3 this visit, selling 5: 3 full refunds then 2 at 50%.
-        let boughtThisVisit = 3;
-        const credited: number[] = [];
-        for (let i = 0; i < 5; i++) {
-            const refund = sellRefund(outfit, boughtThisVisit);
-            credited.push(refund.credited);
-            boughtThisVisit = refund.boughtThisVisit;
+    it('never profits on a round trip, whatever the entry count', () => {
+        for (const entry of [0, 1, 2, 5]) {
+            for (const bought of [1, 2, 4]) {
+                const refunds = visit(outfit, entry, [+bought, -bought]);
+                expect(refunds.reduce((a, b) => a + b, 0))
+                    .toBeLessThanOrEqual(5000 * bought);
+            }
         }
-        expect(credited).toEqual([5000, 5000, 5000, 2500, 2500]);
-        expect(boughtThisVisit).toBe(0);
-    });
-
-    it('treats a reset visit (count 0) as entirely pre-owned', () => {
-        // After the outfitter closes, visitPurchases resets to 0, so a
-        // later re-entry sells everything at the 50% resale value.
-        expect(sellRefund(outfit, 0).credited).toBe(2500);
     });
 });
 
@@ -1583,9 +1638,11 @@ describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
     it('sells back at half the SCALED price, so no hull can mint credits',
         () => {
             expect(outfitResaleValue(carbonFiber, leviathan)).toBe(1_250_000);
-            expect(sellRefund(carbonFiber, 1, leviathan).credited)
+            expect(sellRefund(carbonFiber,
+                { owned: 1, countOnEntry: 0, boughtThisVisit: 1 }, leviathan).credited)
                 .toBe(2_500_000);
-            expect(sellRefund(carbonFiber, 0, heavyShuttle).credited)
+            expect(sellRefund(carbonFiber,
+                { owned: 1, countOnEntry: 1, boughtThisVisit: 0 }, heavyShuttle).credited)
                 .toBe(3_125);
         });
 
@@ -1619,7 +1676,8 @@ describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
                 .toEqual([3_700, 5_000, 10_000, 15_500, 30_000]);
             // "charged / refunded (same visit)": 3,700 / 3,700 and so on.
             expect(hulls.map(hull =>
-                sellRefund(kitMassPrice, 1, hull).credited))
+                sellRefund(kitMassPrice,
+                    { owned: 1, countOnEntry: 0, boughtThisVisit: 1 }, hull).credited))
                 .toEqual([3_700, 5_000, 10_000, 15_500, 30_000]);
         });
 

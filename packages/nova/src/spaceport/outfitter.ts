@@ -157,14 +157,20 @@ export class Outfitter extends Menu<Entity> {
     private ownsTransaction = false;
     /**
      * How many units of each outfit id were BOUGHT during the current
-     * outfitter visit (per outfit id). Selling drains these first at a
-     * full refund (you get back exactly what you just paid); once the
-     * same-visit purchases are used up, further sells fall back to the
-     * 50% pre-owned resale value. Reset to empty on every show() — each
-     * visit starts with a clean slate (see setInput). Visit-local by
-     * nature: it is a receipt book, not a copy of state.
+     * outfitter visit and not yet refunded in full (per outfit id): the
+     * receipts that guard sellRefund's full refund against units that came
+     * aboard unpaid. Reset to empty on every show() — each visit starts
+     * with a clean slate (see setInput). Visit-local by nature: it is a
+     * receipt book, not a copy of state.
      */
     private visitPurchases = new DefaultMap<string, number>(() => 0);
+    /**
+     * The units of each outfit aboard when this visit opened (the count on
+     * entry): a sale refunds the full price only while the count before it
+     * is above this (reference "Outfit resale (R9), wave 36"; sellRefund).
+     * Taken in setInput, with visitPurchases.
+     */
+    private countOnEntry = new Map<string, number>();
     /** Every govt, sorted by id, loaded in build() for ModType 21. */
     private govts: (readonly [string, GovtData])[] = [];
     private shipData?: ShipData;
@@ -785,8 +791,8 @@ export class Outfitter extends Menu<Entity> {
         // (ship-mass-proportional for oütf 0x0200, hence the hull).
         this.credits.credits -= outfitPrice(outfit, this.shipData) * units;
         this.outfits.set(outfit.id, this.owned(outfit.id) + units);
-        // Record the same-visit purchase so selling it back before
-        // leaving refunds the full price (see applySell).
+        // Record the same-visit purchase: the receipt a full refund above
+        // the count on entry needs (see applySell).
         this.visitPurchases.set(outfit.id,
             this.visitPurchases.get(outfit.id) + units);
         // ModType 21: buying the outfit cleans (raises to at least 0)
@@ -886,16 +892,19 @@ export class Outfitter extends Menu<Entity> {
     }
 
     /**
-     * Applies one unit's sale, count, and OnSell. A unit bought earlier
-     * this same visit is refunded in full (100% of the price paid);
-     * otherwise the player recovers the 50% pre-owned resale value.
-     * Same-visit purchases drain first, so a bulk sell that spans both
-     * (e.g. 3 bought this visit + 2 pre-owned) splits automatically as
-     * the per-unit loop calls this repeatedly.
+     * Applies one unit's sale, count, and OnSell. A sale while more units
+     * are aboard than when the visit opened is refunded in full (100% of
+     * the price); otherwise the player recovers the 50% pre-owned resale
+     * value (sellRefund; reference "Outfit resale (R9), wave 36"). A bulk
+     * sell that spans both (3 bought this visit, 5 sold) splits as the
+     * per-unit loop calls this repeatedly.
      */
     private applySell(outfit: OutfitData) {
-        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id),
-            this.shipData);
+        const refund = sellRefund(outfit, {
+            owned: this.owned(outfit.id),
+            countOnEntry: this.countOnEntry.get(outfit.id) ?? 0,
+            boughtThisVisit: this.visitPurchases.get(outfit.id),
+        }, this.shipData);
         this.credits.credits += refund.credited;
         this.visitPurchases.set(outfit.id, refund.boughtThisVisit);
         this.outfits.set(outfit.id, Math.max(0, this.owned(outfit.id) - 1));
@@ -1300,8 +1309,11 @@ export class Outfitter extends Menu<Entity> {
         // A fresh visit: an empty search, shown when the enhancement is on.
         this.search.open(enhancementEnabled('enhShopSearch'));
         // A fresh visit: clear same-visit purchase tracking so no prior
-        // visit's purchases still qualify for the full refund.
+        // visit's purchases still qualify for the full refund, and take the
+        // count on entry the full refund is judged against (GUESS: the
+        // outfitter's opening, not the landing; wave 36).
         this.visitPurchases.clear();
+        this.countOnEntry = new Map(this.outfits);
         this.updateCreditsText();
         this.shipData = undefined;
         const shipId = input.components.get(ShipComponent)?.id;

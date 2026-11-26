@@ -126,6 +126,7 @@ describe('Extra Outfits officers, within one outfitter visit', () => {
         let working = new DefaultMap<string, number>(() => 0,
             [...session.outfits]);
         const visitPurchases = new DefaultMap<string, number>(() => 0);
+        const countOnEntry = new Map(working);
 
         const context = (): OutfitterContext => ({
             shipData,
@@ -161,7 +162,11 @@ describe('Extra Outfits officers, within one outfitter visit', () => {
             runSetString(outfit.onPurchase, idPrefix(outfit.id));
         };
         const applySell = (outfit: OutfitData) => {
-            const refund = sellRefund(outfit, visitPurchases.get(outfit.id));
+            const refund = sellRefund(outfit, {
+                owned: working.get(outfit.id),
+                countOnEntry: countOnEntry.get(outfit.id) ?? 0,
+                boughtThisVisit: visitPurchases.get(outfit.id),
+            });
             session.state.credits.credits += refund.credited;
             visitPurchases.set(outfit.id, refund.boughtThisVisit);
             working.set(outfit.id, Math.max(0, working.get(outfit.id) - 1));

@@ -260,4 +260,49 @@ describe('a ship-upgrade permit bought at the real outfitter', () => {
             outfitter.dismiss();
             await shown;
         }, 120_000);
+
+    it('refunds in full only above the count on entry: the reference\'s '
+        + 'sequence from two aboard (reference "Outfit resale (R9), wave '
+        + '36": +half, +half; buy, +half; buy 3, +full, +half, +half)',
+        async () => {
+            const gameData = await getSyntheticGameData();
+            const entity = await dockedSkiff(100_000);
+            entity.components.set(OutfitsStateComponent, new Map([
+                [PULSE_BLASTER, { count: 2 }],
+            ]));
+            const outfitter = new Outfitter(displayAssets(), gameData,
+                new Subject<ControlEvent>());
+            await outfitter.buildPromise;
+            const shown = outfitter.show(entity);
+            await untilShown(outfitter);
+
+            const blaster = await gameData.data.Outfit.get(PULSE_BLASTER);
+            const ship = (outfitter as any).shipData;
+            const full = outfitPrice(blaster, ship);
+            const half = outfitResaleValue(blaster, ship);
+            expect(half).toBeLessThan(full);
+            const credits = () => (outfitter as any).credits.credits as number;
+            const owned = () => ((outfitter as any).outfits as
+                Map<string, number>).get(PULSE_BLASTER) ?? 0;
+            const sell = () => {
+                const before = credits();
+                (outfitter as any).applySell(blaster);
+                return credits() - before;
+            };
+            const buy = () => (outfitter as any).applyBuy(blaster);
+
+            expect([sell(), sell()]).toEqual([half, half]);
+            expect(owned()).toBe(0);
+            buy();
+            // The unit just bought: 0 -> 1 is not above the entry's 2.
+            expect(sell()).toBe(half);
+            buy(); buy(); buy();
+            expect(owned()).toBe(3);
+            expect([sell(), sell(), sell()]).toEqual([full, half, half]);
+            expect(owned()).toBe(0);
+
+            outfitter.dismiss();
+            await shown;
+        }, 120_000);
 });
+

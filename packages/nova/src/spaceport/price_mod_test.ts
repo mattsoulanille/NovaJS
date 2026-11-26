@@ -141,8 +141,10 @@ describe('the outfitter item price', () => {
 
     it('refunds a same-visit purchase at exactly what was paid', () => {
         const item = outfit(5_000);
-        expect(sellRefund(item, 1).credited).toBe(outfitPrice(item));
-        expect(sellRefund(item, 0).credited).toBe(outfitResaleValue(item));
+        expect(sellRefund(item, { owned: 1, countOnEntry: 0, boughtThisVisit: 1 }).credited)
+            .toBe(outfitPrice(item));
+        expect(sellRefund(item, { owned: 1, countOnEntry: 1, boughtThisVisit: 0 }).credited)
+            .toBe(outfitResaleValue(item));
     });
 });
 

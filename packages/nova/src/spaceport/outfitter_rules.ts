@@ -409,9 +409,11 @@ export type SellDenialReason =
  * outfit-resale field, and its 25% figure is specifically the *ship*
  * trade-in ("25% of the original cost of your current ship and
  * upgrades", Bible shïp Cost field). Per Matthew's rule, standalone
- * outfit resale is 50% of the price, floored. (A unit bought and sold
- * within the same outfitter visit is refunded in full — that same-visit
- * accounting lives in the Outfitter menu, not here.) The original's ship
+ * outfit resale is 50% of the price, floored, MEASURED (reference "Outfit
+ * resale (R9), wave 36", finding 1: two pre-owned 1,000 cr units sold for
+ * 500 each). A sale that takes the count back down toward the count the
+ * player had when the outfitter opened is refunded in full (sellRefund).
+ * The original's ship
  * trade-in credits the outfits at this same fraction, not the Bible's 25%
  * (reference wave 12; shipyard_rules' SHIP_TRADE_IN_OUTFIT_FRACTION).
  */
@@ -482,26 +484,50 @@ export function outfitResaleValue(outfit: OutfitData, ship?: ShipData): number {
     return Math.floor(outfitPrice(outfit, ship) * OUTFIT_RESALE_FRACTION);
 }
 
+/** What sellRefund weighs for one unit's sale of an outfit. */
+export interface SellRefundState {
+    /** Units aboard before this sale. */
+    owned: number;
+    /** Units aboard when the outfitter opened (the count on entry). */
+    countOnEntry: number;
+    /**
+     * Units bought this visit and not yet refunded in full (receipts): a
+     * guard so a unit that came aboard WITHOUT being paid for at full price
+     * (an OnPurchase `Gxxx` grant) never sells back at full price.
+     */
+    boughtThisVisit: number;
+}
+
 /**
- * The credits refunded for selling one unit of an outfit, given how many
- * units of it were bought during the current outfitter visit. A unit
- * bought this visit refunds the full price (you get back exactly what
- * you just paid); once those are exhausted, further sells are pre-owned
- * stock at outfitResaleValue (50%). Returns the amount to credit and the
- * remaining same-visit purchase count after this unit — call it once per
- * unit in a bulk sell and the full/half split falls out naturally (buy 3
- * this visit, sell 5 -> 3 full + 2 half).
+ * The credits refunded for selling one unit of an outfit. MEASURED
+ * (reference "Outfit resale (R9), wave 36", finding 2): the full price
+ * while the count before the sale is ABOVE the count the player came in
+ * with, the 50% outfitResaleValue otherwise. From two aboard (1,000 cr,
+ * resale 500): sell both +500 +500; buy one and sell it straight back
+ * +500 (0 -> 1 -> 0 stays at or under the entry count of 2); buy three and
+ * sell all three +1,000 +500 +500 (only 3 -> 2 is above it). GUESS: the
+ * entry is the outfitter's opening (one visit measured), not the landing.
+ *
+ * A full refund also needs a receipt (`boughtThisVisit`): with only buys
+ * and sells the receipts always cover the units above the entry count, so
+ * this changes nothing there, but a unit granted by a set string during
+ * the visit is above the count on entry without having been paid for, and
+ * a full refund of it would mint credits. Returns the amount to credit and
+ * the receipts left after this unit (one fewer after a full refund, never
+ * more than the units left aboard); call it once per unit in a bulk sell.
  */
-export function sellRefund(outfit: OutfitData, boughtThisVisit: number,
+export function sellRefund(outfit: OutfitData, state: SellRefundState,
     ship?: ShipData): { credited: number, boughtThisVisit: number } {
-    if (boughtThisVisit > 0) {
+    const ownedAfter = Math.max(0, state.owned - 1);
+    if (state.owned > state.countOnEntry && state.boughtThisVisit > 0) {
         return {
             credited: outfitPrice(outfit, ship),
-            boughtThisVisit: boughtThisVisit - 1,
+            boughtThisVisit: Math.min(state.boughtThisVisit - 1, ownedAfter),
         };
     }
     return {
-        credited: outfitResaleValue(outfit, ship), boughtThisVisit,
+        credited: outfitResaleValue(outfit, ship),
+        boughtThisVisit: Math.min(state.boughtThisVisit, ownedAfter),
     };
 }
 

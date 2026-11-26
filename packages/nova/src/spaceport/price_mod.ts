@@ -90,9 +90,10 @@ import { ActiveRanksComponent, RankLookup, rankPriceMod } from '../nova_plugin/n
  *   written, everywhere, and the outfitter builds no PriceMod at all. Dropping
  *   it from BOTH ends is what preserves the invariant a review round checked:
  *   within one shop, buying and immediately selling can never profit (resale
- *   is 50% of the same number the buy charged, and a same-visit sell refunds
- *   exactly what was paid). A discount on one end only would have minted
- *   credits, which is why the two must always move together.
+ *   is 50% of the same number the buy charged, and a full refund, above the
+ *   count on entry, refunds exactly what was paid). A discount on one end
+ *   only would have minted credits, which is why the two must always move
+ *   together.
  * - The ship TRADE-IN valuation (shipyard_rules' tradeInValue). The Bible pins
  *   that to the "ORIGINAL cost of your current ship and upgrades" (the
  *   original credits 25% of the hull's and 50% of the outfits'), and a
