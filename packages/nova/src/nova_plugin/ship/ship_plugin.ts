@@ -21,7 +21,7 @@ import { AnimationComponent, CreateTimeProvider, ProjectileAnimationProvider } f
 import { CollisionVulnerabilityComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { gameDataRefType } from '../core/index.js';
-import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent, shieldFloor } from './health_plugin.js';
+import { ArmorComponent, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent, shieldFloor } from './health_plugin.js';
 import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
@@ -316,9 +316,10 @@ const ShipArmorProvider = shipStatSystem(
     [ShipShieldProvider]);
 
 /**
- * A ship's fuel bounds: capacity, and the per-second recharge from three
- * sources — fuel scoops (oütf ModType 18), an auto-refueller (ModType 19,
- * a slow constant trickle), and the hull's own shïp FuelRegen.
+ * A ship's fuel bounds: capacity, and the per-second recharge from two
+ * sources — fuel scoops (oütf ModType 18) and the hull's own shïp
+ * FuelRegen. (An auto-refueller, ModType 19, adds nothing in flight: it
+ * refuels on landing, spaceport/auto_refuel.ts.)
  *
  * THE HULL TERM IS GATED FOR THE PLAYER. shïp Flags 0x0008 is "Player
  * ship takes advantage of FuelRegen property" (EVN Bible ~:2517), and
@@ -347,8 +348,7 @@ export function shipFuelBounds(physics: ShipPhysics, shipData: ShipData,
     return {
         max: physics.energy,
         min: 0,
-        recharge: physics.energyRecharge - hullRegen
-            + (physics.autoRefuel ? AUTO_REFUEL_PER_SECOND : 0),
+        recharge: physics.energyRecharge - hullRegen,
     };
 }
 

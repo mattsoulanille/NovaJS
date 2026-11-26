@@ -286,8 +286,9 @@ export interface OutfitData extends BaseData {
      */
     iff: boolean,
     /**
-     * This item is an auto-refueller (ModType 19): the ship slowly regenerates
-     * hyperspace fuel on its own. ModVal is ignored.
+     * This item is an auto-refueller (ModType 19): the ship's tank is filled
+     * at the port's price on every landing (measured on the original; it
+     * adds nothing in flight). ModVal is ignored.
      */
     autoRefuel: boolean,
     /**

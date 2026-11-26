@@ -8,7 +8,7 @@ import { MovementPhysicsComponent, MovementStateComponent } from 'nova_ecs/plugi
 import { World } from 'nova_ecs/world';
 import { AFTERBURNER_FACTOR } from '../travel/index.js';
 import { completeEntity } from '../spawn/index.js';
-import { AUTO_REFUEL_PER_SECOND, FuelComponent } from './health_plugin.js';
+import { FuelComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
@@ -241,8 +241,10 @@ describe('fuel regeneration', () => {
         expect(fuel.current).toEqual(100);
     });
 
-    it('an auto-refueller outfit trickles fuel back (ModType 19)', async () => {
-        // No fuel-scoop recharge; the only regeneration is the auto-refueller.
+    it('an auto-refueller outfit adds NO fuel in flight (ModType 19; '
+        + 'reference "The Auto-recharger (E7), wave 39")', async () => {
+        // No fuel-scoop recharge; the auto-refueller refuels on landing
+        // (spaceport/auto_refuel.ts), never in space.
         const { world, ship } = await makeTestWorld({
             ammoType: 'unlimited',
             energy: 100,
@@ -253,10 +255,7 @@ describe('fuel regeneration', () => {
         fuel.current = 0;
 
         await stepWorld(world, 60);
-        // AUTO_REFUEL_PER_SECOND (2.5) units/second for 60 sim ticks.
-        expect(fuel.current).toBeCloseTo(
-            AUTO_REFUEL_PER_SECOND * 60 * SIMULATION_STEP_MS / 1000, 0);
-        expect(fuel.current).toBeGreaterThan(0);
+        expect(fuel.current).toEqual(0);
     });
 
     it('a ship without an auto-refueller does not regenerate fuel', async () => {

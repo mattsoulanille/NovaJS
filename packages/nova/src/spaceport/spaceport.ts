@@ -29,6 +29,7 @@ import {
 } from '../nova_plugin/player/index.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
+import { hasAutoRefueller } from './auto_refuel.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';
 import { LINE_HEIGHT } from './dialog_layout.js';
@@ -598,6 +599,17 @@ export class Spaceport extends Menu<Entity> {
         // The hull the landing pass left the player in (a completion's
         // set string can have changed it).
         input = this.transaction?.ship ?? input;
+        // An auto-refueller (oütf ModType 19) fills the tank at touch-down,
+        // at the port's price, so the Refuel button is gone (reference
+        // "The Auto-recharger (E7), wave 39"; spaceport/auto_refuel.ts).
+        try {
+            if (await hasAutoRefueller(input,
+                id => this.simulationData.data.Outfit.get(id))) {
+                this.buyFullTank(input);
+            }
+        } catch (e) {
+            console.warn('Auto-refuel on landing failed:', e);
+        }
         this.refreshRefuelButton(input);
 
         // The spaceport is shown (super.show binds controls + reveals the
@@ -1038,17 +1050,23 @@ export class Spaceport extends Menu<Entity> {
         if (!entity) {
             return;
         }
+        this.buyFullTank(entity);
+        this.refreshRefuelButton();
+    }
+
+    /** Fills the tank at the port's price when it is not full and the
+     * fill is affordable (the Refuel button's purchase; the auto-refueller
+     * makes it at touch-down). */
+    private buyFullTank(entity: Entity) {
         const fuel = entity.components.get(FuelComponent);
         const credits = entity.components.get(CreditsComponent);
         // Re-check rather than trusting button state: clicking flips a
         // Button to 'clicked'/'normal' regardless of greying.
         if (!fuel || fuel.current >= fuel.max || !credits) {
-            this.refreshRefuelButton();
             return;
         }
         const cost = refuelCost(fuel);
         if (credits.credits < cost) {
-            this.refreshRefuelButton();
             return;
         }
         // A writer outside the venues: through the landing's ledger, so
@@ -1065,7 +1083,6 @@ export class Spaceport extends Menu<Entity> {
         // Fuel is not part of the working copy (nothing a venue does while
         // docked changes it), so the entity is the one place it lives.
         fuel.current = fuel.max;
-        this.refreshRefuelButton();
     }
 
     override async build() {
