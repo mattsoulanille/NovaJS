@@ -26,7 +26,7 @@ import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
 import { OutfitsState, OutfitsStateComponent, OutfitWeaponProvider } from '../ship/index.js';
-import { SelectStellarSystem } from '../travel/index.js';
+import { JumpComponent, SelectStellarSystem } from '../travel/index.js';
 import { PlatformResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { Stat } from '../core/index.js';
@@ -264,11 +264,11 @@ export const WeaponsSystem = new System({
         Optional(FoldStateComponent), Emit, Optional(ArmorComponent),
         Optional(ExplodingComponent), Optional(CloakActiveComponent),
         Optional(IsIonizedComponent), Optional(ControlledByComponent),
-        Optional(TargetComponent), Entities] as const,
+        Optional(TargetComponent), Entities, Optional(JumpComponent)] as const,
     step(weaponsState, weaponsLocalState, time, uuid, weaponEntries,
         outfits, fuel, gameData, disabled, foldState, emit, armor,
         exploding, cloakActive, ionized, controlledBy, shipTarget,
-        entities) {
+        entities, jump) {
         // A disabled ship cannot fire anything — held triggers, NPC fire
         // control, and even automatic point defense are all suspended.
         // (Safe to gate before the localState touch: DisabledComponent
@@ -294,6 +294,21 @@ export const WeaponsSystem = new System({
         // unlike PlayerShipSelector, which marks only the LOCAL player's
         // ship and would call every remote player an AI.
         const isAi = controlledBy === undefined;
+
+        // A PILOT'S WEAPONS ARE LOCKED ONCE A JUMP STARTS (reference "Jump
+        // phases and fuel (U8), wave 38", finding 4: the Kit Big Blast
+        // pressed 0.47 s and 2.65 s into the sequence did not fire at
+        // all). Every peer-steered ship, for the whole sequence: stopping,
+        // turning, the hold and the burn. The trigger INTENT is left as
+        // it is (a key still held at the arrival fires there), and a
+        // disable that collapses the jump drops the JumpComponent, which
+        // is the end of the lock. AI ships are untouched: their fire
+        // control already holds fire mid-jump (npc_fire_control.ts, the
+        // escort command framework). Point defense, an automatic system
+        // and not the pilot's trigger, keeps working (GUESS: not tested
+        // on the original). JumpComponent is synced sim state, so this
+        // reads the same on every peer.
+        const jumpLocked = jump !== undefined && !isAi;
 
         // wëap Flags3 0x0020: an exclusive weapon mid-reload silences
         // every other weapon on the ship. Resolved once, up front, from
@@ -329,6 +344,9 @@ export const WeaponsSystem = new System({
             const isPointDefense = weapon.data.guidance === 'pointDefense'
                 || weapon.data.guidance === 'pointDefenseBeam';
             if (!(state.firing || isPointDefense)) {
+                continue;
+            }
+            if (jumpLocked && !isPointDefense) {
                 continue;
             }
 

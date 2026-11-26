@@ -43,6 +43,7 @@ import {
     planetClearance, StellarClearance,
 } from '../reputation/index.js';
 import { displayName } from '../core/index.js';
+import { JumpComponent } from './jump_state.js';
 
 export const PlanetType = t.type({
     id: t.string // Not a UUID. A nova id.
@@ -855,11 +856,22 @@ const AttemptLandingSystem = new System({
         Optional(OutfitsStateComponent), Optional(StellarBribesComponent),
         Optional(ActiveRanksComponent), Optional(MissionsComponent),
         SimulationGameDataResource, Optional(GovtsResource),
-        Optional(TimeResource), Optional(SystemIdResource)] as const,
+        Optional(TimeResource), Optional(SystemIdResource),
+        Optional(JumpComponent)] as const,
     step(planets, playerUuid, { position, velocity }, planetTarget,
         controls, emit, records, shipData, outfits, bribes, ranks, missions,
-        gameData, govts, time, systemId) {
+        gameData, govts, time, systemId, jump) {
         if (controls.get('land') !== 'start') {
+            return;
+        }
+        // A started jump cannot be stopped by the player: `l` is ignored
+        // for the whole sequence (reference "Jump phases and fuel (U8),
+        // wave 38", finding 4, u8_x3). Without this a ship holding still
+        // beside a port it was cleared for would land out of its own
+        // hyperspace sequence. GUESS that the press does nothing at all
+        // (no selection, no traffic-control line): the reference records
+        // only that the jump went ahead on time.
+        if (jump) {
             return;
         }
 

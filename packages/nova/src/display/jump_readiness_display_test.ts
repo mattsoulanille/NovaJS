@@ -28,7 +28,10 @@ import {
     DiscoveryLevelResource, DrawStatusBarNavigation,
 } from './status_bar_navigation.js';
 import { StatusBarResource } from './status_bar_resource.js';
-import { NavReadout } from './status_bar_content.js';
+import {
+    JUMP_NO_FUEL_MESSAGE, JUMP_TOO_CLOSE_MESSAGE, NavReadout,
+} from './status_bar_content.js';
+import { StatusLineResource } from './status_line_resource.js';
 import { BEEP_CANT_DO } from './ui_sound.js';
 import { UiSoundTriggersPlugin } from './ui_sound_triggers_plugin.js';
 
@@ -123,6 +126,10 @@ describe('jump readiness in the display world', () => {
         const world = new World('jump readiness display test');
         const played: string[] = [];
         const drawn: NavReadout[] = [];
+        const lines: string[] = [];
+        world.resources.set(StatusLineResource, {
+            setMessage: (message: string) => { lines.push(message); },
+        } as never);
         const controls = new Subject<ControlEvent>();
         world.resources.set(DisplayAssetDataResource, spyAssets(played));
         world.resources.set(SimulationGameDataResource, gameData());
@@ -166,7 +173,7 @@ describe('jump readiness in the display world', () => {
         played.length = 0;
 
         return {
-            world, player, played, controls,
+            world, player, played, controls, lines,
             pressJump() {
                 controls.next(
                     { action: 'hyperjump', state: 'start' } as ControlEvent);
@@ -214,6 +221,32 @@ describe('jump readiness in the display world', () => {
         pressJump();
         expect(played).not.toContain(BEEP_CANT_DO);
     }, 120_000);
+
+    // Reference "Jump phases and fuel (U8), wave 38", finding 5: each
+    // refusal prints its STR# 2002 line at once, with the beep.
+    it('says why a jump is refused: too close, or out of fuel', async () => {
+        const close = await makeDisplayWorld({ distance: JUMP_DISTANCE - 1 });
+        close.pressJump();
+        expect(close.lines).toEqual([JUMP_TOO_CLOSE_MESSAGE]);
+        expect(JUMP_TOO_CLOSE_MESSAGE).toBe("Can't initiate hyperspace jump"
+            + ' - not yet far enough away from system center.');
+
+        const dry = await makeDisplayWorld({ fuel: FUEL_PER_JUMP - 1 });
+        dry.pressJump();
+        expect(dry.lines).toEqual([JUMP_NO_FUEL_MESSAGE]);
+        expect(JUMP_NO_FUEL_MESSAGE)
+            .toBe('Insufficient energy for hyperspace jump.');
+    }, 120_000);
+
+    it('prints nothing for a possible jump or with no destination',
+        async () => {
+            const ready = await makeDisplayWorld();
+            ready.pressJump();
+            expect(ready.lines).toEqual([]);
+            const none = await makeDisplayWorld({ route: [] });
+            none.pressJump();
+            expect(none.lines).toEqual([]);
+        }, 120_000);
 
     it('refuses inside a no-jump zone an outfit widened', async () => {
         // Outside the standard radius, inside the one the ship's

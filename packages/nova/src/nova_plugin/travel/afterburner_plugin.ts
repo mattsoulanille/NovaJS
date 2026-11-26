@@ -6,7 +6,7 @@ import { System } from 'nova_ecs/system';
 import { DisabledComponent } from '../ship/index.js';
 import { FuelComponent } from '../ship/index.js';
 import { ION_FACTOR, IsIonizedComponent } from '../ship/index.js';
-import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, JUMP_DEPART_DELAY_MS } from './jump_plugin.js';
+import { JumpComponent, JumpSequenceSystem, JUMP_BASE_SPEED, jumpStageDelays } from './jump_plugin.js';
 import { ShipControlStateComponent, StrictPlayComponent } from '../player/index.js';
 import { ControlShipSystem } from './ship_controller_plugin.js';
 import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
@@ -140,7 +140,7 @@ export const EffectiveMovementPhysicsSystem = new System({
             const jumpSpeed = JUMP_BASE_SPEED * shipPhysics.jumpSpeedMult;
             movementPhysics.maxVelocity = jumpSpeed;
             movementPhysics.acceleration =
-                jumpSpeed / (JUMP_DEPART_DELAY_MS / 1000);
+                jumpSpeed / (jumpStageDelays(jump).departMs / 1000);
         }
     },
     // Overrides the acceleration ControlShipSystem chose (and the jump

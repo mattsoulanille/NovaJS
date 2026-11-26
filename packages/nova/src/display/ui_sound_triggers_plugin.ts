@@ -15,9 +15,11 @@ import {
 } from '../nova_plugin/ship/index.js';
 import { selectNearestHostile, styleForTarget } from '../nova_plugin/combat/index.js';
 import {
-    JumpComponent, JumpRouteComponent, JUMP_DISTANCE, jumpBlocker, jumpRadiusFor,
-    PlanetTargetComponent,
+    JumpBlocker, JumpComponent, JumpRouteComponent, JUMP_DISTANCE, jumpBlocker,
+    jumpRadiusFor, PlanetTargetComponent,
 } from '../nova_plugin/travel/index.js';
+import { JUMP_NO_FUEL_MESSAGE, JUMP_TOO_CLOSE_MESSAGE } from './status_bar_content.js';
+import { showStatusMessage } from './status_line_resource.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
@@ -190,8 +192,11 @@ function playerWeapons(world: World) {
  * player whose jump is already underway would be nonsense.
  *
  * No player ship / missing components → no beep: there is no ship to refuse.
+ *
+ * Returns the refusing blocker (undefined when the press is not a refusal),
+ * so the status line can name it: see jumpRefusalMessage.
  */
-function playerJumpRefused(world: World): boolean {
+function playerJumpRefusal(world: World): JumpBlocker | undefined {
     for (const entity of world.entities.values()) {
         if (!entity.components.has(PlayerShipSelector)) {
             continue;
@@ -201,7 +206,7 @@ function playerJumpRefused(world: World): boolean {
         const physics = entity.components.get(ShipPhysicsComponent);
         const fuel = entity.components.get(FuelComponent);
         if (!route || !movement || !physics || !fuel) {
-            return false;
+            return undefined;
         }
         const blocked = jumpBlocker({
             hasRoute: route.route.length > 0,
@@ -217,10 +222,28 @@ function playerJumpRefused(world: World): boolean {
         // system center", and "doesn't include when you haven't selected a
         // destination"). 'jumping' is excluded for the held-key reason
         // documented above.
-        return blocked !== undefined && blocked !== 'jumping'
-            && blocked !== 'noRoute';
+        return blocked === 'jumping' || blocked === 'noRoute'
+            ? undefined : blocked;
     }
-    return false;
+    return undefined;
+}
+
+/**
+ * The status line a refused jump press prints with its beep (reference
+ * "Jump phases and fuel (U8), wave 38", finding 5: the original prints
+ * both at once). Only the two the reference measured have a line: a
+ * disabled ship's press keeps just the beep (GUESS: not tested; the
+ * disable already printed "Ship disabled.").
+ */
+export function jumpRefusalMessage(blocker: JumpBlocker): string | undefined {
+    switch (blocker) {
+        case 'tooClose':
+            return JUMP_TOO_CLOSE_MESSAGE;
+        case 'noFuel':
+            return JUMP_NO_FUEL_MESSAGE;
+        default:
+            return undefined;
+    }
 }
 
 /**
@@ -305,14 +328,19 @@ export const UiSoundTriggersPlugin: Plugin = {
                     }
                     // Jump refused: hyperjump pressed while the shared
                     // readiness predicate says no — inside the no-jump
-                    // zone, out of fuel, disabled, or with no route at
-                    // all (per the snd-153 research: the natural
-                    // negative counterpart of 154's jump-ready). Only
-                    // 'start' reaches here, so a held/auto-repeating key
-                    // beeps ONCE per discrete press.
+                    // zone, out of fuel or disabled (per the snd-153
+                    // research: the natural negative counterpart of 154's
+                    // jump-ready), plus the original's line for the first
+                    // two. Only 'start' reaches here, so a held/auto-
+                    // repeating key beeps (and prints) ONCE per press.
                     if (action === 'hyperjump') {
-                        if (playerJumpRefused(world)) {
+                        const refusal = playerJumpRefusal(world);
+                        if (refusal !== undefined) {
                             playUiSound(world, { id: BEEP_CANT_DO });
+                            const message = jumpRefusalMessage(refusal);
+                            if (message !== undefined) {
+                                showStatusMessage(world, message);
+                            }
                         }
                         return;
                     }

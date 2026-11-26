@@ -4,7 +4,9 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { ShipDisabledEvent } from '../nova_plugin/encounters/index.js';
 import { PlayerShipSelector } from '../nova_plugin/player/index.js';
-import { SHIP_DISABLED_MESSAGE } from './status_bar_content.js';
+import {
+    JUMP_COLLAPSED_MESSAGE, SHIP_DISABLED_MESSAGE,
+} from './status_bar_content.js';
 import {
     ShowShipDisabledMessage, StatusLineResource,
 } from './status_message_plugin.js';
@@ -39,6 +41,16 @@ describe('ShowShipDisabledMessage (A10, wave 37)', () => {
         world.step();
         expect(lines).toEqual([SHIP_DISABLED_MESSAGE]);
         expect(SHIP_DISABLED_MESSAGE).toBe('Ship disabled.');
+    });
+
+    it('says "Ship disabled - hyperspace field collapsed." when the disable '
+        + 'cut a jump short (U8, wave 38)', () => {
+        const { world, lines } = makeDisplayWorld();
+        world.emit(ShipDisabledEvent, { jumpCollapsed: true }, [ME]);
+        world.step();
+        expect(lines).toEqual([JUMP_COLLAPSED_MESSAGE]);
+        expect(JUMP_COLLAPSED_MESSAGE)
+            .toBe('Ship disabled - hyperspace field collapsed.');
     });
 
     it('says nothing for another player\'s ship', () => {

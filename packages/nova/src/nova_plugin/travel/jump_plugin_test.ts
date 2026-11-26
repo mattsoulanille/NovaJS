@@ -6,7 +6,7 @@ import { World } from "nova_ecs/world";
 import { getIntegrationGameData, getSyntheticGameData } from "../../communication/simulation_test_fixture.js";
 import { GameDataAggregator } from "../../server/parsing/game_data_aggregator.js";
 import { completeEntity } from "../spawn/index.js";
-import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
+import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, PLAYER_JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
 import { makeShip } from "../ship/index.js";
 import { makeSystem, SIMULATION_STEP_MS } from "../make_system.js";
 import { applyControlEvents } from "../player/index.js";
@@ -17,6 +17,11 @@ import { LandEvent } from "./planet_plugin.js";
 import { PlayerSoundEvent } from "../core/index.js";
 import { Entity } from "nova_ecs/entity";
 import { DisabledComponent } from "../ship/index.js";
+import { Angle } from "nova_ecs/datatypes/angle";
+import { jumpStageDelays, NPC_DEPARTURE_DEPART_DELAY_MS, NPC_DEPARTURE_SPINUP_DELAY_MS } from "./jump_plugin.js";
+import { PlanetTargetComponent } from "./planet_plugin.js";
+import { ControlledByComponent } from "../player/index.js";
+import { ShipDisabled, ShipDisabledEvent } from "../encounters/index.js";
 
 const SHIP_UUID = 'jump test ship';
 
@@ -179,7 +184,7 @@ describe('jump sequence', () => {
         const arrivalMovement =
             jumpedShip.components.get(MovementStateComponent)!;
         const arrivalDistance = JUMP_DISTANCE
-            + physics.speed * JUMP_ARRIVAL_MARGIN_S;
+            + physics.speed * PLAYER_JUMP_ARRIVAL_MARGIN_S;
         // The ship may have coasted inward for a tick or two before
         // the event was published.
         expect(arrivalMovement.position.length)
@@ -976,4 +981,126 @@ describe('a route hop naming the system the ship is already in', () => {
             expect(ship.components.get(JumpComponent)).toBeUndefined();
             expect(ship.components.get(JumpRouteComponent)!.route).toEqual([]);
         }, 60_000);
+});
+
+/**
+ * Reference "Jump phases and fuel (U8), wave 38": `j` -> arrival 4.8 s
+ * from rest (the turn, about 0.4 s still, about 3.5 s of acceleration;
+ * facing the destination to the arrival 3.7-3.9 s), arrival at top speed
+ * about 1,350 px out (1,000 + one second at Speed 800), a disable
+ * collapses the jump with its own line, and nothing else the player does
+ * stops it.
+ */
+describe('jump phases (U8, wave 38)', () => {
+    async function restingFacingDestination() {
+        const harness = await makeJumpHarness();
+        const movement = harness.ship.components.get(MovementStateComponent)!;
+        movement.position = new Position(0, -(JUMP_DISTANCE * 2));
+        movement.velocity = new Vector(0, 0);
+        movement.rotation = new Angle(harness.expectedDirection);
+        harness.world.step();
+        return harness;
+    }
+
+    it('departs 3.8 s after the press for a ship already at rest and '
+        + 'facing the destination: 0.4 s still, a 3.4 s burn', async () => {
+        expect(JUMP_SPINUP_DELAY_MS).toBe(400);
+        expect(JUMP_DEPART_DELAY_MS).toBe(3400);
+        const { world } = await restingFacingDestination();
+        let finished = false;
+        world.events.get(FinishJumpEvent).subscribe(() => { finished = true; });
+        pressHyperjump(world);
+        const ticks = stepUntil(world, () => finished) + 1;
+        const expected = ticksFor(JUMP_SPINUP_DELAY_MS + JUMP_DEPART_DELAY_MS);
+        expect(ticks).toBeGreaterThanOrEqual(expected - 2);
+        expect(ticks).toBeLessThanOrEqual(expected + 4);
+    }, 30_000);
+
+    it('arrives one second of top speed outside the no-jump radius',
+        async () => {
+            expect(PLAYER_JUMP_ARRIVAL_MARGIN_S).toBe(1);
+            const { world, ship } = await restingFacingDestination();
+            const speed = ship.components.get(ShipPhysicsComponent)!.speed;
+            let finishJump: FinishJump | undefined;
+            world.events.get(FinishJumpEvent).subscribe(({ data }) => {
+                finishJump = data;
+            });
+            pressHyperjump(world);
+            stepUntil(world, () => finishJump !== undefined);
+            const arrived = finishJump!.entity
+                .components.get(MovementStateComponent)!;
+            expect(arrived.position.length).toBeCloseTo(
+                JUMP_DISTANCE + speed, -1);
+            expect(arrived.velocity.length).toBeCloseTo(speed, 3);
+        }, 30_000);
+
+    it('an NPC departure keeps the 1 s + 2 s it had; a follower takes the '
+        + 'player\'s timing', () => {
+        expect(jumpStageDelays({ vanish: true })).toEqual({
+            spinupMs: NPC_DEPARTURE_SPINUP_DELAY_MS,
+            departMs: NPC_DEPARTURE_DEPART_DELAY_MS,
+        });
+        expect(NPC_DEPARTURE_SPINUP_DELAY_MS).toBe(1000);
+        expect(NPC_DEPARTURE_DEPART_DELAY_MS).toBe(2000);
+        expect(jumpStageDelays({})).toEqual({
+            spinupMs: JUMP_SPINUP_DELAY_MS,
+            departMs: JUMP_DEPART_DELAY_MS,
+        });
+    });
+
+    it('ignores the land key for the whole sequence', async () => {
+        const { world, ship } = await restingFacingDestination();
+        let finished = false;
+        world.events.get(FinishJumpEvent).subscribe(() => { finished = true; });
+        const landed: unknown[] = [];
+        world.events.get(LandEvent).subscribe(e => landed.push(e));
+        pressHyperjump(world);
+        stepUntil(world, () =>
+            ship.components.get(JumpComponent)?.stage === 'accelerating');
+        applyControlEvents(world, undefined,
+            [{ action: 'land', state: 'start' }]);
+        world.step();
+        // The press selected nothing (it would pick the nearest port).
+        expect(ship.components.get(PlanetTargetComponent)?.target)
+            .toBeUndefined();
+        stepUntil(world, () => finished);
+        expect(landed).toEqual([]);
+    }, 30_000);
+
+    it('the land key still selects a port when no jump is running',
+        async () => {
+            // The control for the spec above: the same press, no jump.
+            const { world, ship } = await restingFacingDestination();
+            applyControlEvents(world, undefined,
+                [{ action: 'land', state: 'start' }]);
+            world.step();
+            expect(ship.components.get(PlanetTargetComponent)?.target)
+                .toBeDefined();
+        }, 30_000);
+
+    it('a disable mid-jump says "hyperspace field collapsed" and costs no '
+        + 'fuel', async () => {
+            const { world, ship } = await restingFacingDestination();
+            ship.components.set(ControlledByComponent, { peerId: 'pilot' });
+            const fuel = ship.components.get(FuelComponent)!;
+            fuel.recharge = 0;
+            fuel.current = FUEL_PER_JUMP * 2;
+            const told: ShipDisabled[] = [];
+            world.events.get(ShipDisabledEvent).subscribe(
+                ({ data }) => told.push(data));
+            pressHyperjump(world);
+            stepUntil(world, () =>
+                ship.components.get(JumpComponent)?.stage === 'spinup');
+            // The real disable path: armor under the threshold, so
+            // ShipDisableSystem attaches the component (and tells).
+            const armor = ship.components.get(ArmorComponent)!;
+            armor.current = armor.max * 0.05;
+            armor.recharge = 0;
+            world.step();
+            expect(ship.components.has(DisabledComponent)).toBeTrue();
+            expect(ship.components.get(JumpComponent)).toBeUndefined();
+            expect(told).toEqual([{ jumpCollapsed: true }]);
+            expect(ship.components.get(FuelComponent)!.current)
+                .toEqual(FUEL_PER_JUMP * 2);
+        }, 30_000);
 });

@@ -29,6 +29,7 @@ import { SimulationGameDataInterface } from "../../client/gamedata/simulation_ga
 import { SimulationGameDataResource } from "../core/index.js";
 import { PlayerSoundEvent } from "../core/index.js";
 import { SystemIdResource } from "../core/index.js";
+import { JumpComponent, JumpState, JumpStateType } from "./jump_state.js";
 
 // Hyperspace jump tuning. The EVN Bible documents the *structure* of
 // the jump sequence — ships must be outside the no-jump zone ("Jump
@@ -37,27 +38,58 @@ import { SystemIdResource } from "../core/index.js";
 // (shïp Flags2 0x0020 or a "fast jumping" outfit), turn to face the
 // destination, and leave at a multiple of the normal hyperspace speed
 // (shïp Flags 0x0001/0x0002/0x0004); arriving ships "jump in from
-// hyperspace after a short delay". The three delay durations below are
-// not numerically specified in the Bible; they are tuned to match the
-// original game's feel.
+// hyperspace after a short delay". The Bible gives no durations; the
+// player's are MEASURED on the original (reference "Jump phases and fuel
+// (U8), wave 38": `j` -> arrival 4.8 s from rest, a turn at the hull's
+// rate, about 0.4 s still, then about 3.5 s of acceleration, departure and
+// arrival on one frame).
 /** Radius of the no-jump zone around the system center, in pixels. */
 export const JUMP_DISTANCE = 1000;
 /** Delay between finishing the turn toward the destination and the
- * hyperdrive engaging (thrust starting). */
-export const JUMP_SPINUP_DELAY_MS = 1000;
+ * hyperdrive engaging (thrust starting): the ~0.4 s the original's ship
+ * sits still, facing the destination (U8 wave 38, u8_a j1: 0.43 s; GUESS
+ * for the split, read off one jump, the sum is frame-exact). */
+export const JUMP_SPINUP_DELAY_MS = 400;
 /** How long a departing ship accelerates before it vanishes into
  * hyperspace. Acceleration is scaled so the ship reaches its full jump
- * speed exactly at departure. */
-export const JUMP_DEPART_DELAY_MS = 2000;
+ * speed exactly at departure. Facing the destination to arrival is
+ * 3.7-3.9 s on the original (U8 wave 38), so spin-up + this = 3.8 s. */
+export const JUMP_DEPART_DELAY_MS = 3400;
+/**
+ * The pre-wave-38 tuning, kept for an NPC's DEPARTURE (a `vanish` jump,
+ * beginDepartureJump): U8 timed only the player's own jumps, so an NPC
+ * leaving the system keeps the timings it had (1 s still, 2 s burn).
+ * A FOLLOWER (an escort leaving with its player) takes the player's
+ * timings, so a flock still warps out together. See jumpStageDelays.
+ */
+export const NPC_DEPARTURE_SPINUP_DELAY_MS = 1000;
+export const NPC_DEPARTURE_DEPART_DELAY_MS = 2000;
+/** The spin-up and burn lengths of THIS jump: the measured player
+ * timings, or the pre-wave-38 ones for a vanishing NPC departure. */
+export function jumpStageDelays(jump: Pick<JumpState, 'vanish'>):
+    { spinupMs: number, departMs: number } {
+    return jump.vanish
+        ? { spinupMs: NPC_DEPARTURE_SPINUP_DELAY_MS,
+            departMs: NPC_DEPARTURE_DEPART_DELAY_MS }
+        : { spinupMs: JUMP_SPINUP_DELAY_MS, departMs: JUMP_DEPART_DELAY_MS };
+}
 /** The "normal" hyperspace jump speed, scaled per ship by the shïp
  * resource's jump speed flags (75% / 125% / 150%). */
 export const JUMP_BASE_SPEED = 1500;
-/** Ships jump in this many seconds of flight (at their regular top
- * speed) outside the no-jump radius. They arrive coasting inward at
- * that speed, so the margin is the time a pilot has to start another
- * jump before drifting inside the no-jump zone — a held jump key only
- * needs one tick, and three seconds is comfortable for a human. */
+/** NPC traffic jumps in this many seconds of flight (at its regular top
+ * speed) outside the no-jump radius (npc_spawn_plugin's jumpInState), and
+ * NPC_DEPART_RADIUS is measured in it. Not the player's arrival: see
+ * PLAYER_JUMP_ARRIVAL_MARGIN_S. */
 export const JUMP_ARRIVAL_MARGIN_S = 3;
+/** A ship that JUMPS IN (the player) arrives this many seconds of flight
+ * at its regular top speed outside its no-jump radius, coasting inward at
+ * that speed: the original's ship arrives about 1,350 px out at Speed 800
+ * (about 350 px/s), i.e. 1,000 + one second (reference "Jump phases and
+ * fuel (U8), wave 38", finding 3; GUESS that it scales with top speed
+ * rather than being a fixed 1,350: one hull measured). One second is
+ * still plenty to chain a route: a held jump key needs one tick, and
+ * multi-jump continues on the tick after the arrival. */
+export const PLAYER_JUMP_ARRIVAL_MARGIN_S = 1;
 
 /** How closely (radians) an inertial ship must face retrograde before
  * it thrusts to kill its velocity. */
@@ -174,107 +206,11 @@ export const JumpRouteProvider = Provide({
     }
 });
 
-/**
- * The hyperspace jump sequence state machine. Shared, deterministic
- * simulation state: every peer advances every jumping ship's sequence
- * identically. Registered with the serializer, so it crosses to the
- * destination system with the ship (stage 'arriving') and is included
- * in rollback snapshots via the default codec policy.
- */
-export const JumpStateType = t.intersection([t.type({
-    stage: t.union([
-        t.literal('stopping'),
-        t.literal('aligning'),
-        t.literal('spinup'),
-        t.literal('accelerating'),
-        t.literal('arriving'),
-    ]),
-    /** Travel heading (radians): the map-space direction from the
-     * origin system to the destination system. */
-    direction: t.number,
-    /**
-     * Destination system uuid. REQUIRED, and it must stay required: this
-     * codec is registered with the serializer, so it crosses the wire to
-     * other peers and feeds the shared desync hash. Peers may run
-     * different builds, and a serializer-registered shape may therefore
-     * only ever change ADDITIVELY — an older peer must still decode a
-     * newer peer's state. Moving a required field into t.partial is not
-     * additive in the direction that matters: the older peer's decoder
-     * still demands it and REJECTS the state outright.
-     *
-     * A vanishing jump (see `vanish`) has no destination world, so it
-     * carries the sentinel {@link VANISH_DESTINATION} — the empty string,
-     * which is not a legal system uuid — rather than omitting the field.
-     */
-    to: t.string,
-}), t.partial({
-    /**
-     * TERMINAL SELECTOR: set (always to `true`) on a ship that leaves the
-     * game world entirely rather than travelling anywhere — an NPC
-     * departing or fleeing the system (see beginDepartureJump). There is
-     * no destination room to carry it to, so departure simply deletes it:
-     * no InitiateJumpEvent, no FinishJumpEvent, no arrival kinematics.
-     * Such a jump's `to` is {@link VANISH_DESTINATION}.
-     *
-     * ADDITIVE, which is the whole point of spelling the terminal as a
-     * flag rather than as "the destination is missing". An OLD peer that
-     * predates this field decodes a new vanishing jump fine (it ignores
-     * the unknown key), simulates the identical stopping/aligning/spinup/
-     * accelerating stages off the fields it does know, and at burn end
-     * takes its ordinary depart path: it emits InitiateJumpEvent with the
-     * sentinel `to` and its own JumpFromSystem deletes the ship from the
-     * world. Both peers therefore end the burn with the ship gone from
-     * this system — mixed versions CONVERGE instead of desyncing. (The
-     * stray FinishJumpEvent the old peer emits is targeted at the NPC,
-     * and only the local player's own ship is ever followed out of a
-     * system, so nothing acts on it.)
-     *
-     * Read through an EXPLICIT check for this flag, never through the
-     * falsiness of `to`: the sentinel is falsy on purpose (so a guard that
-     * was already asking "is there a destination to load?" still answers
-     * no), but the flag is what decides the terminal.
-     */
-    vanish: t.literal(true),
-    /**
-     * Set on a ship that is following ANOTHER ship's jump out of the
-     * system — the uuid of the ship it is following (in practice a player
-     * ship; its escorts are the only followers there are). Three things
-     * hang off it, and they are what make a follower's sequence differ
-     * from the leader's:
-     *
-     *  - TERMINAL. A follower does not depart through
-     *    JumpFromSystem/FinishJumpEvent (that is the local player's own
-     *    system transition, and the client follows it). It emits the same
-     *    InitiateJumpEvent, but JumpFromSystem skips it and the owning
-     *    module's own listener sweeps it instead — see
-     *    EscortDepartJumpSystem (player_escort_plugin). Reusing the one
-     *    event is what makes "an escort's carry reaches the client before
-     *    the player's FinishJumpEvent" a plain `before: [JumpFromSystem]`
-     *    toposort edge rather than an argument about queue order.
-     *  - FREE. No fuel is deducted (see the departure case): a follower
-     *    must always be able to keep up with the ship it follows.
-     *  - CANCELLED WITH THE LEADER. A follower's sequence is only ever
-     *    valid while the ship it follows is itself mid-jump, so the stage
-     *    machine drops it the moment that stops being true — which is how
-     *    "if the parent ship is disabled mid-jump, escorts should not
-     *    jump" falls out of the general disabled-cancels-jump rule with no
-     *    extra plumbing (see JumpSequenceSystem's leader check).
-     */
-    follows: t.string,
-    /** Logical time (TimeResource ms) when the current timed stage
-     * (spinup, accelerating) began. Cleared at departure: logical time
-     * differs between systems. */
-    stageStart: t.number,
-    /**
-     * How many further jumps to auto-continue along the route without the
-     * player re-pressing the jump key ("multi-jump" outfits, ModType 32). Set
-     * when the player first initiates a jump to min(multiJump, route length),
-     * decremented on each auto-continued jump, and carried across systems with
-     * the entity. Absent/0 means the ship stops after this jump. */
-    autoJumpsLeft: t.number,
-})]);
-export type JumpState = t.TypeOf<typeof JumpStateType>;
-export const JumpComponent = new Component<JumpState>('JumpSequence');
+// The sequence's state (JumpStateType / JumpComponent, with their field
+// notes) lives in jump_state.ts, so planet_plugin can read it without an
+// import cycle; re-exported here for everyone else.
+export { JumpComponent, JumpStateType } from './jump_state.js';
+export type { JumpState } from './jump_state.js';
 
 /**
  * Marker left on a ship that just arrived from a jump and still has
@@ -841,7 +777,7 @@ export const JumpSequenceSystem = new System({
                 // The hyperdrive charges while the ship holds still.
                 movement.turnTo = target;
                 if (time.time - (jump.stageStart ?? time.time)
-                    >= JUMP_SPINUP_DELAY_MS) {
+                    >= jumpStageDelays(jump).spinupMs) {
                     jump.stage = 'accelerating';
                     jump.stageStart = time.time;
                 }
@@ -855,7 +791,7 @@ export const JumpSequenceSystem = new System({
                 // per-tick writer of effective movement physics), which
                 // runs after this system and reads the jump stage.
                 if (time.time - (jump.stageStart ?? time.time)
-                    >= JUMP_DEPART_DELAY_MS) {
+                    >= jumpStageDelays(jump).departMs) {
                     const destination = jump.to;
                     if (jump.vanish) {
                         // VANISH TERMINAL (an NPC departure). There is no
@@ -902,13 +838,13 @@ export const JumpSequenceSystem = new System({
                     // system will see: the ship jumps in on the side of
                     // the system facing where it came from, coasting
                     // inward at its regular top speed, far enough
-                    // outside the no-jump zone (JUMP_ARRIVAL_MARGIN_S)
+                    // outside the no-jump zone (PLAYER_JUMP_ARRIVAL_MARGIN_S)
                     // that another jump can start before it drifts in.
                     const basePhysics = getShipMovementPhysics(shipPhysics);
                     const jumpRadius = jumpRadiusFor(JUMP_DISTANCE,
                         shipPhysics.jumpDistanceMod);
                     const arrivalDistance = jumpRadius
-                        + basePhysics.maxVelocity * JUMP_ARRIVAL_MARGIN_S;
+                        + basePhysics.maxVelocity * PLAYER_JUMP_ARRIVAL_MARGIN_S;
                     const unit = target.getUnitVector();
                     teleport(movement,
                         new Position(-unit.x * arrivalDistance,
@@ -919,10 +855,12 @@ export const JumpSequenceSystem = new System({
                     jump.stage = 'arriving';
                     jump.stageStart = undefined;
                     // A jump costs FUEL_PER_JUMP (EVN Bible: fuel
-                    // "100 = 1 jump"). The Bible doesn't say when the
-                    // charge lands, so it is deducted at departure —
-                    // the moment the ship actually leaves the system —
-                    // and crosses to the destination with the entity.
+                    // "100 = 1 jump"). It is deducted at departure — the
+                    // moment the ship actually leaves the system, which
+                    // is the arrival frame on the original (reference
+                    // "Jump phases and fuel (U8), wave 38", finding 2: a
+                    // jump a disable cuts short costs nothing) — and
+                    // crosses to the destination with the entity.
                     if (fuel) {
                         fuel.current = Math.max(
                             fuel.min, fuel.current - FUEL_PER_JUMP);

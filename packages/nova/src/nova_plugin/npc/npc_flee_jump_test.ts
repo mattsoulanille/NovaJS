@@ -13,7 +13,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { completeEntity } from '../spawn/index.js';
 import { ArmorComponent } from '../ship/index.js';
 import { Stat } from '../core/index.js';
-import { FinishJumpEvent, InitiateJumpEvent, JumpComponent, JumpState, JumpStateType, VANISH_DESTINATION, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS } from '../travel/index.js';
+import { FinishJumpEvent, InitiateJumpEvent, JumpComponent, JumpState, JumpStateType, VANISH_DESTINATION, NPC_DEPARTURE_DEPART_DELAY_MS, JUMP_DISTANCE, NPC_DEPARTURE_SPINUP_DELAY_MS } from '../travel/index.js';
 import { makeShip } from '../ship/index.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { FLEE_JUMP_BLOCK_RANGE, NpcComponent, NPC_DEPART_RADIUS } from './npc_ai_plugin.js';
@@ -188,7 +188,8 @@ describe('NPCs jump out with the full sequence', () => {
             expect(lastStage).toEqual('accelerating');
             // And only after the timed stages have actually elapsed.
             expect(steps).toBeGreaterThanOrEqual(
-                ticksFor(JUMP_SPINUP_DELAY_MS + JUMP_DEPART_DELAY_MS));
+                ticksFor(NPC_DEPARTURE_SPINUP_DELAY_MS
+                    + NPC_DEPARTURE_DEPART_DELAY_MS));
         });
 
     it('a slow-turning ship finishes its turn before the departure burn',

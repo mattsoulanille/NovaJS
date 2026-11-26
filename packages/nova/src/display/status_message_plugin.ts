@@ -19,7 +19,7 @@ import {
     GameDateComponent, PlayerNamesComponent, playerShipName, PlayerShipSelector,
 } from '../nova_plugin/player/index.js';
 import { Optional } from 'nova_ecs/optional';
-import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
+import { ArrivalRoute, bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, cargoRetrievedMessage, contrabandScanMessage, escortRepairedMessage, HYPERGATE_CLEARED_FORMS, hypergateClearedMessage, JUMP_COLLAPSED_MESSAGE, jumpArrivalMessage, landingBlockedMessage, landingRequestMessage, playerHailMessage, playerPlunderedMessage, plunderSelfDestructMessage, SHIP_DISABLED_MESSAGE, stellarClearedMessage } from "./status_bar_content.js";
 import { LandingBlockedEvent, LandingClearedEvent, LandingRequestEvent } from "../nova_plugin/travel/index.js";
 import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent, MissionCargoRetrievedEvent, PlunderSelfDestructEvent, SentHailComponent, ShipDisabledEvent } from "../nova_plugin/encounters/index.js";
 import { missionCargoName } from '../nova_plugin/missions/index.js';
@@ -37,6 +37,7 @@ import { targetIdentity } from './target_identity.js';
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { Stage } from "./stage_resource.js";
 import { DrawDockedStatus } from "./status_bar_docked.js";
+import { showStatusMessage, StatusLineResource } from "./status_line_resource.js";
 
 /**
  * The bottom-left on-screen status line the original game uses for the date on
@@ -68,7 +69,7 @@ export function statusLineAlpha(age: number): number {
     return age < STATUS_LINE_HOLD_MS ? 1 : 0;
 }
 
-class StatusLine {
+export class StatusLine {
     readonly container = new PIXI.Container();
     private readonly text: PIXI.Text;
     /** Wall-clock time (TimeResource) the current message was set. */
@@ -115,21 +116,9 @@ class StatusLine {
     }
 }
 
-export const StatusLineResource = new Resource<StatusLine>('StatusLine');
-
-/**
- * Posts a transient line on the bottom-left status line from display code
- * that isn't an ECS system (rxjs control subscriptions, promise
- * continuations) but holds the display world — the StatusLine twin of
- * ui_sound's playUiSound. A no-op when the plugin isn't built (headless
- * specs), and it never touches the simulation. The systems below set the
- * line directly with their own `Emit`/TimeResource args; this exists only
- * for the callers that have neither.
- */
-export function showStatusMessage(world: World, message: string) {
-    world.resources.get(StatusLineResource)?.setMessage(message,
-        world.resources.get(TimeResource)?.time ?? 0);
-}
+// The resource and showStatusMessage live in status_line_resource.ts (so
+// modules this one imports can post a line without a cycle).
+export { showStatusMessage, StatusLineResource };
 /** The scenario's date suffix (e.g. " NC"), fetched once at build. */
 export const DateSuffixResource = new Resource<{ suffix: string }>('StatusLineDateSuffix');
 /** The scenario's cargo names (STR# 4000 and the lowercase STR# 4001, from
@@ -443,14 +432,18 @@ const ShowEscortRepairedMessage = new System({
 // The LOCAL player's own ship was just disabled (disabled_plugin's
 // ShipDisabledEvent, emitted in the sim targeted at that ship, re-emitted
 // here; PlayerShipSelector keeps it to that player's client): "Ship
-// disabled." (reference "A disabled player (A10), wave 37", finding 3).
+// disabled." (reference "A disabled player (A10), wave 37", finding 3), or
+// "Ship disabled - hyperspace field collapsed." when the disable cut a jump
+// short (reference "Jump phases and fuel (U8), wave 38", finding 4).
 // No sound (none checked in the reference).
 export const ShowShipDisabledMessage = new System({
     name: 'ShowShipDisabledMessage',
     events: [ShipDisabledEvent],
-    args: [StatusLineResource, TimeResource, PlayerShipSelector] as const,
-    step(statusLine, { time }) {
-        statusLine.setMessage(SHIP_DISABLED_MESSAGE, time);
+    args: [ShipDisabledEvent, StatusLineResource, TimeResource,
+        PlayerShipSelector] as const,
+    step({ jumpCollapsed }, statusLine, { time }) {
+        statusLine.setMessage(jumpCollapsed
+            ? JUMP_COLLAPSED_MESSAGE : SHIP_DISABLED_MESSAGE, time);
     },
 });
 

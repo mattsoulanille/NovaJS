@@ -27,6 +27,7 @@ import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { ProjectileComponent } from '../core/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { TargetComponent } from '../ship/index.js';
+import { JumpComponent } from '../travel/index.js';
 import {
     effectiveReload, FAST_SHIP_TURN_RATE, intervalElapsed, ORIGINAL_FRAME_MS,
     WeaponsSystem,
@@ -751,5 +752,49 @@ describe('fixed side angle (wëap Inaccuracy < 0, #99)', () => {
         expect(angles.every(a => Math.abs(Math.abs(a) - Math.PI / 2) < 1e-9))
             .toBeFalse();
         expect(angles.every(a => Math.abs(a) <= Math.PI / 2 + 1e-9)).toBeTrue();
+    });
+});
+
+describe('a pilot\'s weapons are locked mid-jump (U8, wave 38)', () => {
+    // Reference "Jump phases and fuel (U8), wave 38", finding 4: the Kit
+    // Big Blast pressed 0.47 s and 2.65 s into the sequence never fired.
+    function startJump(ship: Entity) {
+        ship.components.set(JumpComponent,
+            { stage: 'spinup', direction: 0, to: 'test:elsewhere' });
+    }
+
+    it('a player-controlled ship mid-jump fires nothing', async () => {
+        const { world, ship } = await makeTestWorld({
+            weapons: [[weapon('test:gun'), 1]],
+        });
+        ship.components.set(ControlledByComponent, { peerId: 'peer' });
+        startJump(ship);
+        setFiring(ship, 'test:gun', true);
+        await stepWorld(world, 5);
+        expect(projectiles(world).length).toEqual(0);
+    });
+
+    it('the lock ends with the jump: a held trigger fires again', async () => {
+        const { world, ship } = await makeTestWorld({
+            weapons: [[weapon('test:gun'), 1]],
+        });
+        ship.components.set(ControlledByComponent, { peerId: 'peer' });
+        startJump(ship);
+        setFiring(ship, 'test:gun', true);
+        await stepWorld(world, 5);
+        // A disable collapsing the field drops the JumpComponent.
+        ship.components.delete(JumpComponent);
+        await stepWorld(world, 5);
+        expect(projectiles(world).length).toEqual(3);
+    });
+
+    it('an AI ship is left to its own fire control', async () => {
+        const { world, ship } = await makeTestWorld({
+            weapons: [[weapon('test:gun'), 1]],
+        });
+        startJump(ship);
+        setFiring(ship, 'test:gun', true);
+        await stepWorld(world, 5);
+        expect(projectiles(world).length).toEqual(3);
     });
 });

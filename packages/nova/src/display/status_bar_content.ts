@@ -390,6 +390,24 @@ export function captureRepelledMessage(): string {
 export const SHIP_DISABLED_MESSAGE = 'Ship disabled.';
 
 /**
+ * The line, in place of {@link SHIP_DISABLED_MESSAGE}, when the disable
+ * cuts the player's hyperspace jump short: stock STR# 2002 0-based 34,
+ * verbatim (reference "Jump phases and fuel (U8), wave 38", finding 4).
+ */
+export const JUMP_COLLAPSED_MESSAGE =
+    'Ship disabled - hyperspace field collapsed.';
+
+/**
+ * The lines for a refused hyperspace jump, stock STR# 2002 0-based 41 and
+ * 9, verbatim (reference "Jump phases and fuel (U8), wave 38", finding 5:
+ * both printed at once on the press). The original calls the jump's fuel
+ * "energy".
+ */
+export const JUMP_TOO_CLOSE_MESSAGE =
+    "Can't initiate hyperspace jump - not yet far enough away from system center.";
+export const JUMP_NO_FUEL_MESSAGE = 'Insufficient energy for hyperspace jump.';
+
+/**
  * The stock line for a booty take that tripped the hulk's security
  * self-destruct: STR# 2002 index 112, verbatim (reference "Disabled ships,
  * wave 24": the only line shown, the dialog gone, the hulk destroyed).

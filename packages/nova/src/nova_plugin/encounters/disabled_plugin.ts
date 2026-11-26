@@ -68,10 +68,20 @@ import { registerSimulationBridgeEvent } from '../../communication/simulation_br
  * wave 37", finding 3: printed at the moment of the disable). NPC
  * disables emit nothing (no line names them). Display only: never
  * mutates the simulation.
+ *
+ * `jumpCollapsed` is set when the disable cuts a hyperspace jump short
+ * (JumpDisableCancelSystem drops it on this same tick): the line is then
+ * "Ship disabled - hyperspace field collapsed." (stock STR# 2002 0-based
+ * 34) in place of "Ship disabled." (reference "Jump phases and fuel (U8),
+ * wave 38", finding 4). Bridge events never cross the room protocol.
  */
-export const ShipDisabledEvent =
-    new EcsEvent<Record<string, never>>('ShipDisabledEvent');
-export const ShipDisabledEventType = t.type({});
+export interface ShipDisabled {
+    jumpCollapsed?: true;
+}
+export const ShipDisabledEvent = new EcsEvent<ShipDisabled>('ShipDisabledEvent');
+export const ShipDisabledEventType = t.partial({
+    jumpCollapsed: t.literal(true),
+});
 registerSimulationBridgeEvent({ event: ShipDisabledEvent });
 
 const RepairProvider = ProvideFromCache({
@@ -120,7 +130,14 @@ export const ShipDisableSystem = new System({
                     controlledBy !== undefined, () => random.next()),
             });
             if (controlledBy !== undefined) {
-                emit(ShipDisabledEvent, {}, [uuid]);
+                // A jump still in its origin system collapses this tick
+                // (JumpDisableCancelSystem, ordered after this one). At
+                // 'arriving' the hop was already flown: no collapse.
+                const jump = entity.components.get(JumpComponent);
+                emit(ShipDisabledEvent,
+                    jump !== undefined && jump.stage !== 'arriving'
+                        ? { jumpCollapsed: true } : {},
+                    [uuid]);
             }
             // Disabling drops the cloak through the existing decloak
             // transition (state flip + one cloak-off sound).
