@@ -612,16 +612,25 @@ function isPopupScrollKey(key: string): key is PopupScrollKey {
 
 /**
  * The buttons a mission offer is asked with: the mïsn's own labels, or
- * Accept / Refuse; no refuse button at all under mïsn Flags 0x0004
- * cantRefuse. Shared by the spaceport offers (presentOffers) and the
- * in-flight ship offers (ship_mission_offer_plugin.ts).
+ * Yes / No; no refuse button at all under mïsn Flags 0x0004 cantRefuse.
+ * Shared by the spaceport offers (presentOffers) and the in-flight ship
+ * offers (ship_mission_offer_plugin.ts).
+ *
+ * The defaults are the original's: the wave-40 kit's text-less mïsn 1024,
+ * with blank AcceptButton / RefuseButton, came up as an empty dialog with
+ * "No / Yes" (reference "A mission with no offer text (R14), wave 40"),
+ * as stock offers do (wave 5's Earth bar, sigma_mission_1/
+ * 1_sigma_1_offer.png). NovaJS showed Accept / Refuse.
  */
+export const OFFER_ACCEPT_DEFAULT = 'Yes';
+export const OFFER_REFUSE_DEFAULT = 'No';
+
 export function offerButtons(offer: MissionOffer):
     { accept: string, refuse: string | null } {
     return {
-        accept: offer.data.acceptButton || 'Accept',
+        accept: offer.data.acceptButton || OFFER_ACCEPT_DEFAULT,
         refuse: offer.data.flags.cantRefuse ? null
-            : (offer.data.refuseButton || 'Refuse'),
+            : (offer.data.refuseButton || OFFER_REFUSE_DEFAULT),
     };
 }
 
