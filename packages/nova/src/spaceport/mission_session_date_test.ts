@@ -135,3 +135,37 @@ describe('a date advance whose bookkeeping cannot run (#120)', () => {
                 .toBe(10_000);
         });
 });
+
+describe('a landing\'s day leaves the escort wages to the departure '
+    + '(reference "Escort wages (R12), wave 37")', () => {
+    it('advanceEntityDate with escortWages: false pays the salary but not '
+        + 'the wage; a jump\'s days still charge both', async () => {
+        const gameData = await getSyntheticGameData();
+        const universe = new MissionUniverse(gameData);
+        await universe.load();
+        const make = async () => {
+            const entity = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
+            entity.components.set(CreditsComponent, { credits: 10_000 });
+            entity.components.set(GameDateComponent,
+                { day: 1, month: 1, year: 1177 });
+            entity.components.set(ActiveRanksComponent,
+                new Set([SYNTHETIC.ranks.warrant]));
+            entity.components.set(EscortPayrollComponent,
+                [SYNTHETIC.ships.corsair]);
+            entity.components.set(CronStatesComponent, new Map());
+            return entity;
+        };
+        // The landing: the warrant's 100, no Corsair wage.
+        const landed = await make();
+        await advanceEntityDate(landed, 1, universe, gameData,
+            { escortWages: false });
+        expect(landed.components.get(CreditsComponent)!.credits)
+            .toBe(10_000 + 100);
+        // A jump's two days: 100 - 900 each.
+        const jumped = await make();
+        await advanceEntityDate(jumped, 2, universe, gameData);
+        expect(jumped.components.get(CreditsComponent)!.credits)
+            .toBe(10_000 + 2 * (100 - 900));
+    });
+});

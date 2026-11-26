@@ -20,11 +20,9 @@ import { hirePrice as hirePriceFromBar } from './hire_escort.js';
  *   escortSellValue   shïp EscSellValue, defaulting to 10% of the cost
  *
  * The Bible gives the last two verbatim; the first two are not in it and are
- * pinned by the original's own captures. See escort_fees.ts's module comment
- * for the ONE reference figure the daily wage disagrees with
- * (hail_escort.png's 1,100 cr/day Terrapin against this rule's 1,500) — that
- * disagreement is pinned below too, deliberately, so it cannot be "fixed" by
- * accident.
+ * pinned by the original: its captures, and the reference's wage
+ * measurement (reference "Escort wages (R12), wave 37": 1% of the hull's
+ * Cost a day, for Costs from 1,000 to 1,000,000).
  */
 
 function makeShip(ship: Partial<ShipData>): ShipData {
@@ -105,18 +103,20 @@ describe('hirePrice', () => {
     });
 });
 
-describe('escortDailyFee: the KNOWN divergence from the original', () => {
-    it('pays 1,500 cr/day for a Terrapin where the capture shows 1,100',
-        () => {
-            // hail/hail_escort.png: a hired Terrapin (shïp nova:136, cost
-            // 150,000) reads "Pay: 1,100 credits per day". Matthew's rule
-            // gives 1,500. One sample is not enough to reverse-engineer the
-            // original's formula (1,100 is 0.733% of the hull price and
-            // matches no obvious function of its cost, crew, strength or
-            // mass), so the specified shape is what ships — and this spec is
-            // here so that changing it is a decision rather than an accident.
-            expect(escortDailyFee(makeShip({ price: 150_000 }))).toBe(1_500);
-        });
+describe('escortDailyFee: 1% of the hull\'s Cost a day (reference "Escort '
+    + 'wages (R12), wave 37")', () => {
+    it('matches every measured Cost, crew, Strength and mass alike', () => {
+        // r12_a / r12_b: Costs 1,000 / 10,000 / 100,000 / 150,000 /
+        // 1,000,000 drew 10 / 100 / 1,000 / 1,500 / 10,000 a day; crew 80,
+        // Strength 400 and mass 400 changed nothing.
+        for (const [price, wage] of [[1_000, 10], [10_000, 100],
+            [100_000, 1_000], [150_000, 1_500], [1_000_000, 10_000]]) {
+            expect(escortDailyFee(makeShip({ price })))
+                .withContext(`${price}`).toBe(wage);
+        }
+        expect(escortDailyFee(makeShip({ price: 100_000, crew: 80,
+            strength: 400 }))).toBe(1_000);
+    });
 });
 
 describe('escortUpgradeShip / escortUpgradeCost', () => {

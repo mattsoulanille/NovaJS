@@ -37,6 +37,7 @@ import { DeployedOutfitCounts } from './deployed_outfits.js';
 import {
     EscortDealEntry, escortSettlementReport, queuedUpgradeTargets,
 } from './escort_deals.js';
+import { escortWageReport } from './escort_wages.js';
 import { LandedTransaction } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
@@ -1201,9 +1202,13 @@ export class Spaceport extends Menu<Entity> {
      * LEAVE, from the button or the 'depart' key: first the escort deals
      * the player queued over the comm channel are SETTLED (Matthew's
      * ruling #249/#253 — as the player departs, from any spaceport, if
-     * funds suffice), then — if anything settled — a dialog says how many
-     * escorts were upgraded and how many sold and for how much, and only
-     * once the player closes it does {@link done} commit the landing and
+     * funds suffice), then the landing day's escort WAGES are paid, and an
+     * escort the player cannot pay defects (escort_wages.ts; reference
+     * "Escort wages (R12), wave 37"). If anything settled, a dialog says how
+     * many escorts were upgraded and how many sold and for how much; if an
+     * escort defected, "Due to lack of pay, one of your escorts has
+     * defected." follows (the original's, at Leave, with an Okay). Only
+     * once the player closes them does {@link done} commit the landing and
      * resolve show(). The client answers that resolution with the
      * lift-off's insertion records, so nothing is in space until the
      * dialog is closed; a deal the working balance cannot cover stays
@@ -1222,19 +1227,29 @@ export class Spaceport extends Menu<Entity> {
         }
         this.leaving = true;
         try {
-            const report = await this.settleEscortDealsAtLiftOff();
-            if (report !== undefined && this.stillDocked()) {
+            let reports: (string | undefined)[] = [];
+            try {
+                reports.push(await this.settleEscortDealsAtLiftOff());
+            } catch (e) {
+                console.warn('Escort deals failed to settle at lift-off:', e);
+            }
+            reports.push(this.settleEscortWagesAtLiftOff());
+            reports = reports.filter(report => report !== undefined);
+            for (const report of reports) {
+                if (!this.stillDocked()) {
+                    break;
+                }
                 this.controls.unbind();
                 this.popupBlocker.bind();
                 try {
-                    await this.offerPopup.show(report, { accept: 'Okay' },
+                    await this.offerPopup.show(report!, { accept: 'Okay' },
                         { style: 'briefing' });
                 } finally {
                     this.popupBlocker.unbind();
                 }
             }
         } catch (e) {
-            console.warn('Escort deals failed to settle at lift-off:', e);
+            console.warn('Escort settlement failed at lift-off:', e);
         } finally {
             this.leaving = false;
         }
@@ -1280,6 +1295,28 @@ export class Spaceport extends Menu<Entity> {
                 + `at a cost of ${upgrade.cost} credits on departure.`);
         }
         return escortSettlementReport(settled);
+    }
+
+    /**
+     * The landing day's escort wages at lift-off (escort_wages.ts has the
+     * rules), through the landing's transaction, after the deals: returns
+     * the defection message, or undefined when everyone was paid (or there
+     * is no transaction or roster: nothing is charged then).
+     */
+    private settleEscortWagesAtLiftOff(): string | undefined {
+        const transaction = this.transaction;
+        const roster = this.landedRoster?.();
+        const player = this.playerUuid;
+        if (!this.alive || !transaction || transaction.isClosed || !roster
+            || !player) {
+            return undefined;
+        }
+        const settled = transaction.settleEscortWages(roster, player);
+        for (const gone of settled.defected) {
+            console.log(`Escort ${gone.uuid} defected on departure for lack `
+                + `of pay (${gone.wage} credits owed).`);
+        }
+        return escortWageReport(settled);
     }
 
     /**

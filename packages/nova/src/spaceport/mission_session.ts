@@ -558,7 +558,8 @@ export function processLandingOn(session: MissionSession): void {
  */
 function settlePlayerBudget(entity: Entity, ranks: Set<string>,
     universe: MissionUniverse, days: number,
-    getShip?: (id: string) => ShipData | undefined): void {
+    getShip?: (id: string) => ShipData | undefined,
+    escortWages = true): void {
     const credits = entity.components.get(CreditsComponent);
     if (!credits) {
         return;
@@ -566,7 +567,9 @@ function settlePlayerBudget(entity: Entity, ranks: Set<string>,
     const inputs = {
         ranks,
         getRank: (id: string) => universe.getRank(id),
-        escortShips: playerPayroll(entity),
+        // A landing's day leaves the escort wages to the departure
+        // (escort_wages.ts; reference "Escort wages (R12), wave 37").
+        escortShips: escortWages ? playerPayroll(entity) : [],
         getShip,
     };
     const balance = settleDailyBudget(inputs, credits.credits, days);
@@ -709,7 +712,9 @@ export async function processEntityLanding(entity: Entity,
     planetId: string): Promise<MissionEvent[]> {
     // A landing advances the player's calendar by one day (and runs
     // any crons that fire on it, and fails any now-expired missions).
-    await advanceEntityDate(entity, 1, universe, gameData);
+    // The day's escort wages wait for the departure (escort_wages.ts).
+    await advanceEntityDate(entity, 1, universe, gameData,
+        { escortWages: false });
 
     const session = await MissionSession.create(
         entity, gameData, universe, planetId);
@@ -762,7 +767,13 @@ export function drainPendingMissionNotices(entity: Entity): MissionEvent[] {
  */
 export async function advanceEntityDate(entity: Entity, days: number,
     universe: MissionUniverse,
-    gameData?: SimulationGameDataInterface): Promise<void> {
+    gameData?: SimulationGameDataInterface,
+    options: {
+        /** Whether these days' books include the escorts' wages (default
+         * true). A LANDING passes false: the original takes the landing
+         * day's wages as the player leaves (spaceport/escort_wages.ts). */
+        escortWages?: boolean,
+    } = {}): Promise<void> {
     ensurePlayerStateComponents(entity);
     if (days <= 0) {
         return;
@@ -795,6 +806,7 @@ export async function advanceEntityDate(entity: Entity, days: number,
             ? await heldHullChanger(entity, gameData, universe) : undefined;
         settleDateAdvance(entity, days, universe, {
             contribute, getShip: id => payrollShips.get(id),
+            escortWages: options.escortWages,
             ...(hull ? {
                 changeShip: (id: string, mode: ShipChangeMode,
                     outfits: Map<string, number>) =>
@@ -842,6 +854,9 @@ export function settleDateAdvance(entity: Entity, days: number,
         getShip?: (id: string) => ShipData | undefined,
         /** Whether to step the crons at all (default true). */
         crons?: boolean,
+        /** Whether the books include the escorts' wages (default true);
+         * see advanceEntityDate. */
+        escortWages?: boolean,
         /**
          * A crön's `Cxxx` / `Exxx` / `Hxxx`, for a caller that can swap
          * the hull of `entity` in place (advanceEntityDate's
@@ -904,7 +919,8 @@ export function settleDateAdvance(entity: Entity, days: number,
         entity.components.set(CronStatesComponent, cronStates);
         commitCronOutfits(entity, ownedOutfits);
     }
-    settlePlayerBudget(entity, ranks, universe, days, options.getShip);
+    settlePlayerBudget(entity, ranks, universe, days, options.getShip,
+        options.escortWages ?? true);
     entity.components.set(GameDateComponent, addDays(date, days));
 }
 

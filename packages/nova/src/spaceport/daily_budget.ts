@@ -11,7 +11,8 @@ import { escortPayrollFee } from './escort_fees.js';
  *
  *  - `advanceEntityDate` (mission_session.ts) walks it a day at a time and
  *    settles the player's credits — every landing costs a day, every jump
- *    several.
+ *    several (a landing's day without the escort wages, which are paid at
+ *    the departure: escort_wages.ts).
  *  - The player-info dialog's General page prints it as the "Income:" /
  *    "Expenses:" lines under Energy Status (p_properties/general.png shows
  *    "Expenses: 3,300 credits per day").
@@ -79,13 +80,16 @@ export function dailyBudget(inputs: DailyBudgetInputs,
  * is stated against "the money the player can have", so a day's pay is
  * all-or-nothing and the order the ranks are summed in cannot matter).
  *
- * NEVER GOES NEGATIVE. The original dismisses escorts the player cannot pay;
- * we have no dismissal flow yet (nor a message for it), so the balance is
- * clamped at zero and the escorts stay. Documented gap, not a ruling: a
- * broke player currently keeps their flock for free. The clamp is the
- * conservative half of the choice — it is the same rule every other
- * credits-spending path in the game follows, and it cannot produce the
- * negative balance the credits readout has no way to render.
+ * NEVER GOES NEGATIVE. The original's escort the player cannot pay DEFECTS
+ * (reference "Escort wages (R12), wave 37"); that happens as the player
+ * leaves a spaceport, where the landing day's wages are paid escort by
+ * escort (escort_wages.ts). The days settled HERE are a jump's (and a
+ * mission's DatePostInc): the escorts are not on hand to dismiss, so the
+ * balance is clamped at zero and a player who runs dry in flight meets the
+ * defection at the next departure (GUESS: wages in flight were not
+ * measured). The clamp is the same rule every other credits-spending path
+ * follows, and it cannot produce the negative balance the credits readout
+ * has no way to render.
  */
 export function settleDailyBudget(inputs: DailyBudgetInputs,
     credits: number, days: number): number {

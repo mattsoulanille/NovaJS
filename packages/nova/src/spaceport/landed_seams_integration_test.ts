@@ -20,7 +20,8 @@ import { LOCATION_MISSION_COMPUTER } from '../nova_plugin/missions/index.js';
 import { ActiveRanksComponent, ControlBitsComponent }
     from '../nova_plugin/ncb/index.js';
 import {
-    PlayerEscortComponent, CreditsComponent, GameDateComponent, MissionsComponent,
+    NO_DEAL, PlayerEscortComponent, CreditsComponent, GameDateComponent,
+    MissionsComponent,
 } from '../nova_plugin/player/index.js';
 import { Bar } from './bar.js';
 import { creditBalance } from './credit_commit.js';
@@ -180,7 +181,7 @@ describe('the seams between landed venues', () => {
     }
 
     /** An escort on the landed roster with an upgrade (or a sale) queued. */
-    function escort(deal: 'upgrade' | 'sale'): EscortDealEntry {
+    function escort(deal: 'upgrade' | 'sale' | 'none'): EscortDealEntry {
         return {
             player: PLAYER, uuid: 'escort-uuid',
             entity: new Entity('escort')
@@ -190,7 +191,9 @@ describe('the seams between landed venues', () => {
                     player: PLAYER, parent: PLAYER,
                     ...(deal === 'upgrade'
                         ? { provenance: 'hired', deal: { kind: 'upgrade', toShip: BETTER_ESCORT } }
-                        : { provenance: 'captured', deal: { kind: 'sale' } }),
+                        : deal === 'sale'
+                            ? { provenance: 'captured', deal: { kind: 'sale' } }
+                            : { provenance: 'hired', deal: NO_DEAL }),
                 }),
         };
     }
@@ -361,7 +364,11 @@ describe('the seams between landed venues', () => {
                         'the settlement report');
                     expect(popupText(popup)).toContain(
                         '1 escort was upgraded at a cost of 60,000 cr.');
-                    const expected = 500_000 - tradeUpPrice(0) - 60_000;
+                    // ...and the landing day's wage of the HIRED escort,
+                    // on its new hull (1% of 400,000), after the deal
+                    // (reference "Escort wages (R12), wave 37").
+                    const expected = 500_000 - tradeUpPrice(0) - 60_000
+                        - 4_000;
                     expect(creditBalance(client.entity)).toBe(expected);
                     expect(transaction.credits.credits).toBe(expected);
                     expect(roster[0].entity.components.get(ShipComponent)?.id)
@@ -417,7 +424,8 @@ describe('the seams between landed venues', () => {
                 + 'the trade QUEUED, shows no report, and lifts off at once',
                 async () => {
                     // 200,000 less the 175,000 trade leaves 25,000; the
-                    // 60,000 upgrade cannot be paid.
+                    // 60,000 upgrade cannot be paid, the day's 3,000 wage
+                    // (1% of the old 300,000 class) can.
                     const visit = await land(200_000, { hasShipyard: true });
                     const { spaceport, press, departed, transaction, venues,
                         client } = visit;
@@ -431,7 +439,7 @@ describe('the seams between landed venues', () => {
                     const lifted = await departed;
                     expect(venues.offerPopup.container.visible).toBeFalse();
                     expect(lifted).toBe(client.entity);
-                    expect(creditBalance(lifted)).toBe(25_000);
+                    expect(creditBalance(lifted)).toBe(22_000);
                     // Still queued, still the old class, still aboard.
                     expect(roster.length).toBe(1);
                     expect(roster[0].entity.components
@@ -453,12 +461,48 @@ describe('the seams between landed venues', () => {
                         'the settlement report');
                     expect(popupText(popup)).toContain('upgraded at a cost');
                     closePopup(popup);
-                    expect(creditBalance(await departed)).toBe(440_000);
+                    // The 60,000 upgrade and the day's 4,000 wage.
+                    expect(creditBalance(await departed)).toBe(436_000);
                     expect(roster[0].entity.components.get(ShipComponent)?.id)
                         .toBe(BETTER_ESCORT);
                     expect(client.entity.components.get(ShipComponent)?.id)
                         .toBe(OLD_SHIP);
                 });
+        });
+
+    describe('the landing day\'s escort wage, at the Leave (reference '
+        + '"Escort wages (R12), wave 37")', () => {
+            it('pays a hired escort its 1% at the Leave, no dialog', async () => {
+                const visit = await land(10_000, {});
+                const { spaceport, press, departed, venues } = visit;
+                const roster = [escort('none')];
+                spaceport.setLandedEscorts(() => roster, PLAYER);
+                await press('depart');
+                const lifted = await departed;
+                expect(venues.offerPopup.container.visible).toBeFalse();
+                // 1% of the 300,000 escort.
+                expect(creditBalance(lifted)).toBe(7_000);
+                expect(roster.length).toBe(1);
+            });
+
+            it('an escort the player cannot pay DEFECTS: the message, an '
+                + 'Okay, and it does not lift off', async () => {
+                const visit = await land(2_000, {});
+                const { spaceport, press, departed, venues, transaction } =
+                    visit;
+                const roster = [escort('none')];
+                spaceport.setLandedEscorts(() => roster, PLAYER);
+                await press('depart');
+                const popup = venues.offerPopup;
+                await waitFor(() => popup.container.visible,
+                    'the defection message');
+                expect(popupText(popup)).toContain(
+                    'Due to lack of pay, one of your escorts has defected.');
+                expect(roster).toEqual([]);
+                expect(transaction.isClosed).toBeFalse();
+                closePopup(popup);
+                expect(creditBalance(await departed)).toBe(2_000);
+            });
         });
 
     // ── Standalone venues sharing one transaction (seams 2 and 3) ─────

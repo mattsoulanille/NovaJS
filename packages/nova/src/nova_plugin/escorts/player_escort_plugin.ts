@@ -701,23 +701,7 @@ export function escortsOnPayroll(
     entities: Iterable<[string, Entity]>, player: string): string[] {
     const ships: string[] = [];
     for (const [, escort] of entities) {
-        if (escort.components.get(PlayerEscortComponent)?.player !== player) {
-            continue;
-        }
-        // MISSION SHIPS ARE NOT EMPLOYEES. A mïsn ShipBehav 1 special ship
-        // flies in formation on the player like a hire, but nobody engaged
-        // it and nobody pays it; it belongs to the mission, and it goes when
-        // the mission does. Checked here rather than trusted to the marker's
-        // absence, for the same reason the sweep checks it: the two must
-        // agree about what is the player's, or the player is billed for a
-        // ship they cannot dismiss, sell, or keep.
-        if (escort.components.has(MissionShipComponent)) {
-            continue;
-        }
-        if (escort.components.has(BayFighterComponent)) {
-            continue;
-        }
-        if (escortProvenance(escort) === 'captured') {
+        if (!drawsEscortWage(escort, player)) {
             continue;
         }
         const shipId = escort.components.get(ShipComponent)?.id;
@@ -726,6 +710,27 @@ export function escortsOnPayroll(
         }
     }
     return ships.sort();
+}
+
+/**
+ * Whether `escort` is one of `player`'s wage-drawing escorts: the per-ship
+ * rule {@link escortsOnPayroll} sweeps with, and the one the departure's
+ * wage settlement (spaceport/escort_wages.ts) applies to the landed roster.
+ */
+export function drawsEscortWage(escort: Entity, player: string): boolean {
+    if (escort.components.get(PlayerEscortComponent)?.player !== player) {
+        return false;
+    }
+    // MISSION SHIPS ARE NOT EMPLOYEES. A mïsn ShipBehav 1 special ship
+    // flies in formation on the player like a hire, but nobody engaged it
+    // and nobody pays it; it belongs to the mission, and it goes when the
+    // mission does. Checked here rather than trusted to the marker's
+    // absence, for the same reason the sweep checks it: the two must agree
+    // about what is the player's, or the player is billed for a ship they
+    // cannot dismiss, sell, or keep.
+    return !escort.components.has(MissionShipComponent)
+        && !escort.components.has(BayFighterComponent)
+        && escortProvenance(escort) !== 'captured';
 }
 
 /**

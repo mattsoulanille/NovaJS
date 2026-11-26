@@ -18,6 +18,7 @@ import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {
     EscortDealEntry, EscortDealSettlement, settleEscortDeals,
 } from './escort_deals.js';
+import { EscortWageSettlement, settleEscortWages } from './escort_wages.js';
 import {
     collectFleetHolds, commitFleetHolds, FleetEscortEntry, FleetHold,
 } from './fleet_cargo.js';
@@ -450,8 +451,9 @@ export class LandedTransaction {
 
     /**
      * Landing bookkeeping, before the spaceport is shown: the calendar
-     * advances one day (crons, salaries, wages — on the ENTITY, as every
-     * date advance is), the working copy is re-seeded from the advanced
+     * advances one day (crons, salaries — on the ENTITY, as every date
+     * advance is; the day's escort wages wait for the departure, see
+     * {@link settleEscortWages}), the working copy is re-seeded from the advanced
      * entity, every active mission is checked against this stellar, and
      * the result is flushed. Returns the events for the UI, including any
      * notices queued from mid-flight failures — what processEntityLanding
@@ -459,7 +461,8 @@ export class LandedTransaction {
      */
     async processLanding(): Promise<MissionEvent[]> {
         const classBefore = this.hull.components.get(ShipComponent)?.id;
-        await advanceEntityDate(this.hull, 1, this.universe, this.gameData);
+        await advanceEntityDate(this.hull, 1, this.universe, this.gameData,
+            { escortWages: false });
         // The crons just ran on the entity (bits, ranks, outfits, the
         // books): the working copy and the per-hull facts follow.
         this.session.reseed(this.hull);
@@ -817,6 +820,27 @@ export class LandedTransaction {
         const settled = settleEscortDeals(roster, player, this.spendable(),
             getShip, uuid => this.holdOpen(uuid));
         this.applyExternalCredits(settled.credits);
+        return settled;
+    }
+
+    /**
+     * THE LANDING DAY'S ESCORT WAGES, at lift-off (escort_wages.ts; reference
+     * "Escort wages (R12), wave 37"): run by the spaceport's Leave after
+     * {@link settleEscortDeals} and BEFORE {@link commit}, over the same
+     * landed roster and the same working balance. Each escort is paid in
+     * roster order; one the balance cannot cover defects (spliced off the
+     * roster, so it does not lift off). The wages go through the one ledger
+     * (applyExternalCredits), as the deals' credits do.
+     */
+    settleEscortWages(roster: EscortDealEntry[], player: string):
+        EscortWageSettlement {
+        if (this.closed) {
+            this.warnAbandoned('escort-wage settlement');
+            return { paid: 0, defected: [] };
+        }
+        const settled = settleEscortWages(roster, player, this.spendable(),
+            uuid => this.holdOpen(uuid));
+        this.applyExternalCredits(-settled.paid);
         return settled;
     }
 

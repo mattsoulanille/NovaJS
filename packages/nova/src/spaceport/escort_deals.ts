@@ -216,7 +216,7 @@ function clearDeals(entity: Entity, marker: PlayerEscort): void {
  * remaps them only as it puts the batch back down). Bounded by the roster
  * length: each pass adds at least one entry or stops.
  */
-function wingOf(roster: readonly EscortDealEntry[], uuid: string): Set<string> {
+export function wingOf(roster: readonly EscortDealEntry[], uuid: string): Set<string> {
     const inSubtree = new Set<string>([uuid]);
     for (let grew = true; grew;) {
         grew = false;

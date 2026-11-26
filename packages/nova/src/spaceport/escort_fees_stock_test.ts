@@ -18,7 +18,7 @@ import {
  *
  *   hail/hail_escort.png           a HIRED Terrapin (shïp nova:136):
  *                                    "Upgrade Cost: 50,000 credits"
- *                                    "Pay: 1,100 credits per day"
+ *                                    "Pay: 1,100 credits per day" (*)
  *   hail/hail_captured_escort.png  a CAPTURED Pirate Viper (shïp nova:166):
  *                                    "Upgrade Cost: 35,000 credits"
  *                                    "Sell Price: 11,000 credits"
@@ -28,12 +28,12 @@ import {
  * its EscSellValue is <= 0, so it falls back to "10% of the ship's original
  * cost" and its cost is 110,000.
  *
- * The FOURTH figure, the Terrapin's 1,100 cr/day wage, is the one NovaJS
- * knowingly diverges on — Matthew's rule is 10% of the hire fee, which for
- * a 150,000 cr hull is 1,500. Pinned here as well as in escort_fees_test.ts
- * so the divergence stays a recorded decision rather than a surprise; see
- * escort_fees.ts's module comment for why one sample was not enough to
- * reverse-engineer the original's formula.
+ * (*) The FOURTH figure, the Terrapin's 1,100 cr/day, is not the stock
+ * Terrapin's wage: the original charged a stock Terrapin 1,500 a day,
+ * exactly 1% of its 150,000 Cost (reference "Escort wages (R12), wave 37"),
+ * which is the rule NovaJS charges; that capture's 1,100 came from
+ * something else (GUESS: a different Cost in that game's data, or a
+ * plug-in).
  */
 describe('escort prices against real stock data', () => {
     /** shïp nova:136 "Terrapin" — hail/hail_escort.png's hired escort. */
@@ -84,8 +84,8 @@ describe('escort prices against real stock data', () => {
         expect(hirePrice(terrapin)).toBe(15_000);
     });
 
-    it('pays 1,500 cr/day for the Terrapin where the original paid 1,100 '
-        + '— the one KNOWN divergence', () => {
+    it('pays 1,500 cr/day for the Terrapin, as the original charges a stock '
+        + 'one (reference "Escort wages (R12), wave 37")', () => {
             expect(escortDailyFee(terrapin)).toBe(1_500);
         });
 

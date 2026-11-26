@@ -67,17 +67,12 @@ import { modifiedPrice } from './price_mod.js';
  *    Thunderhead hires for 30,000. This is the rule NovaJS already shipped
  *    and it survives the check.
  *
- *  - DAILY WAGE = 10% of the hire fee (i.e. 1% of the ship's price), which
- *    is Matthew's ruling. THIS IS THE ONE NUMBER HERE THAT THE REFERENCE
- *    CAPTURE DISAGREES WITH: hail_escort.png's Terrapin (cost 150,000, so
- *    hire 15,000) draws "Pay: 1,100 credits per day" where this rule says
- *    1,500. One sample is not enough to reverse-engineer the original's
- *    formula — 1,100 is 0.733% of the hull price and matches no obvious
- *    function of the class's cost, crew (4), strength (20) or mass (175) —
- *    so rather than invent a fit to one point, the wage follows the shape
- *    Matthew specified and the discrepancy is recorded here and pinned in
- *    the specs. If the real formula is ever recovered, {@link escortDailyFee}
- *    is the only thing that moves.
+ *  - DAILY WAGE = 10% of the hire fee (i.e. 1% of the ship's price),
+ *    Matthew's ruling, and MEASURED (reference "Escort wages (R12), wave
+ *    37"): 1% of the hull's Cost exactly, for Costs from 1,000 to
+ *    1,000,000, with crew, Strength and mass playing no part; the stock
+ *    Terrapin (Cost 150,000) draws 1,500 a day. When it is charged (at the
+ *    departure, or the escort defects) is escort_wages.ts's business.
  *
  * ---------------------------------------------------------------------------
  * WHERE ränk PriceMod APPLIES, AND WHERE IT DOES NOT
