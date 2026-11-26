@@ -14,6 +14,9 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import {
+    stellarHasTradeCenter, stellarNeedsJunksForTrade,
+} from '../nova_plugin/economy/index.js';
+import {
     ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent,
     ShipComponent, ShipPhysicsComponent, WeaponsStateComponent, OutfitsStateComponent,
 } from '../nova_plugin/ship/index.js';
@@ -46,6 +49,7 @@ import { Outfitter } from './outfitter.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
 import { Shipyard } from './shipyard.js';
+import { loadEachOrSkip } from './skip_failed_loads.js';
 import { OpenStarmapOptions } from './starmap.js';
 import { TradeCenter } from './trade_center.js';
 
@@ -1064,7 +1068,15 @@ export class Spaceport extends Menu<Entity> {
         await super.build();
         const data = await this.simulationData.data.Planet.get(this.id);
         this.data = data;
-        this.buildVenues(data);
+        // The jünks are loaded only where they can decide the Trade Center
+        // (a flagged port with no commodity tier: stellarHasTradeCenter).
+        const junks = stellarNeedsJunksForTrade(data)
+            ? await loadEachOrSkip('Spaceport', 'junk',
+                (await this.simulationData.ids).Junk,
+                id => this.simulationData.data.Junk.get(id))
+            : [];
+        const hasTradeCenter = stellarHasTradeCenter(data, junks);
+        this.buildVenues(data, hasTradeCenter);
         const title = new PIXI.Text(data.name, this.font.title);
         title.anchor.x = 0.5;
         // "Earth"'s ink spans x940..982 on the R8 wave-5 capture
@@ -1087,11 +1099,13 @@ export class Spaceport extends Menu<Entity> {
 
 
         // Venue buttons only appear where the stellar offers the
-        // service (spöb flags).
+        // service (spöb flags), hidden in their fixed slots (reference
+        // "Spaceport venue buttons (K6, #373), wave 36", finding 1); the
+        // Trade Center needs something to trade as well (finding 2).
         if (!data.flags.hasBar) {
             this.buttons.bar.container.visible = false;
         }
-        if (!data.flags.hasCommodityExchange) {
+        if (!hasTradeCenter) {
             this.buttons.tradeCenter.container.visible = false;
         }
         if (!data.flags.hasOutfitter) {
@@ -1119,9 +1133,10 @@ export class Spaceport extends Menu<Entity> {
      * Builds the facility venues this stellar has (#373) — and only those:
      * a venue's construction is what loads its art and data, so a
      * facility the stellar lacks costs the landing nothing. Runs once,
-     * from build(), with the stellar's data.
+     * from build(), with the stellar's data and whether it has a Trade
+     * Center (stellarHasTradeCenter: the 0x02 flag and a price tier).
      */
-    private buildVenues(data: PlanetData) {
+    private buildVenues(data: PlanetData, hasTradeCenter: boolean) {
         const { displayAssets, simulationData } = this;
         const controlEvents = this.venueControlEvents;
         if (data.flags.hasOutfitter) {
@@ -1157,7 +1172,7 @@ export class Spaceport extends Menu<Entity> {
             this.bar = new Bar(displayAssets, simulationData, controlEvents,
                 this.universe, this.id);
         }
-        if (data.flags.hasCommodityExchange) {
+        if (hasTradeCenter) {
             this.tradeCenter = new TradeCenter(displayAssets, simulationData,
                 controlEvents, this.id);
         }

@@ -14,6 +14,8 @@ import {
     sellGood,
     sellGoodQuantity,
     standardTradeGoods,
+    stellarHasTradeCenter,
+    stellarNeedsJunksForTrade,
     STANDARD_COMMODITY_BASE_PRICES,
     tierPrice,
     TradeGood,
@@ -468,5 +470,53 @@ describe('STANDARD_COMMODITY_BASE_PRICES', () => {
     it('matches the stock STR# 4004 base prices', () => {
         expect(STANDARD_COMMODITY_BASE_PRICES)
             .toEqual([75, 350, 750, 900, 200, 550]);
+    });
+});
+
+describe('stellarHasTradeCenter (reference "Spaceport venue buttons (K6, '
+    + '#373), wave 36", finding 2)', () => {
+    const flagged = (tiers: (TradeTier | null)[]) => makePlanet(tiers, {
+        id: 'nova:300',
+        flags: { ...getDefaultPlanetData().flags, canLand: true,
+            hasCommodityExchange: true, hasBar: true },
+    });
+    const none = [null, null, null, null, null, null];
+
+    it('needs a commodity price tier as well as flag 0x02: the 0x43 ports '
+        + 'with every tier zero had no Trade Center', () => {
+        expect(stellarHasTradeCenter(flagged(none))).toBeFalse();
+        expect(stellarNeedsJunksForTrade(flagged(none))).toBeTrue();
+    });
+
+    it('opens on any one tier (GUESS: only none and several were seen)',
+        () => {
+            for (const tier of ['low', 'med', 'high'] as const) {
+                for (let i = 0; i < 6; i++) {
+                    const tiers: (TradeTier | null)[] = [...none];
+                    tiers[i] = tier;
+                    expect(stellarHasTradeCenter(flagged(tiers)))
+                        .withContext(`${tier} ${i}`).toBeTrue();
+                    expect(stellarNeedsJunksForTrade(flagged(tiers)))
+                        .toBeFalse();
+                }
+            }
+        });
+
+    it('opens on a jünk the stellar buys or sells (GUESS)', () => {
+        const other = makeJunk({ id: 'nova:128', soldAt: ['nova:301'] });
+        expect(stellarHasTradeCenter(flagged(none), [other])).toBeFalse();
+        expect(stellarHasTradeCenter(flagged(none), [other,
+            makeJunk({ id: 'nova:129', soldAt: ['nova:300'] })])).toBeTrue();
+        expect(stellarHasTradeCenter(flagged(none), [
+            makeJunk({ id: 'nova:129', boughtAt: ['nova:300'] })])).toBeTrue();
+    });
+
+    it('never opens without flag 0x02, whatever it trades', () => {
+        const unflagged = makePlanet(['low', null, null, null, null, null],
+            { id: 'nova:300' });
+        expect(unflagged.flags.hasCommodityExchange).toBeFalse();
+        expect(stellarHasTradeCenter(unflagged, [
+            makeJunk({ soldAt: ['nova:300'] })])).toBeFalse();
+        expect(stellarNeedsJunksForTrade(unflagged)).toBeFalse();
     });
 });

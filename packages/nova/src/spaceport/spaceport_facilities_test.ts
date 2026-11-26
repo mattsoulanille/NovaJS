@@ -5,6 +5,8 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
+import { GameDataInterface } from 'novadatainterface/game_data_interface';
+import { PlanetData } from 'novadatainterface/planet_data';
 import { ControlEvent } from '../nova_plugin/core/index.js';
 import { BAR_PICT } from './bar.js';
 import { Button } from './button.js';
@@ -57,8 +59,39 @@ describe('spaceport venues by facility (#373)', () => {
         } as unknown as DisplayAssetDataInterface;
     }
 
-    async function build(planetId: string) {
+    /**
+     * The synthetic data with one stellar's flags and tiers edited (a
+     * copy: the cache's PlanetData is shared).
+     */
+    async function editedData(planetId: string,
+        edit: (planet: PlanetData) => PlanetData) {
         const gameData = await getSyntheticGameData();
+        const planets = new Proxy(gameData.data.Planet, {
+            get(target, key) {
+                if (key === 'get') {
+                    return async (id: string) => {
+                        const planet = await target.get(id);
+                        return id === planetId ? edit(planet) : planet;
+                    };
+                }
+                const value = Reflect.get(target, key);
+                return typeof value === 'function' ? value.bind(target)
+                    : value;
+            },
+        });
+        const data = new Proxy(gameData.data, {
+            get: (target, key) => key === 'Planet' ? planets
+                : Reflect.get(target, key),
+        });
+        return new Proxy(gameData, {
+            get: (target, key) => key === 'data' ? data
+                : Reflect.get(target, key),
+        });
+    }
+
+    async function build(planetId: string,
+        gameDataIn?: GameDataInterface) {
+        const gameData = gameDataIn ?? await getSyntheticGameData();
         const drawn: string[] = [];
         const controlEvents = new Subject<ControlEvent>();
         const spaceport = new Spaceport(recordingAssets(drawn), gameData,
@@ -179,4 +212,85 @@ describe('spaceport venues by facility (#373)', () => {
         expect(MenuControls.focused).not.toBe(
             (spaceport as unknown as { controls: MenuControls }).controls);
     });
+
+    describe('the Trade Center needs commodity prices (reference "Spaceport '
+        + 'venue buttons (K6, #373), wave 36", finding 2)', () => {
+        const NONE = [null, null, null, null, null, null];
+
+        it('builds no Trade Center at a port with flag 0x02 and no price '
+            + 'tier, and hides its button in its slot', async () => {
+            // The moon, given the wave-36 rigs' 0x43 (land, commodities,
+            // bar) with every commodity tier zero; no jünk trades there.
+            const moon = SYNTHETIC.planets.moon;
+            const gameData = await editedData(moon, planet => ({
+                ...planet, tradeTiers: [...NONE],
+                flags: { ...planet.flags, canLand: true, uninhabited: false,
+                    hasCommodityExchange: true, hasBar: true },
+            }));
+            const { venues, drawn, buttons } = await build(moon, gameData);
+            expect(venues.tradeCenter).toBeUndefined();
+            expect(drawn).not.toContain(TRADE_CENTER_PICT);
+            expect(buttons.tradeCenter.container.visible).toBeFalse();
+            expect(buttons.bar.container.visible).toBeTrue();
+            expect(venues.bar).toBeDefined();
+        });
+
+        it('keeps the Trade Center where a jünk trades with no tier '
+            + '(GUESS): Coldharbour, its tiers zeroed, buys Gate Alloy',
+            async () => {
+                const coldharbour = SYNTHETIC.planets.coldharbour;
+                const gameData = await editedData(coldharbour, planet => ({
+                    ...planet, tradeTiers: [...NONE],
+                }));
+                const { venues, buttons } = await build(coldharbour,
+                    gameData);
+                expect(venues.tradeCenter).toBeDefined();
+                expect(buttons.tradeCenter.container.visible).toBeTrue();
+            });
+
+        it('needs flag 0x02 too: Refuge sells both jünks without it',
+            async () => {
+                const { venues, buttons } =
+                    await build(SYNTHETIC.planets.refuge);
+                expect(venues.tradeCenter).toBeUndefined();
+                expect(buttons.tradeCenter.container.visible).toBeFalse();
+            });
+    });
+
+    it('hides Recharge once it is used, its slot left empty (reference '
+        + '"Spaceport venue buttons (K6, #373), wave 36", finding 3)',
+        async () => {
+            const { spaceport, buttons, controlEvents } =
+                await build(SYNTHETIC.planets.port);
+            const gameData = await getSyntheticGameData();
+            const { makeShip, FuelComponent } =
+                await import('../nova_plugin/ship/index.js');
+            const { CreditsComponent } =
+                await import('../nova_plugin/player/index.js');
+            const entity: Entity = makeShip(
+                await gameData.data.Ship.get(SYNTHETIC.ships.warden));
+            entity.components.set(CreditsComponent, { credits: 10_000 });
+            const { Stat } = await import('../nova_plugin/core/index.js');
+            entity.components.set(FuelComponent, new Stat(
+                { current: 298, max: 300, min: 0, recharge: 0 }));
+            const departed = spaceport.show(entity);
+            for (let i = 0; i < 2000 && !spaceport.onMainScreen; i++) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            expect(buttons.refuel.container.visible).toBeTrue();
+            const { y } = buttons.refuel.container.position;
+            controlEvents.next({ action: 'recharge', state: 'start' });
+            const after = entity.components.get(FuelComponent)!;
+            expect(after.current).toBe(after.max);
+            expect(entity.components.get(CreditsComponent)!.credits)
+                .toBeLessThan(10_000);
+            expect(buttons.refuel.container.visible).toBeFalse();
+            // Leave keeps the fourth right-hand slot below the gap.
+            expect(buttons.leave.container.visible).toBeTrue();
+            expect(buttons.leave.container.position.y).toBeGreaterThan(y);
+            controlEvents.next({ action: 'depart', state: 'start' });
+            await departed;
+        });
 });
+
+

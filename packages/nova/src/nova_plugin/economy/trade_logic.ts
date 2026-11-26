@@ -24,6 +24,34 @@ import { numericId, STANDARD_CARGO_NAMES } from '../missions/index.js';
  * center at Schmoo ... wave 12").
  */
 
+/**
+ * Whether a stellar has a Trade Center (its spaceport button and the
+ * venue): the commodity-exchange flag (spöb Flags 0x02) AND something to
+ * trade. MEASURED (reference "Spaceport venue buttons (K6, #373), wave
+ * 36", finding 2): three 0x43 ports with every commodity tier zero showed
+ * no Trade Center button, a 0x43 port with tiers and Kit Port did. GUESS:
+ * any one tier turns it on (only "none" and "several" were seen), and so
+ * does a jünk the stellar buys or sells (its BoughtAt / SoldAt name the
+ * stellar, whatever its BuyOn / SellOn; unmeasured). `junks` need only be
+ * passed for a flagged stellar without tiers (stellarNeedsJunksForTrade).
+ */
+export function stellarHasTradeCenter(planet: PlanetData,
+    junks: readonly JunkData[] = []): boolean {
+    if (!planet.flags.hasCommodityExchange) {
+        return false;
+    }
+    return planet.tradeTiers.some(tier => tier !== null)
+        || junks.some(junk => junk.soldAt.includes(planet.id)
+            || junk.boughtAt.includes(planet.id));
+}
+
+/** Whether stellarHasTradeCenter needs the jünks to decide (a flagged
+ * stellar with no commodity tier); elsewhere they cannot change it. */
+export function stellarNeedsJunksForTrade(planet: PlanetData): boolean {
+    return planet.flags.hasCommodityExchange
+        && !planet.tradeTiers.some(tier => tier !== null);
+}
+
 /** Base prices of the six standard commodities (STR# 4004). */
 export const STANDARD_COMMODITY_BASE_PRICES =
     [75, 350, 750, 900, 200, 550];
